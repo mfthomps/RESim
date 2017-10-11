@@ -1,0 +1,48 @@
+#!/usr/bin/python
+import sys
+import os
+import shutil
+import socket
+from pgRepo import models 
+from pgRepo import cutils
+from monitorLibs import szk
+from monitorLibs import utils
+from monitorLibs import configMgr
+'''
+'''
+cfg = configMgr.configMgr()
+hostname = socket.gethostname()
+zk = szk.szk(hostname, cfg)
+      
+only_failed = False 
+if len(sys.argv) > 1 and sys.argv[1] == '-f':
+    only_failed = True 
+
+event = cfg.cgc_event
+db = models.db_init(host='10.10.10.30', database=cfg.cgc_event_db)
+if db is None:
+    print('db init failed, exit')
+    exit(1)
+
+event_id = models.Event.get(event).event_id
+subs = models.Submission.select(event_id = event_id)
+sorted_subs = []
+for sub in subs:
+    key = sub.timestamp
+    sorted_subs.append((key, sub))
+sorted_subs.sort()
+num_verified =0
+for sub_tuple in sorted_subs:
+    sub = sub_tuple[1]
+    cset = models.Cset.select(cset_id = sub.cset_id)
+    if not only_failed:
+        print('sub: %s %d verified: %r  rcb: %r  pov: %r sub_id: %s' % (cset[0].name, sub.competitor_id, sub.verified, sub.rbs_clear, sub.pov_clear, sub.submission_id))
+    elif sub.verified and (not sub.rbs_clear or not sub.pov_clear):
+        print('sub: %s %d verified: %r  rcb: %r  pov: %r sub_id: %s' % (cset[0].name, sub.competitor_id, sub.verified, sub.rbs_clear, sub.pov_clear, sub.submission_id))
+    num_verified += 1
+print("submits: %d verified: %d" % (len(subs), num_verified))
+teams = models.Competitor.select()
+for t in teams:
+    print('id: %d  name: %s' % (t.competitor_id, t.competitor_name))
+
+

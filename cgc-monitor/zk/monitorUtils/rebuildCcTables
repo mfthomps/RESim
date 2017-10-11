@@ -1,0 +1,122 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import MySQLdb as mdb
+import sys
+from monitorLibs import configMgr
+'''
+Drop and create all of the code coverage tables 
+'''
+class rebuildCcTables():
+    def __init__(self):
+        self.con = None
+        try:
+            self.con = mdb.connect('localhost', 'cgc', 'password')
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def dropAll(self):
+        retval = False
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("DROP TABLE IF EXISTS best_polls")
+            t_cur.execute("DROP TABLE IF EXISTS code_coverage")
+            t_cur.execute("DROP TABLE IF EXISTS basic_blocks")
+            t_cur.execute("DROP TABLE IF EXISTS total_code_coverage")
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def createDB(self, db_name):
+        print 'in createDB'
+        retval = False
+        try:
+            t_cur = self.con.cursor()
+            print 'in createDB create db'
+            cmd = "CREATE DATABASE %s" % db_name
+            print 'command is %s' % cmd
+            try:
+                t_cur.execute(cmd)
+            except:
+                pass
+            self.con.close
+            self.con = mdb.connect('localhost', 'cgc', 'password', db_name)
+            print 'back from new connect'
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    
+    def createTables(self):
+        retval = False
+        try:
+            t_cur = self.con.cursor()
+            cmd =  "CREATE TABLE best_polls (id MEDIUMINT NOT NULL AUTO_INCREMENT,\
+                      csi VARCHAR(64), \
+                      replay VARCHAR(64), \
+                      untouched_blocks int, \
+                      PRIMARY KEY (id),\
+                      INDEX replay_pair (csi, replay))"
+            t_cur.execute(cmd)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+        try:
+            cmd =  "CREATE TABLE code_coverage (id MEDIUMINT NOT NULL AUTO_INCREMENT,\
+                      csi VARCHAR(64), \
+                      csi_bin VARCHAR(64), \
+                      replay VARCHAR(64), \
+                      touched_blocks VARCHAR(8192), \
+                      PRIMARY KEY (id),\
+                      INDEX replay_pair (csi, csi_bin, replay))"
+            t_cur.execute(cmd)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+        try:
+            cmd =  "CREATE TABLE total_code_coverage (id MEDIUMINT NOT NULL AUTO_INCREMENT,\
+                      csi VARCHAR(64), \
+                      csi_bin VARCHAR(64), \
+                      touched_blocks VARCHAR(8192), \
+                      PRIMARY KEY (id),\
+                      INDEX csi_bin_pair (csi, csi_bin))"
+            t_cur.execute(cmd)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+        try:
+            cmd =  "CREATE TABLE basic_blocks (id MEDIUMINT NOT NULL AUTO_INCREMENT,\
+                      csi VARCHAR(64), \
+                      csi_bin VARCHAR(64), \
+                      block int, \
+                      PRIMARY KEY (id), \
+                      INDEX replay_pair (csi, csi_bin, block))"
+            t_cur.execute(cmd)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+rt = rebuildCcTables()
+cfg = configMgr.configMgr()
+rt.createDB(cfg.cc_db_name)
+rt.dropAll()
+rt.createTables()

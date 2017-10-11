@@ -1,0 +1,320 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+
+#
+#  Run a replay and start Ida if it goes to the debugger
+#  TBD:  must run on host with file level access to CB file hierarchy
+#
+import xml.etree.ElementTree as ET
+import socket
+import subprocess
+import time
+import os
+import sys
+import logging
+import shutil
+from subprocess import Popen
+try:
+    from monitorLibs import szk
+except:
+    sys.path.append('../zk')
+    from monitorLibs import szk
+from monitorLibs import throwMgr
+from monitorLibs import configMgr
+from monitorLibs import packageMgr
+from monitorLibs import accessSQL
+from monitorLibs import utils
+from monitorLibs import dbgQueue
+from monitorLibs import updateMasterCfg
+class gdbThrow():
+    def __init__(self):
+        self.lgr = utils.getLogger('gdbThrow', './logs')
+        hostname = socket.gethostname()
+        self.cfg = configMgr.configMgr()
+        self.zk = szk.szk(hostname, self.cfg)
+        self.throw_mgr = throwMgr.throwMgr(self.zk, self.lgr)
+        umc = updateMasterCfg.updateMasterCfg(self.zk, self.cfg, self.lgr)
+        #self.checksum = self.storeConfig()
+        self.checksum = umc.getChecksum(szk.MASTER_DEBUG_CONFIG_NODE)
+        self.done = False
+        self.local_stage = './stage'
+        #self.repoHost = 'blade17'
+        self.repoHost = self.cfg.repo_master
+        self.cb = None
+        self.replay = None
+        self.my_client_id = hostname
+        self.my_client_node = self.zk.getClientDbgNode(self.my_client_id)
+        self.queue_entry=None
+
+    def storeConfig(self):
+        sql = accessSQL.accessSQL(self.cfg.db_name, self.lgr)
+        value = None
+        local = './master.cfg'
+        if os.path.exists(local):
+            try:
+                value = open('./master.cfg', 'rb').read()
+                print('Using LOCAL copy of master.cfg')
+                checksum = utils.getChecksum(value)
+                sql.addConfig(value, checksum)
+            except:
+                print('error reading local config %s' % local)
+                exit(1)
+        else:
+            checksum = self.cfg.master_dbg_config
+            config = sql.getConfig(checksum)
+            if config is None:
+                print('configMgr says debug config checksum is %s, but that is not in the database' % checksum)
+                self.lgr.error('configMgr says debug config checksum is %s, but that is not in the database' % checksum)
+                exit(1)
+            print('Using master_dbg.cfg from the vmLib')
+            self.lgr.debug('Using master_dbg.cfg from the vmLib')
+        return checksum
+
+
+    def runGdb(self, throw, node):
+        t = self.throw_mgr.decodeThrow(throw)
+        if t.kind == 'NO_EVENT':
+            print('throw of %s against %s caused no event target: %s' % (self.replay, self.cb, t.target_name))
+            self.lgr.debug('throw of %s against %s caused no event target: %s' % (self.replay, self.cb, t.target_name))
+            self.throw_mgr.throwDone(node)
+            self.done = True
+            return
+        path = None
+        if t.kind != 'CB':
+            print 'runGdb, throw is not a CB, not set up for that yet'
+            exit(1)
+        cb, suffix = self.zk.cbFromComm(t.cb)
+        num_cbs = utils.numBins(cb)
+        cb_num = int(suffix, 16)
+        self.lgr.debug('kind is CB, cb: %s  replay: %s  suffix: %s num_cbs: %d cb_num: %d' % (t.cb, t.replay, suffix, num_cbs, cb_num))
+        print('kindx is CB, cb: %s  replay: %s  suffix: %s num_cbs: %d cb_num: %d' % (t.cb, t.replay, suffix, num_cbs, cb_num))
+        if suffix is None:
+            print 'CB missing suffix'
+            exit(1)
+        symbols = '/mnt/vmLib/bigstuff/csetSymbols'
+        orig_cb = cb[2:]
+        p_or_r = 'build/release'
+        if cb.endswith('_MG'):
+            p_or_r = 'build/patched'
+            orig_cb = orig_cb[0:len(orig_cb)-3]
+        orig_cb = orig_cb[0:len(orig_cb)-2]
+        orig_cb_path = orig_cb
+        if num_cbs > 1:
+            append = 'cb_%d' % cb_num
+            orig_cb_path = os.path.join(orig_cb, append)
+            orig_cb = orig_cb+"_%d" % cb_num
+        bin_path = os.path.join(symbols, orig_cb_path, p_or_r,'bin', orig_cb)
+        src_path = os.path.join(symbols, orig_cb_path, p_or_r)
+        lib_path = os.path.join(symbols, orig_cb_path)
+        print('bin_path is %s target_name is %s' % (bin_path, t.target_name)) 
+        t_name, t_instance = t.target_name.split('_')
+        try:
+            t_port = 9123+int(t_instance)
+        except:
+            print('could not turn instance to an int from %s' % t_instance)
+            exit(1)
+        remote='target remote localhost:%d' % t_port
+        print('remote command is %s' % remote)
+        self.lgr.debug('remote command is %s' % remote)
+        f = open('.gdb_commands', 'w')
+        #f.write('echo directory  %s \n\n' % src_path)
+        f.write('directory  %s\n' % src_path)
+        #f.write('echo directory  %s \n\n' % lib_path)
+        f.write('directory  %s\n' % lib_path)
+        #f.write('echo %s \n\n' % remote)
+        f.write(remote+'\n')
+        f.flush()
+        f.close()
+        subprocess.call(['sync'])
+        subprocess.call(['sgdb', '-x', './.gdb_commands', bin_path])
+        #subprocess.call(['sgdb', bin_path])
+        self.throw_mgr.throwDone(node)
+        print('back from throwDone')
+        self.done = True
+        #target remote localhost:9123
+   
+    def myWatcher(self, event):
+        print 'in myWatcher, path is %s' % event.path
+        self.lgr.debug('in myWatcher, path is %s' % event.path)
+        throw, node = self.throw_mgr.getThisThrow(self.myWatcher, self.cb, self.replay, self.my_client_id)
+        if throw is not None and not self.done:
+            self.runGdb(throw, node)
+            self.done = True
+
+    def fixUpPovName(self, cb, replay):
+        base = os.path.basename(replay)
+        root, ext = os.path.splitext(base)
+        print('base is %s' % base)
+        retval = 'POV_%s_MSC_%s' % (cb, root)
+        path = self.zk.replayPathFromName(self.cfg.cb_dir, retval+ext)
+        if not os.path.isfile(replay):
+            if not os.path.isfile(path):
+                print('could not find local file %s or repo file at %s' % (replay, path))
+                return None
+            return retval
+        # copy the local pov to the repo
+        d, f = os.path.split(path)
+        try:
+            print('try to make dir %s' % d)
+            os.makedirs(d)
+        except:
+            print('makedirs failed')
+            pass
+        print('copy %s to %s' % (replay, path))
+        shutil.copyfile(replay, path)
+        return retval
+        
+       
+    def doPackageOwnPP(self, cb, replay):
+        self.cb = cb
+        test_path = self.zk.replayPathFromName(self.cfg.cb_dir, replay)
+        if test_path is None:
+            replay = self.fixUpPovName(cb, replay)
+            print('fixed up replay to be %s' % replay)
+        self.replay = replay
+        throw, node = self.throw_mgr.getThisThrow(self.myWatcher, cb, replay, self.my_client_id)
+        if throw is None:
+            pp = packageMgr.packageMgr(self.zk, None, self.cfg, '0', False, self.checksum)
+            replays = {replay}
+            test_package = utils.getEncodedPackage(cb, replays, self.checksum)
+            pp.localCopyPackage(test_package)
+            pp.doOnePackage(test_package)
+            #self.localCopyPackage(test_package)
+            pp.waitUntilConsumerDone()
+            pp.lgr.debug('consumer done with package') 
+        else:
+            print('doPackageOwnPP found throw before enqueuing!')
+            self.lgr.debug('doPackageOwnPP found throw before enqueuing!')
+            self.runGdb(throw, node)
+       
+    def doPackage(self, cb, replay):
+        self.cb = cb
+        test_path = self.zk.replayPathFromName(self.cfg.cb_dir, replay)
+        if test_path is None:
+            replay = self.fixUpPovName(cb, replay)
+            print('fixed up replay to be %s' % replay)
+        self.replay = replay
+        print('in doPackage for %s %s' % (cb, replay))
+        self.lgr.debug('in doPackage for %s %s' % (cb, replay))
+        replays = []
+        replays.append(replay)
+        throw, node = self.throw_mgr.getThisThrow(self.myWatcher, cb, replay, self.my_client_id)
+        if throw is None:
+            package = utils.getEncodedPackage(cb, replays, self.checksum, no_timeout=True, client_id=self.my_client_id, client_node=self.my_client_node)
+            dbg_queue = dbgQueue.dbgQueue(self.zk, self.lgr)
+            self.queue_entry = dbg_queue.addReplay(package)
+            #self.localCopyPackage(package)
+            print('doPackage added replay to dbgQueue %s %s' % (cb, replay))
+            self.lgr.debug('doPackage added replay to dbgQueue %s %s.  clientnode: %s' % (cb, replay, self.my_client_node))
+        else: 
+            print('doPackage found throw before enqueuing!')
+            self.lgr.debug('doPackage found throw before enqueuing!')
+            self.runGdb(throw, node)
+
+    def rmQueue(self):
+        self.zk.zk.delete(self.queue_entry, recursive=True)
+
+    def getLocalPath(self, path):
+        index = path.find('CBs')
+        local = os.path.join(self.local_stage, path[index:])
+        return os.path.dirname(local)
+
+    def checkBins(self, path):
+        retval = True
+        cb = os.path.basename(path) 
+        csid = utils.getCSID(cb)
+        num_bins = utils.numBins(csid)
+        print('checkBins num bins in %s is %d' % (cb, num_bins))
+        for i in range(1, num_bins+1):
+            f = os.path.join(path, cb+'_%02x' % i)
+            if not os.path.isfile(f):
+                print('checkBins, not a file: %s' % f)
+                return False
+        return retval
+
+    def doLocalscp(self, path):
+        '''
+        '''
+        retval = True
+        print 'doLocalscp path is %s' % path
+        local = self.getLocalPath(path)
+        print 'local is %s ' % local
+        if not self.checkBins(local):
+            try:
+                os.makedirs(local)
+            except:
+                pass
+            # include wildcard to get multi-binary CBs
+            source = 'cgc@%s:%s*' % (self.repoHost, path)
+            print('source is %s local: %s' % (source, local))
+            retcode = subprocess.call(['/usr/bin/scp','-o StrictHostKeyChecking=no', source, local])
+            if retcode != 0:
+                print('scp Error, retcode is %d' % retcode)
+                retval = False
+        return retval
+
+    def localCopyPackage(self, package):
+        root = ET.fromstring(package)
+        cb_name = root.find('cb_name').text
+        path = self.zk.pathFromName(self.cfg.cb_dir, cb_name)
+        if not self.doLocalscp(path):
+            print 'bad path: %s for CB %s not found, exiting' % (path, cb_name) 
+            self.lgr.debug('bad path: %s for CB %s not found, exiting' % (path, cb_name))
+            exit(1)
+    def stop(self):
+        self.zk.stop()
+        '''
+        for pov in root.iter('pov'):
+           pov_path = self.zk.replayPathFromName(pov.text)+'.xml'
+           self.doLocalscp(pov_path) 
+        for poll in root.iter('poll'):
+           poll_path = self.zk.replayPathFromName(poll.text)+'.xml'
+           self.doLocalscp(poll_path) 
+        '''
+
+os.umask(000)
+ot = gdbThrow()
+if len(sys.argv) < 3:
+    print 'usage: gdbThrow replay cb <local>'
+    print('\t If replay is a local file, it is copied into the repo and used.')
+    print('\t cb is of the form CBCADET_0000101, where that last 01 is the # of binaries')
+    print('\t Use the _MG suffix on the CB to select the patched version of the binary')
+    exit(1)
+cb = sys.argv[2]
+replay = sys.argv[1]
+#cb = 'CBdf9df201_028_00001'
+#replay = 'POV_CBdf9df201_006_00001'
+if len(sys.argv) == 3:
+    ot.doPackage(cb, replay)
+    while not ot.done:
+        time.sleep(2)
+    ot.rmQueue()
+else:
+    # no putPackages running, instantiate our own.
+    # asssumes cgcMonitor is running on its own, e.g., via monitor.sh
+    # without targetWatcher running
+    ot.doPackageOwnPP(cb, replay)
+ot.stop()

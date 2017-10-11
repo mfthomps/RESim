@@ -1,0 +1,1114 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+try:
+    import MySQLdb as mdb
+except:
+    import pymysql as mdb
+import sys
+import time
+import subprocess
+import json
+import os
+import logging
+try:
+    from monitorLibs import configMgr
+except:
+    if not __file__.startswith('/usr/bin'):
+        sys.path.append('../')
+    from monitorLibs import configMgr
+from monitorLibs import bitArray
+from monitorLibs import szk
+from monitorLibs import teamSets
+from monitorLibs import utils
+from monitorLibs import cfeScores
+import schedule
+'''
+    Access methods to the MySQL database
+'''
+class reportSQL():
+    def __init__(self):
+        self.con = None
+        self.cfg = configMgr.configMgr()
+        self.db_name = self.cfg.db_name 
+        self.schedule = schedule.schedule()
+        env_db_name = os.getenv('CGC_DB_NAME')
+        get_latest_db = True
+        if env_db_name is not None and len(env_db_name)>0:
+            sys.stderr.write('<><><><><><><Using alternate db: %s<><><><><>>>  any key to continue\n' % env_db_name)
+            self.db_name = env_db_name
+            dum = raw_input()
+            get_latest_db = False
+
+        ''' use zk to get updated cfg node '''
+        self.zk = szk.szk(None, self.cfg)
+        self.team_sets = teamSets.teamSets(self.zk, logging)
+        try:
+            self.con = mdb.connect('master', 'cgc', 'password', self.db_name)
+            print('connected to database: %s' % self.db_name)
+        except mdb.Error, e:
+            try:
+                retcode = subprocess.call(['checkProxies.sh'])
+                if retcode != 0:
+                    print('error running checkProxies.sh %d' % retcode)
+                    exit(1)
+            except:
+                print('error running checkProxies.sh, perhaps not an ida client?')
+                pass
+            i=0
+            done = False
+            while not done and i < 4:
+                print "error %d: %s" % (e.args[0], e.args[1])
+                print 'try again'
+                time.sleep(1)
+                try:
+                    self.con = mdb.connect('master', 'cgc', 'password', self.db_name)
+                    done = True
+                except:
+                    i+=1
+                    pass
+        if get_latest_db:
+            most_recent=self.mostRecentDatabase()        
+            print('** Now using DB: %s **' % most_recent)
+
+    def mostRecentDatabase(self):
+        team_sets = self.team_sets.getTeamSets()
+        if len(team_sets) == 0:
+            print('no team sets, cannot find most recent database')
+            return
+        latest = sorted(team_sets, reverse=True)[0]
+        print('latest teamset is %s' % latest)
+        retval = self.team_sets.getGameId(latest)
+        print('and db is %s' % retval)
+        try:
+            e_cur = self.con.cursor()
+            e_cur.execute('USE %s' % retval)
+            e_cur.close()
+        except mdb.Error, e:
+            print("mostRecentDatabase, error %d: %s" % (e.args[0], e.args[1]))
+        return retval
+
+    def getDatabases(self):
+        retval = []
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute('SHOW DATABASES')
+            for (db) in r_cur:
+                if db[0].startswith('db_'):
+                    retval.append(db[0])
+        except mdb.Error, e:
+            print("listDatabases, error %d: %s" % (e.args[0], e.args[1]))
+        return retval
+        
+    def mostRecentDatabaseNOTUSED(self):
+        retval = None
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute('SHOW DATABASES')
+            for (db) in sorted(r_cur):
+                if db[0].startswith('db_'):
+                    parts = db[0].split('_')
+                    if parts[1].isdigit(): 
+                        retval = db[0]
+            e_cur = self.con.cursor()
+            e_cur.execute('USE %s' % retval)
+        except mdb.Error, e:
+            print("mostRecentDatabase, error %d: %s" % (e.args[0], e.args[1]))
+        return retval
+
+    def showOneCSI(self, name):
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT team, csi, cfg_file, pov, rcb, start_time, finish_time FROM sets WHERE sets.csi = '%s' ORDER BY team" % (name)) 
+            for (team, csi, cfg_file, pov, rcb, start_time, finish_time) in t_cur:
+              if finish_time is not None:
+                print("{} {} {} started: {:%d %b %Y %H:%M:%S} finished: {:%H:%M:%S}".format(team, csi, cfg_file, start_time, finish_time))
+                r_cur = self.con.cursor()
+                r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event FROM replays WHERE replay = '%s'" % (pov))
+                for (replay, duration, cb_user_cycles, cb_faults, display_event) in r_cur:
+                    print("{} {} {} {} {}".format(replay, duration, cb_user_cycles, cb_faults, display_event))
+                r_cur = self.con.cursor()
+                r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event FROM replays WHERE cb = '%s'" % (rcb))
+                for (replay, duration, cb_user_cycles, cb_faults, display_event) in r_cur:
+                    print("{} {} {} {} {}".format(replay, duration, cb_user_cycles, cb_faults, display_event))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showSummary(self):
+        try:
+            cur = self.con.cursor()
+            cur.execute("SELECT MIN(start_time) from sets")
+            row = cur.fetchone()
+            start = row[0]
+            cur.execute("SELECT MAX(finish_time) from sets")
+            row = cur.fetchone()
+            cur.close()
+            finish = row[0]
+            if start is not None and finish is not None:
+                print("start is  {:%d %b %Y %H:%M:%S}".format(start))
+                print("finish is {:%d %b %Y %H:%M:%S}".format(finish))
+                delta = finish - start
+                minutes, seconds = divmod(delta.seconds, 60)
+                print("delta %d:%d" % (minutes, seconds))
+            else:
+                cur = self.con.cursor()
+                cur.execute("SELECT MIN(time_start) from replays")
+                row = cur.fetchone()
+                start = row[0]
+                cur.execute("SELECT MAX(time_end) from replays")
+                row = cur.fetchone()
+                cur.close()
+                finish = row[0]
+                if start is not None and finish is not None:
+                    print("start is  {:%d %b %Y %H:%M:%S}".format(start))
+                    print("finish is {:%d %b %Y %H:%M:%S}".format(finish))
+                    delta = finish - start
+                    minutes, seconds = divmod(delta.seconds, 60)
+                    print("delta %d:%d" % (minutes, seconds))
+            cur = self.con.cursor()
+            cur.execute("SELECT COUNT(*) from replays")
+            row = cur.fetchone()
+            num_replays = row[0]
+            print("%d replays" % num_replays)
+            cur.close()
+            cur = self.con.cursor()
+            cur.execute("SELECT COUNT(*) from sets")
+            row = cur.fetchone()
+            print("%d sets" % row[0])
+            cur.close()
+            cur = self.con.cursor()
+            cur.execute("SELECT COUNT(*) from sets GROUP BY team")
+            row = cur.fetchall()
+            print("%d teams" % len(row))
+
+            cur.close()
+            cur = self.con.cursor()
+            cur.execute("SELECT COUNT(*) from sets WHERE done is TRUE")
+            row = cur.fetchone()
+            print("%d done sets" % row[0])
+            cur.close()
+
+            cur.close()
+            cur = self.con.cursor()
+            #cur.execute("SELECT COUNT(*) from sets WHERE done is TRUE AND rcb_cleared is TRUE AND pov_cleared is TRUE")
+            cur.execute("SELECT COUNT(*) from sets WHERE rcb_cleared is TRUE AND pov_cleared is TRUE")
+            row = cur.fetchone()
+            print("%d cleared " % row[0])
+            cur.close()
+
+            if num_replays == 0:
+                return
+            cur = self.con.cursor()
+            cur.execute("SELECT AVG(duration) from replays")
+            row = cur.fetchone()
+            print("average replay time: %d seconds" % row[0])
+            cur.close()
+            cur = self.con.cursor()
+            cur.execute("SELECT duration from replays ORDER BY duration")
+            rows = cur.fetchall()
+            quant = len(rows)
+            if quant > 2:
+                mid = quant/2
+                median = rows[mid]
+                print("median replay time: %d seconds" % median)
+            cur.close()
+            cur = self.con.cursor()
+            cur.execute("SELECT cb, replay, duration FROM replays ORDER BY duration DESC")
+            row = cur.fetchone()
+            minutes, seconds = divmod(row[2], 60)
+            print("max duration of %d:%d from %s : %s" % (minutes, seconds, row[0], row[1]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+ 
+    def showAllCSIs(self):
+        try:
+            c_cur = self.con.cursor()
+            c_cur.execute("SELECT name from csi")
+            for(name) in c_cur:
+                self.showOneCSI(name)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+                
+    def showAllSets(self):
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT team_set, team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time FROM sets ORDER BY team, csi") 
+            for (team_set, team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time) in t_cur:
+                done_time = 'not done'
+                if finish_time is not None:
+                    done_time = '{:%H:%M:%S}'.format(finish_time)
+                  # TBD fix this!
+                if pov is not None and pov != 'None' and len(pov) > 0:
+                      #print("POV: {} {} {} POV  {} vetted: {} started: {:%d %b %Y %H:%M:%S} finished: {:%H:%M:%S}".format(team_set, team, 
+                      print("POV: {} {} {} POV  {} vetted: {} started: {:%d %b %Y %H:%M:%S} finished: {}".format(team_set, team, 
+                          csi, cfg_file, pov_cleared, start_time, done_time))
+                      r_cur = self.con.cursor()
+                      r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event FROM replays WHERE team_set = '%s'" % (team_set))
+                      for (replay, duration, cb_user_cycles, cb_faults, display_event) in r_cur:
+                          print("{} {} {} {} {}".format(replay, duration, cb_user_cycles, cb_faults, display_event))
+                else:
+                      #print("POLL: {} {} {} RCB {} vetted: {} started: {:%d %b %Y %H:%M:%S} finished: {:%H:%M:%S}".format(team_set, team, 
+                      print("POLL: {} {} {} RCB {} vetted: {} started: {:%d %b %Y %H:%M:%S} finished: {}".format(team_set, team, 
+                          csi, cfg_file, rcb_cleared, start_time, done_time))
+                      r_cur = self.con.cursor()
+                      r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event, load_fail FROM replays WHERE team_set = '%s'" % (team_set))
+                      for (replay, duration, cb_user_cycles, cb_faults, display_event, load_fail) in r_cur:
+                          load_failed = ''
+                          if load_fail:
+                              load_failed = ' load_fail'
+                          print("{} {} {} {} {} ".format(replay, duration, cb_user_cycles, cb_faults, display_event, load_failed)+load_failed)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showFailedSets(self):
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time FROM sets WHERE (pov_cleared IS FALSE OR rcb_cleared IS FALSE) ORDER BY team, csi") 
+            for (team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time) in t_cur:
+                if finish_time is not None:
+                  print("{} {} {} rcb_cleared: {} pov_cleared {} started: {:%d %b %Y %H:%M:%S} finished: {:%H:%M:%S}".format(team, 
+                      csi, cfg_file, rcb_cleared, pov_cleared, start_time, finish_time))
+                  r_cur = self.con.cursor()
+                  r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event FROM replays WHERE replay = '%s'" % (pov))
+                  for (replay, duration, cb_user_cycles, cb_faults, display_event) in r_cur:
+                      print("{} {} {} {} {}".format(replay, duration, cb_user_cycles, cb_faults, display_event))
+                  r_cur = self.con.cursor()
+                  r_cur.execute("SELECT replay, duration, cb_user_cycles, cb_faults, display_event, load_fail FROM replays WHERE cb = '%s'" % (rcb))
+                  for (replay, duration, cb_user_cycles, cb_faults, display_event, load_fail) in r_cur:
+                      load_failed = ''
+                      if load_fail:
+                          load_failed = ' load_fail'
+                      print("{} {} {} {} {} ".format(replay, duration, cb_user_cycles, cb_faults, display_event, load_failed)+load_failed)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showOneSet(self, cfg_file):
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT team_set, team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time FROM sets WHERE cfg_file = '%s'" % (cfg_file))
+            for (team_set, team, csi, cfg_file, record, pov, pov_cleared, rcb, rcb_cleared, start_time, finish_time) in t_cur:
+                if finish_time is not None:
+                  print('duration cb_calls  cb_wrote cb_read cb_user_cycles cb_faults pov_calls')
+                  print("{} {} {} rcb_cleared: {} pov_cleared {} started: {:%d %b %Y %H:%M:%S} finished: {:%H:%M:%S}".format(team, 
+                      csi, cfg_file, rcb_cleared, pov_cleared, start_time, finish_time))
+                  r_cur = self.con.cursor()
+                  r_cur.execute("SELECT replay, duration, cb_calls, cb_wrote, cb_read, cb_user_cycles, cb_faults, display_event, load_fail, raw FROM replays WHERE team_set = '%s'" % (team_set))
+                  for (replay, duration, cb_calls, cb_wrote, cb_read, cb_user_cycles, cb_faults, display_event, load_fail, raw) in r_cur:
+                      load_failed = ''
+                      if load_fail:
+                          load_failed = ' load_fail'
+                      print("{} {} {} {} {} {} {} {} {}".format(replay, duration, cb_calls, cb_wrote, cb_read, cb_user_cycles, cb_faults, display_event, load_failed)+load_failed)
+                      print raw
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showAllReplacements(self):
+        print('%10s %10s %10s %10s' % ('csys', 'cw',  'cr',  'dur'))
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT id, replay, cb, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, cb_faults, wall_time, display_event FROM replays ORDER BY replay, cb")
+            for (id, replay, cb, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, cb_faults, wall_time, display_event) in r_cur:
+                p_cur = self.con.cursor()
+                p_cur.execute("SELECT COUNT(*) FROM protected_access WHERE replay_id = %d" % id)
+                access_count = p_cur.fetchone()[0]
+                print("%s %s \n%10d %10d %10d %10.2f 0x%x %d %5.2f %d %s" % (replay, cb, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, cb_faults, wall_time, access_count, display_event))
+                p_cur.close()
+            r_cur.close()
+
+            #for row in t_cur.fetchall():
+            #    print('team %s csi %s  pov: %s  rcb: %s' % (row[0], row[1], row[2], row[3]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showOneReplacements(self, cb, show_protected=False):
+        print('show replays for %s' % cb)
+        print('%-30s %6s %6s %6s %6s %8s %6s %6s %6s ' % ('replay', 'sys', 'wrote','read', 'dur', 'ucy', 'pf', 'wt', 'mp'))
+        #print('replay \tsys \twrote \tread \tdur \tucy \tpf \twt \tmp')
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT id, replay, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, cb_faults, wall_time, poll_fail, display_event, is_pov, team_set FROM replays WHERE cb = '%s'" % cb)
+            for (id, replay, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, cb_faults, wall_time, poll_fail, display_event, is_pov, team_set) in r_cur:
+                if poll_fail != 0:
+                    pe = 'poll_%d' % poll_fail
+                    display_event = display_event+" "+pe
+                p_cur = self.con.cursor()
+                p_cur.execute("SELECT length, location, delta FROM protected_access WHERE replay_id = %d" % id)
+                print("%-30s %6d %6d %6d  %6.2f 0x%-8x %6d %6.2f %6d %-6s %r %s" % (replay, cb_calls, cb_wrote, cb_read, duration, cb_user_cycles, 
+                      cb_faults, wall_time, p_cur.rowcount, display_event, is_pov, team_set))
+                if show_protected:
+                    for (length, location, delta) in p_cur:
+                        print("protected memory: %d %x %x" % (length, location, delta))
+                p_cur.close()
+            r_cur.close()
+
+            #for row in t_cur.fetchall():
+            #    print('team %s csi %s  pov: %s  rcb: %s' % (row[0], row[1], row[2], row[3]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def summaryAccessAllCB(self, plot=False):
+        total_cb_patched = 0
+        total_cb_vuln = 0
+        cb_patched_access = 0
+        cb_vuln_access = 0
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT DISTINCT cb FROM replays ORDER BY cb")
+            for (cb) in t_cur:
+                #print('the cb is %s  type is %s' % (cb, type(cb)))
+                # wtf is this a tuple?
+                total = self.summaryAccess(cb[0], plot)
+                if cb[0].endswith('MG'):
+                    total_cb_patched += 1
+                    if total > 0:
+                        cb_patched_access += 1
+                else:
+                    total_cb_vuln += 1
+                    if total > 0:
+                        cb_vuln_access += 1
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+            exit(1)
+        print('results in /tmp/xxx-summary.csl')
+        print('%d of %d patched CBs had magic page access' % (cb_patched_access, total_cb_patched))
+        print('%d of %d vulnerable CBs had magic page access' % (cb_vuln_access, total_cb_vuln))
+
+    def allAvgReplays(self):
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT DISTINCT cb FROM replays ORDER BY cb")
+            print('cb                   \t\tcalls \twrote \tread \tsecs \twall \tcount \tfaults(min|avg|max)')
+            for (cb) in t_cur:
+                self.avgReplays(cb[0])
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+            exit(1)
+
+    def avgReplays(self, cb):
+        try:
+            #print('summaryAccess for cb %s' % cb)
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT AVG(cb_calls), AVG(cb_wrote), AVG(cb_read), AVG(duration), AVG(wall_time), COUNT(*), MIN(cb_faults), ROUND(AVG(cb_faults)), MAX(cb_faults) FROM replays WHERE cb = '%s' AND is_pov IS FALSE" % cb)
+            for (calls, wrote, read, duration, wall_time, count, min_faults, avg_faults, max_faults) in r_cur:
+                if calls is None:
+                    print('No data for %s' % cb)
+                    return
+                if avg_faults is None:
+                    avg_faults = 0
+                if min_faults is None:
+                    min_faults =0
+                if max_faults is None:
+                    max_faults=0
+                print("%-30s \t%d \t%d \t%d \t%6.2f \t%6.2f \t%d \t%d|%d|%d" % (cb, calls, wrote, read, duration, wall_time, count, min_faults+1, avg_faults+1, max_faults+1))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def summaryAccess(self, cb, plot=False):
+        try:
+            #print('summaryAccess for cb %s' % cb)
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT id, replay, cb_cycles FROM replays WHERE cb = '%s' AND is_pov IS FALSE" % cb)
+            num_replays = r_cur.rowcount
+            total_count = 0
+            if plot:
+                i = 0
+                polls = []
+                lens = []
+            for (id, replay, cb_cycles) in r_cur:
+                p_cur = self.con.cursor()
+                p_cur.execute("SELECT SUM(length) FROM protected_access WHERE replay_id = %d" % id)
+                length = p_cur.fetchone()[0]
+                if length is None:  
+                    length = 0
+                if plot:
+                    i += 1    
+                    polls.append(i)
+                    lens.append(length) 
+                total_count += length
+                p_cur.close()
+            r_cur.close()
+            print('total count is %d' % total_count)
+            if plot and total_count > 0:
+                fname='/tmp/%s-summary.csl' % (cb)
+                print('fname is %s' % fname)
+                fid=open(fname, 'w')
+                fid.write('%s\n' % (cb))
+                poll_s = ','.join([str(x) for x in polls])
+                length_s = ','.join([str(x) for x in lens])
+                fid.write('%s\n' % poll_s)
+                fid.write('%s\n' % length_s)
+                fid.close()
+                self.plotAccess(cb, 20)
+            print('%s had %d replays, total access is %d' % (cb, num_replays, total_count))
+            return total_count
+            #for row in t_cur.fetchall():
+            #    print('team %s csi %s  pov: %s  rcb: %s' % (row[0], row[1], row[2], row[3]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+
+    def plotAccess(self, cb, num_plots=1):
+        print('show replays for %s doing %d plots' % (cb, num_plots))
+        fid=open('/tmp/%s-execution.csl' % (cb), 'w')
+        fid.write('%s %d\n' % (cb, num_plots))
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT id, replay, cb_cycles FROM replays WHERE cb = '%s' AND is_pov IS FALSE ORDER BY replay" % cb)
+            inc = r_cur.rowcount / num_plots - 1
+            print('inc is %d' % inc)
+            i = 0
+            for (id, replay, cb_cycles) in r_cur:
+                if i < inc:
+                    i += 1
+                    continue
+                i = 0
+                print("will generate data for plots for %s 0x%x" % (replay, cb_cycles))
+                p_cur = self.con.cursor()
+                p_cur.execute("SELECT length, location, delta FROM protected_access WHERE replay_id = %d" % id)
+                len_points = []
+                delta_points = []
+                for (length, location, delta) in p_cur:
+                    len_points.append(length)
+                    percent = delta*100/cb_cycles
+                    delta_points.append(percent)
+                    #print("protected memory: %d %x %x" % (length, location, delta))
+                len_s = ','.join([str(x) for x in len_points])
+                delta_s = ','.join([str(x) for x in delta_points])
+                fid.write('%s\n' % len_s)
+                fid.write('%s\n' % delta_s)
+                p_cur.close()
+            fid.close()
+            r_cur.close()
+
+            #for row in t_cur.fetchall():
+            #    print('team %s csi %s  pov: %s  rcb: %s' % (row[0], row[1], row[2], row[3]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showDrones(self):
+        tot_count = 0
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT drone, COUNT(*) as count FROM replays GROUP BY drone ORDER BY count")
+            for(drone, count) in r_cur:
+                print('%s : %d' % (drone, count))
+                tot_count += count
+            print('%d drones processed %d replays' % (r_cur.rowcount, tot_count))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+        
+    def showFailPoll(self):
+        print 'showFailPoll'
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, poll_fail, display_event FROM replays WHERE poll_fail != 0  ORDER BY replay, cb")
+            for (replay, cb, poll_fail, display_event) in r_cur:
+                print("%s  %s  %s %s" % (replay, cb, poll_fail, display_event.strip()))
+
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+ 
+    def showFailPoV(self):
+        print 'showFailPoV'
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE cb NOT LIKE '%_MG' AND is_pov IS TRUE AND display_event NOT LIKE '%POV%'  ORDER BY replay, cb")
+            #r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE is_pov IS TRUE ORDER BY replay, cb")
+            for (replay, cb, display_event, drone) in r_cur:
+                print("%s  %s  %s %s" % (replay, cb, display_event.strip(), drone))
+            r_cur.close()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showFailPatched(self):
+        print 'showFailPatched'
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE cb LIKE '%_MG' AND is_pov IS TRUE AND display_event LIKE '%POV%'  ORDER BY replay, cb")
+            #r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE is_pov IS TRUE ORDER BY replay, cb")
+            for (replay, cb, display_event, drone) in r_cur:
+                print("%s  %s  %s %s" % (replay, cb, display_event.strip(), drone))
+            r_cur.close()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def tupSub(self, team_set, cfg_file, team, pov_team, round_id, csid=None, prev_csid=None):
+        r_cur = self.con.cursor()
+        r_cur.execute('SELECT display_event, is_pov, replay, cb, drone FROM replays where team_set = "%s"' % team_set) 
+        if r_cur.rowcount > 0 and csid is not None:
+            if csid != prev_csid:
+                print csid 
+        for(display_event, is_pov, replay, cb, drone) in r_cur:
+            if is_pov:
+                print('pov:%-5s def:%-5s rnd:%-5s %20s %20s %20s' % (pov_team, team, round_id, cfg_file, 
+                  display_event, drone))
+            else:
+                print('%9s %9s %9s %20s %20s' % ('poll', team, round_id, cfg_file, display_event))
+        r_cur.close()
+
+    def showTuple(self, args):
+        print('%9s %9s %9s %20s %20s' % ('poll/pov', 'def_team', 'round', 'cfg', 'event'))
+        try:
+            if len(args) == 2:
+                ts_cur = self.con.cursor()
+                ts_cur.execute('SELECT csi, cfg_file, team, pov_team, round_id, team_set FROM sets ORDER BY csi, round_id, team, pov_team')
+                prev_csi=None 
+                for (csi, cfg_file, team, pov_team, round_id, team_set) in ts_cur:
+                    if csi != prev_csi:
+                        print(csi)
+                        prev_csi = csi
+                    self.tupSub(team_set, cfg_file, team, pov_team, round_id)
+            elif len(args) == 3:
+                ts_cur = self.con.cursor()
+                ts_cur.execute('SELECT cfg_file, team, pov_team, round_id, team_set FROM sets WHERE rcb like "%%%s%%"' % args[2])
+                for (cfg_file, team, pov_team, round_id, team_set) in ts_cur:
+                    print('%s %s %s' % (team_set, cfg_file, round_id))
+                    self.tupSub(team_set, cfg_file, team, pov_team, round_id)
+            elif len(args) == 4 and args[2] == '-r':
+                ts_cur = self.con.cursor()
+                round_id = args[3]
+                ts_cur.execute('SELECT csi, cfg_file, team, pov_team, team_set FROM sets WHERE round_id = "%s" ORDER BY csi, team, pov_team' % round_id)
+                prev_csi=None 
+                for (csi, cfg_file, team, pov_team, team_set) in ts_cur:
+                    self.tupSub(team_set, cfg_file, team, pov_team, round_id, csid=csi, prev_csid=prev_csi)
+                    if csi != prev_csi:
+                        prev_csi = csi
+                
+            elif len(args) == 4:
+                ts_cur = self.con.cursor()
+                ts_cur.execute('SELECT cfg_file, team, pov_team, round_id, team_set FROM sets WHERE rcb like "%%%s%%" and pov_team = "%s"' % (args[2], args[3]))
+                for (cfg_file, team, pov_team, round_id, team_set) in ts_cur:
+                    self.tupSub(team_set, cfg_file, team, pov_team, round_id)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+        
+    def showPerDB(self, fun, arg):
+        db_list = self.getDatabases()
+        for db in sorted(db_list, reverse=True):    
+            try:
+                r_cur = self.con.cursor()
+                r_cur.execute("USE %s" % db)
+                print('db: %s' % db)
+                fun(arg)
+            except mdb.Error, e:
+                print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showScoresPerDB(self):
+        db_list = self.getDatabases()
+        for db in sorted(db_list, reverse=True):    
+            try:
+                r_cur = self.con.cursor()
+                r_cur.execute("USE %s" % db)
+                print('db: %s' % db)
+                self.showScores(False)
+            except mdb.Error, e:
+                print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showDefendRef(self):
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, display_event, drone, FROM replays WHERE is_pov IS TRUE AND replay LIKE 'POV%' ORDER BY cb")
+            for (replay, cb, display_event, drone) in r_cur:
+                print("%s  %s  %s  %s  " % (replay, cb, display_event.strip(), drone))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+  
+    def showScores(self, verbose):
+        cfe_scores = cfeScores.cfeScores()
+        with open('/etc/cgc-monitor/csid_up_list.json') as fh:
+            up_list = json.load(fh)
+        cb_map = {}
+        with open('/etc/cgc-monitor/cbmap.txt') as fh_map:
+            print('cbmap open')
+            for line in fh_map:
+                parts = line.strip().split()
+                cb_map[parts[1]] = parts[0]
+
+        if not verbose:
+            print('%15s %9s %9s %9s %20s' % ('CB', 'pov_team', 'def_team', 'round', 'cfg_file'))
+        try:
+            r_cur = self.con.cursor()
+            ts_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, display_event, drone, team_set FROM replays WHERE is_pov IS TRUE AND display_event LIKE '%POV%'  ORDER BY replay, cb")
+            #r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE is_pov IS TRUE ORDER BY replay, cb")
+            for (replay, cb, display_event, drone, team_set) in r_cur:
+                #print("%s  %s  %s  %s  %s " % (replay, cb, display_event.strip(), drone, team_set))
+                ts_cur.execute('SELECT cfg_file, team, pov_team, round_id FROM sets WHERE team_set = "%s"' % team_set)
+                for (cfg_file, team, pov_team, round_id) in ts_cur:
+                    common = utils.getCommonNameSub(cb)
+                    is_schedule = self.schedule.isIdInRound(common, int(round_id))
+                    not_sched = ""
+                    not_scored = ""
+                    if not is_schedule:
+                        not_sched = "NOT SCHEDULED"
+                    if verbose:
+                        print("%s  %s  %s  %s  %s %s %s %s" % (replay, cb, display_event.strip(), drone, cfg_file, pov_team, team, round_id))
+                    else:
+                        cb_id = cb.split('-')[1]
+                        in_cfe = cfe_scores.didScore(cb_id, pov_team, team, round_id)
+                        if in_cfe is None:
+                            csid = cb_map[cb_id]
+                            if round_id in up_list[csid][team]:
+                                not_scored = "not_scored" 
+                            else:
+                                not_scored = "not up"
+                        print('%15s pov:%-5s def:%-5s %9s %20s %15s %s %s' % (cb_id, pov_team, team, round_id, cfg_file, display_event, not_sched, not_scored))
+            ts_cur.close()
+            r_cur.close()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def showSEGV(self, verbose):
+        cfe_scores = cfeScores.cfeScores()
+        with open('/etc/cgc-monitor/csid_up_list.json') as fh:
+            up_list = json.load(fh)
+        cb_map = {}
+        with open('/etc/cgc-monitor/cbmap.txt') as fh_map:
+            print('cbmap open')
+            for line in fh_map:
+                parts = line.strip().split()
+                cb_map[parts[1]] = parts[0]
+
+        if not verbose:
+            print('%15s %9s %9s %9s %20s' % ('CB', 'pov_team', 'def_team', 'round', 'cfg_file'))
+        try:
+            r_cur = self.con.cursor()
+            ts_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, display_event, drone, team_set FROM replays WHERE is_pov IS TRUE AND display_event NOT LIKE '%POV%' AND display_event LIKE '%SEGV%'  ORDER BY replay, cb")
+            #r_cur.execute("SELECT replay, cb, display_event, drone FROM replays WHERE is_pov IS TRUE ORDER BY replay, cb")
+            for (replay, cb, display_event, drone, team_set) in r_cur:
+                #print("%s  %s  %s  %s  %s " % (replay, cb, display_event.strip(), drone, team_set))
+                ts_cur.execute('SELECT cfg_file, team, pov_team, round_id FROM sets WHERE team_set = "%s"' % team_set)
+                for (cfg_file, team, pov_team, round_id) in ts_cur:
+                    common = utils.getCommonNameSub(cb)
+                    is_schedule = self.schedule.isIdInRound(common, int(round_id))
+                    not_sched = ""
+                    not_scored = ""
+                    if not is_schedule:
+                        not_sched = "NOT SCHEDULED"
+                    if verbose:
+                        print("%s  %s  %s  %s  %s %s %s %s" % (replay, cb, display_event.strip(), drone, cfg_file, pov_team, team, round_id))
+                    else:
+                        cb_id = cb.split('-')[1]
+                        in_cfe = cfe_scores.didScore(cb_id, pov_team, team, round_id)
+                        if in_cfe is None:
+                            csid = cb_map[cb_id]
+                            if round_id in up_list[csid][team]:
+                                not_scored = "not_scored" 
+                            else:
+                                not_scored = "not up"
+                        print('%15s pov:%-5s def:%-5s %9s %20s %15s %s %s' % (cb_id, pov_team, team, round_id, cfg_file, display_event, not_sched, not_scored))
+            ts_cur.close()
+            r_cur.close()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def findRCB(self, rcb):
+        print('%9s %9s %9s %20s %20s' % ('poll/pov', 'def_team', 'round', 'cfg', 'event'))
+        try:
+            r_cur = self.con.cursor()
+            ts_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, display_event, drone, team_set FROM replays WHERE cb = '%s'  ORDER BY replay" % rcb)
+            for (replay, display_event, drone, team_set) in r_cur:
+                ts_cur.execute('SELECT cfg_file, team, pov_team, round_id FROM sets WHERE team_set = "%s" ORDER BY team, round_id' % team_set)
+                for (cfg_file, team, pov_team, round_id) in ts_cur:
+                    self.tupSub(team_set, cfg_file, team, pov_team, round_id)
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+
+    def showSlowest(self):
+        try:
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, duration, cb_user_cycles, cb_faults, display_event FROM replays ORDER BY duration DESC")
+            for (replay, cb, duration, cb_user_cycles, cb_faults, display_event) in r_cur:
+                    print("%s %s %6.2f %d %d %s" % (replay, cb, duration, cb_user_cycles, cb_faults, display_event))
+
+            #for row in t_cur.fetchall():
+            #    print('team %s csi %s  pov: %s  rcb: %s' % (row[0], row[1], row[2], row[3]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+
+    def coverageAll(self, cc_con=None):
+        if cc_con is None:
+            try:
+                cc_con = mdb.connect('master', 'cgc', 'password', self.cfg.cc_db_name)
+            except mdb.Error, e:
+                print("reportSQL coverageAll connect error %d: %s" % (e.args[0], e.args[1]))
+                return
+        try:
+            s_cur = cc_con.cursor()
+            s_cur.execute("SELECT DISTINCT csi FROM code_coverage")
+            csi_bins = s_cur.fetchall()
+        except mdb.Error, e:
+            print("reportSQL updateCsiCoverage select csi_bin error %d: %s" % (e.args[0], e.args[1]))
+            return
+        for binary in csi_bins:
+            self.coverageCB(binary[0], cc_con)
+
+    def bestCoverageAll(self, cc_con=None):
+        if cc_con is None:
+            try:
+                cc_con = mdb.connect('master', 'cgc', 'password', self.cfg.cc_db_name)
+            except mdb.Error, e:
+                print("reportSQL bestCoverageAll connect error %d: %s" % (e.args[0], e.args[1]))
+                return
+        try:
+            s_cur = cc_con.cursor()
+            s_cur.execute("SELECT DISTINCT csi FROM best_polls")
+            csi_list = s_cur.fetchall()
+        except mdb.Error, e:
+            print("reportSQL select csi  error %d: %s" % (e.args[0], e.args[1]))
+            return
+        for csi in csi_list:
+            self.bestCoverage(csi[0], cc_con)
+       
+    def bestCoverage(self, csi, cc_con=None):
+        csi_bins = None
+        if cc_con is None:
+            try:
+                cc_con = mdb.connect('master', 'cgc', 'password', self.cfg.cc_db_name)
+            except mdb.Error, e:
+                print("reportSQL coverageCB connect error %d: %s" % (e.args[0], e.args[1]))
+                return
+        csi_best = None
+        try:
+            t_cur = cc_con.cursor()
+            t_cur.execute("SELECT replay, untouched_blocks FROM best_polls WHERE csi = '%s'" % (csi))
+            csi_best = t_cur.fetchall()
+        except mdb.Error, e:
+            print("reportSQL bestCoverage select csi_bin error %d: %s" % (e.args[0], e.args[1]))
+            return
+        for row in csi_best:
+            print('replay: %s  untouched: %d' % (row[0], row[1]))
+ 
+    def coverageCB(self, csi, cc_con=None):
+        csi_bins = None
+        if cc_con is None:
+            try:
+                cc_con = mdb.connect('master', 'cgc', 'password', self.cfg.cc_db_name)
+            except mdb.Error, e:
+                print("reportSQL coverageCB connect error %d: %s" % (e.args[0], e.args[1]))
+                return
+        try:
+            s_cur = cc_con.cursor()
+            s_cur.execute("SELECT DISTINCT csi_bin FROM code_coverage WHERE csi = '%s'" % csi)
+            csi_bins = s_cur.fetchall()
+        except mdb.Error, e:
+            print("reportSQL updateCsiCoverage select csi_bin error %d: %s" % (e.args[0], e.args[1]))
+            return
+
+        for binary in csi_bins:
+
+            total_count = None
+            try:
+                u_cur = cc_con.cursor()
+                u_cur.execute("SELECT COUNT(*) FROM basic_blocks WHERE csi = '%s' and csi_bin = '%s'" % (csi, binary[0]))
+                total_count = u_cur.fetchone()[0]
+            except mdb.Error, e:
+                print("reportSQL updateCsiCoverage select count error %d: %s" % (e.args[0], e.args[1]))
+                return
+
+            try:
+                r_cur = cc_con.cursor()
+                r_cur.execute("SELECT touched_blocks FROM total_code_coverage WHERE csi = '%s' AND csi_bin = '%s'" % (csi, binary[0]))
+                one = r_cur.fetchone()
+                if one is not None:
+                    barray = bitArray.load(one[0])
+                    num_touched = bitArray.countbits(barray)
+                    percent = num_touched / float(total_count)
+                    print('binary: %s %d of %d %02f' % (binary[0], num_touched, total_count, percent))
+                else:
+                    print('no total_code_coverage entry for bin %s' % binary[0])
+            except mdb.Error, e:
+                print "error %d: %s" % (e.args[0], e.args[1])
+                return
+
+    def povFromPoll(self):
+        '''
+        Find polls that have some display event, or PoVs against vulnerable CBs that have nothing, or timeouts
+        '''
+        try:
+            print('replay \tcb \tduration \tcyc \tflts \tevent \tdrone')
+            r_cur = self.con.cursor()
+            r_cur.execute("SELECT replay, cb, duration, cb_user_cycles, cb_faults, display_event, drone FROM replays WHERE is_pov IS FALSE AND display_event IS NOT NULL AND display_event != '' ORDER BY replay, cb")
+            for (replay, cb, duration, cb_user_cycles, cb_faults, display_event, drone) in r_cur:
+                    print("%s %s %6.2f %d %d %s %s" % (replay, cb, duration, cb_user_cycles, cb_faults, display_event, drone))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+        
+        try:
+            s_cur = self.con.cursor()
+            s_cur.execute("SELECT replay, cb, duration, cb_user_cycles, cb_faults, display_event FROM replays WHERE is_pov IS TRUE AND cb NOT LIKE '%_MG' AND (display_event IS NULL OR display_event = '' OR display_event LIKE '%SIGALRM') ORDER BY replay, cb")
+            for (replay, cb, duration, cb_user_cycles, cb_faults, display_event) in s_cur:
+                    print("%s %s %6.2f %d %d %s" % (replay, cb, duration, cb_user_cycles, cb_faults, display_event))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+       
+    def showTableLanded(self):
+        cb_list = []
+        owned = {}
+        team_scored = []
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT DISTINCT cb FROM replays ORDER BY cb")
+            cbs = t_cur.fetchall()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+            exit(1)
+        for cb in cbs:
+            parts = cb[0].split('_')
+            acb = parts[0]+'_'+parts[1]
+            if acb not in cb_list:
+                cb_list.append(acb)
+        for cb in cb_list:
+            owned[cb] = []
+            scores = None
+            try:
+                t_cur = self.con.cursor()
+                match=cb+'%'
+                t_cur.execute("SELECT DISTINCT replay from replays WHERE cb LIKE '%s' and is_score = TRUE and is_pov = TRUE ORDER BY replay" % match)
+                scores = t_cur.fetchall()
+            except mdb.Error, e:
+                print "error %d: %s" % (e.args[0], e.args[1])
+                exit(1)
+            for s in scores:
+                parts = s[0].split('_')
+                team = parts[3]
+                if team not in owned[cb]:
+                    owned[cb].append(team)
+                if team not in team_scored:
+                    team_scored.append(team)
+        row = '                '
+        for team in team_scored:
+            row = row + '  %s  ' % team
+        print row
+            
+        for cb in cb_list:        
+            row = cb
+            for team in team_scored:
+                if cb in owned and team in owned[cb]:
+                    row = row+'   X   '
+                else: 
+                    row = row+'   -   '
+            print row
+        
+    def showTableDefense(self):
+        cb_list = []
+        owned = {}
+        team_scored = []
+        try:
+            t_cur = self.con.cursor()
+            t_cur.execute("SELECT DISTINCT cb FROM replays ORDER BY cb")
+            cbs = t_cur.fetchall()
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+            exit(1)
+        for cb in cbs:
+            parts = cb[0].split('_')
+            acb = parts[0]+'_'+parts[1]
+            if acb not in cb_list:
+                cb_list.append(acb)
+        for cb in cb_list:
+            owned[cb] = []
+            scores = None
+            try:
+                t_cur = self.con.cursor()
+                match=cb+'%'
+                t_cur.execute("SELECT DISTINCT replay from replays WHERE cb LIKE '%s' and is_score = TRUE and is_pov = TRUE ORDER BY replay" % match)
+                scores = t_cur.fetchall()
+            except mdb.Error, e:
+                print "error %d: %s" % (e.args[0], e.args[1])
+                exit(1)
+            for s in scores:
+                parts = s[0].split('_')
+                team = parts[3]
+                if team not in owned[cb]:
+                    owned[cb].append(team)
+                if team not in team_scored:
+                    team_scored.append(team)
+        row = '                '
+        for team in team_scored:
+            row = row + '  %s  ' % team
+        print row
+            
+        for cb in cb_list:        
+            row = cb
+            for team in team_scored:
+                if cb in owned and team in owned[cb]:
+                    row = row+'   X   '
+                else: 
+                    row = row+'   -   '
+            print row
+
+    def mft(self, substring):
+        try:
+            t_cur = self.con.cursor()
+            s_cur = self.con.cursor()
+            match='%'+substring
+            t_cur.execute("SELECT team_set, display_event from replays WHERE replay LIKE '%s' " % match)
+            matches = t_cur.fetchall()
+            for m in matches:
+                print(m[0])
+                s_cur.execute("SELECT csi, cfg_file, team, pov_team, round_id FROM sets WHERE team_set = '%s' ORDER BY csi, round_id, team, pov_team" % m[0])
+                for (csi, cfg_file, team, pov_team, round_id) in s_cur:
+                    print('%s %s def_team: %s pov_team:%s round: %s event: %s' % (csi, cfg_file, team, pov_team, round_id, m[1]))
+        except mdb.Error, e:
+            print "error %d: %s" % (e.args[0], e.args[1])
+            exit(1)
+
+
+        
+    def zkStop(self): 
+        self.zk.stop()
+
+
+    def usage(self):
+        print 'as [cfg_file] -- list team sets and their replays, sorted by team & cb, or just one'
+        print 'fv -- show team sets that failed vetting'
+        print 'ar -- list all replays, sorted by replay and cb'
+        print 'oc CB [protected] -- list all replays, for one cb'
+        print 'pa CB [count] -- create plot data (/tmp/<replay>.csl files) of protected access for all replays of a given cb'
+        print 'sa [plot] -- summarize access to magic page for all CBs, with optional plot summary & execution access data'
+        print 'ac [csi] -- all CSIs, or a single given CSI'
+        print 'cc csi -- code coverage for csi'
+        print 'ca code coverage for all csis'
+        print 'cb best code coverage for a csi'
+        print 'st -- create table of who landed on what'
+        print 'ss -- summary'
+        print 'score [-l] -- show povs that succeeded, use -l for only the latest game (i.e., sparring session)'
+        print 'segv [-l] -- show povs that failed but led to SEGV'
+        print 'ftuple [-r <round>] | [csid] [pov_team]  -- show all replays, or those for a given round, csid or csid pov_team pair'
+        print 'fail_pov -- show povs failed, and povs that scored on the patched CB'
+        print 'fail_poll -- show polls that failed'
+        print 'odd -- list polls that have events and PoVs that do not match?'
+
+rs = reportSQL()
+if len(sys.argv) < 2:
+   rs.usage()
+   exit(1)
+
+if sys.argv[1] == 'as':
+   if len(sys.argv) == 2:
+       rs.showAllSets()
+   elif len(sys.argv) == 3:
+       rs.showOneSet(sys.argv[2])
+   else:
+       rs.usage()
+
+elif sys.argv[1] == 'fv':
+   if len(sys.argv) == 2:
+       rs.showFailedSets()
+   else:
+       rs.usage()
+
+elif sys.argv[1] == 'ac':
+    if len(sys.argv) == 2:
+        rs.showAllCSIs()
+    else:
+        print('showing replacements for %s' % sys.argv[2])
+        rs.showOneCSI(sys.argv[2])
+elif sys.argv[1] == 'ar':
+    rs.showAllReplacements() 
+elif sys.argv[1] == 'oc' and len(sys.argv)>2:
+    show_protected = False
+    if len(sys.argv) == 4 and sys.argv[3] == "protected":
+        show_protected = True
+    if len(sys.argv) == 4 and sys.argv[3] == "-a":
+        rs.showPerDB(rs.showOneReplacements, sys.argv[2])
+    else:
+        rs.showOneReplacements(sys.argv[2], show_protected) 
+elif sys.argv[1] == 'pa':
+    count = 1
+    if len(sys.argv) == 4:
+        count = int(sys.argv[3])
+    rs.plotAccess(sys.argv[2], count) 
+elif sys.argv[1] == 'sa':
+    plot = False
+    if len(sys.argv) == 3:
+        if sys.argv[2] == 'plot':
+            rs.summaryAccessAllCB(True)
+        else:
+            rs.summaryAccess(sys.argv[2], True)
+    else:
+        rs.summaryAccessAllCB(False)
+
+elif sys.argv[1] == 'avg':
+    if len(sys.argv) == 3:
+        rs.avgReplays(sys.argv[2])
+    else:
+        rs.allAvgReplays()
+
+elif sys.argv[1] == 'ss':
+    rs.showSummary() 
+elif sys.argv[1] == 'sd':
+    rs.showDrones() 
+elif sys.argv[1] == 'slow':
+    rs.showSlowest() 
+elif sys.argv[1] == 'ftuple':
+    if len(sys.argv) >= 3 and sys.argv[2]=='-a':
+        rs.showPerDB(rs.showTuple, sys.argv[1:]) 
+    else:
+        rs.showTuple(sys.argv) 
+elif sys.argv[1] == 'score':
+    if len(sys.argv) == 3 and sys.argv[2]=='-v':
+        rs.showScores(True)
+    elif len(sys.argv) == 3 and sys.argv[2]=='-l':
+        rs.showScores(False)
+    else:
+        rs.showPerDB(rs.showScores, False)
+elif sys.argv[1] == 'segv':
+        rs.showSEGV(False)
+elif sys.argv[1] == 'defend_ref':
+    rs.showDefendRef() 
+elif sys.argv[1] == 'frcb':
+    if len(sys.argv) == 3:
+        rs.findRCB(sys.argv[2])
+    else:
+        usage()
+elif sys.argv[1] == 'fail_pov':
+    rs.showFailPoV()
+    rs.showFailPatched()
+elif sys.argv[1] == 'fail_poll':
+    rs.showFailPoll()
+elif sys.argv[1] == 'st':
+    rs.showTableLanded()
+elif sys.argv[1] == 'odd':
+    rs.povFromPoll() 
+elif sys.argv[1] == 'cc':
+    rs.coverageCB(sys.argv[2])
+elif sys.argv[1] == 'ca':
+    rs.coverageAll()
+elif sys.argv[1] == 'cb':
+    rs.bestCoverage(sys.argv[2])
+elif sys.argv[1] == 'cba':
+    rs.bestCoverageAll()
+elif sys.argv[1] == 'mft':
+    rs.mft(sys.argv[2])
+
+else:
+    rs.usage()
+    exit(1)
+rs.zkStop()   

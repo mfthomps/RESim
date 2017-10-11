@@ -1,0 +1,24 @@
+#!/usr/bin/python
+from pgRepo import models 
+from pgRepo import cutils
+import sys
+import os
+import shutil
+from monitorLibs import szk
+from monitorLibs import utils
+from monitorLibs import configMgr
+'''
+Create a forensics-local repo of CBs / PoVs / polls taken from the MITLL database server
+TBD: only copies 2 polls.  Find the ones with good code coverage and copy those.
+'''
+cfg = configMgr.configMgr()
+        
+db = models.db_init(host='10.10.10.30')
+if db is None:
+    print('db init failed, exit')
+    exit(1)
+
+events = models.Event.select()
+for e in events:
+    event_sets = models.EventCset.get(e.event_name)
+    print('event %s has %d csets' % (e.event_name, len(event_sets)))

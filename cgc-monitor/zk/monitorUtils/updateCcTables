@@ -1,0 +1,112 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import logging
+import os
+import sys
+from monitorLibs import configMgr
+from monitorLibs import accessSQL
+from monitorLibs import utils
+from monitorLibs import szk
+'''
+Update code coverage tables
+'''
+class updateCcTables():
+    def __init__(self):
+        self.cfg = configMgr.configMgr()
+        zk = szk.szk(None, self.cfg)
+        self.lgr = utils.getLogger('updateCcTabls', self.cfg.logdir)
+        self.sql = accessSQL.accessSQL(self.cfg.db_name, self.lgr)
+        print('done init')
+
+    def updateAllPolls(self):
+        '''
+         
+        '''
+        print('updateCcTables, call udpateAllPolls for db %s' % self.cfg.cc_db_name)
+        self.sql.updateAllPolls(self.cfg.cc_db_name)
+
+    def updateBestPolls(self):
+        print('updateCcTables, call udpateAllBestPolls for db %s' % self.cfg.cc_db_name)
+        self.lgr.debug('updateCcTables, call udpateAllBestPolls for db %s' % self.cfg.cc_db_name)
+        self.sql.updateAllBestPolls(self.cfg.cc_db_name)
+
+    def updateTotal(self):
+        '''
+        Look at all replays and update the total coverage tables
+        '''
+        self.sql.updateTotalCoverage(self.cfg.cc_db_name)
+
+    def updateBB(self):
+        '''
+        Read Ida-generated basic block files for each cb and update the database
+        '''
+        self.sql.connectCC(self.cfg.cc_db_name)
+        self.lgr.debug('updateBB')
+        cb_list = os.listdir(self.cfg.cb_dir)
+        for cb in cb_list:
+            dest = os.path.join(self.cfg.artifact_dir, utils.pathFromCommon(cb), 'ida')
+            bin_list = os.listdir(dest)
+            if len(bin_list) > 0:
+                self.lgr.debug('updateCcTables, update, replace basic blocks for %s' % cb)
+                self.sql.rmBasicBlocks(cb)
+            for binary in bin_list:
+                # avoid ida .til, .nam, etc.
+                if not '.' in binary:
+                    fname = os.path.join(dest, binary, "blocks.txt")
+                    with open(fname) as fhandle:
+                        lines = fhandle.readlines()
+                        for function in lines:
+                            items = function.split()
+                            for b in items[2:]:
+                                value = int(b, 16)
+                                self.sql.addBasicBlock(cb, binary, value)
+
+def usage():
+    print('updateCcTables [-bb | -tc | -bp]')
+    print('\t -bb: basic blocks;  -tc total coverage  -bp best polls')
+
+
+if __name__ == "__main__":
+    uc = updateCcTables()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '-bb':
+            print('rebuilding BB tables, this will take a while') 
+            uc.updateBB()
+            print('done rebuilding BB tables')
+        elif sys.argv[1] == '-tc':
+            print('updating total coverage')
+            uc.updateTotal()
+            print('done updating total')
+        if sys.argv[1] == '-bp':
+            print('rebuilding bestpoll tables, this will take a while') 
+            uc.updateBestPolls()
+            print('done rebuilding BB tables')
+        else:
+            usage() 
+    else:
+        print('update code coverage tables')
+        uc.updateAllPolls()
+        print('done update code coverage tables')

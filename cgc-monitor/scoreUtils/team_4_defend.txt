@@ -1,0 +1,397 @@
+# Summary of team 4 defenses.  Each CB service is presented separately below.
+# RCBs are listed with their round numbers and availability.  Scores against RCBs are noted.
+
+
+CROMU_00046, introduced in round 53, through 66.  
+     57 3316836470-CROMU_00046-14f5d0b79a258758264472879f5a68fd30b9df4a2eb44bdad5c8bed4b061f3f9.rcb availability: 1.000000 
+
+
+CROMU_00047, introduced in round 71, through 94.  
+
+
+CROMU_00048, introduced in round 39, through 52.  
+
+
+CROMU_00051, introduced in round 60, through 73. First failed defense in 64. First score by this team (4) in 73
+     67 1029868449-CROMU_00051-6a3158787aad3bbbdecd71cb4cd150c4dbb7d6188da0f7035c2c19313fe782cc.rcb availability: 1.000000 
+
+
+CROMU_00054, introduced in round 31, through 44.  
+
+
+CROMU_00055, introduced in round 1, through 24. First failed defense in 2. First score by this team (4) in 2
+
+
+CROMU_00057, introduced in round 46, through 59.  
+     50 3526406823-CROMU_00057-535cbf7c14785ae1814a68abae7f459b712f1be80557b54c94815181b5fc86b5.rcb availability: 1.000000 
+
+
+CROMU_00058, introduced in round 24, through 37. First failed defense in 34. 
+     28 3345162729-CROMU_00058-f9791218a50e74f8e0b874b565abff9ce8d23fc9832cfbadd5a33e78651a35ff.rcb availability: 0.227162 
+     32 3345162729-CROMU_00058-fb2eb10890cd46c962c7d313456f8077f1bbe057583075bf4e06f3b710b6c537.rcb availability: 0.244157 
+	  round 34  team 6 scored 1 times
+	  round 37  team 6 scored 1 times
+
+
+CROMU_00061, introduced in round 70, through 93.  
+     76 3048513317-CROMU_00061-a6b9c5de8dec12f28e8fd0b50b5db0d17b67f905e6923bcdbb33eb717e830d3f.rcb availability: 0.750517 
+
+
+CROMU_00063, introduced in round 68, through 91.  
+     78 4139590144-CROMU_00063_1-5f6652671ace2f978745bab0470783ed8ec533d6c979f8f7e2c043d3ad5d7a87.rcb availability: 1.000000 
+     78 4139590144-CROMU_00063_2-9857c831c74fb2dbc261b6ecaaa06beb9b2e4865c70772476efb51bedf7def0f.rcb availability: 1.000000 
+     78 4139590144-CROMU_00063_3-327c03d2626aa489c078b80de49e2ba31fbeedc4c9ebe13369d3df99f6feb086.rcb availability: 1.000000 
+
+
+CROMU_00064, introduced in round 2, through 21. First failed defense in 2. First score by this team (4) in 18
+      4 1906881742-CROMU_00064-1f6a62eaaae5020dcecb3aae02d539124eb83f6d91e4cad9f1f607b2fb6ab79f.rcb availability: 0.575102 
+
+
+CROMU_00065, introduced in round 81, through 95. First failed defense in 81. First score by this team (4) in 90
+     83 754026095-CROMU_00065-a5e695c52304e09dfbb0825823688ed3152555efd596450a5a1e6565535f317c.rcb availability: 0.000000 
+     87 754026095-CROMU_00065-fe1955677e1f9fb30415801a026e8b9e366e9bb0857e777bf5dddc4bbce87762.rcb availability: 1.000000 
+
+
+CROMU_00066, introduced in round 77, through 95.  
+
+
+CROMU_00072, introduced in round 17, through 30.  
+     19 3368667469-CROMU_00072-250f1b9a8dabd14df5795eaedafb3d5c79f8da37e19dd1f6ef71f82ae68fd1b9.rcb availability: 1.000000 
+
+
+CROMU_00073, introduced in round 19, through 32.  First score by this team (4) in 29
+     21 1514220152-CROMU_00073-9808063b1dd738bd2ec64749f8d9389e2079a942e84c0f8031809d5230cee867.rcb availability: 0.877808 
+
+
+CROMU_00076, introduced in round 28, through 43.  
+     30 3077360081-CROMU_00076-f07c386c90ffb4985c7d75f0037ebd4d8f01302643ec1c49d7bc51d830642d5e.rcb availability: 0.815876 
+
+
+CROMU_00077, introduced in round 72, through 95.  
+     74 1286298085-CROMU_00077-29f7e0570f0ce8ec65f617d5260fa76a07ed382d575747915b228faed9c88b68.rcb availability: 0.965907 
+
+
+CROMU_00078, introduced in round 75, through 95.  
+     80 540826762-CROMU_00078-f25f514615c6daefe54c5f2464adb4d7ce62624dece16f9ad6f7c005de376518.rcb availability: 1.000000 
+
+
+CROMU_00079, introduced in round 65, through 78.  
+     67 3049714598-CROMU_00079-ffe53f284a12cead3438ebdd3355cd5ceb4dd92625d48ff366273fec7b702275.rcb availability: 0.935280 
+
+
+CROMU_00082, introduced in round 29, through 42.  
+     35 1295802477-CROMU_00082-092dc853e521575b56d9d93e57db1afcdbf11bb45cddf0b3c59a7fc62240f0c8.rcb availability: 0.920625 
+
+
+CROMU_00083, introduced in round 40, through 53.  
+     42 3295241155-CROMU_00083-50fd02d464c18361e8c095fae97f43a028558d53761af54b55359841ab534771.rcb availability: 1.000000 
+
+
+CROMU_00084, introduced in round 42, through 55.  
+     47 609591380-CROMU_00084-0823c977c62d38bc781fc1458a865a84c03e8bd6e7a6ce0eda506c1956dc07f2.rcb availability: 1.000000 
+
+
+CROMU_00087, introduced in round 44, through 57.  
+     47 1161136519-CROMU_00087-0c686b54b65de99c6083668149acec80765104dd15ca65a0cf57f7c906283ccd.rcb availability: 0.902217 
+
+
+CROMU_00088, introduced in round 52, through 65. First failed defense in 64. 
+
+
+CROMU_00092, introduced in round 1, through 22.  
+      3 3686083451-CROMU_00092-e73d441eba7c067108613aa1845ea45c262c94bda2907f1b811eb58f4b1592a6.rcb availability: 0.696859 
+
+
+CROMU_00093, introduced in round 47, through 60.  
+     49 218589811-CROMU_00093_1-5091cb548ce9d9864acfb9be300adc0aefe0dc14eed8721a73210f3608143340.rcb availability: 0.941711 
+     49 218589811-CROMU_00093_2-a150e9141285a151b096fd2ce4b5712b09241427832a61379bbaf3e12c5bd845.rcb availability: 0.941711 
+     49 218589811-CROMU_00093_3-224db929d287684fc19e6331811abf0ab94f4c184a05beee5d2a25cc1eef29c6.rcb availability: 0.941711 
+     49 218589811-CROMU_00093_4-d39a61cdeb5588fd99778d83c6615fcc1b42badbc33fa3fd4ddfa481e24c57b4.rcb availability: 0.941711 
+
+
+CROMU_00094, introduced in round 3, through 26. First failed defense in 3. First score by this team (4) in 6
+      5 1424130266-CROMU_00094-851a0e3149144392b9d03062c312bb56abd97143a4c75d28adb0d9dca96245db.rcb availability: 0.994810 
+
+
+CROMU_00095, introduced in round 2, through 25. First failed defense in 23. 
+      8 1504525286-CROMU_00095-67f08722206ee734c83d42081ae744ed9cee3199e244575e0b16df78ea8b0cf2.rcb availability: 0.978190 
+	  round 23  team 5 scored 1 times
+	  round 25  team 5 scored 1 times
+
+
+CROMU_00096, introduced in round 4, through 27.  
+      6 2760261320-CROMU_00096-035b3c013d3e0c8082a38221b1f84b5e0ab483d13e690dc5741ba4a4dddd8f13.rcb availability: 0.268754 
+     10 2760261320-CROMU_00096-35ebf56d507bb4b5ee61051c64a824c0e90bee92b5abce1f44bb8ddc0b15e35c.rcb availability: 1.000000 
+
+
+CROMU_00097, introduced in round 1, through 24. First failed defense in 3. 
+
+
+CROMU_00098, introduced in round 34, through 47. First failed defense in 46. 
+
+
+KPRCA_00062, introduced in round 62, through 75.  
+     65 2974725597-KPRCA_00062-44424e990bde3d4ae671a2dfd172d717cee157310dd729c8623c58ed0c32e0bd.rcb availability: 0.000000 
+     69 2974725597-KPRCA_00062-83083762ee4f2f4e06411daf38169cb8dc59f880812906c809d42b8a5efd277b.rcb availability: 0.000000 
+
+
+KPRCA_00064, introduced in round 67, through 80.  
+     74 3036863130-KPRCA_00064-475ce6a9161dc6aa8fd2c0793ceaf868955be721f947e98b8d8026f7370e490c.rcb availability: 0.824555 
+
+
+KPRCA_00065, introduced in round 23, through 36. First failed defense in 23. First score by this team (4) in 32
+     28 3361046760-KPRCA_00065-f7abb5c6f7498d80fbadc5a6f82588cc118e460fdaf539e7aa1702734cb9c05f.rcb availability: 0.909901 
+	  round 33  team 5 scored 1 times
+	  round 34  team 5 scored 2 times
+
+
+KPRCA_00068, introduced in round 76, through 95.  
+     78 3837133838-KPRCA_00068-c3dd6d52d37642bf1653d6cd501300a5bb1349dde2340e16c1a23060f766ed87.rcb availability: 1.000000 
+
+
+KPRCA_00069, introduced in round 69, through 92.  
+     73 1817614021-KPRCA_00069-414c9949a77c84d64c567b213cf8bf4808b8111f9405f07a0372d941df570961.rcb availability: 0.000000 
+     77 1817614021-KPRCA_00069-6677667cbedb1097ae2c7a91e60d184fbe3f5cc13e0b4e84bfe7723d985b2b8b.rcb availability: 0.000000 
+
+
+KPRCA_00071, introduced in round 1, through 17.  
+      3 3745528879-KPRCA_00071-93bc9f57099d7f4c00b28f44c40a161f51122e65e78233051534892fd556c162.rcb availability: 0.693560 
+
+
+KPRCA_00073, introduced in round 59, through 72.  
+     61 2472483849-KPRCA_00073-9056b2f08f031779c835eff8d506a60eba2891ba8e0eead3f330b49f4a03c11e.rcb availability: 0.000000 
+     65 2472483849-KPRCA_00073-70dafc8db6f85ddf4ee13e195daa3e00ae62e8e9a6c313ab5a84053ec258e626.rcb availability: 1.000000 
+
+
+KPRCA_00074, introduced in round 21, through 34.  
+     23 2912718818-KPRCA_00074-b16ab36a246b111847d635bfc215d04ceae9258414419c0026dfc5b1d37efe65.rcb availability: 0.552631 
+
+
+KPRCA_00075, introduced in round 1, through 16.  
+
+
+KPRCA_00077, introduced in round 80, through 95.  
+
+
+KPRCA_00079, introduced in round 33, through 46.  
+
+
+KPRCA_00081, introduced in round 25, through 38.  
+     28 74619044-KPRCA_00081-64c7063ef493a5247d38b441c7e5d3265b66baf86dc44ccb5a2a56c41baa7ffe.rcb availability: 0.372613 
+     32 74619044-KPRCA_00081-8da7f72695a5a9cc231f2b204a5df1a324c38fede96c6af81d647d58ef75ee58.rcb availability: 0.372764 
+
+
+KPRCA_00086, introduced in round 74, through 95.  
+
+
+KPRCA_00087, introduced in round 26, through 39.  
+
+
+KPRCA_00088, introduced in round 43, through 56.  
+
+
+KPRCA_00091, introduced in round 51, through 64.  
+
+
+KPRCA_00093, introduced in round 35, through 48.  
+
+
+KPRCA_00094, introduced in round 64, through 77. First failed defense in 73. 
+     76 2097594834-KPRCA_00094-5f131c96ec2e6d9f387b902353fa4538df49696b5fa1e96b37acc64e4fc1ccc5.rcb availability: 0.800447 
+
+
+KPRCA_00097, introduced in round 1, through 20.  
+      3 3471858189-KPRCA_00097-ac80c367e0d24688034e283b6ab1a9b704e962bee82323c67ea8bdfc2d97b68f.rcb availability: 0.606069 
+
+
+KPRCA_00099, introduced in round 54, through 67.  
+     56 3997570780-KPRCA_00099-3c9c1a535cb247a18828bc0288de71290b2ffb50f040cb0fa0630ee713dad3b4.rcb availability: 0.888600 
+
+
+KPRCA_00100, introduced in round 56, through 69.  
+     58 2425946942-KPRCA_00100-3bb01e5be819b638d1b6087571589951e95e607da458c9d79cf28b8370ec9993.rcb availability: 0.897074 
+
+
+KPRCA_00101, introduced in round 1, through 18.  
+      3 3436313223-KPRCA_00101-bae1e81651f7da804e2beb1b78b2391ce5fd3d62561766c3d4ed61b2ad0b0808.rcb availability: 1.000000 
+
+
+KPRCA_00102, introduced in round 2, through 23.  
+      4 944326584-KPRCA_00102-6068f9a1b08dac2ec45ee5a2cc721a9901b8a7c423b63792aa42c58ac9c6bc40.rcb availability: 0.747205 
+
+
+KPRCA_00110, introduced in round 50, through 63.  
+     52 3528943668-KPRCA_00110-4cb16bddfbc2b7186f295f8b25ad745dfccfe6eda7d04680ab090d23e56d46b0.rcb availability: 0.946155 
+
+
+KPRCA_00111, introduced in round 1, through 15.  
+      9 914490513-KPRCA_00111_1-00d01ae78de4b6eef86b24d1615b90ee5adbc44dd9a365df195377887ae83b23.rcb availability: 1.000000 
+      9 914490513-KPRCA_00111_2-18779f77728ac166214ec0bd4e1d9de3fbbafef9c237881dc41bfdd17fdbf48c.rcb availability: 1.000000 
+      9 914490513-KPRCA_00111_3-5f36aac9e3274b6e3559da6f706ebcfa61cb9dac92107bb8f09d985daa86f9f5.rcb availability: 1.000000 
+
+
+KPRCA_00112, introduced in round 82, through 95.  
+     84 1269138034-KPRCA_00112-db689117cc9c6a55d2655eaa76d35126d4e00f7b98357f305e5aa256c1bdffd6.rcb availability: 1.000000 
+
+
+KPRCA_00119, introduced in round 20, through 33.  
+
+
+KPRCA_00120, introduced in round 78, through 95.  
+     80 3983181159-KPRCA_00120-9eb5bc404b9f7adf36771b19bd23c90f44937964940f97ffd1e41ccbb5f95c2d.rcb availability: 0.997180 
+
+
+NRFIN_00043, introduced in round 58, through 71.  
+     60 2928792287-NRFIN_00043-15ac033b5e591db0fa3607268f57fe6e95560ed51698f9b73c6369b876f5e914.rcb availability: 0.523523 
+
+
+NRFIN_00044, introduced in round 55, through 68.  
+
+
+NRFIN_00045, introduced in round 16, through 29.  
+
+
+NRFIN_00046, introduced in round 45, through 58.  
+     47 1896924873-NRFIN_00046-47f5047a3d17b65e033c90ff24d85d4a7bffee801392f9ec4aace1638c264fbb.rcb availability: 1.000000 
+
+
+NRFIN_00049, introduced in round 1, through 14.  
+      3 325025771-NRFIN_00049-51574bc060f5f32569e35f6fc98916bc92eac08a5df30e0da0a701afdcdc8184.rcb availability: 0.940178 
+
+
+NRFIN_00051, introduced in round 41, through 54.  
+
+
+NRFIN_00052, introduced in round 73, through 95. First failed defense in 73. 
+     75 3881696163-NRFIN_00052-5c4a796a1206726fd9ffc1375de37ea4b27e1f63e73b91c7881b4f2a476606e8.rcb availability: 1.000000 
+	  round 75  team 1 scored 8 times
+	  round 76  team 1 scored 6 times
+	  round 77  team 1 scored 6 times
+	  round 78  team 1 scored 8 times
+	  round 79  team 1 scored 8 times
+	  round 80  team 1 scored 7 times
+	  round 81  team 1 scored 8 times
+	  round 82  team 1 scored 9 times
+	  round 83  team 1 scored 7 times
+	  round 83  team 6 scored 10 times
+	  round 84  team 1 scored 6 times
+	  round 84  team 3 scored 3 times
+	  round 84  team 6 scored 10 times
+	  round 85  team 1 scored 5 times
+	  round 85  team 3 scored 3 times
+	  round 85  team 6 scored 10 times
+	  round 86  team 1 scored 6 times
+	  round 86  team 3 scored 1 times
+	  round 86  team 6 scored 10 times
+	  round 87  team 1 scored 6 times
+	  round 87  team 3 scored 2 times
+	  round 87  team 6 scored 10 times
+	  round 88  team 1 scored 7 times
+	  round 88  team 3 scored 2 times
+	  round 88  team 6 scored 10 times
+	  round 89  team 1 scored 8 times
+	  round 89  team 3 scored 2 times
+	  round 89  team 6 scored 10 times
+	  round 90  team 1 scored 6 times
+	  round 90  team 3 scored 3 times
+	  round 90  team 6 scored 10 times
+	  round 91  team 1 scored 6 times
+	  round 91  team 3 scored 4 times
+	  round 91  team 6 scored 10 times
+	  round 92  team 1 scored 5 times
+	  round 92  team 3 scored 8 times
+	  round 92  team 6 scored 10 times
+	  round 93  team 1 scored 7 times
+	  round 93  team 3 scored 4 times
+	  round 93  team 6 scored 10 times
+	  round 94  team 1 scored 8 times
+	  round 94  team 3 scored 4 times
+	  round 94  team 6 scored 10 times
+	  round 95  team 1 scored 6 times
+	  round 95  team 3 scored 6 times
+	  round 95  team 6 scored 10 times
+
+
+NRFIN_00053, introduced in round 32, through 45.  
+
+
+NRFIN_00054, introduced in round 38, through 51.  
+     45 2803382251-NRFIN_00054-3461754ca71723cc03b7a3a8002711b7bd743b02cabd3bf47b4f16a81f47fc73.rcb availability: 0.893948 
+
+
+NRFIN_00055, introduced in round 18, through 31.  
+     20 3395615331-NRFIN_00055-0a237d7094a1a72102513681b5c68e16d8d63adcc512a8ff9d02bfc87933093d.rcb availability: 1.000000 
+
+
+NRFIN_00056, introduced in round 63, through 76.  
+
+
+NRFIN_00059, introduced in round 36, through 49. First failed defense in 42. 
+     38 2988916517-NRFIN_00059-f307dddd8436e878579834af8fa3d6c7876420f5bdb31d226d6672d9e4ff46e4.rcb availability: 0.040044 
+     42 2988916517-NRFIN_00059-56501e2198ee15c1575d7f1d2ceff9fdd0510c6b58fbdcd5049b66b55ee97922.rcb availability: 0.096479 
+	  round 42  team 6 scored 10 times
+	  round 43  team 6 scored 10 times
+	  round 44  team 6 scored 10 times
+	  round 45  team 6 scored 10 times
+	  round 46  team 6 scored 10 times
+	  round 47  team 6 scored 10 times
+	  round 48  team 6 scored 10 times
+	  round 49  team 6 scored 10 times
+
+
+NRFIN_00061, introduced in round 26, through 41.  
+     28 3371584014-NRFIN_00061-be969093ad024b329907dd002afca35bffce398c20effe4732f991dac43a4afd.rcb availability: 0.862050 
+
+
+NRFIN_00063, introduced in round 49, through 62. First failed defense in 50. 
+     53 2347155893-NRFIN_00063-c94c30b96a8286eb0f789816c2b9999efdcc4d96440b45e96de7e7216f00932a.rcb availability: 0.184504 
+
+
+NRFIN_00064, introduced in round 22, through 35.  
+     24 3121141496-NRFIN_00064-67640fcdcc9b4df88902b2a14d59e530e3e4314239f9a3d7642bae2838ca2dd4.rcb availability: 1.000000 
+
+
+NRFIN_00065, introduced in round 48, through 61.  
+
+
+NRFIN_00066, introduced in round 37, through 50.  
+
+
+NRFIN_00067, introduced in round 61, through 74.  
+     74 3506984293-NRFIN_00067_1-f4989e6523e09996ab3ec8b952c08a905688f83b10766ec30928c96eafaeefff.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_10-4aa253266bda7dfe6385a12ff33ed8a422ce3bae2c3fd97bb0107d9c5fabfd77.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_2-f01174711b02c43c0d240f932935e875690edc8e3b7306099ccab55b6f8cffe8.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_3-2b620b27bed57212d33c90eab0c51f1548929773710a83bc46b1f90b11de2628.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_4-94e7ad6a98c24f2ccf465bc3db2fb365487954fabb2566e81d20eba5f7fd1baa.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_5-7cd73569f375950c24b805db74ce181910a4346af9d6f217ad06130b2d5eb513.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_6-da6d1b21319edfbf0b9cde204be6854c47955dbdd532afb107f3da78cbd9e6c8.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_7-d02e28f1cf3a79121a9443c0c2d491f991fe2921db8964acb3439c4aac7cac97.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_8-33680676fc18550126293dca06c5f34042848b6096613671a6706a1837d37251.rcb availability: 0.943652 
+     74 3506984293-NRFIN_00067_9-682dcce0b0868e6addb118a39e08cd4ffab974e9350bc5ce633a6512a226add2.rcb availability: 0.943652 
+
+
+NRFIN_00069, introduced in round 1, through 19.  
+
+
+NRFIN_00071, introduced in round 27, through 40.  
+
+
+NRFIN_00072, introduced in round 66, through 79.  
+     68 2351307877-NRFIN_00072_1-f2fe5566e351ead812136457135d9c07674e3386f0d4d0be6b1f5388afbc4a2c.rcb availability: 0.586346 
+     68 2351307877-NRFIN_00072_2-fd2d7e7c719db56cfa78068645ccd4cf9f135603c211ad065d8b67f4e9187b3d.rcb availability: 0.586346 
+     68 2351307877-NRFIN_00072_3-54caea95db9b735aa67c3c047d36428aefe67bcfe35d5d83d9a275e44794cffb.rcb availability: 0.586346 
+     68 2351307877-NRFIN_00072_4-1291150c237beb65c11a377bbafcc3ab161e9e6a95fedcf59629c94c1cde31ae.rcb availability: 0.586346 
+     68 2351307877-NRFIN_00072_5-95b86d168bc5bf074490269088b00a83a86230080e18b94fb5de4389a48ea0cb.rcb availability: 0.586346 
+     68 2351307877-NRFIN_00072_6-803afa3d03cb0f87211fdf1e00c022a396dc0a6eaa6a5b152d6ece60cfdeae08.rcb availability: 0.586346 
+     77 2351307877-NRFIN_00072_1-0d35220a6c29fdf7bf96a764e78cd3d692adf7ad3e1ac20c1231f6598edc5460.rcb availability: 1.000000 
+     77 2351307877-NRFIN_00072_2-9113e6e5527c3f48230aa30ae048bfb090c3941be743e42127933cacc4c35109.rcb availability: 1.000000 
+     77 2351307877-NRFIN_00072_3-f1298ac89a475260c7407c938877cf7df60701457981b64231f15e85ebd067d1.rcb availability: 1.000000 
+     77 2351307877-NRFIN_00072_4-8a76fdfc02224a3a6c00171cd7b9274e6256f3251f424fbd133bedd779e942fb.rcb availability: 1.000000 
+     77 2351307877-NRFIN_00072_5-476c0396ae41ca5e1093f1e92b5c198b7836a2a7ac4d540be94ae18560a00282.rcb availability: 1.000000 
+     77 2351307877-NRFIN_00072_6-9d276b028d5592f0ba436f3d9a9fb1ad6150ec5742dc352161b9bf803d77157d.rcb availability: 1.000000 
+
+
+YAN01_00015, introduced in round 57, through 70. First failed defense in 57. First score by this team (4) in 64
+
+
+YAN01_00016, introduced in round 79, through 95. First failed defense in 79. First score by this team (4) in 81

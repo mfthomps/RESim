@@ -1,0 +1,255 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+
+import os
+import glob
+'''
+Generate plots of failed polls, based on .SUMMARY logs from
+Jean's test harness..
+'''
+import sys
+import math
+import operator
+import numpy as np
+import pylab as pb
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+#data_dir = '/mnt/vmLib/bigstuff/cbPlots'
+data_dir = '/Volumes/disk2/cgc/pollFail'
+same_cbs=False
+def doPlots(cb_sets, count_list, save=None):
+    #cb_sets[cb_name][count] = tags
+    N=10
+    fails = {}
+    timeouts = {}
+    connects = {}
+    i=0
+    cb_names = []
+    set_number = 0
+    expect = len(cb_sets)
+    total = 0
+    for cb_name in sorted(cb_sets):
+        cb_names.append(cb_name) 
+        for count in cb_sets[cb_name]:
+            if count not in fails:
+                fails[count] = []
+                timeouts[count] = []
+                connects[count] = []
+            fails[count].append(cb_sets[cb_name][count]['failure'])
+            timeouts[count].append(cb_sets[cb_name][count]['timeout'])
+            connects[count].append(cb_sets[cb_name][count]['connect_error'])
+            if 'KPRCA_00057' in cb_name:
+                print cb_sets[cb_name][count]['timeout']
+        total += 1
+        i += 1
+        if i >= N and (total+1) != expect:
+            onePlot(fails, timeouts, connects, cb_names, set_number, save, i)
+            set_number += 1
+            i=0
+            fails = {}
+            timeouts = {}
+            connects = {}
+            cb_names = []
+    if len(cb_names) > 0:
+        print('leftovers %s' % str(cb_names))
+        onePlot(fails, timeouts, connects, cb_names, set_number, save, i)
+
+def onePlot(fails, timeouts, connects, cb_names, set_number, save, plots_per_page):
+    width = 0.1
+    N = plots_per_page
+    ind = np.arange(N)
+    plot_list = []
+    leg_list = []
+    offset=0
+    colors = ['r','g','b','m','y','c']
+    ll=[] 
+    ltext=[] 
+    for count in count_list:
+        fail_color = colors.pop()
+        p1 = plt.bar(ind+offset, fails[count], width, color=fail_color, hatch="*")
+        p2 = plt.bar(ind+offset, connects[count], width, color=fail_color, hatch="/", bottom=fails[count])
+        bot = map(operator.add, fails[count], connects[count])
+        p3 = plt.bar(ind+offset, timeouts[count], width, color=fail_color, bottom=bot)
+        offset=offset+width
+        ll.append(p3)
+        ltext.append('%d'%count)
+        plot_list.append(p1)
+        plot_list.append(p2)
+        plot_list.append(p3)
+        leg_list.append('fail%d'%count) 
+        leg_list.append('timeout%d'%count) 
+        leg_list.append('connect%d'%count) 
+    plt.ylabel('failures & timeouts & connect')
+    plt.xticks(ind+width/2., cb_names, rotation='vertical', fontsize="small")
+    #plt.yticks(np.arange(0, 10, 10))
+    #plt.legend(plot_list, leg_list, ncol=1, bbox_to_anchor=(1.15,1.13), fontsize="small")
+    mixed='(mixed)'
+    if same_cbs:
+        mixed = '(same CB)'
+    plt.legend(ll, ltext, title="Load:#CBs\n%s" % mixed, fontsize="small", bbox_to_anchor=(0.00, 0.05))
+    plt.subplots_adjust(bottom=0.28)
+    plt.subplots_adjust(left=0.18)
+    plt.title('CFE Poll failures under load (K64)\n* = functional failures, other is timeouts')
+    if save is not None:
+        outname = 'plots/fail_set%d.png' % set_number
+        plt.savefig(outname)
+    else:
+        plt.show()
+    plt.clf()
+
+def getPair(pair):
+    if '=' in pair:
+        parts = pair.split('=')
+        return parts[0], parts[1]
+    else:
+        return None, None
+
+class cbSum():
+    '''
+    Get the set of tags and the cb for the given line
+    '''
+    def __init__(self, line):
+        parts = line.split()
+        #print('parts is %s' % str(parts))
+        tag, self.cb_name = getPair(parts[0])
+        self.tags = {}
+        if tag != 'CB':
+            print('cbSum expected cb at start of %s' % line)
+            exit()
+        #print('do cb %s, num pairs is %d' % (self.cb_name, len(parts)))
+        for pair in parts[1:]:
+            tag, value = getPair(pair)
+            if tag is not None:
+                try:
+                    self.tags[tag] = int(value)
+                except:
+                    print('cbSum could not get int from %s, tag is %s line was %s' % (value, tag, line))
+                    exit(1)
+    def getSum(self):
+        return self.cb_name, self.tags
+    
+    
+def getSet(dname):
+    ldir = os.path.join(data_dir, dname)
+    file_list = glob.glob(ldir+'/*SUM*')
+    if len(file_list) == 0:
+        print('no summaries at %s' % ldir)
+        return None
+    print('sum file is %s' % file_list[0])
+    cb_sets = []
+    with open(file_list[0], 'rb') as f_in:
+        lines = f_in.readlines()
+        for line in lines:
+            if line.strip().startswith('CB='):
+                cb_summary = cbSum(line)
+                cb_sets.append(cb_summary)
+    return cb_sets
+
+def tagSum(tags):
+    failed = tags['failure']
+    timeout = tags['timeout']
+    connect = tags['connect_error']
+    return failed+timeout+connect
+
+log_dict={}
+log_list = os.listdir(data_dir)
+log_list.sort()
+count = None
+for log_dir in log_list:
+   repeat = 1
+   if '=' not in log_dir:
+       print('no = in %s, skip' % log_dir)
+       continue
+   parts = log_dir.split('.')
+   for p in parts:
+       if p.startswith('COUNT'):
+           count = int(p.rsplit('=',1)[1])
+       if p.startswith('REPEAT'):
+           repeat = int(p.rsplit('=',1)[1])
+   print('count of %s is %s, repeat is %s' % (log_dir, count, repeat))
+   total = count*repeat
+   if total not in log_dict:
+       log_dict[int(total)] = getSet(log_dir)
+   if repeat > 1:
+       ''' assume multiple copies of same CB, note this need not be true, though in practice likely is? '''
+       ''' only used for legend '''
+       same_cbs = True
+
+cb_sets = {}
+for count in log_dict:
+    log_set = log_dict[count]
+    prev_cb_name = ''
+    for cb_sum in log_set:
+        cb_name, tags = cb_sum.getSum()
+        if cb_name not in cb_sets:
+            cb_sets[cb_name] = {}
+        if cb_name == prev_cb_name:
+            prev_max = tagSum(cb_sets[cb_name][count])
+            this_sum = tagSum(tags)
+            #print('forx %s, count %d prev_max %d, this_sum %d' % (cb_name, count, prev_max, this_sum))
+            #print('%s tags is %s' % (cb_name, str(tags)))
+            #print('%s max tags %s' % (cb_name, str(cb_sets[cb_name][count])))
+            if this_sum > prev_max:
+                cb_sets[cb_name][count] = tags
+        else:
+            cb_sets[cb_name][count] = tags
+        prev_cb_name = cb_name
+
+count_list = []
+for count in log_dict:
+    print('a count of %d' % count)
+    count_list.append(count)
+count_list.sort()
+
+plot_sets={}
+cb_list_file = open('/tmp/pig_list', 'w')
+for cb_name in sorted(cb_sets):
+    line = cb_name
+    got_one = False
+    for count in count_list:
+        if count not in cb_sets[cb_name]:
+            print('cset %s missing count of %d' % (cb_name, count))
+            continue
+        tags = cb_sets[cb_name][count]
+        failed = tags['failure']
+        timeout = tags['timeout']
+        connect = tags['connect_error']
+        if (failed != 0 or timeout != 0 or connect != 0) and (failed+timeout) < 9999:
+            got_one = True
+        append = '\t%d/%d/%d' % (failed, timeout, connect)
+        line = line+append
+    if got_one:
+        print line
+        cb_list_file.write(cb_name+'\n')
+        plot_sets[cb_name] = {}
+        for count in count_list:
+            if count in cb_sets[cb_name]:
+                plot_sets[cb_name][count]=cb_sets[cb_name][count]
+            else:
+                print('no count of %d for %s, skip' % (count, cb_name))
+cb_list_file.close()
+doPlots(plot_sets, count_list, save=True)
+

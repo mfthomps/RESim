@@ -1,0 +1,35 @@
+#!/bin/sh
+
+#
+# *Might* be needed in some cases to force loading of the 'tuntap' driver.
+#
+#kextload /Library/Extensions/tun.kext
+
+SSH_KEY_DIR="/home/mike/.ssh"
+SSH_KEY="${SSH_KEY_DIR}/id_mfthomps_gfe"
+REMOTE_TUN="11"
+REMOTE_USER="mfthomps"
+TUN_LOCAL_IP="192.168.2.46"
+TUN_REMOTE_IP="192.168.2.45"
+
+LOCAL_TUN="0"
+TUN_NETMASK="255.255.255.252"
+#REMOTE_HOST="129.55.210.188"
+REMOTE_HOST="KageNet"
+REMOTE_NETWORK="10.10.10.0/24"
+
+#
+# Establish SSH tunnel.
+#
+ssh -F /home/mike/.ssh/config -NTCf -i ${SSH_KEY} -w ${LOCAL_TUN}:${REMOTE_TUN} ${REMOTE_USER}@${REMOTE_HOST}
+
+#
+# Configure local tunnel interface with a point-to-point network.
+#
+ifconfig tun${LOCAL_TUN} ${TUN_LOCAL_IP} netmask ${TUN_NETMASK} pointopoint ${TUN_REMOTE_IP}
+
+#
+# Add route to MIT server management network.
+#
+route add -net "${REMOTE_NETWORK}" gw ${TUN_REMOTE_IP}
+sudo mount -o ro -o intr -t nfs 10.10.10.30:/data /mnt/data

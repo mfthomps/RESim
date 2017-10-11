@@ -1,0 +1,9 @@
+<!ELEMENT replay_master (cache, clear_cache, workspace, cb_dir, cb_host, service_host?, local_replay?, ignore_header_errors?)>
+<!ELEMENT cache (#PCDATA)>
+<!ELEMENT clear_cache (#PCDATA)>
+<!ELEMENT workspace (#PCDATA)>
+<!ELEMENT cb_dir (#PCDATA)>
+<!ELEMENT cb_host (#PCDATA)>
+<!ELEMENT service_host (#PCDATA)>
+<!ELEMENT local_replay (#PCDATA)>
+<!ELEMENT ignore_header_errors (#PCDATA)>

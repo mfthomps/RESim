@@ -1,0 +1,8 @@
+#!/bin/bash
+PROC=$(ps aux | grep '[m]onitorRamWatcher' | grep -v tail | awk '{print $2}')
+if [ -z "$PROC" ]; then
+    echo "no monitorRamWatcher running"
+else
+    echo "kill monitorRamWatcher, running as $PROC"
+    sudo kill -9 $PROC
+fi

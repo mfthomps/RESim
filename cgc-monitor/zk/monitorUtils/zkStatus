@@ -1,0 +1,74 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+
+import os
+import subprocess
+import sys
+def usage():
+    print('zkStatus [-v]')
+    exit(0)
+
+print "zookeeper server status"
+server_count = 0
+master = None
+node_count = None
+verbose = False
+if len(sys.argv) > 1:
+    if len(sys.argv) == 2 and sys.argv[1] == '-v':
+        verbose = True
+    else:
+        usage()
+ 
+ 
+with open('/mnt/cgc/zk_hosts.txt') as f:
+    servers = f.read()
+    server_list = servers.split(',')
+    for pair in server_list:
+        server, port = pair.strip().split(':')
+        #print('server: %s  port: <%s>' % (server, port))
+        #cmd = 'echo srvr | nc %s %s' % (server, port)
+        #os.system(cmd)
+        nc_proc = subprocess.Popen(['nc', server, port], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        nc_proc.stdin.write('srvr\n')
+        output,err = nc_proc.communicate()
+        if verbose:
+            print output
+        if err is None and output is not None:
+            for line in output.splitlines():
+                if line.strip().startswith('Mode:'):
+                    #print line
+                    server_count += 1
+                    if 'leader' in line.lower():
+                        master = line.split()[1]
+                        #print('is leader %s' % master)
+                    elif 'standalone' in line.lower():
+                        master = 'standalone'
+                elif node_count is None and line.strip().startswith('Node count:'):
+                    node_count = line.split()[2]
+        #print('output: %s   err: %s' % (output, err))
+    print('%d servers, leader is %s, node count: %s' % (server_count, master, node_count))
+
+

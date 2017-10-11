@@ -1,0 +1,83 @@
+#!/usr/bin/python
+import os
+import sys
+import glob
+import socket
+from monitorLibs import testRepo
+from monitorLibs import szk
+from monitorLibs import configMgr
+
+'''
+update a test repo (just files, no zookeeper) to include
+all pov's and all service polls for a CBs in a given list
+    fullCB cb_list
+Only updates for CSET packages in which the cgc-challenges directory
+is newer than the repo entry.
+'''
+def listdir_fullpath(d):
+    #print 'listdir_fullpath for '+d
+    #return [os.path.join(d, f) for f in os.listdir(d)]
+    retval = []
+    if os.path.isdir(d):
+        onlyfiles = [ f for f in os.listdir(d) if os.path.isfile(os.path.join(d,f)) ]
+        retval = [os.path.join(d, f) for f in onlyfiles]
+    return retval
+
+def countBins(orig_cb):
+    binaries = glob.glob(orig_cb+'*')
+    b = list(filter(lambda x: x.endswith('_patched'), binaries))
+    return len(b)
+       
+def doCB(cb, repo_top):
+    samples = '/mnt/vmLib/bigstuff/challenge-sets/usr/share/cgc-challenges'
+    cb_dir = os.path.join(samples, cb)
+    if not os.path.isdir(cb_dir):
+        print('no challenge set for %s, skip' % cb)
+        return
+    source_time = os.path.getctime(cb_dir)
+    source_cb_bin = os.path.join(cb_dir, 'bin', cb)
+    bin_count = countBins(source_cb_bin)
+    cb_name = 'CB'+cb+'%02x' % bin_count
+    repo_cb_dir = os.path.join(repo_top, cb_name) 
+    dest_time = 0
+    if os.path.isdir(repo_cb_dir):
+        dest_time = os.path.getctime(repo_cb_dir)
+    if dest_time >= source_time:
+        print('repo for %s is up to date' % cb)
+        return
+    #path = os.path.join(cb_dir, 'poller/for-testing/')
+    polls = []
+    #if os.path.exists(path):
+    #    polls = listdir_fullpath(path)
+    path = os.path.join(cb_dir, 'poller/for-release/')
+    if os.path.exists(path):
+        release_polls = listdir_fullpath(path)
+        for poll in release_polls:
+            if poll.endswith('.xml'):
+                polls.append(poll)
+    
+    povs = listdir_fullpath(cb_dir+'/pov')
+    ids = listdir_fullpath(cb_dir+'/ids')
+    tr.doCB(cb_name, source_cb_bin, polls, povs, ids)
+
+cfg = configMgr.configMgr()
+hostname = socket.gethostname()
+# do zk to override cfg values from zookeeper
+zk = szk.szk(hostname+"fullCB", cfg)
+top_file = cfg.cb_dir
+#print 'top_file is %s' % top_file
+tr = testRepo.testRepo(top_file)
+cfe_csets = '/usr/share/cgc-monitor/allCFE-CSETS.txt'
+if len(sys.argv) > 2:
+    print 'fullCB cb_list'
+    exit(1)
+
+if len(sys.argv) == 2:
+    cfe_csets = sys.argv[1]
+
+print('Reading cb list from %s' % cfe_csets)
+
+with open(cfe_csets) as cb_list:
+    for cb in cb_list:
+        doCB(cb.strip(), top_file)
+zk.stop()

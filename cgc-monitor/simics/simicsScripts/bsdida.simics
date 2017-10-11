@@ -1,0 +1,19 @@
+#
+#  Simics script example of using FreeBSD OS awareness and remote
+#  debugging.  It loads a symbol file (which may be stripped) and 
+#  defines a context for a process named "server".  When the server 
+#  starts, remote GDB is enabled, as is reverse execution.
+#  It is assumed that the target is loaded via a checkpoint that already
+#  include network connections such as:
+#	connect-real-network 10.10.0.47
+#	connect-real-network-port-in ethernet-link = ethernet_switch0 target-ip = 10.10.0.47 target-port = 5006 host-port = 5006
+#
+enable-real-time-mode
+add-symbol-file symbolfile = /home/mike/testc/bsdstatic/server context-query = "server"
+#add-symbol-file symbolfile = /home/mike/testc/bsdstripped/server context-query = "server"
+dredd.software.load-parameters freeBSD.params
+dredd.software.enable-tracker
+dredd.software.track server
+server0.run-until-active
+new-gdb-remote
+enable-reverse-execution

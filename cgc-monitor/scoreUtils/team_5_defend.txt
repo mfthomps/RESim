@@ -1,0 +1,315 @@
+# Summary of team 5 defenses.  Each CB service is presented separately below.
+# RCBs are listed with their round numbers and availability.  Scores against RCBs are noted.
+
+
+CROMU_00046, introduced in round 53, through 66. First failed defense in 58. 
+
+
+CROMU_00047, introduced in round 71, through 94.  
+
+
+CROMU_00048, introduced in round 39, through 52.  
+
+
+CROMU_00051, introduced in round 60, through 73. First failed defense in 64. 
+
+
+CROMU_00054, introduced in round 31, through 44.  
+
+
+CROMU_00055, introduced in round 1, through 24. First failed defense in 2. First score by this team (5) in 2
+      5 3007107812-CROMU_00055-f0933717613cd7fd653ee53cb1f434cbc9b943d95da5fede6d0642d912f789de.rcb availability: 1.000000 
+	  round  5  team 3 scored 6 times
+	  round  5  team 4 scored 8 times
+	  round  5  team 6 scored 10 times
+	  round  6  team 3 scored 5 times
+	  round  6  team 4 scored 8 times
+	  round  6  team 6 scored 10 times
+	  round  7  team 3 scored 5 times
+	  round  7  team 4 scored 9 times
+	  round  7  team 6 scored 9 times
+	  round  8  team 3 scored 4 times
+	  round  8  team 4 scored 7 times
+	  round  8  team 6 scored 9 times
+	  round  9  team 3 scored 3 times
+	  round  9  team 4 scored 10 times
+	  round  9  team 6 scored 10 times
+	  round 10  team 3 scored 2 times
+	  round 10  team 4 scored 10 times
+	  round 10  team 6 scored 10 times
+	  round 11  team 3 scored 3 times
+	  round 11  team 4 scored 8 times
+	  round 11  team 6 scored 10 times
+	  round 12  team 3 scored 3 times
+	  round 12  team 4 scored 10 times
+	  round 12  team 6 scored 9 times
+	  round 13  team 3 scored 3 times
+	  round 13  team 4 scored 9 times
+	  round 13  team 6 scored 10 times
+	  round 14  team 3 scored 4 times
+	  round 14  team 4 scored 10 times
+	  round 14  team 6 scored 10 times
+	  round 15  team 3 scored 4 times
+	  round 15  team 4 scored 10 times
+	  round 15  team 6 scored 10 times
+	  round 16  team 3 scored 6 times
+	  round 16  team 4 scored 9 times
+	  round 16  team 6 scored 10 times
+	  round 17  team 3 scored 1 times
+	  round 17  team 4 scored 9 times
+	  round 17  team 6 scored 10 times
+	  round 18  team 3 scored 4 times
+	  round 18  team 4 scored 9 times
+	  round 18  team 6 scored 10 times
+	  round 19  team 3 scored 3 times
+	  round 19  team 4 scored 10 times
+	  round 19  team 6 scored 10 times
+	  round 20  team 3 scored 4 times
+	  round 20  team 4 scored 10 times
+	  round 20  team 6 scored 10 times
+	  round 21  team 3 scored 3 times
+	  round 21  team 4 scored 10 times
+	  round 21  team 6 scored 10 times
+	  round 22  team 3 scored 3 times
+	  round 22  team 4 scored 8 times
+	  round 22  team 6 scored 9 times
+	  round 23  team 3 scored 3 times
+	  round 23  team 4 scored 10 times
+	  round 23  team 6 scored 10 times
+	  round 24  team 3 scored 4 times
+	  round 24  team 4 scored 9 times
+	  round 24  team 6 scored 9 times
+
+
+CROMU_00057, introduced in round 46, through 59.  
+
+
+CROMU_00058, introduced in round 24, through 37. First failed defense in 33. First score by this team (5) in 35
+
+
+CROMU_00061, introduced in round 70, through 93.  
+
+
+CROMU_00063, introduced in round 68, through 91.  
+
+
+CROMU_00064, introduced in round 2, through 21. First failed defense in 2. First score by this team (5) in 5
+      7 1906881742-CROMU_00064-05ab0253a7caab563835f2ab069b8f9c27a79e69409b4d218143f0a051089cad.rcb availability: 0.893406 
+
+
+CROMU_00065, introduced in round 81, through 95. First failed defense in 81. 
+
+
+CROMU_00066, introduced in round 77, through 95.  
+
+
+CROMU_00072, introduced in round 17, through 30.  
+
+
+CROMU_00073, introduced in round 19, through 32.  First score by this team (5) in 22
+     24 1514220152-CROMU_00073-c50592f9c843491b2a0294cf18400585f0e782c39b008575767727676298bad1.rcb availability: 0.912407 
+
+
+CROMU_00076, introduced in round 28, through 43.  
+
+
+CROMU_00077, introduced in round 72, through 95.  
+
+
+CROMU_00078, introduced in round 75, through 95.  
+
+
+CROMU_00079, introduced in round 65, through 78.  
+
+
+CROMU_00082, introduced in round 29, through 42.  
+
+
+CROMU_00083, introduced in round 40, through 53.  
+
+
+CROMU_00084, introduced in round 42, through 55.  
+
+
+CROMU_00087, introduced in round 44, through 57.  
+
+
+CROMU_00088, introduced in round 52, through 65. First failed defense in 64. 
+
+
+CROMU_00092, introduced in round 1, through 22.  
+
+
+CROMU_00093, introduced in round 47, through 60.  
+
+
+CROMU_00094, introduced in round 3, through 26. First failed defense in 3. First score by this team (5) in 4
+      7 1424130266-CROMU_00094-0fb0ffdcab6b507452edc41f52d9e6d5b8a9fb29f1d550268842c97c23767b3f.rcb availability: 1.000000 
+
+
+CROMU_00095, introduced in round 2, through 25.  First score by this team (5) in 11
+
+
+CROMU_00096, introduced in round 4, through 27.  First score by this team (5) in 9
+     12 2760261320-CROMU_00096-0375b239a2485192184536292e8dc252b10b1ac76aa9464b89a7a581a94a149f.rcb availability: 1.000000 
+
+
+CROMU_00097, introduced in round 1, through 24.  First score by this team (5) in 3
+      5 1204538468-CROMU_00097-04c872bd5a05df9e1192e465006136463ed914ca602cf770db1a934ee3c1b9be.rcb availability: 1.000000 
+
+
+CROMU_00098, introduced in round 34, through 47. First failed defense in 46. 
+
+
+KPRCA_00062, introduced in round 62, through 75.  
+
+
+KPRCA_00064, introduced in round 67, through 80.  
+
+
+KPRCA_00065, introduced in round 23, through 36. First failed defense in 23. First score by this team (5) in 24
+
+
+KPRCA_00068, introduced in round 76, through 95.  
+
+
+KPRCA_00069, introduced in round 69, through 92.  
+
+
+KPRCA_00071, introduced in round 1, through 17.  
+
+
+KPRCA_00073, introduced in round 59, through 72.  
+
+
+KPRCA_00074, introduced in round 21, through 34.  
+
+
+KPRCA_00075, introduced in round 1, through 16.  
+
+
+KPRCA_00077, introduced in round 80, through 95.  
+
+
+KPRCA_00079, introduced in round 33, through 46.  
+
+
+KPRCA_00081, introduced in round 25, through 38.  
+
+
+KPRCA_00086, introduced in round 74, through 95.  
+
+
+KPRCA_00087, introduced in round 26, through 39.  
+
+
+KPRCA_00088, introduced in round 43, through 56.  
+
+
+KPRCA_00091, introduced in round 51, through 64.  
+
+
+KPRCA_00093, introduced in round 35, through 48.  
+
+
+KPRCA_00094, introduced in round 64, through 77. First failed defense in 73. 
+
+
+KPRCA_00097, introduced in round 1, through 20.  
+
+
+KPRCA_00099, introduced in round 54, through 67.  
+
+
+KPRCA_00100, introduced in round 56, through 69.  
+
+
+KPRCA_00101, introduced in round 1, through 18.  
+
+
+KPRCA_00102, introduced in round 2, through 23.  
+
+
+KPRCA_00110, introduced in round 50, through 63.  
+
+
+KPRCA_00111, introduced in round 1, through 15.  
+
+
+KPRCA_00112, introduced in round 82, through 95.  
+
+
+KPRCA_00119, introduced in round 20, through 33.  
+
+
+KPRCA_00120, introduced in round 78, through 95.  
+
+
+NRFIN_00043, introduced in round 58, through 71.  
+
+
+NRFIN_00044, introduced in round 55, through 68.  
+
+
+NRFIN_00045, introduced in round 16, through 29.  
+
+
+NRFIN_00046, introduced in round 45, through 58.  
+
+
+NRFIN_00049, introduced in round 1, through 14.  
+      5 325025771-NRFIN_00049-b2e834a2e9b6ef1facf86388c6f66124184d03985fb600f518f3abbf1e13d0a3.rcb availability: 1.000000 
+
+
+NRFIN_00051, introduced in round 41, through 54.  
+
+
+NRFIN_00052, introduced in round 73, through 95. First failed defense in 73. First score by this team (5) in 95
+
+
+NRFIN_00053, introduced in round 32, through 45.  
+
+
+NRFIN_00054, introduced in round 38, through 51.  
+
+
+NRFIN_00055, introduced in round 18, through 31.  
+
+
+NRFIN_00056, introduced in round 63, through 76.  
+
+
+NRFIN_00059, introduced in round 36, through 49. First failed defense in 40. First score by this team (5) in 49
+
+
+NRFIN_00061, introduced in round 26, through 41.  
+
+
+NRFIN_00063, introduced in round 49, through 62. First failed defense in 50. 
+
+
+NRFIN_00064, introduced in round 22, through 35.  
+
+
+NRFIN_00065, introduced in round 48, through 61.  
+
+
+NRFIN_00066, introduced in round 37, through 50.  
+
+
+NRFIN_00067, introduced in round 61, through 74.  
+
+
+NRFIN_00069, introduced in round 1, through 19.  
+
+
+NRFIN_00071, introduced in round 27, through 40.  
+
+
+NRFIN_00072, introduced in round 66, through 79.  
+
+
+YAN01_00015, introduced in round 57, through 70. First failed defense in 57. 
+
+
+YAN01_00016, introduced in round 79, through 95. First failed defense in 79. 

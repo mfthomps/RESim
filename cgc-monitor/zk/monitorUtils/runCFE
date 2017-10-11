@@ -1,0 +1,99 @@
+#!/bin/bash
+:<<'END_COMMENT'
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+END_COMMENT
+#
+#  Full workflow to prep monitoring system for a CFE-stye game
+#
+show_usage() {
+   echo "runCFE game_dir [game_name] [all]"
+   echo "   Where game_dir is the path to the game directory where new games will appear and"
+   echo "   where game_name is an optional CFE game timestamp from cgcwf."
+   echo "   within the cfe_cfg_files_dir."
+   echo "   ** NOTE ** this command will delete the zk CB hierarchy and the forensics RCB repo "
+   echo "   A game_notify process is started using nohup"
+}
+if [ $# -lt 1 ]
+then
+    show_usage
+    exit 1
+fi
+isMonitorDown
+if [ ! $? = 0 ]
+then
+    echo "monitor is not down, exit"
+    exit
+fi
+# stop all slaves
+#ZM clean
+ZM updatePackages
+echo "wait for packages to update"
+sleep 10
+# Note monitor config is updated via game_listener
+# so that all processes read the same data.
+gname=$1
+# clear all rcb's
+#clearFileRepo --force
+#if [ ! $? = 0 ]
+#then
+#    echo "problem with clearFileRepo"
+#    exit
+#fi
+if [ $# -ge 2 ]; then
+    #
+    #  game to start with provided, do all following as well? 
+    #
+    game_dir="$1"/"$2"
+    if [ -d "$game_dir" ]; then
+       new_list=$2
+       if [ "$3" == "all" ]; then
+           list=`ls $1`
+           foundit=0
+           new_list=""
+           for game in $list; do
+               if [ $game == "$2" ]; then
+                  foundit=1
+               fi
+               if [ $foundit == "1" ]; then
+                   new_list+=" "$game
+                   resetGame $game
+               fi
+           done
+       else
+           resetGame $new_list
+       fi
+    else
+       echo $2 "is not a game directory in "$1
+       echo `ls $1`
+       exit
+    fi
+fi
+# clear zk nodes 
+cleanCBs
+# clear logs
+ZM clearLogs
+# start slaves
+ZM start
+#
+nohup game_notify $1 $new_list &

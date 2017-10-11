@@ -1,0 +1,404 @@
+# Summary of team 7 defenses.  Each CB service is presented separately below.
+# RCBs are listed with their round numbers and availability.  Scores against RCBs are noted.
+
+
+CROMU_00046, introduced in round 53, through 66.  
+     55 deployed filter 3316836470-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     55 3316836470-CROMU_00046-d127123452d2edafc75d7ef982550993ef3f3afe7b86c2a9cfefdba02148d5fa.rcb availability: 1.000000 
+
+
+CROMU_00047, introduced in round 71, through 94.  
+
+
+CROMU_00048, introduced in round 39, through 52.  
+
+
+CROMU_00051, introduced in round 60, through 73. First failed defense in 64. 
+     67 deployed filter 1029868449-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     67 1029868449-CROMU_00051-78dea3fcceb9f68d74522218d1f5fe4c7a51c39289eeb2b479937736ff832361.rcb availability: 1.000000 
+
+
+CROMU_00054, introduced in round 31, through 44.  
+
+
+CROMU_00055, introduced in round 1, through 24.  
+     3 deployed filter 3007107812-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.000000
+      3 3007107812-CROMU_00055-b64a246a56f9e78ef8be08ded30ce21fd6dcf007f206438d3d5f2bfcfcdc7e01.rcb availability: 0.000000 
+      6 3007107812-CROMU_00055-fd68d8bde2b79a93d98d2d709074d56cf081c81716d811ddcd020a3a27e7c344.rcb availability: 1.000000 
+
+
+CROMU_00057, introduced in round 46, through 59.  
+     48 deployed filter 3526406823-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     48 3526406823-CROMU_00057-5bb73cabf09809f7ce81deb8d166eebd65cf128ff610dd3c2626a3dbdbf038e6.rcb availability: 1.000000 
+
+
+CROMU_00058, introduced in round 24, through 37. First failed defense in 35. 
+     26 deployed filter 3345162729-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     26 3345162729-CROMU_00058-55922a6e56c0ef8753a92bd832848b1c47d6a3392328eb3b771972d2c07cc0ec.rcb availability: 1.000000 
+	  round 35  team 5 scored 1 times
+
+
+CROMU_00061, introduced in round 70, through 93.  
+
+
+CROMU_00063, introduced in round 68, through 91.  
+
+
+CROMU_00064, introduced in round 2, through 21. First failed defense in 2. 
+     4 deployed filter 1906881742-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+      4 1906881742-CROMU_00064-00e35f4329bfcb21ad1ee3bf77d6ca6fa1777bef4aa9d025f9dcef3c40b4e13f.rcb availability: 1.000000 
+
+
+CROMU_00065, introduced in round 81, through 95. First failed defense in 81. 
+     83 deployed filter 754026095-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.845194
+     83 754026095-CROMU_00065-981bf6b3d5093d05f833fa98021300a4e101fbbc3b4e0d794f9dc86ac63412e1.rcb availability: 0.845194 
+
+
+CROMU_00066, introduced in round 77, through 95.  
+     79 deployed filter 4097491697-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.996145
+     79 4097491697-CROMU_00066-fc690b9d2d65cb56235a9786bcac8b5aea2ddd6610c757f4b8f1e4c30326efdb.rcb availability: 0.996145 
+
+
+CROMU_00072, introduced in round 17, through 30.  
+     19 deployed filter 3368667469-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.949465
+     19 3368667469-CROMU_00072-2292303d5abf7b4f6bdf0a1d968efe4e2fef49505f1892969327367702b7c0c7.rcb availability: 0.949465 
+
+
+CROMU_00073, introduced in round 19, through 32. First failed defense in 22. 
+     25 deployed filter 1514220152-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.820125
+     25 1514220152-CROMU_00073-2ad0b0edf92ec960c79a64992b0f89a36f9d591247edd436bdd3ca112966cf70.rcb availability: 0.820125 
+
+
+CROMU_00076, introduced in round 28, through 43.  
+
+
+CROMU_00077, introduced in round 72, through 95.  
+
+
+CROMU_00078, introduced in round 75, through 95.  
+     77 deployed filter 540826762-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     77 540826762-CROMU_00078-34b64a394bcdbb349525c7127ba436b67da6603b06016fe679ed3657d4b32c13.rcb availability: 1.000000 
+     84 540826762-CROMU_00078-6d65babec50d28bddde5b3fa039ec2e92ce9601c1dc3bf0b3892fce996ce0928.rcb availability: 1.000000 
+
+
+CROMU_00079, introduced in round 65, through 78.  
+     67 deployed filter 3049714598-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     67 3049714598-CROMU_00079-3f55223c36b7a174383dcab7ec8e3d64fae7ae672c0974216299b7296682c4fc.rcb availability: 1.000000 
+
+
+CROMU_00082, introduced in round 29, through 42.  
+     31 1295802477-CROMU_00082-bd5df600ba46dc76c5d7f08d9c8ec95f7ff8729658c82282668135b9f7387f41.rcb availability: 0.000000 
+     34 1295802477-CROMU_00082-a8671daf48dca65a169a5dd0ca9ceac04aecf578305fdff88a4daeadbac40bae.rcb availability: 0.971389 
+
+
+CROMU_00083, introduced in round 40, through 53.  
+     42 deployed filter 3295241155-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     42 3295241155-CROMU_00083-46246121a6bcec63ed4b735d2904ca5ad17b11e21965658cad71f2ed04298e72.rcb availability: 1.000000 
+
+
+CROMU_00084, introduced in round 42, through 55.  
+
+
+CROMU_00087, introduced in round 44, through 57.  
+     48 deployed filter 1161136519-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     48 1161136519-CROMU_00087-c5858b7f6c28d630aefdbacb8ea27dedfb67245d8e1eb5d54eb8844b3fd03c74.rcb availability: 1.000000 
+
+
+CROMU_00088, introduced in round 52, through 65. First failed defense in 64. 
+
+
+CROMU_00092, introduced in round 1, through 22.  
+
+
+CROMU_00093, introduced in round 47, through 60.  
+
+
+CROMU_00094, introduced in round 3, through 26. First failed defense in 9. First score by this team (7) in 3
+     5 deployed filter 1424130266-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+      5 1424130266-CROMU_00094-432827e2bd46f9d7bd52f4630d1ccc2ae0f11df55d7402c91a36835df7e68cf5.rcb availability: 1.000000 
+	  round  9  team 5 scored 9 times
+
+
+CROMU_00095, introduced in round 2, through 25.  
+     4 deployed filter 1504525286-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+      4 1504525286-CROMU_00095-5c56778e8356b559ddf584471d13b5d75d0b00e64673905eec1e88f632215859.rcb availability: 1.000000 
+
+
+CROMU_00096, introduced in round 4, through 27.  
+     6 deployed filter 2760261320-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+      6 2760261320-CROMU_00096-1abaab11274da11a7aab015df1d9a7f67485bd2cc6e884e68e6c39704110efeb.rcb availability: 1.000000 
+
+
+CROMU_00097, introduced in round 1, through 24.  
+      3 1204538468-CROMU_00097-a865061bf27220632a904777ecd6a25e0999229b8711e77413cf7694b5e37bb7.rcb availability: 1.000000 
+
+
+CROMU_00098, introduced in round 34, through 47. First failed defense in 46. 
+
+
+KPRCA_00062, introduced in round 62, through 75.  
+
+
+KPRCA_00064, introduced in round 67, through 80.  
+
+
+KPRCA_00065, introduced in round 23, through 36. First failed defense in 23. First score by this team (7) in 23
+     25 3361046760-KPRCA_00065-074e028796a2e23f6203c1109cf194e99046ed97d11bdcb6d08a254d0c028ac6.rcb availability: 0.009459 
+     28 3361046760-KPRCA_00065-430e28d7213f9034c236288c78d9dfa0c6945711fa27d435ace33260b53ec307.rcb availability: 1.000000 
+	  round 28  team 6 scored 10 times
+	  round 29  team 1 scored 10 times
+	  round 29  team 6 scored 10 times
+	  round 30  team 1 scored 10 times
+	  round 30  team 6 scored 10 times
+	  round 31  team 1 scored 10 times
+	  round 31  team 6 scored 10 times
+	  round 32  team 1 scored 10 times
+	  round 32  team 4 scored 10 times
+	  round 32  team 6 scored 10 times
+	  round 33  team 1 scored 10 times
+	  round 33  team 4 scored 10 times
+	  round 33  team 5 scored 10 times
+	  round 33  team 6 scored 10 times
+	  round 34  team 1 scored 10 times
+	  round 34  team 4 scored 10 times
+	  round 34  team 5 scored 10 times
+	  round 34  team 6 scored 10 times
+	  round 35  team 1 scored 10 times
+	  round 35  team 4 scored 10 times
+	  round 35  team 6 scored 10 times
+	  round 36  team 1 scored 10 times
+	  round 36  team 4 scored 10 times
+	  round 36  team 6 scored 10 times
+
+
+KPRCA_00068, introduced in round 76, through 95.  
+     78 3837133838-KPRCA_00068-a15c2ddb648832139a946470cf85292d952721b23f6681a91476d80704387b83.rcb availability: 1.000000 
+
+
+KPRCA_00069, introduced in round 69, through 92.  
+
+
+KPRCA_00071, introduced in round 1, through 17.  
+
+
+KPRCA_00073, introduced in round 59, through 72.  
+
+
+KPRCA_00074, introduced in round 21, through 34.  
+     27 2912718818-KPRCA_00074-fcbcbb15d379e1c56cd56503f80446d4c4e36648a677c9c4e19960a93ee81a62.rcb availability: 0.842132 
+
+
+KPRCA_00075, introduced in round 1, through 16.  
+      7 3217895783-KPRCA_00075_1-d0273ad4aac84142e66db3936678e4fbb1c4d14ff1d1f1add2c376d0b8eacf79.rcb availability: 0.000000 
+      7 3217895783-KPRCA_00075_2-9ea5c56701b5482cd38f00c276524c461f4c726e2cb9ded6a2902ea699d907ea.rcb availability: 0.000000 
+      7 3217895783-KPRCA_00075_3-b3c15f2bc6bac987979e025d2a6a1794882afc8085e9cb304a98ea954e93e91f.rcb availability: 0.000000 
+      7 3217895783-KPRCA_00075_4-7acaeab4bb8853391cf9aeda3dc4757ea9aecf62297dfd967ed3fac0779bc690.rcb availability: 0.000000 
+     10 3217895783-KPRCA_00075_1-37daf0de62522b443d6e8db30db24ddd40f69bb1b85f37cebb6a598141010319.rcb availability: 1.000000 
+     10 3217895783-KPRCA_00075_2-582562c2aff60da54e932cd8b9e09ab7b91a7190f070dedf132eb8688fa6fd3a.rcb availability: 1.000000 
+     10 3217895783-KPRCA_00075_3-2e39836b54cd2bba5bd3f8f9778cda602f11d9a11875ef2b47360f1d119b84c2.rcb availability: 1.000000 
+     10 3217895783-KPRCA_00075_4-efb00ee641a9649266e5d457e484f3cdd77395dab9b1795194f976f97d46fe78.rcb availability: 1.000000 
+
+
+KPRCA_00077, introduced in round 80, through 95.  
+
+
+KPRCA_00079, introduced in round 33, through 46.  
+
+
+KPRCA_00081, introduced in round 25, through 38.  
+
+
+KPRCA_00086, introduced in round 74, through 95.  
+
+
+KPRCA_00087, introduced in round 26, through 39.  
+     28 2522530102-KPRCA_00087-684f9bbda4a8852ff6b8e8768c1b39563f3a543447244d8d99b5d55df82af05b.rcb availability: 0.545258 
+
+
+KPRCA_00088, introduced in round 43, through 56.  
+
+
+KPRCA_00091, introduced in round 51, through 64.  
+
+
+KPRCA_00093, introduced in round 35, through 48.  
+     37 deployed filter 1878641631-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.940532
+     37 1878641631-KPRCA_00093_1-68b0502ae0763e77cbb658834e7a34b499b92f58115d4de9bcc5518f5b60c6b4.rcb availability: 0.940532 
+     37 1878641631-KPRCA_00093_2-b6fc1e38f370bfbc6cf635b27cd065cc5960bf46fa67dc89cb718af8a1d1fd13.rcb availability: 0.940532 
+
+
+KPRCA_00094, introduced in round 64, through 77.  
+     66 deployed filter 2097594834-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.995565
+     66 2097594834-KPRCA_00094-1f41067b72122b94ba54a19574f173624674c2b5c18b3a68a70143f3b6dc5655.rcb availability: 0.995565 
+
+
+KPRCA_00097, introduced in round 1, through 20.  
+      3 3471858189-KPRCA_00097-d83fbe999d54ec52b6fb2e248410f607d4e6cc303c013b2a591b053e6d0d830d.rcb availability: 0.004500 
+      6 3471858189-KPRCA_00097-26e3e46d3815cc1abd08cf8342df587dfaee97094213656ab362eff9e9a195b9.rcb availability: 1.000000 
+
+
+KPRCA_00099, introduced in round 54, through 67.  
+
+
+KPRCA_00100, introduced in round 56, through 69.  
+     58 deployed filter 2425946942-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.018162
+     58 2425946942-KPRCA_00100-9b7192cc6169bae90d3847f289675a0d0de3be43117a6aa4c8008961bed60426.rcb availability: 0.018162 
+     61 2425946942-KPRCA_00100-4cad8e04ca88f49e6b1dd735a697710267cf1be676ef5ed34b2a5c033ea05618.rcb availability: 1.000000 
+
+
+KPRCA_00101, introduced in round 1, through 18.  
+      3 3436313223-KPRCA_00101-3beffa6020b918cf60b5f92495bd8bcd7b6bb82ae4228c4bcb8a42bbfb1aacab.rcb availability: 0.805870 
+
+
+KPRCA_00102, introduced in round 2, through 23.  
+      9 944326584-KPRCA_00102-69f469577185aba1ae97633c50be17f4857513b5f3cc181cf0005d1a1b3fae50.rcb availability: 0.822778 
+
+
+KPRCA_00110, introduced in round 50, through 63.  
+     52 deployed filter 3528943668-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.922568
+     52 3528943668-KPRCA_00110-4a26a75b0aebfaa1a8b86a14ed0654d6625700f5df449559d304fd7bf0b09d7b.rcb availability: 0.922568 
+
+
+KPRCA_00111, introduced in round 1, through 15.  
+
+
+KPRCA_00112, introduced in round 82, through 95.  
+
+
+KPRCA_00119, introduced in round 20, through 33.  
+
+
+KPRCA_00120, introduced in round 78, through 95.  
+
+
+NRFIN_00043, introduced in round 58, through 71.  
+     60 deployed filter 2928792287-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.332734
+     60 2928792287-NRFIN_00043-aa2624b4256e8f0d81b007aa4b3698e95eccc743e5a4a3c41db181bb1fd8289e.rcb availability: 0.332734 
+
+
+NRFIN_00044, introduced in round 55, through 68.  
+
+
+NRFIN_00045, introduced in round 16, through 29.  
+     24 deployed filter 975877749-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     24 975877749-NRFIN_00045-4780dff9a485bad1c70217e502d63130ea3b354ec031b17a83967e7df283cbd2.rcb availability: 1.000000 
+
+
+NRFIN_00046, introduced in round 45, through 58.  
+
+
+NRFIN_00049, introduced in round 1, through 14.  
+     3 deployed filter 325025771-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+      3 325025771-NRFIN_00049-80b384c1fa312af8bacc38bae0b6dd602e3e49071f367fdcb545eb382b040688.rcb availability: 1.000000 
+
+
+NRFIN_00051, introduced in round 41, through 54.  
+
+
+NRFIN_00052, introduced in round 73, through 95. First failed defense in 73. 
+     75 deployed filter 3881696163-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     75 3881696163-NRFIN_00052-c3800439ba8ea7e11ff32b8344b2cfd22d4e1ad8b9001a54f3ab334d9e38ee7f.rcb availability: 1.000000 
+
+
+NRFIN_00053, introduced in round 32, through 45.  
+
+
+NRFIN_00054, introduced in round 38, through 51.  
+
+
+NRFIN_00055, introduced in round 18, through 31.  
+     29 deployed filter 3395615331-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     29 3395615331-NRFIN_00055-85f8be5633160b71ecc4a15bfcebcee0b1e644c833f9b942de860f73cf8c8bcd.rcb availability: 1.000000 
+
+
+NRFIN_00056, introduced in round 63, through 76.  
+
+
+NRFIN_00059, introduced in round 36, through 49. First failed defense in 40. 
+
+
+NRFIN_00061, introduced in round 26, through 41.  
+     28 deployed filter 3371584014-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     28 3371584014-NRFIN_00061-52c27d7795dd4b6f315ebd6f7890cb413113ea16e34f9e81c73e3964202a32ea.rcb availability: 1.000000 
+
+
+NRFIN_00063, introduced in round 49, through 62. First failed defense in 50. 
+     53 deployed filter 2347155893-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 0.947170
+     53 2347155893-NRFIN_00063-0f7a04df22c0aba315b2cac07d6bad9b9c4bd9820ef21978ca092235120b5e06.rcb availability: 0.947170 
+
+
+NRFIN_00064, introduced in round 22, through 35.  
+     26 deployed filter 3121141496-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     26 3121141496-NRFIN_00064-7f88dcf4a2efc0aa3dc9066fb05d4148780788bf35b40b9043dc34eee5c0d2fc.rcb availability: 1.000000 
+
+
+NRFIN_00065, introduced in round 48, through 61.  
+
+
+NRFIN_00066, introduced in round 37, through 50.  
+
+
+NRFIN_00067, introduced in round 61, through 74.  
+
+
+NRFIN_00069, introduced in round 1, through 19.  
+
+
+NRFIN_00071, introduced in round 27, through 40.  
+
+
+NRFIN_00072, introduced in round 66, through 79.  
+     68 deployed filter 2351307877-c4947910df2905a836027aae1bc1d061cf6033cb49dc7731a3830cf2c564e05b.ids  avail: 1.000000
+     68 2351307877-NRFIN_00072_1-dcea213bc27d1283edf40bb440c0db836f4d27e11b743ab14c12ccb5a1df3269.rcb availability: 1.000000 
+     68 2351307877-NRFIN_00072_2-fc33eb1bde5bc6d4ccd32b78487b43351856b72911e34f5aa87a4155cbaab9f1.rcb availability: 1.000000 
+     68 2351307877-NRFIN_00072_3-80ed44ed896aa3f8d1be32a8286e91e744f37ea956ad82b1389cb1e6ecd76b29.rcb availability: 1.000000 
+     68 2351307877-NRFIN_00072_4-9df02221e620175fced605882b110fc69eab8f7c27b0d0bddcca3a31c357230f.rcb availability: 1.000000 
+     68 2351307877-NRFIN_00072_5-69a9de9a28e7f1b050cd9b8eb961c9df4657967ee9ecff7dcfae8698d048c842.rcb availability: 1.000000 
+     68 2351307877-NRFIN_00072_6-a734b06dcf9958602bebfccc8dfc01c207c2da89da9b6ee2651d6159651f95ea.rcb availability: 1.000000 
+
+
+YAN01_00015, introduced in round 57, through 70. First failed defense in 57. First score by this team (7) in 57
+
+
+YAN01_00016, introduced in round 79, through 95. First failed defense in 79. First score by this team (7) in 79
+     81 1961371372-YAN01_00016-a02540e15563fc7b69dbedc2e44b07edd471645048a33a5abf0c6aaf9db0e4c0.rcb availability: 0.061092 
+     84 1961371372-YAN01_00016-690a41e7a4ccadfe25f3c575976991ecc89975c349f5a7777e68cd8aca76f8d8.rcb availability: 1.000000 
+	  round 84  team 1 scored 10 times
+	  round 84  team 4 scored 10 times
+	  round 85  team 1 scored 10 times
+	  round 85  team 4 scored 10 times
+	  round 86  team 1 scored 10 times
+	  round 86  team 3 scored 2 times
+	  round 86  team 4 scored 10 times
+	  round 87  team 1 scored 10 times
+	  round 87  team 3 scored 3 times
+	  round 87  team 4 scored 10 times
+	  round 88  team 1 scored 10 times
+	  round 88  team 3 scored 6 times
+	  round 88  team 4 scored 10 times
+	  round 89  team 1 scored 10 times
+	  round 89  team 3 scored 2 times
+	  round 89  team 4 scored 10 times
+	  round 90  team 1 scored 10 times
+	  round 90  team 3 scored 2 times
+	  round 90  team 4 scored 10 times
+	  round 91  team 1 scored 10 times
+	  round 91  team 3 scored 1 times
+	  round 91  team 4 scored 10 times
+	  round 91  team 6 scored 10 times
+	  round 92  team 1 scored 10 times
+	  round 92  team 3 scored 8 times
+	  round 92  team 4 scored 10 times
+	  round 92  team 6 scored 10 times
+	  round 93  team 1 scored 10 times
+	  round 93  team 3 scored 4 times
+	  round 93  team 4 scored 10 times
+	  round 93  team 6 scored 10 times
+	  round 94  team 1 scored 10 times
+	  round 94  team 3 scored 2 times
+	  round 94  team 4 scored 10 times
+	  round 94  team 6 scored 10 times
+	  round 95  team 1 scored 10 times
+	  round 95  team 3 scored 6 times
+	  round 95  team 4 scored 10 times
+	  round 95  team 6 scored 10 times

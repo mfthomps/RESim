@@ -1,0 +1,15 @@
+#!/bin/bash
+PROC=$(ps aux | grep '[p]utServiceCfg' | grep -v tail | awk '{print $2}')
+if [ -z "$PROC" ]; then
+    echo "no putServiceCfg running"
+else
+    echo "kill putServiceCfg, running as $PROC"
+    kill -9 $PROC
+fi
+PROC=$(ps aux | grep '[p]utReplayCfg' | grep -v tail | awk '{print $2}')
+if [ -z "$PROC" ]; then
+    echo "no putReplayCfg running"
+else
+    echo "kill putReplayCfg, running as $PROC"
+    kill -9 $PROC
+fi

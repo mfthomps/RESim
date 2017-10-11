@@ -1,0 +1,283 @@
+#!/bin/bash
+:<<'END_COMMENT'
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+END_COMMENT
+
+#
+#  IF YOU CHANGE THIS FILE: it must be moved to each target's
+#  /usr/bin directory, e.g., by using ZK updatePackages after
+# rebuilding and collecting the debian packages
+#
+# Bootstrap a forensics monitor slave by getting tarballs, expanding them
+# and then starting simics with the launchMonitor.py script.
+# Note this script updates the .craff file, which can take a long time
+#
+export ONE_BOX=NO
+USE_CHECKPOINT=YES
+#export CGC_OS_TYPE=mixed_klk64
+export CGC_OS_TYPE=freeBSD64
+
+CGC=/mnt/cgc
+CGC_LOGS=$CGC/logs
+SIMICS_SCRIPTS=$CGC/simics/simicsScripts
+SIMICS_REBUILD=$CGC/simics/rebuild
+SIMICS_SLAVE=$CGC/simics/slaveInstall
+SIMICS_MASTER=$CGC/simics/masterInstall
+SHARE=/mnt/vmLib/cgcForensicsRepo
+PY_MODS='/usr/share/pyshared/monitorCore'
+here=`pwd`
+exec >> $CGC_LOGS/monitorSlaveService.log 2>&1
+echo "Starting monitorSlaveService from init.d"
+#
+#  If simics is running, bail.
+#
+PROC=$(ps aux | grep '[s]imics-common' | grep -v tail | awk '{print $2}')
+if [ $? -eq 0 ]; then
+    if [ ! -z "$PROC" ]; then
+        echo SIMICS procs still running: $PROC
+        echo "will exit"
+        exit
+    fi
+fi
+#
+# If there is already a scripts installation, use it to get the
+# correct VmLib mounted.  Otherwise, use currently mounted vmLib
+#
+echo "look for vmLib"
+if [ ! -e $SHARE ]; then
+   echo "no share yet, mount the vmLib"
+   vm_lib_exists=`which mountVmLib`
+   if [[ -n "$vm_lib_exists" ]]; then
+       echo "use mountVmLib script"
+       mountVmLib
+       if [ ! $? -eq 0 ]; then
+           echo "failed to mount vmlib, exit"
+           exit
+       fi
+       echo "back from mounting vmLib"
+   else
+       VOL=$(df | grep 'vmLib')
+       if [ $? -eq 0 ]; then
+           echo "No mountVmLib script, but a vmLib is mounted, use that"
+       else
+           echo "No mountVmLib script and no vmLib mounted, exit"
+           exit
+       fi
+   fi
+fi
+echo "mount the artifactServer, if any"
+mountArtifacts
+#
+#  Make sure using latest images
+#
+
+cd $CGC
+#TARBALL=$SHARE/monitor.tar
+export SIMICS=/mnt/simics/simics-4.8/simics-4.8.145
+SIMICS_RUN_BASE=/mnt/simics/simicsWorkspace
+
+mkdir -m 777 -p $CGC_LOGS
+mkdir -m 777 -p $CGC_LOGS/monitors
+# get time from master as defined in zk node
+timeFromMaster
+targetIP
+# kill any lingering targetWatcher instances and putPackages
+PROC=$(ps aux | grep '[t]argetWatcher' | grep -v tail | awk '{print $2}')
+if [ $? -eq 0 ]; then
+    echo proc to kill is $PROC
+    if [ ! -z "$PROC" ]; then
+       kill $PROC
+    fi
+fi
+PROC=$(ps aux | grep '[p]utPackages' | grep -v tail | awk '{print $2}')
+if [ $? -eq 0 ]; then
+    echo proc to kill is $PROC
+    if [ ! -z "$PROC" ]; then
+       kill $PROC
+    fi
+fi
+# delete any zk nodes for this hosts targets
+cleanZkNodes
+
+SIMICS_VER=4.8
+export SIMICS_VER
+# see if we need to make the VMP kernel module
+checkVMX
+# get the license files for this host
+# Also loads SLAVE_COUNT
+#source $CGC/simics/slaveInstall/getMyLicenses.sh
+source `which getMyLicenses`
+
+zk_instance=`zkInstance /mnt/cgc/zk_hosts.txt`
+if [ -n "$zk_instance" ]
+then
+    if (( $SLAVE_COUNT > 5 )); then
+       SLAVE_COUNT=5
+       echo "is a zookeeper server, cap slaves at $SLAVE_COUNT"
+    fi
+fi
+
+# get the binaries that the target will need
+# these will end up in targetStage/targetBin.tar
+#source $CGC/zk/py/collect4TargetStage.sh
+collect4TargetStage
+cd $SIMICS_RUN_BASE
+if [ $USE_CHECKPOINT == "YES" ]; then
+    if [ $ONE_BOX == "YES" ]; then
+        if [ $CGC_OS_TYPE == "freeBSD" ]; then
+            export RUN_FROM_SNAP=cgc1_bsd_snapshot.ckpt
+        elif [ $CGC_OS_TYPE == "linux" ]; then
+            export RUN_FROM_SNAP=cgc1_snapshot.ckpt
+        else
+            echo "monitorSlaveBootstrap unknown os type for single box run $CGC_OS_TYPE"
+            exit
+        fi
+    else
+        if [ $CGC_OS_TYPE == "freeBSD" ]; then
+            export RUN_FROM_SNAP=cgc3_bsd_snapshot.ckpt
+        elif [ $CGC_OS_TYPE == "linux" ]; then
+            export RUN_FROM_SNAP=cgc3_snapshot.ckpt
+        elif [ $CGC_OS_TYPE == "mixed_klk" ]; then
+            export RUN_FROM_SNAP=cgc3_mixed_klk_snapshot.ckpt
+        elif [ $CGC_OS_TYPE == "mixed_klk64" ]; then
+            export RUN_FROM_SNAP=cgc3_mixed_klk64_snapshot.ckpt
+        elif [ $CGC_OS_TYPE == "freeBSD64" ]; then
+            #export RUN_FROM_SNAP=cgc3_bsd64_snapshot.ckpt
+            export RUN_FROM_SNAP=cgc3_bsd64_snapshot-nohv.ckpt
+        elif [ $CGC_OS_TYPE == "mixed_llk" ]; then
+            export RUN_FROM_SNAP=cgc3_mixed_llk_snapshot.ckpt
+        else
+            echo "monitorSlaveBootstrap unknown os type $CGC_OS_TYPE"
+            exit
+        fi
+    fi
+    CHECKPOINT_DIR=/mnt/vmLib/bigstuff/$RUN_FROM_SNAP
+    if [ "$CHECKPOINT_DIR.tar" -nt "./$RUN_FROM_SNAP.tar" ]
+    then
+       echo "newer checkpoint image, copy it, this will take a while"
+       if cp "$CHECKPOINT_DIR.tar" ./tmp.tar; then
+           echo "copied $CHECKPOINT_DIR.tar"
+       else
+           echo "failed copy of $CHECKPOINT_DIR"
+           exit
+       fi 
+       if mv ./tmp.tar ./$RUN_FROM_SNAP.tar; then
+           echo "did mv to $RUN_FROM_SNAP.tar"
+           # tbd make this a tmp/mv
+           tar -xf $RUN_FROM_SNAP.tar
+           echo "did tar extract"
+       else
+           echo "failed mv of tmp to $RUN_FROM_SNAP"
+           exit
+       fi 
+    else
+       echo "using current $RUN_FROM_SNAP"
+    fi
+fi
+if [ -z "$1" ]; then
+    if checkMasterCfg
+    then
+        echo "Master config node exists"
+    else
+        echo "Missing master config file"
+        exit
+    fi
+    if [ ! -d "$SHARE/targetPackages_cfe64" ]; then
+        echo "No targetPackages directory, exit"
+        exit
+    fi
+
+    #
+    #  start the watcher 
+    #
+    targetWatcher $SLAVE_COUNT &
+    if [ ! $? -eq 0 ]; then
+        echo "targetWatcher failed, exiting"
+        exit
+    fi
+else
+    echo NO TARGET WATCHERS created
+fi
+echo "Slave count is $SLAVE_COUNT"
+
+ALREADY_RUNNING="NO"
+PROC=$(ps aux | grep '[s]imics-common' | grep -v tail | awk '{print $2}')
+if [ ! -z "$PROC" ]; then
+    ALREADY_RUNNING="YES"
+else
+    echo "will start simics, not yet running"
+fi
+i="0"
+while [ $i -lt $SLAVE_COUNT ]
+do
+    SIMICS_RUN=$SIMICS_RUN_BASE$i
+    mkdir -m 777 -p $SIMICS_RUN
+    cd $SIMICS_RUN
+    $SIMICS/bin/workspace-setup --ignore-existing-files
+    mkdir -m 777 -p ./targetStage
+    ln -s $SIMICS_RUN_BASE/$CRAFF
+    ln -s $SIMICS_RUN_BASE/linux64
+    cd ./targetStage
+    #rm -f zk_hosts.txt
+    #ln -s /mnt/cgc/zk_hosts.txt 
+    cd ../
+    cp $SIMICS_SCRIPTS/debian.params .
+    # update the replay_master.xml cfg file on the zk node
+    # TBD tradeoffs: should there just be one such node, or per-target?
+    putReplayCfg $i
+    putServiceCfg $i
+    #
+    # clear any old replay packages for this monitor slave instance
+    #
+    date
+    echo "clearPackages $i"
+    clearPackages $i
+    date
+    export INSTANCE=$i
+    echo "from bootstrap instance is "$INSTANCE
+    cwd=`pwd`
+    echo "and working dir is " $cwd
+    if [ -z "$1"  -o "$1" == NO_PACKAGES ]; then
+        #exec 2>&1
+        #exec > $CGC_LOGS/monitorSlaveService$i.log
+        if [ "$ALREADY_RUNNING" == "NO" ]; then
+            exec >> $CGC/logs/monitorSlaveService$i.log 2>&1
+            export my_log=$CGC/logs/monitorSlaveService$i.log
+            date
+            echo "invoke simics with launchMonitor.py as instance $INSTANCE"
+            rm -f simics.stdin
+            mkfifo simics.stdin
+            hackStdIn.sh &
+            ./simics -p $PY_MODS/launchMonitor.py < simics.stdin &
+            echo "started simics"
+            date
+            exec >> $CGC_LOGS/monitorSlaveService.log 2>&1
+        fi
+    else
+        echo "Did not launch simics, command line argument results in repo updates only."
+    fi
+    i=$[$i+1]
+done
+#exec >> /dev/null 2>&1
+exec >> /tmp/simics.spew 2>&1

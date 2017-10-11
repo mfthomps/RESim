@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#
+#  intended for use on snapshots (instead of cpToVagrant)
+#
+port=$1
+one_box=$2
+OS_TYPE=$3
+POV=$4
+eth_dev=eth0
+if [ $OS_TYPE == "freeBSD" ] || [ $OS_TYPE == "freeBSD64" ]; then
+   #eth_dev=bge0
+   eth_dev=em0
+fi
+exec > startServiceOnTargets-$port.log 2>&1
+echo "begin startServiceOnTargets one_box is $one_box"
+nohost="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+ssh-keygen -f "/home/mike/.ssh/known_hosts" -R [localhost]:$port
+done="NO"
+while [ $done == "NO" ]; do
+    scp -P $port $nohost targetStage/myip.txt vagrant@localhost:/tmp/new_host_ip.txt
+    if [ "$?" -ne 0 ]; then 
+       echo "scp of myip failed"
+       sleep 1
+    else
+       echo "scp of myip ok"
+       done="YES"
+    fi
+done
+done="NO"
+while [ $done == "NO" ]; do
+    ssh -p $1 $nohost vagrant@localhost "/tmp/startService FROM_SNAPSHOT $one_box $eth_dev $POV &"
+    if [ "$?" -ne 0 ]; then 
+       echo "ssh startService failed, maybe killed"
+       sleep 1
+    else
+       echo "ssh ok"
+       done="YES"
+    fi
+done

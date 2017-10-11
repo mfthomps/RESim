@@ -1,0 +1,4 @@
+Scripts intended as part of the baseline simulated target, i.e.,
+the bootable image.  Changes to these must be followed by an
+update to the craff file, e.g., save-persistent-state and a
+checkpoint-merge

@@ -1,0 +1,34 @@
+#!/usr/bin/python
+from pgRepo import models 
+from pgRepo import cutils
+import sys
+import os
+import shutil
+from monitorLibs import szk
+from monitorLibs import utils
+from monitorLibs import configMgr
+'''
+'''
+cfg = configMgr.configMgr()
+        
+event = cfg.cgc_event
+db = models.db_init(host='10.10.10.30')
+if db is None:
+    print('db init failed, exit')
+    exit(1)
+
+event_id = models.Event.get(event).event_id
+subs = models.Submission.select(event_id = event_id)
+sorted_subs = []
+for sub in subs:
+    key = sub.timestamp
+    sorted_subs.append((key, sub))
+sorted_subs.sort()
+for sub_tuple in sorted_subs:
+    sub = sub_tuple[1]
+    cset = models.Cset.select(cset_id = sub.cset_id)
+    print('reset sub: %s %d verified: %r  rcb: %r  pov: %r' % (cset[0].name, sub.competitor_id, sub.verified, sub.rbs_clear, sub.pov_clear))
+    sub.verified = False
+    sub.rbs_clear = False
+    sub.pov_clear = False
+    db.commit()

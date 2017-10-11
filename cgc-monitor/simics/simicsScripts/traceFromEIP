@@ -1,0 +1,14 @@
+#!/bin/bash
+show_usage() {
+   echo "taceFromAddr.sh breakpoint num_instructions"
+   echo "    Create a trace file in /tmp/trace-output.txt containing the given number of instructions after the given EIP"
+}
+if [ $# -lt 2 ]
+then
+    show_usage
+    exit 1
+fi
+export eip_start=$1
+export num_instructs=$2
+#./simics -p /mnt/cgcsvn/cgc/trunk/cgc-monitor/simics/simicsScripts/traceAfterEIP.py
+./simics -p /usr/share/pyshared/simicsScripts/traceAfterEIP.py

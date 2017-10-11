@@ -1,0 +1,13 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE replay_master SYSTEM "/usr/share/cgc-monitoring/replay_master.dtd">
+<replay_master>
+  <cache>yes</cache>
+  <clear_cache>yes</clear_cache>
+  <workspace>/mnt/simics/simicsWorkspace</workspace>
+  <cb_dir>targetStage/repo/</cb_dir>
+  <cb_host>master</cb_host>
+  <service_host>172.16.128.1</service_host>
+  <local_replay>no</local_replay>
+  <ignore_header_errors>no</ignore_header_errors>
+</replay_master>
+

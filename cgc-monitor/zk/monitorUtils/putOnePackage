@@ -1,0 +1,186 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+
+import os
+import time
+import sys
+import socket
+import logging
+import signal
+import xml.etree.ElementTree as ET
+import shutil
+import glob
+from monitorLibs import szk
+from monitorLibs import configMgr
+from monitorLibs import utils
+from monitorLibs import packageMgr
+from monitorLibs import povJson
+from monitorLibs import getMonitor
+from monitorLibs import findPair
+#import subprocess
+#from subprocess import Popen
+'''
+Test the getting and putting of single packages.  
+Gets configuration data from replay_master.xml
+'''
+zk=None      
+use_dbg_queue = False
+def signal_handler(signal, frame):
+    print( 'in signal_handler of putPackages use_dbg_queue is %r' % use_dbg_queue)
+    if use_dbg_queue:
+        # Stop the associated simics instance via its fifo that servers as stdin
+        print( 'Stop the simics instance by writting to the pipe')
+        f=open('simics.stdin', 'a')
+        f.write('quit\n')
+        f.close()
+    zk.deleteAlternateConfig()
+    zk.stop()
+    sys.exit(1)
+
+def usage():
+    print 'putOnePackage instance cb (pov | poll) (rules | NONE) (no_monitor | msc | debug) [replay_count]'
+    print '    debug -- case debug config to be loaded '
+    print '    no_monitor -- do not check that the monitor for the given instance is ready (primarily for testing'
+    print '    msc will cause the MSC config to be loaded as the alternate configuration for the monitor.'
+    print '    replay count will (for now) cause povs to have multiple seeds and throws'
+    print '    if a json file is given, its name is expanded to two files: json_name-neg.json and json_name-pov.json, both of which must exist'
+    print '    if no json file given, then defauls will be used, with string replace on the PoV filename'
+    exit(1)
+
+def defaultJsons(cb, replay, pov_count, team_count):
+    print('get default json for %s %s pov_count: %d team_count: %d' % (cb, replay, pov_count, team_count))
+    pov_json = povJson.getPovJson(cb, "/tmp/tmpReplays/"+replay, seed_count=pov_count, team_count=team_count)
+    neg_json = povJson.getNegJson(cb, seed_count=pov_count, team_count=team_count)
+    print('pov_json: %s' % pov_json)
+    print('neg_json: %s' % neg_json)
+    return pov_json, neg_json
+ 
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        usage()
+   
+    instance = sys.argv[1]
+    hostname = socket.gethostname()
+    cfg = configMgr.configMgr()
+    my_name='putPackages_'+instance
+    zk = szk.szk(hostname, cfg, instance)
+    lgr = utils.getLogger(my_name, cfg.logdir)
+    gm = getMonitor.getMonitor(zk, cfg, lgr)
+    test_package = None
+    check_monitor = True
+    rules = None
+    cb = sys.argv[2]
+    replay = sys.argv[3]
+    rules = sys.argv[4]
+    if rules == 'NONE':
+        rules = None
+    if sys.argv[5] == 'no_monitor':
+        check_monitor = False
+    elif sys.argv[5] == 'msc' or sys.argv[5] == 'debug':
+        print('Using %s config******************************' % sys.argv[5])
+        check_monitor = False
+        if not zk.alternateConfigFromName(sys.argv[5]):
+            print('alternat config from name failed for %s' % sys.argv[5])
+        else:
+            zk.deleteOurReset()
+    else:
+        usage()
+    pov_json = None
+    neg_json = None
+    cfe_style = False
+    if replay.endswith('.pov'):
+        print('has pov extension')
+        if '-' in replay:
+            prefix = replay.split('-')[0]
+            try:
+                dum = int(prefix)
+                cfe_style = True
+                print('cfe style based on pov')
+            except:
+                pass
+    if not cb.startswith('CB'):
+        cfe_style = True
+    if replay.startswith('POV') or replay.endswith('.pov'):
+        print('is a POV ')
+        if not replay.endswith('.pov'):
+            replay = replay+'.pov'
+        # tbd being used?
+        if len(sys.argv) == 88888:
+            # TBD not yet used
+            pov_json = sys.argv[6]
+            neg_json = sys.argv[7]
+        else:
+            replay_count = 1
+            team_count = 1
+            if len(sys.argv) >= 7:
+                try:
+                    replay_count = int(sys.argv[6])
+                except:
+                    usage()
+                    exit(1)
+            if len(sys.argv) >= 8:
+                try:
+                    team_count = int(sys.argv[7])
+                except:
+                    usage()
+                    exit(1)
+
+            pov_json, neg_json = defaultJsons(cb, replay, replay_count, team_count)
+    else:
+        print('must be a poll, no json')         
+    rcbs = None
+    if cfe_style:
+        rcbs, team_id = findPair.findPairUnknown(cb, replay)
+        print('from findPair %s, %s' % (str(rcbs), team_id))
+        if rcbs is not None:
+            test_package = gm.buildPackageXML(rcbs[0], replay, 'msc', '12345', rcbs, rules, team_id, None)
+        else:
+            test_package = utils.getEncodedPackage(cb, [replay], rules=rules, pov_json=pov_json, neg_json=neg_json, team_id=team_id)
+    else:
+        test_package = utils.getEncodedPackage(cb, [replay], rules=rules, pov_json=pov_json, neg_json=neg_json)
+    use_dbg_queue = True
+    #check_monitor = False 
+    pp = packageMgr.packageMgr(zk, lgr, cfg, instance, False, dbg_queue=use_dbg_queue, check_monitor=check_monitor)
+    signal.signal(signal.SIGINT, signal_handler)
+    start_time = time.time()
+    iter_time = time.time()
+    print('PACKAGE: %s' % test_package)
+    pp.xmlParse(test_package)
+    if cfe_style and rcbs is not None:
+        pp.localCopyPackageNoContext(test_package)
+    else:
+        pp.localCopyPackage(test_package)
+    mycount = pp.readCounter()
+    pp.doOnePackage(test_package)
+    pp.waitCounter(mycount)
+    iter_secs = round(time.time() - iter_time)
+    pp.lgr.debug('putOnePackage done with package %d seconds' % (iter_secs))
+    total_secs = round(time.time() - start_time)
+    print 'took %d seconds' % total_secs
+    pp.lgr.info('%s  %s  in %d seconds' % (cb, replay, total_secs))
+    zk.stop()       
+    
+

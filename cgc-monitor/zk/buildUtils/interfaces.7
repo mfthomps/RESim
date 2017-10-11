@@ -1,0 +1,14 @@
+# interfaces file for cgc-monitor target
+auto eth0
+iface eth0 inet dhcp
+        netmask 255.255.255.0
+        network 10.10.0.0
+        broadcast 10.10.0.255
+        gateway 10.10.0.1
+        # dns-* options are implemented by the resolvconf package, if installed
+        dns-nameservers 10.10.0.1
+
+auto eth1
+iface eth1 inet static
+   address 172.16.0.1
+   netmask 255.255.255.0 

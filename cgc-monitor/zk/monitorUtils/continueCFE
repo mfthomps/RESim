@@ -1,0 +1,56 @@
+#!/bin/bash
+:<<'END_COMMENT'
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+END_COMMENT
+#
+#  Assuming the monitor is running, switch databases to a new game and 
+#  consume those config files (unless wait is set).
+#  Intended for use by game_notify when a new game arrives.
+#
+show_usage() {
+   echo "continueCFE game_name [wait]"
+}
+if [ $# -lt 1 ]
+then
+    show_usage
+    exit 1
+fi
+# update the monitor configuration
+# so that all processes read the same data.
+gname=$1
+nomicro=${gname%.*}
+db="db_name=db_$nomicro"
+event="cgc_event=$gname"
+echo continueCFE putMonitorCfg $db and clearDB
+putMonitorCfg $db $event
+# clear all rcb's
+# clear db and zk nodes 
+clearDB
+#
+# 
+#
+if [ $# -lt 2 ] || [ "$2" != "wait" ]; then
+   echo "not waiting, call cfeFlow second param is $2"
+   cfeFlow "$gname"
+fi

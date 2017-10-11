@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import os
+import shutil
+import getpass
+tdir='/tmp/cgc-ida-client-install'
+try:
+    shutil.rmtree(tdir)
+except:
+    pass
+os.mkdir(tdir)
+os.chdir(tdir)
+#prefix='http://127.0.0.1:8080/build-artifacts/trunk/'
+modules=['cgc-monitor-ida', 'cgc-monitor-libs', 'cgc-monitor-utils', 'cgc-monitor-ida-client']
+for m in modules:
+    #path=os.path.join(prefix, m)
+    path='http://space/~mfthomps/idaClient/'
+    cmd = 'wget -A deb -m -np -E -k -K -nd -r '+path+'/'
+    print cmd
+    os.system(cmd)
+os.system('sudo dpkg -i *.deb')
+me=getpass.getuser()
+keyfile='/home/%s/.ssh/id_cgc_user' % me
+if not os.path.isfile(keyfile):
+    os.system('/usr/bin/get_monitor_key.sh')

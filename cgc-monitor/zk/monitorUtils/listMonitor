@@ -1,0 +1,347 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import time
+import os
+import sys
+import kazoo
+import logging
+from monitorLibs import teamSets
+from monitorLibs import szk
+from monitorLibs import configMgr
+'''
+Command line utilities for inspecting a 
+CGC zookeeper hierarchy
+'''
+class listMonitor():
+    def __init__(self, zk):
+        logging.basicConfig()
+        self.zk = zk
+        self.team_sets = teamSets.teamSets(zk, lgr=logging)
+
+    def listTargets(self):
+        try:
+            children = self.zk.zk.get_children(szk.TARGETS_NODE)
+        except kazoo.exceptions.NoNodeError:
+            print 'no node found for %s' % szk.TARGETS_NODE
+            return
+        children.sort()
+        for child in children:
+            print 'target: %s' % child
+
+    def listMonitors(self, verbose=False):
+        try:
+            children = self.zk.zk.get_children(szk.MONITORS_STATUS_NODE)
+        except kazoo.exceptions.NoNodeError:
+            print 'no node found for %s' % szk.MONITORS_STATUS_NODE
+            return
+        children.sort()
+        for child in children:
+            print 'monitors: %s' % child
+            if verbose:
+               path = szk.MONITORS_STATUS_NODE+'/'+child
+               instances = self.zk.zk.get_children(path)
+               instances.sort()
+               for instance in instances:
+                   print instance
+
+    # list CBs
+    def lc(self, verbose, incomplete):
+        if incomplete:
+            self.zk.listIncompleteCBs(verbose)
+        else:
+            self.zk.listCBs(verbose, incomplete)
+
+    # list PoVs or polls of a CB, and optionally log entries
+    def lr(self, cb, show_log, replay, raw=False):
+        if replay is None:
+            self.zk.listReplays(cb, show_log, raw)
+        else:
+            self.zk.listOneReplay(cb, replay)
+
+    # list all CBs that have been polled by a given poll (or pov)
+    def listReplacements(self, replay):
+        self.zk.listReplacements(replay)
+    
+    def listTeamSets(self, show_log, team_set=None, incomplete=False, not_cleared=False):
+        self.team_sets.listTeamSets(show_log, team_set, incomplete, not_cleared)
+
+    #  all log entries of all CBs
+    def allLogs(self):
+        self.zk.listAllReplays()
+
+    def allPov(self):
+        team_sets = self.zk.listAllPov()
+        for ts in team_sets:
+            self.team_sets.showTeamReplays(ts)
+            
+            
+
+    # list unlocked replays
+    def lu(self):
+        self.zk.listUnlockedReplays(szk.FORENSICS)
+
+    def lp(self, instance, only_undone):
+        try:
+            dum = int(instance)
+        except:
+            print('instance must be an integer')
+            return
+        self.zk.listPackages(instance, only_undone)
+
+    def dumpReplay(self, cb, replay):
+        cb_path = szk.CBS_NODE+'/'+cb
+        path = cb_path+'/'+replay
+        value, stat = self.zk.zk.get(path)
+        print value
+
+    def findPov(self, pov):
+        '''
+        Find the team sets that contain the given pov
+        '''
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            spov = self.team_sets.getPov(s)
+            if spov is not None:
+                if spov.endswith(pov):
+                    config = self.team_sets.getConfigFileName(s)
+                    round_id = self.team_sets.getRoundId(s)
+                    cb = self.team_sets.getCB(s).text
+                    cb = cb.split('-')[1]
+                    defend = self.team_sets.getTeamId(s)
+                    thrower = self.team_sets.getPovTeamId(s)
+                    print('%s %s %s round: %s %s vs %s' % (s, config, cb, round_id, thrower, defend))
+
+    def findRCB(self, rcb):
+        '''
+        Find the team sets that contain the given rcb
+        '''
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            srcb = self.team_sets.getTeamRCBs(s)
+            for binary in srcb:
+                if binary is not None:
+                    if binary.endswith(rcb):
+                        config = self.team_sets.getConfigFileName(s)
+                        round_id = self.team_sets.getRoundId(s)
+                        cb = self.team_sets.getCB(s).text
+                        cb = cb.split('-')[1]
+                        defend = self.team_sets.getTeamId(s)
+                        thrower = self.team_sets.getPovTeamId(s)
+                        print('%s %s %s round: %s %s vs %s' % (s, config, cb, round_id, thrower, defend))
+
+    def findPair(self, pov, rcb):
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            spov = self.team_sets.getPov(s)
+            if spov is not None:
+                if spov.endswith(pov):
+                    srcb = self.team_sets.getTeamRCBs(s)
+                    for binary in srcb:
+                        if binary is not None:
+                            if binary.endswith(rcb) and binary == rcb:
+                                config = self.team_sets.getConfigFileName(s)
+                                print('%s %s' % (s, config))
+
+    def findCID(self, cid):
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            cb_name = self.team_sets.getCB(s) 
+            if cb_name is None:
+                print('could not get cb_name from set %s' % s)
+                continue
+            if cid in cb_name.text:
+                self.team_sets.showTeamReplays(s)
+
+    def findJson(self, json):
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            config_name = self.team_sets.getConfigFileName(s) 
+            if config_name is None:
+                print('could not get config_name from set %s' % s)
+                continue
+            if json in config_name:
+                self.team_sets.showTeamReplays(s)
+
+    def findTuple(self, cb, throw_team, def_team, want_round_id):
+        sets = self.team_sets.getTeamSets()
+        for s in sets:
+            spov = self.team_sets.getPov(s)
+            if spov is not None:
+                    srcb = self.team_sets.getTeamRCBs(s)
+                    for binary in srcb:
+                        if binary is not None:
+                            if cb in binary:
+                                team_id = self.team_sets.getTeamId(s)
+                                pov_team = self.team_sets.getPovTeamId(s)
+                                round_id = self.team_sets.getRoundId(s)
+                                #print('compare <%s> to <%s>  <%s> to <%s> <%s> to <%s>' % (team_id, def_team, pov_team, throw_team, want_round_id, round_id))
+                                if str(team_id) == def_team and str(pov_team) == throw_team and want_round_id == str(round_id):
+                                    config = self.team_sets.getConfigFileName(s)
+                                    game_id = self.team_sets.getGameId(s)
+                                    self.team_sets.showTeamReplays(s)
+                            
+
+    def summary(self):
+        num_cbs = self.zk.numCBs()
+        num_povs, num_povs_done = self.zk.numPoVs()
+        num_polls, num_polls_done = self.zk.numPolls()
+        print 'cbs: %d  povs: %d (%d done) polls: %d (%d done)' % (num_cbs, num_povs, num_povs_done, num_polls, num_polls_done)
+
+    def usage(self):
+        print 'lc [-v] | [-i] [-l] -- list CBs, optionally with all replays for each cb & their status.  Use -i for only incomplete, and -l for the locked replays'
+        print 'lr <CB> [log | raw] povs/polls for a cb and optionally log entires'
+        print 'al povs/polls for all cbs with log entires'
+        print 'apov povs that segfault or type 2, exclude segfaulting polls'
+        print 'lu -- unlocked CBs'
+        print 'lp <instance> -- packages not yet done [all] for packages done or not'
+        print 'lts [log | team set name | -i | not_cleared] -- summary of team sets.  log displays log, name of set shows that, -i filters for incomplete'
+        print 'lrp -- log entries for all replacements polled by a given service poll'
+        print 'lt -- list target hosts'
+        print 'lm [-v] -- list target monitors, optionally also list instances'
+        print 'dr <CB> <replay> -- dump content of replay node'
+        print 'fpov <pov> -- find the team set(s) containing the given pov'
+        print 'frcb <rcb> -- find the team set(s) containing the given rcb'
+        print 'fpair <pov> <rcb> -- find the team set(s) containing the given rcb & pov'
+        print 'ftuple <cb> <throw_team> <def_team> <round> -- find the team set for the given tuple'
+        print 'fcid <cid> '
+        print 'fjson <json> '
+        print 'sum -- # of CBs and PoVs'
+
+cfgfile = configMgr.configMgr()
+zk = szk.szk(None, cfgfile)
+lm = listMonitor(zk)
+if len(sys.argv) < 2:
+   lm.usage()
+   exit(1)
+
+if sys.argv[1] == 'lc':
+   verbose = False
+   incomplete = False
+   if len(sys.argv) > 2:
+       if sys.argv[2] == '-v':
+           verbose = True
+       elif sys.argv[2] == '-i':
+           verbose = True
+           incomplete = True
+       elif sys.argv[2] == '-l':
+           verbose = False
+           incomplete = True
+   lm.lc(verbose, incomplete)
+elif sys.argv[1] == 'lu':
+   lm.lu()
+elif sys.argv[1] == 'lp':
+   if len(sys.argv) < 2:
+       print 'must provide instance value'
+       lm.usage()
+   instance = sys.argv[2]
+   if len(sys.argv) > 3 and sys.argv[3] == 'all':
+       lm.lp(instance, False)
+   else:
+       lm.lp(instance, True)
+elif sys.argv[1] == 'lr':
+    replay = None
+    log = False
+    raw = False
+    if len(sys.argv) < 3:
+        print('usage: lr <CB> [log]')
+        exit(1)
+    elif len(sys.argv) > 3:
+        if sys.argv[3] == 'log':
+            log = True
+        elif sys.argv[3] == 'raw':
+            log = True
+            raw = True
+        else:
+            replay = sys.argv[3]
+
+    lm.lr(sys.argv[2], log, replay, raw)
+elif sys.argv[1] == 'sum':
+    lm.summary()
+
+elif sys.argv[1] == 'lt':
+    lm.listTargets()
+
+elif sys.argv[1] == 'lm':
+    if len(sys.argv) > 2:
+        lm.listMonitors(True)
+    else:
+        lm.listMonitors()
+
+elif sys.argv[1] == 'lts':
+    if len(sys.argv) < 3:
+        lm.listTeamSets(False)
+    else:
+        if sys.argv[2] == 'log':
+            lm.listTeamSets(True)
+        elif sys.argv[2] == '-i':
+            lm.listTeamSets(False, incomplete=True)
+        elif sys.argv[2] == 'not_cleared':
+            print('looking for team sets that failed vetting')
+            lm.listTeamSets(False, not_cleared=True)
+        else:
+            lm.listTeamSets(True, sys.argv[2])
+elif sys.argv[1] == 'al':
+    lm.allLogs()
+elif sys.argv[1] == 'apov':
+    lm.allPov()
+elif sys.argv[1] == 'lrp':
+    lm.listReplacements(sys.argv[2])
+elif sys.argv[1] == 'dr' and len(sys.argv) == 4:
+    lm.dumpReplay(sys.argv[2], sys.argv[3])
+elif sys.argv[1] == 'fpov':
+    if len(sys.argv) == 3:
+        lm.findPov(sys.argv[2])
+    else:
+        lm.usage()
+elif sys.argv[1] == 'frcb':
+    if len(sys.argv) == 3:
+        lm.findRCB(sys.argv[2])
+    else:
+        lm.usage()
+elif sys.argv[1] == 'fpair':
+    if len(sys.argv) == 4:
+        lm.findPair(sys.argv[2], sys.argv[3])
+    else:
+        lm.usage()
+elif sys.argv[1] == 'ftuple':
+    if len(sys.argv) == 6:
+        lm.findTuple(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+    else:
+        lm.usage()
+elif sys.argv[1] == 'fcid':
+    if len(sys.argv) == 3:
+        lm.findCID(sys.argv[2])
+    else:
+        lm.usage()
+elif sys.argv[1] == 'fjson':
+    if len(sys.argv) == 3:
+        lm.findJson(sys.argv[2])
+    else:
+        lm.usage()
+
+else:
+    lm.usage()
+zk.stop()

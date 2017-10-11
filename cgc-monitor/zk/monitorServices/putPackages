@@ -1,0 +1,98 @@
+#!/usr/bin/python
+import os
+import time
+import sys
+import socket
+import logging
+import signal
+from threading import Thread, Lock, Condition
+import xml.etree.ElementTree as ET
+import shutil
+import glob
+from monitorLibs import szk
+from monitorLibs import configMgr
+from monitorLibs import utils
+from monitorLibs import packageMgr
+#import subprocess
+#from subprocess import Popen
+'''
+Test the getting and putting of packages.  This looks at the entire node
+hierarchy looking for sessions that have not yet been run.  
+After putting a package, wait until the consumer indicates it is done before getting 
+and putting the next package.
+Gets configuration data from replay_master.xml
+Also see putOnePackage for enqueuing one replay.
+'''
+zk=None      
+use_dbg_queue = False
+def signal_handler(signal, frame):
+    print( 'in signal_handler of putPackages use_dbg_queue is %r' % use_dbg_queue)
+    if use_dbg_queue:
+        # Stop the associated simics instance via its fifo that servers as stdin
+        print( 'Stop the simics instance by writting to the pipe')
+        f=open('simics.stdin', 'a')
+        f.write('quit\n')
+        f.close()
+    zk.deleteAlternateConfig()
+    zk.stop()
+    sys.exit(1)
+
+def usage():
+    print 'putPackage.py instance [debug] [no_monitor | any_config | msc]  '
+    print '    debug -- consume entries from the debug queue (e.g., for Ida client) and will consume all configurations'
+    print '    no_monitor -- do not check that the monitor for the given instance is ready (primarily for testing'
+    print '    msc will cause the MSC config to be loaded as the alternate configuration for the monitor.'
+    print '    any_config will consume replay packages that have been queued with any configuration.'
+    exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        usage()
+   
+    be_nice = False 
+    instance = sys.argv[1]
+    hostname = socket.gethostname()
+    cfg = configMgr.configMgr()
+    my_name='putPackages_'+instance
+    zk = szk.szk(hostname, cfg, instance, local_logging=True)
+    lgr = utils.getLogger(my_name, cfg.logdir)
+    check_monitor = True
+    SEED_LEN = 96
+    rules = None
+    any_config = False
+    only_client = None
+    if len(sys.argv) <= 4:
+        if len(sys.argv) == 3 and sys.argv[2].lower() == "nice":
+            be_nice = True
+        elif len(sys.argv) <= 4 and sys.argv[2].lower() == "debug":
+            use_dbg_queue = True
+            if len(sys.argv) == 4:
+                only_client = sys.argv[3]
+        elif len(sys.argv) == 3 and sys.argv[2].lower() == "no_monitor":
+            check_monitor = False
+        elif len(sys.argv) == 3 and sys.argv[2].lower() == "any_config":
+            any_config = True
+        print 'Getting packages using getMonitor, nice locks? %r' % be_nice
+        lgr.debug('Getting packages using getMonitor, nice locks? %r use_dbg_queue: %r' % (be_nice, use_dbg_queue))
+        myip = utils.getMyIP()
+        if cfg.dbg_host == 'ALL' or (myip == cfg.dbg_host and instance >= cfg.dbg_instance):
+            print('enable debug on %s_%s' % (hostname, instance))  
+            use_dbg_queue = True
+    else:
+        usage()
+    pp = packageMgr.packageMgr(zk, lgr, cfg, instance, be_nice, dbg_queue=use_dbg_queue, check_monitor=check_monitor, any_config=any_config, only_client=only_client)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    ''' 
+    Use getMonitor to get all sessions from the node tree, and sessions
+    defined in competitor sets and one-offs in the dbgQueue.
+    The doNext() function will not return to us until there is 
+    a session to run.  While waiting for consumers to finish
+    processing packages (sessions), the waitCounter timeout is used to enable
+    detection of hung targets.  But again, all waiting for the next
+    thing to do is in the pp.doNext().
+    
+    '''
+    lgr.debug('now call runForever')
+    pp.runForever()
+

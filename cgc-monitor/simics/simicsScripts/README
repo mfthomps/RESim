@@ -1,0 +1,25 @@
+CGC monitoring and analysis scripts for Simics.
+See 015-forensics-cqe.txt for requirements.
+See ../docs/performance.txt for a discussion of the implementation
+strategy for the different monitoring functions.
+
+
+These scripts require Simics.  The top level script is cgcMonitor.py.
+It should be run from the Simics command line:
+simics> run-python-file cgcMonitor.py
+
+You may first need to set your path to these scripts
+via "add-directrory -prepend".
+
+
+TBD: 
+  o Clean up python paths, the challenge is getting things to properly
+    reference in the Simics environment.
+  o Include os awareness classes after they are cleaned up. (These
+    are not required for monitoring, only analysis.)
+  o Add monitoring of fork/exec and network access?
+  o Clean up hardcoded paths and component names (see cellConfig.py)
+
+  o Enumeration of Linux kernel executable sections (modules), currently uses text2 hack
+  o Make local copy of CB for use by Ida
+  o Linux not yet getting name of thrower file

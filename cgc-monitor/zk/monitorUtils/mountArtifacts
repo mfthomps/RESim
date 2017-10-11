@@ -1,0 +1,79 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+Mount the vmLib volume on NFS server named
+as the repo_master in the configMgr
+
+NOTE: This script is a canary, in that if it is availble on a host, then
+it is assumed the host also has enough monitor support to complete a
+bootstrap.  In other words, DONT MOVE THIS TO build_utils.
+
+'''
+import sys
+import socket
+import os
+import subprocess
+from subprocess import Popen
+from monitorLibs import utils
+from monitorLibs import szk
+from monitorLibs import configMgr
+def waitForNet(master):
+     retcode = subprocess.call(['waitnet', master])
+
+hostname = socket.gethostname()
+cfg = configMgr.configMgr()
+# NOTE szk will cause cfg to be updated via zookeeper
+print('call szk to attach zookeeper')
+zk = szk.szk(hostname, cfg)
+if 'vmLib' in cfg.artifact_dir:
+    print('artifact_dir is under vmLib, assume no nfs mount')
+    exit(0)
+if cfg.repo_master is None:
+    print('No artifact server defined, run putMonitorCfg')
+    exit(1)
+artifact_server = cfg.artifact_server
+myip = utils.getMyIP()
+print('using %s as repoMaster, my ip is %s' % (artifact_server, myip)) 
+mnt_pt = '/mnt/artifactServer'
+if myip != artifact_server:
+    p1 = subprocess.Popen('/bin/df', stdout = subprocess.PIPE)
+    output, error = p1.communicate()
+    if artifact_server not in output:    
+        if not os.path.isdir(mnt_pt):
+            retcode = subprocess.call(['/usr/bin/sudo', 'mkdir', '-m','777', mnt_pt])
+        if 'artifactServer' in output:
+           retcode = subprocess.call(['/usr/bin/sudo', '/bin/umount', '/mnt/artifactServer'])
+        waitForNet(artifact_server)
+        print('artifact server responds to ping, mount the artifact')
+        source = '%s:/data' % artifact_server
+        retcode = subprocess.call(['/usr/bin/sudo', '/bin/mount', '-o', 'nolock', '-t', 'nfs', source, '/mnt/artifactServer'])
+        retcode = subprocess.call(['/usr/bin/sudo', 'chmod', 'a+w', '/mnt/artifactServer'])
+    else:
+        print('artifactServer mounted on proper host')
+else:
+    print('I am the artifact_server, do not try mount')
+
+zk.stop()

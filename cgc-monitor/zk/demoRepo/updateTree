@@ -1,0 +1,72 @@
+#!/usr/bin/python
+'''
+Use putMonitor to update a zk node hierarchy to include
+replays for all author-generated CBs/PoVs/Polls found in the CB
+repository.  Use the no_replay option to supress replays,
+e.g., if only discrete replays are to be run.
+'''
+import sys
+import socket
+import logging
+from monitorLibs import szk
+from monitorLibs import putMonitor
+from monitorLibs import configMgr
+from monitorLibs import utils
+def usage():
+    print('updateTree.py [no_replays] [just_vuln | all_polls | no_pigs]')
+no_replays = False
+just_vuln = False
+all_polls = False
+just_polls = False
+just_povs = False
+no_pigs = False
+max_sessions = None
+cb = None
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'no_replays':
+        print 'Not queuing replays'
+        no_replays = True
+    elif sys.argv[1] == 'just_vuln':
+        print 'Use all polls, but only enque them against vulnerable reference cbs'
+        just_vuln = True
+    elif sys.argv[1] == 'all_polls':
+        print 'Use all polls, will take a while'
+        all_polls = True
+    elif sys.argv[1] == 'just_polls':
+        print 'Only enqueue polls'
+        just_polls = True
+    elif sys.argv[1] == 'just_povs':
+        print 'Only enqueue povs'
+        just_povs = True
+    elif sys.argv[1] == 'no_pigs':
+        print 'All polls enqueued, but skip pigs'
+        all_polls = True
+        no_pigs = True
+    elif sys.argv[1] == 'one_cb' and len(sys.argv) == 3:
+        print 'Only enqueue polls & povs for %s'
+        cb = sys.argv[2]
+    else:
+        usage()
+        exit(1)
+    if cb is None and len(sys.argv) > 2:
+        try:
+            max_sessions = int(sys.argv[2])
+        except:
+            usage()
+            exit(1)
+cfg = configMgr.configMgr()
+top_file = cfg.cb_dir
+hostname = socket.gethostname()
+print 'hostname is '+hostname
+zk = szk.szk(hostname+"_updateTree", cfg)
+lgr = utils.getLogger('updateTree', cfg.logdir)
+pm = putMonitor.putMonitor(zk, cfg, lgr, szk.MASTER_MSC_CONFIG_NODE)
+if no_replays:
+    # just add CBs & program sections, no replays, to zk
+    session_count = pm.updateTreeCBs(szk.FORENSICS)
+elif cb is not None:
+    session_count = pm.oneCB(cb, False, szk.FORENSICS)
+else:
+    session_count = pm.updateTree(False, szk.FORENSICS, just_vuln, all_polls=all_polls, just_polls=just_polls, just_povs=just_povs, max_sessions=max_sessions, no_pigs=no_pigs)
+    print 'put %d sessions usng the MSC master configuration' % session_count
+zk.stop()

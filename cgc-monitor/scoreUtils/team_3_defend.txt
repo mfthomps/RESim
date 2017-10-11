@@ -1,0 +1,623 @@
+# Summary of Deep Red defenses.  Each CB service is presented separately below.
+# RCBs are listed with their round numbers, availability, and with an 
+# indication of whether they contained a honeypot
+# Occurrences of POVs causing SEGV without a score and POVs "scoring" on a honeypot are noted
+# As are POVs actually scoring
+
+
+CROMU_00046, introduced in round 53, through 66. First failed defense in 58. 
+     61 deployed filter 3316836470-ce49fe85fa777eb1a1727b217a1076e3b3ddb2f7173f3631b7bc25fc8bb074f3.ids  avail: 1.000000
+     61 3316836470-CROMU_00046-f9211d19c7b947389ef40d6485e3a58d77071679c7e577d3e83e4a35a40cd6a1.rcb availability: 1.000000 (honey_pot)
+
+
+CROMU_00047, introduced in round 71, through 94.  
+
+
+CROMU_00048, introduced in round 39, through 52.  
+
+
+CROMU_00051, introduced in round 60, through 73. First failed defense in 64. 
+     67 1029868449-CROMU_00051-5af8c452dd702354cfc8f0a8214e67f77a5871789d676698466b804378703a19.rcb availability: 1.000000 (honey_pot)
+	  team 1 ate honey in rounds 68 - 72
+	  team 1 SEGV in rounds 67
+	  team 2 SEGV in rounds 67 - 72
+
+
+CROMU_00054, introduced in round 31, through 44.  
+
+
+CROMU_00055, introduced in round 1, through 24. First failed defense in 2. First score by this team (3) in 4
+      4 3007107812-CROMU_00055-cc7830c15a7c5b8b552ea8d9c4e4e56fda397ccef5647bc5937a646e28814cc6.rcb availability: 1.000000 (honey_pot)
+	  team 5 ate honey in rounds 5
+	  team 5 SEGV in rounds 4
+	  team 1 SEGV in rounds 4 - 5
+	  team 4 SEGV in rounds 5
+	  team 2 SEGV in rounds 4
+	  team 2 SEGV in rounds 5
+	  round  4  team 6 scored 10 times
+	  round  5  team 6 scored 10 times
+      7 3007107812-CROMU_00055-ce980ddab8b57999a45e74f5276f8d4d680610e3e2ad1e13509bf2c9c97dd1b6.rcb availability: 0.000000 (honey_pot)
+     11 deployed filter 3007107812-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 1.000000
+     11 3007107812-CROMU_00055-43725d6732f456b6c54655ce463c32f76942b029ab3a0974bd0b0abf4a99e4a5.rcb availability: 1.000000 
+	  team 5 ate honey in rounds 23
+	  team 5 SEGV in rounds 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24
+	  team 2 SEGV in rounds 14
+	  team 4 SEGV in rounds 11, 13, 16, 18, 19, 20, 24
+	  team 2 SEGV in rounds 13
+	  team 2 SEGV in rounds 22
+	  team 4 SEGV in rounds 21
+	  team 4 SEGV in rounds 15
+	  team 2 SEGV in rounds 11, 15, 19
+	  team 2 SEGV in rounds 21
+	  team 4 SEGV in rounds 22
+	  team 2 SEGV in rounds 24
+	  team 2 SEGV in rounds 12
+	  team 2 SEGV in rounds 20
+	  team 2 SEGV in rounds 17
+	  team 2 SEGV in rounds 23
+	  team 4 SEGV in rounds 17
+	  team 4 SEGV in rounds 23
+	  team 4 SEGV in rounds 12
+	  team 6 SEGV in rounds 11 - 24
+	  team 4 SEGV in rounds 14
+	  team 2 SEGV in rounds 18
+
+
+CROMU_00057, introduced in round 46, through 59.  
+
+
+CROMU_00058, introduced in round 24, through 37.  
+     27 deployed filter 3345162729-ca54d12315f72a9ca9091dd891182602cde12c4539e4c6be91f5392059369271.ids  avail: 0.597767
+     27 3345162729-CROMU_00058-25a45091cd3f697ec49661591eab18cd3317abc322f9befa655f3cb66a0d35bd.rcb availability: 0.597767 (honey_pot)
+	  team 1 SEGV in rounds 27 - 36
+	  team 5 SEGV in rounds 27, 28, 31, 32, 34, 35
+	  team 2 SEGV in rounds 27 - 36
+
+
+CROMU_00061, introduced in round 70, through 93.  
+
+
+CROMU_00063, introduced in round 68, through 91.  
+
+
+CROMU_00064, introduced in round 2, through 21.  First score by this team (3) in 2
+     4 deployed filter 1906881742-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 1.000000
+      4 1906881742-CROMU_00064-00affaf869a7ef0d4772ba48d491c98d4da3a499af8df3f38a14f8c2e795f957.rcb availability: 1.000000 (honey_pot)
+	  team 5 ate honey in rounds 9, 15, 20
+	  team 5 ate honey in rounds 8, 11, 12, 16, 19
+	  team 5 ate honey in rounds 13, 14, 18
+	  team 5 ate honey in rounds 6, 7, 10, 17, 21
+	  team 5 SEGV in rounds 4 - 5
+	  team 1 SEGV in rounds 4 - 21
+	  team 4 SEGV in rounds 19 - 21
+	  team 4 SEGV in rounds 18
+	  team 2 SEGV in rounds 4 - 21
+
+
+CROMU_00065, introduced in round 81, through 95. First failed defense in 81. First score by this team (3) in 86
+     84 754026095-CROMU_00065-a28f8a490523bdf89bb5d21b66c9985056e97ba8c24caa509fede7fd4365bf6d.rcb availability: 0.115254 (honey_pot)
+     87 754026095-CROMU_00065-d0e47500f8a84f38d6f77b6036e5950c9ac233572c5e1d9df83b39b27e2e2498.rcb availability: 1.000000 
+	  team 2 SEGV in rounds 87 - 88
+	  round 87  team 1 scored 9 times
+	  round 88  team 1 scored 6 times
+     90 754026095-CROMU_00065-97dbc4556a042f1ca885c40553319ab9f18d99d6237407bf605188520ef828ea.rcb availability: 0.116266 (honey_pot)
+	  team 4 ate honey in rounds 90
+	  team 6 SEGV in rounds 91
+	  team 2 SEGV in rounds 90 - 91
+     93 754026095-CROMU_00065-6f8386f4cf152dde4abebce196dd574f7e15550084575dec4c1e882d105f2637.rcb availability: 1.000000 (honey_pot) NO ASLR on stack
+	  team 4 ate honey in rounds 93
+	  team 2 SEGV in rounds 93
+	  round 93  team 1 scored 9 times
+	  round 93  team 6 scored 10 times
+     95 Reverted to Reference CB
+
+
+CROMU_00066, introduced in round 77, through 95.  
+
+
+CROMU_00072, introduced in round 17, through 30.  
+
+
+CROMU_00073, introduced in round 19, through 32. First failed defense in 22. 
+     25 deployed filter 1514220152-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.000000
+     25 1514220152-CROMU_00073-d1b6dad0e42c34f4eab945760fa9d14194ce1557d8fa090a923938f0594b8bb1.rcb availability: 0.000000 (honey_pot)
+	  team 5 ate honey in rounds 26
+	  team 1 ate honey in rounds 26
+	  team 5 SEGV in rounds 25
+	  team 2 SEGV in rounds 25 - 26
+     28 reverted filter to null
+     28 Reverted to Reference CB
+     31 deployed filter 1514220152-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.000000
+     31 1514220152-CROMU_00073-de851dd8785c6b5e8a0bd62f719c37dfe9adfe3d28f2f2c740b8377e00ecaa9d.rcb availability: 0.000000 
+
+
+CROMU_00076, introduced in round 28, through 43.  
+     30 deployed filter 3077360081-ce49fe85fa777eb1a1727b217a1076e3b3ddb2f7173f3631b7bc25fc8bb074f3.ids  avail: 0.989205
+     30 3077360081-CROMU_00076-8b51ac731bcf8b764a73629eca45c21b3b9a1f6bf24bdcd2d4b943089fd84e0c.rcb availability: 0.989205 (honey_pot)
+
+
+CROMU_00077, introduced in round 72, through 95.  
+
+
+CROMU_00078, introduced in round 75, through 95.  
+
+
+CROMU_00079, introduced in round 65, through 78.  
+     68 3049714598-CROMU_00079-99f114471e174714ff445ebf1b8a25240cfe80ffb91bbd92b91ad343f3aa6a08.rcb availability: 0.017748 (honey_pot)
+	  team 2 ate honey in rounds 68 - 69
+     72 3049714598-CROMU_00079-d67f51773cadacbc578dc163a3994645b6d16238740888b4a7c41cc8a16e53b5.rcb availability: 0.015304 (honey_pot)
+	  team 2 SEGV in rounds 72 - 73
+     75 Reverted to Reference CB
+
+
+CROMU_00082, introduced in round 29, through 42.  
+     36 deployed filter 1295802477-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 1.000000
+     36 1295802477-CROMU_00082-72caacf5b1d8e26adfb4370ee80cf19905b3bbbb63710f3c003b5cbe83a82251.rcb availability: 1.000000 (honey_pot)
+	  team 5 SEGV in rounds 36 - 38
+	  team 1 SEGV in rounds 36 - 42
+	  team 5 SEGV in rounds 39 - 42
+	  team 2 SEGV in rounds 36 - 42
+
+
+CROMU_00083, introduced in round 40, through 53.  
+
+
+CROMU_00084, introduced in round 42, through 55.  
+
+
+CROMU_00087, introduced in round 44, through 57.  
+
+
+CROMU_00088, introduced in round 52, through 65. First failed defense in 64. 
+
+
+CROMU_00092, introduced in round 1, through 22.  
+
+
+CROMU_00093, introduced in round 47, through 60.  
+
+
+CROMU_00094, introduced in round 3, through 26. First failed defense in 3. First score by this team (3) in 3
+     5 deployed filter 1424130266-7c8da43fa0c5bf966f118642fa37618a09acd6c0730cb76f9e2fd4f5d459cb90.ids  avail: 1.000000
+      5 1424130266-CROMU_00094-3e4758d9765f27e9da1215e85cd8ed09f66792f9da18b367e0863c29bfb78b73.rcb availability: 1.000000 (honey_pot)
+	  team 5 ate honey in rounds 7, 18
+	  team 5 ate honey in rounds 11
+	  team 5 ate honey in rounds 12
+	  team 5 ate honey in rounds 9, 17
+	  team 1 ate honey in rounds 7 - 19
+	  team 5 ate honey in rounds 10, 19
+	  team 5 ate honey in rounds 8
+	  team 5 ate honey in rounds 16
+	  team 5 ate honey in rounds 13 - 15
+	  team 2 ate honey in rounds 19
+	  team 2 ate honey in rounds 5 - 17
+	  team 4 SEGV in rounds 11, 17, 19
+	  team 5 SEGV in rounds 5 - 6
+	  team 2 SEGV in rounds 18
+	  team 1 SEGV in rounds 5
+	  team 7 SEGV in rounds 5 - 19
+	  team 4 SEGV in rounds 8
+	  team 6 SEGV in rounds 6 - 19
+	  team 6 SEGV in rounds 5
+	  team 1 SEGV in rounds 6
+	  team 4 SEGV in rounds 6
+	  team 4 SEGV in rounds 7, 9, 10, 12, 13, 14, 15, 16, 18
+     21 deployed filter 1424130266-3e893314b38f4ee25c20573ccfaa87f88de34f91c8628d95ec9d6a2b6a7999f9.ids  avail: 0.000000
+     21 1424130266-CROMU_00094-fce1860abac005c70ff05dd990d77c28c1827e2e3b43556d5b03ed15c4aa525c.rcb availability: 0.000000 (honey_pot)
+	  team 1 ate honey in rounds 21 - 22
+	  team 5 ate honey in rounds 
+	  team 2 ate honey in rounds 21 - 22
+	  team 5 ate honey in rounds 22
+	  team 5 SEGV in rounds 21
+	  team 7 SEGV in rounds 21 - 22
+	  team 6 SEGV in rounds 21 - 22
+	  team 4 SEGV in rounds 21 - 22
+     25 deployed filter 1424130266-7c8da43fa0c5bf966f118642fa37618a09acd6c0730cb76f9e2fd4f5d459cb90.ids  avail: 1.000000
+     25 1424130266-CROMU_00094-0ca5d646bed4419f4ad81fc04de38c55b5333266d131e3879465ced0addb3dbd.rcb availability: 1.000000 
+	  team 4 ate honey in rounds 25 - 26
+	  team 6 ate honey in rounds 25 - 26
+	  team 4 ate honey in rounds 
+	  team 5 SEGV in rounds 25 - 26
+
+
+CROMU_00095, introduced in round 2, through 25.  
+     9 deployed filter 1504525286-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.818860
+      9 1504525286-CROMU_00095-b7c429e4dbe628d7903cf0cb04debe307f508338ef89afcf1a52513148417840.rcb availability: 0.818860 (honey_pot)
+	  team 5 ate honey in rounds 10
+	  team 2 SEGV in rounds 10
+	  team 2 SEGV in rounds 9
+     12 1504525286-CROMU_00095-c7bdb34411e3f2f7056f18a8393ca47b3cfb1a67e34e78c7cca55897d85d7461.rcb availability: 0.790616 (honey_pot)
+	  team 5 ate honey in rounds 15
+	  team 5 ate honey in rounds 17
+	  team 5 ate honey in rounds 12
+	  team 5 ate honey in rounds 13 - 14
+	  team 2 ate honey in rounds 15 - 16
+	  team 5 ate honey in rounds 16
+	  team 5 ate honey in rounds 
+	  team 1 SEGV in rounds 12 - 17
+	  team 2 SEGV in rounds 14
+	  team 2 SEGV in rounds 17
+	  team 2 SEGV in rounds 12
+     19 1504525286-CROMU_00095-8d527a2a6ea443aa0cbd9b22dfec80891f7f95cb7a76ea03789cb156ddad1882.rcb availability: 0.000000 (honey_pot)
+     23 1504525286-CROMU_00095-ce848ca39e5228a391200491e2ec8ba9fa0598ea1eb43f50e16d0923be47b26b.rcb availability: 0.826686 
+	  team 2 SEGV in rounds 23
+	  team 5 SEGV in rounds 23 - 25
+	  team 2 SEGV in rounds 25
+	  team 2 SEGV in rounds 24
+
+
+CROMU_00096, introduced in round 4, through 27.  
+     10 deployed filter 2760261320-39b600f1b9b3c7e78ad55c87234e80c4766249b4f99847d23a8abe9611842326.ids  avail: 1.000000
+     10 2760261320-CROMU_00096-c0722f4be474645b8d6facbc72322e87169cd6600f98d2cc8ba2c514c233594f.rcb availability: 1.000000 (honey_pot)
+	  team 5 ate honey in rounds 11, 12, 19, 22
+	  team 5 ate honey in rounds 10, 13, 14, 17
+	  team 5 ate honey in rounds 16, 20
+	  team 5 ate honey in rounds 21
+	  team 5 ate honey in rounds 15, 18
+	  team 1 SEGV in rounds 10 - 22
+	  team 2 SEGV in rounds 22
+	  team 2 SEGV in rounds 21
+	  team 2 SEGV in rounds 10 - 20
+     24 2760261320-CROMU_00096-b37ace8fc8c93e6e10869d159e49d59bb15f895a8952b1725e9bcdf9b3e1c4ac.rcb availability: 0.000000 (honey_pot)
+
+
+CROMU_00097, introduced in round 1, through 24.  
+     4 deployed filter 1204538468-b6f951c9bcde550bbaf8c79288094b70d0912784564719dc03cc452c1670e8a9.ids  avail: 0.518820
+      4 1204538468-CROMU_00097-3320f01ab6fd8b93d23dce97f4721a6fb643cc8eb4731c77bc790d1583439553.rcb availability: 0.518820 (honey_pot)
+	  team 2 SEGV in rounds 4
+	  team 5 SEGV in rounds 4
+      6 1204538468-CROMU_00097-61d99d21ad8493a4011b8be88e68c3289a08b3ca412588f690d23426d41ce0d9.rcb availability: 0.000000 (honey_pot)
+     11 1204538468-CROMU_00097-ea586f81d56f94b126de4795efab7ef1cd1888702575acc2e177927f58170474.rcb availability: 0.562314 
+	  team 2 SEGV in rounds 16
+	  team 2 SEGV in rounds 14
+	  team 2 SEGV in rounds 22 - 23
+	  team 2 SEGV in rounds 12, 15
+	  team 2 SEGV in rounds 11, 18
+	  team 2 SEGV in rounds 21
+
+
+CROMU_00098, introduced in round 34, through 47. First failed defense in 46. 
+
+
+KPRCA_00062, introduced in round 62, through 75.  
+
+
+KPRCA_00064, introduced in round 67, through 80.  
+
+
+KPRCA_00065, introduced in round 23, through 36. First failed defense in 23. 
+     26 deployed filter 3361046760-613a659bcda410ba82a3870fdacb063804d0d73c1adabd518a598c64daf690b6.ids  avail: 0.549841
+     26 3361046760-KPRCA_00065-7049d1bfbcfc71e021ac94d7526cd6131e221622f4f7a520e5ef7ecdd1476246.rcb availability: 0.549841 (honey_pot)
+	  team 5 ate honey in rounds 27
+	  team 5 ate honey in rounds 30, 32
+	  team 5 ate honey in rounds 33
+	  team 5 ate honey in rounds 26
+	  team 5 ate honey in rounds 29, 34, 35
+	  team 6 ate honey in rounds 31 - 35
+	  team 5 ate honey in rounds 28, 31
+	  team 1 SEGV in rounds 31
+	  team 7 SEGV in rounds 26 - 35
+	  team 1 SEGV in rounds 28
+	  team 4 SEGV in rounds 32 - 35
+	  team 1 SEGV in rounds 35
+	  team 1 SEGV in rounds 33
+	  team 1 SEGV in rounds 29
+	  team 1 SEGV in rounds 26
+	  team 1 SEGV in rounds 30
+	  team 6 SEGV in rounds 29 - 30
+	  team 1 SEGV in rounds 27
+	  team 1 SEGV in rounds 34
+	  team 1 SEGV in rounds 32
+	  team 2 SEGV in rounds 26 - 35
+	  team 4 SEGV in rounds 31
+	  round 26  team 7 scored 10 times
+	  round 27  team 7 scored 10 times
+	  round 28  team 7 scored 10 times
+	  round 29  team 6 scored 10 times
+	  round 29  team 7 scored 9 times
+	  round 30  team 6 scored 10 times
+	  round 30  team 7 scored 10 times
+	  round 31  team 7 scored 10 times
+	  round 32  team 7 scored 10 times
+	  round 33  team 7 scored 10 times
+	  round 34  team 7 scored 10 times
+	  round 35  team 7 scored 10 times
+
+
+KPRCA_00068, introduced in round 76, through 95.  
+
+
+KPRCA_00069, introduced in round 69, through 92.  
+
+
+KPRCA_00071, introduced in round 1, through 17.  
+
+
+KPRCA_00073, introduced in round 59, through 72.  
+
+
+KPRCA_00074, introduced in round 21, through 34.  
+     27 deployed filter 2912718818-127b45b4882b4c1430f8dca3a7d006ba2a04cfddd2fb8bb72c82445115e88c20.ids  avail: 0.351477
+     27 2912718818-KPRCA_00074-ef13714a8f1d6803b610a5e0e234eb0cda5ee1ac731dd4593021b8efa00e04a3.rcb availability: 0.351477 (honey_pot)
+	  team 5 SEGV in rounds 27
+	  team 2 SEGV in rounds 27 - 28
+     30 reverted filter to null
+     30 Reverted to Reference CB
+
+
+KPRCA_00075, introduced in round 1, through 16.  
+     7 deployed filter 3217895783-89f41a56800f29faeaa246399bddebb47f0eb6c4601c968fa592d5253dfeedad.ids  avail: 0.983624
+      7 3217895783-KPRCA_00075_1-1b9d637577a2f223b7ff07d3162224eeedc3476ec5319f946de016fefdf5fc5a.rcb availability: 0.983624 
+      7 3217895783-KPRCA_00075_2-06f58468bc139d1e3876d57703e856ffa56bed97c103654ce271bd58e92945ad.rcb availability: 0.983624 
+      7 3217895783-KPRCA_00075_3-91a4d5de65fc1caab5973fd50c2044b48696dff075fb5991892e1042029aee9f.rcb availability: 0.983624 
+      7 3217895783-KPRCA_00075_4-b2b285b4acf61758a53d81291702adce795110ba173605bc217795d2689a2b5b.rcb availability: 0.983624 
+	  team 5 SEGV in rounds 8, 9, 11, 13, 14, 16
+
+
+KPRCA_00077, introduced in round 80, through 95.  
+
+
+KPRCA_00079, introduced in round 33, through 46.  
+
+
+KPRCA_00081, introduced in round 25, through 38.  
+
+
+KPRCA_00086, introduced in round 74, through 95.  
+
+
+KPRCA_00087, introduced in round 26, through 39.  
+     30 deployed filter 2522530102-854a6cdd2f094b41ebfb46297a0ce482788a2da6fc528dcff497b7712d631419.ids  avail: 0.156814
+     30 2522530102-KPRCA_00087-959592ae479d9fd256a25e2428c5d975ea7daff8160f9cfbf1d6158e664868fb.rcb availability: 0.156814 (honey_pot)
+	  team 5 SEGV in rounds 30 - 31
+	  team 1 SEGV in rounds 30 - 31
+     33 reverted filter to null
+     33 2522530102-KPRCA_00087-50a96cd3845cc4db068e375a2b3c56d9a06f036dc6d4475f5c2076ecbc6bb2fc.rcb availability: 1.000000 (honey_pot)
+	  team 5 SEGV in rounds 34, 36, 38, 39
+	  team 5 SEGV in rounds 33, 35, 37
+	  team 1 SEGV in rounds 33 - 39
+	  team 2 SEGV in rounds 33 - 39
+	  team 4 SEGV in rounds 38 - 39
+
+
+KPRCA_00088, introduced in round 43, through 56.  
+
+
+KPRCA_00091, introduced in round 51, through 64.  
+
+
+KPRCA_00093, introduced in round 35, through 48.  
+
+
+KPRCA_00094, introduced in round 64, through 77. First failed defense in 73. 
+     76 2097594834-KPRCA_00094-2a96e52233c2710a4421fe10a07053869c4e45fb1663fcfb2e2a5d012dcd0d32.rcb availability: 1.000000 (honey_pot)
+	  team 6 SEGV in rounds 76 - 77
+	  team 2 SEGV in rounds 76 - 77
+	  round 76  team 6 scored 10 times
+	  round 77  team 6 scored 9 times
+
+
+KPRCA_00097, introduced in round 1, through 20.  
+
+
+KPRCA_00099, introduced in round 54, through 67.  
+
+
+KPRCA_00100, introduced in round 56, through 69.  
+
+
+KPRCA_00101, introduced in round 1, through 18.  
+      6 3436313223-KPRCA_00101-8f059fe586590f7df899ad2dc1a206dd29fc28feb38e89e352dab9f35513ed24.rcb availability: 1.000000 (honey_pot)
+	  team 1 SEGV in rounds 6 - 18
+	  team 2 SEGV in rounds 6 - 18
+	  team 5 SEGV in rounds 6, 7, 8, 9, 10, 11, 12, 17, 18
+     10 deployed filter 3436313223-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.997026
+
+
+KPRCA_00102, introduced in round 2, through 23.  
+      9 944326584-KPRCA_00102-61329cee2fd44c81ddf070275c2c3ccc83d0b62cc7a0afd9aec2a0ec1337df9f.rcb availability: 1.000000 (honey_pot)
+	  team 5 SEGV in rounds 9 - 10
+	  team 2 SEGV in rounds 10
+	  team 1 SEGV in rounds 9 - 10
+	  team 2 SEGV in rounds 9
+     12 944326584-KPRCA_00102-2f6e525f7492393ccf1fc976145e06034eea4476a71fa67a5f5a83b135394bfc.rcb availability: 1.000000 (honey_pot)
+	  team 2 SEGV in rounds 16
+	  team 5 SEGV in rounds 15, 19
+	  team 2 SEGV in rounds 14, 15, 20
+	  team 1 SEGV in rounds 12 - 23
+	  team 2 SEGV in rounds 13, 17
+	  team 2 SEGV in rounds 12, 19
+	  team 2 SEGV in rounds 21, 23
+	  team 5 SEGV in rounds 12, 13, 14, 16, 17, 18, 20, 21, 22, 23
+	  team 2 SEGV in rounds 18, 22
+
+
+KPRCA_00110, introduced in round 50, through 63.  
+
+
+KPRCA_00111, introduced in round 1, through 15.  
+
+
+KPRCA_00112, introduced in round 82, through 95.  
+
+
+KPRCA_00119, introduced in round 20, through 33.  
+     30 deployed filter 904395588-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.988054
+     30 904395588-KPRCA_00119-aad614cb087c4adca1a873190759751b0e4f10b2c3c6ee1c52c2be7b3a42ccd8.rcb availability: 0.988054 (honey_pot)
+	  team 1 SEGV in rounds 30 - 33
+	  team 5 SEGV in rounds 30 - 33
+
+
+KPRCA_00120, introduced in round 78, through 95.  
+
+
+NRFIN_00043, introduced in round 58, through 71.  
+
+
+NRFIN_00044, introduced in round 55, through 68.  
+
+
+NRFIN_00045, introduced in round 16, through 29.  
+     25 975877749-NRFIN_00045-85086e581cee9f53d1dc70f8747b333aaa50cd2de5742121d065dd0be1997da6.rcb availability: 1.000000 (honey_pot)
+	  team 5 SEGV in rounds 25 - 28
+	  team 1 SEGV in rounds 25 - 28
+	  team 2 SEGV in rounds 25 - 28
+
+
+NRFIN_00046, introduced in round 45, through 58.  
+
+
+NRFIN_00049, introduced in round 1, through 14.  
+     5 deployed filter 325025771-24af8504fac95adecd505df3ad66afa25f6f63728204d44f40c89b8202ecfd33.ids  avail: 1.000000
+      5 325025771-NRFIN_00049-9af61951c997fc2e0c862b682fb8e571c94cffb484401822dc310ee14cf1717a.rcb availability: 1.000000 (honey_pot)
+	  team 2 SEGV in rounds 12
+	  team 5 SEGV in rounds 6, 9, 10, 13
+	  team 1 SEGV in rounds 5 - 14
+	  team 2 SEGV in rounds 7
+	  team 2 SEGV in rounds 10
+	  team 2 SEGV in rounds 5, 11
+	  team 2 SEGV in rounds 9, 14
+	  team 2 SEGV in rounds 6, 8
+	  team 2 SEGV in rounds 13
+
+
+NRFIN_00051, introduced in round 41, through 54.  
+
+
+NRFIN_00052, introduced in round 73, through 95. First failed defense in 73. First score by this team (3) in 84
+     76 3881696163-NRFIN_00052-6b8e7d3eb76f954b601c34ad5e252ca4c0bc52f210aabd8ed9de4e4511ac55c5.rcb availability: 0.000000 
+	  team 2 SEGV in rounds 76 - 77
+     80 3881696163-NRFIN_00052-f264f7f1480c4beecaaa4d51c4d5dc61af409694157b72f174f010eca168dbd6.rcb availability: 0.000000 
+	  team 4 SEGV in rounds 80 - 81
+	  team 1 SEGV in rounds 80 - 81
+     83 Reverted to Reference CB
+     86 3881696163-NRFIN_00052-bf103e34a956f76473159d7cc7ef63a0bed3f8f0cc57888e13c2810aad0459d4.rcb availability: 1.000000 
+	  team 1 ate honey in rounds 
+	  team 6 ate honey in rounds 
+	  team 4 SEGV in rounds 86 - 95
+	  team 1 SEGV in rounds 86
+	  round 86  team 6 scored 10 times
+	  round 87  team 1 scored 8 times
+	  round 87  team 6 scored 10 times
+	  round 88  team 1 scored 10 times
+	  round 88  team 6 scored 10 times
+	  round 89  team 1 scored 9 times
+	  round 89  team 6 scored 10 times
+	  round 90  team 1 scored 8 times
+	  round 90  team 6 scored 10 times
+	  round 91  team 1 scored 9 times
+	  round 91  team 6 scored 10 times
+	  round 92  team 1 scored 10 times
+	  round 92  team 6 scored 10 times
+	  round 93  team 1 scored 9 times
+	  round 93  team 6 scored 10 times
+	  round 94  team 1 scored 10 times
+	  round 94  team 6 scored 10 times
+	  round 95  team 1 scored 9 times
+	  round 95  team 5 scored 10 times
+	  round 95  team 6 scored 10 times
+
+
+NRFIN_00053, introduced in round 32, through 45.  
+
+
+NRFIN_00054, introduced in round 38, through 51.  
+
+
+NRFIN_00055, introduced in round 18, through 31.  
+     27 3395615331-NRFIN_00055-89028ad2ab25aef8d0159cdfba6e3e75b5a409e68f77862327b74804de7fc130.rcb availability: 0.000000 
+	  team 1 SEGV in rounds 27 - 28
+	  team 5 SEGV in rounds 27 - 28
+	  team 2 SEGV in rounds 27 - 28
+     30 Reverted to Reference CB
+
+
+NRFIN_00056, introduced in round 63, through 76.  
+     74 3134302066-NRFIN_00056-b9eaa44fe3b2d294072266a802aed9909914736adeb16c6c614700ee92b383bd.rcb availability: 1.000000 
+	  team 6 SEGV in rounds 74 - 76
+
+
+NRFIN_00059, introduced in round 36, through 49. First failed defense in 40. 
+
+
+NRFIN_00061, introduced in round 26, through 41.  
+     33 3371584014-NRFIN_00061-6e1d4282e40ee59d3f36a8bc4d5e04b07fa1b7d4b52ca9375cf490c8869de21d.rcb availability: 0.862147 (honey_pot)
+	  team 5 SEGV in rounds 33, 34, 36
+	  team 2 SEGV in rounds 33 - 39
+	  team 5 SEGV in rounds 35, 37, 38, 39
+     41 3371584014-NRFIN_00061-ba58f316b633e9a19d323a9fdc372b105a76edce8b6b5adde6446b3bb7e93036.rcb availability: 0.880820 (honey_pot)
+	  team 1 SEGV in rounds 41
+	  team 2 SEGV in rounds 41
+
+
+NRFIN_00063, introduced in round 49, through 62. First failed defense in 50. 
+     53 2347155893-NRFIN_00063-afc7bbbec64e549d4800ffbf9ca132f4b2b702343925a6ab791a404e170473e6.rcb availability: 0.993309 (honey_pot)
+	  team 1 ate honey in rounds 55 - 62
+	  team 6 ate honey in rounds 60 - 62
+	  team 1 SEGV in rounds 54
+	  team 6 SEGV in rounds 58 - 59
+	  team 2 SEGV in rounds 53 - 62
+	  team 1 SEGV in rounds 53
+	  round 54  team 1 scored 10 times
+     56 deployed filter 2347155893-262d508ed04070deba477ae39b05e348caf2d7c817a4377cbe9a9b1f2921362f.ids  avail: 0.993601
+
+
+NRFIN_00064, introduced in round 22, through 35.  
+     26 deployed filter 3121141496-ce49fe85fa777eb1a1727b217a1076e3b3ddb2f7173f3631b7bc25fc8bb074f3.ids  avail: 0.000000
+     26 3121141496-NRFIN_00064-b650bfc4d41065f44ee80bffa559cc8c56e17df4db9890b27f386bf2c12efd34.rcb availability: 0.000000 (honey_pot)
+     29 reverted filter to null
+     29 Reverted to Reference CB
+
+
+NRFIN_00065, introduced in round 48, through 61.  
+
+
+NRFIN_00066, introduced in round 37, through 50.  
+
+
+NRFIN_00067, introduced in round 61, through 74.  
+
+
+NRFIN_00069, introduced in round 1, through 19.  
+
+
+NRFIN_00071, introduced in round 27, through 40.  
+     30 deployed filter 4280490483-4bae6ea4576e9314ff0d5bb919988de5003876f45dfe14eac7cdbd954f851bc2.ids  avail: 0.000000
+     30 4280490483-NRFIN_00071-7dfe21bd3ef15a0d23e7706acf6f68284a55cfe715634469f832854ed0544a6d.rcb availability: 0.000000 (honey_pot)
+	  team 1 ate honey in rounds 30 - 31
+	  team 2 SEGV in rounds 30 - 31
+	  team 5 SEGV in rounds 31
+     33 reverted filter to null
+     33 Reverted to Reference CB
+     34 deployed filter 4280490483-4bae6ea4576e9314ff0d5bb919988de5003876f45dfe14eac7cdbd954f851bc2.ids  avail: 1.000000
+
+
+NRFIN_00072, introduced in round 66, through 79.  
+
+
+YAN01_00015, introduced in round 57, through 70. First failed defense in 57. 
+     60 deployed filter 3516384350-ce49fe85fa777eb1a1727b217a1076e3b3ddb2f7173f3631b7bc25fc8bb074f3.ids  avail: 0.000000
+     60 3516384350-YAN01_00015-dd7b349faad3ed5eeec58ae1dab9d7595a984b1eeda1ff3f2c020c877ec3b851.rcb availability: 0.000000 (honey_pot)
+	  team 2 SEGV in rounds 60 - 61
+     63 reverted filter to null
+     63 Reverted to Reference CB
+
+
+YAN01_00016, introduced in round 79, through 95. First failed defense in 79. First score by this team (3) in 86
+     82 1961371372-YAN01_00016-821ed272f56651a66038bc85d2ba88c1b877770ee9fa700c72a810f21018b9a9.rcb availability: 0.059028 (honey_pot)
+	  team 4 SEGV in rounds 82 - 83
+	  team 1 SEGV in rounds 83
+	  team 2 SEGV in rounds 82 - 83
+	  team 7 SEGV in rounds 82 - 83
+	  team 1 SEGV in rounds 82
+	  round 82  team 2 scored 1 times
+	  round 82  team 7 scored 10 times
+	  round 83  team 2 scored 2 times
+	  round 83  team 7 scored 10 times
+     86 1961371372-YAN01_00016-06a5dbf071c1d673733d3fdf6807e82c7a69836e4eb68dbd8f4b41a99886192f.rcb availability: 0.063149 
+	  team 2 ate honey in rounds 86 - 87
+	  team 4 SEGV in rounds 86 - 87
+	  team 1 SEGV in rounds 86 - 87
+	  round 86  team 7 scored 10 times
+	  round 87  team 7 scored 10 times
+     89 Reverted to Reference CB

@@ -1,0 +1,102 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import idaapi
+import idc
+from idc import Eval
+import time
+MAILBOX='mailbox:'
+def Evalx(cmd):
+    retval = '\n'
+    simicsString = Eval(cmd)
+    #print "string is %s" % simicsString
+    if type(simicsString) is not int and simicsString.endswith('None\n'):
+        l = len(simicsString) - 5
+        #print "len is %d" % l
+        if l != 0:
+            retval = simicsString[:l]
+        else:
+            retval = '\n'
+    else:
+        retval =  simicsString
+    return retval
+
+def goToBookmark(mark):
+    command = "@cgc.goToDebugBookmark('%s')" % mark
+    simicsString = Evalx('SendGDBMonitor("%s");' % command)
+    
+def stripMailbox(msg):
+    '''
+    intended for use only with results of getEIPWhen stopped, regular mailbox has no
+    MAILBOX prefix
+    '''
+    lines = msg.split('\n')
+    for line in reversed(lines):
+        if line.startswith(MAILBOX):
+            msg = line
+            break
+    return msg[len(MAILBOX):]
+
+def getEIPWhenStopped(delay=0, kernel_ok=False):
+    done = False
+    retval = None
+    count = 0
+    if delay == 0:
+        delay = 0.5
+    while not done:
+        count += 1
+        if count == 50:
+            print("waiting for response from monitor...")
+            idc.Warning("may take a while")
+        time.sleep(delay)
+        simicsString = Evalx('SendGDBMonitor("@cgc.getEIPWhenStopped(%s)");' % kernel_ok)
+        #print 'ready set'
+        #print 'getEIPWhenStopped got %s of type %s' % (simicsString, type(simicsString))
+        if simicsString is not None and type(simicsString) is not int and simicsString != '0' and MAILBOX in simicsString:
+            mail = stripMailbox(simicsString)
+            #print 'mail is %s' % mail
+            if not mail.startswith('ip:'):
+                done = True
+                try:
+                    retval = int(mail[2:], 16)
+                except:
+                    print 'could not get int 16 from %s' % mail[2:]
+                #print 'getEIPWhenStopped found ip of %x, now empty mailbox' % retval
+                Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
+        else:
+            if type(simicsString) is not int and not simicsString.strip().startswith('not stopped'):
+                # hack until python logging not sent to stdout on rev module
+                if not 'server.mb' in simicsString:
+                    print('monitor stopped at wrong place: %s' % simicsString)
+                    done = True
+    #print('getEIPWhenStopped returning %x' % retval)
+    if count > 50:
+        print("Got response from monitor.")
+    msg = Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
+    return retval
+
+def stepWait():
+    idc.StepInto()
+    event = idc.GetDebuggerEvent(idc.WFNE_ANY, -1)
+

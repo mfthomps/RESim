@@ -1,0 +1,85 @@
+#!/usr/bin/python
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+import os
+import glob
+import shutil
+import subprocess
+'''
+For each package in the vmLib share,
+make a local copy and install the package
+if the package name differs from what is
+already in the local repo or the date is newer 
+'''
+source='/mnt/vmLib/cgcForensicsRepo/monitorPackages_cfe'
+if not os.path.exists(source):
+    print('no %s, perhaps vmLib not mounted?')
+    exit
+dest='/mnt/cgc/myMonitorPackages'
+os.umask(000)
+try:
+    os.mkdir(dest)
+except:
+    pass
+got_packs = []
+flist = sorted(glob.glob(os.path.join(source, "*.deb")), key=os.path.getmtime, reverse=True)
+for f in flist:
+    do_install = False
+    just_name = os.path.basename(f)
+    pack_name, dum = just_name.split('_', 1)
+    if pack_name in got_packs:
+        print('already handled package: %s, remove older %s' % (pack_name, f))
+        os.remove(f)
+        continue
+    got_packs.append(pack_name)
+    s_time = os.path.getmtime(f)
+    #print('source time %s' % str(s_time))
+    d_time = None
+    dest_file = os.path.join(dest, just_name)
+    if not os.path.exists(dest_file):
+        # no file, use the new one, but first remove
+        # previous with same package name
+        print('pack_name is %s' % pack_name)
+        old_files = glob.glob(os.path.join(dest, pack_name+"*.deb"))
+        for of in old_files:
+            print('removing %s' % of)
+            os.remove(of)
+        do_install = True
+         
+    else:
+        #print('dest is %s' % dest_file)
+        try:
+            #sfgd timestamps
+            d_time = os.path.getmtime(dest_file) + 1
+            #print('dest time %s' % str(d_time))
+        except:
+            pass
+        if d_time is None or (s_time > d_time):
+            do_install = True
+    if do_install:
+        #print("updatePackages would copy %s" % just_name)
+        shutil.copy2(f, dest_file)
+        subprocess.check_call(['sync'])
+        subprocess.check_call(['sudo', 'dpkg', '-i', dest_file]) 

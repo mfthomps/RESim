@@ -1,0 +1,17 @@
+#!/bin/bash
+savedir=/mnt/vmLib/bigstuff/saved_dbs
+show_usage() {
+   echo "saveDB db_name"
+   echo "    Dumps the named database to the $savedir directory"
+}
+if [ $# -lt 1 ]
+then
+    show_usage
+    exit 1
+fi
+dt=`date +"%y%m%d"`
+savedir=/mnt/vmLib/bigstuff/saved_dbs
+mkdir -p $savedir
+save_file=$savedir/$1-$dt.sql
+mysqldump -ucgc -ppassword $1 >"$save_file"
+echo "database saved to $save_file"
