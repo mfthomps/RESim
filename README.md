@@ -18,3 +18,5 @@ simics/slaveInstall -- utilities to help manage provisioning of a CGC Monitor sl
 zk -- utilities and services required by the monitor, including software that runs on emulated infrastructure
 game_notify -- interacts with CGC game infrastructure to obtain data to be vetted.
 scoreUtils -- utilities for analysis of CFE artifacts
+
+A demonstration of the Ida Client is at https://www.youtube.com/watch?v=jpH_PZhwAL0
