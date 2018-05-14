@@ -6,7 +6,7 @@ simulator.
 
 The CGC Monitor lacks complete documentation, though the basic chain of scripts and dependencies can be derived by starting with:
 zk/monitorUtils/cgc-monitor.md to  understand the forensic vetting function used in CFE; and with
-idaClient/README_IDA_CLIENT.md for the analyst functions. The Ida client is also summerized in idaClient.pdf
+idaClient/README_IDA_CLIENT.md for the analyst functions. The Ida client is also summerized in [idaClient.pdf](idaClient.pdf)
 
 A brief summary of the high level directories follows:
 
