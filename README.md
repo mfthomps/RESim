@@ -2,7 +2,7 @@
 The Cyber Grand Challenge forensics platform and automated analysis tools based on Simics.
 The CGC Monitor provides two primary functions: 1)forensic analysis for purposes of vetting software submissions; 
 and, 2) automated support for analysis of CGC binaries via an Ida Pro gdb client.  Both functions rely on the Simics full system 
-simulator.
+simulator.  This paper describes the CGC Monitor https://www.dfrws.org/sites/default/files/session-files/paper_cyber_grand_challenge_cgc_monitor_-_a_vetting_system_for_the_darpa_cyber_grand_challenge.pdf
 
 The CGC Monitor lacks complete documentation, though the basic chain of scripts and dependencies can be derived by starting with:
 zk/monitorUtils/cgc-monitor.md to  understand the forensic vetting function used in CFE; and with
