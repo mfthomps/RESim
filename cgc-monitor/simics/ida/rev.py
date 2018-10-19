@@ -1,33 +1,11 @@
-'''
- * This software was created by United States Government employees
- * and may not be copyrighted.
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
-'''
 import time
 import idaapi
+import bpUtils
 import gdbProt
 import bookmarkView
 import okTextForm
 import waitDialog
+import functionSig
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -36,28 +14,12 @@ from idaapi import Choose
     The script installs its functions as a hotkeys. 
     See showHelp below
 '''
-__regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx']
+__regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
 recent_bookmark = 1
 just_debug = False
 bookmark_view = bookmarkView.bookmarkView()
 print('back from init bookmarkView')
 keymap_done = False
-def disableAllBpts(exempt):
-    qty = idc.GetBptQty()
-    disabledSet = []
-    for i in range(qty):
-	bptEA = GetBptEA(i)
-        bptStat = CheckBpt(bptEA)
-	if bptStat > 0:
-	    if exempt is None or exempt != bptEA:
-	        disabledSet.append(bptEA)
-	        EnableBpt(bptEA, False)
-    return disabledSet
-
-def enableBpts(disabledSet):
-    for ea in disabledSet:
-	EnableBpt(ea, True)
-
 def showHelp(prompt=False):
     print('in showHelp')
     lines = {}
@@ -139,35 +101,6 @@ def getAddress(simicsString):
 		break
     return addr
 
-def setAndDisable(addr):
-    bptEnabled = idc.CheckBpt(addr)
-    if bptEnabled < 0:
-	# no breakpoint, add one
-	#print 'setAndDisable no bpt at %x, add one' % addr
-	idc.AddBpt(addr)
-    elif bptEnabled == 0:
-	# breakpoint, but not enabled
-	#print 'found bpt at %x, enable it' % addr
-        idc.EnableBpt(addr, True)
-    else:
-	#print 'breakpoint exists, use it'
-	pass
-    # disable all breakpoints, excempting the one we just set/enabled
-    disabledSet = disableAllBpts(addr)
-    return bptEnabled, disabledSet
-
-def reEnable(addr, bptEnabled, disabledSet):
-    enableBpts(disabledSet)
-    #print 'back from enable'
-    if bptEnabled < 0:
-        idc.EnableBpt(addr, False)
-        success = idc.DelBpt(addr)
-        #print 'reEnable delete bpt at %x success: %d' % (addr, success)
-    elif bptEnabled == 0:
-        #print 'reEnable reenabling bkpt at %x' % addr
-	idc.EnableBpt(addr, False)
-
-
 '''
     reverse-step-instruction, but within current process, return new eip
 '''
@@ -182,20 +115,32 @@ def reverseStepInstruction(num=1):
 def doRevStepOver():
     #print 'in doRevStepOver'
     curAddr = idc.GetRegValue("EIP")
-    prev_eip = idc.PrevAddr(curAddr)
-    simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False, prev=0x%x)");' % prev_eip)
+    prev_eip = idc.PrevHead(curAddr)
+    if prev_eip == BADADDR:
+        prev_eip = None
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
+    else:
+        #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False, prev=0x%x)");' % prev_eip)
     eip = gdbProt.getEIPWhenStopped()
-    gdbProt.stepWait()
+    #gdbProt.stepWait()
+    signalClient()
     return eip
 
 def doRevStepInto():
     #print 'in doRevStepInto'
     #eip = reverseStepInstruction()
     curAddr = idc.GetRegValue("EIP")
-    prev_eip = idc.PrevAddr(curAddr)
-    simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True, prev=0x%x)");' % prev_eip)
+    prev_eip = idc.PrevHead(curAddr)
+    if prev_eip == BADADDR:
+        prev_eip = None
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True)");')
+    else:
+        #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True, prev=0x%x)");' % prev_eip)
     eip = gdbProt.getEIPWhenStopped()
-    gdbProt.stepWait()
+    #gdbProt.stepWait()
+    signalClient()
     return eip
 
 def doRevFinish():
@@ -204,33 +149,34 @@ def doRevFinish():
     cur_addr = idc.GetRegValue("EIP")
     f = GetFunctionAttr(cur_addr, FUNCATTR_START)
     if f != BADADDR: 
-        print('got function start, go there, and further back 1') 
-        doRevToAddr(f, 1)
+        print('doRevFinish got function start at 0x%x, go there, and further back 1' % f) 
+        doRevToAddr(f, extra_back=1)
     else:
         print('use monitor uncall function')
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.uncall()");')
         eip = gdbProt.getEIPWhenStopped()
-        gdbProt.stepWait()
+        signalClient()
+        #gdbProt.stepWait()
 
 '''
     Issue the Simics "rev" command via GDB and then move forward the actual breakpoint
 '''
 def doReverse(extra_back=None):
-    #print 'in doReverse'
+    print 'in doReverse'
     curAddr = idc.GetRegValue("EIP")
-    goNowhere()
+    #goNowhere()
     #print('doReverse, back from goNowhere curAddr is %x' % curAddr)
     isBpt = idc.CheckBpt(curAddr)
     # if currently at a breakpoint, we need to back an instruction to so we don't break
     # here
     if isBpt > 0:
-	#print 'curAddr is %x, it is a breakpoint, do a rev step over' % curAddr
+	print 'curAddr is %x, it is a breakpoint, do a rev step over' % curAddr
         addr = doRevStepOver()
-        #print 'in doReverse, did RevStepOver got addr of %x' % addr
+        print 'in doReverse, did RevStepOver got addr of %x' % addr
         isBpt = idc.CheckBpt(addr)
         if isBpt > 0:
 	    # back up onto a breakpoint, we are done
-            #print('doReverse backed to breakpoint, we are done')
+            print('doReverse backed to breakpoint, we are done')
 	    return addr
 
     #print 'do reverse'
@@ -240,20 +186,30 @@ def doReverse(extra_back=None):
     command = '@cgc.doReverse(%s)' % param
     simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     addr = gdbProt.getEIPWhenStopped()
+    signalClient()
     #print 'reverse addr after stop %x' % addr
     #GetDebuggerEvent(WFNE_SUSP , 5)
     #print 'back from getdebugevent'
-    disabledSet = disableAllBpts(None)
+    #disabledSet = bpUtils.disableAllBpts(None)
     #print 'after disable'
-    gdbProt.stepWait()
+
+    #gdbProt.stepWait()
+
     #print 'after stepInto'
-    enableBpts(disabledSet)
+    #bpUtils.enableBpts(disabledSet)
     #print 'after enable'
 
     return addr
 
+def doRevToAddr(addr, extra_back=0):
+    command = '@cgc.revToAddr(0x%x, extra_back=%d)' % (addr, extra_back)
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+    eip = gdbProt.getEIPWhenStopped()
+    signalClient()
+    #gdbProt.stepWait()
+    
 ''' reverse to the given address, but hit any existing breakpoints '''
-def doRevToAddr(addr, extra_back=None):
+def doRevToAddrXXX(addr, extra_back=None):
 
     # set a breakpoint for the address 
     bptEnabled = idc.CheckBpt(addr)
@@ -342,30 +298,65 @@ def getMailbox():
     print 'got mailbox message: <%s>' % msg
     return msg
 
-def getUIAddress():    
+def getUIAddress(prompt):    
     value = registerMath()
     if value is None:
         value = idc.GetRegValue("ESP")
-    target_addr = AskAddr(value, "run backwards until this address is modified:")
+    target_addr = AskAddr(value, prompt)
     return target_addr
 
+def writeWord():
+    print('Write Word')
+    addr = AskAddr(0, 'Address to modify')
+    value = AskAddr(0, 'Value')
+    command = '@cgc.writeWord(0x%x, 0x%x)' % (addr, value)
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+
 def wroteToAddressPrompt():
-    addr = getUIAddress()
+    addr = getUIAddress('Run backwards until this address is modified')
     print('Running backwards to find write to address 0x%x' % addr)
     wroteToAddress(addr)
 
+def trackAddressPrompt():
+    addr = getUIAddress('Run backwards to find source of data at this address')
+    print('Running backwards to find source of content of address 0x%x' % addr)
+    trackAddress(addr)
+    showSimicsMessage()
+    bookmark_list = bookmark_view.updateBookmarkView()
+
 def wroteToAddress(target_addr):
-    disabledSet = disableAllBpts(None)
+    disabledSet = bpUtils.disableAllBpts(None)
     command = '@cgc.stopAtKernelWrite(0x%x)' % target_addr
     simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     eip = gdbProt.getEIPWhenStopped()
-    gdbProt.stepWait()
-    enableBpts(disabledSet)
+    #gdbProt.stepWait()
+    signalClient()
+    bpUtils.enableBpts(disabledSet)
     if eip >=  0xc0000000:
         print('previous syscall wrote to address 0x%x' % target_addr)
     else:
         curAddr = idc.GetRegValue("EIP")
-        print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
+        #print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
+        print('Previous instruction  wrote to 0x%x' % (target_addr))
+    # why does the next instruction never return?
+    #curAddr = idc.GetRegValue("EIP")
+    #print('wroteToAddress currAddr is %x' % curAddr)
+
+def trackAddress(target_addr):
+    disabledSet = bpUtils.disableAllBpts(None)
+    command = '@cgc.revTaintAddr(0x%x)' % target_addr
+    print('do command '+command)
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+    print('not get when stopped')
+    eip = gdbProt.getEIPWhenStopped()
+    #gdbProt.stepWait()
+    signalClient()
+    bpUtils.enableBpts(disabledSet)
+    if eip >=  0xc0000000:
+        print('previous is as far back as we can trace content of address 0x%x' % target_addr)
+    else:
+        curAddr = idc.GetRegValue("EIP")
+        print('Current instruction (0x%x) is as far back as we can trace 0x%x' % (curAddr, target_addr))
     # why does the next instruction never return?
     #curAddr = idc.GetRegValue("EIP")
     #print('wroteToAddress currAddr is %x' % curAddr)
@@ -387,7 +378,8 @@ def showSimicsMessage():
     command = '@cgc.idaMessage()' 
     simics_string = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     print simics_string
-    if 'Simics got lost' in simics_string:
+   
+    if type(simics_string) is str and 'Simics got lost' in simics_string:
         idc.Warning(simics_string)
     elif 'Just debug' in simics_string:
         just_debug = True
@@ -411,9 +403,35 @@ def wroteToRegister():
     command = "@cgc.revToModReg('%s')" % highlighted
     simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     eip = gdbProt.getEIPWhenStopped(2)
-    gdbProt.stepWait()
+    #gdbProt.stepWait()
+    signalClient()
     curAddr = idc.GetRegValue("EIP")
     print('Current instruction (0x%x) wrote to reg %s' % (curAddr, highlighted))
+    return eip
+    
+def trackRegister(): 
+    highlighted = idaapi.get_highlighted_identifier()
+    if highlighted is None  or highlighted not in __regs:
+       print('%s not in reg list' % highlighted)
+       c=Choose([], "back track to source of selected register", 1)
+       c.width=50
+       c.list = __regs
+       chose = c.choose()
+       if chose == 0:
+           print('user canceled')
+           return
+       else:
+           highlighted = __regs[chose-1]
+    print 'backtrack to source of to %s...' % highlighted
+    command = "@cgc.revTaintReg('%s')" % highlighted
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+    eip = gdbProt.getEIPWhenStopped(2)
+    #gdbProt.stepWait()
+    signalClient()
+    curAddr = idc.GetRegValue("EIP")
+    print('Current instruction (0x%x) is as far back as we can trace reg %s' % (curAddr, highlighted))
+    showSimicsMessage()
+    bookmark_list = bookmark_view.updateBookmarkView()
     return eip
     
   
@@ -478,6 +496,7 @@ def goToBegin():
 def goToBookmarkRefresh(mark):
     global bookmark_view
     bookmark_view.goToBookmarkRefresh(mark)
+    signalClient()
 
 def goToOrigin():
     '''
@@ -485,6 +504,7 @@ def goToOrigin():
     '''
     print('goToOrigin')
     bookmark_view.goToOrigin()
+    signalClient()
     #goToBookmarkRefresh('origin')
 
 def setBreakAtStart():
@@ -507,9 +527,10 @@ def goNowhere():
     #curAddr = idc.GetRegValue("EIP")
     #print('in goNowhere back from getReg')
     #bptEnabled, disabledSet = setAndDisable(curAddr)
-    simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.skipAndMail()");') 
-    eip = gdbProt.getEIPWhenStopped()
-    gdbProt.stepWait()
+    #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.skipAndMail()");') 
+    #eip = gdbProt.getEIPWhenStopped()
+    #gdbProt.stepWait()
+    signalClient()
     #print('goNowhere after stepInto')
     #GetDebuggerEvent(WFNE_SUSP | WFNE_CONT, -1)
     #reEnable(curAddr, bptEnabled, disabledSet)
@@ -517,6 +538,7 @@ def goNowhere():
 def runToUserSpace():
     global bookmark_view
     bookmark_view.runToUserSpace()
+    signalClient()
 
 def runToSyscall():
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToSyscall()");') 
@@ -525,7 +547,8 @@ def runToSyscall():
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
         eip = gdbProt.getEIPWhenStopped()
         print('runtoSyscall, stopped at eip 0x%x, then stepwait.' % eip)
-        gdbProt.stepWait()
+        #gdbProt.stepWait()
+        signalClient()
         #print('runtoSyscall rev over')
         #doRevStepOver()
         #print('runtoSyscall done')
@@ -537,19 +560,23 @@ def revToSyscall():
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
         eip = gdbProt.getEIPWhenStopped()
         #print('revtoSyscall, stopped at eip 0x%x, then stepwait.' % eip)
-        gdbProt.stepWait()
+        #gdbProt.stepWait()
+        signalClient()
         print('revtoSyscall done')
 
 def revBlock():
     cur_addr = idc.GetRegValue("EIP")
     f = idaapi.get_func(cur_addr)
+    if f is None:
+        print('Ida analysis sees no function, cannot perform this function')
+        return
     fc = idaapi.FlowChart(f)
     block_start = None
     prev_addr = None
     prev_block = None
     for block in fc:
         block_start = block.startEA
-        print('block_start 0x%x, cur_addr is 0x%x' % (block_start, cur_addr))
+        #print('block_start 0x%x, cur_addr is 0x%x' % (block_start, cur_addr))
         if block_start > cur_addr:
             break
         prev_addr = block_start
@@ -561,15 +588,28 @@ def revBlock():
         next_addr = NextHead(prev_addr)
         if next_addr == cur_addr:
             ''' reverse two to get there? '''
+            print('revBlock rev two?')
             doRevStepInto()
             doRevStepInto()
         else:
             print('revBlock rev to 0x%x' % prev_addr)
-            doRevToAddr(prev_addr, 1)
+            doRevToAddr(prev_addr, extra_back=1)
     else:
         print('must have been top, uncall')
         doRevFinish()
-        
+
+def signalClient():
+    eip = gdbProt.getEIPWhenStopped()
+    if  eip is None or not (type(eip) is int or type(eip) is long):
+        print('signalClient got wrong stuff? %s from getEIP' % str(eip))
+        return
+    print('signalClient call setAndDis for 0x%x' % (eip))
+    bpUtils.setAndDisable(eip) 
+    print('signalClient return setAndDis') 
+    #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseStep()");') 
+    GetDebuggerEvent(WFNE_SUSP | WFNE_CONT, -1)
+    print('signalClient back from cont')
+    success = idc.DelBpt(eip)
 
 def testDialog():
     print("in testDialog")
@@ -589,7 +629,23 @@ def rebuildBookmarkView():
     bookmark_view.Create()
     bookmark_list = bookmark_view.updateBookmarkView()
 
+def generateSignatures():
+    functionSig.genSignatures()
+
+def querySignatures():
+    functionSig.querySignatures()
+
+def getTagValue(line, find_tag):
+    parts = line.split()
+    for part in parts:
+        if ':' in part:
+            tag, value = part.split(':',1)
+            if tag.strip() == find_tag:
+                return value
+    return None
+
 def exitIda():
+    goToOrigin()
     simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.idaDone()");')
     print("Telling gdb server we are exiting")
     time.sleep(2)
@@ -632,9 +688,17 @@ def doKeyMap():
     AddHotkey("Alt+Shift+a", 'key_alt_shift_a')
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "^ Wrote to address...", "Alt+Shift+a", 1, wroteToAddressPrompt, None)
     
+    idaapi.CompileLine('static key_ctrl_shift_a() { RunPythonStatement("trackAddressPrompt()"); }')
+    AddHotkey("Ctrl+Shift+a", 'key_ctrl_shift_a')
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "^ track address...", "Ctrl+Shift+a", 1, trackAddressPrompt, None)
+    
     idaapi.CompileLine('static key_alt_shift_r() { RunPythonStatement("wroteToRegister()"); }')
     AddHotkey("Alt+Shift+r", 'key_alt_shift_r')
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "^ Wrote to register...", "Alt+Shift+r", 1, wroteToRegister, None)
+    
+    idaapi.CompileLine('static key_ctrl_shift_r() { RunPythonStatement("trackToRegister()"); }')
+    AddHotkey("Ctrl+Shift+r", 'key_ctrl_shift_r')
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "^ track register...", "Ctrl+Shift+r", 1, trackRegister, None)
     
     idaapi.CompileLine('static key_alt_shift_m() { RunPythonStatement("showSimicsMessage()"); }')
     AddHotkey("Alt+Shift+m", 'key_alt_shift_m')
@@ -671,7 +735,7 @@ def doKeyMap():
     
     idaapi.CompileLine('static key_alt_shift_c() { RunPythonStatement("revToSyscall()"); }')
     AddHotkey("Alt+Shift+c", 'key_alt_shift_c')
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to syscall", "Alt+Shift+c", 1, revToSyscall, None)
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Rev to syscall", "Alt+Shift+c", 1, revToSyscall, None)
     
     idaapi.CompileLine('static key_alt_shift_n() { RunPythonStatement("nameSysCalls()"); }')
     AddHotkey("Alt+Shift+n", 'key_alt_shift_n')
@@ -682,11 +746,26 @@ def doKeyMap():
 
     idaapi.CompileLine('static key_alt_shift_b() { RunPythonStatement("revBlock()"); }')
     AddHotkey("Alt+Shift+b", 'key_alt_shift_b')
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to previous block", "Alt+Shift+b", 1, revBlock, None)
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Reverse to previous block", "Alt+Shift+b", 1, revBlock, None)
     
     idaapi.CompileLine('static key_alt_shift_q() { RunPythonStatement("exitIda()"); }')
     AddHotkey("Alt+Shift+q", 'key_alt_shift_q')
     idaapi.add_menu_item("Debugger/Terminate process", "Exit CGC Ida Client", "Alt+Shift+q", 1, exitIda, None)
+
+    idaapi.CompileLine('static key_alt_shift_g() { RunPythonStatement("generateSignatures()"); }')
+    AddHotkey("Alt+Shift+g", 'key_alt_shift_g')
+    idaapi.add_menu_item("Debugger/Terminate process", "Generate function signatures", "Alt+Shift+g", 1, generateSignatures, None)
+
+    idaapi.CompileLine('static key_alt_shift_f() { RunPythonStatement("querySignatures()"); }')
+    AddHotkey("Alt+Shift+f", 'key_alt_shift_f')
+    idaapi.add_menu_item("Debugger/Terminate process", "Apply function signatures", "Alt+Shift+f", 1, querySignatures, None)
+
+    idaapi.CompileLine('static key_alt_shift_y() { RunPythonStatement("signalClient()"); }')
+    AddHotkey("Alt+Shift+y", 'key_alt_shift_y')
+
+    idaapi.CompileLine('static key_alt_shift_w() { RunPythonStatement("writeWord()"); }')
+    AddHotkey("Alt+Shift+w", 'key_alt_shift_w')
+    idaapi.add_menu_item("Debugger/Terminate process", "Write word to memory", "Alt+Shift+w", 1, writeWord, None)
 
 def nameSysCalls(bail=False):
     print('in nameSysCalls assign names to sys calls')
@@ -768,11 +847,12 @@ form=idaapi.find_tform("Stack view")
 print('do switch')
 idaapi.switchto_tform(form, True)
 print('now create bookmark_view')
+print('Version 1.1')
 bookmark_view.Create()
 bookmark_list = bookmark_view.updateBookmarkView()
 for bm in bookmark_list:
     if 'nox' in bm:
-        eip_str = bm.split(':')[1]
+        eip_str = getTagValue(bm, 'nox')
         eip = int(eip_str, 16)
         idc.MakeCode(eip) 
 

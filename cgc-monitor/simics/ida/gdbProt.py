@@ -43,7 +43,9 @@ def Evalx(cmd):
     return retval
 
 def goToBookmark(mark):
+    mark = mark.replace('"', '|')
     command = "@cgc.goToDebugBookmark('%s')" % mark
+    print('command is %s' % command)
     simicsString = Evalx('SendGDBMonitor("%s");' % command)
     
 def stripMailbox(msg):

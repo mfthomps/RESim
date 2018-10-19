@@ -26,6 +26,23 @@ import idaapi
 import idc
 from idaapi import simplecustviewer_t
 import gdbProt
+import bpUtils
+
+BT = 'backtrack '
+START = 'START'
+def signalClient():
+    eip = gdbProt.getEIPWhenStopped()
+    if  eip is None or not (type(eip) is int or type(eip) is long):
+        print('signalClient got wrong stuff? %s from getEIP' % str(eip))
+        return
+    print('signalClient call setAndDis for 0x%x' % (eip))
+    bpUtils.setAndDisable(eip) 
+    print('signalClient return setAndDis') 
+    #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseStep()");') 
+    idc.GetDebuggerEvent(idc.WFNE_SUSP | idc.WFNE_CONT, -1)
+    print('signalClient back from cont')
+    success = idc.DelBpt(eip)
+
 class bookmarkView(simplecustviewer_t):
 
     class bookmark_handler(idaapi.action_handler_t):
@@ -35,6 +52,7 @@ class bookmarkView(simplecustviewer_t):
         def activate(self, ctx):
             print("set bookmark ")
             self.callback()
+
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
@@ -46,8 +64,11 @@ class bookmarkView(simplecustviewer_t):
         else:
             print("created bookmarkView")
         tcc = self.GetTCustomControl()
-        the_name = "the_name"
+        the_name = "add_bookmark"
         idaapi.register_action(idaapi.action_desc_t(the_name, "add bookmark", self.bookmark_handler(self.askSetBookmark)))
+        idaapi.attach_action_to_popup(tcc, None, the_name)
+        the_name = "print_bookmarks"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "print bookmarks", self.bookmark_handler(self.printBookmarks)))
         idaapi.attach_action_to_popup(tcc, None, the_name)
         self.Show()
 
@@ -55,14 +76,13 @@ class bookmarkView(simplecustviewer_t):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
         eip = gdbProt.getEIPWhenStopped()
         print('runtoUserSpace, stopped at eip 0x%x, then stepwait.' % eip)
-        gdbProt.stepWait()
-        print('runtoUserSpace')
+        #gdbProt.stepWait()
 
     def goToBookmarkRefresh(self, mark):
-        if mark != '_start+1':
+        if True or mark != '_start+1':
             gdbProt.goToBookmark(mark)
             eip = gdbProt.getEIPWhenStopped()
-            gdbProt.stepWait()
+            #gdbProt.stepWait()
             print('Now at bookmark: %s' % mark)
         else:
             ''' monitor goToFirst will now handle missing page, and it starts in user space '''
@@ -70,7 +90,10 @@ class bookmarkView(simplecustviewer_t):
             print('goToBookmarkRefresh, is start_1, goToFirst')
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToFirst()");') 
             eip = gdbProt.getEIPWhenStopped()
-            gdbProt.stepWait()
+            
+            #gdbProt.stepWait()
+
+
             #print('eip when stopped is 0x%x' % eip)
             #self.runToUserSpace()
             #self.runToUserSpace()
@@ -81,8 +104,8 @@ class bookmarkView(simplecustviewer_t):
         eip = gdbProt.getEIPWhenStopped()
         if eip is not None:
             print('gotoOrigin eip when stopped is 0x%x' % eip)
-            gdbProt.stepWait()
-            print('did step wait')
+            #gdbProt.stepWait()
+            #print('did step wait')
         else:
             print('gotToOrigin, getEIPWhenStopped returned None')
 
@@ -97,16 +120,22 @@ class bookmarkView(simplecustviewer_t):
             if ':' in l:
                 #print l
                 num, bm = l.split(':',1)
-                self.AddLine(bm.strip())
-                print("added %s" % bm.strip())
-                retval.append(bm.strip())
+                entry = bm.strip()
+                if entry.startswith(BT) and START not in entry:
+                    entry = '<<<'+entry[len(BT):]
+                self.AddLine(entry)
+                print("added %s" % entry)
+                retval.append(entry)
         self.Refresh()
         return retval
 
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
         if not line: line = "<None>"
+        if line.startswith('<<<'):
+           line = line.replace('<<<',BT)
         self.goToBookmarkRefresh(line.strip())
+        signalClient()
         return True
 
     def setBookmark(self, mark):
@@ -128,3 +157,23 @@ class bookmarkView(simplecustviewer_t):
         if mark != 0 and mark != 'None':
             self.setBookmark(mark)
             self.updateBookmarkView()
+
+    def printBookmarks(self):
+        print('printBookmarks')
+        try:
+            x1, y1, x2, y2 = self.GetSelection()
+        except:
+            print 'nothing selected'
+            for lineno in range(0, 99999):
+                try:
+                    line = self.GetLine(lineno)[0]
+                except:
+                    return
+                if line is not None:
+                    print line
+                else:
+                    return
+            return
+        #print('%d %d %d %d' % (x1, y1, x2, y2)) 
+        for lineno in range(y1, y2+1):
+            print self.GetLine(lineno)[0]
