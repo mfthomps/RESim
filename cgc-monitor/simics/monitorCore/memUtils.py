@@ -115,7 +115,10 @@ class memUtils():
     def readPtr(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE)
+            try:
+                return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE)
+            except:
+                return None
         else:
             return None
 
@@ -157,3 +160,19 @@ class memUtils():
             return 'eip'
         else:
             return 'rip'
+
+    def getCurrentTask(self, param, cpu):
+        cpl = getCPL(cpu)
+        if cpl == 0:
+            tr_base = cpu.tr[7]
+            esp = self.readPtr(cpu, tr_base + 4)
+            #print('kernel mode, esp is 0x%x' % esp)
+        else:
+            esp = self.getRegValue(cpu, 'esp')
+            #print('user mode, esp is 0x%x' % esp)
+        ptr = esp - 1 & ~(param.stack_size - 1)
+        #print('ptr is 0x%x' % ptr)
+        ret_ptr = self.readPtr(cpu, ptr)
+        #print('ret_ptr is 0x%x' % ret_ptr)
+
+        return ret_ptr

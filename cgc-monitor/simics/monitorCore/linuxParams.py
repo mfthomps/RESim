@@ -32,22 +32,26 @@ class linuxParams():
     ram_base = 0
     stack_size = 8192
     os32bit  = True
-    ts_next = 236
-    ts_prev = 240
-    ts_comm = 532
-    ts_pid = 316
-    ts_parent = 328
-    ts_real_parent = 324
+    #ts_next = 236
+    ts_next = 196
+    ts_prev = 200
+    ts_comm = 504
+    ts_pid = 256
+    ts_parent = 272
+    ts_real_parent = 268
     ts_state = None
-    ts_active_mm = 268
-    ts_mm = 264
+    ts_active_mm = 228
+    ts_mm = 224
     ts_binfmt = None
-    ts_tgid = 320
+    ts_tgid = 260
     ts_group_leader = None
-    ts_children_list_head = 332
-    ts_sibling_list_head = 340
-    ts_thread_group_list_head = 404
+    ts_children_list_head = 276
+    ts_sibling_list_head = 284
+    ts_thread_group_list_head = 352
     ts_next_relative = True
+    current_task = 0xc2001454
+    sys_entry = 0xc10028a4
+    execve = 0xc1002a48
 
 
 

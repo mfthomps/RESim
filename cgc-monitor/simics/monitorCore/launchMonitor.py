@@ -64,7 +64,8 @@ MULTI_PROCESSOR = os.getenv('MULTI_PROCESSOR')
 PY_SHARED = '/usr/share/pyshared'
 CORE = None
 if DEVEL is not None and DEVEL == 'YES':
-    CORE = '/mnt/cgcsvn/cgc/trunk/cgc-monitor/simics/monitorCore'
+    print "is devel"
+    CORE = '/mnt/cgc-monitor/cgc-monitor/simics/monitorCore'
 else:
     CORE = os.path.join(PY_SHARED, 'monitorCore')
 if CORE not in sys.path:
@@ -249,7 +250,7 @@ elif ONE_BOX == 'TWO':
 cell_config = cellConfig.cellConfig(num_boxes, OS_TYPE)
 PY_SHARED = '/usr/share/pyshared'
 if DEVEL is not None and DEVEL == 'YES':
-    CORE = '/mnt/cgcsvn/cgc/trunk/cgc-monitor/simics/monitorCore'
+    CORE = '/mnt/cgc-monitor/cgc-monitor/simics/monitorCore'
 else:
     CORE = os.path.join(PY_SHARED, 'monitorCore')
 if CORE not in sys.path:
@@ -283,8 +284,8 @@ except:
     pass
 # set up python paths based on whether we are a development system or a target
 if DEVEL is not None and (DEVEL == 'YES'):
-    run_command('add-directory -prepend /mnt/cgcsvn/cgc/trunk/cgc-monitor/simics/simicsScripts')
-    run_command('add-directory -prepend /mnt/cgcsvn/cgc/trunk/cgc-monitor/simics/monitorCore')
+    run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/simicsScripts')
+    run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/monitorCore')
 else:
     run_command('add-directory -prepend /usr/share/pyshared/simicsScripts')
     run_command('add-directory -prepend /usr/share/pyshared/monitorCore')
@@ -344,8 +345,8 @@ if SIMICS_VER == '4.8' or USE_VIPER == 'YES':
                 #run_command('run-command-file ./targets/x86-x58-ich10/bsd1.simics')
                 run_command('run-command-file ./targets/x86-x58-ich10/cmb1.simics')
             else:
-                print('start linux emulation')
-                run_command('run-command-file ./targets/x86-x58-ich10/cmb1.simics')
+                print('start linux emulationX')
+                run_command('run-command-file ./targets/x86-x58-ich10/vrb.simics')
                 #run_command('run-command-file ./targets/x86-x58-ich10/cfe1.simics')
         elif ONE_BOX == 'TWO':
             print('start two box emulation')
