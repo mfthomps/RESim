@@ -50,8 +50,17 @@ class linuxParams():
     ts_thread_group_list_head = 352
     ts_next_relative = True
     current_task = 0xc2001454
+    # int80 vectors here
     sys_entry = 0xc10028a4
+    # if int80 is execve, we compute a call to here
     execve = 0xc1002a48
+    # from symbol table
+    # NOT GOOD execve = 0xc01019f0
+    # page fault exception vectors here
+    page_fault = 0xc12406e8
+    # call edi goes to
+    #page_fault = 0xc1241e2a
+    sys_exit = 0xc10028a2
 
 
 

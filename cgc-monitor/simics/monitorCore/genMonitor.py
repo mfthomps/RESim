@@ -13,6 +13,7 @@ import isMonitorRunning
 import reverseToCall
 import reverseToAddr
 import pFamily
+import pageFaultGen
 target = 'VDR'
 class cellConfig():
     cells = {}
@@ -73,6 +74,12 @@ class HapCleaner():
         ht = self.HapType(htype, hap)
         self.hlist.append(ht)
 
+class SyscallInfo():
+    def __init__(self, cpu, pid, callnum):
+        self.cpu = cpu
+        self.pid = pid
+        self.callnum = callnum
+
 class GenMonitor():
     SIMICS_BUG=False
     PAGE_SIZE = 4096
@@ -90,7 +97,7 @@ class GenMonitor():
         self.stop_hap = None
         self.log_dir = '/tmp/'
         self.mode_hap = None
-
+        self.hack_list = []
         self.genInit()
 
     def genInit(self):
@@ -238,6 +245,7 @@ class GenMonitor():
         #self.os_p_utils = linuxProcessUtils.linuxProcessUtils(self, 'thrower', self.param,
         #            self.cell_config, None, None, self.cur_task[cpu], self.mem_utils, self.lgr, False)
         self.pfamily = pFamily.Pfamily(target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
+        self.page_faults = pageFaultGen.PageFaultGen(target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
         
     def tasks(self):
         tasks = self.task_utils.getTaskStructs()
@@ -266,7 +274,8 @@ class GenMonitor():
     def show(self):
         cpu = self.cell_config.cpuFromCell(target)
         cpl = memUtils.getCPL(cpu)
-        print('cpu.name is %s PL: %d current_task symbol at 0x%x' % (cpu.name, cpl, self.cur_task[cpu]))
+        eip = self.getEIP(cpu)
+        print('cpu.name is %s PL: %d EIP: 0x%x   current_task symbol at 0x%x' % (cpu.name, cpl, eip, self.cur_task[cpu]))
         pfamily = self.pfamily.getPfamily()
         tabs = ''
         while len(pfamily) > 0:
@@ -274,18 +283,15 @@ class GenMonitor():
             print('%s%5d  %s' % (tabs, prec.pid, prec.proc))
             tabs += '\t'
 
-    class SyscallInfo():
-        def __init__(self, cpu, pid, callnum):
-            self.cpu = cpu
-            self.pid = pid
-            self.callnum = callnum
 
-    def syscallHap(self, syscall_info, one, exception_number):
-        cur_task_rec = self.mem_utils.readPtr(syscall_info.cpu, self.cur_task[syscall_info.cpu])
-        comm = self.mem_utils.readString(syscall_info.cpu, cur_task_rec + self.param.ts_comm, 16)
-        pid = self.mem_utils.readWord32(syscall_info.cpu, cur_task_rec + self.param.ts_pid)
+    def syscallHap(self, syscall_info, third, forth, memory):
+        cpu = SIM_current_processor()
+        if cpu != syscall_info.cpu:
+            self.lgr.debug('syscallHap, wrong cpu %s %s' % (cpu.name, syscall_info.cpu.name))
+            return
+        cpu, comm, pid = self.task_utils.curProc() 
         eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-        self.lgr.debug('int80Hap in proc %d (%s), eax: 0x%x' % (pid, comm, eax))
+        self.lgr.debug('syscallHap in proc %d (%s), eax: 0x%x  look for %s' % (pid, comm, eax, str(syscall_info.callnum)))
         if syscall_info.pid is None or syscall_info.pid == pid: 
             eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
             if syscall_info.callnum is not None:
@@ -297,36 +303,38 @@ class GenMonitor():
                 self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(syscall_info.cpu)))
                 SIM_break_simulation('syscall')
 
-    def int80Hap(self, syscall_info, one, exception_number):
-        cur_task_rec = self.mem_utils.readPtr(syscall_info.cpu, self.cur_task[syscall_info.cpu])
-        comm = self.mem_utils.readString(syscall_info.cpu, cur_task_rec + self.param.ts_comm, 16)
-        pid = self.mem_utils.readWord32(syscall_info.cpu, cur_task_rec + self.param.ts_pid)
-        eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-        self.lgr.debug('int80Hap in proc %d (%s), eax: 0x%x' % (pid, comm, eax))
-        if syscall_info.pid is None or syscall_info.pid == pid: 
-            eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-            if syscall_info.callnum is not None:
-                eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-                if eax == syscall_info.callnum:
-                    self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(syscall_info.cpu)))
-                    SIM_break_simulation('syscall')
-            else:
-                self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(syscall_info.cpu)))
-                SIM_break_simulation('syscall')
 
-    def runToSyscall80(self, callnum=None, debug=True): 
-        if debug:
-            pid, cell, cpu = self.context_manager.getDebugPid() 
-            self.lgr.debug('runToSyscall pid %d' % pid)
-        else:
-            cpu = self.cell_config.cpuFromCell(target)
-            self.lgr.debug('runToSyscall, not debug') 
-            pid = None
-        syscall_info = self.SyscallInfo(cpu, pid, callnum)
+    def signalHap(self, signal_info, one, exception_number):
+        cpu, comm, pid = self.task_utils.curProc() 
+        if signal_info.callnum is None:
+            if exception_number in self.hack_list:
+                return
+            else:
+               self.hack_list.append(exception_number)
+        if signal_info.pid is not None:
+            if pid == signal_info.pid:
+                SIM_break_simulation('signal %d' % exception_number)
+                self.lgr.debug('signalHap from %d (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
+        else: 
+           SIM_break_simulation('signal %d' % exception_number)
+           self.lgr.debug('signalHap from %d (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
+         
+
+    def int80Hap(self, cpu, one, exception_number):
+        cpu, comm, pid = self.task_utils.curProc()
+        eax = self.mem_utils.getRegValue(cpu, 'eax')
+        self.lgr.debug('int80Hap in proc %d (%s), eax: 0x%x' % (pid, comm, eax))
+        self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(cpu)))
+        SIM_break_simulation('syscall')
+        print('use si to get address of syscall entry, and further down look for computed call')
+
+    def runToSyscall80(self):
+        cpu = self.cell_config.cpuFromCell(target)
+        self.lgr.debug('runToSyscall80') 
         self.scall_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
-                 self.int80Hap, syscall_info, 0x180) 
+                 self.int80Hap, cpu, 0x180) 
         hap_clean = HapCleaner()
-        hap_clean.add("Core_Breakpoint_Memop", self.scall_hap)
+        hap_clean.add("Core_Exception", self.scall_hap)
         stop_action = StopAction(hap_clean, [], None)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
@@ -334,8 +342,28 @@ class GenMonitor():
         if not status:
             SIM_run_command('c')
 
-    def watchExecve(self):
+    def runToSignal(self, signal=None, pid=None):
         cpu = self.cell_config.cpuFromCell(target)
+        self.lgr.debug('runToSignal, signal given is %s' % str(signal)) 
+
+        sig_info = SyscallInfo(cpu, pid, signal)
+        #max_intr = 31
+        max_intr = 1028
+        if signal is None:
+            sig_hap = SIM_hap_add_callback_obj_range("Core_Exception", cpu, 0,
+                     self.signalHap, sig_info, 0, max_intr) 
+        else:
+            sig_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
+                     self.signalHap, sig_info, signal) 
+
+        hap_clean = HapCleaner()
+        hap_clean.add("Core_Exception", sig_hap)
+        stop_action = StopAction(hap_clean, [], None)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        status = self.is_monitor_running.isRunning()
+        if not status:
+            SIM_run_command('c')
 
     def debugProc(self, proc):
         self.lgr.debug('debugProc for %s' % proc)
@@ -376,7 +404,7 @@ class GenMonitor():
 
     def toKernel(self): 
         cpu = self.cell_config.cpuFromCell(target)
-        self.run2Kernel(cpu, flist)
+        self.run2Kernel(cpu)
 
     def toProc(self, proc, pid=None, flist=None):
         cpu = self.cell_config.cpuFromCell(target)
@@ -396,7 +424,22 @@ class GenMonitor():
         status = self.is_monitor_running.isRunning()
         if not status:
             SIM_run_command('c')
-        
+       
+    def runToSyscall(self, callnum=None): 
+        self.lgr.debug('runToSyscall callnum is %s' % str(callnum)) 
+        cell = self.cell_config.cell_context[target]
+        proc_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, self.mem_utils.WORD_SIZE, 0)
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        syscall_info = SyscallInfo(cpu, pid, callnum)
+        proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break)
+        hap_clean = HapCleaner()
+        hap_clean.add("Core_Breakpoint_Memop", proc_hap)
+        stop_action = StopAction(hap_clean, [proc_break], None)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        status = self.is_monitor_running.isRunning()
+        if not status:
+            SIM_run_command('c')
 
     def setCurTaskHap(self):
         cpu = self.cell_config.cpuFromCell(target)
@@ -638,5 +681,10 @@ class GenMonitor():
 
     def traceExecve(self):
         self.pfamily.traceExecve()
-        
-cgc = GenMonitor()
+
+    def watchPageFaults(self):
+        self.page_faults.watchPageFaults()
+
+if __name__=="__main__":        
+    print('instantiate the GenMonitor') 
+    cgc = GenMonitor()

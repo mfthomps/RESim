@@ -50,6 +50,12 @@ def bitRange(value, start, end):
     retval = shifted & mask
     return retval
 
+'''
+def getBits( allbits, lsb, msb )
+    mask = ~(0xffffffff << (msb + 1 - lsb)) << lsb 
+    return (allbits & mask) >> lsb 
+'''
+
 class memUtils():
     def __init__(self, word_size, param):
         self.WORD_SIZE = word_size

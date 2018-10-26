@@ -39,6 +39,7 @@ class Pfamily():
         cpu = SIM_current_processor()
         if cpu != hap_cpu:
             self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
+            return
         cpu, comm, pid = self.task_utils.curProc() 
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, None, cpu)
         nargs = min(4, len(arg_string_list))
