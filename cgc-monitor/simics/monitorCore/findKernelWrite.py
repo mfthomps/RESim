@@ -53,12 +53,12 @@ class findKernelWrite():
         self.forward = False
         self.forward_break = None
         self.forward_eip = None
-        if top.isProtectedMemory(addr):
-            self.lgr.debug('findKernelWrite refuses to find who wrote to magic page')
-            self.context_manager.setIdaMessage('findKernelWrite refuses to find who wrote to magic page')
-            
-            self.top.skipAndMail()
-            return
+        #if top.isProtectedMemory(addr):
+        #    self.lgr.debug('findKernelWrite refuses to find who wrote to magic page')
+        #    self.context_manager.setIdaMessage('findKernelWrite refuses to find who wrote to magic page')
+        #    
+        #    self.top.skipAndMail()
+        #    return
         dum_cpu, cur_addr, comm, pid = self.os_utils.currentProcessInfo(cpu)
         my_args = procInfo.procInfo(comm, cpu, pid, None, False)
         phys_block = cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
@@ -207,13 +207,14 @@ class findKernelWrite():
             value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):
-                ida_message = "Content of 0x%x came from loader." % self.addr
-                bm = "backtrack eip:0x%x content of memory:0x%x came from loader" % (eip, self.addr)
+                ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
+                bm = None
             else:
                 ida_message = 'Kernel wrote 0x%x to address: 0x%x' % (value, self.addr)
                 self.lgr.debug('set ida msg to %s' % ida_message)
                 bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
-            self.bookmarks.setDebugBookmark(bm)
+            if bm is not None:
+                self.bookmarks.setDebugBookmark(bm)
             self.context_manager.setIdaMessage(ida_message)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()

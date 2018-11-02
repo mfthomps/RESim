@@ -51,7 +51,9 @@ class isMonitorRunning():
         return retval 
 
     def setRunning(self, is_running):
+        #self.lgr.debug('isMonitorRunning, get lock')
         self.my_lock.acquire()
+        #self.lgr.debug('isMonitorRunning, GOT THE lock')
         self.is_running = is_running
         self.my_lock.release()
         

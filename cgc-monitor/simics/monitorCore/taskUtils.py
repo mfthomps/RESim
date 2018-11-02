@@ -1,6 +1,13 @@
 from simics import *
 import osUtils
 LIST_POISON2 = object()
+def stringFromFrame(frame):
+    if frame is not None:
+        return 'eax:0x%x ebx:0x%x ecx:0x%x edx:0x%x ebp:0x%x edi:0x%x esi:0x%x eip:0x%x esp:0x%x orig_ax:0x%x flags:0x%x' % (frame['eax'], 
+            frame['ebx'], frame['ecx'], frame['edx'], frame['ebp'], frame['edi'], frame['esi'],
+            frame['eip'], frame['esp'], frame['orig_ax'], frame['flags'])
+    else:
+        return None
 class ListHead(object):
     """Represents a struct list_head. But the pointers point to the
     task struct, rather than to another list_head"""
@@ -64,9 +71,13 @@ class TaskUtils():
         self.current_task = current_task
         self.lgr.debug('TaskUtils init with current_task of 0x%x' % current_task)
         self.exec_addrs = {}
+
+    def getCurrentTask(self):
+        return self.current_task
        
-    def getCurrentTaskAddr(self):
-        return self.current_task 
+    def getCurTaskRec(self):
+        cur_task_rec = self.mem_utils.readPtr(self.cpu, self.current_task)
+        return cur_task_rec
 
     def curProc(self):
         cur_task_rec = self.mem_utils.readPtr(self.cpu, self.current_task)
@@ -228,8 +239,59 @@ class TaskUtils():
     
         return tasks
 
+    def getTaskListPtr(self):
+        ''' return address of the task list "next" entry that points to the current task '''
+        task_rec_addr = self.mem_utils.readPtr(self.cpu, self.current_task)
+        seen = set()
+        tasks = {}
+        cpu = self.cpu
+        #print('getTaskStructs current_task is %x' % self.current_task)
+        swapper_addr = self.findSwapper(self.current_task, cpu) 
+        if swapper_addr is None:
+            return tasks
+        #print('using swapper_addr of %x' % swapper_addr)
+        stack = []
+        stack.append((swapper_addr, True))
+        while stack:
+            (task_addr, x,) = stack.pop()
+            if (task_addr, x) in seen:
+                continue
+            seen.add((task_addr, x))
+            seen.add((task_addr, False))
+            task = self.readTaskStruct(task_addr, cpu)
+            #print 'reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next)
+            #print 'reading task struct for got comm of %s ' % (task.comm)
+            tasks[task_addr] = task
+            for child in task.children:
+                if child:
+                    stack.append((child, task_addr))
+    
+            if task.real_parent:
+                stack.append((task.real_parent, False))
+            if self.param.ts_thread_group_list_head != None:
+                if task.thread_group.next:
+                    if task.thread_group.next == task_rec_addr:
+                        return (task_addr + self.param.ts_next)
+                    stack.append((task.thread_group.next, False))
+    
+            if x is True:
+                task.in_main_list = True
+                if task.next:
+                    if task.next == task_rec_addr:
+                        return (task_addr + self.param.ts_next)
+                    stack.append((task.next, True))
+            elif x is False:
+                pass
+            else:
+                task.in_sibling_list = x
+                for s in task.sibling:
+                    if s and s != x:
+                        stack.append((s, x))
+    
+        return None
+
     def currentProcessInfo(self, cpu=None):
-        self.lgr.debug('currentProcessInfo, current_task is 0x%x' % self.current_task)
+        #self.lgr.debug('currentProcessInfo, current_task is 0x%x' % self.current_task)
         #cur_addr = SIM_read_phys_memory(self.cpu, self.current_task, self.mem_utils.WORD_SIZE)
         cur_addr = self.mem_utils.readPtr(self.cpu, self.current_task)
         comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
@@ -271,8 +333,6 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            reg_num = cpu.iface.int_register.get_number(self.mem_utils.getESP())
-            esp = cpu.iface.int_register.read(reg_num)
             reg_num = cpu.iface.int_register.get_number(self.mem_utils.getESP())
             esp = cpu.iface.int_register.read(reg_num)
 
@@ -334,3 +394,63 @@ class TaskUtils():
         '''
 
         return prog_string, arg_string_list
+
+    def getSyscallEntry(self, callnum):
+        ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
+        val = callnum * 4 - self.param.syscall_jump
+        val = val & 0xffffffff
+        entry = self.mem_utils.readPtr(self.cpu, val)
+        return entry
+
+    def frameFromStackSyscall(self):
+        reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
+        esp = self.cpu.iface.int_register.read(reg_num)
+        regs_addr = esp + self.mem_utils.WORD_SIZE
+        regs = self.mem_utils.readPtr(self.cpu, regs_addr)
+        #self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x  regs is 0x%x' % (regs_addr, regs))
+        frame = self.getFrame(regs_addr, self.cpu)
+        return frame
+    
+    def frameFromStack(self):
+        reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
+        esp = self.cpu.iface.int_register.read(reg_num)
+        #self.lgr.debug('frameFromStack esp 0x%x' % (esp))
+        frame = self.getFrame(esp, self.cpu)
+        #print 'frame: %s' % stringFromFrame(frame)
+        #traceback.print_stack()
+        #SIM_break_simulation("debug")
+        return frame
+         
+    '''
+        Given the address of a linux stack frame, return a populated dictionary of its values.
+    '''
+    def getFrame(self, v_addr, cpu):
+            phys_addr = self.mem_utils.v2p(cpu, v_addr)
+            #self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
+            retval = {}
+            retval['ebx'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
+            retval['ecx'] = SIM_read_phys_memory(cpu, phys_addr+self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['edx'] = SIM_read_phys_memory(cpu, phys_addr+2*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['esi'] = SIM_read_phys_memory(cpu, phys_addr+3*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['edi'] = SIM_read_phys_memory(cpu, phys_addr+4*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['ebp'] = SIM_read_phys_memory(cpu, phys_addr+5*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['eax'] = SIM_read_phys_memory(cpu, phys_addr+6*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['eds'] = SIM_read_phys_memory(cpu, phys_addr+7*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['es'] = SIM_read_phys_memory(cpu, phys_addr+8*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['fs'] = SIM_read_phys_memory(cpu, phys_addr+9*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['gs'] = SIM_read_phys_memory(cpu, phys_addr+10*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['orig_ax'] = SIM_read_phys_memory(cpu, phys_addr+11*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['eip'] = SIM_read_phys_memory(cpu, phys_addr+12*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['cs'] = SIM_read_phys_memory(cpu, phys_addr+13*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['flags'] = SIM_read_phys_memory(cpu, phys_addr+14*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['esp'] = SIM_read_phys_memory(cpu, phys_addr+15*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['ss'] = SIM_read_phys_memory(cpu, phys_addr+16*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            return retval
+    def frameFromRegs(self, cpu):
+            regs = {"eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"}
+            frame = {}
+            for reg in regs:
+                frame[reg] = self.mem_utils.getRegValue(cpu, reg)
+            frame['orig_ax'] = frame['eax']
+            frame['flags'] = 0
+            return frame

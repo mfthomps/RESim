@@ -52,6 +52,10 @@ class linuxParams():
     current_task = 0xc2001454
     # int80 vectors here
     sys_entry = 0xc10028a4
+    # sysenter instruction vectors here
+    sysenter = 0xc1002800
+    # where the call jump table computation occurs
+    syscall_compute = 0xc10028e9
     # if int80 is execve, we compute a call to here
     execve = 0xc1002a48
     # from symbol table
@@ -60,7 +64,13 @@ class linuxParams():
     page_fault = 0xc12406e8
     # call edi goes to
     #page_fault = 0xc1241e2a
+    # not symbol, instruct before ret to user
     sys_exit = 0xc10028a2
+    # kallsym
+    do_exit = 0xc1028dd4
+
+    # constant used in syscall jump table calculation
+    syscall_jump = 0x3edb9f00
 
 
 

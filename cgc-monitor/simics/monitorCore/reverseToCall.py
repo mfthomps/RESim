@@ -31,6 +31,7 @@ import pageUtils
 import logging
 import decode
 import memUtils
+import pageUtils
 from monitorLibs import utils
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
@@ -40,6 +41,11 @@ BEWARE syntax errors are not seen.  TBD make unit test
     TBD add other executable pages 
     The log for this is in its own log file
 '''
+class Prec():
+    def __init__(self, cpu, pid=None):
+        self.cpu = cpu
+        self.pid = pid
+
 class reverseToCall():
     def __init__(self, top, param, os_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
             print('call getLogger')
@@ -52,8 +58,9 @@ class reverseToCall():
             #self.lgr = lgr
             self.page_size = page_size
             self.lgr.debug('reverseToCall, in init')
-            self.__param = param
+            self.param = param
             self.os_utils = os_utils
+            ''' hackish for sharing this with genMonitor and cgcMonitor '''
             self.x_pages = None
             self.the_breaks = []
             self.reg = None
@@ -67,12 +74,110 @@ class reverseToCall():
             self.bookmarks = bookmarks
             self.previous_eip = None
             self.step_into = None
+            self.sysenter_cycles = []
+            self.jump_stop_hap = None
+            self.sysenter_hap = None
+            self.enter_break1 = None
+            self.enter_break2 = None
 
-    def setup(self, cpu, x_pages):
+    def noWatchSysenter(self):
+        if self.enter_break1 is not None:
+            self.context_manager.genDeleteBreakpoint(self.enter_break1)
+            self.context_manager.genDeleteBreakpoint(self.enter_break2)
+            self.context_manager.genDeleteHap("Core_Breakpoint_Memop", self.sysenter_hap)
+            self.enter_break1 = None
+
+    def v2p(self, cpu, v):
+        try:
+            phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+            if phys_block.address != 0:
+                return phys_block.address
+            else:
+                if v < self.param.kernel_base:
+                    phys_addr = v & ~self.param.kernel_base 
+                    return phys_addr
+                else:
+                    return 0
+                    
+        except:
+            return None
+
+    def watchSysenter(self, prec):
+        cell = self.top.getCell()
+        if self.enter_break1 is None:
+            #self.enter_break1 = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
+            #self.enter_break2 = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
+            pcell = self.cpu.physical_memory
+            #self.enter_break1 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
+            #self.enter_break2 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
+            #self.sysenter_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
+            self.enter_break1 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
+            self.enter_break2 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
+            self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
+
+    def setup(self, cpu, x_pages, bookmarks=None):
             self.lgr.debug('reverseToCall setup')
             self.cpu = cpu
             self.cell_name = self.top.getTopComponentName(cpu)
             self.x_pages = x_pages
+            if bookmarks is not None: 
+                self.bookmarks = bookmarks
+            if hasattr(self.param, 'sysenter') and self.param.sysenter is not None:
+                '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
+                pid, cell_name, cpu = self.context_manager.getDebugPid() 
+                prec = Prec(cpu, pid)
+                SIM_run_alone(self.watchSysenter, prec)
+
+
+
+    def doBreaks(self, pcell, range_start, page_count, call_ret):
+        size = page_count * pageUtils.PAGE_SIZE
+        if call_ret:
+            # Set exectution breakpoints for "call" and "ret" instructions
+            call_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+               Sim_Access_Execute, range_start, size, 0)
+            self.the_breaks.append(call_break_num)
+            command = 'set-prefix %d "call"' % call_break_num
+            SIM_run_alone(SIM_run_command, command)
+            ret_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+               Sim_Access_Execute, range_start, size, 0)
+            self.the_breaks.append(ret_break_num)
+            command = 'set-prefix %d "ret"' % ret_break_num
+            SIM_run_alone(SIM_run_command, command)
+            self.lgr.debug('done setting breakpoints for call and ret addr: 0x%x len: 0x%x' % (range_start, size))
+        else:
+            break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, 
+                range_start, size, 0)
+            self.the_breaks.append(break_num)
+
+    def pageTableBreaks(self, call_ret):
+        pages = pageUtils.getPageBases(self.cpu, self.lgr, self.param.kernel_base)
+        range_start = None
+        prev_physical = None
+        pcell = self.cpu.physical_memory
+        page_count = 1
+        for page_info in pages:
+            writable = memUtils.testBit(page_info.entry, 1)
+            accessed = memUtils.testBit(page_info.entry, 5)
+            if writable or not accessed:
+                self.lgr.debug('will skip %r %r' % (writable, accessed)) 
+                continue
+            self.lgr.debug('phys: 0x%x  logical: 0x%x' % (page_info.physical, page_info.logical))
+            if range_start is None:
+                range_start = page_info.physical
+                prev_physical = page_info.physical
+            else:
+                if page_info.physical == prev_physical + pageUtils.PAGE_SIZE:
+                    prev_physical = page_info.physical
+                    page_count = page_count + 1
+                else:
+                    self.lgr.debug('Page not contiguous: 0x%x  range_start: 0x%x  prev_physical: 0x%x' % (page_info.physical, range_start, prev_physical))
+                    self.doBreaks(pcell, range_start, page_count, call_ret) 
+                    page_count = 1
+                    range_start = page_info.physical
+                    prev_physical = page_info.physical
+        self.doBreaks(pcell, range_start, page_count, call_ret) 
+        self.lgr.debug('set %d breaks', len(self.the_breaks)) 
 
     def doUncall(self):
         self.need_calls = 0
@@ -88,8 +193,9 @@ class reverseToCall():
         self.lgr.debug('doUncall, added stop hap')
         self.need_calls = 1
         self.uncall = True
-        for item in self.x_pages:
-            self.setBreakRange(self.cell_name, pid, item.address, item.length, self.cpu, comm, True)
+        self.pageTableBreaks(True)
+        #for item in self.x_pages:
+        #    self.setBreakRange(self.cell_name, pid, item.address, item.length, self.cpu, comm, True)
         self.lgr.debug('doUncall, set break range')
         SIM_run_alone(SIM_run_command, 'reverse')
         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
@@ -125,9 +231,25 @@ class reverseToCall():
         return done
 
     def tryBackOne(self, my_args):
+        
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 	        self.tryOneStopped, my_args)
+        self.lgr.debug('tryBackOne from cycle 0x%x' % my_args.cpu.cycles)
         SIM_run_command('rev 1')
+
+    def jumpStopped(self, my_args, one, exception, error_string):
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('jumpStopped at 0x%x' % eip)
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.jump_stop_hap)
+        self.top.skipAndMail()
+
+    def jumpCycle(self, cycle):
+        self.lgr.debug('would jump to 0x%x' % cycle)
+        #self.jump_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+	#        self.jumpStopped, None)
+        cmd = 'skip-to cycle = %d ' % cycle
+        SIM_run_command(cmd)
+        self.top.skipAndMail()
 
     def tryOneStopped(self, my_args, one, exception, error_string):
         '''
@@ -139,7 +261,7 @@ class reverseToCall():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
         #cmd = 'reverse-step-instruction'
-        self.lgr.debug('tryOneStopped, entered')
+        self.lgr.debug('tryOneStopped, entered at cycle 0x%x' % self.cpu.cycles)
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('tryOneStopped reversed 1, eip: %x  %s' % (eip, instruct[1]))
@@ -153,6 +275,28 @@ class reverseToCall():
                 self.cleanup(self.cpu)
                 self.top.skipAndMail()
                 self.context_manager.setExitBreak(self.cpu)
+        elif len(self.sysenter_cycles) > 0:
+            mn = decode.getMn(instruct[1])
+            cur_cycles = self.cpu.cycles
+            cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
+            if pid == my_args.pid and (mn == 'sysexit' or mn == 'iretd'):
+                self.lgr.debug('is sysexit, cur_cycles is 0x%x' % cur_cycles)
+                prev_cycles = None
+                got_it = None
+                for cycles in sorted(self.sysenter_cycles):
+                    if cycles > cur_cycles:
+                        self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                        got_it = prev_cycles - 1
+                        break
+                    else:
+                        self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
+                        prev_cycles = cycles
+                if not got_it:
+                    self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
+                    got_it = prev_cycles
+                SIM_run_alone(self.jumpCycle, got_it)
+                done = True
+
         if not done:
             self.lgr.debug('tryOneStopped, back one did not work, starting at %x' % eip)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -234,8 +378,9 @@ class reverseToCall():
         	     self.stoppedReverseModReg, my_args)
             self.lgr.debug('doRevToModReg, added stop hap')
             self.cell_name = self.top.getTopComponentName(self.cpu)
-            for item in self.x_pages:
-                self.setBreakRange(self.cell_name, pid, item.address, item.length, self.cpu, comm, False, reg)
+            self.pageTableBreaks(False)
+            #for item in self.x_pages:
+            #    self.setBreakRange(self.cell_name, pid, item.address, item.length, self.cpu, comm, False, reg)
             self.lgr.debug('doRevToModReg, set break range')
             #SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
             SIM_run_alone(SIM_run_command, 'reverse')
@@ -503,3 +648,20 @@ class reverseToCall():
                     start))
 
             start = limit
+
+    def sysenterHap(self, prec, third, forth, memory):
+        #reversing = SIM_run_command('simulation-reversing')
+        reversing = False
+        if reversing:
+            return
+        else:
+            cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
+            if cur_cpu == prec.cpu and pid == prec.pid:
+                cycles = prec.cpu.cycles
+                if cycles not in self.sysenter_cycles:
+                    eip = self.top.getEIP(prec.cpu)
+                    self.lgr.debug('sysenterHap at 0x%x, add cycle 0x%x' % (eip, cycles))
+                    self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
+                    self.sysenter_cycles.append(cycles)
+            
+

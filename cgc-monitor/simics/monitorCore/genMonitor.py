@@ -13,7 +13,13 @@ import isMonitorRunning
 import reverseToCall
 import reverseToAddr
 import pFamily
+import traceOpen
 import pageFaultGen
+import hapCleaner
+import reverseToUser
+import findKernelWrite
+import syscall
+
 target = 'VDR'
 class cellConfig():
     cells = {}
@@ -48,38 +54,6 @@ class Prec():
         self.pid = pid
 
 
-class StopAction():
-    def __init__(self, hap_cleaner, breakpoints, flist):
-        self.hap_clean = hap_cleaner
-        if breakpoints is not None:
-            self.breakpoints = breakpoints
-        else:
-            self.breakpoints = []
-        if flist is not None:
-            self.flist = flist
-        else:
-            self.flist = []
-
-class HapCleaner():
-    hlist = None 
-    def __init__(self):
-        self.hlist = []
-
-    class HapType():
-        def __init__(self, htype, hap):
-            self.htype = htype
-            self.hap = hap
-
-    def add(self, htype, hap):
-        ht = self.HapType(htype, hap)
-        self.hlist.append(ht)
-
-class SyscallInfo():
-    def __init__(self, cpu, pid, callnum):
-        self.cpu = cpu
-        self.pid = pid
-        self.callnum = callnum
-
 class GenMonitor():
     SIMICS_BUG=False
     PAGE_SIZE = 4096
@@ -99,6 +73,8 @@ class GenMonitor():
         self.mode_hap = None
         self.hack_list = []
         self.genInit()
+        self.traceOpen = None
+        self.sysenter_cycles = []
 
     def genInit(self):
         '''
@@ -122,12 +98,12 @@ class GenMonitor():
 
     def modeChanged(self, cpu, one, old, new):
         cpl = memUtils.getCPL(cpu)
-        self.lgr.debug('modeChanged now %d' % cpl)
-        self.lgr.debug('mode changed cpl reports %d trigger_obj is %s old: %d  new: %d' % (cpl, str(one), old, new))
+        eip = self.mem_utils.getRegValue(cpu, 'eip')
+        self.lgr.debug('mode changed cpl reports %d trigger_obj is %s old: %d  new: %d  eip: 0x%x' % (cpl, str(one), old, new, eip))
         SIM_break_simulation('mode changed, break simulation')
         
     def stopHap(self, stop_action, one, exception, error_string):
-        self.lgr.debug('stopHap')
+        self.lgr.debug('stopHap cycle: 0x%x' % stop_action.hap_clean.cpu.cycles)
         for hc in stop_action.hap_clean.hlist:
             if hc.hap is not None:
                 self.lgr.debug('will delete hap %s' % str(hc.hap))
@@ -149,9 +125,9 @@ class GenMonitor():
         if cpl != 0:
             self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, cpu)
-            hap_clean = HapCleaner()
+            hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
-            stop_action = StopAction(hap_clean, None)
+            stop_action = hapCleaner.StopAction(hap_clean, None)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             SIM_continue(0)
@@ -163,14 +139,16 @@ class GenMonitor():
         if cpl == 0:
             self.lgr.debug('run2User in kernel space (%d), set hap' % cpl)
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, cpu)
-            hap_clean = HapCleaner()
+            hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
-            stop_action = StopAction(hap_clean, None, flist)
+            stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
+            if len(flist) == 1:
+                flist[0]()
 
     def findCurrentTaskAddr(self, cpu, cur_task):
         ''' Look for the Linux data address corrsponding to the current_task symbol 
@@ -236,16 +214,19 @@ class GenMonitor():
 
         self.task_utils = taskUtils.TaskUtils(cpu, self.param, self.mem_utils, current_task, self.lgr)
         self.context_manager = genContextMgr.GenContextMgr(self, self.task_utils, self.lgr) 
-        self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager, self.lgr)
+        #self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager, self.lgr)
+        self.bookmarks = {}
         ''' hack os_utils fu '''
         os_p_utils = {}
         os_p_utils[target] = self.task_utils 
         self.rev_to_call = reverseToCall.reverseToCall(self, self.param, os_p_utils,
-                 self.PAGE_SIZE, self.context_manager, 'nobody', self.is_monitor_running, self.bookmarks, self.log_dir)
+                 self.PAGE_SIZE, self.context_manager, 'revToCall', self.is_monitor_running, None, self.log_dir)
         #self.os_p_utils = linuxProcessUtils.linuxProcessUtils(self, 'thrower', self.param,
         #            self.cell_config, None, None, self.cur_task[cpu], self.mem_utils, self.lgr, False)
         self.pfamily = pFamily.Pfamily(target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
         self.page_faults = pageFaultGen.PageFaultGen(target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
+        cell = self.cell_config.cell_context[target]
+        self.traceOpen = traceOpen.TraceOpen(self.param, self.mem_utils, self.task_utils, cpu, cell, self.lgr)
         
     def tasks(self):
         tasks = self.task_utils.getTaskStructs()
@@ -254,21 +235,38 @@ class GenMonitor():
 
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
-        self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps)
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        self.bookmarks[pid].setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps)
 
     def debug(self, dumb=None):
-        port = 9123 
-        cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d' % (cpu.name, port, pid))
-        self.context_manager.setDebugPid(pid, target, cpu)
-        cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, port)
-        SIM_run_command(cmd)
-        cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
-        self.setDebugBookmark('_start+1', cpu)
-        self.bookmarks.setOrigin(cpu)
-        ''' tbd read elf and pass executable pages? '''
-        self.rev_to_call.setup(cpu, [])
+        
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        if pid is None:
+            ''' Our first debug '''
+            port = 9123 
+            cpu, comm, pid = self.task_utils.curProc() 
+            self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d' % (cpu.name, port, pid))
+            self.context_manager.setDebugPid(pid, target, cpu)
+            cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, port)
+            SIM_run_command(cmd)
+            cmd = 'enable-reverse-execution'
+            SIM_run_command(cmd)
+            self.bookmarks[pid] = bookmarkMgr.bookmarkMgr(self, self.context_manager, self.lgr)
+            self.setDebugBookmark('_start+1', cpu)
+            self.bookmarks[pid].setOrigin(cpu)
+            ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
+            self.rev_to_call.setup(cpu, [], bookmarks=self.bookmarks[pid])
+            self.context_manager.watchTasks()
+        else:
+            ''' already debugging.  change to current process '''
+            cpu, comm, pid = self.task_utils.curProc() 
+            self.lgr.debug('debug, already debugging, change process pid to %d' % pid)
+            self.context_manager.setDebugPid(pid, target, cpu)
+            if pid not in self.bookmarks:
+                self.bookmarks[pid] = bookmarkMgr.bookmarkMgr(self, self.context_manager, self.lgr)
+                self.bookmarks[pid].setOrigin(cpu)
+            self.rev_to_call.setup(cpu, [], bookmarks=self.bookmarks[pid])
+            self.context_manager.watchTasks()
 
 
     def show(self):
@@ -283,25 +281,6 @@ class GenMonitor():
             print('%s%5d  %s' % (tabs, prec.pid, prec.proc))
             tabs += '\t'
 
-
-    def syscallHap(self, syscall_info, third, forth, memory):
-        cpu = SIM_current_processor()
-        if cpu != syscall_info.cpu:
-            self.lgr.debug('syscallHap, wrong cpu %s %s' % (cpu.name, syscall_info.cpu.name))
-            return
-        cpu, comm, pid = self.task_utils.curProc() 
-        eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-        self.lgr.debug('syscallHap in proc %d (%s), eax: 0x%x  look for %s' % (pid, comm, eax, str(syscall_info.callnum)))
-        if syscall_info.pid is None or syscall_info.pid == pid: 
-            eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-            if syscall_info.callnum is not None:
-                eax = self.mem_utils.getRegValue(syscall_info.cpu, 'eax')
-                if eax == syscall_info.callnum:
-                    self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(syscall_info.cpu)))
-                    SIM_break_simulation('syscall')
-            else:
-                self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(syscall_info.cpu)))
-                SIM_break_simulation('syscall')
 
 
     def signalHap(self, signal_info, one, exception_number):
@@ -333,9 +312,9 @@ class GenMonitor():
         self.lgr.debug('runToSyscall80') 
         self.scall_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
                  self.int80Hap, cpu, 0x180) 
-        hap_clean = HapCleaner()
+        hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", self.scall_hap)
-        stop_action = StopAction(hap_clean, [], None)
+        stop_action = hapCleaner.StopAction(hap_clean, [], None)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
@@ -346,7 +325,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('runToSignal, signal given is %s' % str(signal)) 
 
-        sig_info = SyscallInfo(cpu, pid, signal)
+        sig_info = syscall.SyscallInfo(cpu, pid, signal)
         #max_intr = 31
         max_intr = 1028
         if signal is None:
@@ -356,9 +335,9 @@ class GenMonitor():
             sig_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
                      self.signalHap, sig_info, signal) 
 
-        hap_clean = HapCleaner()
+        hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", sig_hap)
-        stop_action = StopAction(hap_clean, [], None)
+        stop_action = hapCleaner.StopAction(hap_clean, [], None)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
@@ -368,7 +347,7 @@ class GenMonitor():
     def debugProc(self, proc):
         self.lgr.debug('debugProc for %s' % proc)
         flist = [self.toUser, self.debug]
-        self.toProc(proc, flist=flist)
+        self.toProc(proc, None, flist)
 
     def changedThread(self, cpu, third, forth, memory):
         cur_task_rec = self.mem_utils.readPtr(cpu, self.cur_task[cpu])
@@ -384,6 +363,8 @@ class GenMonitor():
         cur_task_rec = SIM_get_mem_op_value_le(memory)
         pid = self.mem_utils.readWord32(cpu, cur_task_rec + self.param.ts_pid)
         if pid != 0:
+            if prec.pid is not None:
+                self.lgr.debug('runToProc pid is %d, look for %d' % (pid, prec.pid))
             comm = self.mem_utils.readString(cpu, cur_task_rec + self.param.ts_comm, 16)
             if (prec.pid is not None and prec.pid == pid) or (prec.pid is None and comm == prec.proc):
                 self.lgr.debug('got proc %s pid is %d' % (comm, pid))
@@ -400,23 +381,30 @@ class GenMonitor():
 
     def runToUserSpace(self):
         self.lgr.debug('runToUserSpace')
-        self.toUser()
+        self.is_monitor_running.setRunning(True)
+        flist = [self.skipAndMail]
+        self.toUser(flist)
 
     def toKernel(self): 
         cpu = self.cell_config.cpuFromCell(target)
         self.run2Kernel(cpu)
 
-    def toProc(self, proc, pid=None, flist=None):
+    def toProc(self, proc, pid, flist):
+        ''' TBD, if already in proc, just attach debugger '''
         cpu = self.cell_config.cpuFromCell(target)
-        self.lgr.debug('toProc current_task is 0x%x   ' % (self.cur_task[cpu]))
+        self.lgr.debug('toProc current_task is 0x%x  pid %s ' % (self.cur_task[cpu], str(pid)))
         cell = self.cell_config.cell_context[target]
         prec = Prec(cpu, proc, pid)
+        if pid is not None:
+            self.lgr.debug('toProc, pid %d prec.pid %d' % (pid, prec.pid))
+        else:
+            self.lgr.debug('pid is None')
         proc_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, self.cur_task[cpu], self.mem_utils.WORD_SIZE, 0)
         self.proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, proc_break)
         
-        hap_clean = HapCleaner()
+        hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Breakpoint_Memop", self.proc_hap)
-        stop_action = StopAction(hap_clean, [proc_break], flist)
+        stop_action = hapCleaner.StopAction(hap_clean, [proc_break], flist)
         #self.stop_proc_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         #	     self.stoppedToProc, fun_list)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -425,22 +413,6 @@ class GenMonitor():
         if not status:
             SIM_run_command('c')
        
-    def runToSyscall(self, callnum=None): 
-        self.lgr.debug('runToSyscall callnum is %s' % str(callnum)) 
-        cell = self.cell_config.cell_context[target]
-        proc_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, self.mem_utils.WORD_SIZE, 0)
-        pid, cell_name, cpu = self.context_manager.getDebugPid() 
-        syscall_info = SyscallInfo(cpu, pid, callnum)
-        proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break)
-        hap_clean = HapCleaner()
-        hap_clean.add("Core_Breakpoint_Memop", proc_hap)
-        stop_action = StopAction(hap_clean, [proc_break], None)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
-        status = self.is_monitor_running.isRunning()
-        if not status:
-            SIM_run_command('c')
-
     def setCurTaskHap(self):
         cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('setBreaks current_task is 0x%x   ' % (self.cur_task[cpu]))
@@ -451,8 +423,7 @@ class GenMonitor():
 
     def getEIP(self, cpu=None):
         if cpu is None:
-            dum, dum2, cpu = self.__context_manager.getDebugPid() 
-        cell_name = self.getTopComponentName(cpu)
+            dum, dum2, cpu = self.context_manager.getDebugPid() 
         eip = self.mem_utils.getRegValue(cpu, 'eip')
         return eip
         
@@ -479,7 +450,7 @@ class GenMonitor():
             self.__gdb_mailbox = None
 
     def runSkipAndMailAlone(self, cycles): 
-        dum, dum2, cpu = self.context_manager.getDebugPid() 
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
         if cpu is None:
             self.lgr.error("no cpu in runSkipAndMailAlone")
             return
@@ -489,7 +460,7 @@ class GenMonitor():
         self.lgr.debug('skipAndMailAlone current cycle is %x eip: %x %s requested %d cycles' % (current, eip, instruct[1], cycles))
         if cycles > 0:
             previous = current - cycles 
-            start = self.bookmarks.getCycle('_start+1')
+            start = self.bookmarks[pid].getCycle('_start+1')
             if previous > start:
                 self.context_manager.clearExitBreak()
                 count = 0
@@ -511,6 +482,8 @@ class GenMonitor():
                 self.context_manager.setExitBreak(cpu)
             else:
                 self.lgr.debug('skipAndRunAlone was asked to back up before start of recording')
+        self.is_monitor_running.setRunning(False)
+        self.lgr.debug('setRunning to false, now set mbox to 0x%x' % eip)
         self.gdbMailbox('0x%x' % eip)
         print('Monitor done')
 
@@ -523,8 +496,10 @@ class GenMonitor():
         #current = SIM_cycle_count(cpu)
         eip = self.getEIP(cpu)
         #instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-        cycles -= 1
+        cycles =- 1
         if cycles <= 0:
+            self.lgr.debug('skipAndMail, set running false, and update mbox directly')
+            self.is_monitor_running.setRunning(False)
             self.gdbMailbox('0x%x' % eip)
         else:
             '''
@@ -535,17 +510,23 @@ class GenMonitor():
             SIM_run_alone(self.runSkipAndMailAlone, cycles)
 
     def goToOrigin(self):
-        self.bookmarks.goToOrigin()
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        self.lgr.debug('goToOrigin for pid %d' % pid)
+        self.bookmarks[pid].goToOrigin()
 
     def goToDebugBookmark(self, mark):
+        self.lgr.goToDebugBookmark('goToDebugBookmark %s' % mark)
         mark = mark.replace('|','"')
-        self.bookmarks.goToDebugBookmark(mark)
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        self.bookmarks[pid].goToDebugBookmark(mark)
 
     def listBookmarks(self):
-        self.bookmarks.listBookmarks()
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        self.bookmarks[pid].listBookmarks()
 
     def getBookmarks(self):
-        return self.bookmarks.getBookmarks()
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        return self.bookmarks[pid].getBookmarks()
 
     def doReverse(self, extra_back=0):
         dum, dum2, cpu = self.context_manager.getDebugPid() 
@@ -594,7 +575,7 @@ class GenMonitor():
         self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
         if prev is not None:
             instruct = SIM_disassemble_address(cpu, prev, 1, 0)
-            self.lgr.debug('reverseToCallInstruction instruct is %s, prev: 0x%x' % (instruct[1], prev))
+            self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
             if instruct[1] == 'int 128' or (not step_into and instruct[1].startswith('call')):
                 self.revToAddr(prev)
             else:
@@ -641,7 +622,7 @@ class GenMonitor():
             self.lgr.debug('getEIPWhenStopped, pid %d' % (pid)) 
             eip = self.getEIP(cpu)
             if self.gdb_mailbox is not None:
-                self.lgr.debug('getEIPWhenStopped mbox is %s pid is %d (%s)' % (self.gdb_mailbox, pid, comm))
+                self.lgr.debug('getEIPWhenStopped mbox is %s pid is %d (%s) cycle: 0x%x' % (self.gdb_mailbox, pid, comm, cpu.cycles))
                 retval = 'mailbox:%s' % self.gdb_mailbox
                 print retval
                 return retval
@@ -674,10 +655,18 @@ class GenMonitor():
         self.context_manager.showIdaMessage()
 
     def resynch(self):
-        pid, cell, cpu = self.context_manager.getDebugPid() 
-        self.lgr.debug('resynch to pid: %d' % pid)
-        flist = [self.toUser]
-        self.toProc(None, pid=pid, flist=flist)
+        debug_pid, debug_cell, debug_cpu = self.context_manager.getDebugPid() 
+        cpu, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug('resynch to pid: %d' % debug_pid)
+        #self.is_monitor_running.setRunning(True)
+        if pid == debug_pid:
+            self.lgr.debug('rsynch, already in proc')
+            flist = [self.skipAndMail]
+            self.toUser(flist) 
+        else:
+            flist = [self.toUser, self.skipAndMail]
+            self.lgr.debug('rsynch, call toProc for pid %d' % debug_pid)
+            self.toProc(None, debug_pid, flist)
 
     def traceExecve(self):
         self.pfamily.traceExecve()
@@ -685,6 +674,109 @@ class GenMonitor():
     def watchPageFaults(self):
         self.page_faults.watchPageFaults()
 
+    def traceOpenSyscall(self):
+        self.lgr.debug('about to call traceOpen')
+        self.traceOpen.traceOpenSyscall()
+
+    def getCell(self):
+        return self.cell_config.cell_context[target]
+
+    def reverseToUser(self):
+        cpu = self.cell_config.cpuFromCell(target)
+        cell = self.cell_config.cell_context[target]
+        rtu = reverseToUser.ReverseToUser(self.param, self.lgr, cpu, cell)
+
+    def getDebugFirstCycle(self):
+        print('start_cycle:%x' % self.bookmarks.getFirstCycle())
+
+    def getFirstCycle(self):
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        return self.bookmarks[pid].getFirstCycle()
+
+    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1):
+        '''
+        Runs backwards until a write to the given address is found.
+        '''
+        self.context_manager.clearExitBreak()
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        cell_name = self.getTopComponentName(cpu)
+        self.lgr.debug('stopAtKernelWrite, call findKernelWrite for 0x%x' % addr)
+        self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, addr, self.task_utils, self.task_utils,
+            self.context_manager, self.param, self.bookmarks[pid], self.lgr, rev_to_call, num_bytes) 
+
+    def revTaintAddr(self, addr):
+        '''
+        back track the value at a given memory location, where did it come from?
+        '''
+        self.lgr.debug('revTaintAddr for 0x%x' % addr)
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        cell_name = self.getTopComponentName(cpu)
+        eip = self.getEIP(cpu)
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        value = self.mem_utils.readWord32(cpu, addr)
+        bm='backtrack START:0x%x inst:"%s" track_addr:0x%x track_value:0x%x' % (eip, instruct[1], addr, value)
+        self.bookmarks[pid].setDebugBookmark(bm)
+        self.lgr.debug('BT add bookmark: %s' % bm)
+        self.context_manager.setIdaMessage('')
+        self.stopAtKernelWrite(addr, self.rev_to_call)
+
+    def revTaintReg(self, reg):
+        ''' back track the value in a given register '''
+        self.lgr.debug('revTaintReg for %s' % reg)
+        pid, dum2, cpu = self.context_manager.getDebugPid() 
+        cell_name = self.getTopComponentName(cpu)
+        eip = self.getEIP(cpu)
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        reg_num = cpu.iface.int_register.get_number(reg)
+        value = cpu.iface.int_register.read(reg_num)
+        self.lgr.debug('revTaintReg for reg value %x' % value)
+        bm='backtrack START:0x%x inst:"%s" track_reg:%s track_value:0x%x' % (eip, instruct[1], reg, value)
+        self.bookmarks[pid].setDebugBookmark(bm)
+        self.context_manager.setIdaMessage('')
+        self.rev_to_call.doRevToModReg(reg, True)
+
+    def rev1(self):
+        dum, dum2, cpu = self.context_manager.getDebugPid() 
+        new_cycle = cpu.cycles - 1
+        result = SIM_run_command('skip-to cycle=0x%x' % new_cycle)
+        self.lgr.debug('rev1 result %s' % result)
+
+    def test1(self):
+        
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        cycles = cpu.cycles
+        print('first skip-to cycle=0x%x' % cycles)
+        for i in range(200):
+            cycles = cycles - 1
+            cycles = cycles & 0xFFFFFFFFFFFFFFFF
+            print('this skip-to cycle=0x%x' % cycles)
+            SIM_run_command('skip-to cycle=0x%x' % cycles)
+            eip = self.getEIP(cpu)
+            cpl = memUtils.getCPL(cpu)
+            instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+            print('0x%x pl:%s  %s' % (eip, cpl, instruct[1]))
+             
+    def runToSyscall(self, callnum = None):
+        cell = self.cell_config.cell_context[target]
+        self.is_monitor_running.setRunning(True)
+        if callnum == 0:
+            callnum = None
+        self.lgr.debug('runToSyscall for callnumm %s' % callnum)
+        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, self.lgr, callnum=callnum)
+
+    def traceSyscall(self, callnum = None):
+        cell = self.cell_config.cell_context[target]
+        self.is_monitor_running.setRunning(True)
+        if callnum == 0:
+            callnum = None
+        self.lgr.debug('runToSyscall for callnumm %s' % callnum)
+        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, self.lgr, callnum=callnum, trace=True)
+
+    def noDebug(self):
+        cmd = 'disable-reverse-execution'
+        SIM_run_command(cmd)
+        self.rev_to_call.noWatchSysenter()
+ 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

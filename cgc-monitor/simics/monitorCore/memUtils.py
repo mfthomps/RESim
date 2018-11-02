@@ -50,6 +50,11 @@ def bitRange(value, start, end):
     retval = shifted & mask
     return retval
 
+def setBitRange(initial, value, start):
+    shifted = value << start
+    retval = initial | shifted
+    return retval
+
 '''
 def getBits( allbits, lsb, msb )
     mask = ~(0xffffffff << (msb + 1 - lsb)) << lsb 
