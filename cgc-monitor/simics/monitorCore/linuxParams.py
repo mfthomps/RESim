@@ -72,6 +72,7 @@ class linuxParams():
     # constant used in syscall jump table calculation
     syscall_jump = 0x3edb9f00
 
+    unistd = '/mnt/ubuntu_img/linux-2.6.32/linux-2.6.32/arch/x86/include/asm/unistd_32.h'
 
 
 #['linux_tracker', {'version_string': 'Linux', 'ts_indirect': True, 'ts_next_relative': True, 'kernel_base': 3221225472, 'ram_base': 0, 'stack_size': 8192, 'os32bit': True, 'ts_offsets': {'mm': 264, 'active_mm': 268, 'parent': 328, 'sibling_list_head': 340, 'tgid': 320, 'group_leader': 348, 'pid': 316, 'next': 236, 'real_parent': 324, 'state': 0, 'children_list_head': 332, 'comm': 532, 'thread_group_list_head': 404, 'prev': 240}, 'tracker_version': 4582}]

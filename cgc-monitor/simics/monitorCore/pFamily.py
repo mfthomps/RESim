@@ -1,5 +1,6 @@
 from simics import *
 import memUtils
+import os
 from genMonitor import Prec
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
@@ -35,13 +36,23 @@ class Pfamily():
                 prec_addr = tasks[t].parent
                 return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
 
-    def execveHap(self, hap_cpu, third, forth, memory):
+    def execveHap(self, look4_prec, third, forth, memory):
         cpu = SIM_current_processor()
-        if cpu != hap_cpu:
-            self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
+        if cpu != look4_prec.cpu:
+            self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
             return
         cpu, comm, pid = self.task_utils.curProc() 
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, None, cpu)
+        if look4_prec.proc is not None:
+            if prog_string is None:
+                return
+            fname = os.path.basename(prog_string)
+            if not fname.startswith(look4_prec.proc):
+                ''' not the proc we are looking for '''
+                #self.lgr.debug('%s does not start with %s' % (fname, look4_prec.proc))
+                return
+            else:
+                self.lgr.debug('execveHap found proc we are looking for %s' % prog_string)
         nargs = min(4, len(arg_string_list))
         arg_string = ''
         for i in range(nargs):
@@ -69,16 +80,19 @@ class Pfamily():
             self.report_fh.write('%s %s\n' % (prog_string, arg_string))
             self.prev_parent = None
             self.prev_tabs = ''
-         
+        if look4_prec.proc is not None:
+            self.report_fh.flush() 
+            SIM_break_simulation('execve %s' % prog_string)
         #print('execve from %d (%s) prog_string %s' % (pid, comm, prog_string))
         #for arg in arg_string_list:
         #    print(arg)
          
 
-    def traceExecve(self):
+    def traceExecve(self, comm=None):
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
+        look4_prec = Prec(cpu, comm, None)
         self.lgr.debug('toExecve set break at 0x%x' % self.param.execve)
         proc_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.execve, self.mem_utils.WORD_SIZE, 0)
-        proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.execveHap, cpu, proc_break)
+        proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.execveHap, look4_prec, proc_break)
         self.report_fh = open('/tmp/pfamily.txt', 'w')

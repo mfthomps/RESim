@@ -116,11 +116,16 @@ class memUtils():
                 del read_data
                 return s
             s += chr(v)
-    
-        return None
+        if len(s) > 0:
+            return s
+        else: 
+            return None
     
     def readWord32(self, cpu, vaddr):
         return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 4)
+
+    def readWord16(self, cpu, vaddr):
+        return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 2)
     
 
     def readPtr(self, cpu, vaddr):
@@ -146,13 +151,13 @@ class memUtils():
         return reg_value
 
     def getESP(self):
-        if self.WORD_SIZE == 32:
+        if self.WORD_SIZE == 4:
             return 'esp'
         else:
             return 'rsp'
 
     def getSigned(self, val):
-        if self.WORD_SIZE == 32:
+        if self.WORD_SIZE == 4:
             if(val & 0x80000000):
                 val = -0x100000000 + val
         else:
@@ -161,13 +166,13 @@ class memUtils():
         return val
 
     def getUnsigned(self, val):
-        if self.WORD_SIZE == 32:
+        if self.WORD_SIZE == 4:
             return val & 0xFFFFFFFF
         else:
             return val & 0xFFFFFFFFFFFFFFFF
 
     def getEIP(self):
-        if self.WORD_SIZE == 32:
+        if self.WORD_SIZE == 4:
             return 'eip'
         else:
             return 'rip'

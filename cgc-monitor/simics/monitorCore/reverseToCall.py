@@ -660,8 +660,8 @@ class reverseToCall():
                 cycles = prec.cpu.cycles
                 if cycles not in self.sysenter_cycles:
                     eip = self.top.getEIP(prec.cpu)
-                    self.lgr.debug('sysenterHap at 0x%x, add cycle 0x%x' % (eip, cycles))
-                    self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
+                    #self.lgr.debug('sysenterHap at 0x%x, add cycle 0x%x' % (eip, cycles))
+                    #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     self.sysenter_cycles.append(cycles)
             
 

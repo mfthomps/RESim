@@ -19,6 +19,7 @@ import hapCleaner
 import reverseToUser
 import findKernelWrite
 import syscall
+import traceProcs
 
 target = 'VDR'
 class cellConfig():
@@ -227,6 +228,8 @@ class GenMonitor():
         self.page_faults = pageFaultGen.PageFaultGen(target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
         cell = self.cell_config.cell_context[target]
         self.traceOpen = traceOpen.TraceOpen(self.param, self.mem_utils, self.task_utils, cpu, cell, self.lgr)
+        self.traceProcs = traceProcs.TraceProcs(self.lgr)
+        self.trace_fh = open('/tmp/syscall_trace.txt', 'w')
         
     def tasks(self):
         tasks = self.task_utils.getTaskStructs()
@@ -424,6 +427,8 @@ class GenMonitor():
     def getEIP(self, cpu=None):
         if cpu is None:
             dum, dum2, cpu = self.context_manager.getDebugPid() 
+            if cpu is None:
+                cpu = self.cell_config.cpuFromCell(target)
         eip = self.mem_utils.getRegValue(cpu, 'eip')
         return eip
         
@@ -668,8 +673,8 @@ class GenMonitor():
             self.lgr.debug('rsynch, call toProc for pid %d' % debug_pid)
             self.toProc(None, debug_pid, flist)
 
-    def traceExecve(self):
-        self.pfamily.traceExecve()
+    def traceExecve(self, comm=None):
+        self.pfamily.traceExecve(comm)
 
     def watchPageFaults(self):
         self.page_faults.watchPageFaults()
@@ -680,6 +685,9 @@ class GenMonitor():
 
     def getCell(self):
         return self.cell_config.cell_context[target]
+
+    def getCPU(self):
+        return self.cell_config.cpuFromCell(target)
 
     def reverseToUser(self):
         cpu = self.cell_config.cpuFromCell(target)
@@ -762,20 +770,36 @@ class GenMonitor():
         if callnum == 0:
             callnum = None
         self.lgr.debug('runToSyscall for callnumm %s' % callnum)
-        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, self.lgr, callnum=callnum)
+        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, None, self.lgr, callnum=callnum)
 
-    def traceSyscall(self, callnum = None):
+    def traceSyscall(self, callnum=None):
         cell = self.cell_config.cell_context[target]
         self.is_monitor_running.setRunning(True)
         if callnum == 0:
             callnum = None
         self.lgr.debug('runToSyscall for callnumm %s' % callnum)
-        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, self.lgr, callnum=callnum, trace=True)
+        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
+                           self.context_manager, self.traceProcs, self.lgr, callnum=callnum, trace=True, trace_fh = self.trace_fh)
+
+    def traceProcesses(self):
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('vfork'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('clone'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('execve'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('open'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('pipe'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('pipe2'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('close'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('dup'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('dup2'))
+        self.traceSyscall(callnum=self.task_utils.syscallNumber('socketcall'))
 
     def noDebug(self):
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_to_call.noWatchSysenter()
+
+    def showProcTrace(self):
+        self.traceProcs.showAll()
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -1,5 +1,6 @@
 from simics import *
 import osUtils
+import syscallNumbers
 LIST_POISON2 = object()
 def stringFromFrame(frame):
     if frame is not None:
@@ -71,6 +72,7 @@ class TaskUtils():
         self.current_task = current_task
         self.lgr.debug('TaskUtils init with current_task of 0x%x' % current_task)
         self.exec_addrs = {}
+        self.syscall_numbers = syscallNumbers.SyscallNumbers(self.param)
 
     def getCurrentTask(self):
         return self.current_task
@@ -239,6 +241,13 @@ class TaskUtils():
     
         return tasks
 
+    def getRecAddrForPid(self, pid):
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+           if ts_list[ts].pid == pid:
+               return ts
+        return None
+ 
     def getTaskListPtr(self):
         ''' return address of the task list "next" entry that points to the current task '''
         task_rec_addr = self.mem_utils.readPtr(self.cpu, self.current_task)
@@ -301,8 +310,11 @@ class TaskUtils():
     def getMemUtils(self):
         return self.mem_utils
 
+    def getExecProgAddr(self, pid, cpu):
+        return self.exec_addrs[pid].prog_addr
+
     def readExecParamStrings(self, pid, cpu):
-        #self.lgr.debug('readExecParamStrings with pid %d' % pid)
+        self.lgr.debug('readExecParamStrings with pid %d' % pid)
         if pid is None:
             self.lgr.debug('readExecParamStrings called with pid of None')
             return None, None, None
@@ -320,6 +332,8 @@ class TaskUtils():
                     #self.lgr.debug('readExecParamStrings on %s adding arg %s' % (self.cell_name, arg_string))
 
             prog_string = prog_string.strip()
+        else:
+            self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[pid].prog_addr)
         return prog_string, arg_string_list
 
     def getProcArgsFromStack(self, pid, finishCallback, cpu):
@@ -338,17 +352,20 @@ class TaskUtils():
 
             sptr = esp + 2*self.mem_utils.WORD_SIZE
             argv = self.mem_utils.readPtr(cpu, sptr)
+            #SIM_break_simulation('proc args, sptr is 0x%x  esp 0x%x' % (sptr, esp))
             while not done and i < limit:
                 xaddr = argv + mult*self.mem_utils.WORD_SIZE
                 arg_addr = self.mem_utils.readPtr(cpu, xaddr)
                 if arg_addr is not None and arg_addr != 0:
-                   #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                   self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
                    arg_addr_list.append(arg_addr)
+                else:
+                   done = True
                 mult = mult + 1
                 i = i + 1
             sptr = esp + self.mem_utils.WORD_SIZE
             prog_addr = self.mem_utils.readPtr(cpu, sptr)
-            #self.lgr.debug('getProcArgsFromStack %s pid: %d esp: 0x%x argv 0x%x' % (self.cell_name, pid, esp, argv))
+            self.lgr.debug('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
         else:
             reg_num = cpu.iface.int_register.get_number("rsi")
             rsi = cpu.iface.int_register.read(reg_num)
@@ -376,7 +393,7 @@ class TaskUtils():
 
         self.exec_addrs[pid] = osUtils.execStrings(cpu, pid, arg_addr_list, prog_addr, finishCallback)
         prog_string, arg_string_list = self.readExecParamStrings(pid, cpu)
-        self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
+        #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
         #if prog_string == 'cfe-poll-player':
         #    SIM_break_simulation('debug')
         #self.lgr.debug('args are %s' % str(arg_string_list))
@@ -454,3 +471,8 @@ class TaskUtils():
             frame['orig_ax'] = frame['eax']
             frame['flags'] = 0
             return frame
+
+    def syscallName(self, callnum):
+        return self.syscall_numbers.syscalls[callnum]
+    def syscallNumber(self, callname):
+        return self.syscall_numbers.callnums[callname]
