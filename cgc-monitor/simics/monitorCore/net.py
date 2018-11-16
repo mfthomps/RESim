@@ -32,24 +32,6 @@ socktype = ['dumb', 'SOCK_STREAM', 'SOCK_DGRAM', 'SOCK_RAW', 'SOCK_RDM', 'SOCK_S
 
 SOCK_TYPE_MASK = 0xf
 
-#define AF_UNSPEC       0
-#define AF_UNIX         1       /* Unix domain sockets          */
-#define AF_LOCAL        1       /* POSIX name for AF_UNIX       */
-#define AF_INET         2       /* Internet IP Protocol         */
-#define AF_AX25         3       /* Amateur Radio AX.25          */
-#define AF_IPX          4       /* Novell IPX                   */
-#define AF_APPLETALK    5       /* AppleTalk DDP                */
-#define AF_NETROM       6       /* Amateur Radio NET/ROM        */
-#define AF_BRIDGE       7       /* Multiprotocol bridge         */
-#define AF_ATMPVC       8       /* ATM PVCs                     */
-#define AF_X25          9       /* Reserved for X.25 project    */
-#define AF_INET6        10      /* IP version 6                 */
-#define AF_ROSE         11      /* Amateur Radio X.25 PLP       */
-#define AF_DECnet       12      /* Reserved for DECnet project  */
-#define AF_NETBEUI      13      /* Reserved for 802.2LLC project*/
-#define AF_SECURITY     14      /* Security callback pseudo AF */
-#define AF_KEY          15      /* PF_KEY key management API */
-#define AF_NETLINK      16
-#define AF_ROUTE        AF_NETLINK /* Alias to emulate 4.4BSD */
-
+domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPLETALK', 'AF_NETROM', 'AF_BRIDGE',
+'AF_ATMPVC', 'AF_X25', 'AF_INET6', 'AF_ROSE', 'AF_DECnet', 'AF_NETBEUI', 'AF_SECURITY', 'AF_KEY', 'AF_NETLINK']
 

@@ -87,6 +87,8 @@ class execStrings():
         self.cpu = cpu
         self.pid = pid
         self.callback = callback
+        self.prog_name = None
+        self.arg_list = None
 
 def loadParameters(filename):
     p_file = simics.SIM_lookup_file(filename)

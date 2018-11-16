@@ -81,6 +81,15 @@ class GenContextMgr():
         self.breakpoints = []
         self.haps = []
         self.break_handle = 0
+        self.text_start = None
+        self.text_end = None
+
+    def recordText(self, start, end):
+        self.text_start = start
+        self.text_end = end
+
+    def getText(self):
+        return self.text_start, self.text_end
 
     def nextHandle(self):
         self.break_handle = self.break_handle+1
@@ -135,7 +144,7 @@ class GenContextMgr():
                 hap = GenHap(hap_type, callback, parameter, self.lgr, bp_start, bp)
                 self.haps.append(hap)
                 return hap.hap_num
-        #self.lgr.error('genHapIndex failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
+        #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
 
     def setAllBreak(self):
         for bp in self.breakpoints:
@@ -155,6 +164,8 @@ class GenContextMgr():
         
     def changedThread(self, cpu, third, forth, memory):
         # get the value that will be written into the current thread address
+        if self.task_hap is None:
+            return
         cur_addr = SIM_get_mem_op_value_le(memory)
         #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
@@ -172,9 +183,15 @@ class GenContextMgr():
         rec = self.task_utils.getRecAddrForPid(pid)
         self.debugging_rec.append(rec)
 
+    def stopWatchTasks(self):
+        SIM_delete_breakpoint(self.task_break)
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
+        self.task_hap = None
+        self.task_break = None
+
     def watchTasks(self):
         self.task_break = SIM_breakpoint(self.debugging_cell, Sim_Break_Linear, Sim_Access_Write, self.current_task, self.mem_utils.WORD_SIZE, 0)
-        cb_num = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.debugging_cpu, self.task_break)
+        self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.debugging_cpu, self.task_break)
         self.lgr.debug('watchTasks break %d set on 0x%x' % (self.task_break, self.current_task))
         self.debugging_scheduled = True
         self.debugging_rec.append(self.mem_utils.readPtr(self.debugging_cpu, self.current_task))

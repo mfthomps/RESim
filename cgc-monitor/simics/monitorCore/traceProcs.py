@@ -17,21 +17,28 @@ class TraceProcs():
         self.plist = {}
         self.did_that = []
         self.trace_fh = None
-        self.pipe_handle = 0
-        self.socket_handle = 0
+        self.pipe_handle = {}
+        self.socket_handle = {}
 
-    def nextPipe(self):
-        self.pipe_handle = self.pipe_handle+1
-        return self.pipe_handle
+    def getPrecs(self):
+        return self.plist
 
-    def nextSocket(self):
-        self.socket_handle = self.socket_handle+1
-        return self.socket_handle
+    def nextPipe(self, pid):
+        if pid not in self.pipe_handle:
+            self.pipe_handle[pid] = 0 
+        self.pipe_handle[pid] = self.pipe_handle[pid]+1
+        return self.pipe_handle[pid]
+
+    def nextSocket(self, pid):
+        if pid not in self.socket_handle:
+            self.socket_handle[pid] = 0 
+        self.socket_handle[pid] = self.socket_handle[pid]+1
+        return self.socket_handle[pid]
 
     def addProc(self, pid, parent, clone=False):
         if pid in self.plist:      
             self.lgr.debug('addProc, pid %d already in plist' % pid)
-            return
+            return False
         if parent not in self.plist:
             self.lgr.debug('No parent %d yet for %d, add it.' % (parent, pid)) 
             parent_pinfo = Pinfo(parent)
@@ -42,6 +49,7 @@ class TraceProcs():
         self.plist[pid] = newproc 
         if clone:
             self.plist[pid].prog = '<clone>'
+        return True
 
     def setName(self, pid, prog, args):
         if pid not in self.plist:
@@ -60,7 +68,7 @@ class TraceProcs():
         self.plist[pid].files[filename] = [fd]
 
     def pipe(self, pid, fd1, fd2):
-        pname = 'pipe-%d-%d' % (pid, self.nextPipe())
+        pname = 'pipe-%d-%d' % (pid, self.nextPipe(pid))
         if pid not in self.plist:
             self.lgr.debug('TraceProcs pipe no pid %d, add it ' % pid)
             newproc = Pinfo(pid)
@@ -69,7 +77,7 @@ class TraceProcs():
         self.plist[pid].wpipe[pname] = [fd2]
 
     def socket(self, pid, fd):
-        sname = 'socket-%d-%d' % (pid, self.nextSocket())
+        sname = 'socket-%d-%d' % (pid, self.nextSocket(pid))
         if pid not in self.plist:
             self.lgr.debug('TraceProcs socket no pid %d, add it ' % pid)
             newproc = Pinfo(pid)
@@ -91,6 +99,14 @@ class TraceProcs():
         else:
             self.lgr.error('TraceProcs, connect pid %d, could not find fd %d' % (pid, fd))
 
+    def socketpair(self, pid, fd1, fd2):
+        sname = 'socket-%d-%d' % (pid, self.nextSocket(pid))
+        if pid not in self.plist:
+            self.lgr.debug('TraceProcs socketpair no pid %d, add it ' % pid)
+            newproc = Pinfo(pid)
+            self.plist[pid] = newproc
+        self.plist[pid].sockets[sname] = [fd1, fd2]
+
     def bind(self, pid, fd, name):
         if pid not in self.plist:
             self.lgr.debug('TraceProcs connect no pid %d' % pid)
@@ -104,7 +120,7 @@ class TraceProcs():
             self.plist[pid].sockets[name] = list(self.plist[pid].sockets[gotit])
             del self.plist[pid].sockets[gotit] 
         else:
-            self.lgr.error('TraceProcs, connect pid %d, could not find fd %d' % (pid, fd))
+            self.lgr.error('TraceProcs, bind pid %d, could not find fd %d' % (pid, fd))
 
     def accept(self, pid, socket_fd, new_fd, name):
         if pid not in self.plist:

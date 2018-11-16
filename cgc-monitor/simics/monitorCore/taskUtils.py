@@ -241,6 +241,21 @@ class TaskUtils():
     
         return tasks
 
+    def getPidsForComm(self, comm):
+        retval = []
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+            if ts_list[ts].comm == comm:
+                retval.append(ts_list[ts].pid)
+        return retval
+
+    def getPidCommMap(self):
+        retval = {}
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+            retval[ts_list[ts].pid] = ts_list[ts].comm
+        return retval
+
     def getRecAddrForPid(self, pid):
         ts_list = self.getTaskStructs()
         for ts in ts_list:
@@ -314,7 +329,7 @@ class TaskUtils():
         return self.exec_addrs[pid].prog_addr
 
     def readExecParamStrings(self, pid, cpu):
-        self.lgr.debug('readExecParamStrings with pid %d' % pid)
+        #self.lgr.debug('readExecParamStrings with pid %d' % pid)
         if pid is None:
             self.lgr.debug('readExecParamStrings called with pid of None')
             return None, None, None
@@ -332,6 +347,8 @@ class TaskUtils():
                     #self.lgr.debug('readExecParamStrings on %s adding arg %s' % (self.cell_name, arg_string))
 
             prog_string = prog_string.strip()
+            self.exec_addrs[pid].prog_name = prog_string
+            self.exec_addrs[pid].arg_list = arg_string_list
         else:
             self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[pid].prog_addr)
         return prog_string, arg_string_list
@@ -357,7 +374,7 @@ class TaskUtils():
                 xaddr = argv + mult*self.mem_utils.WORD_SIZE
                 arg_addr = self.mem_utils.readPtr(cpu, xaddr)
                 if arg_addr is not None and arg_addr != 0:
-                   self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                   #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
                    arg_addr_list.append(arg_addr)
                 else:
                    done = True
@@ -365,7 +382,7 @@ class TaskUtils():
                 i = i + 1
             sptr = esp + self.mem_utils.WORD_SIZE
             prog_addr = self.mem_utils.readPtr(cpu, sptr)
-            self.lgr.debug('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
+            #self.lgr.debug('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
         else:
             reg_num = cpu.iface.int_register.get_number("rsi")
             rsi = cpu.iface.int_register.read(reg_num)
@@ -393,6 +410,8 @@ class TaskUtils():
 
         self.exec_addrs[pid] = osUtils.execStrings(cpu, pid, arg_addr_list, prog_addr, finishCallback)
         prog_string, arg_string_list = self.readExecParamStrings(pid, cpu)
+        self.exec_addrs[pid].prog_name = prog_string
+        self.exec_addrs[pid].arg_list = arg_string_list
         #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
         #if prog_string == 'cfe-poll-player':
         #    SIM_break_simulation('debug')
@@ -412,6 +431,12 @@ class TaskUtils():
 
         return prog_string, arg_string_list
 
+    def getProgName(self, pid):
+        if pid in self.exec_addrs:
+            return self.exec_addrs[pid].prog_name, self.exec_addrs[pid].arg_list
+        else: 
+            return None
+ 
     def getSyscallEntry(self, callnum):
         ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
         val = callnum * 4 - self.param.syscall_jump

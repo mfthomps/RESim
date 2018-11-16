@@ -79,12 +79,16 @@ class reverseToCall():
             self.sysenter_hap = None
             self.enter_break1 = None
             self.enter_break2 = None
+            self.start_cycles = None
+
+    def getStartCycles(self):
+        return self.start_cycles
 
     def noWatchSysenter(self):
         if self.enter_break1 is not None:
             self.context_manager.genDeleteBreakpoint(self.enter_break1)
             self.context_manager.genDeleteBreakpoint(self.enter_break2)
-            self.context_manager.genDeleteHap("Core_Breakpoint_Memop", self.sysenter_hap)
+            self.context_manager.genDeleteHap(self.sysenter_hap)
             self.enter_break1 = None
 
     def v2p(self, cpu, v):
@@ -111,6 +115,7 @@ class reverseToCall():
             #self.enter_break1 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
             #self.enter_break2 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
             #self.sysenter_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
+            self.lgr.debug('watchSysenter set phys breaks at 0x%x and 0x%x' % (self.v2p(self.cpu, self.param.sysenter), self.v2p(self.cpu, self.param.sys_entry)))
             self.enter_break1 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
             self.enter_break2 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
             self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
@@ -118,6 +123,7 @@ class reverseToCall():
     def setup(self, cpu, x_pages, bookmarks=None):
             self.lgr.debug('reverseToCall setup')
             self.cpu = cpu
+            self.start_cycles = SIM_cycle_count(self.cpu)
             self.cell_name = self.top.getTopComponentName(cpu)
             self.x_pages = x_pages
             if bookmarks is not None: 
@@ -134,12 +140,16 @@ class reverseToCall():
         size = page_count * pageUtils.PAGE_SIZE
         if call_ret:
             # Set exectution breakpoints for "call" and "ret" instructions
-            call_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+            #call_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+            #   Sim_Access_Execute, range_start, size, 0)
+            call_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
             command = 'set-prefix %d "call"' % call_break_num
             SIM_run_alone(SIM_run_command, command)
-            ret_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+            #ret_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
+            #   Sim_Access_Execute, range_start, size, 0)
+            ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(ret_break_num)
             command = 'set-prefix %d "ret"' % ret_break_num
@@ -261,6 +271,12 @@ class reverseToCall():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
         #cmd = 'reverse-step-instruction'
+        if self.cpu.cycles <= self.start_cycles:
+            self.lgr.debug('At start of recording, cycle: 0x%x' % self.cpu.cycles)
+            print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
+            self.cleanup(self.cpu)
+            self.top.skipAndMail() 
+            return
         self.lgr.debug('tryOneStopped, entered at cycle 0x%x' % self.cpu.cycles)
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -316,11 +332,13 @@ class reverseToCall():
 
         
     def doRevToCall(self, step_into, prev=None):
+        self.noWatchSysenter()
         '''
         Run backwards.  If uncall is true, run until the previous call.
         If step_into is true, and the previous instruction is a return,
         enter the function at its return.
         '''
+
         dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
         self.is_monitor_running.setRunning(True)
         self.step_into = step_into
@@ -556,10 +574,11 @@ class reverseToCall():
             return
         #cmd = 'reverse-step-instruction'
         cmd = 'reverse'
-        self.lgr.debug('stoppedReverseToCall, entered')
         cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
         current = SIM_cycle_count(cpu)
-        if current < self.top.getFirstCycle():
+        self.lgr.debug('stoppedReverseToCall, entered %d (%s) cycle: 0x%x' % (pid, comm, current))
+        #if current < self.top.getFirstCycle():
+        if current <= self.start_cycles:
             self.lgr.debug('stoppedReverseToCall found cycle 0x%x prior to first, stop here' %(current))
             self.cleanup(cpu)
         elif pid == my_args.pid and SIM_processor_privilege_level(cpu) != 0:
