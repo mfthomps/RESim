@@ -86,9 +86,10 @@ class reverseToCall():
 
     def noWatchSysenter(self):
         if self.enter_break1 is not None:
+            self.lgr.debug('noWatchSystenter, remove sysenter breaks and hap')
             self.context_manager.genDeleteBreakpoint(self.enter_break1)
             self.context_manager.genDeleteBreakpoint(self.enter_break2)
-            self.context_manager.genDeleteHap(self.sysenter_hap)
+            self.context_manager.genDeleteHap(self.sysenter_hap, immediate=True)
             self.enter_break1 = None
 
     def v2p(self, cpu, v):
@@ -309,7 +310,7 @@ class reverseToCall():
                         prev_cycles = cycles
                 if not got_it:
                     self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
-                    got_it = prev_cycles
+                    got_it = prev_cycles - 1
                 SIM_run_alone(self.jumpCycle, got_it)
                 done = True
 
@@ -412,6 +413,7 @@ class reverseToCall():
                 self.followTaint()
 
     def rmBreaks(self):
+        self.lgr.debug('rmBreaks')
         for breakpt in self.the_breaks:
             SIM_delete_breakpoint(breakpt)
         self.the_breaks = []
@@ -660,6 +662,7 @@ class reverseToCall():
                 else:
                     all_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
+                    self.lgr.debug('setBreakRange set phys addr 0x%x linear 0x%x' % (phys_block.address, start))
                     self.the_breaks.append(all_break_num)
                     
             elif phys_block.address == 0:
@@ -667,6 +670,7 @@ class reverseToCall():
                     start))
 
             start = limit
+        self.lgr.debug('setBreakRange done')
 
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
@@ -679,7 +683,9 @@ class reverseToCall():
                 cycles = prec.cpu.cycles
                 if cycles not in self.sysenter_cycles:
                     eip = self.top.getEIP(prec.cpu)
-                    #self.lgr.debug('sysenterHap at 0x%x, add cycle 0x%x' % (eip, cycles))
+                    reg_num = self.cpu.iface.int_register.get_number('eax')
+                    eax = self.cpu.iface.int_register.read(reg_num)
+                    self.lgr.debug('sysenterHap call %d at 0x%x, add cycle 0x%x' % (eax, eip, cycles))
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     self.sysenter_cycles.append(cycles)
             

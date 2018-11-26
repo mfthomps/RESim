@@ -1,19 +1,22 @@
 ''' maintain structure of process hierarchy '''
 class Pinfo():
-    def __init__(self, pid, clone=None):
+    def __init__(self, pid, clone=None, parent=None):
         self.pid = pid
         self.prog = None
         self.args = None
         self.clone = clone
+        self.parent = parent
         self.children = []
         self.files = {}
         self.rpipe = {}
         self.wpipe = {}
+        ''' dict of lists of FDs for sockets indexed by their address, file name, etc. '''
         self.sockets = {}
 
 class TraceProcs():
     def __init__(self, lgr):
         self.lgr = lgr
+        ''' dict of Pinfo indexed by pid '''
         self.plist = {}
         self.did_that = []
         self.trace_fh = None
@@ -37,18 +40,20 @@ class TraceProcs():
 
     def addProc(self, pid, parent, clone=False):
         if pid in self.plist:      
-            self.lgr.debug('addProc, pid %d already in plist' % pid)
+            #self.lgr.debug('addProc, pid %d already in plist' % pid)
             return False
         if parent not in self.plist:
             self.lgr.debug('No parent %d yet for %d, add it.' % (parent, pid)) 
             parent_pinfo = Pinfo(parent)
             self.plist[parent] = parent_pinfo 
-        else: 
-            self.plist[parent].children.append(pid)
-        newproc = Pinfo(pid, clone)
+        self.plist[parent].children.append(pid)
+        newproc = Pinfo(pid, clone=clone, parent=parent)
         self.plist[pid] = newproc 
         if clone:
-            self.plist[pid].prog = '<clone>'
+            if self.plist[parent].prog is not None:
+                self.plist[pid].prog = '%s <clone>' % self.plist[parent].prog
+            else:
+                self.plist[pid].prog = '<clone>'
         return True
 
     def setName(self, pid, prog, args):
@@ -111,16 +116,20 @@ class TraceProcs():
         if pid not in self.plist:
             self.lgr.debug('TraceProcs connect no pid %d' % pid)
             return
+        ''' socket call got the FD, associate a meaningful name '''
         gotit = None
         for s in self.plist[pid].sockets:
             if fd in self.plist[pid].sockets[s]:
                 gotit = s
                 break
         if gotit is not None:
+            ''' replace the dict entry with the more meaningful name '''
             self.plist[pid].sockets[name] = list(self.plist[pid].sockets[gotit])
             del self.plist[pid].sockets[gotit] 
         else:
-            self.lgr.error('TraceProcs, bind pid %d, could not find fd %d' % (pid, fd))
+            ''' assume we did not record the socket call '''
+            self.lgr.debug('TraceProcs, bind pid %d, could not find fd %d' % (pid, fd))
+            self.plist[pid].sockets[name] = [fd]
 
     def accept(self, pid, socket_fd, new_fd, name):
         if pid not in self.plist:
@@ -261,7 +270,8 @@ class TraceProcs():
             self.showFamily(child, tabs)
 
     def showAll(self):
-        self.trace_fh = open('/tmp/procTrace.txt', 'w') 
+        trace_path = '/tmp/procTrace.txt'
+        self.trace_fh = open(trace_path, 'w') 
         self.did_that = []
         for pid in self.plist:
             if pid not in self.did_that:
@@ -269,4 +279,7 @@ class TraceProcs():
                 tabs = ''
                 self.showFamily(pid, tabs)                
         self.trace_fh.close()
+        print('Trace report at: %s' % trace_path)
                  
+    def getProg(self, pid):
+        return self.plist[pid].prog

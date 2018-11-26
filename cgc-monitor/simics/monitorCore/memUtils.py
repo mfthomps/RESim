@@ -182,6 +182,8 @@ class memUtils():
         if cpl == 0:
             tr_base = cpu.tr[7]
             esp = self.readPtr(cpu, tr_base + 4)
+            if esp is None:
+                return None
             #print('kernel mode, esp is 0x%x' % esp)
         else:
             esp = self.getRegValue(cpu, 'esp')

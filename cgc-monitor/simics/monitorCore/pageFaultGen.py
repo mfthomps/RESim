@@ -108,7 +108,7 @@ class PageFaultGen():
         page_info = pageUtils.findPageTable(cpu, cr2, self.lgr)
         if not page_info.page_exists:
             #SIM_break_simulation('page fault page does not exist at 0x%x proc %d (%s)' % (cr2, pid, comm))         
-            self.lgr.debug('page fault page not exists at 0x%x proc %d (%s)' % (cr2, pid, comm))         
+            self.lgr.debug('page fault page does not exist at 0x%x proc %d (%s)' % (cr2, pid, comm))         
             self.lgr.debug(page_info.valueString())
             if not page_info.ptable_exists:
                 self.lgr.debug('watch pdir address of 0x%x' % page_info.pdir_addr)

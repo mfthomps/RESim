@@ -209,7 +209,11 @@ class bookmarkMgr():
             cycle = self.__bookmarks[mark].cycles
             self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
             SIM_run_command('pselect cpu-name = %s' % cpu.name)
-            SIM_run_command('skip-to cycle=%d' % cycle)
+            try:
+                SIM_run_command('skip-to cycle=%d' % cycle)
+            except:
+                print('reverse disabled')
+                return
             eip = self.top.getEIP(cpu)
             current = SIM_cycle_count(cpu)
             step = SIM_step_count(cpu)

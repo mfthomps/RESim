@@ -1,3 +1,4 @@
+import os
 CORE = '/mnt/cgc-monitor/cgc-monitor/simics/monitorCore'
 ZK = '/mnt/cgc-monitor/cgc-monitor/zk/monitorLibs'
 if CORE not in sys.path:
@@ -12,7 +13,19 @@ run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/monitorC
 run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/zk/monitorLibs')
 run_command('add-directory -prepend /mnt/simics/eemsWorkspace')
 if RUN_FROM_SNAP is None:
-    run_command('run-command-file ./targets/x86-x58-ich10/vdr2.simics')
+    #run_command('run-command-file ./targets/x86-x58-ich10/vdr2.simics')
+    run_command('run-command-file ./targets/x86-x58-ich10/mft-ubuntu.simics')
+    run_command('start-agent-manager')
+    done = False
+    count = 0
+    while not done: 
+        run_command('c 50000000000')
+        if os.path.isfile('driver-ready.flag'):
+            done = True 
+        count += 1
+        print count
+    print('NOW run the vdr')  
+    run_command('run-command-file ./targets/x86-x58-ich10/mft-vdr.simics')
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)

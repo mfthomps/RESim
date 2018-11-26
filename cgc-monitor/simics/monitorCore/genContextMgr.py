@@ -61,14 +61,17 @@ class GenHap():
             self.hap_num = None
    
 class GenContextMgr():
-    def __init__(self, top, task_utils, lgr):
+    def __init__(self, top, task_utils, param, lgr):
         self.top = top
+        self.task_utils = task_utils
+        self.param = param
         self.task_utils = task_utils
         self.mem_utils = task_utils.getMemUtils()
         self.debugging_pid = None
         self.debugging_cellname = None
         self.debugging_cell = None
         self.debugging_cpu = None
+        ''' watch multiple tasks, e.g., threads '''
         self.debugging_rec = []
         self.debugging_scheduled = False
         self.lgr = lgr
@@ -112,11 +115,14 @@ class GenContextMgr():
         #self.lgr.debug('genDeleteBreakpoint could not find break handle %d' % handle)
         pass
 
-    def genDeleteHap(self, hap_num):
+    def genDeleteHap(self, hap_num, immediate=False):
         #self.lgr.debug('genDeleteHap hap_num %d' % hap_num)
         for hap in self.haps:
             if hap.hap_num == hap_num:
-                SIM_run_alone(hap.clear, None)
+                if immediate:
+                    hap.clear(None)
+                else:
+                    SIM_run_alone(hap.clear, None)
                 if hap.breakpoint_start is not None:
                     self.breakpoints.remove(hap.breakpoint_start)
                 if hap.breakpoint_end is not None:
@@ -161,6 +167,16 @@ class GenContextMgr():
     def clearAllHap(self, dumb):
         for hap in self.haps:
             hap.clear()
+
+    def getThreadRecs(self):
+        return self.debugging_rec
+
+    def getThreadPids(self):
+        retval = []
+        for rec in self.debugging_rec:
+            pid = self.mem_utils.readWord32(self.debugging_cpu, rec + self.param.ts_pid)
+            retval.append(pid)
+        return retval
         
     def changedThread(self, cpu, third, forth, memory):
         # get the value that will be written into the current thread address
@@ -169,32 +185,63 @@ class GenContextMgr():
         cur_addr = SIM_get_mem_op_value_le(memory)
         #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
-            self.lgr.debug('Now scheduled')
+            pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
+            #self.lgr.debug('Now scheduled %d' % pid)
             self.debugging_scheduled = True
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
-            self.lgr.debug('No longer scheduled')
+            #self.lgr.debug('No longer scheduled')
             self.debugging_scheduled = False
             self.clearAllBreak()
             SIM_run_alone(self.clearAllHap, None)
 
+    def rmTask(self, pid):
+        rec = self.task_utils.getRecAddrForPid(pid)
+        if rec in self.debugging_rec:
+            self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
+            self.debugging_rec.remove(rec)
+
     def addTask(self, pid):
         rec = self.task_utils.getRecAddrForPid(pid)
-        self.debugging_rec.append(rec)
+        if rec not in self.debugging_rec:
+            self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
+            if rec is None:
+                self.lgr.error('genContextManager, addTask got rec of None for pid %d' % pid)
+            else:
+                self.debugging_rec.append(rec)
+        else:
+            self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
+
+    def amWatching(self, pid):
+        rec = self.task_utils.getRecAddrForPid(pid)
+        if rec not in self.debugging_rec:
+            return False
+        else:
+            return True
 
     def stopWatchTasks(self):
+        if self.task_break is None:
+            self.lgr.debug('stopWatchTasks already stopped')
+            return
         SIM_delete_breakpoint(self.task_break)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
+        self.lgr.debug('stopWatchTasks')
         self.task_hap = None
         self.task_break = None
 
     def watchTasks(self):
+        if self.task_break is not None:
+            self.lgr.debug('watchTasks called, but already watching')
+            return
         self.task_break = SIM_breakpoint(self.debugging_cell, Sim_Break_Linear, Sim_Access_Write, self.current_task, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.debugging_cpu, self.task_break)
         self.lgr.debug('watchTasks break %d set on 0x%x' % (self.task_break, self.current_task))
         self.debugging_scheduled = True
-        self.debugging_rec.append(self.mem_utils.readPtr(self.debugging_cpu, self.current_task))
+        ctask = self.mem_utils.readPtr(self.debugging_cpu, self.current_task)
+        pid = self.mem_utils.readWord32(self.debugging_cpu, ctask + self.param.ts_pid)
+        self.lgr.debug('watchTasks watch record 0x%x pid %d' % (ctask, pid))
+        self.debugging_rec.append(ctask)
         
     def setDebugPid(self, debugging_pid, debugging_cellname, debugging_cpu):
         self.debugging_pid = debugging_pid

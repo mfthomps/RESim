@@ -1,4 +1,6 @@
-
+'''
+Structures for cleaning up stop haps used in reverse execution
+'''
 class HapCleaner():
     hlist = None 
     def __init__(self, cpu):
@@ -15,6 +17,9 @@ class HapCleaner():
         self.hlist.append(ht)
 
 class StopAction():
+    ''' hap_clearer is a list of haps to delete
+        breakpoints to be deleted
+        list of functions to be executed '''
     def __init__(self, hap_cleaner, breakpoints, flist=None):
         self.hap_clean = hap_cleaner
         if breakpoints is not None:
@@ -25,4 +30,9 @@ class StopAction():
             self.flist = flist
         else:
             self.flist = []
+    def run(self):
+        ''' Process the functions in the flist '''
+        if len(self.flist) > 0:
+            fun = self.flist.pop(0)
+            fun.run(self.flist)
 

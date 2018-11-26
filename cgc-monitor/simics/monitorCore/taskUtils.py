@@ -245,7 +245,7 @@ class TaskUtils():
         retval = []
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            if ts_list[ts].comm == comm:
+            if comm.startswith(ts_list[ts].comm):
                 retval.append(ts_list[ts].pid)
         return retval
 

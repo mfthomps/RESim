@@ -4,7 +4,7 @@ import memUtils
 import hapCleaner
 class ReverseToUser():
     '''
-    Not usable in practice, too many breakpoints or just too slow 
+    set breakpoints for entire user space and reverse
     '''
     def __init__(self, param, lgr, cpu, cell, pid = 0):
         self.pid = pid
