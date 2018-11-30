@@ -103,16 +103,21 @@ class bookmarkView(simplecustviewer_t):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToOrigin()");') 
         eip = gdbProt.getEIPWhenStopped()
         if eip is not None:
-            print('gotoOrigin eip when stopped is 0x%x' % eip)
+            print('goToOrigin eip when stopped is 0x%x' % eip)
             #gdbProt.stepWait()
             #print('did step wait')
         else:
-            print('gotToOrigin, getEIPWhenStopped returned None')
+            print('goToOrigin, getEIPWhenStopped returned None')
 
     def updateBookmarkView(self):
         print "in updateBookmarkView"
+        #self.Close()
+        #self.Create()
+        #print('did create')
         retval = []
         self.ClearLines()
+        self.Refresh()
+        print('did refresh of clear')
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         lines = simicsString.split('\n')
@@ -127,6 +132,7 @@ class bookmarkView(simplecustviewer_t):
                 print("added %s" % entry)
                 retval.append(entry)
         self.Refresh()
+        #self.Show()
         return retval
 
     def OnDblClick(self, shift):
