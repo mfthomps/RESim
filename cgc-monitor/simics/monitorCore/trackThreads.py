@@ -18,9 +18,11 @@ class TrackThreads():
         self.startTrack()
 
     def startTrack(self):
+         
         if self.call_hap is not None:
-            self.lgr.debug('TrackThreads startTrack called, but already tracking')
+            #self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
+        self.lgr.debug('TrackThreads startTrack')
         callnum = self.task_utils.syscallNumber('clone')
         entry = self.task_utils.getSyscallEntry(callnum)
         self.call_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -30,6 +32,7 @@ class TrackThreads():
         execve_entry = self.task_utils.getSyscallEntry(execve_callnum)
         self.execve_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
         self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break)
+        self.lgr.debug('TrackThreads startTrack return')
 
     def stopTrack(self):
         self.context_manager.genDeleteHap(self.call_hap)
@@ -67,7 +70,7 @@ class TrackThreads():
             return
         stack_frame = self.task_utils.frameFromStackSyscall()
         phys = self.mem_utils.v2p(self.cpu, stack_frame['eip'])
-        #self.lgr.debug('TrackThreads  syscallHap set exit break at 0x%x (0x%x)' % (stack_frame['eip'], phys))
+        self.lgr.debug('TrackThreads  pid %d syscallHap set exit break at 0x%x (0x%x)' % (pid, stack_frame['eip'], phys))
         self.exit_break[pid] = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
         self.exit_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break[pid])
 
@@ -88,7 +91,7 @@ class TrackThreads():
                 del self.exit_hap[pid] 
                 return
             child_pid = eax
-            #self.lgr.debug('TrackThreads exitHap for pid: %d adding child pid %d to contextManager' % (pid, child_pid))
+            self.lgr.debug('TrackThreads exitHap for pid: %d adding child pid %d to contextManager' % (pid, child_pid))
             self.context_manager.addTask(child_pid)
             self.context_manager.genDeleteHap(self.exit_hap[pid])
             del self.exit_hap[pid]

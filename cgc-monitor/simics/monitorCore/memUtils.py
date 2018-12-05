@@ -127,6 +127,11 @@ class memUtils():
     def readWord16(self, cpu, vaddr):
         return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 2)
     
+    def readWord16le(self, cpu, vaddr):
+        hi = SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 1)
+        lo = SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr+1), 1)
+        retval = hi << 8 | lo
+        return retval
 
     def readPtr(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)

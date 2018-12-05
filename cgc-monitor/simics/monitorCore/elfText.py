@@ -21,8 +21,10 @@ def getText(path):
      
     #print('out: {0}'.format(out))
     #print('err: {0}'.format(err))
-    addr = int(out.split()[3], 16)
-    offset = int(out.split()[4], 16)
-    size = int(out.split()[5], 16)
+    ''' section numbering has whitespace '''
+    hack = out[7:]
+    addr = int(hack.split()[2], 16)
+    offset = int(hack.split()[3], 16)
+    size = int(hack.split()[4], 16)
     return Text(addr, offset, size)
      

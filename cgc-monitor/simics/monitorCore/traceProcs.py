@@ -61,6 +61,7 @@ class TraceProcs():
             self.lgr.debug('TraceProcs, setName, no pid yet %d, add it' % pid)
             newproc = Pinfo(pid)
             self.plist[pid] = newproc
+        self.lgr.debug('TraceProcs, setName, pid %d, to %s' % (pid, prog))
         self.plist[pid].prog = prog        
         self.plist[pid].args = args        
    
@@ -102,7 +103,9 @@ class TraceProcs():
             self.plist[pid].sockets[name] = list(self.plist[pid].sockets[gotit])
             del self.plist[pid].sockets[gotit] 
         else:
-            self.lgr.error('TraceProcs, connect pid %d, could not find fd %d' % (pid, fd))
+            ''' assume we did not record the socket call '''
+            self.lgr.debug('TraceProcs, connect pid %d, could not find fd %d' % (pid, fd))
+            self.plist[pid].sockets[name] = [fd]
 
     def socketpair(self, pid, fd1, fd2):
         sname = 'socket-%d-%d' % (pid, self.nextSocket(pid))
@@ -282,4 +285,7 @@ class TraceProcs():
         print('Trace report at: %s' % trace_path)
                  
     def getProg(self, pid):
-        return self.plist[pid].prog
+        if pid in self.plist: 
+            return self.plist[pid].prog
+        else:
+            return 'unknown'

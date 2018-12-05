@@ -34,7 +34,7 @@ class SOMap():
         self.text_end = start+size
         self.text_prog = prog
        
-    def addSO(self, pid, fpath, addr):
+    def addSO(self, pid, fpath, addr, count):
         if pid not in self.so_addr_map:
             self.so_addr_map[pid] = {}
             self.so_file_map[pid] = {}
@@ -43,6 +43,7 @@ class SOMap():
         self.lgr.debug('addSO, prefix is %s fpath is %s  full: %s' % (self.param.root_prefix, fpath, full_path))
         text_seg = elfText.getText(full_path)
         text_seg.start = addr
+        text_seg.size = count
 
         self.so_addr_map[pid][fpath] = text_seg
         self.so_file_map[pid][text_seg] = fpath
@@ -57,8 +58,9 @@ class SOMap():
                 
             for addr in sorted(sort_map):
                 text_seg = sort_map[addr]
-                end = text_seg.start + text_seg.offset + text_seg.size
-                print('0x%x - 0x%x   0x%x 0x%x  %s' % (text_seg.start, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
+                #end = text_seg.start + text_seg.offset + text_seg.size
+                end = text_seg.start + text_seg.size
+                print('0x%x - 0x%x 0x%x 0x%x  %s' % (text_seg.start, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
         else:
             print('no so map for %d' % in_pid)
 

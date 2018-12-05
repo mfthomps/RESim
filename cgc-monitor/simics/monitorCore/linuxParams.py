@@ -64,7 +64,7 @@ class linuxParams():
     page_fault = 0xc12406e8
     # call edi goes to
     #page_fault = 0xc1241e2a
-    # not symbol, instruct before ret to user
+    # not symbol, instruct before ret to user; get emperically
     sys_exit = 0xc10028a2
     # kallsym
     do_exit = 0xc1028dd4

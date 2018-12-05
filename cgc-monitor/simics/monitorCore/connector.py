@@ -13,6 +13,7 @@ class Connector():
             self.prog = prog
             self.address = address
             self.port = port
+
         def getJson(self):
             retval = {}
             retval['pid'] = self.pid
@@ -21,9 +22,12 @@ class Connector():
             retval['port'] = self.port
             return retval
 
+    def getConnectors(self):
+        return self.connectors
+
     def add(self, pid, prog, address, port):
         for connect_rec in self.connectors:
-            if connect_rec.pid == pid and connect_rec.address == address and connect_rec.port == port:
+            if connect_rec.prog == prog and connect_rec.address == address and connect_rec.port == port:
                 return
         connect_rec = self.ConnectRec(pid, prog, address, port)
         self.connectors.append(connect_rec) 
@@ -35,6 +39,14 @@ class Connector():
         with open(fname, 'w') as fh:
             s = json.dumps(jdump)
             fh.write(s)
+
+    def loadJson(self, fname):
+        with open(fname) as fh:
+            s = fh.read()
+            jload = json.loads(s)
+            for jrec in jload:
+                self.add(jrec['pid'], jrec['prog'], jrec['address'], jrec['port'])
+        
 
     def showAll(self, fname):
         with open(fname, 'w') as fh:
