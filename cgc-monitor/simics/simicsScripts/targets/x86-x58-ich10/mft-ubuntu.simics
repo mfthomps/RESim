@@ -1,0 +1,55 @@
+add-directory "%script%"
+$cpu_class="core-i7-single"
+#$rtc_time     = "2016-10-28 14:00:00 UTC"
+if not defined rtc_time     {$rtc_time     = "2016-10-28 14:00:00 UTC"}
+if not defined OS_TYPE     {$OS_TYPE     = "linux"}
+if not defined provision_bsd     {$provision_bsd     = "NO"}
+if not defined port1     {$port1     = 5022}
+#$disk_image=./vp.craff
+#$disk_image=./cgc-linux.craff
+$disk_size=21496236544
+$disk2_size=503823218717
+
+$use_bcm_nic = "NO"
+
+#default-port-forward-target $ip_address
+#connect-real-network
+
+#
+# Define Ubuntu monitoring system
+#
+
+$host_name="ubuntu"
+$mac_address       = "00:19:A1:E1:2C:9D"
+# address for the plug-in NIC (if dual Intel, 2nd port gets n+1)
+# eth0
+$mac_address_2   = "00:19:A0:E1:2C:9E"
+# eth1
+$mac_address_3 = "00:19:A0:E1:2C:9F"
+$disk_image=ubuntu-merged4/viper.disk.hd_image.craff
+run-command-file "%script%/x86-x58-ich10-system.include"
+instantiate-components
+
+$ubuntu_eth0 = ubuntu.mb.nb.i82543gc.connector_ethernet
+$ubuntu_eth1 = ubuntu.mb.nb.i82543gc2.connector_ethernet
+$ubuntu_eth2 = ubuntu.mb.sb.eth_slot
+#echo "doing service node DHCP for " + $host_name
+load-module eth-links
+
+
+create-ethernet-switch switch0
+create-ethernet-switch switch1
+create-ethernet-switch switch2
+
+connect $ubuntu_eth0 cnt1 = switch0.device0
+connect $ubuntu_eth1 cnt1 = switch0.device1
+connect $ubuntu_eth2 cnt1 = switch0.device2
+
+#echo "Ubuntu network connections"
+#echo "mac " + $mac_address + " on switch 0"
+#echo "mac " + $mac_address_2 + " on switch 1"
+#echo "mac " + $mac_address_3 + " on switch 2"
+
+
+instantiate-components
+#connect-real-network 10.0.0.91 switch1
