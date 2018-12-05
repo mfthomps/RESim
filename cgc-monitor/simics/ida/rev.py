@@ -1,11 +1,13 @@
 import time
 import idaapi
+import idc
 import bpUtils
 import gdbProt
 import bookmarkView
 import okTextForm
 import waitDialog
 import functionSig
+import reHooks
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -16,10 +18,8 @@ from idaapi import Choose
 '''
 __regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
 recent_bookmark = 1
+recent_fd = '1'
 just_debug = False
-bookmark_view = bookmarkView.bookmarkView()
-print('back from init bookmarkView')
-keymap_done = False
 
 def showHelp(prompt=False):
     print('in showHelp')
@@ -252,7 +252,7 @@ def doRevToAddrXXX(addr, extra_back=None):
         idc.EnableBpt(addr, False)
 
 def doRevToCursor():
-    cursor = ScreenEA()
+    cursor = idc.ScreenEA()
     curAddr = idc.GetRegValue("EIP")
     if cursor == curAddr:
         print 'attempt to go back to where you are ignored'
@@ -619,9 +619,34 @@ def revBlock():
         print('must have been top, uncall')
         doRevFinish()
 
+def watchData():
+    print('wtf, over?')
+    command = "@cgc.watchData()" 
+    print('called %s' % command)
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+    time.sleep(1)
+    eip = gdbProt.getEIPWhenStopped()
+    signalClient()
+    showSimicsMessage()
+    
+def runToIO():
+    global recent_fd
+    print('runToIO')
+    result = idc.AskStr(recent_fd, 'FD ?')
+    recent_fd = result
+    fd = int(result)
+    command = "@cgc.runToIO(%d)" % fd
+    print('command is %s' % command)
+    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+    time.sleep(1)
+    eip = gdbProt.getEIPWhenStopped()
+    print('runToConnect %s, ended at eip 0x%x' % (result, eip))
+    signalClient()
+    showSimicsMessage()
+
 def runToConnect():
     print('runToConnect')
-    result = idc.AskStr('?', 'Network address as ip:port')
+    result = idc.AskStr('?', 'Network address as ip:port (or regex)')
     #result = '192.168.31.52:20480'
     command = "@cgc.runToConnect('%s')" % result
     print('command is %s' % command)
@@ -631,9 +656,9 @@ def runToConnect():
 
 
     eip = gdbProt.getEIPWhenStopped()
-    showSimicsMessage()
     print('runToConnect %s, ended at eip 0x%x' % (result, eip))
     signalClient()
+    showSimicsMessage()
 
 def signalClient():
     simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.rev1()");')
@@ -645,7 +670,7 @@ def signalClient():
     bpUtils.setAndDisable(eip) 
     #print('signalClient return setAndDis') 
     #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseStep()");') 
-    GetDebuggerEvent(WFNE_SUSP | WFNE_CONT, -1)
+    idc.GetDebuggerEvent(idc.WFNE_SUSP | idc.WFNE_CONT, -1)
     print('signalClient back from cont')
     success = idc.DelBpt(eip)
 
@@ -701,7 +726,7 @@ def getTagValue(line, find_tag):
 def doStepInto():
     #print('in doInto')
     idaapi.step_into()
-    GetDebuggerEvent(WFNE_SUSP, -1)
+    idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
     cur_addr = idc.GetRegValue("EIP")
     if cur_addr > 0xc0000000:
         runToUserSpace()
@@ -709,7 +734,7 @@ def doStepInto():
 def doStepOver():
     #print('in doStepOver')
     idaapi.step_over()
-    GetDebuggerEvent(WFNE_SUSP, -1)
+    idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
     cur_addr = idc.GetRegValue("EIP")
     if cur_addr > 0xc0000000:
         runToUserSpace()
@@ -840,6 +865,8 @@ def doKeyMap():
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Reverse to text segment", None, 1, revToText, None)
 
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to connect", None, 1, runToConnect, None)
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Watch data read", None, 1, watchData, None)
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to IO", None, 1, runToIO, None)
 
     idaapi.CompileLine('static key_alt_shift_n() { RunPythonStatement("nameSysCalls()"); }')
     AddHotkey("Alt+Shift+n", 'key_alt_shift_n')
@@ -945,38 +972,45 @@ def checkHelp():
             pref_file = open("prefs.txt", 'a')
             pref_file.write("no_help")
             pref_file.close()
-#Wait() 
-primePump()
-nameSysCalls(True)
-print('back from nameSysCalls')
-form=idaapi.find_tform("Stack view")
-print('do switch')
-idaapi.switchto_tform(form, True)
-print('now create bookmark_view')
-print('Version 1.1')
-bookmark_view.Create()
-bookmark_list = bookmark_view.updateBookmarkView()
-for bm in bookmark_list:
-    if 'nox' in bm:
-        eip_str = getTagValue(bm, 'nox')
-        eip = int(eip_str, 16)
-        idc.MakeCode(eip) 
 
-form=idaapi.find_tform("IDA View-EIP")
-idaapi.switchto_tform(form, True)
-# MakeCode(eip)
-if not keymap_done:
-    doKeyMap()
-    print('dbg %r' % idaapi.dbg_is_loaded())
-
+if __name__ == "__main__":
+    #Wait() 
+    bookmark_view = bookmarkView.bookmarkView()
+    print('back from init bookmarkView')
+    keymap_done = False
+    primePump()
+    nameSysCalls(True)
+    print('back from nameSysCalls')
+    form=idaapi.find_tform("Stack view")
+    print('do switch')
+    idaapi.switchto_tform(form, True)
+    print('now create bookmark_view')
+    print('Version 1.1')
+    bookmark_view.Create()
+    bookmark_list = bookmark_view.updateBookmarkView()
+    for bm in bookmark_list:
+        if 'nox' in bm:
+            eip_str = getTagValue(bm, 'nox')
+            eip = int(eip_str, 16)
+            idc.MakeCode(eip) 
+    reHooks.register()
+    re_hooks = reHooks.Hooks()
+    re_hooks.hook()
+    form=idaapi.find_tform("IDA View-EIP")
+    idaapi.switchto_tform(form, True)
+    # MakeCode(eip)
+    if not keymap_done:
+        doKeyMap()
+        print('dbg %r' % idaapi.dbg_is_loaded())
+    
+        showSimicsMessage()
+    
+        RefreshDebuggerMemory()
+    checkHelp()
+    recordText()
     showSimicsMessage()
-
-    RefreshDebuggerMemory()
-checkHelp()
-recordText()
-showSimicsMessage()
-if not just_debug:
-    # first origin is sometimes off, call twice.
-    #goToOrigin()
-    goToOrigin()
-Batch(0)
+    if not just_debug:
+        # first origin is sometimes off, call twice.
+        #goToOrigin()
+        pass
+    Batch(0)
