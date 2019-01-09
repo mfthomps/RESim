@@ -133,11 +133,14 @@ class memUtils():
         retval = hi << 8 | lo
         return retval
 
+    def readPhysPtr(self, cpu, addr):
+        return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))
+
     def readPtr(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
             try:
-                return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE)
+                return self.getUnsigned(SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE))
             except:
                 return None
         else:
@@ -151,7 +154,10 @@ class memUtils():
             return None
 
     def getRegValue(self, cpu, reg):
-        reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+        if reg in self.regs:
+            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+        else:
+            reg_num = cpu.iface.int_register.get_number(reg)
         reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
 
@@ -172,7 +178,8 @@ class memUtils():
 
     def getUnsigned(self, val):
         if self.WORD_SIZE == 4:
-            return val & 0xFFFFFFFF
+            retval = val & 0xFFFFFFFF
+            return retval
         else:
             return val & 0xFFFFFFFFFFFFFFFF
 

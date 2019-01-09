@@ -27,7 +27,6 @@
 from simics import *
 import memUtils
 PAGE_SIZE = 4096
-ENTRIES_PER_TABLE = 1024
 class PtableInfo():
     def __init__(self):
         self.pdir_protect = None
@@ -36,8 +35,16 @@ class PtableInfo():
         self.page_exists = False
         self.pdir_addr = None
         self.ptable_addr = None
+        self.page_addr = None
+        self.entry_size = 4
     def valueString(self):
-        return 'pdir_protect: %s ptable_protect: %s ptable_exists: %r  page_exists: %r' % (str(self.pdir_protect), str(self.ptable_protect), self.ptable_exists, self.page_exists)
+        retval =  'pdir_protect: %s ptable_protect: %s ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), str(self.ptable_protect), self.ptable_exists, self.page_exists)
+        if self.ptable_addr is not None:
+            retval = retval + ' ptable_addr: 0x%x' % self.ptable_addr
+        if self.page_addr is not None:
+            retval = retval + ' page_addr: 0x%x' % self.page_addr
+        return retval
+
 class PageAddrInfo():
     def __init__(self, logical, physical, entry):
         self.logical = logical
@@ -85,6 +92,7 @@ def setBitRange(initial, value, start, lgr):
     return retval
 
 def getPageBases(cpu, lgr, kernel_base):
+    ENTRIES_PER_TABLE = 1024
     retval = []
     reg_num = cpu.iface.int_register.get_number("cr3")
     cr3 = cpu.iface.int_register.read(reg_num)
@@ -118,6 +126,44 @@ def getPageBases(cpu, lgr, kernel_base):
         pdir_index += 1
     return retval
     
+def getPageBasesExtended(cpu, lgr, kernel_base):
+    ENTRIES_PER_TABLE = 512
+    WORD_SIZE = 8
+    retval = []
+    reg_num = cpu.iface.int_register.get_number("cr3")
+    cr3 = cpu.iface.int_register.read(reg_num)
+    page_table_directory = cr3
+    pdir_index = 0
+    for pdir_table_index in range(4):
+      pdir_entry_addr = SIM_read_phys_memory(cpu, page_table_directory, 8)
+      for i in range(ENTRIES_PER_TABLE):
+        pdir_entry = SIM_read_phys_memory(cpu, pdir_entry_addr, WORD_SIZE)                
+        pdir_entry_20 = memUtils.bitRange(pdir_entry, 12, 31)
+        ptable_base = pdir_entry_20 * PAGE_SIZE
+        if pdir_entry != 0:
+            ptable_entry_addr = ptable_base
+            ptable_index = 0
+            for j in range(ENTRIES_PER_TABLE):
+                ptable_entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)
+                present = memUtils.testBit(ptable_entry, 0)
+                if present:
+                    entry_20 = memUtils.bitRange(ptable_entry, 12, 31)
+                    page_base = entry_20 * PAGE_SIZE
+                    logical = 0
+                    logical = memUtils.setBitRange(logical, pdir_index, 22)
+                    #lgr.debug('logical now 0x%x from index %d' % (logical, pdir_index))
+                    logical = memUtils.setBitRange(logical, ptable_index, 12)
+                    if logical >= kernel_base:
+                        break
+                    #lgr.debug('logical now 0x%x from ptable index %d' % (logical, ptable_index))
+                    addr_info = PageAddrInfo(logical, page_base, ptable_entry)
+                    retval.append(addr_info)
+                ptable_entry_addr += WORD_SIZE
+                ptable_index += 1
+        pdir_entry_addr += WORD_SIZE
+        pdir_index += 1
+      page_table_directory += WORD_SIZE
+    return retval
     
 def findPageTable(cpu, addr, lgr):
         ptable_info = PtableInfo()
@@ -130,8 +176,7 @@ def findPageTable(cpu, addr, lgr):
         #print('addr_extend is %d' % addr_extend)
         if addr_extend == 0:
             ''' 
-            Traditional page table.  Assume upper half kernel, and watch those directories & page tables
-            Get the directory table entry that starts kernel base address
+            Traditional page table.  
             '''
             offset = memUtils.bitRange(addr, 0,11) 
             ptable = memUtils.bitRange(addr, 12,21) 
@@ -162,6 +207,67 @@ def findPageTable(cpu, addr, lgr):
             entry_20 = memUtils.bitRange(entry, 12, 31)
             page_base = entry_20 * PAGE_SIZE
             paddr = page_base + offset
+            ptable_info.page_addr = paddr
             #lgr.debug('phys addr is 0x%x' % paddr)
             return ptable_info
+        else:
+            return findPageTableExtended(cpu, addr, lgr)
 
+def findPageTableExtended(cpu, addr, lgr):
+        WORD_SIZE = 8
+        mask64 = 0x000ffffffffff000
+        ptable_info = PtableInfo()
+        ptable_info.entry_size = WORD_SIZE
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        cr3 = cpu.iface.int_register.read(reg_num)
+        reg_num = cpu.iface.int_register.get_number("cr4")
+        cr4 = cpu.iface.int_register.read(reg_num)
+        ''' determine if PAE being used '''
+        addr_extend = memUtils.testBit(cr4, 5)
+        #print('addr_extend is %d' % addr_extend)
+        if addr_extend != 0:
+            ''' 
+            Extended page table.  
+            '''
+            offset = memUtils.bitRange(addr, 0,11) 
+            ptable = memUtils.bitRange(addr, 12,20) 
+            pdir = memUtils.bitRange(addr, 21,29) 
+            pdir_pointer_table = memUtils.bitRange(addr, 30,31) 
+          
+            dir_ptr_entry_addr = cr3 + WORD_SIZE * pdir_pointer_table 
+            dir_ptr_entry = SIM_read_phys_memory(cpu, dir_ptr_entry_addr, WORD_SIZE)
+            dir_ptr_entry_addr = dir_ptr_entry & mask64 
+
+            pdir_entry_addr = dir_ptr_entry_addr + (pdir * WORD_SIZE)
+
+            ptable_info.pdir_addr = pdir_entry_addr
+
+            pdir_entry = SIM_read_phys_memory(cpu, pdir_entry_addr, WORD_SIZE)                
+            if pdir_entry == 0:
+                return ptable_info
+
+            ptable_info.ptable_protect = memUtils.testBit(pdir_entry, 2)
+            ptable_info.ptable_exists = True
+            
+            pdir_entry_24 = pdir_entry & mask64
+            ptable_base = pdir_entry_24
+            #lgr.debug('pdir_entry: 0x%x 24 0x%x ptable_base: 0x%x' % (pdir_entry, pdir_entry_24, ptable_base))
+
+            ptable_entry_addr = ptable_base + (WORD_SIZE*ptable)
+            #lgr.debug('ptable_entry_addr 0x%x  ptable 0x%x' % (ptable_entry_addr, ptable_base))
+            ptable_info.ptable_addr = ptable_entry_addr
+            entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
+            #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
+            if entry == 0:
+                return ptable_info
+            
+            ptable_info.page_protect = memUtils.testBit(entry, 2)
+            ptable_info.page_exists = True
+            entry_24 = entry & mask64
+            page_base = entry_24 
+            paddr = page_base + offset
+            ptable_info.page_addr = paddr
+            #lgr.debug('phys addr is 0x%x' % paddr)
+            return ptable_info
+        else:
+            lgr.error('addr_extended is zero?')

@@ -41,10 +41,6 @@ BEWARE syntax errors are not seen.  TBD make unit test
     TBD add other executable pages 
     The log for this is in its own log file
 '''
-class Prec():
-    def __init__(self, cpu, pid=None):
-        self.cpu = cpu
-        self.pid = pid
 
 class reverseToCall():
     def __init__(self, top, param, os_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
@@ -54,6 +50,7 @@ class reverseToCall():
             #sys.stderr = open('err.txt', 'w')
             self.top = top 
             self.cpu = None
+            self.pid = None
             self.cell_name = None
             #self.lgr = lgr
             self.page_size = page_size
@@ -66,7 +63,6 @@ class reverseToCall():
             self.reg = None
             self.reg_num = None
             self.reg_val = None
-            self.byte_reg_value = None
             self.stop_hap = None
             self.uncall = False
             self.is_monitor_running = is_monitor_running
@@ -107,19 +103,19 @@ class reverseToCall():
         except:
             return None
 
-    def watchSysenter(self, prec):
+    def watchSysenter(self, dumb=None):
         cell = self.top.getCell()
         if self.enter_break1 is None:
-            #self.enter_break1 = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
-            #self.enter_break2 = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
-            pcell = self.cpu.physical_memory
-            #self.enter_break1 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
-            #self.enter_break2 = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
+            #pcell = self.cpu.physical_memory
             #self.sysenter_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
-            self.lgr.debug('watchSysenter set phys breaks at 0x%x and 0x%x' % (self.v2p(self.cpu, self.param.sysenter), self.v2p(self.cpu, self.param.sys_entry)))
-            self.enter_break1 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
-            self.enter_break2 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
-            self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
+            self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
+            #self.lgr.debug('watchSysenter set phys breaks at 0x%x and 0x%x' % (self.v2p(self.cpu, self.param.sysenter), self.v2p(self.cpu, self.param.sys_entry)))
+            #self.enter_break1 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
+            #self.enter_break2 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
+
+            self.enter_break1 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
+            self.enter_break2 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
+            self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, self.enter_break1, self.enter_break2, 'reverseToCall sysenter')
 
     def setup(self, cpu, x_pages, bookmarks=None):
             self.lgr.debug('reverseToCall setup')
@@ -132,8 +128,8 @@ class reverseToCall():
             if hasattr(self.param, 'sysenter') and self.param.sysenter is not None:
                 '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
                 pid, cell_name, cpu = self.context_manager.getDebugPid() 
-                prec = Prec(cpu, pid)
-                SIM_run_alone(self.watchSysenter, prec)
+                self.pid = pid
+                SIM_run_alone(self.watchSysenter, None)
 
 
 
@@ -376,21 +372,21 @@ class reverseToCall():
     '''
     BEWARE syntax errors are not seen.  TBD make unit test
     '''
-    def doRevToModReg(self, reg, taint=False, offset=0):
+    def doRevToModReg(self, reg, taint=False, offset=0, value=None, num_bytes=None):
         '''
         Run backwards until a write to the given register
         '''
         self.offset =  offset 
         self.taint = taint
-        if not taint: 
-            self.byte_reg_value = None
-        self.lgr.debug('doRevToModReg for %s offset is %x' % (reg, offset))
+        self.value = value
+        self.num_bytes = num_bytes
+        self.lgr.debug('\ndoRevToModReg cycle 0x%x for register %s offset is %x' % (self.cpu.cycles, reg, offset))
         self.reg = reg
         dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
         self.reg_num = self.cpu.iface.int_register.get_number(reg)
         self.reg_val = self.cpu.iface.int_register.read(self.reg_num)
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('doRevToModReg starting at %x, looking for %s change from %x' % (eip, reg, self.reg_val))
+        self.lgr.debug('doRevToModReg starting at %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         if not self.cycleRegisterMod():
             my_args = procInfo.procInfo(comm, self.cpu, pid)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -417,6 +413,15 @@ class reverseToCall():
         for breakpt in self.the_breaks:
             SIM_delete_breakpoint(breakpt)
         self.the_breaks = []
+
+    def conditionalMove(self, mn):
+        eflags = self.top.getReg('eflags', self.cpu)
+        if mn == 'cmovne' and not memUtils.testBit(eflags, 6):
+            return True
+        elif mn == 'cmove' and memUtils.testBit(eflags, 6):
+            return True
+        else:
+            return False
 
     def cycleRegisterMod(self):
         '''
@@ -451,8 +456,8 @@ class reverseToCall():
                 self.lgr.debug('cycleRegisterMod disassemble for eip 0x%x is %s' % (eip, str(instruct)))
                 mn = decode.getMn(instruct[1])
                 self.lgr.debug('cycleRegisterMod decode is %s' % mn)
-                if decode.modifiesOp0(mn):
-                    self.lgr.debug('get operatnds from %s' % instruct[1])
+                if decode.modifiesOp0(mn) or self.conditionalMove(mn):
+                    self.lgr.debug('get operands from %s' % instruct[1])
                     op1, op0 = decode.getOperands(instruct[1])
                     self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
                     if decode.isReg(op0) and decode.regIsPart(op0, self.reg):
@@ -462,14 +467,38 @@ class reverseToCall():
                 
         return retval
                        
- 
+
+    def multOne(self, op0, mn):
+        self.lgr.debug('multOne %s %s' % (op0, mn))
+        if mn == 'imul':
+            self.lgr.debug('multOne is imul')
+            if decode.isReg(op0):
+                mul = decode.getValue(op0, self.cpu, self.lgr)
+                self.lgr.debug('multOne val of %s is 0x%x' % (op0, mul))
+                if mul == 1:
+                    return True
+        return False
+
+    def orValue(self, op1, mn):
+        if self.value is not None and mn == 'or':
+            if self.num_bytes == 1:
+                address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                if address is not None:
+                    value = self.os_utils[self.cell_name].getMemUtils().readWord32(self.cpu, address)
+                    self.lgr.debug('orValue, address is 0x%x value 0x%x' % (address, value))
+                    if value == self.value:
+                        return True
+        return False
+            
     def followTaint(self):
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('followTaint instruct at 0x%x is %s' % (eip, str(instruct)))
         op1, op0 = decode.getOperands(instruct[1])
         mn = decode.getMn(instruct[1])
-        if not mn.startswith('mov') and not mn == 'pop':
+        if not self.multOne(op0, mn) and not mn.startswith('mov') and not mn == 'pop' and not mn.startswith('cmov') \
+                                     and not self.orValue(op1, mn) and not mn == 'add':
+            ''' NOTE: treating "or" and "add" and imult of one as a "mov" '''
             if mn == 'add':
                offset = None
                #offset = int(op1, 16)
@@ -502,8 +531,12 @@ class reverseToCall():
         elif decode.isReg(op1) and decode.isIndirect(op1):
             self.lgr.debug('followTaint, is indrect reg, track %s' % op1)
             address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-            self.bookmarks.setDebugBookmark('backtrack switch to indirect value:0x%x eip:0x%x inst:"%s"' % (value, eip, instruct[1]))
+            self.bookmarks.setDebugBookmark('backtrack switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
             self.doRevToModReg(op1, taint=True)
+
+        #elif mn == 'lea':
+        #    address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+
         else:
             self.lgr.debug('followTaint, see if %s is an address' % op1)
             address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
@@ -520,7 +553,7 @@ class reverseToCall():
                 self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
                     self.bookmarks.setDebugBookmark('taint branch %s eip:0x%x inst:%s' % (protected_memory, eip, instruct[1]))
-                    self.lgr.debug('BT bookmark: taint branch %s eip:0x%x inst%s' % (protected_memory, eip, instruct[1]))
+                    self.lgr.debug('BT bookmark: taint branch %s eip:0x%x inst %s' % (protected_memory, eip, instruct[1]))
                 else:
                     self.bookmarks.setDebugBookmark('backtrack%s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack %s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
@@ -679,13 +712,13 @@ class reverseToCall():
             return
         else:
             cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
-            if cur_cpu == prec.cpu and pid == prec.pid:
-                cycles = prec.cpu.cycles
+            if cur_cpu == self.cpu and pid == self.pid:
+                cycles = self.cpu.cycles
                 if cycles not in self.sysenter_cycles:
-                    eip = self.top.getEIP(prec.cpu)
+                    eip = self.top.getEIP(self.cpu)
                     reg_num = self.cpu.iface.int_register.get_number('eax')
                     eax = self.cpu.iface.int_register.read(reg_num)
-                    self.lgr.debug('sysenterHap call %d at 0x%x, add cycle 0x%x' % (eax, eip, cycles))
+                    #self.lgr.debug('sysenterHap call %d at 0x%x, add cycle 0x%x' % (eax, eip, cycles))
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     self.sysenter_cycles.append(cycles)
             

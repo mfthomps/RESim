@@ -171,7 +171,7 @@ class TraceProcs():
 
     def close(self, pid, fd):
         if pid not in self.plist:
-            self.lgr.debug('traceProcs close on unknown pid %d' % pid)
+            #self.lgr.debug('traceProcs close on unknown pid %d' % pid)
             return
         #self.lgr.debug('try close pid %d fd %d' % (pid, fd))
         self.rmFD(pid, fd)

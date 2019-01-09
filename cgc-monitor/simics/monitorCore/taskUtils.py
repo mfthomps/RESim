@@ -63,38 +63,45 @@ class TaskStruct(object):
 
 class TaskUtils():
     COMM_SIZE = 16
-    def __init__(self, cpu, param, mem_utils, current_task, lgr):
+    def __init__(self, cpu, param, mem_utils, unistd32, lgr):
         self.cpu = cpu
         self.lgr = lgr
         self.param = param
         self.mem_utils = mem_utils
-        ''' address of current_task symbol, pointer at this address points to the current task record '''
-        self.current_task = current_task
-        self.lgr.debug('TaskUtils init with current_task of 0x%x' % current_task)
-        self.exec_addrs = {}
-        self.syscall_numbers = syscallNumbers.SyscallNumbers(self.param)
 
-    def getCurrentTask(self):
-        return self.current_task
-       
+        ''' address of current_task symbol, pointer at this address points to the current task record '''
+        ''' use physical address because some are relative to FS segment '''
+        if param.current_task_fs:
+            cmd = 'logical-to-physical fs:0x%x' % param.current_task
+        else:
+            cmd = 'logical-to-physical 0x%x' % param.current_task
+        self.phys_current_task = SIM_run_command(cmd)
+        self.lgr.debug('TaskUtils init with current_task of 0x%x, phys: 0x%x' % (param.current_task, self.phys_current_task))
+        self.exec_addrs = {}
+        self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd32)
+
+    def getPhysCurrentTask(self):
+        return self.phys_current_task
+
     def getCurTaskRec(self):
-        cur_task_rec = self.mem_utils.readPtr(self.cpu, self.current_task)
+        cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         return cur_task_rec
 
     def curProc(self):
-        cur_task_rec = self.mem_utils.readPtr(self.cpu, self.current_task)
+        cur_task_rec = self.getCurTaskRec()
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         return self.cpu, comm, pid 
 
-    def findSwapper(self, current_task, cpu):
+    def findSwapper(self):
             #task = SIM_read_phys_memory(cpu, current_task, self.mem_utils.WORD_SIZE)
-            task = self.mem_utils.readPtr(cpu, current_task)
+            task = self.getCurTaskRec()
+            cpu = self.cpu
             #task = self.mem_utils.getCurrentTask(self.param, cpu)
             done = False
             while not done:
-                comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
-                #print 'findSwapper task is %x comm: %s' % (task, comm)
+                #comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
+                #print 'findSwapper task is %x ' % (task)
                 ts_real_parent = self.mem_utils.readPtr(cpu, task + self.param.ts_real_parent)
                 if ts_real_parent == task:
                     #print 'parent is same as task, done?'
@@ -114,7 +121,13 @@ class TaskUtils():
 
     def read_list_head(self, cpu, addr, offset, head_addr = None, head_offset = None, other_offset = None):
         next = self.mem_utils.readPtr(cpu, addr + offset)
+        if next is None:
+            self.lgr.error('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
+            return None
         prev = self.mem_utils.readPtr(cpu, addr + offset + self.mem_utils.WORD_SIZE)
+        if prev is None:
+            self.lgr.error('read_list_head got none for prev addr 0x%x offset 0x%x' % (addr, offset))
+            return None
     
         def transform(p):
             if p == 0:
@@ -127,14 +140,18 @@ class TaskUtils():
                 #SIM_break_simulation("debug")
                 pass
             if head_addr != None and p - head_offset == head_addr:
+                #print('returning head_addr')
                 return head_addr
             if p - offset == addr:
+                #print('returning addr p - offset')
                 return addr
             if other_offset != None:
+                #print('returning other offset p 0x%x minus %d' % (p, other_offset))
                 return p - other_offset
             return p - offset
-    
+        #print('read_list_head addr 0x%x  next is 0x%x' % (addr, next)) 
         return ListHead(transform(next), transform(prev))
+
     def readTaskStruct(self, addr, cpu):
         """Read the task_struct at addr and return a TaskStruct object
         with the information."""
@@ -142,6 +159,7 @@ class TaskUtils():
         if self.param.ts_next != None:
             if self.param.ts_next_relative:
                 assert self.param.ts_prev == self.param.ts_next + self.mem_utils.WORD_SIZE
+                #print('read ts_next')
                 task.tasks = self.read_list_head(cpu, addr, self.param.ts_next)
             else:
                 task.tasks = ListHead(self.mem_utils.readPtr(cpu, addr + self.param.ts_next), self.mem_utils.readPtr( cpu, addr + self.param.ts_prev))
@@ -186,6 +204,8 @@ class TaskUtils():
             task.group_leader = self.mem_utils.readPtr(cpu, addr + self.param.ts_group_leader)
         if self.param.ts_children_list_head != None and self.param.ts_sibling_list_head != None and self.param.ts_real_parent != None:
             c = self.read_list_head(cpu, addr, self.param.ts_children_list_head, other_offset=self.param.ts_sibling_list_head)
+            #if c.next is not None:
+                #print('read clist head children got 0x%x 0x%x' % (c.next, c.prev))
             task.children = [c.next, c.prev]
             if task.in_sibling_list:
                 s = self.read_list_head(cpu, addr, self.param.ts_sibling_list_head, head_addr=task.in_sibling_list, head_offset=self.param.ts_children_list_head)
@@ -201,10 +221,10 @@ class TaskUtils():
         tasks = {}
         cpu = self.cpu
         #print('getTaskStructs current_task is %x' % self.current_task)
-        swapper_addr = self.findSwapper(self.current_task, cpu) 
+        swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return tasks
-        #print('using swapper_addr of %x' % swapper_addr)
+        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -214,7 +234,10 @@ class TaskUtils():
             seen.add((task_addr, x))
             seen.add((task_addr, False))
             task = self.readTaskStruct(task_addr, cpu)
-            #print 'reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next)
+            if task.next == swapper_addr:
+               self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
+               return tasks
+            self.lgr.debug('reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next))
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
             for child in task.children:
@@ -265,12 +288,12 @@ class TaskUtils():
  
     def getTaskListPtr(self):
         ''' return address of the task list "next" entry that points to the current task '''
-        task_rec_addr = self.mem_utils.readPtr(self.cpu, self.current_task)
+        task_rec_addr = self.getCurTaskRec()
         seen = set()
         tasks = {}
         cpu = self.cpu
         #print('getTaskStructs current_task is %x' % self.current_task)
-        swapper_addr = self.findSwapper(self.current_task, cpu) 
+        swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return tasks
         #print('using swapper_addr of %x' % swapper_addr)
@@ -317,7 +340,7 @@ class TaskUtils():
     def currentProcessInfo(self, cpu=None):
         #self.lgr.debug('currentProcessInfo, current_task is 0x%x' % self.current_task)
         #cur_addr = SIM_read_phys_memory(self.cpu, self.current_task, self.mem_utils.WORD_SIZE)
-        cur_addr = self.mem_utils.readPtr(self.cpu, self.current_task)
+        cur_addr = self.getCurTaskRec()
         comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
         return self.cpu, cur_addr, comm, pid
@@ -467,27 +490,36 @@ class TaskUtils():
         Given the address of a linux stack frame, return a populated dictionary of its values.
     '''
     def getFrame(self, v_addr, cpu):
-            phys_addr = self.mem_utils.v2p(cpu, v_addr)
-            #self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
-            retval = {}
-            retval['ebx'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
-            retval['ecx'] = SIM_read_phys_memory(cpu, phys_addr+self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['edx'] = SIM_read_phys_memory(cpu, phys_addr+2*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['esi'] = SIM_read_phys_memory(cpu, phys_addr+3*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['edi'] = SIM_read_phys_memory(cpu, phys_addr+4*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['ebp'] = SIM_read_phys_memory(cpu, phys_addr+5*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['eax'] = SIM_read_phys_memory(cpu, phys_addr+6*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['eds'] = SIM_read_phys_memory(cpu, phys_addr+7*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['es'] = SIM_read_phys_memory(cpu, phys_addr+8*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['fs'] = SIM_read_phys_memory(cpu, phys_addr+9*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['gs'] = SIM_read_phys_memory(cpu, phys_addr+10*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['orig_ax'] = SIM_read_phys_memory(cpu, phys_addr+11*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['eip'] = SIM_read_phys_memory(cpu, phys_addr+12*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['cs'] = SIM_read_phys_memory(cpu, phys_addr+13*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['flags'] = SIM_read_phys_memory(cpu, phys_addr+14*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['esp'] = SIM_read_phys_memory(cpu, phys_addr+15*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            retval['ss'] = SIM_read_phys_memory(cpu, phys_addr+16*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
-            return retval
+        eip_off = self.param.stack_frame_eip / self.mem_utils.WORD_SIZE
+ 
+        phys_addr = self.mem_utils.v2p(cpu, v_addr)
+        #self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x  eip_off 0x%x' % (v_addr, phys_addr, eip_off))
+        retval = {}
+        retval['ebx'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
+        retval['ecx'] = SIM_read_phys_memory(cpu, phys_addr+self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['edx'] = SIM_read_phys_memory(cpu, phys_addr+2*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['esi'] = SIM_read_phys_memory(cpu, phys_addr+3*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['edi'] = SIM_read_phys_memory(cpu, phys_addr+4*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['ebp'] = SIM_read_phys_memory(cpu, phys_addr+5*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['eax'] = SIM_read_phys_memory(cpu, phys_addr+6*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['eds'] = SIM_read_phys_memory(cpu, phys_addr+7*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['es'] = SIM_read_phys_memory(cpu, phys_addr+8*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['fs'] = SIM_read_phys_memory(cpu, phys_addr+9*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['gs'] = SIM_read_phys_memory(cpu, phys_addr+10*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['orig_ax'] = SIM_read_phys_memory(cpu, phys_addr+11*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        #retval['eip'] = SIM_read_phys_memory(cpu, phys_addr+12*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['eip'] = SIM_read_phys_memory(cpu, phys_addr+eip_off*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        #self.lgr.debug('read eip of 0x%x' % retval['eip'])
+        #retval['cs'] = SIM_read_phys_memory(cpu, phys_addr+(eip_off+1)*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['cs'] = SIM_read_phys_memory(cpu, phys_addr+(eip_off+1)*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        #retval['flags'] = SIM_read_phys_memory(cpu, phys_addr+14*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['flags'] = SIM_read_phys_memory(cpu, phys_addr+(eip_off+2)*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        #retval['esp'] = SIM_read_phys_memory(cpu, phys_addr+15*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['esp'] = SIM_read_phys_memory(cpu, phys_addr+(eip_off+3)*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        #retval['ss'] = SIM_read_phys_memory(cpu, phys_addr+16*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        retval['ss'] = SIM_read_phys_memory(cpu, phys_addr+(eip_off+4)*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+        return retval
+
     def frameFromRegs(self, cpu):
             regs = {"eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"}
             frame = {}

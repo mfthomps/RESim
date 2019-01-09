@@ -16,7 +16,7 @@ class CloneChild():
         entry = self.task_utils.getSyscallEntry(callnum)
         self.lgr.debug('cloneChild callnum is %s entry 0x%x' % (callnum, entry))
         self.call_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-        self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, nth, self.call_break)
+        self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, nth, self.call_break,'cloneChild')
         self.exit_break = None
         self.exit_hap = None
         self.child_pid = None
@@ -45,7 +45,7 @@ class CloneChild():
             phys = self.mem_utils.v2p(self.cpu, stack_frame['eip'])
             self.lgr.debug('cloneChild syscallHap set exit break at 0x%x (0x%x)' % (stack_frame['eip'], phys))
             self.exit_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
-            self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break)
+            self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break, 'cloneChild syscall hap')
 
     def exitHap(self, dumb, third, forth, memory):
         if self.exit_hap is None:

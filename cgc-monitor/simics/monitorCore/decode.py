@@ -24,7 +24,7 @@
 '''
 
 from simics import *
-modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg']
+modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul']
 ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
 def modifiesOp0(op):
     if op.startswith('mov') or op in modifiesOp0_list:
@@ -87,7 +87,7 @@ def getInBrackets(cpu, s, lgr):
             reg_num = cpu.iface.int_register.get_number(reg)
             if reg_num is not None:
                 prefix = getSigned(cpu.iface.int_register.read(reg_num))
-                lgr.debug('cell_name: %s got prefix value of %d' % (cell_name, prefix))
+                #lgr.debug('cell_name: %s got prefix value of %d' % (cell_name, prefix))
             else:
                 print 'cell_name: %s could not get reg num for %s ' % (cell_name, reg)
                 return None, None
@@ -102,7 +102,8 @@ def getInBrackets(cpu, s, lgr):
                 if len(prefix.strip()) == 0:
                     prefix = None
                 else:
-                    lgr.debug('cell_name: %s returning prefix of %s' % (cell_name, prefix))
+                    #lgr.debug('cell_name: %s returning prefix of %s' % (cell_name, prefix))
+                    pass
             
         return prefix, content
 
@@ -144,7 +145,7 @@ def isIndirect(reg):
 
 def getValue(s, cpu, lgr):
     retval = None
-    lgr.debug('getValue for %s' % s)
+    #lgr.debug('getValue for %s' % s)
     if '+' in s:
         parts = s.split('+',1)
         retval = getValue(parts[0], cpu, lgr) + getValue(parts[1], cpu, lgr)
@@ -159,16 +160,16 @@ def getValue(s, cpu, lgr):
             retval = retval * getValue(p, cpu, lgr) 
     elif isReg(s):
         reg_num = cpu.iface.int_register.get_number(s)
-        lgr.debug('getValue %s is reg, get its value' % s)
+        #lgr.debug('getValue %s is reg, get its value' % s)
         retval = cpu.iface.int_register.read(reg_num)
     else:
         try:
             retval = int(s, 16)
-            lgr.debug('getValue returning 0x%x' % retval)
+            #lgr.debug('getValue returning 0x%x' % retval)
         except:
             try: 
                 retval = int(s)
-                lgr.debug('getValue returning 0x%x' % retval)
+                #lgr.debug('getValue returning 0x%x' % retval)
             except:
                 lgr.error('getValue could not parse %s' % s)
                 pass
@@ -202,12 +203,12 @@ def addressFromExpression(cpu, exp, lgr):
 
 def getAddressFromOperand(cpu, operand, lgr):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
-    lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
+    #lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
         address = addressFromExpression(cpu, bracketed, lgr)
         if address is not None:
-            lgr.debug('bracketedd value was %x' % address)
+            #lgr.debug('bracketedd value was %x' % address)
             offset = 0
             if prefix is not None:
                try:
@@ -216,7 +217,7 @@ def getAddressFromOperand(cpu, operand, lgr):
                except:
                   try:
                       offset = getSigned(int(prefix, 16))
-                      lgr.debug("adjusting by offset %d" % offset)
+                      #lgr.debug("adjusting by offset %d" % offset)
                       address = address + offset
                   except:
                       print 'did not parse offset %s' % prefix
@@ -229,20 +230,20 @@ def getAddressFromOperand(cpu, operand, lgr):
             reg_num = cpu.iface.int_register.get_number(operand)
             if reg_num is not None:
                 address = cpu.iface.int_register.read(reg_num)
-                lgr.debug('indirect value was %x' % address)
+                #lgr.debug('indirect value was %x' % address)
             else:
                 print 'could not get reg number from %s' % operand
     return address
 
 def getAddressFromOperandXX(cpu, operand, lgr):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
-    lgr.debug('bracketedd it %s prefix is %s' % (bracketed, prefix))
+    #lgr.debug('bracketedd it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
         reg_num = cpu.iface.int_register.get_number(bracketed)
         if reg_num is not None:
             address = cpu.iface.int_register.read(reg_num)
-            lgr.debug('bracketed value was %x' % address)
+            #lgr.debug('bracketed value was %x' % address)
             offset = 0
             if prefix is not None:
                try:
@@ -251,7 +252,7 @@ def getAddressFromOperandXX(cpu, operand, lgr):
                except:
                   try:
                       offset = getSigned(int(prefix, 16))
-                      lgr.debug("adjusting by offset %d" % offset)
+                      #lgr.debug("adjusting by offset %d" % offset)
                       address = address + offset
                   except:
                       print 'did not parse offset %s' % prefix
@@ -264,7 +265,7 @@ def getAddressFromOperandXX(cpu, operand, lgr):
             reg_num = cpu.iface.int_register.get_number(operand)
             if reg_num is not None:
                 address = cpu.iface.int_register.read(reg_num)
-                lgr.debug('indirect value was %x' % address)
+                #lgr.debug('indirect value was %x' % address)
             else:
                 print 'could not get reg number from %s' % operand
     return address
@@ -280,7 +281,7 @@ def getUnmapped(cpu, instruct, lgr):
                 #print 'found unmapped at %x' % address
                 return address
             else:
-                lgr.debug('operand %s logical address: %x  phys not zero: %x' % (operand, address, phys_block.address))
+                #lgr.debug('operand %s logical address: %x  phys not zero: %x' % (operand, address, phys_block.address))
                 pass
     return None
            

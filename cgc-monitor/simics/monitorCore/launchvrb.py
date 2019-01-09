@@ -13,6 +13,12 @@ run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/monitorC
 run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/zk/monitorLibs')
 run_command('add-directory -prepend /mnt/simics/eemsWorkspace')
 if RUN_FROM_SNAP is None:
+    # 45x slowdown
+    #run_command('set-min-latency min-latency = 0.01')
+    # 45x slowdown
+    #run_command('set-min-latency min-latency = 0.1')
+    # 45x slowdown
+    #run_command('set-min-latency min-latency = 0.001')
     #run_command('run-command-file ./targets/x86-x58-ich10/vdr2.simics')
     run_command('run-command-file ./targets/x86-x58-ich10/mft-ubuntu.simics')
     run_command('start-agent-manager')

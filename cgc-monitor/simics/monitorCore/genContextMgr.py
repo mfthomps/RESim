@@ -13,55 +13,74 @@ class GenBreakpoint():
 
         self.set()
 
+    def show(self):
+        print('\tbreak_handle: %d num: %d  add:0x%x' % (self.handle, self.break_num, self.addr))
+
     def set(self):
         #self.break_num = SIM_breakpoint(self.cell, self.addr_type, self.mode, self.addr, self.length, self.flags)
         ''' do set in hap? '''
-        self.lgr.debug('GenBreakpoint set done in hap, the break handle is %d' % self.handle)
+        pass
+        #self.lgr.debug('GenBreakpoint set done in hap, the break handle is %d' % self.handle)
 
     def clear(self):
         if self.break_num is not None:
             SIM_delete_breakpoint(self.break_num)
-            self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            #self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             self.break_num = None
 
 class GenHap():
-    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_start, breakpoint_end = None):
+    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, immediate=True):
         ''' breakpoint_start and breakpont_end are GenBreakpoint types '''
         self.hap_type = hap_type
         self.callback = callback
         self.parameter = parameter
-        self.breakpoint_start = breakpoint_start
-        self.breakpoint_end = breakpoint_end
+        self.breakpoint_list = breakpoint_list
         self.lgr = lgr
         self.hap_num = None
         self.handle = handle
-        self.set()
+        self.name = name
+        self.set(immediate)
 
-    def set(self):
-        if self.breakpoint_end is not None:
-            bs = self.breakpoint_start
-            be = self.breakpoint_end
-            bs.break_num = SIM_breakpoint(bs.cell, bs.addr_type, bs.mode, bs.addr, bs.length, bs.flags)
-            be.break_num = SIM_breakpoint(be.cell, be.addr_type, be.mode, be.addr, be.length, be.flags)
-            self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
-            self.lgr.debug('GenHap set handle %s assigned hap %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                           str(self.hap_num), str(bs.break_num), str(be.break_num), 
-                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+    def show(self):
+        print('hap_handle: %d  num: %d name: %s' % (self.handle, self.hap_num, self.name))
+        for bp in self.breakpoint_list:
+            bp.show()
+
+    def hapAlone(self, (bs, be)):
+        self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
+        #self.lgr.debug('GenHap alone set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+        #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
+        #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+
+    def set(self, immediate=True):
+        if len(self.breakpoint_list) > 1:
+            for bp in self.breakpoint_list:
+                bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+            bs = self.breakpoint_list[0]
+            be = self.breakpoint_list[-1]
+            #self.lgr.debug('GenHap callback range')
+            if immediate:
+                self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
+                #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
+                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+            else:
+                SIM_run_alone(self.hapAlone, (bs, be))
+        elif len(self.breakpoint_list) == 1:
+            bp = self.breakpoint_list[0]
+            bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+            self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
+            #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
+            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
         else:
-            bs = self.breakpoint_start
-            bs.break_num = SIM_breakpoint(bs.cell, bs.addr_type, bs.mode, bs.addr, bs.length, bs.flags)
-            self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bs.break_num)
-            self.lgr.debug('GenHap set handle %s assigned hap %s on break %s (0x%x) break handle %s' % (str(self.handle), str(self.hap_num), 
-                            str(bs.break_num), bs.addr, str(bs.handle)))
+            self.lgr.error('GenHap, no breakpoints')
 
     def clear(self, dumb=None):
         if self.hap_num is not None:
-            if self.breakpoint_start is not None:
-                self.breakpoint_start.clear()
-            if self.breakpoint_end is not None:
-                self.breakpoint_end.clear()
+            for bp in self.breakpoint_list:
+                bp.clear()
             SIM_hap_delete_callback_id(self.hap_type, self.hap_num)
-            self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
+            #self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
             self.hap_num = None
    
 class GenContextMgr():
@@ -82,7 +101,7 @@ class GenContextMgr():
         self.ida_message = None
         self.exit_break_num = None
         self.exit_cb_num = None
-        self.current_task = task_utils.getCurrentTask()
+        self.phys_current_task = task_utils.getPhysCurrentTask()
         self.task_break = None
         self.task_hap = None
         self.breakpoints = []
@@ -92,6 +111,25 @@ class GenContextMgr():
         self.text_start = None
         self.text_end = None
 
+    def getRealBreak(self, break_handle):
+        for hap in self.haps:
+            for bp in hap.breakpoint_list:
+                if bp.handle == break_handle:
+                    return bp.break_num
+        return None
+
+    def getBreakHandle(self, real_bp):
+        for hap in self.haps:
+            #self.lgr.debug('getBreakHandle hap %s' % (hap.name))
+            for bp in hap.breakpoint_list:
+                #self.lgr.debug('getBreakHandle look for %d got %d' % (real_bp, bp.break_num))
+                if bp.break_num == real_bp:
+                    return bp.handle
+        return None
+
+    def showHaps(self):
+        for hap in self.haps:
+            hap.show()
     def getRESimContext(self):
         return self.debugging_cell
 
@@ -128,7 +166,7 @@ class GenContextMgr():
         pass
 
     def genDeleteHap(self, hap_handle, immediate=False):
-        self.lgr.debug('genDeleteHap hap_handle %d' % hap_handle)
+        #self.lgr.debug('genDeleteHap hap_handle %d' % hap_handle)
         hap_copy = list(self.haps)
         for hap in hap_copy:
             if hap.handle == hap_handle:
@@ -136,34 +174,38 @@ class GenContextMgr():
                     hap.clear(None)
                 else:
                     SIM_run_alone(hap.clear, None)
-                if hap.breakpoint_start is not None:
-                    self.breakpoints.remove(hap.breakpoint_start)
-                if hap.breakpoint_end is not None:
-                    self.breakpoints.remove(hap.breakpoint_end)
-                self.lgr.debug('genDeleteHap removing hap %d from list' % hap.handle)
+                #self.lgr.debug('num breaks in hap %d is %d' % (hap_handle, len(hap.breakpoint_list)))
+                for bp in hap.breakpoint_list:
+                    if bp in self.breakpoints:
+                        self.breakpoints.remove(bp)
+                        #self.lgr.debug('removing bp %d from hap_handle %d  break_num %s' % (bp.handle, hap_handle, str(bp.break_num)))
+                    else:
+                        self.lgr.error('genDeleteHap bp not in list, handle %d ' % (bp.handle))
+                #self.lgr.debug('genDeleteHap removing hap %d from list' % hap.handle)
                 self.haps.remove(hap)
                 return
-        #self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_num)
+        self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_num)
 
-    def genHapIndex(self, hap_type, callback, parameter, handle):
-        self.lgr.debug('genHapIndex break handle %d' % handle)
+    def genHapIndex(self, hap_type, callback, parameter, handle, name=None):
+        #self.lgr.debug('genHapIndex break_handle %d' % handle)
         for bp in self.breakpoints:
             if bp.handle == handle:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name)
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapIndex failed to find break %d' % breakpoint)
 
-    def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end):
-        #self.lgr.debug('genHapRange break handle %d %d' % (handle_start, handle_end))
+    def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None):
+        #self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
         bp_start = None
+        bp_list = []
         for bp in self.breakpoints:
-            if bp.handle == handle_start:
-                bp_start = bp
+            if bp.handle >= handle_start:
+                bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_start, bp)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=False)
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
@@ -213,10 +255,14 @@ class GenContextMgr():
             SIM_run_alone(self.clearAllHap, None)
 
     def rmTask(self, pid):
+        ''' remove a pid from the list of task records being watched.  return True if this is the last thread. '''
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec in self.debugging_rec:
             self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
             self.debugging_rec.remove(rec)
+            if len(self.debugging_rec) == 0:
+                return True
+        return False
 
     def addTask(self, pid):
         rec = self.task_utils.getRecAddrForPid(pid)
@@ -251,11 +297,12 @@ class GenContextMgr():
             #self.lgr.debug('watchTasks called, but already watching')
             return
         print('debugging_cell is %s' % self.debugging_cell)
-        self.task_break = SIM_breakpoint(self.debugging_cell, Sim_Break_Linear, Sim_Access_Write, self.current_task, self.mem_utils.WORD_SIZE, 0)
+        self.task_break = SIM_breakpoint(self.debugging_cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
+                             self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.debugging_cpu, self.task_break)
-        self.lgr.debug('watchTasks break %d set on 0x%x' % (self.task_break, self.current_task))
+        self.lgr.debug('watchTasks break %d set on physical 0x%x' % (self.task_break, self.phys_current_task))
         self.debugging_scheduled = True
-        ctask = self.mem_utils.readPtr(self.debugging_cpu, self.current_task)
+        ctask = self.task_utils.getCurTaskRec()
         pid = self.mem_utils.readWord32(self.debugging_cpu, ctask + self.param.ts_pid)
         self.lgr.debug('watchTasks watch record 0x%x pid %d' % (ctask, pid))
         self.debugging_rec.append(ctask)
@@ -284,7 +331,7 @@ class GenContextMgr():
         if self.exit_break_num is not None:
             SIM_delete_breakpoint(self.exit_break_num)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.exit_cb_num)
-            self.lgr.debug('contextManager clearExitBreak removed breakpoint %d' % self.exit_break_num)
+            #self.lgr.debug('contextManager clearExitBreak removed breakpoint %d' % self.exit_break_num)
             self.exit_break_num = None
             self.exit_cb_num = None
 

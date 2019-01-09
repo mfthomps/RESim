@@ -25,6 +25,8 @@ class Pfamily():
         tabs = ''
         while pid != 0:
             parent_pid, parent_comm, parent_parent = self.parentInfo(pid, tasks)
+            if parent_pid is None:
+                return retval
             if parent_pid != 0:
                 retval.append(Prec(cpu, parent_comm, parent_pid))
             pid = parent_pid
@@ -35,6 +37,7 @@ class Pfamily():
             if tasks[t].pid == pid:
                 prec_addr = tasks[t].parent
                 return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
+        return None, None, None
 
     def execveHap(self, look4_prec, third, forth, memory):
         cpu = SIM_current_processor()

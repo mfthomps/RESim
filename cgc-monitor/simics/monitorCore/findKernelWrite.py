@@ -65,6 +65,7 @@ class findKernelWrite():
         if phys_block.address == 0:
             self.lgr.error('findKernelWrite requested address %x, not mapped?' % addr)
             return
+        ''' TBD support byte, word, dword '''
         if num_bytes > 1:
             value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
         else:
@@ -302,11 +303,13 @@ class findKernelWrite():
                     self.top.stopAtKernelWrite(new_address, self.rev_to_call)
                 else:
                     self.lgr.debug('stopToCheckWriteCallback is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
-                    self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset)
+                    self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
  
             elif decode.isReg(op1):
-                self.lgr.debug('stopToCheckWriteCallback is reg, find mod')
-                self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset)
+                reg_num = self.cpu.iface.int_register.get_number(op1)
+                value = self.cpu.iface.int_register.read(reg_num)
+                self.lgr.debug('stopToCheckWriteCallback %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
             else:
                 value = None
                 try:
@@ -328,7 +331,7 @@ class findKernelWrite():
         elif mn == 'push':
             op1, op0 = decode.getOperands(instruct[1])
             self.lgr.debug('stopToCheckWriteCallback is push reg %s, find mod', op0)
-            self.rev_to_call.doRevToModReg(op0, taint=True)
+            self.rev_to_call.doRevToModReg(op0, taint=True, value=self.value, num_bytes = self.num_bytes)
 
         else:
             self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))

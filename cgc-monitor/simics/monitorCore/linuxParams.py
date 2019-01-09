@@ -23,7 +23,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 
-from monitorLibs import utils
 '''
 Instead of simics-style .params file.  Hardcode limited number of offsets.
 '''

@@ -91,7 +91,7 @@ class SOMap():
                 retval = self.text_prog
             else:
                 for text_seg in sorted(self.so_file_map[pid]):
-                    end = text_seg.start + text_seg.offset + text_seg.size
+                    end = text_seg.start + text_seg.size
                     #self.lgr.debug('compare 0x%x to range 0x%x - 0x%x' % (addr_in, text_seg.start, end))
                     if text_seg.start <= addr_in and addr_in <= end:
                         retval = self.so_file_map[pid][text_seg]
@@ -105,7 +105,9 @@ class SOMap():
         retval = None
         pid = self.getThreadPid(pid)
         self.lgr.debug('look for addr for pid %d in_fname %s' % (pid, in_fname))
-        if pid in self.so_file_map:
+        if in_fname == self.text_prog:
+            retval = elfText(self.text_start, 0, self.text_start-self.text_end)
+        elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
                 base = os.path.basename(fpath)
                 in_base = os.path.basename(in_fname)
