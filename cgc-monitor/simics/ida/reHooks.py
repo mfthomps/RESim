@@ -15,9 +15,9 @@ def getHex(s):
     return retval
 
 class RevToHandler(idaapi.action_handler_t):
-        def __init__(self):
+        def __init__(self, isim):
             idaapi.action_handler_t.__init__(self)
-
+            self.isim = isim
         # reverse to the highlighted address
         def activate(self, ctx):
             highlighted = idaapi.get_highlighted_identifier()
@@ -26,7 +26,7 @@ class RevToHandler(idaapi.action_handler_t):
             print('cmd: %s' % command)
             simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
             eip = gdbProt.getEIPWhenStopped()
-            rev.signalClient()
+            self.isim.signalClient()
             return 1
 
         # This action is always available.
@@ -34,8 +34,9 @@ class RevToHandler(idaapi.action_handler_t):
             return idaapi.AST_ENABLE_ALWAYS
 
 class ModRegHandler(idaapi.action_handler_t):
-        def __init__(self):
+        def __init__(self, isim):
             idaapi.action_handler_t.__init__(self)
+            self.isim = isim
         def activate(self, ctx):
             highlighted = idaapi.get_highlighted_identifier()
             current = idc.GetRegValue(highlighted)
@@ -45,6 +46,8 @@ class ModRegHandler(idaapi.action_handler_t):
             #print('prompt is %s' % prompt)
             #enc = prompt.encode('utf-8')
             value = idc.AskStr(default, 'reg value ?')
+            if value is None:
+                return
             reg_param = "'%s'" % highlighted
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeRegValue(%s, 0x%s)");' % (reg_param, value)) 
 
@@ -53,12 +56,15 @@ class ModRegHandler(idaapi.action_handler_t):
             return idaapi.AST_ENABLE_ALWAYS
 
 class DataWatchHandler(idaapi.action_handler_t):
-        def __init__(self):
+        def __init__(self, isim):
+            self.isim = isim
             idaapi.action_handler_t.__init__(self)
         def activate(self, ctx):
             highlighted = idaapi.get_highlighted_identifier()
             addr = getHex(highlighted)
             count = idc.AskStr(last_data_watch_count, 'number of bytes to watch?')
+            if count is None:
+                return
             print('watch %s bytes from 0x%x' % (count, addr))
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.dataWatch(0x%x, 0x%s)");' % (addr, count)) 
 
@@ -68,20 +74,37 @@ class DataWatchHandler(idaapi.action_handler_t):
 
 
 class RevCursorHandler(idaapi.action_handler_t):
-        def __init__(self):
+        def __init__(self, isim):
             idaapi.action_handler_t.__init__(self)
+            self.isim = isim
 
         # reverse to cursor
         def activate(self, ctx):
-            rev.doRevToCursor()
+            self.isim.doRevToCursor()
             return 1
 
         # This action is always available.
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
-class DisHandler(idaapi.action_handler_t):
-        def __init__(self):
+
+class RevDataHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
             idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        # reverse to cursor
+        def activate(self, ctx):
+            self.isim.trackAddressPrompt()
+            return 1
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
+class DisHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
 
         # Disassemble SO
         def activate(self, ctx):
@@ -100,37 +123,43 @@ class DisHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
-def register():
+def register(isim):
     rev_to_action_desc = idaapi.action_desc_t(
        'rev:action',
-       'Reverse to',
-       RevToHandler()
+       'Reverse to address',
+       RevToHandler(isim)
        )
     dis_action_desc = idaapi.action_desc_t(
        'dis:action',
        'analysis',
-       DisHandler()
+       DisHandler(isim)
        )
     rev_cursor_action_desc = idaapi.action_desc_t(
        'revCursor:action',
        'reverse to cursor',
-       RevCursorHandler()
+       RevCursorHandler(isim)
        )
     mod_reg_action_desc = idaapi.action_desc_t(
        'modReg:action',
        'modify register',
-       ModRegHandler()
+       ModRegHandler(isim)
        )
     data_watch_action_desc = idaapi.action_desc_t(
        'dataWatch:action',
        'data watch',
-       DataWatchHandler()
+       DataWatchHandler(isim)
+       )
+    rev_addr_action_desc = idaapi.action_desc_t(
+       'revData:action',
+       'reverse track data',
+       RevDataHandler(isim)
        )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
     idaapi.register_action(mod_reg_action_desc)
     idaapi.register_action(data_watch_action_desc)
+    idaapi.register_action(rev_addr_action_desc)
 
 class Hooks(idaapi.UI_Hooks):
         def populating_tform_popup(self, form, popup):
@@ -161,6 +190,7 @@ class Hooks(idaapi.UI_Hooks):
                         if addr is not None:
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
+                            idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
                             
 
 #register()

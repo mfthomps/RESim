@@ -30,21 +30,10 @@ import bpUtils
 
 BT = 'backtrack '
 START = 'START'
-def signalClient():
-    eip = gdbProt.getEIPWhenStopped()
-    if  eip is None or not (type(eip) is int or type(eip) is long):
-        print('signalClient got wrong stuff? %s from getEIP' % str(eip))
-        return
-    print('signalClient call setAndDis for 0x%x' % (eip))
-    bpUtils.setAndDisable(eip) 
-    print('signalClient return setAndDis') 
-    #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseStep()");') 
-    idc.GetDebuggerEvent(idc.WFNE_SUSP | idc.WFNE_CONT, -1)
-    print('signalClient back from cont')
-    success = idc.DelBpt(eip)
 
 class bookmarkView(simplecustviewer_t):
-
+    def __init__(self):
+        self.isim = None
     class bookmark_handler(idaapi.action_handler_t):
         def __init__(self, callback):
             idaapi.action_handler_t.__init__(self)
@@ -56,7 +45,8 @@ class bookmarkView(simplecustviewer_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
-    def Create(self):
+    def Create(self, isim):
+        self.isim = isim
         title = "Bookmarks"
         if not simplecustviewer_t.Create(self, title):
             print("failed create of bookmarks viewer")
@@ -69,6 +59,9 @@ class bookmarkView(simplecustviewer_t):
         idaapi.attach_action_to_popup(tcc, None, the_name)
         the_name = "print_bookmarks"
         idaapi.register_action(idaapi.action_desc_t(the_name, "print bookmarks", self.bookmark_handler(self.printBookmarks)))
+        idaapi.attach_action_to_popup(tcc, None, the_name)
+        the_name = "refresh"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh", self.bookmark_handler(self.updateBookmarkView)))
         idaapi.attach_action_to_popup(tcc, None, the_name)
         self.Show()
 
@@ -110,16 +103,19 @@ class bookmarkView(simplecustviewer_t):
             print('goToOrigin, getEIPWhenStopped returned None')
 
     def updateBookmarkView(self):
-        print "in updateBookmarkView"
+        #print "in updateBookmarkView"
         #self.Close()
         #self.Create()
         #print('did create')
         retval = []
         self.ClearLines()
-        self.Refresh()
-        print('did refresh of clear')
+        #self.Refresh()
+        #print('did refresh of clear')
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        if type(simicsString) is int:
+            print('listBookmarks got an int?  %d' % simicsString)
+            return
         lines = simicsString.split('\n')
         for l in lines:
             if ':' in l:
@@ -128,8 +124,8 @@ class bookmarkView(simplecustviewer_t):
                 entry = bm.strip()
                 if entry.startswith(BT) and START not in entry:
                     entry = '<<<'+entry[len(BT):]
-                self.AddLine(entry)
-                print("added %s" % entry)
+                self.AddLine(str(entry))
+                #print("added %s" % entry)
                 retval.append(entry)
         self.Refresh()
         #self.Show()
@@ -141,7 +137,7 @@ class bookmarkView(simplecustviewer_t):
         if line.startswith('<<<'):
            line = line.replace('<<<',BT)
         self.goToBookmarkRefresh(line.strip())
-        signalClient()
+        self.isim.signalClient()
         return True
 
     def setBookmark(self, mark):
@@ -149,7 +145,7 @@ class bookmarkView(simplecustviewer_t):
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     
     def askSetBookmark(self):
-        print('askSetBookmark')
+        #print('askSetBookmark')
         addr = idc.GetRegValue("EIP")
         instruct = idc.GetDisasm(addr)
         if ';' in instruct:
@@ -165,7 +161,7 @@ class bookmarkView(simplecustviewer_t):
             self.updateBookmarkView()
 
     def printBookmarks(self):
-        print('printBookmarks')
+        #print('printBookmarks')
         try:
             x1, y1, x2, y2 = self.GetSelection()
         except:
