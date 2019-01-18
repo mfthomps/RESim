@@ -44,7 +44,7 @@ BEWARE syntax errors are not seen.  TBD make unit test
 
 class reverseToCall():
     def __init__(self, top, param, os_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
-            print('call getLogger')
+            #print('call getLogger')
             self.lgr = utils.getLogger(name, logdir)
             self.context_manager = context_manager 
             #sys.stderr = open('err.txt', 'w')

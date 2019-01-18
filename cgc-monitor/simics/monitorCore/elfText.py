@@ -9,7 +9,7 @@ class Text():
 
 def getText(path):
     if not os.path.isfile(path):
-        return None, None
+        return None
     cmd = 'readelf -S %s' % path
     grep = 'grep " .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE)

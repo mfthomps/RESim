@@ -6,9 +6,9 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, context_manager, param, lgr):
+    def __init__(self, context_manager, root_prefix, lgr):
         self.context_manager = context_manager
-        self.param = param
+        self.root_prefix = root_prefix
         self.so_addr_map = {}
         self.so_file_map = {}
         self.lgr = lgr
@@ -39,9 +39,12 @@ class SOMap():
             self.so_addr_map[pid] = {}
             self.so_file_map[pid] = {}
 
-        full_path = os.path.join(self.param.root_prefix, fpath[1:])
-        self.lgr.debug('addSO, prefix is %s fpath is %s  full: %s' % (self.param.root_prefix, fpath, full_path))
+        full_path = os.path.join(self.root_prefix, fpath[1:])
+        self.lgr.debug('addSO, prefix is %s fpath is %s  full: %s' % (self.root_prefix, fpath, full_path))
         text_seg = elfText.getText(full_path)
+        if text_seg is None:
+            self.lgr.debug('SOMap addSO, no file at %s' % full_path)
+            return
         text_seg.start = addr
         text_seg.size = count
 

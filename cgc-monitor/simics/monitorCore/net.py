@@ -1,3 +1,4 @@
+import pickle
 SOCKET      =1 
 BIND        =2
 CONNECT     =3
@@ -37,3 +38,35 @@ domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPL
 'AF_ATMPVC', 'AF_X25', 'AF_INET6', 'AF_ROSE', 'AF_DECnet', 'AF_NETBEUI', 'AF_SECURITY', 'AF_KEY', 'AF_NETLINK']
 
 FIONBIO = 0x5421
+class NetInfo():
+    def __init__(self, ip, mask, broadcast, dev, label):
+        self.ip = ip
+        self.mask = mask
+        self.broadcast = broadcast
+        self.dev = dev
+        self.label = label 
+ 
+class NetAddresses():
+    def __init__(self, lgr):
+        self.ipv4_addrs = []
+        self.net_commands = []
+        self.lgr = lgr 
+    def add(self, ip, mask, broadcast, dev, label):
+        info = NetInfo(ip, mask, broadcast, dev, label)
+        self.ipv4_addrs.append(info)
+    def checkNet(self, prog, args):
+        if '/bin/ip addr add' in args:
+            self.lgr.debug('NetAddresses checkNet found net info %s' % args) 
+            self.net_commands.append(args)
+        elif 'ifconfig' in args:
+            self.lgr.debug('NetAddresses checkNet found net info %s' % args) 
+            self.net_commands.append(args)
+
+    def getCommands(self):
+        return self.net_commands
+
+    def pickleit(self, net_file):
+        pickle.dump( self.net_commands, open( net_file, "wb" ) )
+
+    def loadfile(self, net_file):
+        self.net_commands = pickle.load( open(net_file, 'rb') ) 

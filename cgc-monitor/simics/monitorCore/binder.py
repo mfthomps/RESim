@@ -32,7 +32,10 @@ class Binder():
     def showAll(self, fname):
         with open(fname, 'w') as fh:
             for bind_rec in self.binders:
-                line = '%-60s \t%s:%d' % (bind_rec.prog, bind_rec.address, bind_rec.port)
+                if bind_rec.port is not None:
+                    line = '%-60s \t%s:%d' % (bind_rec.prog, bind_rec.address, bind_rec.port)
+                else:
+                    line = '%-60s \t%s' % (bind_rec.prog, bind_rec.address)
                 print(line)
                 fh.write(line+'\n')
  

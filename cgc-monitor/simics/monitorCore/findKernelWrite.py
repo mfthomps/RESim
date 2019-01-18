@@ -34,7 +34,7 @@ import time
     If the memory is written by user space, stop there.
 '''
 class findKernelWrite():
-    def __init__(self, top, cpu, addr, os_utils, os_p_utils, context_manager, param, bookmarks, lgr, rev_to_call=None, num_bytes = 1):
+    def __init__(self, top, cpu, cell, addr, os_utils, os_p_utils, context_manager, param, bookmarks, lgr, rev_to_call=None, num_bytes = 1):
         self.stop_write_hap = None
         self.os_p_utils = os_p_utils
         self.os_utils = os_utils
@@ -53,6 +53,11 @@ class findKernelWrite():
         self.forward = False
         self.forward_break = None
         self.forward_eip = None
+        self.kernel_exit_break1 = None
+        self.kernel_exit_break2 = None
+        self.exit_hap = None
+        self.stop_exit_hap = None
+        self.cell = cell
         #if top.isProtectedMemory(addr):
         #    self.lgr.debug('findKernelWrite refuses to find who wrote to magic page')
         #    self.context_manager.setIdaMessage('findKernelWrite refuses to find who wrote to magic page')
@@ -72,8 +77,8 @@ class findKernelWrite():
             value = self.os_p_utils.getMemUtils().readByte(self.cpu, self.addr)
         self.value = value
         self.lgr.debug( 'findKernelWrite of 0x%x to addr %x, phys %x num_bytes: %d' % (value, addr, phys_block.address, num_bytes))
-        cell = cpu.physical_memory
-        self.kernel_write_break = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Write, 
+        pcell = cpu.physical_memory
+        self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, num_bytes, 0)
 
         ''' limit how far forward we run if trying to find bp simics misses going back '''
@@ -162,6 +167,53 @@ class findKernelWrite():
                 self.lgr.error('checkWriteValue found simics to be running, should be invoked as part of a stop hap????')
             retval = False          
         return retval
+       
+    def skipAlone(self, cycles):
+        self.lgr.debug('findKernelWrite skipAlone to cycle 0x%x' % cycles)
+        cmd = 'skip-to cycle=%d' % cycles
+        SIM_run_command(cmd)
+        value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+        eip = self.top.getEIP(self.cpu)
+        if eip == self.bookmarks.getEIP('_start+1'):
+            ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
+            bm = None
+        else:
+            ida_message = 'Kernel wrote 0x%x to address: 0x%x' % (value, self.addr)
+            self.lgr.debug('set ida msg to %s' % ida_message)
+            bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
+        if bm is not None:
+            self.bookmarks.setDebugBookmark(bm)
+        self.context_manager.setIdaMessage(ida_message)
+        SIM_run_alone(self.cleanup, False)
+        self.top.skipAndMail()
+
+    def stopExit(self, cycles, one, exception, error_string):
+        ''' stopped after hitting exit after write by kernel to desired address '''
+        if self.stop_exit_hap is None:
+            return
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('findKernelWrite stopExit eip 0x%x' % eip)
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_exit_hap)
+        self.stop_exit_hap = None
+        SIM_run_alone(self.skipAlone, cycles) 
+ 
+    def exitAlone(self, cycles):
+        ''' set stop hap and stop simulation '''
+        self.lgr.debug('findKernelWrite exitAlone cycles: 0x%x' % cycles)
+        self.stop_exit_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+		    self.stopExit, cycles)
+        self.context_manager.genDeleteHap(self.exit_hap)
+        self.exit_hap = None
+        SIM_break_simulation('exitAlone')
+   
+    def exitHap(self, exit_info, third, forth, memory):
+        ''' we hit one of the sysexit breakpoints '''
+        if self.exit_hap is None:
+            return
+        target_cycles = self.cpu.cycles + 1
+        self.lgr.debug('findKernelWrite exitHap target cycles set to 0x%x' % target_cycles)
+        SIM_run_alone(self.exitAlone, target_cycles)
+
         
     ''' We stopped, presumably because target address was written.  If in the kernel, set break on return
         address and continue to user space.
@@ -182,24 +234,21 @@ class findKernelWrite():
                 return
             cpu, cur_addr, comm, pid = self.os_utils.currentProcessInfo(self.cpu)
             ''' get return address '''
-            frame = self.os_utils.frameFromThread(self.cpu)
-            eip = frame['eip']
             self.found_kernel_write = True
             if self.kernel_write_break is not None:
                 self.lgr.debug('deleting breakpoint %d' % self.kernel_write_break)
                 SIM_delete_breakpoint(self.kernel_write_break)
                 self.kernel_write_break = None
-            phys_block = cpu.iface.processor_info.logical_to_physical(eip, Sim_Access_Write)
-            if phys_block.address == 0:
-                self.lgr.debug('thinkWeWrote, cannot get physical address of %x, in %d (%s)' % (eip, pid, comm))
-                return
-            self.lgr.debug( 'thinkWeWrote set break for addr %x, phys %x and reverse' % (eip, phys_block.address))
-            cell = cpu.physical_memory
-            self.kernel_write_break = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, 
-                phys_block.address, 1, 0)
-            # continue to after the syscall
+
+            self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
+                                                        Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+            self.kernel_exit_break2 = self.context_manager.genBreakpoint(self.cell, 
+                                                        Sim_Break_Linear, Sim_Access_Execute, self.param.iretd, 1, 0)
+            self.exit_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.exitHap, 
+                                                           None, self.kernel_exit_break1, self.kernel_exit_break2, 'findKernelWrite exits')
+            self.cleanup()
             SIM_run_alone(SIM_run_command, 'continue')
-             
+
         elif self.found_kernel_write:
             self.lgr.debug('thinkWeWrote, BACKTRACK user space address 0x%x after finding kernel write to  0x%x' % (eip, self.addr))
             if not self.checkWriteValue(eip):

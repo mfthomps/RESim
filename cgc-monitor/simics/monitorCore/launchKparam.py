@@ -42,12 +42,18 @@ if ZK not in sys.path:
     print("using ZK of %s" % ZK)
     sys.path.append(ZK)
 RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
+SIMICS_SCRIPT = os.getenv('SIMICS_SCRIPT')
 run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/simicsScripts')
 run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/simics/monitorCore')
 run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/zk/monitorLibs')
 run_command('add-directory -prepend /mnt/simics/eemsWorkspace')
+run_command('log-level 0 -all')
 if RUN_FROM_SNAP is None:
-    run_command('run-command-file ./targets/ubuntu.simics')
+    if SIMICS_SCRIPT is not None:
+        run_command('run-command-file %s' % SIMICS_SCRIPT)
+    else:
+        print('No SIMICS_SCRIPT defined')
+        exit(1)
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)

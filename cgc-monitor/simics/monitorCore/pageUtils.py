@@ -164,7 +164,20 @@ def getPageBasesExtended(cpu, lgr, kernel_base):
         pdir_index += 1
       page_table_directory += WORD_SIZE
     return retval
-    
+   
+def getPageEntrySize(cpu): 
+    reg_num = cpu.iface.int_register.get_number("cr3")
+    cr3 = cpu.iface.int_register.read(reg_num)
+    reg_num = cpu.iface.int_register.get_number("cr4")
+    cr4 = cpu.iface.int_register.read(reg_num)
+    ''' determine if PAE being used '''
+    addr_extend = memUtils.testBit(cr4, 5)
+    #print('addr_extend is %d' % addr_extend)
+    if addr_extend == 0:
+        return 4
+    else:
+        return 8
+
 def findPageTable(cpu, addr, lgr):
         ptable_info = PtableInfo()
         reg_num = cpu.iface.int_register.get_number("cr3")
@@ -251,13 +264,13 @@ def findPageTableExtended(cpu, addr, lgr):
             
             pdir_entry_24 = pdir_entry & mask64
             ptable_base = pdir_entry_24
-            #lgr.debug('pdir_entry: 0x%x 24 0x%x ptable_base: 0x%x' % (pdir_entry, pdir_entry_24, ptable_base))
+            lgr.debug('pdir_entry: 0x%x 24 0x%x ptable_base: 0x%x' % (pdir_entry, pdir_entry_24, ptable_base))
 
             ptable_entry_addr = ptable_base + (WORD_SIZE*ptable)
-            #lgr.debug('ptable_entry_addr 0x%x  ptable 0x%x' % (ptable_entry_addr, ptable_base))
+            lgr.debug('ptable_entry_addr 0x%x  ptable 0x%x' % (ptable_entry_addr, ptable_base))
             ptable_info.ptable_addr = ptable_entry_addr
             entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
-            #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
+            lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
             if entry == 0:
                 return ptable_info
             

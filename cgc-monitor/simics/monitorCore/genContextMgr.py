@@ -61,17 +61,17 @@ class GenHap():
             #self.lgr.debug('GenHap callback range')
             if immediate:
                 self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
-                #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
-                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+                self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
+                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
             else:
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
-            #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
-            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+        #    self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
+        #                    self.name, str(bp.break_num), bp.addr, str(bp.handle)))
         else:
             self.lgr.error('GenHap, no breakpoints')
 
@@ -166,6 +166,9 @@ class GenContextMgr():
         pass
 
     def genDeleteHap(self, hap_handle, immediate=False):
+        if hap_handle is None:
+            self.lgr.error('genDelteHap called with handle of none')
+            return
         #self.lgr.debug('genDeleteHap hap_handle %d' % hap_handle)
         hap_copy = list(self.haps)
         for hap in hap_copy:
@@ -184,7 +187,7 @@ class GenContextMgr():
                 #self.lgr.debug('genDeleteHap removing hap %d from list' % hap.handle)
                 self.haps.remove(hap)
                 return
-        self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_num)
+        self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_handle)
 
     def genHapIndex(self, hap_type, callback, parameter, handle, name=None):
         #self.lgr.debug('genHapIndex break_handle %d' % handle)
@@ -223,8 +226,10 @@ class GenContextMgr():
             bp.clear()
         
     def clearAllHap(self, dumb):
+        #self.lgr.debug('clearAllHap start')
         for hap in self.haps:
             hap.clear()
+        #self.lgr.debug('clearAllHap finish')
 
     def getThreadRecs(self):
         return self.debugging_rec
@@ -244,12 +249,12 @@ class GenContextMgr():
         #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
-            self.lgr.debug('Now scheduled %d' % pid)
+            #self.lgr.debug('Now scheduled %d' % pid)
             self.debugging_scheduled = True
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
-            self.lgr.debug('No longer scheduled')
+            #self.lgr.debug('No longer scheduled')
             self.debugging_scheduled = False
             self.clearAllBreak()
             SIM_run_alone(self.clearAllHap, None)
@@ -258,7 +263,7 @@ class GenContextMgr():
         ''' remove a pid from the list of task records being watched.  return True if this is the last thread. '''
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec in self.debugging_rec:
-            self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
+           # self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
             self.debugging_rec.remove(rec)
             if len(self.debugging_rec) == 0:
                 return True
@@ -267,7 +272,7 @@ class GenContextMgr():
     def addTask(self, pid):
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.debugging_rec:
-            self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
+            #self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
             if rec is None:
                 self.lgr.error('genContextManager, addTask got rec of None for pid %d' % pid)
             else:
@@ -304,7 +309,7 @@ class GenContextMgr():
         self.debugging_scheduled = True
         ctask = self.task_utils.getCurTaskRec()
         pid = self.mem_utils.readWord32(self.debugging_cpu, ctask + self.param.ts_pid)
-        self.lgr.debug('watchTasks watch record 0x%x pid %d' % (ctask, pid))
+        self.lgr.debug('watchTasks watch record 0x%x pid: %d' % (ctask, pid))
         self.debugging_rec.append(ctask)
         
     def setDebugPid(self, debugging_pid, debugging_cellname, debugging_cpu):

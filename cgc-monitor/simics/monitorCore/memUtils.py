@@ -134,7 +134,11 @@ class memUtils():
         return retval
 
     def readPhysPtr(self, cpu, addr):
-        return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))
+        try:
+            return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))
+        except:
+            self.lgr.error('readPhyPtr fails on address 0x%x' % addr)
+            return None
 
     def readPtr(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)

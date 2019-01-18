@@ -7,10 +7,11 @@ class StackTrace():
             self.fname = fname
             self.instruct = instruct
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, lgr):
         self.top = top
         self.cpu = cpu
         self.pid = pid
+        self.lgr = lgr
         self.soMap = soMap
         self.frames = []
         self.mem_utils = mem_utils
@@ -45,11 +46,12 @@ class StackTrace():
 
     def doTrace(self):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        #print('esp is 0x%x' % esp)
+        self.lgr.debug('stackTrace doTrace esp is 0x%x' % esp)
         ebp = self.mem_utils.getRegValue(self.cpu, 'ebp')
         if ebp == 0:
             ''' we just returned and bp is on stack '''
-            ebp = self.mem_utils.readPtr(self.cpu, esp)
+            ebp = esp
+            self.lgr.debug('stackTrace doTrace ebp was zero, setting to esp')
         eip = self.top.getEIP(self.cpu)
         fname = self.soMap.getSOFile(self.pid, eip)
         #print('0x%08x  %-s' % (eip, fname))
@@ -61,10 +63,10 @@ class StackTrace():
         while not done and count < 1000: 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if self.soMap.isCode(self.pid, val):
-                #print('is code: 0x%x' % val)
+                self.lgr.debug('is code: 0x%x' % val)
                 call_ip = self.followCall(val)
-                instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
                 if call_ip is not None:
+                    instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
                     fname = self.soMap.getSOFile(self.pid, val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -76,10 +78,12 @@ class StackTrace():
                         self.frames.append(frame)
                     ''' value at ptr-word_size should be ebp '''
                     ebp = self.mem_utils.readPtr(self.cpu, ptr-self.mem_utils.WORD_SIZE)
-                    #self.lgr.debug('ptr: 0x%x ebp: 0x%x' % (ptr, ebp))
+                    self.lgr.debug('ptr: 0x%x ebp: 0x%x' % (ptr, ebp))
                     if ebp == 0:
                         done = True
                     else:
                         ptr = ebp
+            else:
+                self.lgr.debug('not code 0x%x' % val)
             count += 1
             ptr = ptr + self.mem_utils.WORD_SIZE
