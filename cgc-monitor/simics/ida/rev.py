@@ -360,7 +360,7 @@ def nameSysCalls(bail=False):
        if i == 1:
           f += 2
        MakeCode(f)
-       MakeFunction(f, BADADDR)
+       MakeFunction(f, idaapi.BADADDR)
        try:
            MakeNameEx(f, names[i], 0)
            ApplyType(f, types[i], 0)
@@ -409,7 +409,7 @@ if __name__ == "__main__":
     idaapi.switchto_tform(form, True)
     #print('now create bookmark_view')
     print('RESim Ida Client Version 1.2')
-    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, kernel_base)
+    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, kernel_base, reg_list, registerMath)
     bookmark_view.Create(isim)
     bookmark_list = bookmark_view.updateBookmarkView()
     if bookmark_list is not None:

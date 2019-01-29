@@ -89,8 +89,9 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
         else:
             if type(simicsString) is not int and not simicsString.strip().startswith('not stopped'):
                 # hack until python logging not sent to stdout on rev module
-                if not 'server.mb' in simicsString:
-                    print('monitor stopped at wrong place: %s' % simicsString)
+                simicsString = simicsString.strip()
+                if not (simicsString.startswith('[')) and not simicsString.startswith('SystemPerf'):
+                    print('monitor stopped at wrong place: <%s>' % simicsString)
                     done = True
     #print('getEIPWhenStopped returning %x' % retval)
     if count > 50:

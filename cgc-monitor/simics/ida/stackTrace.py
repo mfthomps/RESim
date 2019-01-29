@@ -12,7 +12,7 @@ class StackTrace(simplecustviewer_t):
             idaapi.action_handler_t.__init__(self)
             self.callback = callback
         def activate(self, ctx):
-            print("set stacktrace ")
+            #print("set stacktrace ")
             self.callback()
 
         def update(self, ctx):
@@ -22,7 +22,7 @@ class StackTrace(simplecustviewer_t):
         highlighted = idaapi.get_highlighted_identifier()
         addr = reHooks.getHex(highlighted)
         command = '@cgc.revToAddr(0x%x, extra_back=0)' % (addr)
-        print('cmd: %s' % command)
+        #print('cmd: %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         eip = gdbProt.getEIPWhenStopped()
         self.isim.signalClient()
@@ -46,7 +46,7 @@ class StackTrace(simplecustviewer_t):
         return True
 
     def updateStackTrace(self):
-        print "in updateStackTrace"
+        #print "in updateStackTrace"
         #self.Close()
         #self.Create()
         #print('did create')
@@ -78,4 +78,11 @@ class StackTrace(simplecustviewer_t):
 
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
-        print('line is %s' % line)
+        #print('line is %s' % line)
+        parts = line.split()
+        try:
+            addr = int(parts[0], 16)
+        except:
+            print('no address found in %s' % line)
+            return
+        idc.Jump(addr) 
