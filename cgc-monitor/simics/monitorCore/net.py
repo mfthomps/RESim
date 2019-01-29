@@ -70,3 +70,66 @@ class NetAddresses():
 
     def loadfile(self, net_file):
         self.net_commands = pickle.load( open(net_file, 'rb') ) 
+
+class SockStruct():
+    def __init__(self, cpu, params, mem_utils):
+        self.fd = mem_utils.readWord32(cpu, params)
+        self.port = None
+        self.sin_addr = None
+        self.sa_data = None
+        addr = mem_utils.readWord32(cpu, params+4)
+        self.addr = addr
+        self.sa_family = mem_utils.readWord16(cpu, addr) 
+        if self.sa_family == 1:
+            self.sa_data = mem_utils.readString(cpu, addr+2, 256)
+        elif self.sa_family == 2:
+            self.port = mem_utils.readWord16le(cpu, addr+2)
+            self.sin_addr = mem_utils.readWord32(cpu, addr+4)
+
+    def famName(self):
+        if self.sa_family is not None and self.sa_family < len(domaintype):
+            return domaintype[self.sa_family]
+        else:
+            return None
+
+    def dottedIP(self):
+      if self.sin_addr is None:
+          return self.famName()
+      "Convert 32-bit integer to dotted IPv4 address."
+      return ".".join(map(lambda n: str(self.sin_addr>>n & 0xFF), [0,8,16,24]))
+
+    def dottedPort(self):
+        return '%s:%s' % (self.dottedIP(), self.port)
+
+    def getName(self):
+        if self.sa_family == 1:
+            return self.sa_data
+        elif self.sa_family == 2:
+            name = '%s:%s' % (self.dottedIP(), self.port)
+            return name
+        else:
+            return None
+
+    def isRoutable(self):
+        if self.sa_family == 2:
+            ip = self.dottedIP()
+            if not ip.startswith('0.0.') and not ip.startswith('127.'):
+                return True
+        return False
+
+    def addressInfo(self):
+        ''' for use in printing traces '''
+        flag = ''
+        if self.isRoutable():
+            flag = 'ROUTABLE IP'
+        return flag
+
+    def getString(self):
+        if self.sa_family == 1:
+            retval = ('FD: %d sa_family: %s  sa_data: %s' % (self.fd, self.famName(), self.sa_data))
+        elif self.sa_family == 2:
+            retval = ('FD: %d sa_family: %s  address: %s:%d' % (self.fd, self.famName(), self.dottedIP(), self.port))
+        else:
+            retval = ('FD: %d sa_family: %s  TBD' % (self.fd, self.famName()))
+        return retval
+

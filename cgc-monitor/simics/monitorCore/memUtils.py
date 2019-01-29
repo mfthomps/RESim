@@ -27,11 +27,11 @@ import simics
 from simics import *
 MACHINE_WORD_SIZE = 8
 
-def readPhysBytes(cpu, paddr, len):
+def readPhysBytes(cpu, paddr, count):
     try:
-        return cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, paddr, len, 0)
+        return cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, paddr, count, 0)
     except:
-        return None
+        raise valueError('failed to read %d bytes from 0x%x' % (count, paddr))
 
 def getCPL(cpu):
     reg_num = cpu.iface.int_register.get_number("cs")
@@ -62,9 +62,10 @@ def getBits( allbits, lsb, msb )
 '''
 
 class memUtils():
-    def __init__(self, word_size, param):
+    def __init__(self, word_size, param, lgr):
         self.WORD_SIZE = word_size
         self.param = param
+        self.lgr = lgr
         ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
         ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp"]
         self.regs = {}
@@ -208,5 +209,7 @@ class memUtils():
         #print('ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
         #print('ret_ptr is 0x%x' % ret_ptr)
-
+        check_val = self.readPtr(cpu, ret_ptr)
+        if check_val == 0xffffffff:
+            return None
         return ret_ptr

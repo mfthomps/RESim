@@ -1,4 +1,5 @@
 import os
+import pickle
 import elfText
 '''
 Manage maps of shared object libraries
@@ -6,7 +7,7 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, context_manager, root_prefix, lgr):
+    def __init__(self, context_manager, root_prefix, run_from_snap, lgr):
         self.context_manager = context_manager
         self.root_prefix = root_prefix
         self.so_addr_map = {}
@@ -15,6 +16,28 @@ class SOMap():
         self.text_start = None
         self.text_end = None
         self.text_prog = None
+        if run_from_snap is not None:
+            self.loadPickle(run_from_snap)
+
+    def loadPickle(self, name):
+        somap_file = os.path.join('./', name, 'soMap.pickle')
+        if os.path.isfile(somap_file):
+            so_pickle = pickle.load( open(somap_file, 'rb') ) 
+            self.so_addr_map = so_pickle['so_addr_map']
+            self.so_file_map = so_pickle['so_file_map']
+            self.text_start = so_pickle['text_start']
+            self.text_end = so_pickle['text_end']
+            self.text_prog = so_pickle['text_prog']
+
+    def pickleit(self, name):
+        somap_file = os.path.join('./', name, 'soMap.pickle')
+        so_pickle = {}
+        so_pickle['so_addr_map'] = self.so_addr_map
+        so_pickle['so_file_map'] = self.so_file_map
+        so_pickle['text_start'] = self.text_start
+        so_pickle['text_end'] = self.text_end
+        so_pickle['text_prog'] = self.text_prog
+        pickle.dump( so_pickle, open( somap_file, "wb" ) )
 
     def isCode(self, in_pid, address):
         ''' is the given address within the text segment or those of SO libraries? '''
@@ -28,6 +51,12 @@ class SOMap():
             if address >= text_seg.start and address <= end:
                 return True
         return False
+
+    def isMainText(self, in_pid, address):
+        if address >= self.text_start and address <= self.text_end:
+            return True
+        else: 
+            return False
 
     def addText(self, start, size, prog):
         self.text_start = start
@@ -109,7 +138,8 @@ class SOMap():
         pid = self.getThreadPid(pid)
         self.lgr.debug('look for addr for pid %d in_fname %s' % (pid, in_fname))
         if in_fname == self.text_prog:
-            retval = elfText(self.text_start, 0, self.text_start-self.text_end)
+            size = self.text_end - self.text_start
+            retval = elfText.Text(self.text_start, 0, size)
         elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
                 base = os.path.basename(fpath)

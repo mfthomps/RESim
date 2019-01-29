@@ -42,9 +42,10 @@ class GenHap():
         self.set(immediate)
 
     def show(self):
-        print('hap_handle: %d  num: %d name: %s' % (self.handle, self.hap_num, self.name))
-        for bp in self.breakpoint_list:
-            bp.show()
+        if self.handle is not None and self.hap_num is not None:
+            print('hap_handle: %d  num: %d name: %s' % (self.handle, self.hap_num, self.name))
+            for bp in self.breakpoint_list:
+                bp.show()
 
     def hapAlone(self, (bs, be)):
         self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
@@ -56,22 +57,23 @@ class GenHap():
         if len(self.breakpoint_list) > 1:
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+                self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
             bs = self.breakpoint_list[0]
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
             if immediate:
                 self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
-                self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
-                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+                #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
+                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
             else:
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
-        #    self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
-        #                    self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+            #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
+            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
         else:
             self.lgr.error('GenHap, no breakpoints')
 
@@ -130,6 +132,7 @@ class GenContextMgr():
     def showHaps(self):
         for hap in self.haps:
             hap.show()
+
     def getRESimContext(self):
         return self.debugging_cell
 

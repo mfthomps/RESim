@@ -51,7 +51,10 @@ class Connector():
     def showAll(self, fname):
         with open(fname, 'w') as fh:
             for connect_rec in self.connectors:
-                line = '%-60s \t%s:%d' % (connect_rec.prog, connect_rec.address, connect_rec.port)
+                if connect_rec.port is not None:
+                    line = '%-60s \t%s:%d' % (connect_rec.prog, connect_rec.address, connect_rec.port)
+                else:
+                    line = '%-60s \t%s' % (connect_rec.prog, connect_rec.address)
                 print(line)
                 fh.write(line+'\n')
  

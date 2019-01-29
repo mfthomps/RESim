@@ -122,6 +122,7 @@ class GenMonitor():
         self.sysenter_cycles = []
         self.trace_fh = None
         self.soMap = None
+        ''' dict of syscall.SysCall keyed on call number '''
         self.call_traces = {}
         self.trace_all = None
         self.track_threads = None
@@ -134,7 +135,11 @@ class GenMonitor():
         if self.root_prefix is None:
             self.root_prefix = '/mnt/vdr_img/rootfs'
         self.netInfo = None
-
+        self.stack_base = None
+        self.maze_exits = []
+        self.exit_maze = None
+        self.rev_execution_enabled = False
+        self.run_from_snap = None
 
         self.genInit()
 
@@ -158,15 +163,14 @@ class GenMonitor():
             #print('param next %s  comm %s' % (str(self.param.ts_next), str(self.param.ts_comm)))
         else:
             self.param = linuxParams.linuxParams()
-        self.mem_utils = memUtils.memUtils(4, self.param)
+        self.mem_utils = memUtils.memUtils(4, self.param, self.lgr)
         self.netInfo = net.NetAddresses(self.lgr)
-        self.sharedSyscall = sharedSyscall.SharedSyscall(self.lgr)
-        RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
-        if RUN_FROM_SNAP is not None:
-            plist_file = os.path.join('./', RUN_FROM_SNAP, 'proc_list.pickle')
+        self.run_from_snap = os.getenv('RUN_FROM_SNAP')
+        if self.run_from_snap is not None:
+            plist_file = os.path.join('./', self.run_from_snap, 'proc_list.pickle')
             if os.path.isfile(plist_file):
                 self.proc_list = pickle.load( open(plist_file, 'rb') ) 
-            net_file = os.path.join('./', RUN_FROM_SNAP, 'net_list.pickle')
+            net_file = os.path.join('./', self.run_from_snap, 'net_list.pickle')
             self.netInfo.loadfile(net_file)
 
     def getTopComponentName(self, cpu):
@@ -288,8 +292,9 @@ class GenMonitor():
                     SIM_continue(900000000)
                 else:
                     SIM_break_simulation('Booted enough to get cur_task_rec')
+            self.lgr.debug('doInit out of loop with cur_task_rec of 0x%x' % cur_task_rec)
                 
-        self.task_utils = taskUtils.TaskUtils(cpu, self.param, self.mem_utils, self.unistd32, self.lgr)
+        self.task_utils = taskUtils.TaskUtils(cpu, self.param, self.mem_utils, self.unistd32, self.run_from_snap, self.lgr)
  
         tu_cur_task_rec = self.task_utils.getCurTaskRec()
         if tu_cur_task_rec is None:
@@ -304,19 +309,22 @@ class GenMonitor():
         ''' hack os_utils fu '''
         os_p_utils = {}
         os_p_utils[self.target] = self.task_utils 
+        self.page_faults = pageFaultGen.PageFaultGen(self, self.target, self.param, self.cell_config, self.mem_utils, 
+               self.task_utils, self.context_manager, self.lgr)
         self.rev_to_call = reverseToCall.reverseToCall(self, self.param, os_p_utils, 
                  self.PAGE_SIZE, self.context_manager, 'revToCall', self.is_monitor_running, None, self.log_dir)
         self.pfamily = pFamily.Pfamily(self.target, self.param, self.cell_config, self.mem_utils, self.task_utils, self.lgr)
-        self.page_faults = pageFaultGen.PageFaultGen(self, self.target, self.param, self.cell_config, self.mem_utils, 
-               self.task_utils, self.context_manager, self.lgr)
         cell = self.cell_config.cell_context[self.target]
         self.traceOpen = traceOpen.TraceOpen(self.param, self.mem_utils, self.task_utils, cpu, cell, self.lgr)
         self.traceProcs = traceProcs.TraceProcs(self.lgr, self.proc_list)
-        self.soMap = soMap.SOMap(self.context_manager, self.root_prefix, self.lgr)
+        self.soMap = soMap.SOMap(self.context_manager, self.root_prefix, self.run_from_snap, self.lgr)
         self.dataWatch = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager, self.lgr)
         self.traceFiles = traceFiles.TraceFiles(self.lgr)
+        self.sharedSyscall = sharedSyscall.SharedSyscall(self, cpu, cell, self.param, self.mem_utils, self.task_utils, 
+                  self.context_manager, self.traceProcs, self.traceFiles, self.soMap, self.dataWatch, self.lgr)
         
     def tasks(self):
+        self.lgr.debug('tasks')
         tasks = self.task_utils.getTaskStructs()
         plist = {}
         for t in tasks:
@@ -345,11 +353,12 @@ class GenMonitor():
             SIM_run_command(cmd)
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
+            self.rev_execution_enabled = True
             self.bookmarks[pid] = bookmarkMgr.bookmarkMgr(self, self.context_manager, self.lgr)
             self.setDebugBookmark('_start+1', cpu)
             self.bookmarks[pid].setOrigin(cpu)
             ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
-            self.rev_to_call.setup(cpu, [], bookmarks=self.bookmarks[pid])
+            self.rev_to_call.setup(cpu, [], bookmarks=self.bookmarks[pid], page_faults = self.page_faults)
 
             self.context_manager.watchTasks()
             cell = self.cell_config.cell_context[self.target]
@@ -360,9 +369,8 @@ class GenMonitor():
             self.lgr.debug('debug set exit_group break')
             self.exit_group_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, callnum_list=[self.task_utils.syscallNumber('exit_group')], continue_simulation=False)
-            #self.exit_group_syscall = self.traceSyscall(callnum=self.task_utils.syscallNumber('exit_group'))
-            self.watchPageFaults(True)
-
+            self.watchPageFaults(pid)
+            self.sharedSyscall.setDebugging(True)
         else:
             ''' already debugging.  change to current process '''
             cpu, comm, pid = self.task_utils.curProc() 
@@ -518,6 +526,13 @@ class GenMonitor():
             f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
             self.toExecve(proc, [f1])
 
+    def setStackBase(self):
+        ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        esp = self.mem_utils.getRegValue(cpu, 'esp')
+        eip = self.mem_utils.getRegValue(cpu, 'eip')
+        self.stack_base = esp
+        self.lgr.debug('setStackBase to 0x%x eip is 0x%x' % (esp, eip))
 
     def debugProc(self, proc):
         plist = self.task_utils.getPidsForComm(proc)
@@ -534,8 +549,9 @@ class GenMonitor():
             ''' run to the execve, then start recording shared object mmaps and run
                 until we enter the text segment so we get the SO map '''
             f1 = stopFunction.StopFunction(self.execToText, [], True)
-            f2 = stopFunction.StopFunction(self.debug, [], False)
-            flist = [f1, f2]
+            f2 = stopFunction.StopFunction(self.setStackBase, [], False)
+            f3 = stopFunction.StopFunction(self.debug, [], False)
+            flist = [f1, f2, f3]
             self.toExecve(proc, flist=flist)
 
     def debugPid(self, pid):
@@ -567,7 +583,10 @@ class GenMonitor():
                 self.proc_list[pid] = comm
                 #self.lgr.debug('runToProc pid: %d proc: %s' % (pid, comm))
             
-       
+      
+    def addProcList(self, pid, comm):
+        self.proc_list[pid] = comm
+ 
     def toUser(self, flist=None): 
         self.lgr.debug('toUser')
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -792,6 +811,7 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.context_manager.clearExitBreak()
         self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
+        self.context_manager.showHaps()
         if prev is not None:
             instruct = SIM_disassemble_address(cpu, prev, 1, 0)
             self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
@@ -897,8 +917,11 @@ class GenMonitor():
     def traceExecve(self, comm=None):
         self.pfamily.traceExecve(comm)
 
-    def watchPageFaults(self, debugging=False):
+    def watchPageFaults(self, debugging=None):
         self.page_faults.watchPageFaults(debugging)
+
+    def stopWatchPageFaults(self, pid=None):
+        self.page_faults.stopWatchPageFaults(pid)
 
     def catchCorruptions(self):
         self.watchPageFaults()
@@ -973,22 +996,22 @@ class GenMonitor():
         self.rev_to_call.doRevToModReg(reg, True)
 
     def rev1(self):
-        self.removeDebugBreaks()
-        dum, dum2, cpu = self.context_manager.getDebugPid() 
-        new_cycle = cpu.cycles - 1
+        if self.rev_execution_enabled:
+            self.removeDebugBreaks()
+            dum, dum2, cpu = self.context_manager.getDebugPid() 
+            new_cycle = cpu.cycles - 1
          
-        start_cycles = self.rev_to_call.getStartCycles()
-        if new_cycle >= start_cycles:
-            try:
+            start_cycles = self.rev_to_call.getStartCycles()
+            if new_cycle >= start_cycles:
                 self.is_monitor_running.setRunning(True)
                 result = SIM_run_command('skip-to cycle=0x%x' % new_cycle)
                 self.lgr.debug('rev1 result from skipt to 0x%x  is %s' % (new_cycle, result))
                 self.skipAndMail()
-            except:
-                print('reverse disabled')
-                self.restoreDebugBreaks()
+            else:
+                self.lgr.debug('rev1, already at first cycle 0x%x' % new_cycle)
+                self.skipAndMail()
         else:
-            self.lgr.debug('rev1, already at first cycle 0x%x' % new_cycle)
+            print('reverse execution disabled')
             self.skipAndMail()
 
     def test1(self):
@@ -1043,6 +1066,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         self.trace_fh = open('/tmp/syscall_trace.txt', 'w')
+        self.sharedSyscall.setTrace(self.trace_fh)
         for call in call_list: 
             '''
             if call == 'open':
@@ -1076,6 +1100,7 @@ class GenMonitor():
         self.lgr.debug('traceAll begin')
         cell = self.cell_config.cell_context[self.target]
         self.trace_fh = open('/tmp/syscall_trace.txt', 'w')
+        self.sharedSyscall.setTrace(self.trace_fh)
         #call_list = ['vfork','clone','execve','open','pipe','pipe2','close','dup','dup2','socketcall']
         #call_list = ['vfork', 'clone']
         #calls = ' '.join(s for s in call_list)
@@ -1095,13 +1120,16 @@ class GenMonitor():
         self.lgr.debug('noDebug')
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
-        self.lgr.debug('noDebug call noWatchSysenter')
-        self.rev_to_call.noWatchSysenter()
+        self.rev_execution_enabled = False
+        self.removeDebugBreaks()
+        self.sharedSyscall.setDebugging(False)
 
     def restartDebug(self):
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
-        self.rev_to_call.watchSysenter()
+        self.rev_execution_enabled = True
+        self.restoreDebugBreaks()
+        self.sharedSyscall.setDebugging(True)
 
     def stopThreadTrack(self):
         self.lgr.debug('stopThreadTrack')
@@ -1123,7 +1151,7 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         callnum=self.task_utils.syscallNumber('execve')
         my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
-                           self.context_manager, self.sharedSyscall, self.traceProcs, self.lgr, callnum_list=[callnum], 
+                           self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, callnum_list=[callnum], 
                            trace=False, trace_fh = None, break_on_execve=comm, flist_in = flist, netInfo=self.netInfo)
 
     def clone(self, nth=1):
@@ -1167,14 +1195,19 @@ class GenMonitor():
                 self.rev_to_call.watchSysenter(prec)
                 if self.track_threads is not None:
                     self.track_threads.startTrack()
-            #self.exit_group_syscall = self.traceSyscall(callnum=self.task_utils.syscallNumber('exit_group'))
             cell = self.cell_config.cell_context[self.target]
             self.exit_group_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, callnum_list=[self.task_utils.syscallNumber('exit_group')], continue_simulation=False)
             self.debug_breaks_set = True
 
+
+    def noWatchSysEnter(self):
+        self.rev_to_call.noWatchSysenter()
+
     def removeDebugBreaks(self):
         self.lgr.debug('removeDebugBreaks')
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        self.stopWatchPageFaults(pid)
         self.context_manager.stopWatchTasks()
         self.rev_to_call.noWatchSysenter()
         if self.track_threads is not None:
@@ -1205,6 +1238,14 @@ class GenMonitor():
           self.stopHap, stop_action)
         self.lgr.debug('hap set, now reverse')
         SIM_run_command('rev')
+
+    def getSyscall(self, callname):
+        if callname in self.call_traces:
+            return self.call_traces[callname]
+        elif self.trace_all is not None:
+            return self.trace_all
+        else:
+            self.lgr.error('getSyscall, not able to return instance for call %s len self.call_traces %d' % (callname, len(self.call_traces)))
 
     def runToText(self, flist = None):
         ''' run until within the currently defined text segment '''
@@ -1251,7 +1292,10 @@ class GenMonitor():
         self.lgr.debug('runToConnect to %s' % addr)
         self.call_traces['socketcall'] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                                self.context_manager, None, self.sharedSyscall, self.lgr, 
-                               callnum_list=[self.task_utils.syscallNumber('socketcall')], call_params=[call_params])
+                               callnum_list=[self.task_utils.syscallNumber('socketcall')], call_params=[call_params], continue_simulation=False)
+        self.lgr.debug('back from runToConnect to %s' % addr)
+        SIM_run_command('c')
+
     def runToWrite(self, substring):
         self.is_monitor_running.setRunning(True)
         call_params = syscall.CallParams('write', substring, break_simulation=True)        
@@ -1259,7 +1303,8 @@ class GenMonitor():
         self.lgr.debug('runToWrite to %s' % substring)
         self.call_traces['write'] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                                self.context_manager, None, self.sharedSyscall, self.lgr, 
-                               callnum_list=[self.task_utils.syscallNumber('write')], call_params=[call_params])
+                               callnum_list=[self.task_utils.syscallNumber('write')], call_params=[call_params], continue_simulation=False)
+        SIM_run_command('c')
     def runToBind(self, addr):
         #addr = '192.168.31.52:20480'
         self.is_monitor_running.setRunning(True)
@@ -1268,7 +1313,8 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s' % addr)
         self.call_traces['socketcall'] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                                self.context_manager, None, self.sharedSyscall, self.lgr, 
-                               callnum_list=[self.task_utils.syscallNumber('socketcall')], call_params=[call_params])
+                               callnum_list=[self.task_utils.syscallNumber('socketcall')], call_params=[call_params], continue_simulation=False)
+        SIM_run_command('c')
     def runToIO(self, fd):
         self.is_monitor_running.setRunning(True)
         call_params = syscall.CallParams(None, fd, break_simulation=True)        
@@ -1280,10 +1326,13 @@ class GenMonitor():
             callnum=self.task_utils.syscallNumber(call)
             callnums.append(callnum)
 
-        self.call_traces[call] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
+        the_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                                self.context_manager, None, self.sharedSyscall, self.lgr, 
                                callnums, call_params=[call_params], 
-                               continue_simulation=True, dataWatch=self.dataWatch)
+                               continue_simulation=False)
+        for call in calls:
+            self.call_traces[call] = the_syscall
+        SIM_run_command('c')
 
 
     def getCurrentSO(self):
@@ -1342,6 +1391,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         self.trace_fh = open('/tmp/syscall_trace.txt', 'w')
+        self.sharedSyscall.setTrace(self.trace_fh)
         for call in call_list: 
             this_call_params = []
             if call in call_params:
@@ -1360,6 +1410,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         self.trace_fh = open('/tmp/syscall_trace.txt', 'w')
+        self.sharedSyscall.setTrace(self.trace_fh)
         for call in call_list: 
             this_call_params = []
             if call in call_params:
@@ -1394,13 +1445,13 @@ class GenMonitor():
 
     def stackTrace(self):
         cpu, comm, pid = self.task_utils.curProc() 
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap, self.mem_utils, self.task_utils, self.lgr)
+        st = stackTrace.StackTrace(self, cpu, pid, self.soMap, self.mem_utils, self.task_utils, self.stack_base, self.lgr)
         st.printTrace()
 
     def getStackTrace(self):
         self.lgr.debug('getStackTrace')
         cpu, comm, pid = self.task_utils.curProc() 
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap, self.mem_utils, self.task_utils, self.lgr)
+        st = stackTrace.StackTrace(self, cpu, pid, self.soMap, self.mem_utils, self.task_utils, self.stack_base, self.lgr)
         j = st.getJson() 
         self.lgr.debug(j)
         print j
@@ -1433,18 +1484,44 @@ class GenMonitor():
     def showHaps(self):
         self.context_manager.showHaps()
 
+    def addMazeExit(self):
+        ''' Intended for use if it seems a maze exit is nested -- will cause the most recent breakout
+            address to be ignored when setting maze exit breakpoints '''
+        if self.exit_maze is not None:
+            eip = self.exit_maze.getBreakout()
+            if eip is not None:
+                self.lgr.debug('addMazeExit adding 0x%x to exits' % eip)
+                self.maze_exits.append(eip)
+
+    def getMazeExits(self):
+        return self.maze_exits
+
     def exitMaze(self, debugging=False):
         cpu, comm, pid = self.task_utils.curProc() 
+        cpl = memUtils.getCPL(cpu)
+        if cpl == 0:
+            print('Must first run to user space.')
+            return
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         tod_track = self.trace_all
         if tod_track is None:
             tod_track = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
-                           self.context_manager, None, self.lgr, self.sharedSyscall, callnum_list=[self.task_utils.syscallNumber('gettimeofday')], continue_simulation=False)
-        maze = exitMaze.ExitMaze(self, cpu, cell, pid, tod_track, self.context_manager, self.task_utils, self.mem_utils, debugging, self.lgr)
-        maze.run()
-        #maze.showInstructs()
-        #maze.plantBreaks()
+                           self.context_manager, None, self.sharedSyscall, self.lgr, callnum_list=[self.task_utils.syscallNumber('gettimeofday')], 
+                           continue_simulation=False)
+        self.exit_maze = exitMaze.ExitMaze(self, cpu, cell, pid, tod_track, self.context_manager, self.task_utils, self.mem_utils, debugging, self.lgr)
+        self.exit_maze.run()
+        #self.exit_maze.showInstructs()
+
+    def plantBreaks(self):
+        if self.exit_maze is not None:
+            self.exit_maze.plantBreaks() 
+        print('Maze exit breaks planted')
+
+    def plantCmpBreaks(self):
+        if self.exit_maze is not None:
+            self.exit_maze.plantCmpBreaks() 
+            print('Maze pruning breaks planted')
 
     def showParams(self):
         self.param.printParams()
@@ -1456,6 +1533,8 @@ class GenMonitor():
         pickle.dump( self.proc_list, open( plist_file, "wb" ) )
         net_file = os.path.join('./', name, 'net_list.pickle')
         self.netInfo.pickleit(net_file)
+        self.task_utils.pickleit(name)
+        self.soMap.pickleit(name)
 
     def continueForward(self):
         self.lgr.debug('continueForward')
@@ -1469,6 +1548,12 @@ class GenMonitor():
         for c in net_commands:
             print c
 
+    def notRunning(self):
+        status = self.is_monitor_running.isRunning()
+        if status:   
+            print('Was running, set to not running')
+            self.is_monitor_running.setRunning(False)
+    
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

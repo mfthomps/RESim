@@ -28,13 +28,20 @@ class DataWatch():
         return False
  
     def readHap(self, dumb, third, forth, memory):
+        #value = SIM_get_mem_op_value_le(memory)
+        op_type = SIM_get_mem_op_type(memory)
         addr = memory.logical_address
-        self.context_manager.setIdaMessage('Data read from 0x%x within input buffer (%d bytes at 0x%x' % (addr, self.length, self.start))
-        SIM_break_simulation('DataWatch read data')
+        eip = self.top.getEIP(self.cpu)
+        if op_type == Sim_Trans_Load:
+            self.context_manager.setIdaMessage('Data read from 0x%x within input buffer (%d bytes starting at 0x%x) eip: 0x%x' % (addr, self.length, self.start, eip))
+            SIM_break_simulation('DataWatch read data')
+        else:
+            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (%d bytes starting at 0x%x) eip: 0x%x' % (addr, self.length, self.start, eip))
+            SIM_break_simulation('DataWatch written data')
         
     def setBreakRange(self):
         context = self.context_manager.getRESimContext()
-        break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read, self.start, self.length, 0)
+        break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start, self.length, 0)
         end = self.start + self.length 
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x' % (eip, break_num, self.start, end, self.length))
@@ -78,7 +85,7 @@ class DataWatch():
             print('stopHap error, stop_action None?')
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('stopHap d eip 0x%x cycle: 0x%x' % (eip, stop_action.hap_clean.cpu.cycles))
+        self.lgr.debug('dataWatch stopHap eip 0x%x cycle: 0x%x' % (eip, stop_action.hap_clean.cpu.cycles))
         for hc in stop_action.hap_clean.hlist:
             if hc.hap is not None:
                 if hc.htype == 'GenContext':

@@ -267,6 +267,9 @@ class TraceProcs():
         if parent_pid not in self.plist:
             self.lgr.debug('traceProcs copyOpen on unknown pid %s' % parent_pid)
             return
+        if child_pid not in self.plist[parent_pid].children:
+            self.plist[parent_pid].children.append(child_pid)
+        self.plist[child_pid].parent = child_pid
         for fname in self.plist[parent_pid].files:
             if len(self.plist[parent_pid].files[fname]) > 0:
                 #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))

@@ -23,6 +23,7 @@ class StopAction():
     def __init__(self, hap_cleaner, breakpoints, flist=None, break_addrs = []):
         self.hap_clean = hap_cleaner
         self.break_addrs = break_addrs
+        self.exit_addr = None
         if breakpoints is not None:
             self.breakpoints = breakpoints
         else:
@@ -39,3 +40,9 @@ class StopAction():
 
     def getBreaks(self):
         return self.break_addrs
+
+    def setExitAddr(self, exit_addr):
+        self.exit_addr = exit_addr
+
+    def getExitAddr(self):
+        return self.exit_addr

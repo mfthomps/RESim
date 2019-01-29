@@ -76,6 +76,7 @@ class reverseToCall():
             self.enter_break1 = None
             self.enter_break2 = None
             self.start_cycles = None
+            self.page_faults = None
 
     def getStartCycles(self):
         return self.start_cycles
@@ -117,12 +118,13 @@ class reverseToCall():
             self.enter_break2 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
             self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, self.enter_break1, self.enter_break2, 'reverseToCall sysenter')
 
-    def setup(self, cpu, x_pages, bookmarks=None):
+    def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
             self.lgr.debug('reverseToCall setup')
             self.cpu = cpu
             self.start_cycles = SIM_cycle_count(self.cpu)
             self.cell_name = self.top.getTopComponentName(cpu)
             self.x_pages = x_pages
+            self.page_faults = page_faults
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
             if hasattr(self.param, 'sysenter') and self.param.sysenter is not None:
@@ -296,7 +298,11 @@ class reverseToCall():
                 self.lgr.debug('is sysexit, cur_cycles is 0x%x' % cur_cycles)
                 prev_cycles = None
                 got_it = None
-                for cycles in sorted(self.sysenter_cycles):
+                page_cycles = self.sysenter_cycles
+                if self.page_faults is not None:
+                    self.lgr.debug('tryBackOne adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                    page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                for cycles in sorted(page_cycles):
                     if cycles > cur_cycles:
                         self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
                         got_it = prev_cycles - 1
@@ -304,6 +310,7 @@ class reverseToCall():
                     else:
                         self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
                         prev_cycles = cycles
+
                 if not got_it:
                     self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
                     got_it = prev_cycles - 1
@@ -346,28 +353,6 @@ class reverseToCall():
         self.lgr.debug('reservseToCall, got my_args ')
         self.previous_eip = prev
         self.tryBackOne(my_args)
-        #if self.tryBackOne(step_into):
-        #    self.is_monitor_running.setRunning(False)
-        #    self.lgr.debug('reverseToCall, doRevToCall, tryBackOne worked, we are done')
-        #    return
-        ''' 
-        eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('reservseToCall starting at %x' % eip)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-	        self.stoppedReverseToCall, my_args)
-        self.lgr.debug('reverseToCall, added stop hap')
-        if prev is not None and eip != prev:
-            self.lgr.debug('reverseToCall, prev %x not equal eip %x, assume syscall, set break on prev and rev' % (prev, eip))
-            self.setOneBreak(prev, self.cpu)
-        else: 
-            self.uncall = False
-            for item in self.x_pages:
-                self.setBreakRange(self.cell_name, pid, item.address, item.length, self.cpu, comm, False)
-            self.lgr.debug('reverseToCall, set break range')
-        SIM_run_alone(SIM_run_command, 'reverse')
-        #self.lgr.debug('reverseToCall, did reverse-step-instruction')
-        self.lgr.debug('reverseToCall, did reverse')
-        ''' 
 
     '''
     BEWARE syntax errors are not seen.  TBD make unit test

@@ -1,4 +1,6 @@
 from simics import *
+import os
+import pickle
 import osUtils
 import syscallNumbers
 LIST_POISON2 = object()
@@ -63,19 +65,25 @@ class TaskStruct(object):
 
 class TaskUtils():
     COMM_SIZE = 16
-    def __init__(self, cpu, param, mem_utils, unistd32, lgr):
+    def __init__(self, cpu, param, mem_utils, unistd32, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
         self.lgr = lgr
         self.param = param
         self.mem_utils = mem_utils
+        self.phys_current_task = None
 
-        ''' address of current_task symbol, pointer at this address points to the current task record '''
-        ''' use physical address because some are relative to FS segment '''
-        if param.current_task_fs:
-            cmd = 'logical-to-physical fs:0x%x' % param.current_task
-        else:
-            cmd = 'logical-to-physical 0x%x' % param.current_task
-        self.phys_current_task = SIM_run_command(cmd)
+        if RUN_FROM_SNAP is not None:
+            phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, 'phys_current_task.pickle')
+            if os.path.isfile(phys_current_task_file):
+                self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
+        if self.phys_current_task is None:
+            ''' address of current_task symbol, pointer at this address points to the current task record '''
+            ''' use physical address because some are relative to FS segment '''
+            if param.current_task_fs:
+                cmd = 'logical-to-physical fs:0x%x' % param.current_task
+            else:
+                cmd = 'logical-to-physical 0x%x' % param.current_task
+            self.phys_current_task = SIM_run_command(cmd)
         self.lgr.debug('TaskUtils init with current_task of 0x%x, phys: 0x%x' % (param.current_task, self.phys_current_task))
         self.exec_addrs = {}
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd32)
@@ -87,6 +95,10 @@ class TaskUtils():
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         return cur_task_rec
 
+    def pickleit(self, fname):
+        phys_current_task_file = os.path.join('./', fname, 'phys_current_task.pickle')
+        pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
+
     def curProc(self):
         cur_task_rec = self.getCurTaskRec()
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
@@ -96,6 +108,7 @@ class TaskUtils():
     def findSwapper(self):
             #task = SIM_read_phys_memory(cpu, current_task, self.mem_utils.WORD_SIZE)
             task = self.getCurTaskRec()
+            #self.lgr.debug('getCurTask got 0x%x' % task)
             cpu = self.cpu
             #task = self.mem_utils.getCurrentTask(self.param, cpu)
             done = False
@@ -223,7 +236,7 @@ class TaskUtils():
         swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return tasks
-        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
+        #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -233,9 +246,13 @@ class TaskUtils():
             seen.add((task_addr, x))
             seen.add((task_addr, False))
             task = self.readTaskStruct(task_addr, cpu)
-            if task.next == swapper_addr:
-               self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
-               return tasks
+            
+            #if task.next == swapper_addr:
+            #   self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
+            #   #return tasks
+            if len(task.comm.strip()) == 0:
+                # cleaner way to know we are done?
+                return tasks
             #self.lgr.debug('reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next))
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
@@ -260,10 +277,10 @@ class TaskUtils():
                 for s in task.sibling:
                     if s and s != x:
                         stack.append((s, x))
-    
         return tasks
 
-    def getPidsForComm(self, comm):
+    def getPidsForComm(self, comm_in):
+        comm = os.path.basename(comm_in)
         retval = []
         ts_list = self.getTaskStructs()
         for ts in ts_list:

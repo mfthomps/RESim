@@ -7,7 +7,7 @@ class StackTrace():
             self.fname = fname
             self.instruct = instruct
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, lgr):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, lgr):
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -16,7 +16,11 @@ class StackTrace():
         self.frames = []
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.stack_base = stack_base
+
+
         self.doTrace()
+
 
     def followCall(self, return_to):
         eip = return_to - 8
@@ -47,11 +51,11 @@ class StackTrace():
     def doTrace(self):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         self.lgr.debug('stackTrace doTrace esp is 0x%x' % esp)
-        ebp = self.mem_utils.getRegValue(self.cpu, 'ebp')
-        if ebp == 0:
-            ''' we just returned and bp is on stack '''
-            ebp = esp
-            self.lgr.debug('stackTrace doTrace ebp was zero, setting to esp')
+        #ebp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+        #if ebp == 0:
+        #    ''' we just returned and bp is on stack '''
+        #    ebp = esp
+        #    self.lgr.debug('stackTrace doTrace ebp was zero, setting to esp')
         eip = self.top.getEIP(self.cpu)
         fname = self.soMap.getSOFile(self.pid, eip)
         #print('0x%08x  %-s' % (eip, fname))
@@ -59,14 +63,23 @@ class StackTrace():
         self.frames.append(frame)
         done  = False
         count = 0
-        ptr = ebp
-        while not done and count < 1000: 
+        #ptr = ebp
+        ptr = esp
+        been_in_main = False
+        while not done and count < 9000: 
             val = self.mem_utils.readPtr(self.cpu, ptr)
+            skip_this = False
+                
             if self.soMap.isCode(self.pid, val):
-                self.lgr.debug('is code: 0x%x' % val)
+                self.lgr.debug('is code: 0x%x from ptr 0x%x' % (val, ptr))
                 call_ip = self.followCall(val)
-                if call_ip is not None:
+                if been_in_main and not self.soMap.isMainText(self.pid, val):
+                    ''' once in main text assume we never leave? what about callbacks?'''
+                    skip_this = True
+                if call_ip is not None and not skip_this:
+                    skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
+                    self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(self.pid, val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -76,14 +89,24 @@ class StackTrace():
                         #print('0x%08x  %-s' % (call_ip, fname))
                         frame = self.FrameEntry(call_ip, fname, instruct)
                         self.frames.append(frame)
+                    if self.soMap.isMainText(self.pid, call_ip):
+                        been_in_main = True
+                        self.lgr.debug('stackTrace been in main')
                     ''' value at ptr-word_size should be ebp '''
+                    '''
                     ebp = self.mem_utils.readPtr(self.cpu, ptr-self.mem_utils.WORD_SIZE)
-                    self.lgr.debug('ptr: 0x%x ebp: 0x%x' % (ptr, ebp))
                     if ebp == 0:
                         done = True
                     else:
-                        ptr = ebp
+                        ptr = ebp - 2*self.mem_utils.WORD_SIZE
+                    self.lgr.debug('ptr: 0x%x ebp: 0x%x' % (ptr, ebp))
+                    '''
+                else:
+                    self.lgr.debug('nothing from followCall')
             else:
-                self.lgr.debug('not code 0x%x' % val)
+                #self.lgr.debug('not code 0x%x' % val)
+                pass
             count += 1
             ptr = ptr + self.mem_utils.WORD_SIZE
+            if self.stack_base is not None and ptr > self.stack_base:
+                done = True
