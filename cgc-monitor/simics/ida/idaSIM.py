@@ -598,13 +598,19 @@ class IdaSIM():
         eip = gdbProt.getEIPWhenStopped()
         self.signalClient()
      
+    def showCycle(self):
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.showCycle()");')
+        print simicsString
     
     def refreshBookmarks(self):
         self.bookmark_view.updateBookmarkView()
     
     def continueForward(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.continueForward()");')
-        time.sleep(1)
+        #while True:
+        #    simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getEIPWhenStopped(%s)");' % 'True')
+        #    time.sleep(2)
+        #idc.PauseProcess()
         eip = gdbProt.getEIPWhenStopped()
         print('continueForward got eip 0x%x' % eip)
         self.signalClient()

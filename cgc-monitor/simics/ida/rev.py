@@ -13,6 +13,7 @@ import reHooks
 idaapi.require("idaSIM")
 idaapi.require("stackTrace")
 idaapi.require("bookmarkView")
+idaapi.require("reHooks")
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -181,9 +182,9 @@ def doKeyMap(isim):
     idaapi.CompileLine('static key_alt_shift_d() { RunPythonStatement("isim.testDialog()"); }')
     AddHotkey("Alt+Shift+d", 'key_alt_shift_d')
 
-    idaapi.CompileLine('static key_f9() { RunPythonStatement("isim.continueForward()"); }')
-    AddHotkey("F9", 'f9')
-    idaapi.add_menu_item("Debugger/Attach to process", "continue", "F9", 0, isim.continueForward, None)
+    #idaapi.CompileLine('static key_f9() { RunPythonStatement("isim.continueForward()"); }')
+    #AddHotkey("F9", 'f9')
+    #idaapi.add_menu_item("Debugger/Attach to process", "continue", "F9", 0, isim.continueForward, None)
 
     idaapi.CompileLine('static key_alt_f9() { RunPythonStatement("isim.doReverse()"); }')
     AddHotkey("Alt+Shift+F9", 'key_alt_f9')
@@ -287,6 +288,7 @@ def doKeyMap(isim):
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Watch data read", None, 1, isim.watchData, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to IO", None, 1, isim.runToIO, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Stack trace", None, 1, isim.updateStackTrace, None)
+    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Show cycle", None, 1, isim.showCycle, None)
 
     idaapi.CompileLine('static key_alt_shift_n() { RunPythonStatement("nameSysCalls()"); }')
     AddHotkey("Alt+Shift+n", 'key_alt_shift_n')

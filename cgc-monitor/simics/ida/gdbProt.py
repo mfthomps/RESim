@@ -87,7 +87,8 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
                 #print 'getEIPWhenStopped found ip of %x, now empty mailbox' % retval
                 Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
         else:
-            if type(simicsString) is not int and not simicsString.strip().startswith('not stopped'):
+            if type(simicsString) is not int and not simicsString.strip().startswith('not stopped') \
+               and not simicsString.strip().startswith('End of playback'):
                 # hack until python logging not sent to stdout on rev module
                 simicsString = simicsString.strip()
                 if not (simicsString.startswith('[')) and not simicsString.startswith('SystemPerf'):

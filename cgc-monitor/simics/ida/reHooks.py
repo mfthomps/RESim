@@ -1,4 +1,5 @@
 import idaapi
+from idaapi import Form
 import idc
 import gdbProt
 import rev
@@ -123,6 +124,40 @@ class DisHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+class ModMemoryHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        # Modify memory
+        def activate(self, ctx):
+            highlighted = idaapi.get_highlighted_identifier()
+            addr = getHex(highlighted)
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
+            print simicsString
+            print addr
+            print('addr 0x%x value %s' % (addr, simicsString))
+            value = getHex(simicsString)
+
+            # Sample form from kernwin.hpp
+            s = """Modify memory
+            Address: %$
+            <~E~nter value:N:32:16::>
+            """
+            num = Form.NumericArgument('N', value=value)
+            ok = idaapi.AskUsingForm(s,
+                    Form.NumericArgument('$', addr).arg,
+                    num.arg)
+            if ok == 1:
+                print("You entered: %x" % num.value)
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, num.value)) 
+                idc.RefreshDebuggerMemory()
+                
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     rev_to_action_desc = idaapi.action_desc_t(
        'rev:action',
@@ -154,12 +189,18 @@ def register(isim):
        'reverse track data',
        RevDataHandler(isim)
        )
+    mod_memory_action_desc = idaapi.action_desc_t(
+       'modMemory:action',
+       'modify memory',
+       ModMemoryHandler(isim)
+       )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
     idaapi.register_action(mod_reg_action_desc)
     idaapi.register_action(data_watch_action_desc)
     idaapi.register_action(rev_addr_action_desc)
+    idaapi.register_action(mod_memory_action_desc)
 
 class Hooks(idaapi.UI_Hooks):
         def populating_tform_popup(self, form, popup):
@@ -191,6 +232,7 @@ class Hooks(idaapi.UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
+                            idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
                             
 
 #register()
