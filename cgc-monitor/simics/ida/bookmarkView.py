@@ -73,7 +73,10 @@ class bookmarkView(simplecustviewer_t):
 
     def goToBookmarkRefresh(self, mark):
         if True or mark != '_start+1':
-            gdbProt.goToBookmark(mark)
+            simicsString = gdbProt.goToBookmark(mark)
+            if simicsString == "reverse disabled":
+                print('Reverse execution is disabled')
+                return
             eip = gdbProt.getEIPWhenStopped()
             #gdbProt.stepWait()
             print('Now at bookmark: %s' % mark)
@@ -91,6 +94,7 @@ class bookmarkView(simplecustviewer_t):
             #self.runToUserSpace()
             #self.runToUserSpace()
             print('Now at bookmark: %s' % mark)
+        self.isim.showSimicsMessage()
 
     def goToOrigin(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToOrigin()");') 

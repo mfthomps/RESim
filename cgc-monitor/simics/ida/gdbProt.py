@@ -47,6 +47,7 @@ def goToBookmark(mark):
     command = "@cgc.goToDebugBookmark('%s')" % mark
     print('command is %s' % command)
     simicsString = Evalx('SendGDBMonitor("%s");' % command)
+    return simicsString
     
 def stripMailbox(msg):
     '''
@@ -91,7 +92,8 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
                and not simicsString.strip().startswith('End of playback'):
                 # hack until python logging not sent to stdout on rev module
                 simicsString = simicsString.strip()
-                if not (simicsString.startswith('[')) and not simicsString.startswith('SystemPerf'):
+                if not (simicsString.startswith('[')) and not simicsString.startswith('SystemPerf') \
+                       and not simicsString.startswith('Using virtual time'):
                     print('monitor stopped at wrong place: <%s>' % simicsString)
                     done = True
     #print('getEIPWhenStopped returning %x' % retval)

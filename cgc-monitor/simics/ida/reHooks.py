@@ -1,8 +1,10 @@
 import idaapi
+import time
 from idaapi import Form
 import idc
 import gdbProt
 import rev
+import regFu
 last_data_watch_count = '32'
 def getHex(s):
     retval = None
@@ -67,7 +69,7 @@ class DataWatchHandler(idaapi.action_handler_t):
             if count is None:
                 return
             print('watch %s bytes from 0x%x' % (count, addr))
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.dataWatch(0x%x, 0x%s)");' % (addr, count)) 
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, 0x%s)");' % (addr, count)) 
 
         # This action is always available.
         def update(self, ctx):
@@ -131,13 +133,20 @@ class ModMemoryHandler(idaapi.action_handler_t):
 
         # Modify memory
         def activate(self, ctx):
-            highlighted = idaapi.get_highlighted_identifier()
-            addr = getHex(highlighted)
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
-            print simicsString
-            print addr
-            print('addr 0x%x value %s' % (addr, simicsString))
-            value = getHex(simicsString)
+            if regFu.isHighlightedEffective():
+                addr = regFu.getOffset()
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
+                print('effective addr 0x%x value %s' % (addr, simicsString))
+                value = getHex(simicsString)
+            else:
+                highlighted = idaapi.get_highlighted_identifier()
+                addr = getHex(highlighted)
+                if addr is None:
+                    print('ModMemoryHandler unable to parse hex from %s' % highlighted)
+                    return
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
+                print('addr 0x%x value %s' % (addr, simicsString))
+                value = getHex(simicsString)
 
             # Sample form from kernwin.hpp
             s = """Modify memory
@@ -151,8 +160,8 @@ class ModMemoryHandler(idaapi.action_handler_t):
             if ok == 1:
                 print("You entered: %x" % num.value)
                 simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, num.value)) 
+                time.sleep(1)
                 idc.RefreshDebuggerMemory()
-                
 
         # This action is always available.
         def update(self, ctx):
@@ -228,7 +237,7 @@ class Hooks(idaapi.UI_Hooks):
                         idaapi.attach_action_to_popup(form, popup, "modReg:action", 'RESim/')
                     else:
                         addr = getHex(highlighted)
-                        if addr is not None:
+                        if addr is not None or regFu.isHighlightedEffective():
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')

@@ -1,4 +1,5 @@
 import time
+import json
 import idaapi
 import idc
 import idautils
@@ -26,7 +27,7 @@ class IdaSIM():
         eip = gdbProt.getEIPWhenStopped()
         self.signalClient()
 
-    def signalClient(self, norev=False):
+    def XXXXXXXXXXXXXXXsignalClient(self, norev=False):
         start_eip = idc.GetRegValue("EIP")
         if not norev:
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.rev1()");')
@@ -37,6 +38,32 @@ class IdaSIM():
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         idaapi.step_into()
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
+        new_eip = idc.GetRegValue("EIP")
+        #print('signalClient back from cont new_eip is 0x%x' % new_eip)
+        if new_eip >= self.kernel_base:
+            print('in kernel, run to user')
+        self.updateStackTrace()
+
+    def signalClient(self, norev=False):
+        start_eip = idc.GetRegValue("EIP")
+            #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
+        if norev:
+            idaapi.step_into()
+            idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.printRegJson()");')
+        try:
+            regs = json.loads(simicsString)
+        except:
+            print('failed to get regs from %s' % simicsString)
+        for reg in regs:
+            r = str(reg.upper())
+            if r == 'EFLAGS':
+                r = 'EFL'
+            #print('set %s to 0x%x' % (r, regs[reg]))
+            idc.SetRegValue(regs[reg], r)
+        idc.RefreshDebuggerMemory()
+
+
         new_eip = idc.GetRegValue("EIP")
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
@@ -92,10 +119,10 @@ class IdaSIM():
         #print 'doRevFinish'
         #doRevCommand('uncall-function')
         cur_addr = idc.GetRegValue("EIP")
-        f = GetFunctionAttr(cur_addr, FUNCATTR_START)
+        f = idc.GetFunctionAttr(cur_addr, idc.FUNCATTR_START)
         if f != idaapi.BADADDR: 
-            print('doRevFinish got function start at 0x%x, go there, and further back 0' % f) 
-            doRevToAddr(f, extra_back=0)
+            print('doRevFinish got function start at 0x%x, go there, and further back 1' % f) 
+            self.doRevToAddr(f, extra_back=1)
         else:
             print('use monitor uncall function')
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.uncall()");')
@@ -116,7 +143,7 @@ class IdaSIM():
         # here
         if isBpt > 0:
        	    print 'curAddr is %x, it is a breakpoint, do a rev step over' % curAddr
-            addr = doRevStepOver()
+            addr = self.doRevStepOver()
             print 'in doReverse, did RevStepOver got addr of %x' % addr
             isBpt = idc.CheckBpt(addr)
             if isBpt > 0:
@@ -191,10 +218,11 @@ class IdaSIM():
     
     def trackAddressPrompt(self):
         addr = self.getUIAddress('Run backwards to find source of data at this address')
-        print('Running backwards to find source of content of address 0x%x' % addr)
-        self.trackAddress(addr)
-        self.showSimicsMessage()
-        bookmark_list = self.bookmark_view.updateBookmarkView()
+        if addr is not None:
+            print('Running backwards to find source of content of address 0x%x' % addr)
+            self.trackAddress(addr)
+            self.showSimicsMessage()
+            bookmark_list = self.bookmark_view.updateBookmarkView()
     
     def wroteToAddress(self, target_addr):
         disabledSet = bpUtils.disableAllBpts(None)
@@ -447,20 +475,20 @@ class IdaSIM():
             prev_block = block
     
         if prev_addr == cur_addr:
-            doRevStepInto()
+            self.doRevStepInto()
         elif prev_addr is not None:
             next_addr = NextHead(prev_addr)
             if next_addr == cur_addr:
                 ''' reverse two to get there? '''
                 print('revBlock rev two?')
-                doRevStepInto()
-                doRevStepInto()
+                self.doRevStepInto()
+                self.doRevStepInto()
             else:
                 print('revBlock rev to 0x%x' % prev_addr)
-                doRevToAddr(prev_addr, extra_back=0)
+                self.doRevToAddr(prev_addr, extra_back=0)
         else:
             print('must have been top, uncall')
-            doRevFinish()
+            self.doRevFinish()
     
     def watchData(self):
         command = "@cgc.watchData()" 
@@ -523,7 +551,7 @@ class IdaSIM():
     
     def rebuildBookmarkView(self):
         print 'rebuilding bookmark view'
-        self.bookmark_view.Create()
+        self.bookmark_view.Create(self)
         bookmark_list = self.bookmark_view.updateBookmarkView()
     
     def updateStackTrace(self):
