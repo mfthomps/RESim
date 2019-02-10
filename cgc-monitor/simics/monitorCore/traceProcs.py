@@ -19,7 +19,6 @@ class TraceProcs():
         ''' dict of Pinfo indexed by pid '''
         self.plist = {}
         self.did_that = []
-        self.trace_fh = None
         self.pipe_handle = {}
         self.socket_handle = {}
         self.latest_pid_instance = {}

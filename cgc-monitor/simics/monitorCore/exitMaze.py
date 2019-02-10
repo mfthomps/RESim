@@ -1,3 +1,27 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 from simics import *
 import decode
 from collections import OrderedDict
@@ -58,15 +82,45 @@ class ExitMaze():
         self.live_cmp = []
         self.breakout_addr = None
         self.function_ret = None
+        self.just_return = False
+
+    def mazeReturn(self):
+        if self.function_ret is None:
+            print('no function return set.')
+            return
+        self.just_return = True
+        self.break_addrs = []
+        self.break_addrs.append((self.function_ret, 0))
+        self.lgr.debug('mazeReturn, plant breaks')
+        self.removeDebugBreaks()
+        SIM_run_alone(self.plantBreaks, None)
+
+    def checkJustReturn(self):
+        if not self.just_return:
+            return False
+        st = self.top.getStackTraceQuiet()
+        current_frames = st.getFrames(4)
+        for i in range(len(self.stack_frames)):
+            if current_frames[i].ip != self.stack_frames[i].ip:
+                self.lgr.debug('exitMaze checkStack not equal %d 0x%x 0x%x' % (i, current_frames[i].ip, self.stack_frames[i].ip))
+                return False
+        else:
+            return True
+
+    def recordStack(self):
+        st = self.top.getStackTraceQuiet()
+        self.stack_frames = st.getFrames(4)
 
     def run(self):
         if self.debugging:
             self.lgr.debug('ExitMaze Disabling reverse execution')
             SIM_run_command('disable-reverse-execution')
+        self.recordStack()
         round_count = 0
         call_level = 0
         cmd = 'si -q'
-        timeofday_count_start = self.syscall.getTimeofdayCount()
+        self.syscall.resetTimeofdayCount()
+        timeofday_count_start = 0
         self.lgr.debug('exitMaze, Begin.  timeofday_count_start is %d' % timeofday_count_start)
         cpl = getCPL(self.cpu)
         self.cycle_start = self.cpu.cycles
@@ -109,11 +163,15 @@ class ExitMaze():
                                 else:
                                     print('function return: 0x%x' % dest)
                             if len(self.break_addrs) > 4:
-                                print('more than 4 breakpoints.  Use @cgc.plantCmpBreaks() to prune and run')
+                                print('more than 4 breakpoints.  \nUse @cgc.plantCmpBreaks() to prune and run')
+                                print('Or use @cgc.doMazeReturn() to exit via a function return, and continue doing so')
+                                print('when this maze is again encountered.')
                                 return
                             else:
                                 self.lgr.debug('ExitMaze Found %d breaks' % len(self.break_addrs))
                                 print('Use @cgc.plantBreaks() to set the above breaks to exit the maze')
+                                print('Or use @cgc.doMazeReturn() to exit via a function return, and continue doing so')
+                                print('when this maze is again encountered.')
                                 return
                         else:
                             self.lgr.error('ExitMaze confused')
@@ -297,7 +355,7 @@ class ExitMaze():
                     SIM_run_command('enable-reverse-execution')
                 self.top.skipAndMail()
             else:        
-                #SIM_run_alone(SIM_run_command, 'c')
+                SIM_run_alone(SIM_run_command, 'c')
                 print('out of stop hap')
             
     def getBreakout(self):

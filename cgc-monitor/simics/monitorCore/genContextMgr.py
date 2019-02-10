@@ -252,12 +252,12 @@ class GenContextMgr():
         #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
-            #self.lgr.debug('Now scheduled %d' % pid)
+            self.lgr.debug('Now scheduled %d' % pid)
             self.debugging_scheduled = True
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
-            #self.lgr.debug('No longer scheduled')
+            self.lgr.debug('No longer scheduled')
             self.debugging_scheduled = False
             self.clearAllBreak()
             SIM_run_alone(self.clearAllHap, None)
@@ -266,10 +266,17 @@ class GenContextMgr():
         ''' remove a pid from the list of task records being watched.  return True if this is the last thread. '''
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec in self.debugging_rec:
-           # self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
+            self.lgr.debug('rmTask removing rec 0x%x for pid %d' % (rec, pid))
             self.debugging_rec.remove(rec)
             if len(self.debugging_rec) == 0:
+                self.debugging_pid = None
+                self.debugging_cellname = None
+                self.debugging_cell = None
+                self.debugging_cpu = None
+                self.stopWatchTasks()
                 return True
+            else:
+                self.lgr.debug('rmTask remaining debug recs %s' % str(self.debugging_rec))
         return False
 
     def addTask(self, pid):
@@ -288,6 +295,9 @@ class GenContextMgr():
         if rec is not None and rec not in self.debugging_rec:
             return False
         else:
+            if rec is None:
+                self.lgr.debug('amWatching pid %d rec was None' % pid)
+                return False
             return True
 
     def stopWatchTasks(self):
@@ -299,6 +309,7 @@ class GenContextMgr():
         self.lgr.debug('stopWatchTasks')
         self.task_hap = None
         self.task_break = None
+        self.debugging_scheduled = False
 
     def watchTasks(self):
         if self.task_break is not None:

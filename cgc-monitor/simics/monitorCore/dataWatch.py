@@ -21,6 +21,7 @@ class DataWatch():
         self.length = length
 
     def watch(self):
+        self.lgr.debug('DataWatch watch')
         if self.start is not None:
             self.setBreakRange()
             self.setStopHap()
@@ -92,11 +93,11 @@ class DataWatch():
                     #self.lgr.debug('will delete GenContext hap %s' % str(hc.hap))
                     self.context_manager.genDeleteHap(hc.hap)
                 else:
-                    #self.lgr.debug('stopHap will delete hap %s' % str(hc.hap))
+                    #self.lgr.debug('GenMonitor stopHap will delete hap %s' % str(hc.hap))
                     SIM_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
-            self.lgr.debug('stopHap will delete hap %s' % str(self.stop_hap))
+            self.lgr.debug('GenMonitor stopHap will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:

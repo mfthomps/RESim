@@ -71,6 +71,8 @@ class TaskUtils():
         self.param = param
         self.mem_utils = mem_utils
         self.phys_current_task = None
+        self.exit_cycles = 0
+        self.exit_pid = 0
 
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, 'phys_current_task.pickle')
@@ -279,13 +281,23 @@ class TaskUtils():
                         stack.append((s, x))
         return tasks
 
+    def getExitPid(self):
+        return self.exit_pid
+
+    def setExitPid(self, pid):
+        self.exit_pid = pid
+        self.exit_cycles = self.cpu.cycles
+
     def getPidsForComm(self, comm_in):
         comm = os.path.basename(comm_in)
         retval = []
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             if comm.startswith(ts_list[ts].comm):
-                retval.append(ts_list[ts].pid)
+                pid = ts_list[ts].pid
+                ''' skip if exiting as recorded by syscall '''
+                if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                    retval.append(ts_list[ts].pid)
         return retval
 
     def getPidCommMap(self):

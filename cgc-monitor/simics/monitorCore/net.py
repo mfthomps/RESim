@@ -38,6 +38,8 @@ domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPL
 'AF_ATMPVC', 'AF_X25', 'AF_INET6', 'AF_ROSE', 'AF_DECnet', 'AF_NETBEUI', 'AF_SECURITY', 'AF_KEY', 'AF_NETLINK']
 
 FIONBIO = 0x5421
+FIONREAD = 0x541B
+
 class NetInfo():
     def __init__(self, ip, mask, broadcast, dev, label):
         self.ip = ip

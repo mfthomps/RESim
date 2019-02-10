@@ -3,7 +3,7 @@ import pageUtils
 import memUtils
 import net
 class SharedSyscall():
-    def __init__(self, top, cpu, cell, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, lgr):
+    def __init__(self, top, cpu, cell, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_call = {}
         self.pending_execve = []
         self.lgr = lgr
@@ -20,14 +20,12 @@ class SharedSyscall():
         self.exit_hap = {}
         self.exit_names = {} 
         self.debugging = False
-        self.trace_fh = None
+        self.traceMgr = traceMgr
         self.traceFiles = traceFiles
         self.soMap = soMap
         self.dataWatch = dataWatch
         self.top = top
 
-    def setTrace(self, fh):
-        self.trace_fh = fh
 
     def setDebugging(self, debugging):
         self.debugging = debugging
@@ -44,74 +42,35 @@ class SharedSyscall():
             self.context_manager.genDeleteHap(self.exit_hap[eip])
         self.exit_pids = {}
 
-    def redoExitHapXXXX(self):
-        self.lgr.debug('redoExitHap')
-        if self.exit_hap is not None:
-            self.lgr.debug('redoExitHap delete existing hap')
-            self.context_manager.genDeleteHap(self.exit_hap)
-        first_break = None
-        exit_break = None
+    def showExitHaps(self):
         for eip in self.exit_pids:
-            exit_break = self.context_manager.genBreakpoint(self.cell, 
-                                Sim_Break_Linear, Sim_Access_Execute, eip, 1, 0)
-            if first_break is None:
-                first_break = exit_break
-        if len(self.exit_pids) == 1:
-            self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
-                               None, exit_break, 'exit hap')
-        else:
-            self.exit_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.exitHap, 
-                                   None, first_break, exit_break, 'exit hap')
-
-    def rmExitHapXX(self, pid):
-        self.lgr.debug('rmExitHap for pid %d' % pid)
-        redo = False
-        for eip in self.exit_pids:
-            if pid in self.exit_pids[eip]:
-                self.exit_pids[eip].remove(pid)
-                if len(self.exit_pids[eip]) == 0:
-                    redo = True 
-        if redo:
-            self.redoExitHap()
-
-        self.exit_info.pop(pid, None)
-
-    def addExitHapXX(self, pid, exit_eip1, exit_eip2, callnum, exit_info, traceProcs, name):
-        self.exit_info[pid] = exit_info
-        if traceProcs is not None:
-            self.trace_procs.append(pid)
-        self.exit_names[pid] = name
-        redo = False
-
-        if exit_eip1 not in self.exit_pids:
-            self.exit_pids[exit_eip1] = []
-
-        if len(self.exit_pids[exit_eip1]) == 0:
-            #self.lgr.debug('addExitHap new exit EIP 0x%x for pid %d' % (exit_eip1, pid))
-            redo = True
-        self.exit_pids[exit_eip1].append(pid)
-        if exit_eip2 not in self.exit_pids:
-            self.exit_pids[exit_eip2] = []
-        if len(self.exit_pids[exit_eip2]) == 0:
-            #self.lgr.debug('addExitHap new exit EIP 0x%x for pid %d' % (exit_eip2, pid))
-            redo = True
-        self.exit_pids[exit_eip2].append(pid)
-
-        if redo:
-            self.redoExitHap()
-        #self.lgr.debug('addExitHap set pending_call for pid %d to %d' % (pid, callnum))
-        self.pending_call[pid] = callnum
+            print('eip: 0x%x' % eip)
+            for pid in self.exit_pids[eip]:
+                prog = self.task_utils.getProgName(pid)
+                if prog is not None:
+                    print('\t%d %s' % (pid, prog))
+                else:
+                    print('\t%d' % (pid))
 
     def rmExitHap(self, pid):
-        #self.lgr.debug('rmExitHap for pid %d' % pid)
-        redo = False
-        for eip in self.exit_pids:
-            if pid in self.exit_pids[eip]:
-                self.exit_pids[eip].remove(pid)
-                if len(self.exit_pids[eip]) == 0:
-                    self.context_manager.genDeleteHap(self.exit_hap[eip])
+        if pid is not None:
+            #self.lgr.debug('rmExitHap for pid %d' % pid)
+            for eip in self.exit_pids:
+                if pid in self.exit_pids[eip]:
+                    self.exit_pids[eip].remove(pid)
+                    if len(self.exit_pids[eip]) == 0:
+                        self.context_manager.genDeleteHap(self.exit_hap[eip])
+            self.exit_info.pop(pid, None)
 
-        self.exit_info.pop(pid, None)
+        else:
+            ''' assume the exitHap was for a one-off syscall such as execve that
+                broke the simulation. '''
+            ''' TBD NOTE procs returning from blocked syscalls will not be caught! '''
+            for eip in self.exit_pids:
+                del self.exit_pids[eip][:]
+                self.context_manager.genDeleteHap(self.exit_hap[eip])
+                self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
+
 
     def addExitHap(self, pid, exit_eip1, exit_eip2, callnum, exit_info, traceProcs, name):
         self.exit_info[pid] = exit_info
@@ -128,6 +87,7 @@ class SharedSyscall():
                                 Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
             self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                None, exit_break, 'exit hap')
+            self.lgr.debug('sharedSyscall added exit hap %d' % self.exit_hap[exit_eip1])
         self.exit_pids[exit_eip1].append(pid)
 
         if exit_eip2 is not None:
@@ -139,43 +99,10 @@ class SharedSyscall():
                 exit_break = self.context_manager.genBreakpoint(self.cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
-                                   None, exit_break, 'exit hap')
+                                   None, exit_break, 'exit hap2')
+                self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip1])
             self.exit_pids[exit_eip2].append(pid)
-
-    def rmExitHapXX(self, pid):
-        self.lgr.debug('rmExitHap for pid %d' % pid)
-        redo = False
-        for eip in self.exit_pids:
-            if pid in self.exit_pids[eip]:
-                self.exit_pids[eip].remove(pid)
-                if len(self.exit_pids[eip]) == 0:
-                    redo = True 
-        if redo:
-            self.redoExitHap()
-
-        self.exit_info.pop(pid, None)
-
-    def addExitHapXX(self, pid, exit_eip1, exit_eip2, callnum, exit_info, traceProcs, name):
-        self.exit_info[pid] = exit_info
-        if traceProcs is not None:
-            self.trace_procs.append(pid)
-        self.exit_names[pid] = name
-        redo = False
-        
-       
-      
-        self.exit_pids[exit_eip1].append(pid)
-        if exit_eip2 not in self.exit_pids:
-            self.exit_pids[exit_eip2] = []
-        if len(self.exit_pids[exit_eip2]) == 0:
-            self.lgr.debug('addExitHap new exit EIP 0x%x for pid %d' % (exit_eip2, pid))
-            redo = True
-        self.exit_pids[exit_eip2].append(pid)
-
-        if redo:
-            self.redoExitHap()
-        self.lgr.debug('addExitHap set pending_call for pid %d to %d' % (pid, callnum))
-        self.pending_call[pid] = callnum
+        self.lgr.debug('sharedSyscall addExitHap return')
 
 
     def addPendingExecve(self, pid):
@@ -218,7 +145,7 @@ class SharedSyscall():
             ''' no pending syscall for this pid '''
             if not self.traceProcs.pidExists(pid):
                 ''' new PID, add it without parent for now? ''' 
-                self.lgr.debug('exitHap call traceProcs.addProc for pid %d' % pid)
+                #self.lgr.debug('exitHap call traceProcs.addProc for pid %d' % pid)
                 self.traceProcs.addProc(pid, None)
                 return
             else:
@@ -235,6 +162,7 @@ class SharedSyscall():
             ret_addr = self.mem_utils.readPtr(cpu, esp)
             if ret_addr > self.param.kernel_base:
                 ''' nested '''
+                self.lgr.debug('sharedSyscall exitHap nested')
                 return
 
         if eip == exit_info.syscall_entry:
@@ -273,7 +201,6 @@ class SharedSyscall():
                         trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                         self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                         ''' TBD cleaner way to know if we are getting ready for a debug session? '''
-                        #if self.trace_fh is None and '.so.' in fname:
                         if '.so.' in exit_info.fname:
                             open_syscall = self.top.getSyscall('open')
                             if open_syscall is not None: 
@@ -304,13 +231,14 @@ class SharedSyscall():
                         trace_msg = ('\treturn from read pid:%d FD: %d exception %d\n' % (pid, exit_info.old_fd, eax))
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('write'):
-                    if eax >= 0:
+                    if eax >= 0 and exit_info.retval_addr is not None:
                         byte_string, byte_array = self.getBytes(cpu, eax, exit_info.retval_addr)
                         trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
                         if self.traceFiles is not None:
                             self.traceFiles.write(exit_info.old_fd, byte_array)
                         if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
                             s = ''.join(map(chr,byte_array))
+                            self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
                             if exit_info.call_params.match_param not in s:
                                 ''' no match, set call_param to none '''
                                 exit_info.call_params = None
@@ -318,6 +246,14 @@ class SharedSyscall():
                 elif exit_info.callnum == self.task_utils.syscallNumber('_llseek'):
                     result = self.mem_utils.readWord32(cpu, exit_info.retval_addr)
                     trace_msg = ('\treturn from _llseek pid:%d FD: %d result: 0x%x\n' % (pid, exit_info.old_fd, result))
+
+                elif exit_info.callnum == self.task_utils.syscallNumber('ioctl'):
+                    if exit_info.retval_addr is not None:
+                        result = self.mem_utils.readWord32(cpu, exit_info.retval_addr)
+                        if result is not None:
+                            trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result))
+                        else:
+                            self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('gettimeofday'): 
                     if exit_info.retval_addr is not None:
@@ -366,13 +302,15 @@ class SharedSyscall():
                                     binders.add(pid, prog_name, ss.dottedIP(), ss.port)
                             trace_msg = ('\treturn from socketcall BIND pid:%d, %s\n' % (pid, ss.getString()))
                                 
+                    elif exit_info.socket_callnum == net.GETSOCKNAME:
+                        ss = net.SockStruct(cpu, params, self.mem_utils)
+                        trace_msg = ('\t return from GETSOCKNAME pid:%d %s\n' % (pid, ss.getString()))
+
                     elif exit_info.socket_callnum == net.ACCEPT:
                         new_fd = eax
                         if new_fd < 0:
                             return 
                         ss = net.SockStruct(cpu, params, self.mem_utils)
-                        if self.trace_fh is None:
-                            return
                         if ss.sa_family == 1:
                             if pid in self.trace_procs:
                                 self.traceProcs.accept(pid, ss.fd, new_fd, None)
@@ -401,6 +339,15 @@ class SharedSyscall():
                             trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
                         else:
                             trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
+
+                        if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
+                            byte_string, byte_array = self.getBytes(cpu, eax, exit_info.retval_addr)
+                            s = ''.join(map(chr,byte_array))
+                            self.lgr.debug('sharedSyscall SEND check string %s against %s' % (s, exit_info.call_params.match_param))
+                            if exit_info.call_params.match_param not in s:
+                                ''' no match, set call_param to none '''
+                                exit_info.call_params = None
+
                     elif exit_info.socket_callnum == net.RECV or exit_info.socket_callnum == net.RECVFROM or \
                          exit_info.socket_callnum == net.RECVMSG: 
                         if eax >= 0:
@@ -416,7 +363,7 @@ class SharedSyscall():
                     else:
                         fd = self.mem_utils.readWord32(cpu, params)
                         addr = self.mem_utils.readWord32(cpu, params+4)
-                        trace_msg = ('\treturn from socketcall %s pid:%d FD:%d addr:0x%x eax: 0x%x\n' % (socket_callname, pid, fd, addr, eax)) 
+                        trace_msg = ('\treturn from socketcall %s pid:%d FD: %d addr:0x%x eax: 0x%x\n' % (socket_callname, pid, fd, addr, eax)) 
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('close'):
                     if eax == 0:
@@ -484,9 +431,8 @@ class SharedSyscall():
                     SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
                 self.lgr.debug(trace_msg.strip())
     
-                if self.trace_fh is not None and len(trace_msg.strip())>0:
-                    self.trace_fh.write(trace_msg) 
-                    self.trace_fh.flush()
+                if len(trace_msg.strip())>0:
+                    self.traceMgr.write(trace_msg) 
 
     def getBytes(self, cpu, num_bytes, addr):
         '''

@@ -392,6 +392,7 @@ class findKernelWrite():
         if self.kernel_write_break is not None:
             self.lgr.debug('deleting hap and breakpoint %d' % self.kernel_write_break)
             SIM_delete_breakpoint(self.kernel_write_break)
+            self.kernel_write_break = None
         if self.stop_write_hap is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
             self.kernel_write_break = None

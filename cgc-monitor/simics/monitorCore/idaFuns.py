@@ -9,6 +9,7 @@ class IDAFuns():
         self.funs = {}
         self.lgr = lgr
         flist = []
+        self.lgr.debug('IDAFuns for path %s' % path)
         if os.path.isfile(path):
             with open(path) as fh:
                 for line in fh:
@@ -17,8 +18,10 @@ class IDAFuns():
                         fun_addr = int(fun_s, 16)
                         flist.append(fun_addr)
                     except:
-                        print('could not parse int from %s' % fun_s)
-
+                        self.lgr.error('could not parse int from %s' % fun_s)
+        else:
+            self.lgr.debug('IDAFuns no file at %s' % path)
+            return
         sflist = sorted(flist)
         prev_f = None
         for f in sflist:

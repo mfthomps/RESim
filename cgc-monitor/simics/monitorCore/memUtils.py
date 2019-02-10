@@ -24,6 +24,7 @@
 '''
 
 import simics
+import json
 from simics import *
 MACHINE_WORD_SIZE = 8
 
@@ -66,8 +67,8 @@ class memUtils():
         self.WORD_SIZE = word_size
         self.param = param
         self.lgr = lgr
-        ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
-        ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp"]
+        ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
+        ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags"]
         self.regs = {}
         i=0
         for ia32_reg in ia32_regs:
@@ -134,6 +135,16 @@ class memUtils():
         retval = hi << 8 | lo
         return retval
 
+    def printRegJson(self, cpu):
+        regs = {}
+        for reg in self.regs:
+            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+            reg_value = cpu.iface.int_register.read(reg_num)
+            regs[reg] = reg_value
+        
+        s = json.dumps(regs)
+        print s
+    
     def readPhysPtr(self, cpu, addr):
         try:
             return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))

@@ -102,20 +102,20 @@ class SOMap():
         else:
             pid_list = self.context_manager.getThreadPids()
             if pid not in pid_list:
-                self.lgr.debug('SOMap getThreadPid requested unknown pid %d' % pid)
+                self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
                 return None
             else:
                 for p in pid_list:
                     if p in self.so_file_map:
                         return p
-        self.lgr.debug('SOMap getThreadPid requested unknown pid %d' % pid)
+        self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
         return None
 
-    def getSOFile(self, pid, addr_in):
+    def getSOFile(self, pid_in, addr_in):
         retval = None
-        pid = self.getThreadPid(pid)
+        pid = self.getThreadPid(pid_in)
         if pid is None:
-            self.lgr.debug('getSOFile, no such pid in threads %d' % pid)
+            self.lgr.error('getSOFile, no such pid in threads %d' % pid_in)
             return
         #self.lgr.debug('getSOFile for pid %d addr 0x%x' % (pid, addr_in))
         if pid in self.so_file_map:

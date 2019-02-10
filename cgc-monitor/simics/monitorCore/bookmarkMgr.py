@@ -32,6 +32,7 @@ class bookmarkMgr():
     __kernel_marks = []
     __origin_bookmark = 'origin'
     __back_marks = {}
+    __mark_msg = {}
     def __init__(self, top, context_mgr, lgr):
         self.top = top
         self.context_mgr = context_mgr
@@ -42,6 +43,7 @@ class bookmarkMgr():
         self.__bookmarks = OrderedDict()
         self.__kernel_marks = []
         self.__back_marks = {}
+        self.__mark_msg = {}
 
     def hasBookmarkDelta(self, delta):
         for mark in self.__bookmarks:
@@ -50,7 +52,7 @@ class bookmarkMgr():
                 return True
         return False
 
-    def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
+    def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         self.lgr.debug('setDebugBookmark mark: %s' % mark)
         if cpu is None: 
             dum, dum2, cpu = self.context_mgr.getDebugPid() 
@@ -66,13 +68,14 @@ class bookmarkMgr():
             steps = steps
         #SIM_run_command('set-bookmark %s' % mark)
         #if not mark.startswith('protected_memory') and not mark.startswith('_start+1'):
-        if not mark.startswith('_start+1'):
-            start_cycle = self.getCycle('_start+1')
+        if not mark.startswith('origin'):
+            start_cycle = self.getCycle('origin')
             if start_cycle is None:
-                self.lgr.debug('setDebugBookmark no _start+1')
+                self.lgr.debug('setDebugBookmark no origin')
                 return
             delta = current - start_cycle
             if mark.startswith('protected_memory:') and self.hasBookmarkDelta(delta):
+                self.lgr.debug('setDebugBookmark protected memory, return')
                 return
             mark = mark+" cycle:%x" % delta
         cpl = memUtils.getCPL(cpu)
@@ -91,11 +94,20 @@ class bookmarkMgr():
         if eip is None: 
             eip = self.top.getEIP(cpu)
         self.__bookmarks[mark] = self.top.cycleRecord(current, steps, eip)
+        self.__mark_msg[mark] = msg
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         if not mark.startswith('protected_memory'):
             self.lgr.debug('setDebugBookmark %s cycle on %s is %x eip: %x %s' % (mark, cell_name, current, eip, instruct[1]))
         self.lgr.debug('setDebugBookmark return')
         return mark
+
+    def getCurrentCycle(self, cpu):
+        start_cycle = self.getCycle('origin')
+        if start_cycle is None:
+            self.lgr.debug('setDebugBookmark no origin')
+            return None
+        delta = cpu.cycles - start_cycle
+        return delta
 
     def getCycle(self, mark):
         real_mark = self.getDebugBookmark(mark)
@@ -213,53 +225,23 @@ class bookmarkMgr():
                 SIM_run_command('skip-to cycle=%d' % cycle)
             except:
                 print('reverse disabled')
-                return
+                return 'reverse disabled'
             eip = self.top.getEIP(cpu)
             current = SIM_cycle_count(cpu)
             step = SIM_step_count(cpu)
             if cycle is not None and self.__bookmarks[mark].steps is not None:
                 self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
             
-        '''    
-        if mark not in self.__kernel_marks and mark != '_start+1':
-            SIM_run_command('pselect cpu-name = %s' % cpu.name)
-            rev_step = SIM_step_count(cpu) - 1
-            rev_cycle = SIM_cycle_count(cpu)-1
 
-            SIM_run_command('skip-to cycle = 0x%x' % start_cycle)
-            cycles = SIM_cycle_count(cpu)
-            self.lgr.debug('goToDebugBookmark, before rev did skip to start at cycle %x, expected %x ' % (cycles, start_cycle))
-
-            self.lgr.debug("goToDebugBookmark, pslect then skip")
-            SIM_run_command('pselect cpu-name = %s' % cpu.name)
-            SIM_run_command('skip-to step=%d' % rev_step)
-            eip = self.top.getEIP(cpu)
-            current = SIM_cycle_count(cpu)
-            current_step = SIM_step_count(cpu)
-            if mark in self.__back_marks:
-                if eip != self.__back_marks[mark]:
-                    self.lgr.error('goToDebugBookmark simicsError expected eip of %x, got %x' % (self.__back_marks[mark], eip))
-            else:
-               self.__back_marks[mark] = eip
-            self.lgr.debug('goToDebugBookmark AFTER backstep skipped to cycle %x step 0x%x eip: %x, wanted cycle %x step 0x%x' % (current, 
-                current_step, eip, rev_cycle, rev_step))
-            if current != rev_cycle:
-                print('stop')
-                self.lgr.error('goToDebugBookmark, simicsError, did not get expected cycle')
-                return
-        else:
-            self.lgr.debug("goToDebugBookmark, was in kernel (or start of recording), do not backstep")
-        '''    
-
-        self.lgr.debug("onward")
         self.context_mgr.setExitBreak(cpu)
-        self.lgr.debug("upward")
         self.context_mgr.resetBackStop()
         self.top.gdbMailbox('0x%x' % eip)
         self.lgr.debug('goToDebugBookmark set mbox to %x' % eip)
+        return self.__mark_msg[mark]
 
     def goToOrigin(self):
         self.goToDebugBookmark(self.__origin_bookmark)
+        return self.__mark_msg[self.__origin_bookmark]
 
     def skipToOrigin(self):
         dum, dum2, cpu = self.context_mgr.getDebugPid() 
@@ -272,9 +254,10 @@ class bookmarkMgr():
         self.lgr.debug('skipToOrigin skip %x landed at %x, eip: %x %s' % (origin, current, eip, instruct[1]))
 
     def getFirstCycle(self):
-        return self.__bookmarks['_start+1'].cycles
+        return self.__bookmarks['origin'].cycles
 
     def skipToFirst(self, cpu=None):
+        # TBD NOT USED
         if cpu is None:
             dum, dum2, cpu = self.context_mgr.getDebugPid() 
         first = self.__bookmarks['_start+1'].cycles
@@ -287,12 +270,15 @@ class bookmarkMgr():
         self.lgr.debug('skipToFirst skip %x landed at %x step: 0x%x, eip: %x %s' % (first, current, step, 
             eip, instruct[1]))
 
-    def setOrigin(self, cpu):
+    def setOrigin(self, cpu, msg=None):
+        ''' Remove all other bookmarks and set the origin '''
+        self.lgr.debug('bookmarkMgr setOrigin')
+        self.clearMarks()
         self.__origin_bookmark = 'origin'
         im = self.context_mgr.getIdaMessage()
         if im is not None and '[' in im:
             self.__origin_bookmark = im[im.find('[')+1:im.find(']')]        
-        self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu)
+        self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu, msg)
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:
@@ -300,3 +286,4 @@ class bookmarkMgr():
                 self.__origin_bookmark = mark
                 self.lgr.debug('bookmarkMgr mapOrigin now: %s' % mark)
                 break 
+
