@@ -70,10 +70,11 @@ class GenHap():
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
+            self.lgr.debug('bp.cell is %s' % str(bp.cell))
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
-            #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
-            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+            self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
+                            self.name, str(bp.break_num), bp.addr, str(bp.handle)))
         else:
             self.lgr.error('GenHap, no breakpoints')
 
@@ -98,6 +99,7 @@ class GenContextMgr():
         self.debugging_cpu = None
         ''' watch multiple tasks, e.g., threads '''
         self.debugging_rec = []
+        self.pending_watch_pids = []
         self.debugging_scheduled = False
         self.lgr = lgr
         self.ida_message = None
@@ -112,6 +114,11 @@ class GenContextMgr():
         self.hap_handle = 0
         self.text_start = None
         self.text_end = None
+        self.default_context = None
+        SIM_run_command('new-context RESim')
+        obj = SIM_get_object('RESim')
+        self.resim_context = obj
+        self.lgr.debug('resim_context defined as obj %s' % str(obj))
 
     def getRealBreak(self, break_handle):
         for hap in self.haps:
@@ -153,6 +160,9 @@ class GenContextMgr():
 
     def genBreakpoint(self, cell, addr_type, mode, addr, length, flags):
         handle = self.nextBreakHandle()
+        if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
+            cell = self.resim_context
+            self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr) 
         self.breakpoints.append(bp)
         #self.lgr.debug('genBreakpoint handle %d  number of breakpoints is now %d' % (handle, len(self.breakpoints)))
@@ -230,6 +240,7 @@ class GenContextMgr():
         
     def clearAllHap(self, dumb):
         #self.lgr.debug('clearAllHap start')
+        
         for hap in self.haps:
             hap.clear()
         #self.lgr.debug('clearAllHap finish')
@@ -249,14 +260,27 @@ class GenContextMgr():
         if self.task_hap is None:
             return
         cur_addr = SIM_get_mem_op_value_le(memory)
+        pid = None
+        if len(self.pending_watch_pids) > 0:
+            pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
+            if pid in self.pending_watch_pids:
+                self.lgr.debug('add pid %d to watched processes' % pid)
+                self.debugging_rec.append(cur_addr)
+                self.pending_watch_pids.remove(pid)
         #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
+            if self.debugging_pid is not None:
+                cpu.current_context = self.resim_context
+                self.lgr.debug('resim_context')
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
             self.lgr.debug('Now scheduled %d' % pid)
             self.debugging_scheduled = True
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
+            if self.debugging_pid is not None:
+                cpu.current_context = self.default_context
+                self.lgr.debug('default_context')
             self.lgr.debug('No longer scheduled')
             self.debugging_scheduled = False
             self.clearAllBreak()
@@ -272,6 +296,7 @@ class GenContextMgr():
                 self.debugging_pid = None
                 self.debugging_cellname = None
                 self.debugging_cell = None
+                self.debugging_cpu.current_context = self.default_context
                 self.debugging_cpu = None
                 self.stopWatchTasks()
                 return True
@@ -284,21 +309,27 @@ class GenContextMgr():
         if rec not in self.debugging_rec:
             #self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
             if rec is None:
-                self.lgr.error('genContextManager, addTask got rec of None for pid %d' % pid)
+                self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
+                self.pending_watch_pids.append(pid)
             else:
                 self.debugging_rec.append(rec)
         else:
             self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
 
     def amWatching(self, pid):
-        rec = self.task_utils.getRecAddrForPid(pid)
-        if rec is not None and rec not in self.debugging_rec:
-            return False
-        else:
-            if rec is None:
-                self.lgr.debug('amWatching pid %d rec was None' % pid)
-                return False
+        ctask = self.task_utils.getCurTaskRec()
+        dumb, comm, cur_pid  = self.task_utils.curProc()
+        if pid == cur_pid and ctask in self.debugging_rec:
             return True
+        else:
+            rec = self.task_utils.getRecAddrForPid(pid)
+            if rec is not None and rec not in self.debugging_rec:
+                return False
+            else:
+                if rec is None:
+                    self.lgr.debug('amWatching pid %d rec was None' % pid)
+                    return False
+                return True
 
     def stopWatchTasks(self):
         if self.task_break is None:
@@ -327,6 +358,9 @@ class GenContextMgr():
         self.debugging_rec.append(ctask)
         
     def setDebugPid(self, debugging_pid, debugging_cellname, debugging_cpu):
+        self.default_context = debugging_cpu.current_context
+        debugging_cpu.current_context = self.resim_context
+        self.lgr.debug('resim_context')
         self.debugging_pid = debugging_pid
         self.debugging_cellname = debugging_cellname
         self.debugging_cpu = debugging_cpu

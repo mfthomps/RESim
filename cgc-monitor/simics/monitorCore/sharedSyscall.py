@@ -28,6 +28,7 @@ class SharedSyscall():
 
 
     def setDebugging(self, debugging):
+        self.lgr.debug('SharedSyscall set debugging %r' % debugging)
         self.debugging = debugging
 
     def getPendingCall(self, pid):
@@ -102,7 +103,7 @@ class SharedSyscall():
                                    None, exit_break, 'exit hap2')
                 self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip1])
             self.exit_pids[exit_eip2].append(pid)
-        self.lgr.debug('sharedSyscall addExitHap return')
+        #self.lgr.debug('sharedSyscall addExitHap return')
 
 
     def addPendingExecve(self, pid):
@@ -189,6 +190,12 @@ class SharedSyscall():
                     else:
                         ''' must be repeated hap '''
                         return
+                    
+                    dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
+                    #if dumb_pid is not None:
+                    #    self.lgr.debug('sharedSyscall adding clone %d to watched pids' % eax)
+                    #    self.context_manager.addTask(eax)
+                     
                 elif exit_info.callnum == self.task_utils.syscallNumber('open'):
                     #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
                     if exit_info.fname is None:
@@ -207,6 +214,12 @@ class SharedSyscall():
                                 open_syscall.watchFirstMmap(pid, exit_info.fname, eax)
                         if self.traceFiles is not None:
                             self.traceFiles.open(exit_info.fname, eax)
+                    if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
+                        self.lgr.debug('sharedSyscall open check string %s against %s' % (exit_info.fname, exit_info.call_params.match_param))
+                        if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
+                            ''' no match, set call_param to none '''
+                            exit_info.call_params = None
+
                         
                 elif exit_info.callnum == self.task_utils.syscallNumber('pipe') or \
                      exit_info.callnum == self.task_utils.syscallNumber('pipe2'):
@@ -260,7 +273,15 @@ class SharedSyscall():
                         result = self.mem_utils.readWord32(cpu, exit_info.retval_addr)
                         trace_msg = ('\treturn from gettimeofday pid:%d result: 0x%x\n' % (pid, result))
                         timer_syscall = self.top.getSyscall('gettimeofday')
-                        timer_syscall.checkTimeLoop()
+                        if timer_syscall is not None:
+                            timer_syscall.checkTimeLoop('gettimeofday')
+
+                elif exit_info.callnum == self.task_utils.syscallNumber('waitpid'): 
+                    timer_syscall = self.top.getSyscall('waitpid')
+                    if timer_syscall is not None:
+                        timer_syscall.checkTimeLoop('waitpid')
+                    else:
+                        self.lgr.debug('timer_syscall is None')
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('socketcall'):
                     params = exit_info.socket_params
@@ -416,7 +437,8 @@ class SharedSyscall():
                     #self.lgr.debug('exitHap pid %d delete breakpoints' % pid)
                     self.rmExitHap(pid)
                 ''' if debugging a proc, and clone call, add the new process '''
-                if self.debugging and exit_info.callnum == self.task_utils.syscallNumber('clone'):
+                dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
+                if dumb_pid is not None and exit_info.callnum == self.task_utils.syscallNumber('clone'):
                     self.lgr.debug('adding clone %d to watched pids' % eax)
                     self.context_manager.addTask(eax)
 

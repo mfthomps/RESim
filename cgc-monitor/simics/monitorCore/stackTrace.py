@@ -72,6 +72,9 @@ class StackTrace():
         ptr = esp
         been_in_main = False
         prev_ip = None
+        if self.soMap.isMainText(self.pid, eip):
+            been_in_main = True
+            prev_ip = eip
         while not done and count < 9000: 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             skip_this = False

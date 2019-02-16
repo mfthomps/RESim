@@ -808,13 +808,17 @@ class GenMonitor():
         return self.bookmarks[pid].getBookmarks()
 
     def doReverse(self, extra_back=0):
-        dum, dum2, cpu = self.context_manager.getDebugPid() 
-        self.lgr.debug('doReverse entered, extra_back is %s' % str(extra_back))
-        self.context_manager.clearExitBreak()
-        self.removeDebugBreaks()
-        reverseToWhatever.reverseToWhatever(self, self.context_manager, cpu, self.lgr, extra_back=extra_back)
-        self.lgr.debug('doReverse, back from reverseToWhatever init')
-        self.context_manager.setExitBreak(cpu)
+        if self.rev_execution_enabled:
+            dum, dum2, cpu = self.context_manager.getDebugPid() 
+            self.lgr.debug('doReverse entered, extra_back is %s' % str(extra_back))
+            self.context_manager.clearExitBreak()
+            self.removeDebugBreaks()
+            reverseToWhatever.reverseToWhatever(self, self.context_manager, cpu, self.lgr, extra_back=extra_back)
+            self.lgr.debug('doReverse, back from reverseToWhatever init')
+            self.context_manager.setExitBreak(cpu)
+        else:
+            print('reverse execution disabled')
+            self.skipAndMail()
 
     def printCycle(self):
         dum, dum2, cpu = self.context_manager.getDebugPid() 
@@ -849,24 +853,28 @@ class GenMonitor():
             SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
     
     def reverseToCallInstruction(self, step_into, prev=None):
-        self.removeDebugBreaks()
-        dum, dum2, cpu = self.context_manager.getDebugPid() 
-        cell_name = self.getTopComponentName(cpu)
-        self.removeDebugBreaks()
-        self.context_manager.clearExitBreak()
-        self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
-        self.context_manager.showHaps()
-        if prev is not None:
-            instruct = SIM_disassemble_address(cpu, prev, 1, 0)
-            self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
-            if instruct[1] == 'int 128' or (not step_into and instruct[1].startswith('call')):
-                self.revToAddr(prev)
+        if self.rev_execution_enabled:
+            self.removeDebugBreaks()
+            dum, dum2, cpu = self.context_manager.getDebugPid() 
+            cell_name = self.getTopComponentName(cpu)
+            self.removeDebugBreaks()
+            self.context_manager.clearExitBreak()
+            self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
+            self.context_manager.showHaps()
+            if prev is not None:
+                instruct = SIM_disassemble_address(cpu, prev, 1, 0)
+                self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
+                if instruct[1] == 'int 128' or (not step_into and instruct[1].startswith('call')):
+                    self.revToAddr(prev)
+                else:
+                    self.rev_to_call.doRevToCall(step_into, prev)
             else:
+                self.lgr.debug('prev is none')
                 self.rev_to_call.doRevToCall(step_into, prev)
+            self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
-            self.lgr.debug('prev is none')
-            self.rev_to_call.doRevToCall(step_into, prev)
-        self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
+            print('reverse execution disabled')
+            self.skipAndMail()
 
     def uncall(self):
         dum, dum2, cpu = self.context_manager.getDebugPid() 
@@ -887,12 +895,16 @@ class GenMonitor():
         self.rev_to_call.doRevToModReg(reg)
 
     def revToAddr(self, address, extra_back=0):
-        pid, cell_name, cpu = self.context_manager.getDebugPid() 
-        self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
-        self.removeDebugBreaks()
-        self.context_manager.clearExitBreak()
-        reverseToAddr.reverseToAddr(address, self.context_manager, self.is_monitor_running, self, cpu, self.lgr, extra_back=extra_back)
-        self.lgr.debug('back from reverseToAddr')
+        if self.rev_execution_enabled:
+            pid, cell_name, cpu = self.context_manager.getDebugPid() 
+            self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
+            self.removeDebugBreaks()
+            self.context_manager.clearExitBreak()
+            reverseToAddr.reverseToAddr(address, self.context_manager, self.is_monitor_running, self, cpu, self.lgr, extra_back=extra_back)
+            self.lgr.debug('back from reverseToAddr')
+        else:
+            print('reverse execution disabled')
+            self.skipAndMail()
 
     ''' intended for use by gdb, if stopped return the eip.  checks for mailbox messages'''
     def getEIPWhenStopped(self, kernel_ok=False):
@@ -1099,7 +1111,10 @@ class GenMonitor():
         if callnum == 0:
             callnum = None
         self.lgr.debug('runToSyscall for callnumm %s' % callnum)
-        my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,callnum_list=[callnum])
+        if callnum is not None:
+            my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,callnum_list=[callnum])
+        else:
+            my_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,None)
 
     def traceSyscall(self, callnum=None, soMap=None, call_params=[], trace_procs = False):
         cell = self.cell_config.cell_context[self.target]
@@ -1116,12 +1131,13 @@ class GenMonitor():
                            self.context_manager, tp, self.sharedSyscall, self.lgr, self.traceMgr,callnum_list=[callnum], trace=True, soMap=soMap, call_params=call_params)
         return my_syscall
 
-    def traceProcesses(self):
-        call_list = ['vfork','fork', 'clone','execve','open','pipe','pipe2','close','dup','dup2','socketcall', 'exit', 'exit_group']
+    def traceProcesses(self, new_log=True):
+        call_list = ['vfork','fork', 'clone','execve','open','pipe','pipe2','close','dup','dup2','socketcall', 'exit', 'exit_group', 'waitpid', 'ipc']
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         cpu, comm, pid = self.task_utils.curProc() 
-        self.traceMgr.open('/tmp/syscall_trace.txt', cpu)
+        if new_log:
+            self.traceMgr.open('/tmp/syscall_trace.txt', cpu)
         for call in call_list: 
             '''
             if call == 'open':
@@ -1192,8 +1208,9 @@ class GenMonitor():
         self.sharedSyscall.setDebugging(True)
 
     def stopThreadTrack(self):
-        self.lgr.debug('stopThreadTrack')
-        self.track_threads.stopTrack()
+        if self.track_threads is not None:
+            self.lgr.debug('stopThreadTrack')
+            self.track_threads.stopTrack()
 
     def showProcTrace(self):
         pid_comm_map = self.task_utils.getPidCommMap()
@@ -1367,6 +1384,16 @@ class GenMonitor():
         self.call_traces['write'] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
                                self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
                                callnum_list=[self.task_utils.syscallNumber('write')], call_params=[call_params], continue_simulation=False)
+        SIM_run_command('c')
+
+    def runToOpen(self, substring):
+        self.is_monitor_running.setRunning(True)
+        call_params = syscall.CallParams('open', substring, break_simulation=True)        
+        cell = self.cell_config.cell_context[self.target]
+        self.lgr.debug('runToOpen to %s' % substring)
+        self.call_traces['open'] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
+                               self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
+                               callnum_list=[self.task_utils.syscallNumber('open')], call_params=[call_params], continue_simulation=False)
         SIM_run_command('c')
 
     def runToSend(self, substring):
@@ -1614,7 +1641,7 @@ class GenMonitor():
                 return True
         return False
 
-    def exitMaze(self, debugging=False):
+    def exitMaze(self, syscallname, debugging=False):
         cpu, comm, pid = self.task_utils.curProc() 
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
@@ -1623,11 +1650,17 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         tod_track = self.trace_all
-        if tod_track is None:
+        if tod_track is None and syscall in self.call_traces:
+            tod_track = self.call_traces[syscallname]
+        else:
             tod_track = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
-                           self.context_manager, None, self.sharedSyscall, self.lgr,self.traceMgr, callnum_list=[self.task_utils.syscallNumber('gettimeofday')], 
+                           self.context_manager, None, self.sharedSyscall, self.lgr,self.traceMgr, callnum_list=[self.task_utils.syscallNumber(syscallname)], 
                            continue_simulation=False)
-        self.exit_maze = exitMaze.ExitMaze(self, cpu, cell, pid, tod_track, self.context_manager, self.task_utils, self.mem_utils, debugging, self.lgr)
+        one_proc = False
+        dbgpid, dumb, dumb1 = self.context_manager.getDebugPid() 
+        if dbgpid is not None:
+            one_proc = True
+        self.exit_maze = exitMaze.ExitMaze(self, cpu, cell, pid, tod_track, self.context_manager, self.task_utils, self.mem_utils, debugging, one_proc, self.lgr)
         self.exit_maze.run()
         #self.exit_maze.showInstructs()
 

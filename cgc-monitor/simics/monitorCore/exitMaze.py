@@ -58,7 +58,7 @@ def getEIP(cpu):
     return reg_value
 
 class ExitMaze():
-    def __init__(self, top, cpu, cell, pid, syscall, context_manager, task_utils, mem_utils, debugging, lgr):
+    def __init__(self, top, cpu, cell, pid, syscall, context_manager, task_utils, mem_utils, debugging, one_proc, lgr):
         self.cpu = cpu
         self.cell = cell
         self.pid = pid
@@ -67,6 +67,7 @@ class ExitMaze():
         self.syscall = syscall
         self.context_manager = context_manager
         self.mem_utils = mem_utils
+        self.one_proc = one_proc
         ''' recorded instructions, not within functions '''
         self.instructs = OrderedDict()
         ''' look for changes in compare values '''
@@ -268,6 +269,7 @@ class ExitMaze():
         self.top.removeDebugBreaks()
         self.syscall.stopTrace()
         self.top.stopThreadTrack()
+        self.top.stopTrace()
 
     def plantCmpBreaks(self):
         first_break = None
@@ -345,8 +347,11 @@ class ExitMaze():
     def stopHap(self, stop_action, one, exception, error_string):
         if self.stop_hap is not None:
             self.lgr.debug('ExitMaze in stopHap')
-            self.context_manager.watchTasks()
-            self.syscall.doBreaks()
+            if self.one_proc:
+                self.context_manager.watchTasks()
+                self.syscall.doBreaks()
+            else:
+                self.top.traceProcesses(new_log=False)
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             if self.debugging:
@@ -365,7 +370,7 @@ class ExitMaze():
         cpu, comm, pid = self.task_utils.curProc() 
         bp = int(str(breakpoint))
         self.lgr.debug('breakout breakpoint %d  bp %d' % (breakpoint, bp))
-        self.top.showHaps()
+        #self.top.showHaps()
         break_handle = self.context_manager.getBreakHandle(bp)
         cmp_eip = self.break_map[break_handle]
         if self.pid == pid:

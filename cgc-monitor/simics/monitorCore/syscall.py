@@ -4,6 +4,7 @@ from simics import *
 import hapCleaner
 import taskUtils
 import net
+import ipc
 import memUtils
 import stopFunction
 import binder
@@ -444,6 +445,11 @@ class Syscall():
                 self.lgr.debug('syscallParse, pid %d filename not yet here... set break at 0x%x' % (pid, exit_info.fname_addr))
                 self.finish_break[pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                 self.finish_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[pid])
+            else:
+                for call_param in syscall_info.call_params:
+                    if type(call_param.match_param) is str:
+                        exit_info.call_params = call_param
+                        break
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info)
@@ -550,7 +556,7 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
                 #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
                 for call_param in syscall_info.call_params:
-                    if call_param.match_param == ss.fd:
+                    if call_param.subcall == 'GETPEERNAME' and call_param.match_param == ss.fd:
                         exit_info.call_params = call_param
                         break
 
@@ -559,7 +565,7 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
                 #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
                 for call_param in syscall_info.call_params:
-                    if call_param.match_param == ss.fd:
+                    if call_param.subcall == 'ACCEPT' and call_param.match_param == ss.fd:
                         exit_info.call_params = call_param
                         break
 
@@ -568,7 +574,7 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
                 #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
                 for call_param in syscall_info.call_params:
-                    if call_param.match_param == ss.fd:
+                    if call_param.subcall == 'GETSOCKNAME' and call_param.match_param == ss.fd:
                         exit_info.call_params = call_param
                         break
 
@@ -608,6 +614,12 @@ class Syscall():
             else:
                 ida_msg = '%s - %s %s   pid:%d' % (callname, socket_callname, taskUtils.stringFromFrame(frame), pid)
 
+        elif callname == 'ipc':        
+            call = frame['ebx']
+            if call == ipc.MSGGET or call == ipc.SHMGET:
+                key = frame['ecx']
+                callname = ipc.call[call]
+                ida_msg = 'ipc %s pid:%d key: 0x%x size: %d  flags: 0x%x' % (callname, pid, key, frame['edx'], frame['esi']) 
 
         elif callname == 'ioctl':        
             fd = frame['ebx']
@@ -761,7 +773,7 @@ class Syscall():
             self.lgr.error('syscallhap call to dead hap pid %d' % pid) 
             return
 
-        self.lgr.debug('syscallhap for %s at 0x%x' % (pid, break_eip))
+        #self.lgr.debug('syscallhap for %s at 0x%x' % (pid, break_eip))
         stack_frame = None
         exit_eip1 = None
         exit_eip2 = None
@@ -809,8 +821,11 @@ class Syscall():
             if eax == self.task_utils.syscallNumber('close'):
                 self.lgr.debug('syscallHap must be a close on exec? pid:%d' % pid)
                 return
-            if eax == self.task_utils.syscallNumber('execve'):
-                self.lgr.debug('syscallHap execve called from within execve... eh? %d' % pid)
+            elif eax == self.task_utils.syscallNumber('execve'):
+                self.lgr.debug('syscallHap must be a execve in execve? pid:%d' % pid)
+                return
+            elif eax == self.task_utils.syscallNumber('exit_group'):
+                self.lgr.debug('syscallHap exit_group called from within execve %d' % pid)
                 return
             else:
                 self.lgr.error('fix this, syscall within exec? pid:%d eax: %d' % (pid, eax))
@@ -858,7 +873,7 @@ class Syscall():
         frame_string = taskUtils.stringFromFrame(stack_frame)
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
         if syscall_info.callnum is not None:
-            self.lgr.debug('syscallHap callnum %d eax %d' % (syscall_info.callnum, eax))
+            #self.lgr.debug('syscallHap callnum %d eax %d' % (syscall_info.callnum, eax))
             # TBD we forced this above, seems eax is sometimes not set to callnumber when we reach a calculated address?
             if eax == syscall_info.callnum:
                 exit_info = self.syscallParse(stack_frame, cpu, pid, syscall_info)
@@ -875,7 +890,7 @@ class Syscall():
                         ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
                         if len(syscall_info.call_params) == 0 or exit_info.call_params is not None:
                             name = self.task_utils.syscallName(syscall_info.callnum)+' exit' 
-                            self.lgr.debug('syscllHap call to addExitHap for pid %d call  %d' % (pid, syscall_info.callnum))
+                            #self.lgr.debug('syscllHap call to addExitHap for pid %d call  %d' % (pid, syscall_info.callnum))
                             self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, syscall_info.callnum, exit_info, self.traceProcs, name)
                         else:
                             self.lgr.debug('did not add exitHap')
@@ -892,7 +907,7 @@ class Syscall():
 
             if comm != 'tar' and (pid not in self.first_mmap_hap):
                 name = self.task_utils.syscallName(syscall_info.callnum)+' exit' 
-                self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
+                #self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
                 self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, syscall_info.callnum, exit_info, self.traceProcs, name)
 
     def getBinders(self):
@@ -907,26 +922,27 @@ class Syscall():
     def getTimeofdayCount(self):
         return self.timeofday_count
 
-    def checkMaze(self, dumb):
+    def checkMaze(self, syscall):
         self.lgr.debug('Seems to be in a timer loop?  Try exiting the maze?  Use @cgc.exitMaze()') 
         if self.top.checkMazeReturn():
             self.top.doMazeReturn()
         else:
-            print('Seems to be in a timer loop?  Try exiting the maze? Use @cgc.exitMaze()') 
+            print("Seems to be in a timer loop?  Try exiting the maze? Use @cgc.exitMaze('%s')" % syscall) 
             SIM_break_simulation('timer loop?')
    
  
-    def modeChanged(self, the_fun, one, old, new):
+    def modeChanged(self, (the_fun, arg), one, old, new):
         if self.mode_hap is None:
             return
         self.lgr.debug('syscall modeChanged old %d new %d' % (old, new))
         if old == Sim_CPU_Mode_Supervisor:
             SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
-            SIM_run_alone(the_fun, None)
+            SIM_run_alone(the_fun, arg)
             
 
-    def checkTimeLoop(self):
+    def checkTimeLoop(self, callname):
+        self.lgr.debug('checkTimeLoop')
         ''' crude measure of whether we are in a delay loop '''
         if self.timeofday_count == 0:
             self.timeofday_start_cycle = self.cpu.cycles
@@ -936,6 +952,7 @@ class Syscall():
             delta = now - self.timeofday_start_cycle
             self.lgr.debug('timeofday count is 1000, now 0x%x was 0x%x delta 0x%x' % (now, self.timeofday_start_cycle, delta))
             if delta < 0x2540be40:
-                self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, self.checkMaze)
+                self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, (self.checkMaze, callname))
             else:
                 self.timeofday_count = 0
+                self.lgr.debug('checkTimeLoop reset tod count')
