@@ -70,6 +70,8 @@ class DataWatchHandler(idaapi.action_handler_t):
                 return
             print('watch %s bytes from 0x%x' % (count, addr))
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, 0x%s)");' % (addr, count)) 
+            eip = gdbProt.getEIPWhenStopped()
+            self.isim.signalClient()
 
         # This action is always available.
         def update(self, ctx):
@@ -112,6 +114,8 @@ class DisHandler(idaapi.action_handler_t):
         # Disassemble SO
         def activate(self, ctx):
             eip = idc.ScreenEA()
+            self.isim.getOrigAnalysis().origFun(eip)
+            '''
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getSO(0x%x)");' % eip) 
             print('will analyze: %s' % simicsString)
             sofile, start_end = simicsString.rsplit(':', 1)
@@ -121,6 +125,7 @@ class DisHandler(idaapi.action_handler_t):
             idaapi.auto_mark_range(start_h, end_h, 25)
             idaapi.autoWait()
             return 1
+            '''
 
         # This action is always available.
         def update(self, ctx):
@@ -151,7 +156,7 @@ class ModMemoryHandler(idaapi.action_handler_t):
             # Sample form from kernwin.hpp
             s = """Modify memory
             Address: %$
-            <~E~nter value:N:32:16::>
+            <~E~nter value:S:32:16::>
             """
             num = Form.NumericArgument('N', value=value)
             ok = idaapi.AskUsingForm(s,
@@ -160,6 +165,54 @@ class ModMemoryHandler(idaapi.action_handler_t):
             if ok == 1:
                 print("You entered: %x" % num.value)
                 simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, num.value)) 
+                time.sleep(1)
+                idc.RefreshDebuggerMemory()
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
+class StringMemoryHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        # Modify memory
+        def activate(self, ctx):
+            if regFu.isHighlightedEffective():
+                addr = regFu.getOffset()
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
+                print('effective addr 0x%x value %s' % (addr, simicsString))
+                value = simicsString
+            else:
+                highlighted = idaapi.get_highlighted_identifier()
+                addr = getHex(highlighted)
+                if addr is None:
+                    print('ModMemoryHandler unable to parse hex from %s' % highlighted)
+                    return
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
+                print('addr 0x%x value %s' % (addr, simicsString))
+                value = simicsString
+
+            # Sample form from kernwin.hpp
+            s = """Modify memory
+            Address: %$
+            <~E~nter value:t40:80:50::>
+            """
+            ti = idaapi.textctrl_info_t(value)
+            ok = idaapi.AskUsingForm(s, Form.NumericArgument('$', addr).arg, idaapi.pointer(idaapi.c_void_p.from_address(ti.clink_ptr)))
+            '''
+            string = Form.StringArgument(value)
+            ok = idaapi.AskUsingForm(s,
+                    Form.NumericArgument('$', addr).arg,
+                    string.arg)
+            '''
+            if ok == 1:
+                arg = "'%s'" % ti.text.strip()
+                print("You entered: %s <%s>" % (ti.text, arg))
+                cmd = "@cgc.writeString(0x%x, %s)" % (addr, arg) 
+                print cmd
+                simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % (cmd)) 
                 time.sleep(1)
                 idc.RefreshDebuggerMemory()
 
@@ -203,6 +256,11 @@ def register(isim):
        'modify memory',
        ModMemoryHandler(isim)
        )
+    string_memory_action_desc = idaapi.action_desc_t(
+       'stringMemory:action',
+       'modify memory (string)',
+       StringMemoryHandler(isim)
+       )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
@@ -210,6 +268,7 @@ def register(isim):
     idaapi.register_action(data_watch_action_desc)
     idaapi.register_action(rev_addr_action_desc)
     idaapi.register_action(mod_memory_action_desc)
+    idaapi.register_action(string_memory_action_desc)
 
 class Hooks(idaapi.UI_Hooks):
         def populating_tform_popup(self, form, popup):
@@ -242,6 +301,7 @@ class Hooks(idaapi.UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
+                            idaapi.attach_action_to_popup(form, popup, "stringMemory:action", 'RESim/')
                             
 
 #register()

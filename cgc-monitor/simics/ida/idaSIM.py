@@ -5,6 +5,7 @@ import idc
 import idautils
 import bpUtils
 import gdbProt
+import origAnalysis
 class IdaSIM():
     def __init__(self, stack_trace, bookmark_view, kernel_base, reg_list, registerMath):
         self.stack_trace = stack_trace
@@ -15,6 +16,11 @@ class IdaSIM():
         self.kernel_base = kernel_base
         self.reg_list = reg_list
         self.registerMath = registerMath
+        self.origAnalysis = origAnalysis.OrigAnalysis(idc.GetInputFile())
+
+    def getOrigAnalysis(self):
+        return self.origAnalysis
+
     def doRevToCursor(self):
         cursor = idc.ScreenEA()
         curAddr = idc.GetRegValue("EIP")
@@ -55,6 +61,7 @@ class IdaSIM():
             regs = json.loads(simicsString)
         except:
             print('failed to get regs from %s' % simicsString)
+            return
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
@@ -477,7 +484,7 @@ class IdaSIM():
         if prev_addr == cur_addr:
             self.doRevStepInto()
         elif prev_addr is not None:
-            next_addr = NextHead(prev_addr)
+            next_addr = idc.NextHead(prev_addr)
             if next_addr == cur_addr:
                 ''' reverse two to get there? '''
                 print('revBlock rev two?')
@@ -514,7 +521,36 @@ class IdaSIM():
         print('runToIO %s, ended at eip 0x%x' % (result, eip))
         self.signalClient(norev=True)
         self.showSimicsMessage()
+
+    def runToAccept(self):
+        print('runToAccept')
+        result = idc.AskStr(self.recent_fd, 'FD ?')
+        if result is None:
+            return
+        self.recent_fd = result
+        fd = int(result)
+        command = "@cgc.runToAccept(%d)" % fd
+        print('command is %s' % command)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        time.sleep(1)
+        eip = gdbProt.getEIPWhenStopped()
+        print('runToAccept %s, ended at eip 0x%x' % (result, eip))
+        self.signalClient(norev=True)
+        self.showSimicsMessage()
     
+    def runToOpen(self):
+        print('runToOpen')
+        result = idc.AskStr('?', 'filename substring')
+        if result is None:
+            return
+        command = "@cgc.runToOpen('%s')" % result
+        print('command is %s' % command)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        eip = gdbProt.getEIPWhenStopped()
+        print('runToOpen %s, ended at eip 0x%x' % (result, eip))
+        self.signalClient(norev=True)
+        self.showSimicsMessage()
+
     def runToConnect(self):
         print('runToConnect')
         result = idc.AskStr('?', 'Network address as ip:port (or regex)')

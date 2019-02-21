@@ -79,7 +79,10 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
         if simicsString is not None and type(simicsString) is not int and simicsString != '0' and MAILBOX in simicsString:
             mail = stripMailbox(simicsString)
             #print 'mail is %s' % mail
-            if not mail.startswith('ip:'):
+            if mail == 'exited':
+                retval = 0
+                print('Process exited')
+            elif not mail.startswith('ip:'):
                 done = True
                 try:
                     retval = int(mail[2:], 16)

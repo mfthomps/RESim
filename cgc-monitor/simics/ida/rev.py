@@ -183,6 +183,9 @@ def getTagValue(line, find_tag):
                     return value
         return None
 
+
+
+
 def doKeyMap(isim):
     idaapi.CompileLine('static key_alt_shift_d() { RunPythonStatement("isim.testDialog()"); }')
     AddHotkey("Alt+Shift+d", 'key_alt_shift_d')
@@ -276,22 +279,24 @@ def doKeyMap(isim):
 
     idaapi.CompileLine('static key_alt_c() { RunPythonStatement("isim.runToSyscall()"); }')
     AddHotkey("Alt+c", 'key_alt_c')
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to syscall", "Alt+c", 1, isim.runToSyscall, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to syscall", "Alt+c", 1, isim.runToSyscall, None)
     
     
     idaapi.CompileLine('static key_alt_shift_c() { RunPythonStatement("isim.revToSyscall()"); }')
     AddHotkey("Alt+Shift+c", 'key_alt_shift_c')
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Rev to syscall", "Alt+Shift+c", 1, isim.revToSyscall, None)
     
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to clone child", None, 1, isim.runToClone, None)
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to text segment", None, 1, isim.runToText, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to clone child", None, 1, isim.runToClone, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to text segment", None, 1, isim.runToText, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Reverse to text segment", None, 1, isim.revToText, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Exit maze", None, 1, isim.exitMaze, None)
 
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to connect", None, 1, isim.runToConnect, None)
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to bind", None, 1, isim.runToBind, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to connect", None, 1, isim.runToConnect, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to accept", None, 1, isim.runToAccept, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to bind", None, 1, isim.runToBind, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to open", None, 1, isim.runToOpen, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Watch data read", None, 1, isim.watchData, None)
-    idaapi.add_menu_item("Debugger/^ Rev to cursor", "Run to IO", None, 1, isim.runToIO, None)
+    idaapi.add_menu_item("Debugger/O Run to/", "Run to IO", None, 1, isim.runToIO, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Stack trace", None, 1, isim.updateStackTrace, None)
     idaapi.add_menu_item("Debugger/^ Rev to cursor", "Show cycle", None, 1, isim.showCycle, None)
 
@@ -402,6 +407,22 @@ def checkHelp():
             pref_file.write("no_help")
             pref_file.close()
 
+
+class RunToConnectHandler(idaapi.action_handler_t):
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    # Say hello when invoked.
+    def activate(self, ctx):
+        print "Hello!"
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+
 if __name__ == "__main__":
     #Wait() 
     bookmark_view = bookmarkView.bookmarkView()
@@ -427,13 +448,29 @@ if __name__ == "__main__":
                 idc.MakeCode(eip) 
 
     stack_trace.Create(isim)
-
+   
     reHooks.register(isim)
     re_hooks = reHooks.Hooks()
     re_hooks.hook()
+    
     form=idaapi.find_tform("IDA View-EIP")
     idaapi.switchto_tform(form, True)
     # MakeCode(eip)
+
+    '''
+    run_to_connect_desc = idaapi.action_desc_t(
+        'run_to_connect:action',   # The action name. This acts like an ID and must be unique
+        'Run to connect',  # The action text.
+        RunToConnectHandler())   # The action handler.
+
+    idaapi.register_action(run_to_connect_desc)
+
+    idaapi.attach_action_to_menu(
+        'Debugger/O Run to/', # The relative path of where to add the action
+        'run_to_connect:action',                        # The action ID (see above)
+        idaapi.SETMENU_APP)                 # We want to append the action after the 'Manual instruction...'
+    '''
+
     if not keymap_done:
         doKeyMap(isim)
         print('dbg %r' % idaapi.dbg_is_loaded())
