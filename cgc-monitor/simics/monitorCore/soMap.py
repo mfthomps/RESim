@@ -7,8 +7,9 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, context_manager, root_prefix, run_from_snap, lgr):
+    def __init__(self, context_manager, task_utils, root_prefix, run_from_snap, lgr):
         self.context_manager = context_manager
+        self.task_utils = task_utils
         self.root_prefix = root_prefix
         self.so_addr_map = {}
         self.so_file_map = {}
@@ -39,12 +40,14 @@ class SOMap():
         so_pickle['text_prog'] = self.text_prog
         pickle.dump( so_pickle, open( somap_file, "wb" ) )
 
-    def isCode(self, in_pid, address):
+    def isCode(self, address):
         ''' is the given address within the text segment or those of SO libraries? '''
-        pid = self.getThreadPid(in_pid)
         #print('compare 0x%x to 0x%x - 0x%x' % (address, self.text_start, self.text_end))
         if address >= self.text_start and address <= self.text_end:
             return True
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid not in self.so_file_map:
+            pid = self.task_utils.getCurrentThreadLeaderPid()
         for text_seg in self.so_file_map[pid]:
             end = text_seg.start + text_seg.offset + text_seg.size
             #print('so compare 0x%x to 0x%x - 0x%x' % (address, text_seg.start, end))
@@ -52,7 +55,7 @@ class SOMap():
                 return True
         return False
 
-    def isMainText(self, in_pid, address):
+    def isMainText(self, address):
         if address >= self.text_start and address <= self.text_end:
             return True
         else: 
@@ -80,8 +83,10 @@ class SOMap():
         self.so_addr_map[pid][fpath] = text_seg
         self.so_file_map[pid][text_seg] = fpath
 
-    def showSO(self, in_pid):
-        pid = self.getThreadPid(in_pid)
+    def showSO(self):
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid not in self.so_file_map:
+            pid = self.task_utils.getCurrentThreadLeaderPid()
         if pid in self.so_file_map:
             print('0x%x - 0x%x   %s' % (self.text_start, self.text_end, self.text_prog))
             sort_map = {}
@@ -94,7 +99,7 @@ class SOMap():
                 end = text_seg.start + text_seg.size
                 print('0x%x - 0x%x 0x%x 0x%x  %s' % (text_seg.start, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
         else:
-            print('no so map for %d' % in_pid)
+            print('no so map for %d' % pid)
 
     def getThreadPid(self, pid):
         if pid in self.so_file_map:
@@ -102,7 +107,7 @@ class SOMap():
         else:
             pid_list = self.context_manager.getThreadPids()
             if pid not in pid_list:
-                self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
+                self.lgr.error('SOMap getThreadPid requested unknown pid %d %s' % (pid, str(pid_list)))
                 return None
             else:
                 for p in pid_list:
@@ -111,13 +116,16 @@ class SOMap():
         self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
         return None
 
-    def getSOFile(self, pid_in, addr_in):
+    def getSOFile(self, addr_in):
         retval = None
-        pid = self.getThreadPid(pid_in)
-        if pid is None:
-            self.lgr.error('getSOFile, no such pid in threads %d' % pid_in)
-            return
+        #pid = self.getThreadPid(pid_in)
+        #if pid is None:
+        #    self.lgr.error('getSOFile, no such pid in threads %d' % pid_in)
+        #    return
         #self.lgr.debug('getSOFile for pid %d addr 0x%x' % (pid, addr_in))
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid not in self.so_file_map:
+            pid = self.task_utils.getCurrentThreadLeaderPid()
         if pid in self.so_file_map:
             if addr_in >= self.text_start and addr_in <= self.text_end:
                 retval = self.text_prog
@@ -133,10 +141,12 @@ class SOMap():
             self.lgr.debug('getSOFile no so map for %d' % pid)
         return retval
 
-    def getSOAddr(self, pid, in_fname):
+    def getSOAddr(self, in_fname):
         retval = None
-        pid = self.getThreadPid(pid)
         self.lgr.debug('look for addr for pid %d in_fname %s' % (pid, in_fname))
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid not in self.so_file_map:
+            pid = self.task_utils.getCurrentThreadLeaderPid()
         if in_fname == self.text_prog:
             size = self.text_end - self.text_start
             retval = elfText.Text(self.text_start, 0, size)

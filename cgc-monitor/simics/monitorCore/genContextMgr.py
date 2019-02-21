@@ -57,7 +57,7 @@ class GenHap():
         if len(self.breakpoint_list) > 1:
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
-                self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
+                #self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
             bs = self.breakpoint_list[0]
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
@@ -70,11 +70,11 @@ class GenHap():
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
-            self.lgr.debug('bp.cell is %s' % str(bp.cell))
+            #self.lgr.debug('bp.cell is %s' % str(bp.cell))
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
-            self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
-                            self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+            #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
+            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
         else:
             self.lgr.error('GenHap, no breakpoints')
 
@@ -162,7 +162,7 @@ class GenContextMgr():
         handle = self.nextBreakHandle()
         if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
             cell = self.resim_context
-            self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
+            #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr) 
         self.breakpoints.append(bp)
         #self.lgr.debug('genBreakpoint handle %d  number of breakpoints is now %d' % (handle, len(self.breakpoints)))
@@ -252,6 +252,7 @@ class GenContextMgr():
         retval = []
         for rec in self.debugging_rec:
             pid = self.mem_utils.readWord32(self.debugging_cpu, rec + self.param.ts_pid)
+            self.lgr.debug('getThreadPids add %d' % (pid))
             retval.append(pid)
         return retval
         
@@ -271,17 +272,17 @@ class GenContextMgr():
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
-                self.lgr.debug('resim_context')
+                #self.lgr.debug('resim_context')
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
-            self.lgr.debug('Now scheduled %d' % pid)
+            #self.lgr.debug('Now scheduled %d' % pid)
             self.debugging_scheduled = True
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
             if self.debugging_pid is not None:
                 cpu.current_context = self.default_context
-                self.lgr.debug('default_context')
-            self.lgr.debug('No longer scheduled')
+                #self.lgr.debug('default_context')
+            #self.lgr.debug('No longer scheduled')
             self.debugging_scheduled = False
             self.clearAllBreak()
             SIM_run_alone(self.clearAllHap, None)

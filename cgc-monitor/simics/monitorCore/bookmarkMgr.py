@@ -278,7 +278,7 @@ class bookmarkMgr():
         im = self.context_mgr.getIdaMessage()
         if im is not None and '[' in im:
             self.__origin_bookmark = im[im.find('[')+1:im.find(']')]        
-        self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu, msg)
+        self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu=cpu, msg=msg)
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:

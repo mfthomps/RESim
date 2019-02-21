@@ -28,6 +28,7 @@ derived from cgcMonitor, which was developed for the DARPA Cyber Grand Challenge
 '''
 from simics import *
 import os
+import struct
 import utils
 import linuxParams
 import memUtils
@@ -324,7 +325,7 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         self.traceOpen = traceOpen.TraceOpen(self.param, self.mem_utils, self.task_utils, cpu, cell, self.lgr)
         self.traceProcs = traceProcs.TraceProcs(self.lgr, self.proc_list)
-        self.soMap = soMap.SOMap(self.context_manager, self.root_prefix, self.run_from_snap, self.lgr)
+        self.soMap = soMap.SOMap(self.context_manager, self.task_utils, self.root_prefix, self.run_from_snap, self.lgr)
         self.dataWatch = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager, self.lgr)
         self.traceFiles = traceFiles.TraceFiles(self.lgr)
         self.sharedSyscall = sharedSyscall.SharedSyscall(self, cpu, cell, self.param, self.mem_utils, self.task_utils, 
@@ -371,7 +372,7 @@ class GenMonitor():
             cell = self.cell_config.cell_context[self.target]
 
             ''' keep track of threads within our process that are created during debug session '''
-            self.track_threads = trackThreads.TrackThreads(cpu, cell, pid, self.context_manager, self.task_utils, self.mem_utils, self.lgr)
+            self.track_threads = trackThreads.TrackThreads(cpu, cell, pid, self.context_manager, self.task_utils, self.mem_utils, self.param, self.lgr)
 
             self.lgr.debug('debug set exit_group break')
             self.exit_group_syscall = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
@@ -387,6 +388,10 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils.curProc() 
         cpl = memUtils.getCPL(cpu)
         eip = self.getEIP(cpu)
+        #cur_task_rec = self.task_utils.getCurTaskRec()
+        #addr = cur_task_rec+self.param.ts_group_leader
+        #val = self.mem_utils.readPtr(cpu, addr)
+        #print('current task 0x%x gl_addr 0x%x group_leader 0x%s' % (cur_task_rec, addr, val))
         print('cpu.name is %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpl, pid, 
                comm, eip, self.param.current_task, self.param.current_task_fs))
         pfamily = self.pfamily.getPfamily()
@@ -620,6 +625,7 @@ class GenMonitor():
             
       
     def addProcList(self, pid, comm):
+        self.lgr.debug('addProcList %d %s' % (pid, comm))
         self.proc_list[pid] = comm
  
     def toUser(self, flist=None): 
@@ -1453,12 +1459,11 @@ class GenMonitor():
         return retval
 
     def getSO(self, eip):
-        cpu, comm, pid = self.task_utils.curProc() 
-        fname = self.getSOFile(pid, eip)
+        fname = self.getSOFile(eip)
         self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
         retval = None
         if fname is not None:
-            text_seg  = self.soMap.getSOAddr(pid, fname) 
+            text_seg  = self.soMap.getSOAddr(fname) 
             base = text_seg.start
             if base is not None:
                 end = base+text_seg.size
@@ -1470,15 +1475,12 @@ class GenMonitor():
             print('None')
         return retval
      
-    def showSOMap(self, pid=None):
+    def showSOMap(self):
         self.lgr.debug('showSOMap')
-        if pid is None:
-            cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('showSOMap pid %d' % pid)
-        self.soMap.showSO(pid)
+        self.soMap.showSO()
 
-    def getSOFile(self, pid, addr):
-        fname = self.soMap.getSOFile(pid, addr)
+    def getSOFile(self, addr):
+        fname = self.soMap.getSOFile(addr)
         return fname
 
     def showThreads(self):
@@ -1592,6 +1594,7 @@ class GenMonitor():
         self.lgr.debug('writeRegValue %s, %x regnum %d' % (reg, value, reg_num))
 
     def writeWord(self, address, value):
+        ''' NOTE: wipes out bookmarks! '''
         cpu, comm, pid = self.task_utils.curProc() 
         phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         SIM_write_phys_memory(cpu, phys_block.address, value, 4)
@@ -1600,7 +1603,38 @@ class GenMonitor():
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
-        self.bookmarks[pid].setOrigin(self.context_manager.getIdaMessage())
+        self.bookmarks[pid].setOrigin(cpu, self.context_manager.getIdaMessage())
+
+    def writeString(self, address, string):
+        ''' NOTE: wipes out bookmarks! '''
+        cpu, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug('writeString 0x%x %s' % (address, string))
+
+        lcount = len(string)/4
+        carry = len(string) % 4
+        if carry != 0:
+            lcount += 1
+        print lcount
+        sindex = 0
+        for i in range(lcount):
+            eindex = min(sindex+4, len(string))
+            sub = string[sindex:eindex] 
+            count = len(sub)
+            #sub = sub.zfill(4)
+            sub = sub.ljust(4, '0')
+            print('sub is %s' % sub)
+            #value = int(sub.encode('hex'), 16)
+            value = struct.unpack("<L", sub)[0]
+            sindex +=4
+            phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+            SIM_write_phys_memory(cpu, phys_block.address, value, count)
+            address += 4
+        self.lgr.debug('writeWord, disable reverse execution to clear bookmarks, then set origin')
+        cmd = 'disable-reverse-execution'
+        SIM_run_command(cmd)
+        cmd = 'enable-reverse-execution'
+        SIM_run_command(cmd)
+        self.bookmarks[pid].setOrigin(cpu, self.context_manager.getIdaMessage())
 
     def watchData(self, start=None, length=None):
         if start is not None:
@@ -1721,6 +1755,10 @@ class GenMonitor():
 
     def flushTrace(self):
         self.traceMgr.flush()
+
+    def getCurrentThreadLeaderPid(self):
+        pid = self.task_utils.getCurrentThreadLeaderPid()
+        print pid        
   
     
 if __name__=="__main__":        

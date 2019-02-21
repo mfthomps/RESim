@@ -41,7 +41,7 @@ class GetKernelParams():
         self.log_dir = '/tmp'
         self.lgr = utils.getLogger('getKernelParams', self.log_dir)
         self.param = kParams.Kparams()
-        self.mem_utils = memUtils.memUtils(4, self.param)
+        self.mem_utils = memUtils.memUtils(4, self.param, self.lgr)
         self.cpu = SIM_current_processor()
         obj = SIM_get_object('viper')
         self.cell = obj.cell_context
@@ -189,7 +189,8 @@ class GetKernelParams():
             self.param.ts_parent = real_parent_offset + 4
             self.param.ts_children_list_head = real_parent_offset + 8
             self.param.ts_sibling_list_head = real_parent_offset + 16
-            self.param.ts_thread_group_list_head = real_parent_offset + 32
+            self.param.ts_group_leader = real_parent_offset + 24
+            self.param.ts_thread_group_list_head = self.param.ts_group_leader+60
         return real_parent_offset
       
     def getInitAlone(self, dumb): 
@@ -336,7 +337,7 @@ class GetKernelParams():
 
     def checkTasks(self):        
         #self.lgr.debug(self.param.getParamString())
-        self.taskUtils = taskUtils.TaskUtils(self.cpu, self.param, self.mem_utils, self.unistd32, self.lgr)
+        self.taskUtils = taskUtils.TaskUtils(self.cpu, self.param, self.mem_utils, self.unistd32, None, self.lgr)
         swapper_child = self.mem_utils.readPtr(self.cpu, self.idle+self.param.ts_children_list_head) 
         self.lgr.debug('checkTasks swapper_child_next is 0x%x  sib %d' % (swapper_child, self.param.ts_sibling_list_head))
         init = swapper_child - self.param.ts_sibling_list_head

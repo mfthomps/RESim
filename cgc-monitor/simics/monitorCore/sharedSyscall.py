@@ -190,6 +190,7 @@ class SharedSyscall():
                     else:
                         ''' must be repeated hap '''
                         return
+                    self.top.addProcList(eax, comm)
                     
                     dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
                     #if dumb_pid is not None:
@@ -293,10 +294,11 @@ class SharedSyscall():
                         domain = self.mem_utils.readWord32(cpu, params)
                         sock_type_full = self.mem_utils.readWord32(cpu, params+4)
                         sock_type = sock_type_full & net.SOCK_TYPE_MASK
+                        type_string = net.socktype[sock_type]
                         protocol = self.mem_utils.readWord32(cpu, params+8)
                         dstring = net.domaintype[domain]
-                        trace_msg = ('\treturn from socketcall SOCKET pid:%d, FD: %d domain: %s  type: %d protocol: %d  socket params at 0x%x\n' % (pid, 
-                             eax, dstring, sock_type, protocol, exit_info.socket_params))
+                        trace_msg = ('\treturn from socketcall SOCKET pid:%d, FD: %d domain: %s  type: %s protocol: %d  socket params at 0x%x\n' % (pid, 
+                             eax, dstring, type_string, protocol, exit_info.socket_params))
                         if domain == 2:
                             pass
                     elif exit_info.socket_callnum == net.CONNECT:

@@ -136,6 +136,7 @@ class TaskUtils():
 
     def read_list_head(self, cpu, addr, offset, head_addr = None, head_offset = None, other_offset = None):
         next = self.mem_utils.readPtr(cpu, addr + offset)
+        #self.lgr.debug('read_list_head addr 0x%x  offset is 0x%x effective 0x%x  read 0x%x' % (addr, offset, (addr+offset), next)) 
         if next is None:
             self.lgr.error('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
             return None
@@ -164,7 +165,7 @@ class TaskUtils():
                 #print('returning other offset p 0x%x minus %d' % (p, other_offset))
                 return p - other_offset
             return p - offset
-        #print('read_list_head addr 0x%x  next is 0x%x' % (addr, next)) 
+        #self.lgr.debug('read_list_head addr 0x%x  next is 0x%x' % (addr, next)) 
         return ListHead(transform(next), transform(prev))
 
     def readTaskStruct(self, addr, cpu):
@@ -238,7 +239,7 @@ class TaskUtils():
         swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return tasks
-        #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
+        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -252,10 +253,18 @@ class TaskUtils():
             #if task.next == swapper_addr:
             #   self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
             #   #return tasks
-            if len(task.comm.strip()) == 0:
-                # cleaner way to know we are done?
+            if task_addr is None or task.next is None: 
+                self.lgr.debug('task_addr None')
                 return tasks
-            #self.lgr.debug('reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next))
+            '''
+            if task.comm is None or len(task.comm.strip()) == 0:
+                # cleaner way to know we are done?
+                #return tasks
+                #continue
+                self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
+            else:
+                self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
+            '''
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
             for child in task.children:
@@ -325,8 +334,8 @@ class TaskUtils():
         swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return None
-        self.lgr.debug('getTaskListPtr look for next pointer to current task 0x%x pid: %d (%s) using swapper_addr of %x' % (task_rec_addr, 
-                        pid, comm,  swapper_addr))
+        #self.lgr.debug('getTaskListPtr look for next pointer to current task 0x%x pid: %d (%s) using swapper_addr of %x' % (task_rec_addr, 
+        #                pid, comm,  swapper_addr))
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -381,6 +390,12 @@ class TaskUtils():
         comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
         return self.cpu, cur_addr, comm, pid
+
+    def getCurrentThreadLeaderPid(self):
+        cur_addr = self.getCurTaskRec()
+        group_leader = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_group_leader)
+        pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+        return pid
 
     def getMemUtils(self):
         return self.mem_utils
