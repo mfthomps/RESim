@@ -2,6 +2,7 @@ from simics import *
 import pageUtils
 import memUtils
 import net
+import ipc
 class SharedSyscall():
     def __init__(self, top, cpu, cell, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_call = {}
@@ -197,6 +198,14 @@ class SharedSyscall():
                     #    self.lgr.debug('sharedSyscall adding clone %d to watched pids' % eax)
                     #    self.context_manager.addTask(eax)
                      
+                elif exit_info.callnum == self.task_utils.syscallNumber('mkdir'):
+                    #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
+                    if exit_info.fname is None:
+                        self.lgr.error('fname is None? in exit from mkdir pid %d fname addr was 0x%x' % (pid, exit_info.fname_addr))
+                        #SIM_break_simulation('fname is none on exit of open')
+                        exit_info.fname = 'unknown'
+                    trace_msg = ('\treturn from mkdir pid:%d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+                        
                 elif exit_info.callnum == self.task_utils.syscallNumber('open'):
                     #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
                     if exit_info.fname is None:
@@ -275,12 +284,12 @@ class SharedSyscall():
                         trace_msg = ('\treturn from gettimeofday pid:%d result: 0x%x\n' % (pid, result))
                         timer_syscall = self.top.getSyscall('gettimeofday')
                         if timer_syscall is not None:
-                            timer_syscall.checkTimeLoop('gettimeofday')
+                            timer_syscall.checkTimeLoop('gettimeofday', pid)
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('waitpid'): 
                     timer_syscall = self.top.getSyscall('waitpid')
                     if timer_syscall is not None:
-                        timer_syscall.checkTimeLoop('waitpid')
+                        timer_syscall.checkTimeLoop('waitpid', pid)
                     else:
                         self.lgr.debug('timer_syscall is None')
 
@@ -421,6 +430,18 @@ class SharedSyscall():
                             self.soMap.addSO(pid, exit_info.fname, ueax, exit_info.count)
                     else:
                         trace_msg = ('\treturn from mmap pid:%d, addr: 0x%x \n' % (pid, ueax))
+                elif exit_info.callnum == self.task_utils.syscallNumber('ipc'):
+                    call = exit_info.socket_callnum
+                    callname = ipc.call[call]
+                    if call == ipc.MSGGET or call == ipc.SHMGET:
+                        trace_msg = ('\treturn from ipc %s pid:%d key: 0x%x quid: 0x%x\n' % (callname, pid, exit_info.fname, ueax)) 
+                        #SIM_break_simulation('msgget pid %d ueax 0x%x eax 0x%x' % (pid, ueax, eax))
+                    else:
+                        if eax < 0:
+                            trace_msg = ('\treturn ERROR from ipc %s pid:%d result: %d\n' % (callname, pid, eax)) 
+                        else:
+                            trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
+
                 elif exit_info.callnum == self.task_utils.syscallNumber('vfork'):
                     trace_msg = ('\treturn from vfork in parent %d child pid:%d' % (pid, ueax))
                     if pid in self.trace_procs:

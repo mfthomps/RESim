@@ -1,4 +1,5 @@
 import pickle
+import os
 SOCKET      =1 
 BIND        =2
 CONNECT     =3
@@ -71,7 +72,10 @@ class NetAddresses():
         pickle.dump( self.net_commands, open( net_file, "wb" ) )
 
     def loadfile(self, net_file):
-        self.net_commands = pickle.load( open(net_file, 'rb') ) 
+        if os.path.isfile(net_file):
+            self.net_commands = pickle.load( open(net_file, 'rb') ) 
+        else:
+            self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
     def __init__(self, cpu, params, mem_utils):

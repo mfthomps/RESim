@@ -7,10 +7,9 @@ import net
 import ipc
 import memUtils
 import stopFunction
-import binder
-import connector
 import pageUtils
 import traceFiles
+import elfText
 '''
     Trace syscalls.  Used for process tracing and debug, e.g., runToConnect.
     When used in debugging, or tracing a single process, we assume that
@@ -110,7 +109,7 @@ class Syscall():
 
     def __init__(self, top, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, callnum_list=None, trace = False, break_on_execve=None, flist_in=None, soMap = None, 
-                   call_params=[], continue_simulation = True, traceFiles=None, netInfo=None): 
+                   call_params=[], continue_simulation = True, traceFiles=None, netInfo=None, binders=None, connectors=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -137,8 +136,8 @@ class Syscall():
         self.first_mmap_hap = {}
         self.soMap = soMap
         self.proc_hap = []
-        self.binders = binder.Binder()
-        self.connectors = connector.Connector()
+        self.binders = binders
+        self.connectors = connectors
         ''' lists of sockets by pid that we are watching for selected tracing '''
         self.sockwatch = SockWatch()
         ''' experimental watch for reads of data read from interfaces '''
@@ -350,6 +349,17 @@ class Syscall():
         #if exit_info.fname is None:
         #    SIM_run_alone(self.readSilly, exit_info)
 
+    def addElf(self, prog_string, pid):
+        root_prefix = self.top.getRootPrefix()
+        if root_prefix is not None:
+            full_path = os.path.join(root_prefix, prog_string[1:])
+            self.lgr.debug('syscall finishParseExecve, prefix is %s progname is %s  full: %s' % (root_prefix, prog_string, full_path))
+            text_segment = elfText.getText(full_path)
+            if text_segment is not None and text_segment.start is not None:
+                self.lgr.debug('syscall finishParseExecve 0x%x - 0x%x' % (text_segment.start, text_segment.start+text_segment.size))       
+                self.context_manager.recordText(text_segment.start, text_segment.start+text_segment.size)
+                self.soMap.addText(text_segment.start, text_segment.size, prog_string, pid)
+
     def finishParseExecve(self, call_info, third, forth, memory):
         cpu, comm, pid = self.task_utils.curProc() 
         if cpu != call_info.cpu or pid != call_info.pid:
@@ -369,6 +379,8 @@ class Syscall():
         self.traceMgr.write(ida_msg+'\n')
         if self.traceProcs is not None:
             self.traceProcs.setName(call_info.pid, prog_string, arg_string)
+
+        self.addElf(prog_string, pid)
 
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
@@ -417,6 +429,8 @@ class Syscall():
         if self.traceProcs is not None:
             self.traceProcs.setName(pid, prog_string, arg_string)
 
+        self.addElf(prog_string, pid)
+
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
         base = os.path.basename(prog_string)
@@ -450,6 +464,9 @@ class Syscall():
                     if type(call_param.match_param) is str:
                         exit_info.call_params = call_param
                         break
+
+        if callname == 'mkdir':        
+            exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode = self.parseOpen(frame)
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info)
@@ -616,10 +633,18 @@ class Syscall():
 
         elif callname == 'ipc':        
             call = frame['ebx']
+            exit_info.socket_callnum = call
             if call == ipc.MSGGET or call == ipc.SHMGET:
                 key = frame['ecx']
                 callname = ipc.call[call]
-                ida_msg = 'ipc %s pid:%d key: 0x%x size: %d  flags: 0x%x' % (callname, pid, key, frame['edx'], frame['esi']) 
+                exit_info.fname = key
+                ida_msg = 'ipc %s pid:%d key: 0x%x size: %d  flags: 0x%x\n %s' % (callname, pid, key, frame['edx'], frame['esi'],
+                       taskUtils.stringFromFrame(frame)) 
+            elif call == ipc.MSGSND or call == ipc.MSGRCV:
+                callname = ipc.call[call]
+                ida_msg = 'ipc %s pid:%d quid: 0x%x size: %d addr: 0x%x' % (callname, pid, frame['esi'], frame['edx'], frame['edi'])
+            else:
+                ida_msg = 'ipc %s pid:%d %s' % (callname, pid, taskUtils.stringFromFrame(frame) )
 
         elif callname == 'ioctl':        
             fd = frame['ebx']
@@ -923,11 +948,12 @@ class Syscall():
         return self.timeofday_count
 
     def checkMaze(self, syscall):
-        self.lgr.debug('Seems to be in a timer loop?  Try exiting the maze?  Use @cgc.exitMaze()') 
+        cpu, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug('Syscall checkMaze pid:%d in timer loop' % pid)
         if self.top.checkMazeReturn():
             self.top.doMazeReturn()
         else:
-            print("Seems to be in a timer loop?  Try exiting the maze? Use @cgc.exitMaze('%s')" % syscall) 
+            print("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
             SIM_break_simulation('timer loop?')
    
  
@@ -941,18 +967,21 @@ class Syscall():
             SIM_run_alone(the_fun, arg)
             
 
-    def checkTimeLoop(self, callname):
-        self.lgr.debug('checkTimeLoop')
+    def checkTimeLoop(self, callname, pid):
+        limit = 400
+        self.lgr.debug('checkTimeLoop pid:%d timeofday_count: %d' % (pid, self.timeofday_count))
         ''' crude measure of whether we are in a delay loop '''
         if self.timeofday_count == 0:
             self.timeofday_start_cycle = self.cpu.cycles
         self.timeofday_count = self.timeofday_count + 1
-        if self.timeofday_count == 100:
+        if self.timeofday_count >= limit:
             now = self.cpu.cycles
             delta = now - self.timeofday_start_cycle
-            self.lgr.debug('timeofday count is 1000, now 0x%x was 0x%x delta 0x%x' % (now, self.timeofday_start_cycle, delta))
-            if delta < 0x2540be40:
+            self.lgr.debug('timeofday pid:%d count is %d, now 0x%x was 0x%x delta 0x%x' % (pid, self.timeofday_count, now, self.timeofday_start_cycle, delta))
+            #if delta < 0x2540be40:
+            if delta < 0x95020000:
+                self.timeofday_count = 0
                 self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, (self.checkMaze, callname))
             else:
                 self.timeofday_count = 0
-                self.lgr.debug('checkTimeLoop reset tod count')
+                self.lgr.debug('checkTimeLoop pid:%d reset tod count' % pid)

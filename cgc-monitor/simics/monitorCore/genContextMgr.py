@@ -257,19 +257,24 @@ class GenContextMgr():
         return retval
         
     def changedThread(self, cpu, third, forth, memory):
-        # get the value that will be written into the current thread address
+        ''' guts of context managment.  set or remove breakpoints/haps 
+            depending on whether we are tracking the newly scheduled process '''
         if self.task_hap is None:
             return
+        # get the value that will be written into the current thread address
         cur_addr = SIM_get_mem_op_value_le(memory)
         pid = None
         if len(self.pending_watch_pids) > 0:
+            ''' Are we waiting to watch pids that have not yet been scheduled?
+                We don't have the process rec until it is ready to schedule. '''
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
             if pid in self.pending_watch_pids:
                 self.lgr.debug('add pid %d to watched processes' % pid)
                 self.debugging_rec.append(cur_addr)
                 self.pending_watch_pids.remove(pid)
-        #self.lgr.debug('changedThread compare 0x%x to 0x%x' % (cur_addr, self.debugging_rec))
+
         if not self.debugging_scheduled and cur_addr in self.debugging_rec:
+            ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
                 #self.lgr.debug('resim_context')
@@ -279,6 +284,7 @@ class GenContextMgr():
             self.setAllBreak()
             SIM_run_alone(self.setAllHap, None)
         elif self.debugging_scheduled:
+            ''' Watching processes, but new process should not be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.default_context
                 #self.lgr.debug('default_context')

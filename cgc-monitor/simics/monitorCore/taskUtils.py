@@ -73,11 +73,15 @@ class TaskUtils():
         self.phys_current_task = None
         self.exit_cycles = 0
         self.exit_pid = 0
+        self.exec_addrs = {}
 
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
+            exec_addrs_file = os.path.join('./', RUN_FROM_SNAP, 'exec_addrs.pickle')
+            if os.path.isfile(exec_addrs_file):
+                self.exec_addrs = pickle.load( open(exec_addrs_file, 'rb') ) 
         if self.phys_current_task is None:
             ''' address of current_task symbol, pointer at this address points to the current task record '''
             ''' use physical address because some are relative to FS segment '''
@@ -87,7 +91,6 @@ class TaskUtils():
                 cmd = 'logical-to-physical 0x%x' % param.current_task
             self.phys_current_task = SIM_run_command(cmd)
         self.lgr.debug('TaskUtils init with current_task of 0x%x, phys: 0x%x' % (param.current_task, self.phys_current_task))
-        self.exec_addrs = {}
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd32)
 
     def getPhysCurrentTask(self):
@@ -100,6 +103,8 @@ class TaskUtils():
     def pickleit(self, fname):
         phys_current_task_file = os.path.join('./', fname, 'phys_current_task.pickle')
         pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
+        exec_addrs_file = os.path.join('./', fname, 'exec_addrs.pickle')
+        pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
     def curProc(self):
         cur_task_rec = self.getCurTaskRec()
@@ -515,10 +520,12 @@ class TaskUtils():
         return prog_string, arg_string_list
 
     def getProgName(self, pid):
+        if pid not in self.exec_addrs:
+            pid = self.getCurrentThreadLeaderPid()
         if pid in self.exec_addrs:
             return self.exec_addrs[pid].prog_name, self.exec_addrs[pid].arg_list
         else: 
-            return None
+            return None, None
  
     def getSyscallEntry(self, callnum):
         ''' compute the entry point address for a given syscall using constant extracted from kernel code '''

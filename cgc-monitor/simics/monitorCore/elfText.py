@@ -12,7 +12,7 @@ def getText(path):
         return None
     cmd = 'readelf -S %s' % path
     grep = 'grep " .text"'
-    proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE)
+    proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
                          stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
@@ -23,8 +23,12 @@ def getText(path):
     #print('err: {0}'.format(err))
     ''' section numbering has whitespace '''
     hack = out[7:]
-    addr = int(hack.split()[2], 16)
-    offset = int(hack.split()[3], 16)
-    size = int(hack.split()[4], 16)
+    #print('readelf got %s from %s' % (hack, path))
+    parts = hack.split()
+    if len(parts) < 5:
+        return Text(None, None, None)
+    addr = int(parts[2], 16)
+    offset = int(parts[3], 16)
+    size = int(parts[4], 16)
     return Text(addr, offset, size)
      

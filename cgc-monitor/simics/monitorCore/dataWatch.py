@@ -14,6 +14,7 @@ class DataWatch():
         self.lgr = lgr
         self.page_size = page_size
         self.read_hap = None
+        self.length = None
 
     def setRange(self, start, length):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x' % (start, length))

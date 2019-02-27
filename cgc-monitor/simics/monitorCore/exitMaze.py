@@ -68,6 +68,8 @@ class ExitMaze():
         self.context_manager = context_manager
         self.mem_utils = mem_utils
         self.one_proc = one_proc
+        self.call_level = 0
+        self.timeofday_count_start = 0
         ''' recorded instructions, not within functions '''
         self.instructs = OrderedDict()
         ''' look for changes in compare values '''
@@ -79,6 +81,7 @@ class ExitMaze():
         self.breakout_hap = None
         self.top = top
         self.stop_hap = None
+        self.stop_hap_mode = None
         self.debugging = debugging
         self.live_cmp = []
         self.breakout_addr = None
@@ -103,7 +106,7 @@ class ExitMaze():
         current_frames = st.getFrames(4)
         for i in range(len(self.stack_frames)):
             if current_frames[i].ip != self.stack_frames[i].ip:
-                self.lgr.debug('exitMaze checkStack not equal %d 0x%x 0x%x' % (i, current_frames[i].ip, self.stack_frames[i].ip))
+                self.lgr.debug('exitMaze pid:%d checkStack not equal %d 0x%x 0x%x' % (self.pid, i, current_frames[i].ip, self.stack_frames[i].ip))
                 return False
         else:
             return True
@@ -112,43 +115,42 @@ class ExitMaze():
         st = self.top.getStackTraceQuiet()
         self.stack_frames = st.getFrames(4)
 
-    def run(self):
-        if self.debugging:
-            self.lgr.debug('ExitMaze Disabling reverse execution')
-            SIM_run_command('disable-reverse-execution')
-        self.recordStack()
-        round_count = 0
-        call_level = 0
-        cmd = 'si -q'
-        self.syscall.resetTimeofdayCount()
-        timeofday_count_start = 0
-        self.lgr.debug('exitMaze, Begin.  timeofday_count_start is %d' % timeofday_count_start)
-        cpl = getCPL(self.cpu)
-        self.cycle_start = self.cpu.cycles
-        self.cycle_len = 0
+    def retHap(self, count, third, forth, memory):
+        if self.ret_hap is None:
+            return
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid == self.pid:
+            self.context_manager.genDeleteHap(self.ret_hap)
+            self.ret_hap = None
+            self.lgr.debug('exitMaze ret from call count %d' % count)
+            SIM_run_alone(self.addStopAlone, count)
+
+    def traceCircuit(self, count):
+        self.lgr.debug('traceCircuit count %d' % count)
         max_loops = 2
-        for i in range(200000):
+        cmd = 'si -q'
+        for i in range(count, 200000):
             eip = getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             result = SIM_run_command(cmd)
             if getCPL(self.cpu) > 0:
-                ''' see if we are returning from kernel ''' 
-                if cpl == 0:
+                ''' see if we are returning from kernel or call from outer scope''' 
+                if i > 0 and i == count:
                     ''' returned, check timeofday count'''
                     tod = self.syscall.getTimeofdayCount()
-                    self.lgr.debug('exitMaze tod is %d, start %d' % (tod, timeofday_count_start))
+                    self.lgr.debug('exitMaze tod is %d, start %d' % (tod, self.timeofday_count_start))
                     ''' have we called tod enough to establish a circuit? '''
-                    if (tod - timeofday_count_start) > max_loops:
-                        self.lgr.debug('been around')
+                    if (tod - self.timeofday_count_start) > max_loops:
+                        self.lgr.debug('exitMaze been around')
                         if len(self.break_addrs) == 0:
                             ''' we've run the circuit, look at the collected instructions and 
                                 select breakpoints based on branches not followed '''
                             ''' first make sure we are in outer scope and offer a break on return '''
-                            while True:
-                                eip = getEIP(self.cpu)
-                                if eip in self.instructs:
-                                    break
-                                result = SIM_run_command(cmd)
+                            #while True:
+                            #    eip = getEIP(self.cpu)
+                            #    if eip in self.instructs:
+                            #        break
+                            #    result = SIM_run_command(cmd)
                             ''' in outer scope, make note of return instruction based on EBP '''
                             reg_num = self.cpu.iface.int_register.get_number('ebp')
                             ebp = self.cpu.iface.int_register.read(reg_num)
@@ -177,28 +179,67 @@ class ExitMaze():
                         else:
                             self.lgr.error('ExitMaze confused')
                             return
-                    cpl = 3
                 #self.lgr.debug('exitMaze eip: 0x%x instruct: %s' % (eip, instruct[1]))
                 parts = instruct[1].split()
                 mn = parts[0]
                 if mn == 'call':
-                    call_level += 1
-                    self.lgr.debug('call, level now %d' % call_level)
+                    ret_addr = eip + instruct[0]
+                    ret_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
+                    self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, i, ret_break, 'exitMaze')
+                    self.lgr.debug('call from eip 0x%x, set hap now run' % (eip))
+                    SIM_run_command('c')
+                    return
                 elif mn == 'ret':
-                    if call_level == 0:
-                        self.lgr.debug('new higher level, flush instructions')
-                        self.instructs.clear()
-                        
-                    else:
-                        call_level -= 1
-                        self.lgr.debug('ret, level now %d' % call_level)
-                elif call_level == 0:
+                    self.lgr.debug('new higher level from eip 0x%x, flush instructions' % eip)
+                    self.instructs.clear()
+                else:
                     if len(self.break_addrs) == 0 and eip not in self.instructs:
                         self.instructs[eip] = instruct
                         self.lgr.debug('adding to list %x %s' % (eip, instruct[1]))
-                    
+
             else:
-                cpl = 0
+                ''' in kernel run til out '''
+                self.lgr.debug('exitMaze in kernel, add mode hap count %d' % i)
+                self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, i)
+                SIM_run_command('c')
+                return
+
+    def stopHapMode(self, count, one, exception, error_string):
+        if self.stop_hap_mode is None:
+            return
+        
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_mode)
+        self.stop_hap_mode = None
+        SIM_run_alone(self.traceCircuit, count)
+
+    def addStopAlone(self, count):
+        self.stop_hap_mode = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapMode, count)
+        SIM_break_simulation('back in user space')         
+
+    def modeChanged(self, count, one, old, new):
+        if self.mode_hap is None:
+            return
+        if old == Sim_CPU_Mode_Supervisor:
+            cpu, comm, pid = self.task_utils.curProc() 
+            if pid == self.pid:
+                SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+                self.mode_hap = None
+                self.lgr.debug('exitMaze modeChanged count %d' % count)
+                SIM_run_alone(self.addStopAlone, count)
+
+    def run(self):
+        if self.debugging:
+            self.lgr.debug('ExitMaze Disabling reverse execution')
+            SIM_run_command('disable-reverse-execution')
+        self.recordStack()
+        self.call_level = 0
+        self.syscall.resetTimeofdayCount()
+        self.timeofday_count_start = 0
+        self.lgr.debug('exitMaze, Begin.  timeofday_count_start is %d' % self.timeofday_count_start)
+        cpl = getCPL(self.cpu)
+        self.cycle_start = self.cpu.cycles
+        self.cycle_len = 0
+        self.traceCircuit(0)
 
 
     def showInstructs(self):
@@ -367,6 +408,8 @@ class ExitMaze():
         return self.breakout_addr
 
     def breakoutHap(self, from_eip, third, breakpoint, memory):
+        if self.breakout_hap is None:
+            return
         cpu, comm, pid = self.task_utils.curProc() 
         bp = int(str(breakpoint))
         self.lgr.debug('breakout breakpoint %d  bp %d' % (breakpoint, bp))
@@ -380,10 +423,11 @@ class ExitMaze():
             else:
                 print('broke out to 0x%x, cmp was at 0x%x' % (eip, cmp_eip))
             self.context_manager.genDeleteHap(self.breakout_hap)
+            self.breakout_hap = None
             self.lgr.debug('ExitMaze breakoutHap, am out at 0x%x cmp was at 0x%x' % (eip, cmp_eip))
             ''' record for retrieval by top if this breakout seems nested '''
             self.breakout_addr = eip
             SIM_break_simulation('broke out')
         else:
-            self.lgr.debug('ExitMaze breakoutHap for wrong pid %d' % pid)
+            self.lgr.debug('ExitMaze breakoutHap for wrong pid %d, expeced %d' % (pid, self.pid))
         

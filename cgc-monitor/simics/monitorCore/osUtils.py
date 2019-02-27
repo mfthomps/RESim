@@ -84,7 +84,7 @@ class execStrings():
     def __init__(self, cpu, pid, arg_addr_list, prog_addr, callback):
         self.arg_addr_list = arg_addr_list
         self.prog_addr = prog_addr
-        self.cpu = cpu
+        self.cpu = cpu.name
         self.pid = pid
         self.callback = callback
         self.prog_name = None
