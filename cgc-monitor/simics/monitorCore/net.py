@@ -85,6 +85,8 @@ class SockStruct():
         self.sa_data = None
         addr = mem_utils.readWord32(cpu, params+4)
         self.addr = addr
+        self.length = mem_utils.readWord32(cpu, params+8)
+        self.flags = mem_utils.readWord32(cpu, params+12)
         self.sa_family = mem_utils.readWord16(cpu, addr) 
         if self.sa_family == 1:
             self.sa_data = mem_utils.readString(cpu, addr+2, 256)
