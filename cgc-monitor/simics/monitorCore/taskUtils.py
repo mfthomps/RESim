@@ -140,6 +140,7 @@ class TaskUtils():
         return addr >= self.param.kernel_base
 
     def read_list_head(self, cpu, addr, offset, head_addr = None, head_offset = None, other_offset = None):
+        addr = self.mem_utils.getUnsigned(addr)
         next = self.mem_utils.readPtr(cpu, addr + offset)
         #self.lgr.debug('read_list_head addr 0x%x  offset is 0x%x effective 0x%x  read 0x%x' % (addr, offset, (addr+offset), next)) 
         if next is None:
@@ -176,6 +177,7 @@ class TaskUtils():
     def readTaskStruct(self, addr, cpu):
         """Read the task_struct at addr and return a TaskStruct object
         with the information."""
+        addr = self.mem_utils.getUnsigned(addr)
         task = TaskStruct(addr=addr)
         if self.param.ts_next != None:
             if self.param.ts_next_relative:
@@ -194,6 +196,8 @@ class TaskUtils():
             task.binfmt = self.mem_utils.readPtr(cpu, addr + self.param.ts_binfmt)
         if self.param.ts_pid != None:
             task.pid = self.mem_utils.readWord32(cpu, addr + self.param.ts_pid)
+            if task.pid is None:
+                self.lgr.error('readTaskStruct got pid of none for addr 0x%x' % addr)
         if self.param.ts_tgid != None:
             task.tgid = self.mem_utils.readWord32(cpu, addr + self.param.ts_tgid)
         if self.param.ts_comm != None:
@@ -254,6 +258,8 @@ class TaskUtils():
             seen.add((task_addr, x))
             seen.add((task_addr, False))
             task = self.readTaskStruct(task_addr, cpu)
+            if task.pid is None:
+                self.lgr.error('got pid of none for addr 0x%x' % task_addr)
             
             #if task.next == swapper_addr:
             #   self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
@@ -261,12 +267,12 @@ class TaskUtils():
             if task_addr is None or task.next is None: 
                 self.lgr.debug('task_addr None')
                 return tasks
-            '''
             if task.comm is None or len(task.comm.strip()) == 0:
                 # cleaner way to know we are done?
-                #return tasks
-                #continue
                 self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
+                return tasks
+                #continue
+            '''
             else:
                 self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
             '''
@@ -305,6 +311,7 @@ class TaskUtils():
     def getPidsForComm(self, comm_in):
         comm = os.path.basename(comm_in)
         retval = []
+        self.lgr.debug('getPidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             if comm.startswith(ts_list[ts].comm):
@@ -322,6 +329,7 @@ class TaskUtils():
         return retval
 
     def getRecAddrForPid(self, pid):
+        self.lgr.debug('getRecAddrForPid %d' % pid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
            if ts_list[ts].pid == pid:
@@ -351,9 +359,11 @@ class TaskUtils():
             seen.add((task_addr, False))
             #self.lgr.debug('reading task addr 0x%x' % (task_addr))
             task = self.readTaskStruct(task_addr, cpu)
+            if task.pid is None:
+                self.lgr.error('got pid of none for addr 0x%x' % task_addr)
 
             if task.next == swapper_addr:
-               self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
+               #self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
                return None
 
             #self.lgr.debug('reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next))
@@ -469,8 +479,7 @@ class TaskUtils():
                 reg_num = cpu.iface.int_register.get_number("ebx")
                 prog_addr = cpu.iface.int_register.read(reg_num)
             if prog_addr == 0:
-                self.lgr.debug('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
-                SIM_break_simulation('prog addr zero')
+                self.lgr.error('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
         else:
             reg_num = cpu.iface.int_register.get_number("rsi")
             rsi = cpu.iface.int_register.read(reg_num)
