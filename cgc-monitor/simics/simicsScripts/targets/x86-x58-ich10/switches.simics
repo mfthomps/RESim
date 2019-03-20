@@ -1,0 +1,10 @@
+if defined use_broadcom{
+   $VDR_eth0 = VDR.mb.nb.bcm5704c.connector_ethernet0
+   $VDR_eth1 = VDR.mb.nb.bcm5704c.connector_ethernet1
+   $VDR_eth2 = VDR.mb.sb.eth_slot
+}else{
+   $VDR_eth0 = VDR.mb.nb.i82543gc.connector_ethernet
+   # 172.31.16.200
+   #$VDR_eth1 = VDR.mb.nb.i82543gc2.connector_ethernet
+   $VDR_eth1 = VDR.mb.sb.eth_slot
+}

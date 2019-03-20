@@ -1,0 +1,187 @@
+if not defined cpi             {$cpi             = 1}
+if not defined disk_size       {$disk_size       = 20496236544}
+if not defined disk_image      {}
+if not defined rtc_time        {$rtc_time        = "2008-06-05 23:52:01 UTC"}
+if not defined num_cpus        {$num_cpus        = 1}
+if not defined num_cores       {$num_cores       = -1}
+if not defined num_threads     {$num_threads     = -1}
+if not defined memory_megs     {$memory_megs     = 2048}
+if not defined cpu_class       {$cpu_class       = "core-i7"}
+if not defined text_console    {$text_console    = FALSE}
+if not defined uart0_text_console {$uart0_text_console = FALSE}
+if not defined uart1_text_console {$uart1_text_console = FALSE}
+if not defined use_acpi        {$use_acpi        = TRUE}
+if not defined gpu             {$gpu             = "accel-vga"}
+if not defined break_on_reboot {$break_on_reboot = FALSE}
+if not defined host_name       {$host_name       = "viper"}
+if not defined freq_mhz        {$freq_mhz        = 2000}
+if not defined apic_freq_mhz   {$apic_freq_mhz   = 133}
+if not defined use_vmp         {$use_vmp         = TRUE}
+if not defined spi_flash       {$spi_flash       = "spi-flash.bin"}
+if not defined mac_address     {$mac_address     = "00:19:A0:E1:1C:9F"}
+if not defined sata_mode       {$sata_mode       = TRUE}
+if $sata_mode {
+    if not defined bios         {$bios            = "seabios-simics-x58-ich10-sata-1.6.3-20140611.bin"}
+} else {
+    if not defined bios         {$bios            = "seabios-simics-x58-ich10-ata-1.6.3-20140611.bin"}
+}
+if not defined connect_usb_tablet {$connect_usb_tablet = FALSE}
+if not defined os_awareness_enable {$os_awareness_enable = TRUE}
+
+###
+
+if $cpu_class == "core-i7" {
+   echo ("Standard Intel Core i7 processor selected by default, performance "
+       + "can be increased by changing to single threaded core by setting "
+       + "$cpu_class=\"core-i7-single\".")
+}
+
+add-directory "%simics%/targets/x86-x58-ich10/images/"
+
+load-module isa-components
+load-module pci-components
+load-module std-comp
+load-module x86-comp
+load-module x86-nehalem-comp
+load-module x58-ich10-comp
+load-module memory-comp
+load-module os-awareness
+
+$system = (create-chassis-x58-ich10 name = $host_name)
+
+### motherboard
+$motherboard = (create-motherboard-x58-ich10 $system.mb
+        rtc_time = $rtc_time
+        acpi = $use_acpi
+        break_on_reboot = $break_on_reboot
+        bios = $bios
+        mac_address = $mac_address
+        spi_flash = $spi_flash)
+$southbridge = $motherboard.sb
+$northbridge = $motherboard.nb
+echo "motherboard nic gets mac address "+$mac_address
+
+### processor
+$create_processor = "create-processor-" + $cpu_class
+$cpu = []
+foreach $count in (range $num_cpus) {
+    $cpu[$count] = (exec $create_processor
+                         + " $motherboard.cpu + $count"
+                         + " freq_mhz = $freq_mhz"
+                         + " apic_freq_mhz = $apic_freq_mhz"
+                         + " use_vmp = $use_vmp"
+                         + " cpi = $cpi"
+                         + " n_cores = $num_cores"
+                         + " n_threads = $num_threads")
+    connect $motherboard.socket[$count] $cpu[$count].socket
+}
+
+### memory
+$dimm = (create-simple-memory-module $motherboard.memory
+                                      memory_megs = $memory_megs)
+connect $motherboard.dimm[0] $dimm.mem_bus
+
+### GPU
+if $gpu == "accel-vga" {
+    if defined vga_bios_image {
+        $vga = (create-pci-accel-vga $motherboard.gpu $vga_bios_image)
+    } else {
+        $vga = (create-pci-accel-vga $motherboard.gpu)
+    }
+} else {
+    interrupt-script "Undefined GPU" -error
+}
+connect $northbridge.gpu $vga.connector_pci_bus
+
+### nic
+if defined use_broadcom{
+   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_2 mac_address1 = $mac_address_3)
+   echo "pci_slot[0] gets mac address "+ $mac_address_2+" and "+ $mac_address_3
+   connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
+}else{
+   if defined mac_address_2     {
+      $eth_comp = (create-pci-i82543gc name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
+      echo "pci_slot[0] gets mac address "+ $mac_address_2
+      connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
+   }
+   if defined mac_address_3 {
+      if $mac_address_3 != "" {
+        $eth_comp2 = (create-pci-i82543gc name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
+        echo "pci_slot[1] gets mac address "+ $mac_address_3
+        connect $motherboard.nb.pci_slot[1] $eth_comp2.connector_pci_bus
+      }
+   }
+}
+echo "mb has mac address " + $mac_address
+
+
+### consoles
+if $text_console {
+    $console = (create-text-graphics-console-comp $system.console)
+} else {
+    $console = (create-graphics-console-comp $system.console)
+    connect $console.mouse $southbridge.mse_console
+}
+connect $console.keyboard $southbridge.kbd_console
+connect $console.device $vga.connector_console
+
+if $uart0_text_console {
+    create-text-console-comp $system.serconsole
+    connect $system.serconsole.serial $southbridge.serial[0]
+}
+
+if $uart1_text_console {
+    create-text-console-comp $system.serconsole1
+    connect $system.serconsole1.serial $southbridge.serial[1]
+}
+
+### disk
+if defined disk_image {
+    if not (file-exists $disk_image) {
+        interrupt-script "Disk image file not found: " + $disk_image
+    }
+    if $sata_mode {
+        $disk = (create-sata-disk-comp $system.disk
+                                       size = $disk_size
+                                       file = $disk_image)
+    } else {
+        $disk = (create-ide-disk-comp $system.disk
+                                      size = $disk_size
+                                      file = $disk_image)
+    }
+} else {
+    if $sata_mode {
+        $disk = (create-sata-disk-comp $system.disk
+                                      size = $disk_size)
+    } else {
+        $disk = (create-ide-disk-comp $system.disk
+                                      size = $disk_size)
+    }
+}
+if $sata_mode {
+    connect $southbridge.sata_slot[0] $disk.sata_slot
+} else {
+    connect $southbridge.ide_slot[0] $disk.ide_slot
+}
+### CD-ROM
+if $sata_mode {
+    $cdrom = (create-sata-cdrom-comp $system.cdrom)
+    connect $southbridge.sata_slot[1] $cdrom.sata_slot
+} else {
+    $cdrom = (create-ide-cdrom-comp $system.cdrom)
+    connect $southbridge.ide_slot[1] $cdrom.ide_slot
+}
+
+### process tracker
+if $os_awareness_enable {
+    create-os-awareness name = $system + ".software"
+}
+
+### USB Tablet
+if ($connect_usb_tablet == TRUE) {
+    load-module usb-components
+    $tablet = (create-usb-tablet-comp $system.tablet)
+    connect $tablet.connector_usb_host $system.mb.sb.usb_port[0]
+    connect $tablet.connector_abs_mouse $console.abs_mouse
+}
+
