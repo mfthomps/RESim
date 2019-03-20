@@ -52,9 +52,9 @@ class Connector():
         with open(fname, 'w') as fh:
             for connect_rec in self.connectors:
                 if connect_rec.port is not None:
-                    line = '%-60s \t%s:%d' % (connect_rec.prog, connect_rec.address, connect_rec.port)
+                    line = '%-60s %d \t%s:%d' % (connect_rec.prog, connect_rec.pid, connect_rec.address, connect_rec.port)
                 else:
-                    line = '%-60s \t%s' % (connect_rec.prog, connect_rec.address)
+                    line = '%-60s %d \t%s' % (connect_rec.prog,  connect_rec.pid, connect_rec.address)
                 print(line)
                 fh.write(line+'\n')
  
