@@ -1,4 +1,6 @@
 ''' maintain structure of process hierarchy '''
+import pickle
+import os
 class Pinfo():
     def __init__(self, pid, clone=None, parent=None):
         self.pid = pid
@@ -14,7 +16,7 @@ class Pinfo():
         self.sockets = {}
 
 class TraceProcs():
-    def __init__(self, lgr, proc_list):
+    def __init__(self, lgr, proc_list, run_from_snap=None):
         self.lgr = lgr
         ''' dict of Pinfo indexed by pid '''
         self.plist = {}
@@ -22,13 +24,41 @@ class TraceProcs():
         self.pipe_handle = {}
         self.socket_handle = {}
         self.latest_pid_instance = {}
+        self.init_proc_list = {}
         ''' init_proc_list is the pid/comm pair read from a checkpoint json
             On display, we'll the entries that do not have children
         '''
-        self.init_proc_list = {}
-        for pid in proc_list:
-            self.setName(pid, proc_list[pid], None, quiet=True)
-            self.init_proc_list[str(pid)] = proc_list[pid]
+        if run_from_snap is not None:
+            self.loadPickle(run_from_snap)
+        else:
+            for pid in proc_list:
+                spid = str(pid)
+                self.setName(spid, proc_list[pid], None, quiet=False)
+                self.init_proc_list[spid] = proc_list[pid]
+
+    def loadPickle(self, name):
+        proc_file = os.path.join('./', name, 'traceProcs.pickle')
+        if os.path.isfile(proc_file):
+            self.lgr.debug('traceProcs pickle from %s' % proc_file)
+            proc_pickle = pickle.load( open(proc_file, 'rb') ) 
+            #print('start %s' % str(so_pickle['text_start']))
+            self.plist = proc_pickle['plist']
+            self.pipe_handle = proc_pickle['pipe_handle']
+            self.socket_handle = proc_pickle['socket_handle']
+            self.latest_pid_instance = proc_pickle['latest_pid_instance']
+            self.init_proc_list = proc_pickle['init_proc_list']
+            
+
+    def pickleit(self, name):
+        proc_file = os.path.join('./', name, 'traceProcs.pickle')
+        proc_pickle = {}
+        proc_pickle['plist'] = self.plist
+        proc_pickle['pipe_handle'] = self.pipe_handle
+        proc_pickle['socket_handle'] = self.socket_handle
+        proc_pickle['latest_pid_instance'] = self.latest_pid_instance
+        proc_pickle['init_proc_list'] = self.init_proc_list
+        pickle.dump( proc_pickle, open( proc_file, "wb" ) )
+        self.lgr.debug('traceProcs pickleit to %s ' % (proc_file))
 
     def pidExists(self, pid):
         if str(pid) in self.plist:
@@ -52,11 +82,13 @@ class TraceProcs():
             for tpid in self.plist:
                 if self.plist[tpid].parent == pid:
                     self.plist[tpid].parent = pidq
+                    self.lgr.debug('traceProcs exit change parent of %s to %s' % (tpid, pidq))
             ''' now find my parent and change name in that record '''
             for tpid in self.plist:
                 if pid in self.plist[tpid].children:
                     self.plist[tpid].children.remove(pid) 
                     self.plist[tpid].children.append(pidq)
+                    self.lgr.debug('traceProcs exit switched child name of %s from %s to %s' % (tpid, pid, pidq))
             self.plist[pidq] = entry 
         if pid in self.init_proc_list:
            comm = self.init_proc_list.pop(pid, None)
@@ -80,25 +112,32 @@ class TraceProcs():
         self.socket_handle[pid] = self.socket_handle[pid]+1
         return self.socket_handle[pid]
 
-    def addProc(self, pid, parent, clone=False):
+    def addProc(self, pid, parent, clone=False, comm=None):
+        if pid is None:
+            self.lgr.error('traceProcs pid is None')
+            return False
         pid = str(pid)
-        parent = str(parent)
+        if parent is not None:
+            parent = str(parent)
         if pid in self.plist:      
             self.lgr.error('addProc, pid:%s already in plist parent: %s' % (pid, parent))
             return False
         self.lgr.debug('traceProc addProc pid:%s  parent %s' % (pid, parent))
-        if parent not in self.plist:
-            self.lgr.debug('No parent %s yet for pid:%s, add it.' % (parent, pid)) 
-            parent_pinfo = Pinfo(parent)
-            self.plist[parent] = parent_pinfo 
-        self.plist[parent].children.append(pid)
+        if parent is not None:
+            if parent not in self.plist:
+                self.lgr.debug('No parent %s yet for pid:%s, add it.' % (parent, pid)) 
+                parent_pinfo = Pinfo(parent)
+                self.plist[parent] = parent_pinfo 
+            self.plist[parent].children.append(pid)
         newproc = Pinfo(pid, clone=clone, parent=parent)
         self.plist[pid] = newproc 
         if clone:
-            if self.plist[parent].prog is not None:
+            if parent is not None and self.plist[parent].prog is not None:
                 self.plist[pid].prog = '%s <clone>' % self.plist[parent].prog
             else:
                 self.plist[pid].prog = '<clone>'
+        elif comm is not None:  
+            self.plist[pid].prog = comm
         return True
 
     def setName(self, pid, prog, args, quiet=False):
@@ -335,8 +374,10 @@ class TraceProcs():
 
     def showFamily(self, pid, tabs):
         pid = str(pid)
+        #self.lgr.debug('traceProcs showFamily pid:<%s> type %s' % (pid, type(pid)))
         self.showOne(pid, tabs)
-        self.did_that.append(pid)
+        if pid not in self.did_that:
+            self.did_that.append(pid)
         tabs = tabs+'\t'
         for child in self.plist[pid].children:
             self.showFamily(child, tabs)
@@ -344,14 +385,18 @@ class TraceProcs():
     def showAll(self):
         trace_path = '/tmp/procTrace.txt'
         self.trace_fh = open(trace_path, 'w') 
-        self.did_that = []
+        del self.did_that[:]
         for pid in self.plist:
+            if self.plist[pid].parent is not None:
+                #self.lgr.debug('traceProcs showAll parent is %s, skip' % self.plist[pid].parent)
+                continue
             ''' ignore items from initial set of processes that did not subsequently create children '''
             if pid in self.init_proc_list and len(self.plist[pid].children) == 0:
                 continue
             if pid not in self.did_that:
                 self.did_that.append(pid)
                 tabs = ''
+                #self.lgr.debug('traceProcs showAll showFamily for %s' % pid)
                 self.showFamily(pid, tabs)                
         self.getNetworkAddresses()
         self.trace_fh.close()
