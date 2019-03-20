@@ -96,7 +96,7 @@ class StackTrace():
             if self.soMap.isCode(val):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
-                   self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
+                   #self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
                    pass
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''
@@ -107,18 +107,18 @@ class StackTrace():
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
                     call_to_s = instruct.split()[1]
                     call_to = None
-                    self.lgr.debug('stackTrace check call to %s' % call_to_s)
+                    #self.lgr.debug('stackTrace check call to %s' % call_to_s)
                     try:
                         call_to = int(call_to_s, 16)
                     except:
                         pass 
                     if call_to is not None:
-                        self.lgr.debug('call_to 0x%x ' % call_to)
+                        #self.lgr.debug('call_to 0x%x ' % call_to)
                         if call_to not in so_checked:
                             ''' should we add ida function analysys? '''
                             if not self.ida_funs.isFun(call_to):
                                 fname, start, end = self.soMap.getSOInfo(call_to)
-                                self.lgr.debug('so checj of %s' % fname)
+                                #self.lgr.debug('so checj of %s' % fname)
                                 if fname is not None:
                                     full = os.path.join(self.top.getRootPrefix(), fname[1:])
                                     self.ida_funs.add(full, start)
@@ -139,7 +139,7 @@ class StackTrace():
                 if call_ip is not None and not skip_this:
                     skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
-                    self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
+                    #self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -223,7 +223,7 @@ class StackTrace():
             if self.soMap.isCode(val):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
-                   self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
+                   #self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
                    pass
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''
@@ -234,18 +234,18 @@ class StackTrace():
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
                     call_to_s = instruct.split()[1]
                     call_to = None
-                    self.lgr.debug('stackTrace check call to %s' % call_to_s)
+                    #self.lgr.debug('stackTrace check call to %s' % call_to_s)
                     try:
                         call_to = int(call_to_s, 16)
                     except:
                         pass 
                     if call_to is not None:
-                        self.lgr.debug('call_to 0x%x ' % call_to)
+                        #self.lgr.debug('call_to 0x%x ' % call_to)
                         if call_to not in so_checked:
                             ''' should we add ida function analysys? '''
                             if not self.ida_funs.isFun(call_to):
                                 fname, start, end = self.soMap.getSOInfo(call_to)
-                                self.lgr.debug('so checj of %s' % fname)
+                                #self.lgr.debug('so checj of %s' % fname)
                                 if fname is not None:
                                     full = os.path.join(self.top.getRootPrefix(), fname[1:])
                                     self.ida_funs.add(full, start)
@@ -266,14 +266,14 @@ class StackTrace():
                 if call_ip is not None and not skip_this:
                     skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
-                    self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
+                    #self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
-                        self.lgr.debug('APPEND 0x%08x  %-s' % (call_ip, 'unknown'))
+                        #self.lgr.debug('APPEND 0x%08x  %-s' % (call_ip, 'unknown'))
                         frame = self.FrameEntry(call_ip, 'unknown', instruct)
                         self.frames.append(frame)
                     else:
-                        self.lgr.debug('APPEND 0x%08x  %-s' % (call_ip, fname))
+                        #self.lgr.debug('APPEND 0x%08x  %-s' % (call_ip, fname))
                         frame = self.FrameEntry(call_ip, fname, instruct)
                         self.frames.append(frame)
                     prev_ip = call_ip
@@ -291,3 +291,6 @@ class StackTrace():
             if self.stack_base is not None and ptr > self.stack_base:
                 self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
+
+    def countFrames(self):
+        return len(self.frames)
