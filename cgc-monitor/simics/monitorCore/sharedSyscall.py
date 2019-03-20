@@ -147,8 +147,8 @@ class SharedSyscall():
             ''' no pending syscall for this pid '''
             if not self.traceProcs.pidExists(pid):
                 ''' new PID, add it without parent for now? ''' 
-                #self.lgr.debug('exitHap call traceProcs.addProc for pid %d' % pid)
-                self.traceProcs.addProc(pid, None)
+                self.lgr.debug('exitHap call traceProcs.addProc for pid %d' % pid)
+                self.traceProcs.addProc(pid, None, comm=comm)
                 return
             else:
                 ''' pid exists, but no syscall pending, assume reschedule? '''
@@ -183,8 +183,8 @@ class SharedSyscall():
                         SIM_break_simulation('clone faux return?')
                         return
                     if  pid in self.trace_procs and self.traceProcs.addProc(eax, pid, clone=True):
-                        trace_msg = ('\treturn from clone, new pid:%d  calling pid:%d\n' % (eax, pid))
-                        self.lgr.debug('exitHap clone call addProc for pid:%d parent %d' % (eax, pid))
+                        trace_msg = ('\treturn from clone (tracing), new pid:%d  calling pid:%d\n' % (eax, pid))
+                        self.lgr.debug('exitHap clone called addProc for pid:%d parent %d' % (eax, pid))
                         self.traceProcs.copyOpen(pid, eax)
                     elif pid not in self.trace_procs:
                         trace_msg = ('\treturn from clone, new pid:%d  calling pid:%d\n' % (eax, pid))
@@ -243,7 +243,7 @@ class SharedSyscall():
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('read'):
                     if eax >= 0 and exit_info.retval_addr is not None:
-                        byte_string, dumb = self.getBytes(cpu, eax, exit_info.retval_addr)
+                        byte_string, dumb = self.mem_utils.getBytes(cpu, eax, exit_info.retval_addr)
                         limit = min(len(byte_string), 10)
                         trace_msg = ('\treturn from read pid:%d FD: %d count: %d into 0x%x\n\t%s\n' % (pid, exit_info.old_fd, 
                                       eax, exit_info.retval_addr, byte_string[:limit]))
@@ -255,16 +255,26 @@ class SharedSyscall():
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('write'):
                     if eax >= 0 and exit_info.retval_addr is not None:
-                        byte_string, byte_array = self.getBytes(cpu, eax, exit_info.retval_addr)
-                        trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
-                        if self.traceFiles is not None:
-                            self.traceFiles.write(exit_info.old_fd, byte_array)
-                        if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
-                            s = ''.join(map(chr,byte_array))
-                            self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
-                            if exit_info.call_params.match_param not in s:
-                                ''' no match, set call_param to none '''
-                                exit_info.call_params = None
+                        if eax < 1024:
+                            byte_string, byte_array = self.mem_utils.getBytes(cpu, eax, exit_info.retval_addr)
+                            trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
+                            if self.traceFiles is not None:
+                                self.traceFiles.write(exit_info.old_fd, byte_array)
+                            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
+                                s = ''.join(map(chr,byte_array))
+                                self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
+                                if exit_info.call_params.match_param not in s:
+                                    ''' no match, set call_param to none '''
+                                    exit_info.call_params = None
+                                else:
+                                    self.lgr.debug('MATCHED')
+                            elif exit_info.call_params is not None:
+                                self.lgr.debug('type of param %s' % (type(exit_info.call_params.match_param)))
+                        else:
+                            trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n' % (pid, exit_info.old_fd, eax))
+                            exit_info.call_params = None
+                    else:
+                        exit_info.call_params = None
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('_llseek'):
                     result = self.mem_utils.readWord32(cpu, exit_info.retval_addr)
@@ -277,6 +287,8 @@ class SharedSyscall():
                             trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result))
                         else:
                             self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
+                    else:
+                        trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
 
                 elif exit_info.callnum == self.task_utils.syscallNumber('gettimeofday'): 
                     if exit_info.retval_addr is not None:
@@ -373,7 +385,7 @@ class SharedSyscall():
                             trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
 
                         if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
-                            byte_string, byte_array = self.getBytes(cpu, eax, exit_info.retval_addr)
+                            byte_string, byte_array = self.mem_utils.getBytes(cpu, eax, exit_info.retval_addr)
                             s = ''.join(map(chr,byte_array))
                             self.lgr.debug('sharedSyscall SEND check string %s against %s' % (s, exit_info.call_params.match_param))
                             if exit_info.call_params.match_param not in s:
@@ -391,7 +403,7 @@ class SharedSyscall():
                             self.dataWatch.setRange(exit_info.retval_addr, eax)
                     elif exit_info.socket_callnum == net.GETPEERNAME:
                         ss = net.SockStruct(cpu, params, self.mem_utils)
-                        trace_msg = ('\treturn from socketcall GETPEERNAME pid:%d, %s\n' % (pid, ss.getString()))
+                        trace_msg = ('\treturn from socketcall GETPEERNAME pid:%d, %s  eax: 0x%x\n' % (pid, ss.getString(), eax))
                     else:
                         fd = self.mem_utils.readWord32(cpu, params)
                         addr = self.mem_utils.readWord32(cpu, params+4)
@@ -407,13 +419,13 @@ class SharedSyscall():
                             self.traceFiles.close(exit_info.old_fd)
                     
                 elif exit_info.callnum == self.task_utils.syscallNumber('dup'):
-                    self.lgr.debug('exit pid %d from dup eax %x, old_fd is %d' % (pid, eax, exit_info.old_fd))
+                    #self.lgr.debug('exit pid %d from dup eax %x, old_fd is %d' % (pid, eax, exit_info.old_fd))
                     if eax >= 0:
                         if pid in self.trace_procs:
                             self.traceProcs.dup(pid, exit_info.old_fd, eax)
                         trace_msg = ('\treturn from dup pid %d, old_fd: %d new: %d\n' % (pid, exit_info.old_fd, eax))
                 elif exit_info.callnum == self.task_utils.syscallNumber('dup2'):
-                    self.lgr.debug('return from dup2 pid %d eax %x, old_fd is %d new_fd %d' % (pid, eax, exit_info.old_fd, exit_info.new_fd))
+                    #self.lgr.debug('return from dup2 pid %d eax %x, old_fd is %d new_fd %d' % (pid, eax, exit_info.old_fd, exit_info.new_fd))
                     if eax >= 0:
                         if exit_info.old_fd != exit_info.new_fd:
                             if pid in self.trace_procs:
@@ -473,50 +485,12 @@ class SharedSyscall():
                     callname = self.task_utils.syscallName(exit_info.callnum)
                     #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
                     my_syscall = self.top.getSyscall(callname)
-                    SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
+                    if my_syscall is None:
+                        self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
+                    else:
+                        SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
                 self.lgr.debug(trace_msg.strip())
     
                 if len(trace_msg.strip())>0:
                     self.traceMgr.write(trace_msg) 
 
-    def getBytes(self, cpu, num_bytes, addr):
-        '''
-        Get a hex string of num_bytes from the given address using Simics physical memory reads, which return tuples.
-        '''
-        done = False
-        curr_addr = addr
-        bytes_to_go = num_bytes
-        retval = ''
-        retbytes = ()
-        #print 'in getBytes for 0x%x bytes' % (num_bytes)
-        while not done and bytes_to_go > 0:
-            bytes_to_read = bytes_to_go
-            remain_in_page = pageUtils.pageLen(curr_addr, self.top.PAGE_SIZE)
-            #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
-            if remain_in_page < bytes_to_read:
-                bytes_to_read = remain_in_page
-            if bytes_to_read > 1024:
-                bytes_to_read = 1024
-            phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
-            #print 'read (bytes_to_read) 0x%x bytes from 0x%x phys:%x ' % (bytes_to_read, curr_addr, phys_block.address)
-            try:
-                read_data = memUtils.readPhysBytes(cpu, phys_block.address, bytes_to_read)
-            except valueError:
-                print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
-                print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
-                self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
-                SIM_break_simulation('error in getBytes')
-                return retval
-            holder = ''
-            count = 0
-            for v in read_data:
-                count += 1
-                holder = '%s%02x' % (holder, v)
-                #self.lgr.debug('add v of %2x holder now %s' % (v, holder))
-            retbytes = retbytes+read_data
-            del read_data
-            retval = '%s%s' % (retval, holder)
-            bytes_to_go = bytes_to_go - bytes_to_read
-            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
-            curr_addr = curr_addr + bytes_to_read
-        return retval, retbytes
