@@ -23,8 +23,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 
-import simics
+import pageUtils
 import json
+import struct
 from simics import *
 MACHINE_WORD_SIZE = 8
 
@@ -35,9 +36,14 @@ def readPhysBytes(cpu, paddr, count):
         raise valueError('failed to read %d bytes from 0x%x' % (count, paddr))
 
 def getCPL(cpu):
-    reg_num = cpu.iface.int_register.get_number("cs")
-    cs = cpu.iface.int_register.read(reg_num)
-    mask = 3
+    if cpu.architecture == 'arm':
+        reg_num = cpu.iface.int_register.get_number("control")
+        cs = cpu.iface.int_register.read(reg_num)
+        mask = 1
+    else:
+        reg_num = cpu.iface.int_register.get_number("cs")
+        cs = cpu.iface.int_register.read(reg_num)
+        mask = 3
     return cs & mask
 
 def testBit(int_value, bit):
@@ -63,7 +69,7 @@ def getBits( allbits, lsb, msb )
 '''
 
 class memUtils():
-    def __init__(self, word_size, param, lgr):
+    def __init__(self, word_size, param, lgr, arch='x86'):
         self.WORD_SIZE = word_size
         self.param = param
         self.lgr = lgr
@@ -76,6 +82,18 @@ class memUtils():
             if self.WORD_SIZE == 8:
                 self.regs[ia32_reg] = ia64_regs[i]
             i+=1    
+        if arch == 'x86-64':
+            self.regs['syscall_num'] = self.regs['eax']
+            self.regs['syscall_ret'] = self.regs['eax']
+        elif arch == 'arm':
+            self.regs['syscall_num'] = 'r7'
+            self.regs['syscall_ret'] = 'r0'
+            self.regs['eip'] = 'pc'
+            self.regs['esp'] = 'sp'
+        else: 
+            self.lgr.error('memUtils, unknown architecture %s' % arch)
+            
+
 
     def v2p(self, cpu, v):
         try:
@@ -124,7 +142,15 @@ class memUtils():
             return None
     
     def readWord32(self, cpu, vaddr):
-        return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 4)
+        paddr = self.v2p(cpu, vaddr) 
+        if paddr is None:
+            self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
+        try:
+            value = SIM_read_phys_memory(cpu, paddr, 4)
+        except:
+            self.lgr.error('readWord32 could not read content of %s' % str(paddr))
+            value = None
+        return value
 
     def readWord16(self, cpu, vaddr):
         return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 2)
@@ -206,6 +232,37 @@ class memUtils():
             return 'rip'
 
     def getCurrentTask(self, param, cpu):
+        if cpu.architecture == 'arm':
+            return self.getCurrentTaskARM(param, cpu)
+        else:
+            return self.getCurrentTaskX86(param, cpu)
+
+    def kernel_v2p(self, param, cpu, vaddr):
+        return vaddr - param.kernel_base + param.ram_base
+
+    def getCurrentTaskARM(self, param, cpu):
+        reg_num = cpu.iface.int_register.get_number("sp")
+        sup_sp = cpu.gprs[1][reg_num]
+        #self.lgr.debug('getCurrentTaskARM sup_sp 0x%x' % sup_sp)
+        if sup_sp == 0:
+            return None
+        ts = sup_sp & ~(param.thread_size - 1)
+        #self.lgr.debug('getCurrentTaskARM ts 0x%x' % ts)
+        if ts == 0:
+            return None
+        if ts < param.kernel_base:
+            ts += param.kernel_base
+        ct_addr = self.kernel_v2p(param, cpu, ts) + 12
+        try:
+            ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+        except:
+            self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped?' % ct_addr)
+            return None
+        #self.lgr.debug('getCurrentTaskARM ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
+        return ct
+
+
+    def getCurrentTaskX86(self, param, cpu):
         cpl = getCPL(cpu)
         if cpl == 0:
             tr_base = cpu.tr[7]
@@ -224,3 +281,49 @@ class memUtils():
         if check_val == 0xffffffff:
             return None
         return ret_ptr
+
+    def getBytes(self, cpu, num_bytes, addr):
+        '''
+        Get a hex string of num_bytes from the given address using Simics physical memory reads, which return tuples.
+        '''
+        done = False
+        curr_addr = addr
+        bytes_to_go = num_bytes
+        retval = ''
+        retbytes = ()
+        #print 'in getBytes for 0x%x bytes' % (num_bytes)
+        while not done and bytes_to_go > 0:
+            bytes_to_read = bytes_to_go
+            remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
+            #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
+            if remain_in_page < bytes_to_read:
+                bytes_to_read = remain_in_page
+            if bytes_to_read > 1024:
+                bytes_to_read = 1024
+            phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
+            #print 'read (bytes_to_read) 0x%x bytes from 0x%x phys:%x ' % (bytes_to_read, curr_addr, phys_block.address)
+            try:
+                read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
+            except valueError:
+                print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
+                print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
+                self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
+                return retval
+            holder = ''
+            count = 0
+            for v in read_data:
+                count += 1
+                holder = '%s%02x' % (holder, v)
+                #self.lgr.debug('add v of %2x holder now %s' % (v, holder))
+            retbytes = retbytes+read_data
+            del read_data
+            retval = '%s%s' % (retval, holder)
+            bytes_to_go = bytes_to_go - bytes_to_read
+            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
+            curr_addr = curr_addr + bytes_to_read
+        return retval, retbytes
+
+    def writeWord(self, cpu, address, value):
+        phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+        SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
+

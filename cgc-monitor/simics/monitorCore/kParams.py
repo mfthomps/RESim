@@ -1,9 +1,14 @@
 class Kparams():
-    def __init__(self):
+    def __init__(self, cpu):
         ''' assumptions '''
         #self.kernel_base = 3221225472
         self.kernel_base = 0xc0000000
-        self.ram_base = 0
+
+        if cpu.architecture == 'arm':
+            self.ram_base = 268435456
+            self.thread_size = 8192
+        else:
+            self.ram_base = 0
         self.stack_size = 8192
         self.ts_next_relative = True
         self.ts_state = None
@@ -32,6 +37,9 @@ class Kparams():
         self.sysenter = None
         self.sysexit = None
         self.iretd = None
+        # arm entry/exit
+        self.arm_entry = None
+        self.arm_ret = None
         self.page_fault = None
         self.syscall_compute = None
         self.syscall_jump = None
