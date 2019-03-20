@@ -14,7 +14,7 @@ run_command('add-directory -prepend /mnt/cgc-monitor/cgc-monitor/zk/monitorLibs'
 run_command('add-directory -prepend /mnt/simics/eemsWorkspace')
 if RUN_FROM_SNAP is None:
     # 45x slowdown
-    #run_command('set-min-latency min-latency = 0.01')
+    run_command('set-min-latency min-latency = 0.01')
     # 45x slowdown
     #run_command('set-min-latency min-latency = 0.1')
     # 45x slowdown
@@ -35,6 +35,7 @@ if RUN_FROM_SNAP is None:
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)
+    run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
 run_command('log-level 0 -all')
 run_command('run-python-file genMonitor.py')
 
