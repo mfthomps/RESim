@@ -76,6 +76,8 @@ class ExitMaze():
         self.compares = {}
         ''' addresses upon which we'll break  TBD how to know where we came from? '''
         self.break_addrs = []
+        ''' unexplored destinations that only lead to where we've been '''
+        self.bumps = []
         
         self.break_map = {}
         self.breakout_hap = None
@@ -88,16 +90,20 @@ class ExitMaze():
         self.function_ret = None
         self.just_return = False
 
-    def mazeReturn(self):
+    def mazeReturn(self, was_running=False):
         if self.function_ret is None:
             print('no function return set.')
             return
         self.just_return = True
         self.break_addrs = []
         self.break_addrs.append((self.function_ret, 0))
-        self.lgr.debug('mazeReturn, plant breaks')
-        self.removeDebugBreaks()
-        SIM_run_alone(self.plantBreaks, None)
+        self.lgr.debug('mazeReturn pid:%d , plant breaks' % self.pid)
+        #self.removeDebugBreaks()
+        if was_running:
+            ''' was already running, do not unpause '''
+            SIM_run_alone(self.plantBreaks, False)
+        else:
+            SIM_run_alone(self.plantBreaks, True)
 
     def checkJustReturn(self):
         if not self.just_return:
@@ -113,7 +119,15 @@ class ExitMaze():
 
     def recordStack(self):
         st = self.top.getStackTraceQuiet()
-        self.stack_frames = st.getFrames(4)
+        count = st.countFrames()
+        if count == 0:
+            self.lgr.error('ExitMaze no stack frames')
+            return
+        if count < 4:
+            self.stack_frames = st.getFrames(count-1)
+            self.lgr.debug('ExitMaze, only %d stack frames')
+        else:
+            self.stack_frames = st.getFrames(4)
 
     def retHap(self, count, third, forth, memory):
         if self.ret_hap is None:
@@ -122,11 +136,11 @@ class ExitMaze():
         if pid == self.pid:
             self.context_manager.genDeleteHap(self.ret_hap)
             self.ret_hap = None
-            self.lgr.debug('exitMaze ret from call count %d' % count)
-            SIM_run_alone(self.addStopAlone, count)
+            self.lgr.debug('exitMaze ret from call pid:%d count %d' % (self.pid, count))
+            SIM_run_alone(self.addStopModeAlone, count)
 
     def traceCircuit(self, count):
-        self.lgr.debug('traceCircuit count %d' % count)
+        self.lgr.debug('traceCircuit pid:%d count %d' % (self.pid, count))
         max_loops = 2
         cmd = 'si -q'
         for i in range(count, 200000):
@@ -137,11 +151,13 @@ class ExitMaze():
                 ''' see if we are returning from kernel or call from outer scope''' 
                 if i > 0 and i == count:
                     ''' returned, check timeofday count'''
-                    tod = self.syscall.getTimeofdayCount()
-                    self.lgr.debug('exitMaze tod is %d, start %d' % (tod, self.timeofday_count_start))
+                    tod = self.syscall.getTimeofdayCount(self.pid)
+                    self.lgr.debug('exitMaze pid:%d tod is %d, start %d' % (self.pid, tod, self.timeofday_count_start))
                     ''' have we called tod enough to establish a circuit? '''
                     if (tod - self.timeofday_count_start) > max_loops:
-                        self.lgr.debug('exitMaze been around')
+                        self.lgr.debug('exitMaze pid:%d been around, collected instructions' % self.pid)
+                        for eip in self.instructs: 
+                            self.lgr.debug('\t0x%x  %s' % (eip, self.instructs[eip][1]))
                         if len(self.break_addrs) == 0:
                             ''' we've run the circuit, look at the collected instructions and 
                                 select breakpoints based on branches not followed '''
@@ -158,24 +174,25 @@ class ExitMaze():
 
                             self.cycle_len = self.cpu.cycles - self.cycle_start         
                             self.getBreaks()    
-                            self.removeDebugBreaks()
+                            #self.removeDebugBreaks()
                             print('Would add these breaks:')
                             for dest, prev in self.break_addrs:
                                 if prev != 0:
                                     print('dest 0x%x prev 0x%x' % (dest, prev))
                                 else:
                                     print('function return: 0x%x' % dest)
-                            if len(self.break_addrs) > 4:
+                            if self.top.getAutoMaze():
+                                SIM_run_alone(self.mazeReturn, None)
+                            elif len(self.break_addrs) > 4:
                                 print('more than 4 breakpoints.  \nUse @cgc.plantCmpBreaks() to prune and run')
                                 print('Or use @cgc.doMazeReturn() to exit via a function return, and continue doing so')
                                 print('when this maze is again encountered.')
-                                return
                             else:
                                 self.lgr.debug('ExitMaze Found %d breaks' % len(self.break_addrs))
                                 print('Use @cgc.plantBreaks() to set the above breaks to exit the maze')
                                 print('Or use @cgc.doMazeReturn() to exit via a function return, and continue doing so')
                                 print('when this maze is again encountered.')
-                                return
+                            return
                         else:
                             self.lgr.error('ExitMaze confused')
                             return
@@ -183,10 +200,12 @@ class ExitMaze():
                 parts = instruct[1].split()
                 mn = parts[0]
                 if mn == 'call':
+                    self.instructs[eip] = instruct
+                    self.lgr.debug('adding to list %x %s' % (eip, instruct[1]))
                     ret_addr = eip + instruct[0]
                     ret_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
-                    self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, i, ret_break, 'exitMaze')
-                    self.lgr.debug('call from eip 0x%x, set hap now run' % (eip))
+                    self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, i, ret_break, 'retMaze')
+                    self.lgr.debug('call from pid:%d eip 0x%x, %s set break/hap on return now run' % (self.pid, eip, instruct[1]))
                     SIM_run_command('c')
                     return
                 elif mn == 'ret':
@@ -212,7 +231,7 @@ class ExitMaze():
         self.stop_hap_mode = None
         SIM_run_alone(self.traceCircuit, count)
 
-    def addStopAlone(self, count):
+    def addStopModeAlone(self, count):
         self.stop_hap_mode = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapMode, count)
         SIM_break_simulation('back in user space')         
 
@@ -225,7 +244,7 @@ class ExitMaze():
                 SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
                 self.mode_hap = None
                 self.lgr.debug('exitMaze modeChanged count %d' % count)
-                SIM_run_alone(self.addStopAlone, count)
+                SIM_run_alone(self.addStopModeAlone, count)
 
     def run(self):
         if self.debugging:
@@ -233,7 +252,7 @@ class ExitMaze():
             SIM_run_command('disable-reverse-execution')
         self.recordStack()
         self.call_level = 0
-        self.syscall.resetTimeofdayCount()
+        self.syscall.resetTimeofdayCount(self.pid)
         self.timeofday_count_start = 0
         self.lgr.debug('exitMaze, Begin.  timeofday_count_start is %d' % self.timeofday_count_start)
         cpl = getCPL(self.cpu)
@@ -245,47 +264,115 @@ class ExitMaze():
     def showInstructs(self):
         for eip in self.instructs:
             print('0x%x %s' % (eip, self.instructs[eip][1]))
+
+    def getMaze(self):
+        retval = {}
+        retval['instructions'] = []
+        for eip in self.instructs:
+            retval['instructions'].append(eip)
+        retval['breaks'] = []
+        for jmp_to_eip, cmp_eip in self.break_addrs:
+            if cmp_eip != 0:
+                retval['breaks'].append(jmp_to_eip)
+        retval['bumps'] = self.bumps
+        return retval
                
 
     def getBreaks(self):
+        self.lgr.debug('ExitMaze getBreaks pid:%d' % self.pid)
         if self.function_ret is not None:
             self.break_addrs.append((self.function_ret, 0))
+            self.lgr.debug('ExitMaze getBreaks pid:%d set function return break at 0x%x' % (self.pid, self.function_ret))
         did_eip = []
-        self.lgr.debug('ExitMaze getBreaks')
-        ''' track the cmp TBD, other operators affecting jumps '''
+        ''' track the cmp TBD, other operators affecting , collected instructions '''
         prev = None
         exit_eips = self.top.getMazeExits()
         for x in exit_eips:
             print('exit eip 0x%x' % x)
         for eip in self.instructs:
-            if self.instructs[eip][1].strip().startswith('j') and prev is not None:
-                self.lgr.debug('is jump')
-                parts = self.instructs[eip][1].split()
+            ins = self.instructs[eip][1]
+            if ins.startswith('j') and prev is not None:
+                self.lgr.debug('is jump: 0x%x %s' % (eip, ins))
+                try:
+                    parts = str(ins).split(' ', 1)
+                except:
+                    self.lgr.error('exitMaze getBreaks failed to parse %s' % ins)
+                    continue
                 dest = None
                 if len(parts) > 1:
                     op0 = parts[1]  
-                    try:
-                        dest = int(op0, 16)
-                    except:
+
+                    dest = decode.addressFromExpression(self.cpu, op0, self.lgr)
+                    if dest is None:
                         self.lgr.debug('getBreaks could not get dest from %s from %s' % (op0, self.instructs[eip]))
+                        return
                 if dest is not None:
                     if dest not in self.instructs:
-                        if dest not in did_eip and dest not in exit_eips:
-                            self.lgr.debug('WOULD PLANT jump to 0x%x instruct %s  cmp was at 0x%x' % (dest, self.instructs[eip][1], prev))
+                        if dest not in did_eip and dest not in exit_eips and not self.isBump(dest):
+                            self.lgr.debug('WOULD PLANT pid:%d jump to 0x%x instruct %s  cmp was at 0x%x' % (self.pid, dest, self.instructs[eip][1], prev))
                             self.break_addrs.append((dest, prev))
                             #did_eip.append(dest)
                     else:
                         in_len = self.instructs[eip][0]
-                        self.lgr.debug('len is %d' % in_len)
                         next_in = eip + in_len
+                        self.lgr.debug('dest of jmp already in instructs, check next instruct at 0x%x' % next_in)
                         if next_in not in self.instructs:
-                            if next_in not in did_eip and next_in not in exit_eips:
-                                self.lgr.debug('WOULD PLANT next instruction flag at 0x%x' % next_in) 
+                            if next_in not in did_eip and next_in not in exit_eips and not self.isBump(next_in):
+                                self.lgr.debug('WOULD PLANT pid:%d  next instruction flag at 0x%x' % (self.pid, next_in)) 
                                 self.break_addrs.append((next_in, prev))
                                 #did_eip.append(next_in)
-            if self.instructs[eip][1].strip().startswith('cmp'):
-                self.lgr.debug('getBreaks found cmp')
+                            else:
+                                self.lgr.debug('next instruct 0x%x not in instructs, but in did_eip or exit_eips or maybe bump' % next_in)
+                else:
+                    self.lgr.debug('dest of %s is None?' % ins)
+            if ins.startswith('cmp') or ins.startswith('test'):
+                self.lgr.debug('getBreaks conditional found 0x%x %s' % (eip, ins))
                 prev = eip
+
+    def isBump(self, dest):
+        ''' iterate through instructions until jump or ret found and determine
+            if we've already been to jmp destinations. '''
+        retval = False
+        done = False
+        ip = dest
+        self.lgr.debug('exitMaze isBump is 0x%x a bump?' % dest)
+        while not done and not retval:
+            instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+            if instruct[1].startswith('jmp'):
+                op = instruct[1].split()[1]
+                self.lgr.debug('exitMaze isBump ip 0x%x is jmp op is %s' % (ip, op))
+                try:
+                    next_dest = int(op, 16)
+                except:
+                    self.lgr.debug('isBump jump not explicit %s' % instruct[1])
+                    return False
+                self.lgr.debug('exitMaze isBump is 0x%x in instructs?' % next_dest)
+                if next_dest in self.instructs:
+                    retval = True
+                    self.bumps.append(ip)
+                    self.lgr.debug('exitMaze isBump 0x%x leads 0x%x which is nowhere new' % (new_dest, dest))
+            elif instruct[1].startswith('j'):
+                op = instruct[1].split()[1]
+                self.lgr.debug('exitMaze isBump ip 0x%x is jxx op is %s' % (ip, op))
+                try:
+                    next_dest = int(op, 16)
+                except:
+                    self.lgr.debug('isBump jxx not explicit %s' % instruct[1])
+                    return False
+                next_ip = ip+in_len 
+                if next_dest in self.instructs and next_ip in self.instructs:
+                    retval = True
+                    self.bumps.append(ip)
+                    self.lgr.debug('exitMaze isBump both branches out of 0x%x lead to nowhere new' % (dest))
+                else:
+                    self.lgr.debug('exitMaze isBump either newdest 0x%x or nextip 0x%x not in instructs' % (next_dest, next_ip))
+                
+                done = True
+            elif instruct[1]=='ret':
+                done = True
+            in_len = instruct[0]
+            ip = ip + in_len
+        return retval
 
 
     def pruneBreaks(self):
@@ -359,40 +446,61 @@ class ExitMaze():
                            self.live_cmp.append(eip)
                            self.lgr.debug('ExitMaze cmpareHap remove compare hap')
                            self.context_manager.genDeleteHap(self.compare_hap)
-                           SIM_run_alone(self.plantBreaks, None)
+                           SIM_run_alone(self.plantBreaks, False)
                 self.compares[eip] = (val0, val1)
 
-    def plantBreaks(self, dumb=None):
-        self.lgr.debug('ExitMaze plantBreaks, len of break_addrs is %d' % len(self.break_addrs))
+    def plantBreaks(self, then_run=True):
+        self.lgr.debug('ExitMaze plantBreaks pid:%d, len of break_addrs is %d' % (self.pid, len(self.break_addrs)))
         if len(self.break_addrs) > 4:
             self.pruneBreaks()
         first_break = None
+        self.context_manager.addNoWatch()
         for jmp_to_eip, cmp_eip in self.break_addrs:
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, jmp_to_eip, 1, 0)
             if first_break is None:
                 first_break = proc_break
             last_break = proc_break
             self.break_map[proc_break] = cmp_eip
-            self.lgr.debug('plantBreaks break_map set %d to 0x%x jmp_to was 0x%x' % (proc_break, cmp_eip, jmp_to_eip))
+            self.lgr.debug('plantBreaks break_map set proc_break %d to 0x%x cmp_eip was 0x%x' % (proc_break, jmp_to_eip, cmp_eip))
         if len(self.break_addrs) > 0:
             self.breakout_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.breakoutHap, None, first_break, last_break, 'exitMaze')
             self.lgr.debug('plantBreaks set hap %d' % self.breakout_hap)
-        self.lgr.debug('plantBreaks, remove other breaks')
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, None)
-        SIM_run_command('list-breakpoints')
-        self.top.showHaps()
-        SIM_run_command('system-perfmeter')
-        #SIM_run_command('c')
+            self.lgr.debug('plantBreaks,  set stop hap')
+        #SIM_run_command('list-breakpoints')
+        #self.top.showHaps()
+        #SIM_run_command('system-perfmeter')
+        if then_run:
+            self.lgr.debug('ExitMaze Try to breakout, will continue')
+            SIM_run_command('c')
+
+    def rmAllBreaks(self):
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+        if self.breakout_hap is not None:
+            self.context_manager.genDeleteHap(self.breakout_hap) 
+            self.breakout_hap = None
+        if self.compare_hap is not None:
+            self.context_manager.genDeleteHap(self.compare_hap)
+            self.compare_hap = None
+        if self.ret_hap is not None:
+            self.context_manager.genDeleteHap(self.ret_hap)
+            self.ret_hap = None
 
     def stopHap(self, stop_action, one, exception, error_string):
         if self.stop_hap is not None:
-            self.lgr.debug('ExitMaze in stopHap')
-            if self.one_proc:
-                self.context_manager.watchTasks()
-                self.syscall.doBreaks()
-            else:
-                self.top.traceProcesses(new_log=False)
+            cpu, comm, pid = self.task_utils.curProc() 
+            if pid != self.pid:
+                self.lgr.debug('ExitMaze stopHap wrong pid, wanted %d got %d' % (self.pid, pid))
+                return
+            self.lgr.debug('ExitMaze in stopHap pid %d' % pid)
+            #if self.one_proc:
+            #    self.context_manager.watchTasks()
+            #    self.syscall.doBreaks()
+            #else:
+            #    self.top.traceProcesses(new_log=False)
+            self.lgr.debug('exitMaze stopHap remove the nowatch')
+            self.context_manager.rmNoWatch()
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             if self.debugging:
@@ -407,27 +515,31 @@ class ExitMaze():
     def getBreakout(self):
         return self.breakout_addr
 
+    def addStopAlone(self, dumb):
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, None)
+        SIM_break_simulation('broke out')
+
     def breakoutHap(self, from_eip, third, breakpoint, memory):
         if self.breakout_hap is None:
             return
         cpu, comm, pid = self.task_utils.curProc() 
         bp = int(str(breakpoint))
-        self.lgr.debug('breakout breakpoint %d  bp %d' % (breakpoint, bp))
+        self.lgr.debug('exitMaze breakout pid %d breakpoint %d  bp %d' % (self.pid, breakpoint, bp))
         #self.top.showHaps()
         break_handle = self.context_manager.getBreakHandle(bp)
         cmp_eip = self.break_map[break_handle]
         if self.pid == pid:
             eip = getEIP(self.cpu)
             if cmp_eip == 0:
-                print('failed to break out, hit return from function at 0x%x' % eip)
+                print('exitMaze breakoutHap hit return from function at 0x%x' % eip)
             else:
-                print('broke out to 0x%x, cmp was at 0x%x' % (eip, cmp_eip))
+                print('exitMaze breakoutHap broke out to 0x%x, cmp was at 0x%x' % (eip, cmp_eip))
             self.context_manager.genDeleteHap(self.breakout_hap)
             self.breakout_hap = None
             self.lgr.debug('ExitMaze breakoutHap, am out at 0x%x cmp was at 0x%x' % (eip, cmp_eip))
             ''' record for retrieval by top if this breakout seems nested '''
             self.breakout_addr = eip
-            SIM_break_simulation('broke out')
+            SIM_run_alone(self.addStopAlone, None)
         else:
             self.lgr.debug('ExitMaze breakoutHap for wrong pid %d, expeced %d' % (pid, self.pid))
         
