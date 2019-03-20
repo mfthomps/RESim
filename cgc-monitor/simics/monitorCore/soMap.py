@@ -79,6 +79,7 @@ class SOMap():
             return False
 
     def addText(self, start, size, prog, pid):
+        self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
         self.text_start[pid] = start
         self.text_end[pid] = start+size
         self.text_prog[pid] = prog
@@ -89,7 +90,7 @@ class SOMap():
             self.so_file_map[pid] = {}
 
         full_path = os.path.join(self.root_prefix, fpath[1:])
-        self.lgr.debug('addSO, prefix is %s fpath is %s  full: %s' % (self.root_prefix, fpath, full_path))
+        self.lgr.debug('soMap addSO, prefix is %s fpath is %s  full: %s' % (self.root_prefix, fpath, full_path))
         text_seg = elfText.getText(full_path)
         if text_seg is None:
             self.lgr.debug('SOMap addSO, no file at %s' % full_path)
@@ -144,6 +145,9 @@ class SOMap():
         if pid not in self.so_file_map:
             pid = self.task_utils.getCurrentThreadLeaderPid()
         if pid in self.so_file_map:
+            if pid not in self.text_start:
+                self.lgr.warning('SOMap getSOFile pid %d in so_file map but not text_start' % pid)
+                return None
             if addr_in >= self.text_start[pid] and addr_in <= self.text_end[pid]:
                 retval = self.text_prog[pid]
             else:
@@ -183,15 +187,15 @@ class SOMap():
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.so_file_map:
             pid = self.task_utils.getCurrentThreadLeaderPid()
-        self.lgr.debug('look for addr for pid %d in_fname %s' % (pid, in_fname))
-        if in_fname == self.text_prog:
-            size = self.text_end - self.text_start
-            retval = elfText.Text(self.text_start, 0, size)
+        self.lgr.debug('getSOAddr look for addr for pid %d in_fname %s' % (pid, in_fname))
+        if in_fname == self.text_prog[pid]:
+            size = self.text_end[pid] - self.text_start[pid]
+            retval = elfText.Text(self.text_start[pid], 0, size)
         elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
                 base = os.path.basename(fpath)
                 in_base = os.path.basename(in_fname)
-                #self.lgr.debug('compare %s to %s' % (base, in_base))
+                self.lgr.debug('compare %s to %s' % (base, in_base))
                 if base == in_base:
                     if retval is not None:
                         self.lgr.debug('SOMap getSOAddr multiple so files with fname %s' % in_fname)
@@ -199,8 +203,13 @@ class SOMap():
                     else:
                         retval = self.so_addr_map[pid][fpath]
                         break
+            if retval is None:
+                self.lgr.debug('SOMap getSOAddr could not find so map for %d <%s>' % (pid, in_fname))
+                self.lgr.debug('text_prog is <%s>' % self.text_prog[pid])
+                
         else:
-            self.lgr.debug('SOMap getSOAddr no so map for %d' % pid)
+            self.lgr.debug('SOMap getSOAddr no so map for %d %s' % (pid, in_fname))
+            self.lgr.debug('text_prog is <%s>' % self.text_prog[pid])
         return retval
     
 
