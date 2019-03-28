@@ -41,6 +41,8 @@ domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPL
 FIONBIO = 0x5421
 FIONREAD = 0x541B
 
+F_DUPFD = 0 
+
 class NetInfo():
     def __init__(self, ip, mask, broadcast, dev, label):
         self.ip = ip
@@ -78,21 +80,29 @@ class NetAddresses():
             self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
-    def __init__(self, cpu, params, mem_utils):
-        self.fd = mem_utils.readWord32(cpu, params)
+    def __init__(self, cpu, params, mem_utils, fd=None):
+        if fd is None:
+            self.fd = mem_utils.readWord32(cpu, params)
+            self.length = mem_utils.readWord32(cpu, params+8)
+            self.flags = mem_utils.readWord32(cpu, params+12)
+            self.addr = mem_utils.readWord32(cpu, params+4)
+        else:
+            self.fd = fd
+            #self.addr = mem_utils.readWord32(cpu, params)
+            self.addr = params
         self.port = None
         self.sin_addr = None
         self.sa_data = None
-        addr = mem_utils.readWord32(cpu, params+4)
-        self.addr = addr
-        self.length = mem_utils.readWord32(cpu, params+8)
-        self.flags = mem_utils.readWord32(cpu, params+12)
-        self.sa_family = mem_utils.readWord16(cpu, addr) 
+        self.sa_family = None
+        try:
+            self.sa_family = mem_utils.readWord16(cpu, self.addr) 
+        except:
+            return
         if self.sa_family == 1:
-            self.sa_data = mem_utils.readString(cpu, addr+2, 256)
+            self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)
         elif self.sa_family == 2:
-            self.port = mem_utils.readWord16le(cpu, addr+2)
-            self.sin_addr = mem_utils.readWord32(cpu, addr+4)
+            self.port = mem_utils.readWord16le(cpu, self.addr+2)
+            self.sin_addr = mem_utils.readWord32(cpu, self.addr+4)
 
     def famName(self):
         if self.sa_family is not None and self.sa_family < len(domaintype):
@@ -133,7 +143,9 @@ class SockStruct():
         return flag
 
     def getString(self):
-        if self.sa_family == 1:
+        if self.sa_family is None:
+            retval = ('FD: %d sa_family unknown' % (self.fd))
+        elif self.sa_family == 1:
             retval = ('FD: %d sa_family: %s  sa_data: %s' % (self.fd, self.famName(), self.sa_data))
         elif self.sa_family == 2:
             retval = ('FD: %d sa_family: %s  address: %s:%d' % (self.fd, self.famName(), self.dottedIP(), self.port))

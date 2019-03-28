@@ -73,16 +73,19 @@ class TrackThreads():
             self.lgr.debug('TrackThreads  syscallHap looked for pid %s, found %d.  Do nothing' % (str(self.pid_list), pid))
             return
         stack_frame = self.task_utils.frameFromStackSyscall()
-        phys = self.mem_utils.v2p(self.cpu, stack_frame['eip'])
-        self.lgr.debug('TrackThreads  pid %d syscallHap set exit break at 0x%x (0x%x)' % (pid, stack_frame['eip'], phys))
-        exit_eip1 = self.param.sysexit
-        exit_eip2 = self.param.iretd
-        self.exit_break1[pid] = self.context_manager.genBreakpoint(self.cell, 
+        if cpu.architecture == 'arm':
+            exit_eip1 = self.param.arm_ret
+            self.exit_break1[pid] = self.context_manager.genBreakpoint(self.cell, 
                                 Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
-        self.exit_break2[pid] = self.context_manager.genBreakpoint(self.cell, 
-                                Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
-        #self.exit_break[pid] = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
-        self.exit_hap[pid] = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break1[pid], self.exit_break2[pid], 'trackThreads syscall')
+            self.exit_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break1[pid], 'trackThreads syscall')
+        else: 
+            exit_eip1 = self.param.sysexit
+            exit_eip2 = self.param.iretd
+            self.exit_break1[pid] = self.context_manager.genBreakpoint(self.cell, 
+                                Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
+            self.exit_break2[pid] = self.context_manager.genBreakpoint(self.cell, 
+                                    Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
+            self.exit_hap[pid] = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break1[pid], self.exit_break2[pid], 'trackThreads syscall')
 
     def exitHap(self, dumb, third, forth, memory):
         cpu, comm, pid = self.task_utils.curProc() 
@@ -92,8 +95,7 @@ class TrackThreads():
                 return
         if pid in self.pid_list:
             ''' returned from parent '''
-            reg_num = self.cpu.iface.int_register.get_number('eax')
-            ueax = self.cpu.iface.int_register.read(reg_num)
+            ueax = self.mem_utils.getRegValue(cpu, 'syscall_ret')
             eax = self.mem_utils.getSigned(ueax)
             if eax <= 0:
                 self.lgr.debug('error return from clone? %d' % eax)
@@ -107,6 +109,7 @@ class TrackThreads():
             del self.exit_hap[pid]
             self.pid_list.append(child_pid)
             del self.exit_break1[pid]
-            del self.exit_break2[pid]
+            if pid in self.exit_break2: 
+                del self.exit_break2[pid]
         else: 
             self.lgr.debug('TrackThreads exitHap wrong pid %d looking for %s' % (pid, str(self.pid_list)))

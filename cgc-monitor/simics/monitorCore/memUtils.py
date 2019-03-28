@@ -36,10 +36,16 @@ def readPhysBytes(cpu, paddr, count):
         raise valueError('failed to read %d bytes from 0x%x' % (count, paddr))
 
 def getCPL(cpu):
+    print('arch %s' % cpu.architecture)
     if cpu.architecture == 'arm':
-        reg_num = cpu.iface.int_register.get_number("control")
-        cs = cpu.iface.int_register.read(reg_num)
-        mask = 1
+        ''' TBD FIX this! '''
+        reg_num = cpu.iface.int_register.get_number("pc")
+        pc = cpu.iface.int_register.read(reg_num)
+        print('pc is 0x%x' % pc)
+        if pc > 0xc0000000:
+            return 0
+        else:
+            return 1
     else:
         reg_num = cpu.iface.int_register.get_number("cs")
         cs = cpu.iface.int_register.read(reg_num)
@@ -69,23 +75,30 @@ def getBits( allbits, lsb, msb )
 '''
 
 class memUtils():
-    def __init__(self, word_size, param, lgr, arch='x86'):
+    def __init__(self, word_size, param, lgr, arch='x86-64'):
         self.WORD_SIZE = word_size
         self.param = param
         self.lgr = lgr
         ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
         ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags"]
         self.regs = {}
-        i=0
-        for ia32_reg in ia32_regs:
-            self.regs[ia32_reg] = ia32_reg
-            if self.WORD_SIZE == 8:
-                self.regs[ia32_reg] = ia64_regs[i]
-            i+=1    
         if arch == 'x86-64':
+            i=0
+            for ia32_reg in ia32_regs:
+                self.regs[ia32_reg] = ia32_reg
+                if self.WORD_SIZE == 8:
+                    self.regs[ia32_reg] = ia64_regs[i]
+                i+=1    
             self.regs['syscall_num'] = self.regs['eax']
             self.regs['syscall_ret'] = self.regs['eax']
         elif arch == 'arm':
+            for i in range(13):
+                r = 'R%d' % i
+                self.regs[r] = r
+            self.regs['SP'] = 'SP'
+            self.regs['PC'] = 'PC'
+            self.regs['LR'] = 'LR'
+            self.regs['PSR'] = 'PSR'
             self.regs['syscall_num'] = 'r7'
             self.regs['syscall_ret'] = 'r0'
             self.regs['eip'] = 'pc'
@@ -103,6 +116,9 @@ class memUtils():
             else:
                 if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
+                    return phys_addr
+                elif cpu.architecture == 'arm':
+                    phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                     return phys_addr
                 else:
                     return 0
@@ -164,8 +180,12 @@ class memUtils():
     def printRegJson(self, cpu):
         regs = {}
         for reg in self.regs:
-            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-            reg_value = cpu.iface.int_register.read(reg_num)
+            try:
+                reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+                reg_value = cpu.iface.int_register.read(reg_num)
+            except:
+                ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
+                continue
             regs[reg] = reg_value
         
         s = json.dumps(regs)

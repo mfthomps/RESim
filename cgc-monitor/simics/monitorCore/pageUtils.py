@@ -166,6 +166,9 @@ def getPageBasesExtended(cpu, lgr, kernel_base):
     return retval
    
 def getPageEntrySize(cpu): 
+    ''' TBD FIX THIS '''
+    if cpu.architecture == 'arm':
+        return 4
     reg_num = cpu.iface.int_register.get_number("cr3")
     cr3 = cpu.iface.int_register.read(reg_num)
     reg_num = cpu.iface.int_register.get_number("cr4")

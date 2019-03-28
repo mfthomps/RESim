@@ -1,6 +1,6 @@
 import os
 class SyscallNumbers():
-    def __init__(self, fpath):
+    def __init__(self, fpath, lgr):
         self.syscalls = {}
         self.callnums = {}
         hackvals = {}
@@ -19,11 +19,20 @@ class SyscallNumbers():
                         hackvals[parts[1]] = callnum
                     except:
                         #print('failed to handle %s' % line)
-                        s = parts[2]
-                        express = s[s.find("(")+1:s.find(")")]
-                        sym, offset = express.split('+')
+                        #s = parts[2]
+                        express = line[line.find("(")+1:line.find(")")]
+                        try:
+                            sym, offset = express.split('+')
+                        except:
+                            lgr.debug('No + in %s from \n%s' % (express, line))
+                            continue
                         base = hackvals[sym]
-                        callnum = base + int(offset)
+                        try:
+                            callnum = base + int(offset)
+                        except:
+                            lgr.debug('expected base10 int in %s' % line)
+                            continue
+                    lgr.debug('assign call # %d to %s' % (callnum, nr))
                     self.syscalls[callnum] = nr
                     self.callnums[nr] = callnum
                      

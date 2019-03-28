@@ -90,7 +90,6 @@ class GetKernelParams():
             phys_block = self.cpu.iface.processor_info.logical_to_physical(start, Sim_Access_Read)
             addr = phys_block.address
         #print('cmd is %s' % cmd)
-        cpl = memUtils.getCPL(self.cpu)
         self.lgr.debug('start search add 0x%x' % addr)
         got_count = 0
         offset = 0
@@ -173,7 +172,6 @@ class GetKernelParams():
         ''' find the current_task record pointer ''' 
         if self.try_mode_switches < 9000:
             self.try_mode_switches += 1
-            cpl = memUtils.getCPL(self.cpu)
             if new == Sim_CPU_Mode_Supervisor:
                 self.lgr.debug('entering sup mode')
                 ta = self.mem_utils.getCurrentTask(self.param, self.cpu)

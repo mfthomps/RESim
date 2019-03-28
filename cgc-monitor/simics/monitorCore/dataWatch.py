@@ -25,7 +25,6 @@ class DataWatch():
         self.lgr.debug('DataWatch watch')
         if self.start is not None:
             self.setBreakRange()
-            self.setStopHap()
             return True
         return False
  
@@ -34,6 +33,7 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         addr = memory.logical_address
         eip = self.top.getEIP(self.cpu)
+        SIM_run_alone(self.setStopHap, None)
         if op_type == Sim_Trans_Load:
             self.context_manager.setIdaMessage('Data read from 0x%x within input buffer (%d bytes starting at 0x%x) eip: 0x%x' % (addr, self.length, self.start, eip))
             SIM_break_simulation('DataWatch read data')
@@ -98,7 +98,7 @@ class DataWatch():
                     SIM_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
-            self.lgr.debug('GenMonitor stopHap will delete hap %s' % str(self.stop_hap))
+            self.lgr.debug('dataWatch stopHap will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:
@@ -107,7 +107,7 @@ class DataWatch():
             self.lgr.debug('stopHap now run actions %s' % str(stop_action.flist))
             stop_action.run()
          
-    def setStopHap(self):
+    def setStopHap(self, dumb):
         f1 = stopFunction.StopFunction(self.top.skipAndMail, [], False)
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(self.cpu)

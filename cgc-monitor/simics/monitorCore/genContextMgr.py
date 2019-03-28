@@ -1,4 +1,9 @@
 from simics import *
+'''
+Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
+default & RESim.  Also has a carve-out for "maze_exit" breakpoints/haps, managed as an attribute of 
+the hap.  Designed to watch a single thread group.
+'''
 class GenBreakpoint():
     def __init__(self, cell, addr_type, mode, addr, length, flags, handle, lgr):
         self.cell = cell
@@ -50,8 +55,8 @@ class GenHap():
     def hapAlone(self, (bs, be)):
         self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
         #self.lgr.debug('GenHap alone set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                   #str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
-                   #bs.addr, be.addr, str(bs.handle), str(be.handle)))
+        #          str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
+        #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
 
     def set(self, immediate=True):
         if len(self.breakpoint_list) > 1:
@@ -102,6 +107,7 @@ class GenContextMgr():
         self.pending_watch_pids = []
         self.nowatch_list = []
         self.watching_tasks = False
+        self.single_thread = False
         self.lgr = lgr
         self.ida_message = None
         self.exit_break_num = None
@@ -257,7 +263,7 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
-            self.lgr.debug('getThreadPids add %d' % (pid))
+            self.lgr.debug('genContextManager getThreadPids add %d' % (pid))
             retval.append(pid)
         return retval
 
@@ -302,7 +308,7 @@ class GenContextMgr():
         pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
         prev_task = self.task_utils.getCurTaskRec()
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
-        #self.lgr.debug('changeThread from %d to %d' % (prev_pid, pid))
+        #self.lgr.debug('changeThread from %d to %d cur_addr 0x%x' % (prev_pid, pid, cur_addr))
         pid = None
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -314,7 +320,8 @@ class GenContextMgr():
                 self.pending_watch_pids.remove(pid)
 
         if not self.watching_tasks and \
-               (cur_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)):
+               (cur_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
+               and not (self.single_thread and pid != self.debugging_pid):
             ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
@@ -340,7 +347,7 @@ class GenContextMgr():
                 #self.lgr.debug('Now only watch maze')
                 SIM_run_alone(self.clearAllHap, False)
                 SIM_run_alone(self.setAllHap, True)
-            elif (len(self.watch_rec_list) > 0):
+            elif len(self.watch_rec_list) > 0 and cur_addr not in self.watch_rec_list:
                 ''' Watching processes, but new process should not be watched '''
                 if self.debugging_pid is not None:
                     cpu.current_context = self.default_context
@@ -373,6 +380,8 @@ class GenContextMgr():
                 self.cpu.current_context = self.default_context
                 self.stopWatchTasks()
                 return True
+            elif pid == self.debugging_pid:
+                self.debugging_pid = self.pid_cache[0]
             else:
                 self.lgr.debug('rmTask remaining debug recs %s' % str(self.watch_rec_list))
         return False
@@ -380,7 +389,7 @@ class GenContextMgr():
     def addTask(self, pid):
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.watch_rec_list:
-            #self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
+            self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
             if rec is None:
                 self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
                 self.pending_watch_pids.append(pid)
@@ -429,7 +438,16 @@ class GenContextMgr():
         self.lgr.debug('watchTasks watch record 0x%x pid: %d' % (ctask, pid))
         self.watch_rec_list.append(ctask)
         self.pid_cache.append(pid)
-        
+      
+    def changeDebugPid(self, pid):
+        if pid not in self.pid_cache:
+            self.lgr.error('contextManager changeDebugPid not in pid cache %d' % pid)
+            return
+        self.debugging_pid = pid
+
+    def singleThread(self, single):
+        self.single_thread = single
+ 
     def setDebugPid(self, debugging_pid, debugging_cellname):
         self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
@@ -474,5 +492,5 @@ class GenContextMgr():
         self.lgr.debug('genMonitor says: %s' % self.ida_message)
 
     def setIdaMessage(self, message):
-        self.lgr.debug('ida message set to %s' % message)
+        #self.lgr.debug('ida message set to %s' % message)
         self.ida_message = message
