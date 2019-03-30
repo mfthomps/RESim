@@ -33,6 +33,7 @@ import decode
 import memUtils
 import pageUtils
 from monitorLibs import utils
+import armCond
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -77,6 +78,7 @@ class reverseToCall():
             self.enter_break2 = None
             self.start_cycles = None
             self.page_faults = None
+            self.frame_ips = []
 
     def getStartCycles(self):
         return self.start_cycles
@@ -107,16 +109,15 @@ class reverseToCall():
     def watchSysenter(self, dumb=None):
         cell = self.top.getCell()
         if self.enter_break1 is None:
-            #pcell = self.cpu.physical_memory
-            #self.sysenter_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.sysenterHap, prec, self.enter_break1, self.enter_break2)
-            self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
-            #self.lgr.debug('watchSysenter set phys breaks at 0x%x and 0x%x' % (self.v2p(self.cpu, self.param.sysenter), self.v2p(self.cpu, self.param.sys_entry)))
-            #self.enter_break1 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sysenter), 1, 0)
-            #self.enter_break2 = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, self.v2p(self.cpu, self.param.sys_entry), 1, 0)
-
-            self.enter_break1 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
-            self.enter_break2 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
-            self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, self.enter_break1, self.enter_break2, 'reverseToCall sysenter')
+            if self.cpu.architecture == 'arm':
+                self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
+                self.enter_break1 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+                self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, self.enter_break1, 'reverseToCall sysenter')
+            else:
+                self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
+                self.enter_break1 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
+                self.enter_break2 = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
+                self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, self.enter_break1, self.enter_break2, 'reverseToCall sysenter')
 
     def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
             self.lgr.debug('reverseToCall setup')
@@ -127,12 +128,14 @@ class reverseToCall():
             self.page_faults = page_faults
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
-            if hasattr(self.param, 'sysenter') and self.param.sysenter is not None:
+            if hasattr(self.param, 'sysenter') and self.param.sysenter is not None or \
+               hasattr(self.param, 'arm_entry') and self.param.arm_entry is not None:
                 '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
                 pid, cell_name, cpu = self.context_manager.getDebugPid() 
                 self.pid = pid
                 SIM_run_alone(self.watchSysenter, None)
 
+    
 
 
     def doBreaks(self, pcell, range_start, page_count, call_ret):
@@ -145,31 +148,58 @@ class reverseToCall():
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
             command = 'set-prefix %d "call"' % call_break_num
+            if self.cpu.architecture == 'arm':
+                command = 'set-prefix %d "bl"' % call_break_num
+            else:
+                command = 'set-prefix %d "call"' % call_break_num
             SIM_run_alone(SIM_run_command, command)
-            #ret_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
-            #   Sim_Access_Execute, range_start, size, 0)
-            ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
-               Sim_Access_Execute, range_start, size, 0)
-            self.the_breaks.append(ret_break_num)
-            command = 'set-prefix %d "ret"' % ret_break_num
-            SIM_run_alone(SIM_run_command, command)
+            if self.cpu.architecture == 'arm':
+                ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
+                   Sim_Access_Execute, range_start, size, 0)
+                self.the_breaks.append(ret_break_num)
+                command = 'set-substr %d "PC"' % ret_break_num
+                SIM_run_alone(SIM_run_command, command)
+                ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
+                   Sim_Access_Execute, range_start, size, 0)
+                self.the_breaks.append(ret_break_num)
+                command = 'set-substr %d "LR"' % ret_break_num
+                SIM_run_alone(SIM_run_command, command)
+            else:
+                ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                   Sim_Access_Execute, range_start, size, 0)
+                self.the_breaks.append(ret_break_num)
+                command = 'set-prefix %d "ret"' % ret_break_num
+                SIM_run_alone(SIM_run_command, command)
             self.lgr.debug('done setting breakpoints for call and ret addr: 0x%x len: 0x%x' % (range_start, size))
         else:
             break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, 
                 range_start, size, 0)
             self.the_breaks.append(break_num)
 
+    def thinkExecuted(self, page_info):
+        if self.cpu.architecture == 'arm':
+            nx = memUtils.testBit(page_info.entry, 0)
+            accessed = memUtils.testBit(page_info.entry, 4)
+            if nx or not accessed: 
+                self.lgr.debug('thinkExecuted will skip 0x%x nx %r accessed %r' % (page_info.logical, nx, accessed)) 
+                return False
+        else:
+            writable = memUtils.testBit(page_info.entry, 1)
+            accessed = memUtils.testBit(page_info.entry, 5)
+            if writable or not accessed:
+                self.lgr.debug('thinkExecuted will skip %r %r' % (writable, accessed)) 
+                return False
+        return True
+
     def pageTableBreaks(self, call_ret):
+        ''' set call/ret breaks on all pages that appear executable '''
         pages = pageUtils.getPageBases(self.cpu, self.lgr, self.param.kernel_base)
         range_start = None
         prev_physical = None
         pcell = self.cpu.physical_memory
         page_count = 1
         for page_info in pages:
-            writable = memUtils.testBit(page_info.entry, 1)
-            accessed = memUtils.testBit(page_info.entry, 5)
-            if writable or not accessed:
-                self.lgr.debug('will skip %r %r' % (writable, accessed)) 
+            if not self.thinkExecuted(page_info):
                 continue
             self.lgr.debug('phys: 0x%x  logical: 0x%x' % (page_info.physical, page_info.logical))
             if range_start is None:
@@ -188,7 +218,9 @@ class reverseToCall():
         self.doBreaks(pcell, range_start, page_count, call_ret) 
         self.lgr.debug('set %d breaks', len(self.the_breaks)) 
 
-    def doUncall(self):
+    def doUncall(self, frame_ips=[]):
+        ''' set breaks on calls and returns and reverse to find call into current function'''
+        self.frame_ips = frame_ips
         self.need_calls = 0
         self.got_calls = 0
         self.is_monitor_running.setRunning(True)
@@ -196,7 +228,6 @@ class reverseToCall():
         dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
         self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
         my_args = procInfo.procInfo(comm, self.cpu, pid)
-        self.lgr.debug('doUncall, got my_args ')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 	        self.stoppedReverseToCall, my_args)
         self.lgr.debug('doUncall, added stop hap')
@@ -209,35 +240,6 @@ class reverseToCall():
         SIM_run_alone(SIM_run_command, 'reverse')
         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
         self.lgr.debug('doUncall, did reverse')
-
-    def tryBackOneXX(self, step_into):
-        current = SIM_cycle_count(self.cpu)
-        previous = current - 1
-        start_cycle = self.bookmarks.getCycle('_start+1')
-
-        SIM_run_command('pselect cpu-name = %s' % self.cpu.name)
-        SIM_run_command('skip-to cycle = 0x%x' % start_cycle)
-        cycles = SIM_cycle_count(self.cpu)
-        self.lgr.debug('tryBackOne, did skip to start at cycle %x, expected %x ' % (cycles, start_cycle))
-
-        SIM_run_command('skip-to cycle = %d' % previous)
-        eip = self.top.getEIP(self.cpu)
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('tryBackOne skipped to %x eip: %x  %s' % (previous, eip, instruct[1]))
-        cpl = memUtils.getCPL(self.cpu)
-        done = False
-        if cpl > 0:
-            mn = decode.getMn(instruct[1])
-            if step_into or mn != 'ret':
-                self.lgr.debug('tryBackOne worked ok')
-                done = True
-                self.top.skipAndMail()
-                self.context_manager.setExitBreak(self.cpu)
-        if not done:
-            # more complicated than just back one, reset and return
-            #SIM_run_command('skip-to cycle = %d' % current)
-            pass
-        return done
 
     def tryBackOne(self, my_args):
         
@@ -259,6 +261,60 @@ class reverseToCall():
         cmd = 'skip-to cycle = %d ' % cycle
         SIM_run_command(cmd)
         self.top.skipAndMail()
+
+    def isExit(self, instruct, eip):
+        if self.cpu.architecture == 'arm':
+            if eip == self.param.arm_ret:
+                return True
+        else: 
+            if instruct == 'sysexit' or instruct == 'iretd':
+                return True
+        return False
+
+        
+    def isCall(self, instruct):
+        if self.cpu.architecture == 'arm':
+            N, Z, C, V = armCond.flags(self.cpu)
+            if instruct.startswith('ble'):
+                return Z or (N and not V) or (not N and V)
+            if instruct.startswith('blt'):
+                return (N and not V) or (not N and V)
+            if instruct.startswith('blo'):
+                return (not C)
+            if instruct.startswith('bls'):
+               return (not C) or Z
+            elif instruct.startswith('bl'):
+               return True
+        else:
+            if instruct.startswith('call'):
+               return True
+        return False
+        
+    def isRet(self, instruct):
+        if self.cpu.architecture == 'arm':
+            parts = instruct.split()
+            if parts[0].strip().startswith('ld') and parts[1].startswith('pc'):
+                return True
+            if parts[0].strip().startswith('ldm') and 'pc' in instruct:
+                return True
+
+            if parts[0].strip().startswith('bxcc'):
+                #return not armCond.cSet(self.cpu)
+                # TBD fix this ?
+                return False
+            if parts[0].strip().startswith('bxeq'):
+                return armCond.zSet(self.cpu)
+            if parts[0].strip().startswith('bxne'):
+                return not armCond.zSet(self.cpu)
+            elif parts[0].strip().startswith('bx') and parts[1] == 'lr':
+                return True
+
+            if parts[0] == 'pop' and 'pc' in instruct:
+                return True
+        else:
+            if instruct.startswith('ret'):
+                return True
+        return False
 
     def tryOneStopped(self, my_args, one, exception, error_string):
         '''
@@ -283,19 +339,20 @@ class reverseToCall():
         cpl = memUtils.getCPL(self.cpu)
         done = False
         if cpl > 0:
-            mn = decode.getMn(instruct[1])
-            if self.step_into or mn != 'ret':
+            self.lgr.debug('tryBackOne user space')
+            if self.step_into or not self.isRet(instruct[1]):
                 self.lgr.debug('tryBackOne worked ok')
                 done = True
                 self.cleanup(self.cpu)
                 self.top.skipAndMail()
                 self.context_manager.setExitBreak(self.cpu)
         elif len(self.sysenter_cycles) > 0:
-            mn = decode.getMn(instruct[1])
             cur_cycles = self.cpu.cycles
             cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
-            if pid == my_args.pid and (mn == 'sysexit' or mn == 'iretd'):
-                self.lgr.debug('is sysexit, cur_cycles is 0x%x' % cur_cycles)
+            self.lgr.debug('tryBackOne kernel space pid %d expected %d' % (pid, my_args.pid))
+            is_exit = self.isExit(instruct[1], eip)
+            if pid == my_args.pid and is_exit:
+                self.lgr.debug('tryOneStopped is sysexit, cur_cycles is 0x%x' % cur_cycles)
                 prev_cycles = None
                 got_it = None
                 page_cycles = self.sysenter_cycles
@@ -316,6 +373,9 @@ class reverseToCall():
                     got_it = prev_cycles - 1
                 SIM_run_alone(self.jumpCycle, got_it)
                 done = True
+            elif pid == my_args.pid and not is_exit:
+                self.lgr.debug('tryOneStopped in kernel but not exit? 0x%x  %s' % (eip, instruct[1]))
+        
 
         if not done:
             self.lgr.debug('tryOneStopped, back one did not work, starting at %x' % eip)
@@ -327,8 +387,9 @@ class reverseToCall():
                 self.setOneBreak(self.previous_eip, self.cpu)
             else: 
                 self.uncall = False
-                for item in self.x_pages:
-                    self.setBreakRange(self.cell_name, my_args.pid, item.address, item.length, self.cpu, my_args.comm, False)
+                #for item in self.x_pages:
+                #    self.setBreakRange(self.cell_name, my_args.pid, item.address, item.length, self.cpu, my_args.comm, False)
+                self.pageTableBreaks(False)
                 self.lgr.debug('tryOneStopped, set break range')
             SIM_run_alone(SIM_run_command, 'reverse')
             #self.lgr.debug('reverseToCall, did reverse-step-instruction')
@@ -585,6 +646,15 @@ class reverseToCall():
             self.top.skipAndMail()
         self.lgr.debug('cleanup complete')
 
+    def isSyscall(self, instruct):
+        if self.cpu.architecture == 'arm':
+            if instruct.startswith('svc 0'):
+                return True
+        else:
+            if instruct.startswith('int 128') or instruct.startswith('sysenter'):
+                return True
+        return False
+
     def stoppedReverseToCall(self, my_args, one, exception, error_string):
         '''
         Invoked when the simulation stops while looking for a previous call
@@ -601,33 +671,38 @@ class reverseToCall():
         if current <= self.start_cycles:
             self.lgr.debug('stoppedReverseToCall found cycle 0x%x prior to first, stop here' %(current))
             self.cleanup(cpu)
-        elif pid == my_args.pid and SIM_processor_privilege_level(cpu) != 0:
+        #elif pid == my_args.pid and SIM_processor_privilege_level(cpu) != 0:
+        elif pid == my_args.pid and memUtils.getCPL(cpu) != 0:
             eip = self.top.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-            if self.first_back and instruct[1].startswith('int 128'):
-                self.lgr.debug('stoppedReverseToCall first back is int 128 at %x, we are done' % eip)
+            if self.first_back and self.isSyscall(instruct[1]):
+                self.lgr.debug('stoppedReverseToCall first back is syscall at %x, we are done' % eip)
                 self.cleanup(cpu)
-            elif (self.first_back and not self.uncall) and (not instruct[1].startswith('ret') or self.step_into):
+            elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1]) or self.step_into):
                 self.lgr.debug('stoppedReverseToCall first back not a ret or step_into at %x, we are done' % eip)
                 self.cleanup(cpu)
-            elif instruct[1].startswith('call'):
+            elif self.isCall(instruct[1]):
                 self.got_calls += 1
                 if self.got_calls == self.need_calls:
-                    self.lgr.debug('stoppedReverseToCall at %x we must be done' % eip)
+                    self.lgr.debug('stoppedReverseToCall %s at %x we must be done' % (instruct[1], eip))
+                    self.cleanup(cpu)
+                elif eip in self.frame_ips:
+                    self.lgr.debug('stoppedReverseToCall %s at %x found stack frame entry, declare we are done' % (instruct[1], eip))
                     self.cleanup(cpu)
                 else:
-                    self.lgr.debug('stoppedReverseToCall got call %d, need %d' % (self.got_calls, self.need_calls))
-                    SIM_run_alone(SIM_run_command, cmd)
-            elif instruct[1].startswith('ret'):
+                   self.lgr.debug('stoppedReverseToCall 0x%x got call %s   got_calls %d, need %d' % (eip, instruct[1], self.got_calls, self.need_calls))
+                   SIM_run_alone(SIM_run_command, cmd)
+            elif self.isRet(instruct[1]):
                 self.need_calls += 1
-                self.lgr.debug('stoppedReverseToCall got ret %d' % self.need_calls)
+                self.lgr.debug('stoppedReverseToCall 0x%x got ret %s  need: %d' % (eip, instruct[1], self.need_calls))
                 if self.first_back and not self.uncall:
                     self.rmBreaks()
+                    ''' TBD fix this? '''
                     for item in self.x_pages:
                         self.setBreakRange(self.cell_name, pid, item.address, item.length, cpu, comm, True)
                 SIM_run_alone(SIM_run_command, cmd)
             else:
-                self.lgr.debug('stoppedReverseToCall Not call at %x, is %s' % (eip, instruct[1]))
+                self.lgr.debug('stoppedReverseToCall Not call or ret at %x, is %s' % (eip, instruct[1]))
                 SIM_run_alone(SIM_run_command, cmd)
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong pid (%d) or in kernel, try again' % pid)
@@ -661,13 +736,29 @@ class reverseToCall():
                     call_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     self.the_breaks.append(call_break_num)
-                    command = 'set-prefix %d "call"' % call_break_num
+                    if cpu.architecture == 'arm':
+                        command = 'set-prefix %d "bl"' % call_break_num
+                    else:
+                        command = 'set-prefix %d "call"' % call_break_num
                     SIM_run_alone(SIM_run_command, command)
-                    ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
-                       Sim_Access_Execute, phys_block.address, self.page_size, 0)
-                    self.the_breaks.append(ret_break_num)
-                    command = 'set-prefix %d "ret"' % ret_break_num
-                    SIM_run_alone(SIM_run_command, command)
+                 
+                    if cpu.architecture == 'arm':
+                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                           Sim_Access_Execute, phys_block.address, self.page_size, 0)
+                        self.the_breaks.append(ret_break_num)
+                        command = 'set-substr %d "PC"' % ret_break_num
+                        SIM_run_alone(SIM_run_command, command)
+                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                           Sim_Access_Execute, phys_block.address, self.page_size, 0)
+                        self.the_breaks.append(ret_break_num)
+                        command = 'set-substr %d "LR"' % ret_break_num
+                        SIM_run_alone(SIM_run_command, command)
+                    else:
+                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                           Sim_Access_Execute, phys_block.address, self.page_size, 0)
+                        self.the_breaks.append(ret_break_num)
+                        command = 'set-prefix %d "ret"' % ret_break_num
+                        SIM_run_alone(SIM_run_command, command)
                     self.lgr.debug('done setting breakpoints for call and ret addr: %x', phys_block.address)
                 elif reg is not None:
                     all_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
@@ -700,9 +791,9 @@ class reverseToCall():
             if cur_cpu == self.cpu and pid == self.pid:
                 cycles = self.cpu.cycles
                 if cycles not in self.sysenter_cycles:
-                    eip = self.top.getEIP(self.cpu)
-                    reg_num = self.cpu.iface.int_register.get_number('eax')
-                    eax = self.cpu.iface.int_register.read(reg_num)
+                    #eip = self.top.getEIP(self.cpu)
+                    #reg_num = self.cpu.iface.int_register.get_number('eax')
+                    #eax = self.cpu.iface.int_register.read(reg_num)
                     #self.lgr.debug('sysenterHap call %d at 0x%x, add cycle 0x%x' % (eax, eip, cycles))
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     self.sysenter_cycles.append(cycles)

@@ -29,10 +29,9 @@ class StackTrace():
         self.doTrace()
 
     def followCall(self, return_to):
-        eip = return_to - 8
         retval = None
-        # TBD use instruction length to confirm it is a true call
-        while retval is None and eip < return_to:
+        if self.cpu.architecture == 'arm':
+            eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if instruct[1].startswith(self.callnm):
                 parts = instruct[1].split()
@@ -41,15 +40,32 @@ class StackTrace():
                         dst = int(parts[1],16)
                     except:
                         retval = eip
-                        continue
+                        return retval
                     if self.soMap.isCode(dst):
                         retval = eip
-                    else:
-                        eip = eip+1
                 else:        
                     retval = eip
-            else:
-                eip = eip+1
+        else:
+            eip = return_to - 8
+            # TBD use instruction length to confirm it is a true call
+            while retval is None and eip < return_to:
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                if instruct[1].startswith(self.callnm):
+                    parts = instruct[1].split()
+                    if len(parts) == 2:
+                        try:
+                            dst = int(parts[1],16)
+                        except:
+                            retval = eip
+                            continue
+                        if self.soMap.isCode(dst):
+                            retval = eip
+                        else:
+                            eip = eip+1
+                    else:        
+                        retval = eip
+                else:
+                    eip = eip+1
         return retval
 
     def getJson(self):
@@ -66,6 +82,12 @@ class StackTrace():
         retval = []
         for i in range(count):
             retval.append(self.frames[i])
+        return retval
+
+    def getFrameIPs(self):
+        retval = []
+        for f in self.frames:
+            retval.append(f.ip)
         return retval
 
     def printTrace(self):

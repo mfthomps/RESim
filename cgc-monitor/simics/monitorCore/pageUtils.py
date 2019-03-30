@@ -85,13 +85,10 @@ def pageStart(start, page_size):
        page_start = start - boundary
     return page_start
 
-def setBitRange(initial, value, start, lgr):
-    shifted = value << start
-    retval = initial | shifted
-    lgr.debug('initial 0x%x value: 0x%x, start %d, shifted 0x%x retval 0x%x' % (initial, value, start, shifted, retval))
-    return retval
-
 def getPageBases(cpu, lgr, kernel_base):
+    if cpu.architecture == 'arm':
+        return getPageBasesArm(cpu, lgr, kernel_base)
+
     ENTRIES_PER_TABLE = 1024
     retval = []
     reg_num = cpu.iface.int_register.get_number("cr3")
@@ -125,7 +122,45 @@ def getPageBases(cpu, lgr, kernel_base):
         pdir_entry_addr += 4
         pdir_index += 1
     return retval
-    
+   
+def getPageBasesArm(cpu, lgr, kernel_base):
+    retval = []
+    ttbr = cpu.translation_table_base0
+    #print('ttbr is 0x%x' % ttbr)
+    base = memUtils.bitRange(ttbr, 14,31)
+    base_shifted = base << 14
+
+    #print('base is 0x%x, shifted 0x%x' % (base, base_shifted))
+    NUM_FIRST = 4096
+    NUM_SECOND = 256
+    first_index = 0
+    kernel_base = 0xc0000000
+    for i in range(NUM_FIRST):
+        first_addr = base_shifted | first_index*4
+        fld = SIM_read_phys_memory(cpu, first_addr, 4)
+        if fld != 0:
+            pta = memUtils.bitRange(fld, 10, 31)
+            pta_shifted = pta << 10
+            second_index = 0
+            for j in range(NUM_SECOND):
+                va = first_index << 20
+                va = va | (second_index << 12)
+                if va > kernel_base:
+                    break
+                second_addr = pta_shifted | second_index*4
+                sld = SIM_read_phys_memory(cpu, second_addr, 4)
+                db = memUtils.bitRange(sld, 0, 1)
+                if db != 0:
+                    pbase = memUtils.bitRange(sld, 12, 31)
+                    pbase_shifted = pbase << 12
+                    #print('va: 0x%x page base 0x%x' % (va, pbase_shifted))
+                    addr_info = PageAddrInfo(va, pbase_shifted, sld)
+                    retval.append(addr_info)
+                second_index += 1
+        first_index += 1
+    return retval
+
+ 
 def getPageBasesExtended(cpu, lgr, kernel_base):
     ENTRIES_PER_TABLE = 512
     WORD_SIZE = 8
@@ -228,6 +263,43 @@ def findPageTable(cpu, addr, lgr):
             return ptable_info
         else:
             return findPageTableExtended(cpu, addr, lgr)
+
+def findPageTableArm(cpu, va, lgr):
+    ptable_info = PtableInfo()
+    ttbr = cpu.translation_table_base0
+    base = memUtils.bitRange(ttbr, 14,31)
+    base_shifted = base << 14
+    
+    first_index = memUtils.bitRange(va, 20, 31)
+    first_shifted = first_index << 2
+    first_addr = base_shifted | first_shifted
+    ptable_info.pdir_addr = first_addr
+    #print('first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+    
+    fld = SIM_read_phys_memory(cpu, first_addr, 4)
+    if fld == 0:
+        return ptable_info
+    #ptable_info.ptable_protect = memUtils.testBit(fld, 2)
+    ptable_info.ptable_exists = True
+    pta = memUtils.bitRange(fld, 10, 31)
+    pta_shifted = pta << 10
+    #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
+    
+    second_index = memUtils.bitRange(va, 12, 19)
+    second_shifted = second_index << 2
+    second_addr = pta_shifted | second_shifted
+    ptable_info.ptable_addr = second_addr
+    sld = SIM_read_phys_memory(cpu, second_addr, 4)
+    #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
+    if sld == 0:
+        return ptable_info
+    
+    #ptable_info.page_protect = memUtils.testBit(sld, 2)
+    ptable_info.page_exists = True
+    small_page_base = memUtils.bitRange(sld, 12, 31)
+    s_shifted = small_page_base << 12
+    ptable_info.page_addr = s_shifted
+    return ptable_info 
 
 def findPageTableExtended(cpu, addr, lgr):
         WORD_SIZE = 8

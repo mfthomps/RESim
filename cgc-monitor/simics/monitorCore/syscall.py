@@ -202,10 +202,10 @@ class Syscall():
         self.lgr.debug('syscall doBreaks reset timeofdaycount')
         if self.callnum_list is None:
             if self.cpu.architecture == 'arm':
-                phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
-                self.lgr.debug('Syscall arm no callnum, set break at 0x%x phys 0x %x' % (self.param.arm_entry, phys))
-                #proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
-                proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
+                #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
+                self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
+                proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+                #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                 break_addrs.append(self.param.arm_entry)
                 syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, 'syscall'))
@@ -333,15 +333,6 @@ class Syscall():
         self.context_manager.setIdaMessage(ida_msg)
         return fname, fname_addr, flags, mode
 
-    def readSilly(self, exit_info):
-        # NOT USED
-        ''' run this alone to get the page after it is mapped, simics timing fu '''
-        exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
-        self.lgr.debug('readSilly got fid %s' % (exit_info.fname))
-        if exit_info.fname is None:
-            page_info = pageUtils.findPageTable(self.cpu, exit_info.fname_addr, self.lgr)
-            self.lgr.debug('readSilly, filename not yet at 0x%x... ptable: %s' % (exit_info.fname_addr, page_info.valueString()))
-
     def finishParseOpen(self, exit_info, third, forth, memory):
         ''' in case the file name is in memory that was not mapped when open call was issued '''
         cpu, comm, pid = self.task_utils.curProc() 
@@ -359,9 +350,6 @@ class Syscall():
             del self.finish_break[pid]
         else:
             self.lgr.debug('finishParseOpen pid %d got fid none, arm fu?' % (pid))
-            #SIM_break_simulation('fname is none at 0x%x' % exit_info.fname_addr)
-        #if exit_info.fname is None:
-        #    SIM_run_alone(self.readSilly, exit_info)
 
     def addElf(self, prog_string, pid):
         root_prefix = self.top.getRootPrefix()
