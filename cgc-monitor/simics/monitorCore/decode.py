@@ -27,7 +27,7 @@ from simics import *
 modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul']
 ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
 def modifiesOp0(op):
-    if op.startswith('mov') or op in modifiesOp0_list:
+    if op.startswith('mov') or op.startswith('cmov') or op in modifiesOp0_list:
         return True
     else: 
         return False

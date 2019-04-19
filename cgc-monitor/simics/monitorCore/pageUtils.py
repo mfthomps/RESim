@@ -216,7 +216,47 @@ def getPageEntrySize(cpu):
     else:
         return 8
 
+def findPageTableArm(cpu, va, lgr):
+    ptable_info = PtableInfo()
+    ttbr = cpu.translation_table_base0
+    base = memUtils.bitRange(ttbr, 14,31)
+    base_shifted = base << 14
+    
+    first_index = memUtils.bitRange(va, 20, 31)
+    first_shifted = first_index << 2
+    first_addr = base_shifted | first_shifted
+    ptable_info.pdir_addr = first_addr
+    #print('first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+    
+    fld = SIM_read_phys_memory(cpu, first_addr, 4)
+    if fld == 0:
+        return ptable_info
+    #ptable_info.ptable_protect = memUtils.testBit(fld, 2)
+    ptable_info.ptable_exists = True
+    pta = memUtils.bitRange(fld, 10, 31)
+    pta_shifted = pta << 10
+    #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
+    
+    second_index = memUtils.bitRange(va, 12, 19)
+    second_shifted = second_index << 2
+    second_addr = pta_shifted | second_shifted
+    ptable_info.ptable_addr = second_addr
+    sld = SIM_read_phys_memory(cpu, second_addr, 4)
+    #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
+    if sld == 0:
+        return ptable_info
+    
+    #ptable_info.page_protect = memUtils.testBit(sld, 2)
+    ptable_info.page_exists = True
+    small_page_base = memUtils.bitRange(sld, 12, 31)
+    s_shifted = small_page_base << 12
+    ptable_info.page_addr = s_shifted
+    return ptable_info 
+
 def findPageTable(cpu, addr, lgr):
+    if cpu.architecture == 'arm':
+        return findPageTableArm(cpu, addr, lgr)
+    else:
         ptable_info = PtableInfo()
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
@@ -263,43 +303,6 @@ def findPageTable(cpu, addr, lgr):
             return ptable_info
         else:
             return findPageTableExtended(cpu, addr, lgr)
-
-def findPageTableArm(cpu, va, lgr):
-    ptable_info = PtableInfo()
-    ttbr = cpu.translation_table_base0
-    base = memUtils.bitRange(ttbr, 14,31)
-    base_shifted = base << 14
-    
-    first_index = memUtils.bitRange(va, 20, 31)
-    first_shifted = first_index << 2
-    first_addr = base_shifted | first_shifted
-    ptable_info.pdir_addr = first_addr
-    #print('first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
-    
-    fld = SIM_read_phys_memory(cpu, first_addr, 4)
-    if fld == 0:
-        return ptable_info
-    #ptable_info.ptable_protect = memUtils.testBit(fld, 2)
-    ptable_info.ptable_exists = True
-    pta = memUtils.bitRange(fld, 10, 31)
-    pta_shifted = pta << 10
-    #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
-    
-    second_index = memUtils.bitRange(va, 12, 19)
-    second_shifted = second_index << 2
-    second_addr = pta_shifted | second_shifted
-    ptable_info.ptable_addr = second_addr
-    sld = SIM_read_phys_memory(cpu, second_addr, 4)
-    #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
-    if sld == 0:
-        return ptable_info
-    
-    #ptable_info.page_protect = memUtils.testBit(sld, 2)
-    ptable_info.page_exists = True
-    small_page_base = memUtils.bitRange(sld, 12, 31)
-    s_shifted = small_page_base << 12
-    ptable_info.page_addr = s_shifted
-    return ptable_info 
 
 def findPageTableExtended(cpu, addr, lgr):
         WORD_SIZE = 8
@@ -359,3 +362,81 @@ def findPageTableExtended(cpu, addr, lgr):
             return ptable_info
         else:
             lgr.error('addr_extended is zero?')
+
+def isIA32E(cpu):
+    reg_num = cpu.iface.int_register.get_number("cr4")
+    cr4 = cpu.iface.int_register.read(reg_num)
+    reg_num = cpu.iface.int_register.get_number("efer")
+    efer = cpu.ia32_efer
+    pae = memUtils.testBit(cr4, 5)
+    lme = memUtils.testBit(efer, 8)
+    print('efer is 0x%x  lme %d  pae %d' % (efer, lme, pae))
+    if pae and lme:
+        return True
+    else:
+        return False
+   
+def get40(cpu, addr, lgr):
+    try:
+        value = SIM_read_phys_memory(cpu, addr, 8)
+    except:
+        lgr.debug('nothing mapped at 0x%x' % addr)
+        return 0, 0, 0
+    retval = memUtils.bitRange(value, 12, 50) << 12
+    page_size = memUtils.testBit(value, 7) 
+    present = memUtils.testBit(value, 0) 
+    return retval, present, page_size
+
+def findPageTableIA32E(cpu, addr, lgr): 
+    '''
+    IA32E: CR3 is base address of the PML4 table, which is 512 entries, of 64bits per entry.  
+    Bits 47:39 of an address select the entry in the PML4 table.
+    '''
+    ptable_info = PtableInfo()
+    #lgr.debug('findPageTableIA32E addr 0x%x' % addr)
+    reg_num = cpu.iface.int_register.get_number("cr3")
+    cr3 = cpu.iface.int_register.read(reg_num)
+    pml4_entry = memUtils.bitRange(addr, 39, 47)
+    cr3_40 = memUtils.bitRange(cr3, 12, 50) << 12
+    #lgr.debug('cr3 is 0x%x  cr3_40 0x%x  pl4_entry %d' % (cr3, cr3_40, pml4_entry))
+
+    dir_ptr_base_addr = (pml4_entry * 8) + cr3_40
+    #lgr.debug('dir_ptr_base_addr 0x%x' % dir_ptr_base_addr)
+
+    dir_ptr_base, present, page_size = get40(cpu, dir_ptr_base_addr, lgr)
+    #lgr.debug('dir_ptr_base is 0x%x present %d page_size 0x%x' % (dir_ptr_base, present, page_size))
+
+    dir_ptr_entry = memUtils.bitRange(addr, 30, 38)
+    #lgr.debug('dir_ptr_entry is %d' % dir_ptr_entry)
+
+    dir_base_addr = dir_ptr_base + (dir_ptr_entry * 8)
+    #lgr.debug('dir_base_addr 0x%x' % dir_base_addr)
+    ptable_info.pdir_addr = dir_base_addr
+
+    dir_base, present, page_size = get40(cpu, dir_base_addr, lgr)                
+    #lgr.debug('dir_base 0x%x present %d page_size 0x%x' % (dir_base, present, page_size))
+    if dir_base == 0:
+        return ptable_info
+    else:
+        dir_entry = memUtils.bitRange(addr, 21, 29)
+        #lgr.debug('dir_entry %d' % dir_entry)
+        table_base_addr = dir_base + (dir_entry * 8)
+        #lgr.debug('table_base_addr 0x%x' % table_base_addr)
+        ptable_info.table_addr = table_base_addr
+        table_base, present, page_size = get40(cpu, table_base_addr, lgr)                
+         
+        if table_base == 0:
+            #lgr.debug('table_base could not be read from 0x%x' % table_base_addr)
+            return ptable_info
+        else:
+            #lgr.debug('table_base 0x%x' % table_base)
+            ptable_info.ptable_exists = present
+            table_entry = memUtils.bitRange(addr, 12, 20)
+            page_base_addr = table_base + (table_entry * 8)
+            #lgr.debug('page_base_addr 0x%x ' % (page_base_addr))
+            page_base, present, page_size = get40(cpu, page_base_addr, lgr) 
+            #lgr.debug('page_base 0x%x present %d' % (page_base, present))
+            ptable_info.page_addr = page_base_addr
+            ptable_info.page_exists = present
+
+    return ptable_info

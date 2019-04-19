@@ -30,6 +30,8 @@ if RUN_FROM_SNAP is None:
             done = True 
         count += 1
         print count
+#    print('NOW run the epirb')  
+#    run_command('run-command-file ./targets/qsp-arm/qsp-linux.simics')
     print('NOW run the vdr')  
     run_command('run-command-file ./targets/x86-x58-ich10/mft-vdr.simics')
 else:

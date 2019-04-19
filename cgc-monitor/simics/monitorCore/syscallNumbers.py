@@ -13,6 +13,8 @@ class SyscallNumbers():
                     parts = line.split()
                     if parts[0] != '#define':
                         continue
+                    if '__NR_syscall_max' in line:
+                        continue
                     nr = parts[1][5:]
                     try:
                         callnum = int(parts[2])
@@ -32,7 +34,7 @@ class SyscallNumbers():
                         except:
                             lgr.debug('expected base10 int in %s' % line)
                             continue
-                    lgr.debug('assign call # %d to %s' % (callnum, nr))
+                    #lgr.debug('assign call # %d to %s' % (callnum, nr))
                     self.syscalls[callnum] = nr
                     self.callnums[nr] = callnum
                      

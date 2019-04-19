@@ -30,7 +30,7 @@ SOCK_SEQPACKET  = 5
 SOCK_DCCP       = 6
 SOCK_PACKET     = 10
 
-socktype = ['dumb', 'SOCK_STREAM', 'SOCK_DGRAM', 'SOCK_RAW', 'SOCK_RDM', 'SOCK_SEQPACKET', 'SOCK_DCCP', 'SOCK_PACKET']
+socktype = ['dumb', 'SOCK_STREAM', 'SOCK_DGRAM', 'SOCK_RAW', 'SOCK_RDM', 'SOCK_SEQPACKET', 'SOCK_DCCP', 'UNUNSED1', 'UNUSED2', 'UNUSED3', 'SOCK_PACKET']
 
 SOCK_TYPE_MASK = 0xf
 AF_LOCAL = 1
@@ -42,6 +42,11 @@ FIONBIO = 0x5421
 FIONREAD = 0x541B
 
 F_DUPFD = 0 
+
+O_NONBLOCK  =   0x00004000
+O_CLOEXEC   =   0x02000000        
+
+
 
 class NetInfo():
     def __init__(self, ip, mask, broadcast, dev, label):
@@ -81,6 +86,8 @@ class NetAddresses():
 
 class SockStruct():
     def __init__(self, cpu, params, mem_utils, fd=None):
+        self.length = 0
+        self.flags = 0
         if fd is None:
             self.fd = mem_utils.readWord32(cpu, params)
             self.length = mem_utils.readWord32(cpu, params+8)

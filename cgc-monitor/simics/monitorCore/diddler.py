@@ -108,7 +108,7 @@ class Diddler():
             bad.  The "was" tells us a bad value, i.e., reason to run commands '''
         rm_this = None
         fiddle = self.fiddles[0]
-        #self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
+        self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
         if re.search(fiddle.match, s, re.M|re.I) is not None:
             self.lgr.debug('found match of %s in %s' % (fiddle.match, s))
             rm_this = fiddle
@@ -121,7 +121,7 @@ class Diddler():
         byte_string, byte_array = self.mem_utils.getBytes(cpu, count, addr)
         s = ''.join(map(chr,byte_array))
         if self.kind == 'sub_replace':
-            rm_this = self.subReplace(cpu, si, addr)
+            rm_this = self.subReplace(cpu, s, addr)
         elif self.kind == 'full_replace':
             rm_this = self.fullReplace(cpu, s, addr)
         elif self.kind == 'match_cmd':

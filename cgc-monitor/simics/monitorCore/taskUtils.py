@@ -95,7 +95,12 @@ class TaskUtils():
                 cmd = 'logical-to-physical fs:0x%x' % param.current_task
             else:
                 cmd = 'logical-to-physical 0x%x' % param.current_task
-            self.phys_current_task = SIM_run_command(cmd)
+            try:
+                self.phys_current_task = SIM_run_command(cmd)
+            except:
+                self.phys_current_task = 0
+                self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))
+                return None
         self.lgr.debug('TaskUtils init with current_task of 0x%x, phys: 0x%x' % (param.current_task, self.phys_current_task))
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
 
@@ -103,6 +108,8 @@ class TaskUtils():
         return self.phys_current_task
 
     def getCurTaskRec(self):
+        if self.phys_current_task == 0:
+            return 0
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         return cur_task_rec
 
@@ -117,7 +124,7 @@ class TaskUtils():
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
-        #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d' % (cur_task_rec, phys, pid))
+        #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid 
 
     def findSwapper(self):
@@ -448,7 +455,7 @@ class TaskUtils():
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
                     arg_string_list.append(arg_string.strip())
-                    #self.lgr.debug('readExecParamStrings on %s adding arg %s' % (self.cell_name, arg_string))
+                    #self.lgr.debug('readExecParamStrings adding arg %s' % (arg_string))
 
             prog_string = prog_string.strip()
             self.exec_addrs[pid].prog_name = prog_string
@@ -468,33 +475,44 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            #reg_num = cpu.iface.int_register.get_number(self.mem_utils.getESP())
-            #esp = cpu.iface.int_register.read(reg_num)
-            esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-
-            sptr = esp + 2*self.mem_utils.WORD_SIZE
-            argv = self.mem_utils.readPtr(cpu, sptr)
-            #SIM_break_simulation('proc args, sptr is 0x%x  esp 0x%x' % (sptr, esp))
-            while not done and i < limit:
-                xaddr = argv + mult*self.mem_utils.WORD_SIZE
-                arg_addr = self.mem_utils.readPtr(cpu, xaddr)
-                if arg_addr is not None and arg_addr != 0:
-                   #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
-                   arg_addr_list.append(arg_addr)
-                else:
-                   done = True
-                mult = mult + 1
-                i = i + 1
-            if syscall_info.calculated is not None:
-                ''' ebx not right?  use stack '''
-                sptr = esp + self.mem_utils.WORD_SIZE
-                prog_addr = self.mem_utils.readPtr(cpu, sptr)
-            elif cpu.architecture == 'arm':
+            if cpu.architecture == 'arm':
                 prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
-
+                argv = self.mem_utils.getRegValue(cpu, 'r1')
+                while not done and i < limit:
+                    xaddr = argv + mult*self.mem_utils.WORD_SIZE
+                    arg_addr = self.mem_utils.readPtr(cpu, xaddr)
+                    if arg_addr is not None and arg_addr != 0:
+                       #self.lgr.debug("getProcArgsFromStack ARM adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                       arg_addr_list.append(arg_addr)
+                    else:
+                       done = True
+                    mult = mult + 1
+                    i = i + 1
+                
+                #if pid == 841:
+                #    SIM_break_simulation('prog_addr is 0x%x' % prog_addr)
             else:
-                ''' sysenter or int80, trust ebx '''
-                prog_addr = self.mem_utils.getRegValue(cpu, 'ebx') 
+                esp = self.mem_utils.getRegValue(self.cpu, 'esp')
+                sptr = esp + 2*self.mem_utils.WORD_SIZE
+                argv = self.mem_utils.readPtr(cpu, sptr)
+                while not done and i < limit:
+                    xaddr = argv + mult*self.mem_utils.WORD_SIZE
+                    arg_addr = self.mem_utils.readPtr(cpu, xaddr)
+                    if arg_addr is not None and arg_addr != 0:
+                       #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                       arg_addr_list.append(arg_addr)
+                    else:
+                       done = True
+                    mult = mult + 1
+                    i = i + 1
+                if syscall_info.calculated is not None:
+                    ''' ebx not right?  use stack '''
+                    sptr = esp + self.mem_utils.WORD_SIZE
+                    prog_addr = self.mem_utils.readPtr(cpu, sptr)
+
+                else:
+                    ''' sysenter or int80, trust ebx '''
+                    prog_addr = self.mem_utils.getRegValue(cpu, 'ebx') 
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
         else:
@@ -640,6 +658,13 @@ class TaskUtils():
             frame['param4'] = self.mem_utils.getRegValue(cpu, 'r3')
             frame['param5'] = self.mem_utils.getRegValue(cpu, 'r4')
             frame['param6'] = self.mem_utils.getRegValue(cpu, 'r5')
+        elif self.mem_utils.WORD_SIZE == 8:
+            frame['param1'] = self.mem_utils.getRegValue(cpu, 'rdi')
+            frame['param2'] = self.mem_utils.getRegValue(cpu, 'rsi')
+            frame['param3'] = self.mem_utils.getRegValue(cpu, 'rdx')
+            frame['param4'] = self.mem_utils.getRegValue(cpu, 'r10')
+            frame['param5'] = self.mem_utils.getRegValue(cpu, 'r8')
+            frame['param6'] = self.mem_utils.getRegValue(cpu, 'r9')
         else:
             frame['param1'] = self.mem_utils.getRegValue(cpu, 'ebx')
             frame['param2'] = self.mem_utils.getRegValue(cpu, 'ecx')

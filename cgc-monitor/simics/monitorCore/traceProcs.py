@@ -15,6 +15,11 @@ class Pinfo():
         ''' dict of lists of FDs for sockets indexed by their address, file name, etc. '''
         self.sockets = {}
 
+class FileWatch():
+    def __init__(self, path, outfile):
+        self.path = path
+        self.outfile = outfile
+
 class TraceProcs():
     def __init__(self, lgr, proc_list, run_from_snap=None):
         self.lgr = lgr
@@ -140,7 +145,7 @@ class TraceProcs():
             self.plist[pid].prog = comm
         return True
 
-    def setName(self, pid, prog, args, quiet=False):
+    def setName(self, pid, prog, args, quiet=True):
         pid = str(pid)
         if pid not in self.plist:
             if not quiet:
@@ -160,7 +165,10 @@ class TraceProcs():
             newproc = Pinfo(pid)
             newproc.prog = comm
             self.plist[pid] = newproc
-        self.plist[pid].files[filename] = [fd]
+        if filename in self.plist[pid].files:
+            self.plist[pid].files[filename].append(fd)
+        else:
+            self.plist[pid].files[filename] = [fd]
 
     def pipe(self, pid, fd1, fd2):
         pid = str(pid)
@@ -309,9 +317,13 @@ class TraceProcs():
             self.plist[parent_pid].children.append(child_pid)
         self.plist[child_pid].parent = child_pid
         for fname in self.plist[parent_pid].files:
-            if len(self.plist[parent_pid].files[fname]) > 0:
-                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))
-                self.plist[child_pid].files[fname] = list(self.plist[parent_pid].files[fname])
+            self.plist[child_pid].files[fname] = []
+            for fd in self.plist[parent_pid].files[fname]:
+                self.plist[child_pid].files[fname].append(fd)
+                #self.lgr.debug('traceProcs copyOpen file %s from %s to %s fd: %d' % (fname, parent_pid, child_pid, fd))
+            #if len(self.plist[parent_pid].files[fname]) > 0:
+            #    self.lgr.debug('traceProcs copyOpen file %s from %s to %s' % (fname, parent_pid, child_pid))
+            #    self.plist[child_pid].files[fname] = list(self.plist[parent_pid].files[fname])
         for pname in self.plist[parent_pid].rpipe:
             if len(self.plist[parent_pid].rpipe[pname]) > 0:
                 #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))
@@ -414,3 +426,13 @@ class TraceProcs():
             info = self.plist[pid].args
             if info is not None and '/bin/ip addr add' in self.plist[pid].args:
                 print info.args
+
+
+    def getFileName(self, pid, fd):
+        pid = str(pid)
+        if pid in self.plist:
+            for f in self.plist[pid].files:
+                #self.lgr.debug('traceProcs look for file for fd %d file %s' % (fd, f))
+                if fd in self.plist[pid].files[f]:
+                    return f
+        return None

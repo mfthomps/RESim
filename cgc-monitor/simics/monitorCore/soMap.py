@@ -7,10 +7,10 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, context_manager, task_utils, root_prefix, run_from_snap, lgr):
+    def __init__(self, context_manager, task_utils, targetFS, run_from_snap, lgr):
         self.context_manager = context_manager
         self.task_utils = task_utils
-        self.root_prefix = root_prefix
+        self.targetFS = targetFS
         self.so_addr_map = {}
         self.so_file_map = {}
         self.lgr = lgr
@@ -97,11 +97,8 @@ class SOMap():
             self.so_addr_map[pid] = {}
             self.so_file_map[pid] = {}
 
-        sindex = 0
-        if fpath.startswith('/'):
-            sindex = 1
-        full_path = os.path.join(self.root_prefix, fpath[sindex:])
-        self.lgr.debug('soMap addSO, prefix is %s fpath is %s  full: %s' % (self.root_prefix, fpath, full_path))
+        full_path = self.targetFS.getFull(fpath)
+        self.lgr.debug('soMap addSO, fpath is %s  full: %s' % (fpath, full_path))
         text_seg = elfText.getText(full_path)
         if text_seg is None:
             self.lgr.debug('SOMap addSO, no file at %s' % full_path)
@@ -145,9 +142,12 @@ class SOMap():
                     self.lgr.debug('SOMap handleExit new pid %d added to SOmap' % tpid)
                     self.so_addr_map[tpid] = self.so_addr_map[pid]
                     self.so_file_map[tpid] = self.so_file_map[pid]
-                    self.text_start[tpid] = self.text_start[pid]
-                    self.text_end[tpid] = self.text_end[pid]
-                    self.text_prog[tpid] = self.text_prog[pid]
+                    if tpid in self.text_start and pid in self.text_start:
+                        self.text_start[tpid] = self.text_start[pid]
+                        self.text_end[tpid] = self.text_end[pid]
+                        self.text_prog[tpid] = self.text_prog[pid]
+                    else:
+                        self.lgr.debug('SOMap handle exit, missing text_start entry pid: %d tpid %d' % (pid, tpid))
         else:
             self.lgr.debug('SOMap handleExit pid %d NOT in pidlist' % pid)
         del self.so_addr_map[pid]

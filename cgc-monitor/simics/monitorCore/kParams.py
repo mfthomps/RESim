@@ -1,8 +1,7 @@
 class Kparams():
-    def __init__(self, cpu):
+    def __init__(self, cpu, word_size=4):
         ''' assumptions '''
         #self.kernel_base = 3221225472
-        self.kernel_base = 0xc0000000
 
         if cpu.architecture == 'arm':
             self.ram_base = 268435456
@@ -10,6 +9,17 @@ class Kparams():
         else:
             self.ram_base = 0
         self.stack_size = 8192
+
+        if word_size == 4:
+            self.kernel_base = 0xc0000000
+        else:
+            kernel_base = 0xffffffff80000000
+            self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
+            #self.cur_task_offset_into_gs = 0xc700
+            #self.cur_task_offset_into_gs = 0xa748
+            self.cur_task_offset_into_gs = 0xa780
+
+
         self.ts_next_relative = True
         self.ts_state = None
         self.ts_active_mm = None
@@ -30,7 +40,10 @@ class Kparams():
         # vdr
         #self.current_task = 0xc2001454
         self.current_task = None
-        self.current_task_fs = True
+        if word_size == 4:
+            self.current_task_fs = True
+        else:
+            self.current_task_fs = False
         # int80 goes here
         self.sys_entry = None
         # sysenter instruction vectors here

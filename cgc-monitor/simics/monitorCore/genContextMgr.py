@@ -455,6 +455,7 @@ class GenContextMgr():
         self.debugging_pid = debugging_pid
         self.debugging_cellname = debugging_cellname
         self.debugging_cell = self.top.getCell()
+        self.pid_cache.append(debugging_pid)
 
     def setExitBreak(self, cpu):
         ''' watch for exit of this process, to reinit monitoring '''    

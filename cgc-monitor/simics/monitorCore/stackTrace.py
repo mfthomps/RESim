@@ -8,12 +8,13 @@ class StackTrace():
             self.fname = fname
             self.instruct = instruct
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, lgr):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, lgr):
         self.top = top
         self.cpu = cpu
         self.pid = pid
         self.lgr = lgr
         self.soMap = soMap
+        self.targetFS = targetFS
         self.frames = []
         self.mem_utils = mem_utils
         self.task_utils = task_utils
@@ -163,10 +164,7 @@ class StackTrace():
                                 fname, start, end = self.soMap.getSOInfo(call_to)
                                 #self.lgr.debug('so checj of %s' % fname)
                                 if fname is not None:
-                                    sindex = 0
-                                    if fname.startswith('/'):
-                                        sindex = 1
-                                    full_path = os.path.join(self.top.getRootPrefix(), fname[sindex:])
+                                    full_path = self.targetFS.getFull(fname)
                                     self.ida_funs.add(full_path, start)
                             so_checked.append(call_to) 
                         if self.ida_funs.isFun(call_to):
@@ -218,10 +216,7 @@ class StackTrace():
         if self.ida_funs is not None and not self.ida_funs.isFun(eip):
             fname, start, end = self.soMap.getSOInfo(eip)
             if fname is not None:
-                sindex = 0
-                if fname.startswith('/'):
-                    sindex = 1
-                full = os.path.join(self.top.getRootPrefix, fname[sindex:])
+                full = self.targetFS.getFull(fname)
                 self.lgr.debug('so check of %s full %s' % (fname,full))
                 self.ida_funs.add(full, start)
 

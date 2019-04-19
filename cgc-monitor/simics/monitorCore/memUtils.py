@@ -95,10 +95,9 @@ class memUtils():
             for i in range(13):
                 r = 'R%d' % i
                 self.regs[r] = r
-            self.regs['SP'] = 'SP'
-            self.regs['PC'] = 'PC'
-            self.regs['LR'] = 'LR'
-            self.regs['PSR'] = 'PSR'
+            self.regs['sp'] = 'sp'
+            self.regs['pc'] = 'pc'
+            self.regs['psr'] = 'psr'
             self.regs['syscall_num'] = 'r7'
             self.regs['syscall_ret'] = 'r0'
             self.regs['eip'] = 'pc'
@@ -106,20 +105,18 @@ class memUtils():
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
             
-
-
     def v2p(self, cpu, v):
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
             if phys_block.address != 0:
-                return phys_block.address
+                return self.getUnsigned(phys_block.address)
             else:
                 if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
-                    return phys_addr
+                    return self.getUnsigned(phys_addr)
                 elif cpu.architecture == 'arm':
                     phys_addr = v - (self.param.kernel_base - self.param.ram_base)
-                    return phys_addr
+                    return self.getUnsigned(phys_addr)
                 else:
                     return 0
                     
@@ -146,7 +143,11 @@ class memUtils():
             return None
         if phys_block.address == 0:
             return None
-        read_data = readPhysBytes(cpu, phys_block.address, maxlen)
+        return self.readStringPhys(cpu, phys_block.address, maxlen)
+
+    def readStringPhys(self, cpu, paddr, maxlen):
+        s = ''
+        read_data = readPhysBytes(cpu, paddr, maxlen)
         for v in read_data:
             if v == 0:
                 del read_data
@@ -252,10 +253,29 @@ class memUtils():
             return 'rip'
 
     def getCurrentTask(self, param, cpu):
-        if cpu.architecture == 'arm':
-            return self.getCurrentTaskARM(param, cpu)
+      
+        if self.WORD_SIZE == 4:
+            if cpu.architecture == 'arm':
+                return self.getCurrentTaskARM(param, cpu)
+            else:
+                return self.getCurrentTaskX86(param, cpu)
+        elif self.WORD_SIZE == 8:
+            gs_b700 = self.getGSCurrent_task_offset(cpu)
+            #phys_addr = self.v2p(cpu, gs_b700)
+            #self.current_task[cpu] = phys_addr
+            #self.current_task_virt[cpu] = gs_b700
+            ct_addr = self.v2p(cpu, gs_b700)
+            self.lgr.debug('getCurrentTask gs_b700 is 0x%x phys is 0x%x' % (gs_b700, ct_addr))
+            try:
+                ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+            except:
+                self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped?' % ct_addr)
+                return None
+            self.lgr.debug('getCurrentTask ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
+            return ct
         else:
-            return self.getCurrentTaskX86(param, cpu)
+            print('unknown word size %d' % self.WORD_SIZE)
+            return None
 
     def kernel_v2p(self, param, cpu, vaddr):
         return vaddr - param.kernel_base + param.ram_base
@@ -289,12 +309,12 @@ class memUtils():
             esp = self.readPtr(cpu, tr_base + 4)
             if esp is None:
                 return None
-            #print('kernel mode, esp is 0x%x' % esp)
+            print('kernel mode, esp is 0x%x' % esp)
         else:
             esp = self.getRegValue(cpu, 'esp')
-            #print('user mode, esp is 0x%x' % esp)
+            print('user mode, esp is 0x%x' % esp)
         ptr = esp - 1 & ~(param.stack_size - 1)
-        #print('ptr is 0x%x' % ptr)
+        print('ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
         #print('ret_ptr is 0x%x' % ret_ptr)
         check_val = self.readPtr(cpu, ret_ptr)
@@ -347,3 +367,8 @@ class memUtils():
         phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
 
+    def getGSCurrent_task_offset(self, cpu):
+        gs_base = cpu.ia32_gs_base
+        retval = gs_base + self.param.cur_task_offset_into_gs
+        self.lgr.debug('getGSCurrent_task_offset gs base is 0x%x, plus current_task offset is 0x%x' % (gs_base, retval))
+        return retval

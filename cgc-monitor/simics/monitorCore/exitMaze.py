@@ -89,6 +89,7 @@ class ExitMaze():
         self.breakout_addr = None
         self.function_ret = None
         self.just_return = False
+        self.compare_hap = None
 
     def mazeReturn(self, was_running=False):
         if self.function_ret is None:
@@ -350,7 +351,7 @@ class ExitMaze():
                 if next_dest in self.instructs:
                     retval = True
                     self.bumps.append(ip)
-                    self.lgr.debug('exitMaze isBump 0x%x leads 0x%x which is nowhere new' % (new_dest, dest))
+                    self.lgr.debug('exitMaze isBump 0x%x leads 0x%x which is nowhere new' % (next_dest, dest))
             elif instruct[1].startswith('j'):
                 op = instruct[1].split()[1]
                 self.lgr.debug('exitMaze isBump ip 0x%x is jxx op is %s' % (ip, op))
@@ -470,7 +471,7 @@ class ExitMaze():
         #self.top.showHaps()
         #SIM_run_command('system-perfmeter')
         if then_run:
-            self.lgr.debug('ExitMaze Try to breakout, will continue')
+            self.lgr.debug('ExitMaze pid:%d Try to breakout, will continue' % self.pid)
             SIM_run_command('c')
 
     def rmAllBreaks(self):
