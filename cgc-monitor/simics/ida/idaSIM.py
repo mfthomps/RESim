@@ -17,13 +17,20 @@ class IdaSIM():
         self.reg_list = reg_list
         self.registerMath = registerMath
         self.origAnalysis = origAnalysis.OrigAnalysis(idc.GetInputFile())
+        proc_info = idaapi.get_inf_structure()
+        if proc_info.procName == 'ARM':
+            self.PC='pc'
+            self.SP='sp'
+        else:
+            self.PC='eip'
+            self.SP='esp'
 
     def getOrigAnalysis(self):
         return self.origAnalysis
 
     def doRevToCursor(self):
         cursor = idc.ScreenEA()
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         if cursor == curAddr:
             print 'attempt to go back to where you are ignored'
             return
@@ -34,7 +41,7 @@ class IdaSIM():
         self.signalClient()
 
     def XXXXXXXXXXXXXXXsignalClient(self, norev=False):
-        start_eip = idc.GetRegValue("EIP")
+        start_eip = idc.GetRegValue(self.PC)
         if not norev:
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.rev1()");')
             eip = gdbProt.getEIPWhenStopped()
@@ -44,14 +51,14 @@ class IdaSIM():
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         idaapi.step_into()
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        new_eip = idc.GetRegValue("EIP")
+        new_eip = idc.GetRegValue(self.PC)
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
             print('in kernel, run to user')
         self.updateStackTrace()
 
     def signalClient(self, norev=False):
-        start_eip = idc.GetRegValue("EIP")
+        start_eip = idc.GetRegValue(self.PC)
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         if norev:
             idaapi.step_into()
@@ -71,7 +78,7 @@ class IdaSIM():
         idc.RefreshDebuggerMemory()
 
 
-        new_eip = idc.GetRegValue("EIP")
+        new_eip = idc.GetRegValue(self.PC)
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
             print('in kernel, run to user')
@@ -93,7 +100,7 @@ class IdaSIM():
     
     def doRevStepOver(self):
         #print 'in doRevStepOver'
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         prev_eip = idc.PrevHead(curAddr)
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
@@ -109,7 +116,7 @@ class IdaSIM():
     def doRevStepInto(self):
         #print 'in doRevStepInto'
         #eip = reverseStepInstruction()
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         prev_eip = idc.PrevHead(curAddr)
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
@@ -125,7 +132,7 @@ class IdaSIM():
     def doRevFinish(self):
         #print 'doRevFinish'
         #doRevCommand('uncall-function')
-        cur_addr = idc.GetRegValue("EIP")
+        cur_addr = idc.GetRegValue(self.PC)
         f = idc.GetFunctionAttr(cur_addr, idc.FUNCATTR_START)
         if f != idaapi.BADADDR: 
             print('doRevFinish got function start at 0x%x, go there, and further back 1' % f) 
@@ -142,7 +149,7 @@ class IdaSIM():
     '''
     def doReverse(self, extra_back=None):
         print 'in doReverse'
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         #goNowhere()
         #print('doReverse, back from goNowhere curAddr is %x' % curAddr)
         isBpt = idc.CheckBpt(curAddr)
@@ -191,7 +198,7 @@ class IdaSIM():
     Run backwards until we find the most recent write to the current SP
     '''
     def wroteToSP(self):
-        sp = idc.GetRegValue("ESP")
+        sp = idc.GetRegValue(self.SP)
         print 'Running backwards to previous write to ESP:0x%x' % sp
         self.wroteToAddress(sp)
      
@@ -207,7 +214,7 @@ class IdaSIM():
     def getUIAddress(self, prompt):    
         value = self.registerMath()
         if value is None:
-            value = idc.GetRegValue("ESP")
+            value = idc.GetRegValue(self.SP)
         target_addr = idc.AskAddr(value, prompt)
         return target_addr
     
@@ -242,7 +249,7 @@ class IdaSIM():
         if eip >=  self.kernel_base:
             print('previous syscall wrote to address 0x%x' % target_addr)
         else:
-            curAddr = idc.GetRegValue("EIP")
+            curAddr = idc.GetRegValue(self.PC)
             #print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
             print('Previous instruction  wrote to 0x%x' % (target_addr))
         # why does the next instruction never return?
@@ -262,7 +269,7 @@ class IdaSIM():
         if eip >=  self.kernel_base:
             print('previous is as far back as we can trace content of address 0x%x' % target_addr)
         else:
-            curAddr = idc.GetRegValue("EIP")
+            curAddr = idc.GetRegValue(self.PC)
             print('Current instruction (0x%x) is as far back as we can trace 0x%x' % (curAddr, target_addr))
         # why does the next instruction never return?
         #curAddr = idc.GetRegValue("EIP")
@@ -300,7 +307,7 @@ class IdaSIM():
         eip = gdbProt.getEIPWhenStopped(2)
         #gdbProt.stepWait()
         self.signalClient()
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         print('Current instruction (0x%x) wrote to reg %s' % (curAddr, highlighted))
         return eip
         
@@ -323,7 +330,7 @@ class IdaSIM():
         eip = gdbProt.getEIPWhenStopped(2)
         #gdbProt.stepWait()
         self.signalClient()
-        curAddr = idc.GetRegValue("EIP")
+        curAddr = idc.GetRegValue(self.PC)
         print('Current instruction (0x%x) is as far back as we can trace reg %s' % (curAddr, highlighted))
         self.showSimicsMessage()
         bookmark_list = self.bookmark_view.updateBookmarkView()
@@ -431,7 +438,7 @@ class IdaSIM():
         self.signalClient()
     
     def runToSyscall(self):
-            value = AskLong(0, "Syscall number?")
+            value = idc.AskLong(0, "Syscall number?")
             print('run to syscall of %d' % value)
             if value == 0:
                 simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToSyscall()");') 
@@ -440,14 +447,14 @@ class IdaSIM():
                
             eip = gdbProt.getEIPWhenStopped(kernel_ok=True)
             #print('runtoSyscall, stopped at eip 0x%x, now run to user space.' % eip)
-            showSimicsMessage()
+            self.showSimicsMessage()
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
             eip = gdbProt.getEIPWhenStopped()
             #print('runtoSyscall, stopped at eip 0x%x, then stepwait.' % eip)
             #gdbProt.stepWait()
             self.signalClient(norev=True)
             eax = idc.GetRegValue("EAX")
-            print('Syscall result: %d' % int32(eax))
+            print('Syscall result: %d' % int(eax))
             #print('runtoSyscall rev over')
             #doRevStepOver()
             #print('runtoSyscall done')
@@ -464,7 +471,7 @@ class IdaSIM():
             print('revtoSyscall done')
     
     def revBlock(self):
-        cur_addr = idc.GetRegValue("EIP")
+        cur_addr = idc.GetRegValue(self.PC)
         f = idaapi.get_func(cur_addr)
         if f is None:
             print('Ida analysis sees no function, cannot perform this function')
@@ -551,6 +558,19 @@ class IdaSIM():
         self.signalClient(norev=True)
         self.showSimicsMessage()
 
+    def runToWrite(self):
+        print('runToWrite')
+        result = idc.AskStr('?', 'String')
+        if result is None:
+            return
+        command = "@cgc.runToWrite('%s')" % result
+        print('command is %s' % command)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        eip = gdbProt.getEIPWhenStopped()
+        print('runToWrite %s, ended at eip 0x%x' % (result, eip))
+        self.signalClient(norev=True)
+        self.showSimicsMessage()
+
     def runToConnect(self):
         print('runToConnect')
         result = idc.AskStr('?', 'Network address as ip:port (or regex)')
@@ -619,7 +639,7 @@ class IdaSIM():
         #print('in doInto')
         idaapi.step_into()
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        cur_addr = idc.GetRegValue("EIP")
+        cur_addr = idc.GetRegValue(self.PC)
         if cur_addr > self.kernel_base:
             self.runToUserSpace()
     
@@ -627,7 +647,7 @@ class IdaSIM():
         #print('in doStepOver')
         idaapi.step_over()
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        cur_addr = idc.GetRegValue("EIP")
+        cur_addr = idc.GetRegValue(self.PC)
         if cur_addr > self.kernel_base:
             self.runToUserSpace()
         

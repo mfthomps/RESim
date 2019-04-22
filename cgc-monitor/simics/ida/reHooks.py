@@ -72,6 +72,7 @@ class DataWatchHandler(idaapi.action_handler_t):
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, 0x%s)");' % (addr, count)) 
             eip = gdbProt.getEIPWhenStopped()
             self.isim.signalClient()
+            self.isim.showSimicsMessage()
 
         # This action is always available.
         def update(self, ctx):
@@ -114,18 +115,9 @@ class DisHandler(idaapi.action_handler_t):
         # Disassemble SO
         def activate(self, ctx):
             eip = idc.ScreenEA()
-            self.isim.getOrigAnalysis().origFun(eip)
-            '''
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getSO(0x%x)");' % eip) 
-            print('will analyze: %s' % simicsString)
-            sofile, start_end = simicsString.rsplit(':', 1)
-            start, end = start_end.split('-')
-            start_h = int(start, 16)
-            end_h = int(end, 16)
-            idaapi.auto_mark_range(start_h, end_h, 25)
-            idaapi.autoWait()
+            fun_eip = self.isim.getOrigAnalysis().origFun(eip)
+               
             return 1
-            '''
 
         # This action is always available.
         def update(self, ctx):
@@ -286,7 +278,8 @@ class Hooks(idaapi.UI_Hooks):
                 #line = form.GetCurrentLine()
                 pass
             elif idaapi.get_tform_type(form) == idaapi.BWN_DISASM:
-                regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
+                #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
+                regs = idaapi.ph_get_regnames()
                 idaapi.attach_action_to_popup(form, popup, "revCursor:action", 'RESim/')
                 idaapi.attach_action_to_popup(form, popup, "dis:action", 'RESim/')
 

@@ -150,7 +150,7 @@ class bookmarkView(simplecustviewer_t):
     
     def askSetBookmark(self):
         #print('askSetBookmark')
-        addr = idc.GetRegValue("EIP")
+        addr = idc.GetRegValue(self.isim.PC)
         instruct = idc.GetDisasm(addr)
         if ';' in instruct:
             instruct, dumb = instruct.rsplit(';', 1)

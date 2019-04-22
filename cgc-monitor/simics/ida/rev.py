@@ -23,7 +23,8 @@ from idaapi import Choose
     The script installs its functions as a hotkeys. 
     See showHelp below
 '''
-reg_list =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
+#reg_list =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
+reg_list = idaapi.ph_get_regnames()
 kernel_base =  0xc0000000
 
 def showHelp(prompt=False):
