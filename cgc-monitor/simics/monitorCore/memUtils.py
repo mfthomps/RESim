@@ -36,7 +36,7 @@ def readPhysBytes(cpu, paddr, count):
         raise valueError('failed to read %d bytes from 0x%x' % (count, paddr))
 
 def getCPL(cpu):
-    print('arch %s' % cpu.architecture)
+    #print('arch %s' % cpu.architecture)
     if cpu.architecture == 'arm':
         ''' TBD FIX this! '''
         reg_num = cpu.iface.int_register.get_number("pc")
