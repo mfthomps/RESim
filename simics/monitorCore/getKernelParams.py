@@ -31,7 +31,7 @@ from simics import *
 import linuxParams
 import memUtils
 import taskUtils
-import utils
+import resim_utils
 import kParams
 import pickle
 class GetKernelParams():
@@ -46,7 +46,7 @@ class GetKernelParams():
             word_size = 8
         print('using target of %s' % self.target)
         self.log_dir = '/tmp'
-        self.lgr = utils.getLogger('getKernelParams', self.log_dir)
+        self.lgr = resim_utils.getLogger('getKernelParams', self.log_dir)
         self.param = kParams.Kparams(self.cpu, word_size)
         self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS

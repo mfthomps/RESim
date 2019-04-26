@@ -29,11 +29,8 @@ derived from cgcMonitor, which was developed for the DARPA Cyber Grand Challenge
 from simics import *
 import os
 import struct
-import utils
-import linuxParams
+import resim_utils
 import memUtils
-#import kernelInfo
-#import linuxProcessUtils
 import taskUtils
 import genContextMgr
 import bookmarkMgr
@@ -164,7 +161,7 @@ class GenMonitor():
         '''
         remove all previous breakpoints.  
         '''
-        self.lgr = utils.getLogger('noname', os.path.join(self.log_dir, 'monitors'))
+        self.lgr = resim_utils.getLogger('noname', os.path.join(self.log_dir, 'monitors'))
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
         SIM_run_command("delete -all")
         self.target = os.getenv('RESIM_TARGET')
@@ -176,11 +173,15 @@ class GenMonitor():
         if param_file is not None:
             print('Using params from %s' % param_file)
             self.lgr.debug('Using params from %s' % param_file)
+            if not os.path.isfile(param_file):
+                print('Could not find param file at %s' % param_file)
+                return
             self.param = pickle.load( open(param_file, 'rb') ) 
             self.lgr.debug(self.param.getParamString())
             #print('param next %s  comm %s' % (str(self.param.ts_next), str(self.param.ts_comm)))
         else:
-            self.param = linuxParams.linuxParams()
+            print('RESIM_PARAM env not set to parameter file')
+            return
         self.os_type = os.getenv('OS_TYPE')
         if self.os_type is None:
             self.os_type = 'LINUX32'
