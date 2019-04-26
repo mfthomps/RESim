@@ -1,7 +1,0 @@
-<!ELEMENT service_master (cache, clear_cache, workspace, cb_dir, cb_host, service_host)>
-<!ELEMENT cache (#PCDATA)>
-<!ELEMENT clear_cache (#PCDATA)>
-<!ELEMENT workspace (#PCDATA)>
-<!ELEMENT cb_dir (#PCDATA)>
-<!ELEMENT cb_host (#PCDATA)>
-<!ELEMENT service_host (#PCDATA)>

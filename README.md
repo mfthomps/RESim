@@ -1,22 +1,23 @@
-# cgc-monitor
-The Cyber Grand Challenge forensics platform and automated analysis tools based on Simics.
-The CGC Monitor provides two primary functions: 1)forensic analysis for purposes of vetting software submissions; 
-and, 2) automated support for analysis of CGC binaries via an Ida Pro gdb client.  Both functions rely on the Simics full system 
-simulator.  This paper describes the CGC Monitor https://www.dfrws.org/sites/default/files/session-files/paper_cyber_grand_challenge_cgc_monitor_-_a_vetting_system_for_the_darpa_cyber_grand_challenge.pdf
+# RESim
+## Reverse engineering using a full system simulator.
 
-The CGC Monitor lacks complete documentation, though the basic chain of scripts and dependencies can be derived by starting with:
-zk/monitorUtils/cgc-monitor.md to  understand the forensic vetting function used in CFE; and with
-idaClient/README_IDA_CLIENT.md for the analyst functions. The Ida client is also summerized in [idaClient.pdf](idaClient.pdf)
+RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics'[^1] 
+platform’s high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.
 
-A brief summary of the high level directories follows:
+[^1]Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.
 
-* idaClient -- scripts used on a client computer to interact with a CGC Monitor
-* simics/monitorCore -- the primary Simics scripts that provide monitoring of software
-* simics/simicsScripts -- utilties to start the monitor and manage the monitor, including ts disk image files
-* simics/ida -- Ida Python scripts used by the Ida Pro client.
-* simics/slaveInstall -- utilities to help manage provisioning of a CGC Monitor slave
-* zk -- utilities and services required by the monitor, including software that runs on emulated infrastructure
-* game_notify -- interacts with CGC game infrastructure to obtain data to be vetted.
-* scoreUtils -- utilities for analysis of CFE artifacts
+Broadly, RESim aids reverse engineering of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of kernel hosting the processes.
 
-A demonstration of the Ida Client is at https://www.youtube.com/watch?v=jpH_PZhwAL0
+RESim also provides interactive visibility into individual executing programs through use of a 
+disassembler/debugger that drives the running simulation.  The disassembler/debugger
+allows setting breakpoints to pause the simulation at selected events in either future time, or past time.  For 
+example, RESim can direct the simulation state to reverse until the most recent modification of a selected memory address.   RESim lets the analyst switch between different threads within a process.  Reloadable checkpoints may be generated at any point during system execution.  
+A RESim simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicity modify memory or register content, and can also dynamically augment memory 
+based on system events, e.g., change a password file entry when read by the *su* program.
+
+Analysis is performed entirely through observation of the simulated target system’s memory and processor state, 
+without need for shells, software injection, or kernel symbol tables.   The analysis is said to be *external* because the analysis observation functions have no effect on the state of the simulated system.
+
+RESim is based on a software vetting and forensic analysis platform created for the DARPA Cyber Grand Challenge.  That repo is here:
+https://github.com/mfthomps/cgc-monitor
+

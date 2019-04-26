@@ -1,5 +1,0 @@
-Host localhost
-  HostName localhost
-  User vagrant
-  IdentityFile /home/mike/.ssh/vagrant_insecure_key
-

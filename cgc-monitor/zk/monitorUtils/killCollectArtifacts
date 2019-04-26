@@ -1,9 +1,0 @@
-#!/bin/bash
-PROC=$(ps aux | grep '[c]ollectArtifacts' | grep -v tail | awk '{print $2}')
-if [ $? -eq 0 ]; then
-    echo proc to kill is $PROC
-    if [ ! -z "$PROC" ]; then
-       kill $PROC
-    fi
-fi
-

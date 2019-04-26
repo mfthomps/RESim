@@ -1,2 +1,0 @@
-# -*- Python -*-
-['freeBSD_tracker', {'version_string': 'FreeBSD', 'ts_indirect': True, 'ts_next_relative': True, 'kernel_base': 0xc0000000, 'ram_base': 0, 'tracker_version': 4114, 'ts_offsets': {'mm': 0xdb, 'active_mm': 468, 'parent': 0x7c, 'sibling_list_head': 540, 'tgid': 0x224, 'group_leader': 548, 'pid': 0x68, 'next': 0, 'real_parent': 524, 'state': 0x64, 'children_list_head': 532, 'comm': 0x210, 'thread_group_list_head': 604, 'prev': 4}, 'thread_frame': 0x274, 'thread_retval1': 0x250, 'stack_size': 8192, 'pargs': 0x22c}]

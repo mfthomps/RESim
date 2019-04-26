@@ -1,9 +1,0 @@
-#/bin/bash
-sudo /etc/init.d/logUpdateService stop
-sudo /etc/init.d/sqlUpdateService stop
-cd ../py
-cleanCBs
-rebuildSqlTables
-#./rebuildDumbRepo.py
-sudo /etc/init.d/logUpdateService start
-sudo /etc/init.d/sqlUpdateService start
