@@ -1,0 +1,60 @@
+add-directory "%script%"
+$cpu_class="core-i7-single"
+if not defined rtc_time     {$rtc_time     = "2019-4-25 14:00:00 UTC"}
+if not defined OS_TYPE     {$OS_TYPE     = "linux"}
+if not defined port1     {$port1     = 5022}
+
+echo "mac addr 2 is "+$mac_address_2
+$use_bcm_nic = "NO"
+
+echo "using disk image "+$disk_image
+
+if not defined create_network {$create_network = TRUE}
+if not defined connect_real_network {$connect_real_network = FALSE}
+if not defined network_connection {$network_connection = "napt"}
+
+run-command-file "%script%/x86-x58-ich10-system.include"
+if $use_disk2{
+    echo "using 2nd disk image "+$disk2_image
+    $disk2 = (create-sata-disk-comp $system.disk2
+                                       size = $disk2_size
+                                       file = $disk2_image)
+    connect $southbridge.sata_slot[2] $disk2.sata_slot
+}
+if $use_disk3{
+    echo "using 3nd disk image "+$disk3_image
+    $disk3 = (create-sata-disk-comp $system.disk3
+                                       size = $disk3_size
+                                       file = $disk3_image)
+    connect $southbridge.sata_slot[3] $disk3.sata_slot
+}
+
+instantiate-components
+
+$system.cell->time_quantum = 0.0001
+
+$system->system_info = "Viper - "+$host_name
+
+create-text-console-comp $system.serconsole1
+connect $system.serconsole1.serial $southbridge.serial[0]
+create-text-console-comp $system.serconsole2
+connect $system.serconsole2.serial $southbridge.serial[1]
+
+if defined use_broadcom{
+   $eth0 = $host_name.mb.nb.bcm5704c.connector_ethernet0
+   $eth1 = $host_name.mb.nb.bcm5704c.connector_ethernet1
+   $eth2 = $host_name.mb.sb.eth_slot
+}else{
+   $eth0 = $host_name.mb.nb.i82543gc.connector_ethernet
+   $eth2 = $host_name.mb.nb.i82543gc2.connector_ethernet
+   # 172.31.16.200
+   $eth1 = $host_name.mb.sb.eth_slot
+}
+
+
+echo "eth0 is "+$eth0
+connect $eth0 cnt1 = (switch0.get-free-connector)
+connect $eth1 cnt1 = (switch1.get-free-connector)
+connect $eth2 cnt1 = (switch2.get-free-connector)
+
+instantiate-components
