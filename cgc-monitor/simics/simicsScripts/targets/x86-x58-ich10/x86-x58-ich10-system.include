@@ -100,13 +100,15 @@ if defined use_broadcom{
    connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
 }else{
    if defined mac_address_2     {
-      $eth_comp = (create-pci-i82543gc name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
+      $eth_comp = (create-pci-i82559 name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
+      #$eth_comp = (create-pci-i82543gc name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
       echo "pci_slot[0] gets mac address "+ $mac_address_2
       connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
    }
    if defined mac_address_3 {
       if $mac_address_3 != "" {
-        $eth_comp2 = (create-pci-i82543gc name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
+        $eth_comp2 = (create-pci-i82559 name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
+        #$eth_comp2 = (create-pci-i82543gc name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
         echo "pci_slot[1] gets mac address "+ $mac_address_3
         connect $motherboard.nb.pci_slot[1] $eth_comp2.connector_pci_bus
       }

@@ -166,8 +166,10 @@ class TraceProcs():
             newproc.prog = comm
             self.plist[pid] = newproc
         if filename in self.plist[pid].files:
+            #self.lgr.debug('traceProcs open append fd %d to file %s for pid %s' % (fd, filename, pid))
             self.plist[pid].files[filename].append(fd)
         else:
+            #self.lgr.debug('traceProcs open first fd %d to file %s for pid %s' % (fd, filename, pid))
             self.plist[pid].files[filename] = [fd]
 
     def pipe(self, pid, fd1, fd2):
@@ -254,22 +256,22 @@ class TraceProcs():
         pid = str(pid)
         for fname in self.plist[pid].files: 
             if fd in self.plist[pid].files[fname]:
-                #self.lgr.debug('GOT close pid %d fd %d file %s' % (pid, fd, fname))
+                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, fname))
                 self.plist[pid].files[fname].remove(fd)
                 return
         for pname in self.plist[pid].rpipe: 
             if fd in self.plist[pid].rpipe[pname]:
-                #self.lgr.debug('GOT close pid %d fd %d file %s' % (pid, fd, pname))
+                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, pname))
                 self.plist[pid].rpipe[pname].remove(fd)
                 return
         for pname in self.plist[pid].wpipe: 
             if fd in self.plist[pid].wpipe[pname]:
-                #self.lgr.debug('GOT close pid %d fd %d file %s' % (pid, fd, pname))
+                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, pname))
                 self.plist[pid].wpipe[pname].remove(fd)
                 return
         for sname in self.plist[pid].sockets: 
             if fd in self.plist[pid].sockets[sname]:
-                #self.lgr.debug('GOT close pid %d fd %d file %s' % (pid, fd, sname))
+                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, sname))
                 self.plist[pid].sockets[sname].remove(fd)
                 return
 
@@ -278,7 +280,7 @@ class TraceProcs():
         if pid not in self.plist:
             #self.lgr.debug('traceProcs close on unknown pid %d' % pid)
             return
-        #self.lgr.debug('try close pid %d fd %d' % (pid, fd))
+        self.lgr.debug('try close pid %s fd %d' % (pid, fd))
         self.rmFD(pid, fd)
 
     def dup(self, pid, fd_old, fd_new):
@@ -427,12 +429,11 @@ class TraceProcs():
             if info is not None and '/bin/ip addr add' in self.plist[pid].args:
                 print info.args
 
-
     def getFileName(self, pid, fd):
         pid = str(pid)
         if pid in self.plist:
             for f in self.plist[pid].files:
-                #self.lgr.debug('traceProcs look for file for fd %d file %s' % (fd, f))
+                self.lgr.debug('traceProcs pid %s look for file for fd %d file %s' % (pid, fd, f))
                 if fd in self.plist[pid].files[f]:
                     return f
         return None

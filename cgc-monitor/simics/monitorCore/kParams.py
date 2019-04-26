@@ -50,6 +50,10 @@ class Kparams():
         self.sysenter = None
         self.sysexit = None
         self.iretd = None
+        self.sysret64 = None
+        if word_size == 8:
+            ''' run the findExits.py script to get this last holdout, reported as illegal memory mapping '''
+            self.sysexit = 0xffffffff813e909a 
         # arm entry/exit
         self.arm_entry = None
         self.arm_ret = None

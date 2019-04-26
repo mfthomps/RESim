@@ -8,3 +8,8 @@ if defined use_broadcom{
    #$VDR_eth1 = VDR.mb.nb.i82543gc2.connector_ethernet
    $VDR_eth1 = VDR.mb.sb.eth_slot
 }
+
+$ubuntu_eth0 = ubuntu.mb.nb.i82543gc.connector_ethernet
+$ubuntu_eth1 = ubuntu.mb.nb.i82543gc2.connector_ethernet
+$ubuntu_eth2 = ubuntu.mb.sb.eth_slot
+

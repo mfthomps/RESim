@@ -1,10 +1,15 @@
 add-directory "%script%"
 $cpu_class="core-i7-single"
+#$cpu_class="core-i7"
 #$rtc_time     = "2016-10-28 14:00:00 UTC"
 if not defined rtc_time     {$rtc_time     = "2016-10-28 14:00:00 UTC"}
 if not defined OS_TYPE     {$OS_TYPE     = "linux"}
 if not defined provision_bsd     {$provision_bsd     = "NO"}
 if not defined port1     {$port1     = 5022}
+if not defined use_disk2     {$use_disk2     = TRUE}
+if not defined disk_image {$disk_image=./VDR_Boot.craff}
+#if not defined num_cpus     {$num_cpus     = 1}
+#if not defined num_cores     {$num_cores     = 4}
 #$disk_image=./vp.craff
 #$disk_image=./cgc-linux.craff
 $disk_size=21496236544
@@ -17,23 +22,21 @@ $use_bcm_nic = "NO"
 #
 $host_name="VDR"
 $host_name_alt="VDR_alt"
-# eth2
-$mac_address       = "00:19:A1:E1:1C:9D"
+# eth2 (motherboard)
+#$mac_address       = "00:19:A1:E1:1C:9D"
+$mac_address       = "00:E0:27:0F:CA:A9"
 # address for the plug-in NIC (if dual Intel, 2nd port gets n+1)
 # eth0
-$mac_address_2   = "00:19:A0:E1:1C:9E"
+#$mac_address_2   = "00:19:A0:E1:1C:9E"
+$mac_address_2   = "00:E0:27:0F:CA:A8"
 # eth1
-$mac_address_3 = "00:19:A0:E1:1C:9F"
+#$mac_address_3 = "00:19:A0:E1:1C:9F"
+$mac_address_3 = ""
 
 $ip_address="10.10.0.100"
-$disk_image=./VDR_Boot.craff
+#$disk_image=./vdr-merged/VDR.disk.hd_image.craff
 echo "using disk image "+$disk_image
 
-# 10.0.0.100
-$VDR_eth0 = VDR.mb.nb.i82543gc.connector_ethernet
-# 172.31.16.200
-$VDR_eth1 = VDR.mb.nb.i82543gc2.connector_ethernet
-$VDR_eth2 = VDR.mb.sb.eth_slot
 echo "Not using ZSIM"
 #run-command-file "%simics%/targets/x86-x58-ich10/viper-eems.simics"
 if not defined create_network {$create_network = TRUE}
@@ -45,11 +48,13 @@ run-command-file "%script%/x86-x58-ich10-system.include"
 #  Second disk, data recording
 #
 $disk2_image=/mnt/ubuntu_img/vdr.craff
-echo "using 2nd disk image "+$disk2_image
-$disk2 = (create-sata-disk-comp $system.disk2
+if $use_disk2{
+    echo "using 2nd disk image "+$disk2_image
+    $disk2 = (create-sata-disk-comp $system.disk2
                                        size = $disk2_size
                                        file = $disk2_image)
     connect $southbridge.sata_slot[2] $disk2.sata_slot
+}
 
 instantiate-components
 
@@ -61,12 +66,26 @@ create-text-console-comp $system.serconsole1
 connect $system.serconsole1.serial $southbridge.serial[0]
 create-text-console-comp $system.serconsole2
 connect $system.serconsole2.serial $southbridge.serial[1]
-connect $VDR_eth0 cnt1 = switch0.device3 
-connect $VDR_eth1 cnt1 = switch0.device4 
-connect $VDR_eth2 cnt1 = switch0.device5
+
+if defined use_broadcom{
+   $VDR_eth0 = VDR.mb.nb.bcm5704c.connector_ethernet0
+   $VDR_eth1 = VDR.mb.nb.bcm5704c.connector_ethernet1
+   $VDR_eth2 = VDR.mb.sb.eth_slot
+}else{
+   $VDR_eth0 = VDR.mb.nb.i82543gc.connector_ethernet
+   # 172.31.16.200
+   #$VDR_eth1 = VDR.mb.nb.i82543gc2.connector_ethernet
+   $VDR_eth1 = VDR.mb.sb.eth_slot
+}
+connect $VDR_eth0 cnt1 = (switch0.get-free-connector)
+connect $VDR_eth1 cnt1 = (switch1.get-free-connector)
 #echo "VDR network connections"
 #echo "mac " + $mac_address + " on switch 0"
 #echo "mac " + $mac_address_2 + " on switch 1"
 #echo "mac " + $mac_address_3 + " on switch 2"
+#new-std-service-node sn0
+#sn0.connect-to-link switch0 10.10.0.1
+#connect-real-network-port-in ethernet-link = switch1 target-ip = 10.0.0.100 target-port = 60002
+
 
 instantiate-components

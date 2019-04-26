@@ -3,7 +3,6 @@ import time
 from idaapi import Form
 import idc
 import gdbProt
-import rev
 import regFu
 last_data_watch_count = '32'
 def getHex(s):

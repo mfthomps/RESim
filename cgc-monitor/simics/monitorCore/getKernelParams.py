@@ -485,18 +485,28 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChanged kernel exit eip 0x%x %s' % (eip, instruct[1]))
                 if instruct[1] == 'iretd' or instruct[1] == 'iret64':
                     self.param.iretd = eip
-                elif instruct[1] == 'sysexit' or instruct[1] == 'sysret64':
+                elif instruct[1] == 'sysexit':
                     self.param.sysexit = eip
-                     
-                if self.param.iretd is not None and self.param.sysexit is not None:
-                    self.lgr.debug('entryModeChanged found exits')
-                    SIM_break_simulation('found sysexit and iretd')
+                elif instruct[1] == 'sysret64':
+                    self.param.sysret64 = eip
+                
+                #if self.mem_utils.WORD_SIZE == 4:     
+                if True:
+                    if self.param.iretd is not None and self.param.sysexit is not None:
+                        self.lgr.debug('entryModeChanged found exits')
+                        SIM_break_simulation('found sysexit and iretd')
+                '''
+                else:
+                    if self.param.iretd is not None and self.param.sysexit is not None and self.sysret64 is not None:
+                        self.lgr.debug('entryModeChanged found exits')
+                        SIM_break_simulation('found sysexit and iretd and sysret64')
+                '''
             
         elif old == Sim_CPU_Mode_User:
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
-            self.lgr.debug('entryModeChanged supervisor instruct %s' % instruct[1])
+            self.lgr.debug('entryModeChanged supervisor eip 0x%x instruct %s' % (eip, instruct[1]))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))

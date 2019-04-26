@@ -349,6 +349,7 @@ class TaskUtils():
         for ts in ts_list:
            if ts_list[ts].pid == pid:
                return ts
+        self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
         return None
  
     def getTaskListPtr(self):
@@ -573,13 +574,13 @@ class TaskUtils():
  
     def getSyscallEntry(self, callnum):
         if self.cpu.architecture == 'arm':
-            val = callnum * 4 + self.param.syscall_jump
-            val = val & 0xffffffff
+            val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
+            val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
         else:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
-            val = callnum * 4 - self.param.syscall_jump
-            val = val & 0xffffffff
+            val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
+            val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
         return entry
 

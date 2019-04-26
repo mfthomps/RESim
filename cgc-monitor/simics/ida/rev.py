@@ -6,15 +6,17 @@ import bpUtils
 import gdbProt
 import bookmarkView
 import stackTrace
-import okTextForm
+#import okTextForm
 import waitDialog
 import functionSig
 import reHooks
 import regFu
+import menuMod
 idaapi.require("idaSIM")
 idaapi.require("stackTrace")
 idaapi.require("bookmarkView")
 idaapi.require("reHooks")
+idaapi.require("menuMod")
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -62,9 +64,9 @@ The script installs its functions as a hotkeys. Note use <fn> key on Mac
     Alt-Shift-h  show help
     """
     print lines['hotkeys']
-    print('do okTextForm')
-    f = okTextForm.okTextForm(lines, prompt)
-    return f.go()
+    #print('do okTextForm')
+    #f = okTextForm.okTextForm(lines, prompt)
+    #return f.go()
 
 def int32(x):
   if x>0xFFFFFFFF:
@@ -188,6 +190,9 @@ def getTagValue(line, find_tag):
 
 
 def doKeyMap(isim):
+    menuMod.register(isim)
+    menuMod.attach()
+    '''
     idaapi.CompileLine('static key_alt_shift_d() { RunPythonStatement("isim.testDialog()"); }')
     AddHotkey("Alt+Shift+d", 'key_alt_shift_d')
 
@@ -220,6 +225,7 @@ def doKeyMap(isim):
     
     #idaapi.CompileLine('static key_alt_f7() { RunPythonStatement("doRevFinish()"); }')
     #AddHotkey("Alt+F7", 'key_alt_f7')
+
     idaapi.CompileLine('static key_alt_f6() { RunPythonStatement("doRevFinish()"); }')
     AddHotkey("Alt+F6", 'key_alt_f6')
     idaapi.add_menu_item("Debugger/Run to cursor", "^ Rev until call", "Alt+F6", 0, isim.doRevFinish, None)
@@ -334,6 +340,7 @@ def doKeyMap(isim):
     idaapi.CompileLine('static key_alt_shift_w() { RunPythonStatement("isim.writeWord()"); }')
     AddHotkey("Alt+Shift+w", 'key_alt_shift_w')
     idaapi.add_menu_item("Debugger/Terminate process", "Write word to memory", "Alt+Shift+w", 1, isim.writeWord, None)
+    '''
 
 def nameSysCalls(bail=False):
     print('in nameSysCalls assign names to sys calls')
@@ -431,7 +438,7 @@ if __name__ == "__main__":
     #print('back from init bookmarkView')
     keymap_done = False
     #primePump()
-    nameSysCalls(True)
+    #nameSysCalls(True)
     #print('back from nameSysCalls')
     form=idaapi.find_tform("Stack view")
     #print('do switch')
@@ -440,6 +447,7 @@ if __name__ == "__main__":
     print('RESim Ida Client Version 1.2')
     isim = idaSIM.IdaSIM(stack_trace, bookmark_view, kernel_base, reg_list, registerMath)
     bookmark_view.Create(isim)
+    bookmark_view.register()
     bookmark_list = bookmark_view.updateBookmarkView()
     if bookmark_list is not None:
         for bm in bookmark_list:
@@ -449,6 +457,7 @@ if __name__ == "__main__":
                 idc.MakeCode(eip) 
 
     stack_trace.Create(isim)
+    stack_trace.register()
    
     reHooks.register(isim)
     re_hooks = reHooks.Hooks()
@@ -479,7 +488,7 @@ if __name__ == "__main__":
         isim.showSimicsMessage()
     
         RefreshDebuggerMemory()
-    checkHelp()
+    #checkHelp()
     isim.recordText()
     isim.showSimicsMessage()
     if not isim.just_debug:

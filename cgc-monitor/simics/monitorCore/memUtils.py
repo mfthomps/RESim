@@ -372,3 +372,27 @@ class memUtils():
         retval = gs_base + self.param.cur_task_offset_into_gs
         self.lgr.debug('getGSCurrent_task_offset gs base is 0x%x, plus current_task offset is 0x%x' % (gs_base, retval))
         return retval
+
+    def writeString(self, cpu, address, string):
+        self.lgr.debug('writeString 0x%x %s' % (address, string))
+
+        lcount = len(string)/4
+        carry = len(string) % 4
+        if carry != 0:
+            lcount += 1
+        print lcount
+        sindex = 0
+        for i in range(lcount):
+            eindex = min(sindex+4, len(string))
+            sub = string[sindex:eindex] 
+            count = len(sub)
+            #sub = sub.zfill(4)
+            sub = sub.ljust(4, '0')
+            #print('sub is %s' % sub)
+            #value = int(sub.encode('hex'), 16)
+            value = struct.unpack("<L", sub)[0]
+            sindex +=4
+            phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+            SIM_write_phys_memory(cpu, phys_block.address, value, count)
+            address += 4
+

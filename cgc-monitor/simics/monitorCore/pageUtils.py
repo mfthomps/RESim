@@ -370,7 +370,7 @@ def isIA32E(cpu):
     efer = cpu.ia32_efer
     pae = memUtils.testBit(cr4, 5)
     lme = memUtils.testBit(efer, 8)
-    print('efer is 0x%x  lme %d  pae %d' % (efer, lme, pae))
+    #print('efer is 0x%x  lme %d  pae %d' % (efer, lme, pae))
     if pae and lme:
         return True
     else:
@@ -419,7 +419,7 @@ def findPageTableIA32E(cpu, addr, lgr):
         return ptable_info
     else:
         dir_entry = memUtils.bitRange(addr, 21, 29)
-        #lgr.debug('dir_entry %d' % dir_entry)
+        lgr.debug('dir_entry %d' % dir_entry)
         table_base_addr = dir_base + (dir_entry * 8)
         #lgr.debug('table_base_addr 0x%x' % table_base_addr)
         ptable_info.table_addr = table_base_addr

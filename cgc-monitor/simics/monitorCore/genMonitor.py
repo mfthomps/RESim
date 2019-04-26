@@ -184,9 +184,11 @@ class GenMonitor():
         self.os_type = os.getenv('OS_TYPE')
         if self.os_type is None:
             self.os_type = 'LINUX32'
+            self.lgr.debug('genMonitor 32 bit OS cpu.architecture %s' % cpu.architecture)
         word_size = 4
         if self.os_type == 'LINUX64':
             word_size = 8
+            self.lgr.debug('genMonitor 64 bit Linux cpu.architecture %s' % cpu.architecture)
         self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=cpu.architecture)
         self.netInfo = net.NetAddresses(self.lgr)
         self.run_from_snap = os.getenv('RUN_FROM_SNAP')
@@ -204,6 +206,27 @@ class GenMonitor():
              return names[0]
          else:
              return None
+
+    def stopModeChanged(self, stop_action, one, exception, error_string):
+        cpu, comm, this_pid = self.task_utils.curProc() 
+        eip = self.mem_utils.getRegValue(cpu, 'eip')
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        self.lgr.debug('stopModeChanged eip 0x%x %s' % (eip, instruct[1]))
+        SIM_run_alone(SIM_run_command, 'c')
+
+    def modeChangeReport(self, want_pid, one, old, new):
+        cpu, comm, this_pid = self.task_utils.curProc() 
+        if want_pid != this_pid:
+            self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
+            return
+        new_mode = 'user'
+        if new == Sim_CPU_Mode_Supervisor:
+            new_mode = 'kernel'
+            SIM_break_simulation('mode changed')
+        eip = self.mem_utils.getRegValue(cpu, 'eip')
+        callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
 
     def modeChanged(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils.curProc() 
@@ -383,6 +406,8 @@ class GenMonitor():
             self.context_manager.setDebugPid(pid, self.target)
             if cpu.architecture == 'arm':
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, port)
+            elif self.mem_utils.WORD_SIZE == 8:
+                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, port)
             else:
                 cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, port)
             self.lgr.debug('cmd: %s' % cmd)
@@ -1176,7 +1201,9 @@ class GenMonitor():
             if callnum == 120:
                 print('Disabling thread tracking for clone')
                 self.stopThreadTrack()
-            self.call_traces[callname] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,callnum_list=[callnum], call_params=call_params, stop_on_call=True, targetFS=self.targetFS)
+            self.call_traces[callname] = syscall.Syscall(self, cell, self.param, self.mem_utils, self.task_utils, 
+                 self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,callnum_list=[callnum], 
+                 call_params=call_params, stop_on_call=True, targetFS=self.targetFS)
         else:
             ''' watch all syscalls '''
             self.lgr.debug('runToSyscall for any system call')
@@ -1188,9 +1215,7 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         # TBD only set if debugging?
         self.is_monitor_running.setRunning(True)
-        if callnum == 0:
-            callnum = None
-        self.lgr.debug('traceSyscall for callnumm %s' % callnum)
+        self.lgr.debug('traceSyscall for callnum %s' % callnum)
         if trace_procs:
             tp = self.traceProcs
         else:
@@ -1205,16 +1230,27 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils.curProc() 
         call_list = ['vfork','fork', 'clone','execve','open','pipe','pipe2','close','dup','dup2','socketcall', 
                      'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday']
-        if cpu.architecture == 'arm':
+        if cpu.architecture == 'arm' or self.mem_utils.WORD_SIZE == 8:
             call_list.remove('socketcall')
             for scall in net.callname[1:]:
                 call_list.append(scall.lower())
+        if self.mem_utils.WORD_SIZE == 8:
+            call_list.remove('ipc')
+            call_list.remove('send')
+            call_list.remove('recv')
+            call_list.remove('waitpid')
+            call_list.append('waitid')
+
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         if new_log:
             self.traceMgr.open('/tmp/syscall_trace.txt', cpu)
         for call in call_list: 
-            self.call_traces[call] = self.traceSyscall(self.task_utils.syscallNumber(call), trace_procs=True, soMap=self.soMap)
+            callnum = self.task_utils.syscallNumber(call)
+            if callnum is None or callnum < 0:
+                self.lgr.error('traceProcesses bad call name %s' % call)
+                return
+            self.call_traces[call] = self.traceSyscall(callnum=callnum, trace_procs=True, soMap=self.soMap)
 
     def stopTrace(self):
         self.lgr.debug('stopTrace from genMonitor')
@@ -1471,6 +1507,13 @@ class GenMonitor():
         call_params = syscall.CallParams('write', diddle, break_simulation=True)        
         self.lgr.debug('runToDiddle file %s' % dfile)
         self.runTo('write', call_params)
+
+    def runToDiddleRead(self, dfile):
+        self.is_monitor_running.setRunning(True)
+        diddle = diddler.Diddler(dfile, self.mem_utils, self.lgr)
+        call_params = syscall.CallParams('read', diddle, break_simulation=False)        
+        self.lgr.debug('runToDiddle read file %s' % dfile)
+        self.runTo('read', call_params)
 
     def runToWrite(self, substring):
         self.is_monitor_running.setRunning(True)
@@ -1832,6 +1875,11 @@ class GenMonitor():
     def getCurrentThreadLeaderPid(self):
         pid = self.task_utils.getCurrentThreadLeaderPid()
         print pid        
+
+    def reportMode(self):
+        pid, cell_name, cpu = self.context_manager.getDebugPid() 
+        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, pid)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopModeChanged, None)
   
     
 if __name__=="__main__":        

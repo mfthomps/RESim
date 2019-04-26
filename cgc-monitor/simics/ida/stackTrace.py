@@ -7,6 +7,7 @@ import reHooks
 class StackTrace(simplecustviewer_t):
     def __init__(self):
         self.isim = None
+
     class stacktrace_handler(idaapi.action_handler_t):
         def __init__(self, callback):
             idaapi.action_handler_t.__init__(self)
@@ -35,15 +36,19 @@ class StackTrace(simplecustviewer_t):
             return False
         else:
             print("created stacktrace")
-        tcc = self.GetTCustomControl()
-        the_name = "reverse to"
-        idaapi.register_action(idaapi.action_desc_t(the_name, "reverse to", self.stacktrace_handler(self.revTo)))
-        idaapi.attach_action_to_popup(tcc, None, the_name)
-        the_name = "refresh_stack"
-        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh stack", self.stacktrace_handler(self.updateStackTrace)))
-        idaapi.attach_action_to_popup(tcc, None, the_name)
         self.Show()
         return True
+
+    def register(self):
+
+        form = idaapi.get_current_tform()
+        the_name = "reverse to"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "reverse to", self.stacktrace_handler(self.revTo)))
+        idaapi.attach_action_to_popup(form, None, the_name)
+        the_name = "refresh_stack"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh stack", self.stacktrace_handler(self.updateStackTrace)))
+        idaapi.attach_action_to_popup(form, None, the_name)
+        #self.Show()
 
     def updateStackTrace(self):
         #print "in updateStackTrace"

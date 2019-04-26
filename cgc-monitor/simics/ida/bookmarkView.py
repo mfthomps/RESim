@@ -31,17 +31,19 @@ import bpUtils
 BT = 'backtrack '
 START = 'START'
 
+
 class bookmarkView(simplecustviewer_t):
     def __init__(self):
         self.isim = None
-    class bookmark_handler(idaapi.action_handler_t):
-        def __init__(self, callback):
-            idaapi.action_handler_t.__init__(self)
-            self.callback = callback
-        def activate(self, ctx):
-            print("set bookmark ")
-            self.callback()
 
+    class AddBookmarkHandler(idaapi.action_handler_t):
+        def __init__(self, bookmark_view):
+            idaapi.action_handler_t.__init__(self)
+            self.bookmark_view = bookmark_view
+
+        def activate(self, ctx):
+            self.bookmark_view.askSetBookmark()
+            return 1
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
@@ -53,16 +55,18 @@ class bookmarkView(simplecustviewer_t):
             return False
         else:
             print("created bookmarkView")
-        tcc = self.GetTCustomControl()
-        the_name = "add_bookmark"
-        idaapi.register_action(idaapi.action_desc_t(the_name, "add bookmark", self.bookmark_handler(self.askSetBookmark)))
-        idaapi.attach_action_to_popup(tcc, None, the_name)
-        the_name = "print_bookmarks"
-        idaapi.register_action(idaapi.action_desc_t(the_name, "print bookmarks", self.bookmark_handler(self.printBookmarks)))
-        idaapi.attach_action_to_popup(tcc, None, the_name)
-        the_name = "refresh"
-        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh", self.bookmark_handler(self.updateBookmarkView)))
-        idaapi.attach_action_to_popup(tcc, None, the_name)
+        self.Show()
+
+
+    def register(self):
+        add_bookmark_action = idaapi.action_desc_t(
+            'add_bookmark:action',
+            'Add bookmark', 
+            self.AddBookmarkHandler(self), 
+            None)
+        idaapi.register_action(add_bookmark_action)
+        form = idaapi.get_current_tform()
+        idaapi.attach_action_to_popup(form, None, 'add_bookmark:action')
         self.Show()
 
     def runToUserSpace(self):

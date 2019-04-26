@@ -389,7 +389,6 @@ class GenContextMgr():
     def addTask(self, pid):
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.watch_rec_list:
-            self.lgr.debug('addTask adding rec 0x%x for pid %d' % (rec, pid))
             if rec is None:
                 self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
                 self.pending_watch_pids.append(pid)
