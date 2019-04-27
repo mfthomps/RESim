@@ -97,6 +97,10 @@ class TaskUtils():
                 cmd = 'logical-to-physical 0x%x' % param.current_task
             try:
                 self.phys_current_task = SIM_run_command(cmd)
+                if self.phys_current_task > 0xffffffff:
+                    self.lgr.debug('TaskUtils phys address for 0x%x is too large' % param.current_task)
+                    self.phys_current_task = 0
+                    return None
             except:
                 self.phys_current_task = 0
                 self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))

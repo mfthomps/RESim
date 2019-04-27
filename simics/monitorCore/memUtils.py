@@ -196,7 +196,7 @@ class memUtils():
         try:
             return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))
         except:
-            self.lgr.error('readPhyPtr fails on address 0x%x' % addr)
+            self.lgr.error('readPhysPtr fails on address 0x%x' % addr)
             return None
 
     def readPtr(self, cpu, vaddr):
@@ -309,12 +309,12 @@ class memUtils():
             esp = self.readPtr(cpu, tr_base + 4)
             if esp is None:
                 return None
-            print('kernel mode, esp is 0x%x' % esp)
+            #print('kernel mode, esp is 0x%x' % esp)
         else:
             esp = self.getRegValue(cpu, 'esp')
-            print('user mode, esp is 0x%x' % esp)
+            #print('user mode, esp is 0x%x' % esp)
         ptr = esp - 1 & ~(param.stack_size - 1)
-        print('ptr is 0x%x' % ptr)
+        #print('ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
         #print('ret_ptr is 0x%x' % ret_ptr)
         check_val = self.readPtr(cpu, ret_ptr)
