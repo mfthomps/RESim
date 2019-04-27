@@ -27,8 +27,6 @@
    See that script for details.
 '''
 from simics import *
-#import linux4_4_32
-import linuxParams
 import memUtils
 import taskUtils
 import resim_utils
