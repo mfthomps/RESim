@@ -34,21 +34,21 @@ component in the simulation.
 print('Launch RESim')
 SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
 RESIM_TARGET = os.getenv('RESIM_TARGET')
+RESIM_REPO = os.getenv('RESIM')
 config = ConfigParser.ConfigParser()
 config.optionxform = str
 ini_file = '%s.ini' % RESIM_TARGET
 cfg_file = os.path.join(SIMICS_WORKSPACE, ini_file)
 config.read(cfg_file)
-pymods = config.get('ENV', 'PY_MODS')
 
-CORE = os.path.join(pymods, 'simics/monitorCore')
+CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
 if CORE not in sys.path:
     print("using CORE of %s" % CORE)
     sys.path.append(CORE)
 
 
-run_command('add-directory -prepend %s/simics/simicsScripts' % pymods)
-run_command('add-directory -prepend %s/simics/monitorCore' % pymods)
+run_command('add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO)
+run_command('add-directory -prepend %s/simics/monitorCore' % RESIM_REPO)
 run_command('add-directory -prepend %s' % SIMICS_WORKSPACE)
 
 print('assign ENV variables')
