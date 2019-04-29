@@ -1,34 +1,43 @@
-\documentclass{article}
+\documentclass[titlepage]{article}
 \usepackage{geometry}
 \geometry{a4paper, total={170mm,257mm},left=20mm, top=10mm,}
 \usepackage[colorlinks=true,linkcolor=blue,urlcolor=black]{hyperref}
 \usepackage{bookmark}
 \usepackage{graphicx}
+\usepackage{titling}
 \graphicspath{ {images/} }
 
+\pretitle{%
+  \begin{center}
+  \LARGE
+    \includegraphics[width=6cm]{resim.eps}\\[\smallskipamount]
+}
+\posttitle{\end{center}}
 \begin{document}
 \title {%
-  Reverse Engineering Networked Systems with RESim \\
-  \large External dynamic analysis of \\
-   heterogeneous networks of computers}
+  RESim User's Guide \\
+  \large Reverse Engineering heterogeneous networks of computers
+   through external dynamic analysis}
 \maketitle
+\tableofcontents
+\newpage
 
 \section{Introduction}
 Imagine you would like to analyze the processes running on computers within a system, including the programs they execute and the data they consume and exchange.   And assume you’d like to perform this analysis dynamically, but without ever running your own software on those systems and without ever having a shell on the systems.
 
-RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics'\footnote{ Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.} 
-platform’s high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.
+RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics\footnote{ Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.} 
+platform's high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.
 
 Broadly, RESim aids reverse engineering of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of kernel hosting the processes.
 
-RESim also provides interactive visibility into individual executing programs through use of a 
-disassembler/debugger that drives the running simulation.  The disassembler/debugger
+RESim also provides interactive visibility into individual executing programs through use of the IDA Pro
+disassembler/debugger to control the running simulation.  The disassembler/debugger
 allows setting breakpoints to pause the simulation at selected events in either future time, or past time.  For 
 example, RESim can direct the simulation state to reverse until the most recent modification of a selected memory address.   RESim lets the analyst switch between different threads within a process.  Reloadable checkpoints may be generated at any point during system execution.  
 A RESim simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicity modify memory or register content, and can also dynamically augment memory 
 based on system events, e.g., change a password file entry when read by the {\tt su} program (see \ref{diddling}.
 
-Analysis is performed entirely through observation of the simulated target system’s memory and processor state, 
+Analysis is performed entirely through observation of the simulated target system's memory and processor state, 
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be \textit{external} because the analysis observation functions have no effect on the state of the simulated system.
 
 \section{Analysis artifacts}
@@ -38,8 +47,9 @@ RESim generates system traces of all processes on a computer, starting with syst
 \item A process family history for each process and thread that has executed, identifying:
 \begin{enumerate}
 \item Providence, i.e., which process created the process (or thread), and what programs were loaded via the {\tt execve} system call.
-\item Files and pipes that had been opened (including those whose file descriptors were inherited from their parent), and those that are currently open.
-\item Linux socket functions, e.g. , connect, accept, bind, etc.  Socket connect attempts to external components are highlighted, as are socket accepts from external components.
+\item Files and pipes that had been opened (including file descriptors inherited from the parent), and those that are currently open.
+\item Linux socket functions, e.g. , connect, accept, bind, etc.  Socket connect attempts to external components are highlighted, as are 
+externally visible socket accepts.
 \item Mapped memory shared between processes
 \end{enumerate}
 \end{enumerate}
@@ -52,11 +62,14 @@ RESim couples an IDA Pro2 disassembler debugger client with the Simics simulatio
 A key property that distinguishes RESim from other RE strategies is that analysis occurs on processes as they execute in their native environment, and as they interact with other processes and devices within the system.  Consider an example process that communicates with a remote computer via a network while also interacting with a local process via a pipe.  When the analyst pauses RESim for inspection, the entire system pauses.  The simulation can then be resumed (or single-stepped) from the precise state at which it was paused, without having to account for timeouts and other temporal-based discontinuities between the process of interest and its environment.
 
 \section{Limitations}
-RESim analyzes Linux-based systems for which copies bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
+RESim analyzes Linux-based systems for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
 extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  
 
 \section{Work Flow}
-Simulated systems are defined within Simics configuration files that identify processors and interface devices, e.g., network cards, disks and system consoles.  Once a system is modeled, it is loaded into the Simics platform and the disk image is booted.   
+Simulated systems are defined within RESim configuration files that  parameterize pre-defined Simics scripts to identify 
+processors and interface devices, e.g., network cards, disks and system consoles.  RESim currently includes a generic X86 platform and
+a 32-bit ARM platform. Other platforms can be modeled via Simics, the detailes of which are beyond the scope of this manual.
+Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
 
 RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task records and addresses of selected kernel symbols.  The {\tt getKernelParams} utility automatically analyzes a running kernel and extracts the parameters required by RESim.  
 This utility allows RESim to analyze disparate Linux kernels without a priori knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
@@ -88,9 +101,13 @@ RESim extends IDA Pro debugger functions and the analyst accesses these function
 \end{itemize}
 
 \section{Development and Availability}
-RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro pluging functions are implemented using IDAPython.   
+In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
+RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
+Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
+All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}
 
 \section{RESim commands}
+\label{commands}
 \begin{itemize}
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
@@ -169,10 +186,121 @@ that the result of the read is augmented by a named diddle directive file.
 \item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to Appendix B for information about what we mean by SEGV, and how we catch it.
 \end{itemize}
 
+\section{Defining a target system}
+This section assumes some familiarity with Simics.  RESim is invoked from a Simics workspace that contains a RESim configuration file.
+This configuration file identifies disk images used in the simulation and defines network MAC addresses.  
+The file uses {\tt ini} format and has at least two sections: and {\tt ENV} section and one section per computer that will be part
+of the simulation.  An example RESim configuration file is at:
+\begin{verbatim}
+$RESIM/simics/workspace/ubuntu.ini
+\end{verbatim}
+
+\subsection{ENV section}
+The following environment variables are defined in the {\tt ENV} section of the configuration file:
+\begin{itemize}
+\item {\tt RUN\_FROM\_SNAP} The name of a snapshot created via the {\tt @cgc.writeConfig} command.
+\item {\tt OS\_TYPE} Either LINUX or LINUX64
+\item {\tt RESIM\_TARGET} Name of the host that is to be the target of RESim analysis.  Currently only one host can be analyzed during a given
+RESim session.
+\item {\tt CREATE\_RESIM\_PARAMS} If set to {\tt YES}, the getKernelParams utility will be run instead of the RESim monitor.  This will
+generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} command from the Simics command prompt to generate the file.
+\item {\tt RESIM\_PARAM} Name of a parameter file created by getKernParams utility.
+\item {\tt RESIM\_UNISTD} Path to a Linux {\tt unistd*.h} file that will be parsed to map system call numbers to system calls.
+\item {\tt RESIM\_ROOT\_PREFIX} Path to the root of a file system containing copies of target executables.  This is used by RESim read elf
+headers of target software and to locate analysis files generated by IDA Pro. 
+\end{itemize}
+
+\subsection{Target sections}
+Each computer within the simulation has its own section containing the following:
+\begin{itemize}
+\item {\tt SIMICS\_SCRIPT} Path to the Simics script file that defines the target system.  This path is relative to the {\tt target} directory
+of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targets}.  For example, 
+\begin{verbatim}
+SIMICS_SCRIPT=x86-x58-ich10/genx86.simics
+\end{verbatim}
+\noindent would use the generic X86 platform distributed with RESim.
+\item {\tt host\_name} Name to assign to this computer.
+\item {\tt use\_disk2} Whether a second disk is to be attached to computer.
+\item {\tt use\_disk3} Whether a third disk is to be attached to computer.
+\item {\tt disk\_image} Path to the boot image for the computer.
+\item {\tt disk\_size} Size of disk\_image
+\item {\tt disk2\_image} Path to the 2nd disk
+\item {\tt disk2\_size} Size of 2nd disk\_image
+\item {\tt disk3\_image} Path to the 3nd disk
+\item {\tt disk3\_size} Size of 3nd disk\_image
+\item {\tt mac\_address} Enclose in double quotes
+\item {\tt mac\_address\_2} Enclose in double quotes
+\item {\tt mac\_address\_3} Enclose in double quotes
+\end{itemize}
+\subsection{Network definitions}
+Three network switches are created.  By default, computer ethernet interface is connected to a switch, in the order
+of definition.  TBD: add {\tt NETWORK} section to the configuration file?
+
+\subsection{Driver component}
+Each network can have an optional driver component -- designated by assing the string {\tt driver} to the corresponding
+section header.  This component will be created first, and other components will not be created until the driver has
+caused a file named {\tt driver-ready.flag} is created within the workspace directory.  Use the Simics Agent to 
+create that file from the driver computer.  This requires you copy the simics agent onto the target and get it to run
+upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.
+
+\section{Running the simulation}
+RESim sessions are started from the Simics workspace using the \$RESIM/simics/monitorCore/launchRESim.py program,
+where {\tt \$RESIM} is a path to the RESim repo.  That program requires some environment variables, which are typically
+set in a bash script, an example of which is in
+\begin{verbatim}
+$RESIM/simics/workspace/monitor.sh
+\end{verbatim}
+\noindent Modify that script to name the path to your RESim repo.
+
+\subsection{Getting started}
+Steps to define and run a RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
+computer upon which Simics is installed with a x86-x58-ich10 platform.
+\begin{enumerate}
+\item Create a Simics workspace.
+\item Copy files from {\tt \$RESIM/simics/workspace} into the new workspace.
+\item Clone the RESim repo 
+\item Modify the monitor.sh script to reflect your Simics installation and the path to your RESim repo.
+\item Modify the mytarget.ini as follows:
+\begin{itemize}
+\item Set the {\tt disk\_image} entry to name paths to your target disk image.
+\item Obtain the {\tt unistd\_32.h} or equivalent, for your target's kernel -- this is used match system call numbers to calls.  Name
+the file in the {\tt RESIM\_UNISTD} parameter.
+\item Copy the target systems root file system, or a subset of the file system containing binaries of interest to the local computer
+and name that path in the {\tt RESIM\_ROOT\_PREFIX} parameter.  These images are used when analyzing specified programs, and are given
+to IDA Pro for analysis.
+\item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim.
+\end{itemize}
+\item Launch RESim using {\tt ./monitor.sh mytarget}.  That will start Simics and give you the Simics command prompt.
+\item  Continue the simulation until the kernel appears to have booted, then stop.
+\item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominial interaction
+with the target system via its console, e.g., to schedule a new process.
+\item After the parameters are created, quit Simics and remove the {\tt CREATE\_RESIM\_PARAMS} parameter.
+\item Restart the monitor.sh.  RESim will begin to boot the target and pause once it has confirmed the current task record.  You
+may now use RESim commands listed in \ref{commands}.
+\end{enumerate}
+
+\subsection{IDA Pro}
+Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
+{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  Then, from IDA, run this script:
+\begin{verbatim}
+$RESIM/simics/ida/dumpFuns.py 
+\end{verbatim}
+\noindent This will create a data file used by RESim when generating stack traces.
+
+From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc<program>} command, naming the program of interest.
+RESim will continue the simulation until the program is execed and execution is transfered to the text segment, at which point it will pause.
+Using {\tt debugProc} rather than {\tt debugPid} allows RESim to collect shared object information for the target process.
+You may now attach the IDA gdb debugger to the process (be sure to set the IDA debug port to that displayed at the Simics command prompt.)
+After the debugger has attached, run this IDA plugin:
+\begin{verbatim}
+$RESIM/simics/ida/rev.py
+\end{verbatim}
+You can now run the commands found in the debugger help menu.  Note those commands generally invoke RESim commands listed in \ref{commands}.
+
 \pagebreak
 \appendix
-\section{Introspection on a custom stripped kernel}
-Use of introspection, (i.e., observation of system memory during system execution, to track application processes), requires some knowledge of kernel data structures, e.g., the location of the current task pointer within global data.   While this information can be derived from kernel symbol tables, some systems, e.g., purpose-built appliances, include only stripped kernels compiled with unknown configuration settings.
+\section{Analysis on a custom stripped kernel}
+Use of external analysis, (i.e., observation of system memory during system execution, to track application processes), requires some knowledge of kernel data structures, e.g., the location of the current task pointer within global data.   While this information can be derived from kernel symbol tables, some systems, e.g., purpose-built appliances, include only stripped kernels compiled with unknown configuration settings.
 
 Within 32-bit Linux, the address of the current task record can be found either within a task register (while in user mode), or relative to the base of the stack while in kernel mode.  Heuristics can then be used to locate the offsets of critical fields within the record, e.g., the PID and comm (first 16 characters of the program name).  While the current task record provides information about what is currently running – it cannot be efficiently used to determine when the current task has changed.  For that, the RESim tool prefers to know the address of the pointer to the current task record, i.e., the address of the kernel data structure that is updated whenever a task switch occurs.
 
@@ -180,6 +308,8 @@ Once we have the address of the current task record, a brute force search is per
 
 On 64-bit Linux kernels, the current task pointer is maintained in GS segment at some processor-specific offset.  This offset is not easily determined – even from source code (see the arch/x86/include/percpu.h use of “this\_cpu\_off”).  A crude but effective strategy for determining the offset into GS is to catch a kernel entry, and then step instructions looking for the “gs:” pattern in the disassembly.  The first occurrence of “mov rax,qword ptr gs:[“  seems to be the desired offset.  It is expected that this will vary by cpu – the getKernelParams utility needs to be updated for multi-processor (or multicore) systems.
 
+Once the address containing the pointer to the current task record address is located, the {\tt getKernelParam} utility uses hueristics and brute force to
+find the remaining parameters.
 
 \section{Detecting SEGV on a stripped Linux Kernel}
 
@@ -347,7 +477,9 @@ connect $VDR_eth1 cnt1 = (switch0.get-free-connector)
 \end{verbatim}
 \end{itemize}
 
-\section{Why is RESim differnet from Simics?}
+\section{What is different from Simics?}
 RESim is based the Simics simulator, including the \textit{Hindsight} product.  It does not incorporate the \textit{Analyzer} product
-OS-Awareness funtions.
+OS-Awareness funtions.  RESim includes its own OS-Awareness functions.  The Simics Analyzer features are primarily intended to aid
+understanding and debugging of \textit{known} software, i.e., programs for which you have source code.  RESim is intended to reverse
+engineer unknown software, and thus does not assume possession of source code or specifications.
 \end{document}
