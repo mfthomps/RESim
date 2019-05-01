@@ -1,7 +1,8 @@
-RESim.pdf: RESim.tex
+RESim-UsersGuide.pdf: RESim.tex
 	latex RESim
 	pdflatex RESim
 	pdflatex RESim
+	mv RESim.pdf RESim-UsersGuide.pdf
 
 clean:
 	rm -fr auto

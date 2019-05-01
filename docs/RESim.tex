@@ -63,7 +63,8 @@ A key property that distinguishes RESim from other RE strategies is that analysi
 
 \section{Limitations}
 RESim analyzes Linux-based systems for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
-extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  
+extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
+multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 
 \section{Work Flow}
 Simulated systems are defined within RESim configuration files that  parameterize pre-defined Simics scripts to identify 
@@ -125,13 +126,15 @@ Tracing continues until the stopTrace command is issued.
 
 \item {\tt showBinders} – Display programs that use bind and accept socket calls – intended for use during process tracing to identify processes that listen on externally accessible sockets.
 
+\item {\tt showConnectors} – Display programs that use connect to open sockets – intended for use during process tracing to identify processes that connect to externally accessible sockets.
+
 \item {\tt traceFile(logname)} – Copy all writes that occur to the given filename.  Intended for use with log files.  Output is in /tmp/[basename(logname)]
 
 \item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log  
 
 \item {\tt debugProc(process name)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
 
-Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator for a SIMDis session.  Most of the commands listed below have analogs available from within IDA Pro.
+Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator.  Most of the commands listed below have analogs available from within IDA Pro, once the RESim {\tt rev.py} plugin is loaded.
 
 If execution transfers to a shared object of interest, the associated library file can be found via the getSOFile command described below.  Loading that file into IDA Pro (with the SIMDis plug-ins) will cause IDA to rebase to the address at which the shared object was mapped in the process.
 
@@ -167,12 +170,6 @@ If execution transfers to a shared object of interest, the associated library fi
 
 \item {\tt runToUser()} – Continue execution until user space of the current process is reached.
 
-\item {\tt runToDiddle()} – Run until a specified write system call is encountered, and modify system memory such
-that the result of the write is augmented by a named diddle directive file.
-
-\item {\tt runToDiddleRead()} – Run until a specified read system call is encountered, and modify system memory such
-that the result of the read is augmented by a named diddle directive file.
-
 \item {\tt reverseToUser()} – Reverse execution until user space of the current process is reached.
 
 \item {\tt setDebugBookmark(mark)} – set a bookmark with the given name.
@@ -181,7 +178,15 @@ that the result of the read is augmented by a named diddle directive file.
 
 \item {\tt watchData} – run forward until a specified memory area is read.  Intended for use in finding references to data consumed via a read system call.  Data watch parameters are automatically set on a read during a debug session, allowing the analyst to simply invoke the watchData function to find references to the buffer.
 
+\item {\tt showThreads} - List the thread PIDs of the process being debugged.
+
 \item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.
+\item {\tt writeReg} – Write value to a register (Note: deletes existing bookmarks.)
+\item {\tt writeWord} – Write word to an address. (Note: deletes existing bookmarks.)
+\item {\tt writeString} - Write a string to an addrss. (Note: deletes existing bookmarks.)
+
+\item {\tt runToDiddle()} – Run until a specified read or write system call is encountered, and modify system memory such
+that the result of the read or write is augmented by a named diddle directive file.  See \ref{diddling}
 
 \item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to Appendix B for information about what we mean by SEGV, and how we catch it.
 \end{itemize}
@@ -192,55 +197,60 @@ This configuration file identifies disk images used in the simulation and define
 The file uses {\tt ini} format and has at least two sections: and {\tt ENV} section and one section per computer that will be part
 of the simulation.  An example RESim configuration file is at:
 \begin{verbatim}
-$RESIM/simics/workspace/ubuntu.ini
+$RESIM/simics/workspace/mytarget.ini
 \end{verbatim}
 
 \subsection{ENV section}
 The following environment variables are defined in the {\tt ENV} section of the configuration file:
 \begin{itemize}
 \item {\tt RUN\_FROM\_SNAP} The name of a snapshot created via the {\tt @cgc.writeConfig} command.
-\item {\tt OS\_TYPE} Either LINUX or LINUX64
 \item {\tt RESIM\_TARGET} Name of the host that is to be the target of RESim analysis.  Currently only one host can be analyzed during a given
-RESim session.
 \item {\tt CREATE\_RESIM\_PARAMS} If set to {\tt YES}, the getKernelParams utility will be run instead of the RESim monitor.  This will
 generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} command from the Simics command prompt to generate the file.
-\item {\tt RESIM\_PARAM} Name of a parameter file created by getKernParams utility.
-\item {\tt RESIM\_UNISTD} Path to a Linux {\tt unistd*.h} file that will be parsed to map system call numbers to system calls.
-\item {\tt RESIM\_ROOT\_PREFIX} Path to the root of a file system containing copies of target executables.  This is used by RESim read elf
-headers of target software and to locate analysis files generated by IDA Pro. 
 \end{itemize}
 
 \subsection{Target sections}
-Each computer within the simulation has its own section containing the following:
+Each computer within the simulation has its own section. The section items listed below that 
+have a {\tt \$} prefix represent Simics CLI variables used within Simics scripts.  If you define your own
+simics scripts (instead of using the generic scripts included with RESim), you may add arbitrary CLI variables
+to this section. 
 \begin{itemize}
+\item {\tt \$host\_name} Name to assign to this computer.
+\item {\tt \$use\_disk2} Whether a second disk is to be attached to computer.
+\item {\tt \$use\_disk3} Whether a third disk is to be attached to computer.
+\item {\tt \$disk\_image} Path to the boot image for the computer.
+\item {\tt \$disk\_size} Size of disk\_image
+\item {\tt \$disk2\_image} Path to the 2nd disk
+\item {\tt \$disk2\_size} Size of 2nd disk\_image
+\item {\tt \$disk3\_image} Path to the 3nd disk
+\item {\tt \$disk3\_size} Size of 3nd disk\_image
+\item {\tt \$mac\_address} Enclose in double quotes
+\item {\tt \$mac\_address\_2} Enclose in double quotes
+\item {\tt \$mac\_address\_3} Enclose in double quotes
+
 \item {\tt SIMICS\_SCRIPT} Path to the Simics script file that defines the target system.  This path is relative to the {\tt target} directory
 of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targets}.  For example, 
 \begin{verbatim}
 SIMICS_SCRIPT=x86-x58-ich10/genx86.simics
 \end{verbatim}
 \noindent would use the generic X86 platform distributed with RESim.
-\item {\tt host\_name} Name to assign to this computer.
-\item {\tt use\_disk2} Whether a second disk is to be attached to computer.
-\item {\tt use\_disk3} Whether a third disk is to be attached to computer.
-\item {\tt disk\_image} Path to the boot image for the computer.
-\item {\tt disk\_size} Size of disk\_image
-\item {\tt disk2\_image} Path to the 2nd disk
-\item {\tt disk2\_size} Size of 2nd disk\_image
-\item {\tt disk3\_image} Path to the 3nd disk
-\item {\tt disk3\_size} Size of 3nd disk\_image
-\item {\tt mac\_address} Enclose in double quotes
-\item {\tt mac\_address\_2} Enclose in double quotes
-\item {\tt mac\_address\_3} Enclose in double quotes
+\item {\tt OS\_TYPE} Either LINUX or LINUX64
+RESim session.
+\item {\tt RESIM\_PARAM} Name of a parameter file created by getKernParams utility.
+\item {\tt RESIM\_UNISTD} Path to a Linux {\tt unistd*.h} file that will be parsed to map system call numbers to system calls.
+\item {\tt RESIM\_ROOT\_PREFIX} Path to the root of a file system containing copies of target executables.  This is used by RESim read elf
+headers of target software and to locate analysis files generated by IDA Pro. 
 \end{itemize}
 \subsection{Network definitions}
 Three network switches are created.  By default, computer ethernet interface is connected to a switch, in the order
-of definition.  TBD: add {\tt NETWORK} section to the configuration file?
+of definition.  Simics CLI variables are assigned to each computer ethernet link using the convention {\tt TARGET\_eth0} where {\tt TARGET}
+is the value of the configuration file section header for that component.  TBD: add {\tt NETWORK} section to the configuration file?
 
 \subsection{Driver component}
-Each network can have an optional driver component -- designated by assing the string {\tt driver} to the corresponding
+Each simulation can have an optional driver component -- designated by assigning the string {\tt driver} to the corresponding
 section header.  This component will be created first, and other components will not be created until the driver has
 caused a file named {\tt driver-ready.flag} is created within the workspace directory.  Use the Simics Agent to 
-create that file from the driver computer.  This requires you copy the simics agent onto the target and get it to run
+create that file from the driver computer.  This requires you copy the Simics agent onto the target and get it to run
 upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.
 
 \section{Running the simulation}
@@ -288,7 +298,7 @@ $RESIM/simics/ida/dumpFuns.py
 \noindent This will create a data file used by RESim when generating stack traces.
 
 From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc<program>} command, naming the program of interest.
-RESim will continue the simulation until the program is execed and execution is transfered to the text segment, at which point it will pause.
+RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
 Using {\tt debugProc} rather than {\tt debugPid} allows RESim to collect shared object information for the target process.
 You may now attach the IDA gdb debugger to the process (be sure to set the IDA debug port to that displayed at the Simics command prompt.)
 After the debugger has attached, run this IDA plugin:
@@ -297,6 +307,84 @@ $RESIM/simics/ida/rev.py
 \end{verbatim}
 You can now run the commands found in the debugger help menu.  Note those commands generally invoke RESim commands listed in \ref{commands}.
 
+\subsection{Dynamic modifications to memory and topology}
+\label{diddling}
+RESim includes functions that dynamically modify modeled elements and connections,
+triggered by system events.  For example, a script that loads selected kernel modules could be augmented to
+load alternate modules, e.g., those for which you have modeled devices.  Modifying such a script on the volume
+image itself is not always convenient, e.g., \textit{tripwire} functions might manage checksums of
+configuration files.  It is therefore sometimes preferable to dynamically augment the software's perception of what is read.
+
+The {\tt runToDiddle} function triggers on the reading or writing of a specified
+regular expression via the {\tt write} or {\tt read} system calls.  Note in all the subfunctions listed
+below, the trigger string identifies the read or write operation that triggers the action. 
+The {\tt runToDiddle} function includes a parameter that names a file containing
+diddle directives. The format of directives files depend on the subfunction as listed below. 
+ 
+\begin{itemize}
+\item {\tt sub\_replace <operation>}-- Replace a substring within a read or write buffer (specified by the
+<operation>), with a given string.
+The directives file includes one or more sets of directives.
+The directives use regular expression syntax.
+An example directives file looks like:
+\begin{verbatim}
+sub_replace read
+#
+# match
+# was
+# becomes
+root:x:0:0:root
+root:x:
+root::
+\end{verbatim}
+\noindent This example might be run when the {\tt su} command is captured in the debugger.
+
+\item {\tt full\_replace <operation>} -- Replace the entire write or read buffer with a given string.
+The directives file includes a single directive whose replacement string may include multiple lines.
+\begin{verbatim}
+full_replace write
+KERNEL=="eth*", NAME="eth
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="00:e0:27:0f:ca:a8", \
+  ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", NAME="eth0"
+
+# PCI device 0x8086:0x1001 (e1000e)
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="00:e0:27:0f:ca:a9", \
+  ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", NAME="eth1"
+\end{verbatim}
+
+\item {\tt match\_cmd <operation>} Execute a list of Simics commands when the trigger string is found
+in a read or write buffer (per the <operation> field), and a separate substring is also found.  If the trigger string is
+found, the function will terminate, i.e., no more {\tt write} syscalls will be evaluated.
+\begin{verbatim}
+match_cmd write
+#
+# match (regx)
+# was (regx)
+# cmd
+KERNEL=="eth\*", NAME="eth
+("00:e0:27:0f:ca:a8".*eth1|"00:e0:27:0f:ca:a9".*eth0)
+disconnect $VDR_eth0 switch0.device1
+disconnect $VDR_eth1 switch1.device1
+connect $VDR_eth0 cnt1 = (switch1.get-free-connector)
+connect $VDR_eth1 cnt1 = (switch0.get-free-connector)
+\end{verbatim}
+\end{itemize}
+
+\subsubsection{Diddling multiple computers}
+Dynamic modifications (diddles) to system state are often performed early in the boot process, e.g.,
+as network devices are being assigned addresses or kernel modules are being loaded.
+When simulated components boot, RESim monitors them to determine when each has booted far enough
+for the current task record to be of use, which is typically when the {\tt init} process runs.
+RESim pauses then after all computers in the simulation have reached this initial state.  Note though that
+the first computers to have reached their initial state will continue on while other computers are still
+booting.  Thus, by the time RESim pauses, some computers may have executed beyond the point
+at which a dynamic modification was required.
+
+To avoid such race conditions, the RESim configuration file can optionally identify diddle files
+for each of the computers in a simulation.  If present, the {\tt runToDiddle} command is executed
+as soon as the corresponding computer reaches its initial state.  This ensures that dynamic modifications
+to those computers will occurr while other computers in the simulation continue to boot to their 
+initial states.
 \pagebreak
 \appendix
 \section{Analysis on a custom stripped kernel}
@@ -409,7 +497,7 @@ is assigned to the device that should be ``eth1''.  In some cases, these
 divergences can be 
 mitigated if detected.  In our example, if the eth0/eth1 are found to have been
 swapped, then reversing their corresponding connections to switches might mask the problem,
-restoring fidelity between the simulation and the physical system.  (See \ref{diddling} below.)
+restoring fidelity between the simulation and the physical system.  (See \ref{diddling}.)
 
 \subsection{Timing}
 Simics processor models execute all instructions in a single machine cycle.  The quantity
@@ -419,67 +507,18 @@ race conditions that appear on real systems may manifest differently on simulate
 
 \subsection{Model Limitations}
 It is not always practical to obtain a high fidelity model of every component in a target system.  
+Models may lack specific peripheral devices expected by a kernel.  In some cases, functionally
+compatable devices can be substituted for missing peripherals.  For example, the kernel image from an
+X86 target may include drivers for existing Simics ethernet devices, and yet the initialization functions
+do not cause the corresponding modules to be loaded -- rather, they load kernel modules for an ethernet 
+device that is not modeled.  Use of the diddling function described in \ref{diddling} can cause the kernel
+to load the desired module, without having to modify the disk image.  
 TBD: Explore model building, e.g., to simulate an fpga accessed via a PCI bus device.
 
-\subsection{Diddling -- dynamic modifications to memory and topology}
-\label{diddling}
-RESim includes \textit{diddling} functions that dynamically modify modeled elements and connections,
-triggered by system events.  The {\tt runToDiddle} function triggers on the writing of a specified
-string (or regular expression) via the {\tt write} system call.  Note in all the subfunctions listed
-below, the trigger string identifies the write operation that triggers the action. 
-The {\tt runToDiddle} function has a parameter that names a file containing
-diddle directives. The format of directives files depend on the subfunction as listed below. 
- 
-\begin{itemize}
-\item {\tt sub\_replace}-- Replace a substring within a write buffer with a given string.
-The directives file includes one or more sets of directives.
-An example directives file looks like:
-\begin{verbatim}
-sub_replace
-#
-# match
-# was
-# becomes
-root:x:0:0:root
-root:x:
-root::
-\end{verbatim}
-\noindent This example might be run when the {\tt su} command is captured in the debugger.
-
-\item {\tt full\_replace} -- Replace the entire write buffer with a given string.
-The directives file includes a single directive whose replacement string may include multiple lines.
-\begin{verbatim}
-full_replace
-KERNEL=="eth*", NAME="eth
-SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="00:e0:27:0f:ca:a8", \
-  ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", NAME="eth0"
-
-# PCI device 0x8086:0x1001 (e1000e)
-SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="00:e0:27:0f:ca:a9", \
-  ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", NAME="eth1"
-\end{verbatim}
-
-\item {\tt match\_cmd} Execute a list of Simics commands when the trigger string is found
-in a write buffer and a separate substring is also found.  If the trigger string is
-found, the function will terminate, i.e., no more {\tt write} syscalls will be evaluated.
-\begin{verbatim}
-match_cmd
-#
-# match (regx)
-# was (regx)
-# cmd
-KERNEL=="eth\*", NAME="eth
-("00:e0:27:0f:ca:a8".*eth1|"00:e0:27:0f:ca:a9".*eth0)
-disconnect $VDR_eth0 switch0.device1
-disconnect $VDR_eth1 switch1.device1
-connect $VDR_eth0 cnt1 = (switch1.get-free-connector)
-connect $VDR_eth1 cnt1 = (switch0.get-free-connector)
-\end{verbatim}
-\end{itemize}
 
 \section{What is different from Simics?}
 RESim is based the Simics simulator, including the \textit{Hindsight} product.  It does not incorporate the \textit{Analyzer} product
-OS-Awareness funtions.  RESim includes its own OS-Awareness functions.  The Simics Analyzer features are primarily intended to aid
+OS-Awareness functions.  RESim includes its own OS-Awareness functions.  The Simics Analyzer features are primarily intended to aid
 understanding and debugging of \textit{known} software, i.e., programs for which you have source code.  RESim is intended to reverse
 engineer unknown software, and thus does not assume possession of source code or specifications.
 \end{document}
