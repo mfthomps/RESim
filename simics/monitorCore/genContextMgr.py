@@ -92,8 +92,9 @@ class GenHap():
             self.hap_num = None
    
 class GenContextMgr():
-    def __init__(self, top, task_utils, param, cpu, lgr):
+    def __init__(self, top, cell_name, task_utils, param, cpu, lgr):
         self.top = top
+        self.cell_name = cell_name
         self.task_utils = task_utils
         self.param = param
         self.task_utils = task_utils
@@ -122,8 +123,10 @@ class GenContextMgr():
         self.text_start = None
         self.text_end = None
         self.default_context = None
-        SIM_run_command('new-context RESim')
-        obj = SIM_get_object('RESim')
+        context = 'RESim_%s' % cell_name
+        cmd = 'new-context %s' % context
+        SIM_run_command(cmd)
+        obj = SIM_get_object(context)
         self.resim_context = obj
         self.lgr.debug('resim_context defined as obj %s' % str(obj))
         ''' avoid searching all task recs to know if pid being watched '''

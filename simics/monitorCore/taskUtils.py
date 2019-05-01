@@ -71,8 +71,9 @@ class TaskStruct(object):
 
 class TaskUtils():
     COMM_SIZE = 16
-    def __init__(self, cpu, param, mem_utils, unistd, RUN_FROM_SNAP, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, unistd, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
+        self.cell_name = cell_name
         self.lgr = lgr
         self.param = param
         self.mem_utils = mem_utils
@@ -82,7 +83,7 @@ class TaskUtils():
         self.exec_addrs = {}
 
         if RUN_FROM_SNAP is not None:
-            phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, 'phys_current_task.pickle')
+            phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
             exec_addrs_file = os.path.join('./', RUN_FROM_SNAP, 'exec_addrs.pickle')
@@ -91,21 +92,24 @@ class TaskUtils():
         if self.phys_current_task is None:
             ''' address of current_task symbol, pointer at this address points to the current task record '''
             ''' use physical address because some are relative to FS segment '''
-            if param.current_task_fs:
-                cmd = 'logical-to-physical fs:0x%x' % param.current_task
-            else:
-                cmd = 'logical-to-physical 0x%x' % param.current_task
-            try:
-                self.phys_current_task = SIM_run_command(cmd)
-                if self.phys_current_task > 0xffffffff:
-                    self.lgr.debug('TaskUtils phys address for 0x%x is too large' % param.current_task)
-                    self.phys_current_task = 0
-                    return None
-            except:
+            phys_block = cpu.iface.processor_info.logical_to_physical(param.current_task, Sim_Access_Read)
+            self.phys_current_task = phys_block.address
+            #if param.current_task_fs:
+            #    cmd = 'logical-to-physical fs:0x%x' % param.current_task
+            #else:
+            #    cmd = 'logical-to-physical 0x%x' % param.current_task
+            #SIM_run_command('pselect cpu-name = %s' % cpu.name)
+            #try:
+            #    self.phys_current_task = SIM_run_command(cmd)
+            if self.phys_current_task > 0xffffffff:
+                self.lgr.debug('TaskUtils cell %s phys address for 0x%x is too large' % (self.cell_name, param.current_task))
                 self.phys_current_task = 0
-                self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))
                 return None
-        self.lgr.debug('TaskUtils init with current_task of 0x%x, phys: 0x%x' % (param.current_task, self.phys_current_task))
+            #except:
+            #    self.phys_current_task = 0
+            #    self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))
+            #    return None
+        self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
 
     def getPhysCurrentTask(self):
@@ -118,9 +122,13 @@ class TaskUtils():
         return cur_task_rec
 
     def pickleit(self, fname):
-        phys_current_task_file = os.path.join('./', fname, 'phys_current_task.pickle')
+        phys_current_task_file = os.path.join('./', fname, self.cell_name, 'phys_current_task.pickle')
+        try:
+            os.mkdir(os.path.dirname(phys_current_task_file))
+        except:
+            pass
         pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
-        exec_addrs_file = os.path.join('./', fname, 'exec_addrs.pickle')
+        exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
         pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
     def curProc(self):

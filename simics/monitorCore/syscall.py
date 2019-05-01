@@ -108,7 +108,7 @@ class CallParams():
 
 class Syscall():
 
-    def __init__(self, top, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
+    def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, callnum_list=None, trace = False, break_on_execve=None, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None): 
         self.lgr = lgr
@@ -122,9 +122,10 @@ class Syscall():
         self.stop_on_call = stop_on_call
         if pid is not None:
             self.debugging = True
-            self.lgr.debug('Syscall is debugging')
+            self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
         self.cell = cell
+        self.cell_name = cell_name
         self.top = top
         self.param = param
         self.sharedSyscall = sharedSyscall
@@ -168,19 +169,19 @@ class Syscall():
             f1 = stopFunction.StopFunction(self.top.skipAndMail, [], False)
             flist = [f1]
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
-            self.lgr.debug('Syscall stop action includes skipAndMail in flist')
+            self.lgr.debug('Syscall cell %s stop action includes skipAndMail in flist' % self.cell_name)
         elif flist_in is not None:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
-            self.lgr.debug('Syscall stop action includes given flist.  stop_on_call is %r' % stop_on_call)
+            self.lgr.debug('Syscall cell %s stop action includes given flist.  stop_on_call is %r' % (self.cell_name, stop_on_call))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
-            self.lgr.debug('Syscall stop action includes NO flist')
+            self.lgr.debug('Syscall cell %s stop action includes NO flist' % self.cell_name)
 
 
     def stopAlone(self, msg):
@@ -189,7 +190,7 @@ class Syscall():
             self.stop_action.setExitAddr(eip)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, self.stop_action)
-        self.lgr.debug('Syscall added stopHap %d Now stop. msg: %s' % (self.stop_hap, msg))
+        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
     def breakOnExecve(self, comm):
@@ -200,7 +201,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall doBreaks reset timeofdaycount')
+        self.lgr.debug('syscall cell %s doBreaks reset timeofdaycount' % self.cell_name)
         if self.callnum_list is None:
             ''' trace all calls '''
             if self.cpu.architecture == 'arm':
@@ -912,13 +913,13 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
                 elif call_param.match_param.__class__.__name__ == 'Diddler':
-                    if count < 1024:
+                    if count < 4028:
                         self.lgr.debug('syscall write check diddler count %d' % count)
                         if call_param.match_param.checkString(self.cpu, frame['param2'], count):
                             self.lgr.debug('syscall write found final diddler')
                             self.stopTrace()
                             if SIM_simics_is_running():
-                                SIM_break_simulation('diddle done')
+                                SIM_break_simulation('diddle done on cell %s file: %s' % (self.cell_name, call_param.match_param.getPath()))
                 else:
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  
@@ -982,15 +983,18 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        break_eip = self.top.getEIP()
+        break_eip = self.top.getEIP(syscall_info.cpu)
         cpu, comm, pid = self.task_utils.curProc() 
+        if syscall_info.cpu != cpu:
+            self.lgr.error('syscallHap wrong cell, cur: %s, expected %s' % (cpu.name, syscall_info.cpu.name))
+            return
         callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
         ''' call 0 is read in 64-bit '''
         if callnum == 0 and self.mem_utils.WORD_SIZE==4:
         #if callnum == 0:
             self.lgr.debug('syscallHap callnum is zero')
             return
-        self.lgr.debug('syscallhap for pid %s at 0x%x callnum %d expected %s' % (pid, break_eip, callnum, syscall_info.callnum))
+        self.lgr.debug('syscallhap cell %s for pid %s at 0x%x callnum %d expected %s' % (self.cell_name, pid, break_eip, callnum, syscall_info.callnum))
         stack_frame = self.task_utils.frameFromRegs(cpu)
         frame_string = taskUtils.stringFromFrame(stack_frame)
         self.lgr.debug(frame_string)
@@ -1153,7 +1157,8 @@ class Syscall():
         frame_string = taskUtils.stringFromFrame(stack_frame)
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
         if syscall_info.callnum is not None:
-            self.lgr.debug('syscallHap callnum %d syscall_info.callnum %d' % (callnum, syscall_info.callnum))
+            self.lgr.debug('syscallHap cell %s callnum %d syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
+                 callnum, syscall_info.callnum, self.stop_on_call))
             if syscall_info.callnum == callnum:
                 exit_info = self.syscallParse(callnum, stack_frame, cpu, pid, syscall_info)
                 #self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x cycles: 0x%x' % (eax, pid, comm, break_eip, cpu.cycles))

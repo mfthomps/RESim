@@ -1,9 +1,15 @@
 from simics import *
 import memUtils
 import os
-from genMonitor import Prec
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
+
+class Prec():
+    def __init__(self, cpu, proc, pid=None):
+        self.cpu = cpu
+        self.proc = proc
+        self.pid = pid
+        self.debugging = False
 
 class Pfamily():
     def __init__(self, target, param, cell_config, mem_utils, task_utils, lgr):

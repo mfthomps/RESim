@@ -21,8 +21,9 @@ class FileWatch():
         self.outfile = outfile
 
 class TraceProcs():
-    def __init__(self, lgr, proc_list, run_from_snap=None):
+    def __init__(self, cell_name, lgr, proc_list, run_from_snap=None):
         self.lgr = lgr
+        self.cell_name = cell_name
         ''' dict of Pinfo indexed by pid '''
         self.plist = {}
         self.did_that = []
@@ -42,7 +43,7 @@ class TraceProcs():
                 self.init_proc_list[spid] = proc_list[pid]
 
     def loadPickle(self, name):
-        proc_file = os.path.join('./', name, 'traceProcs.pickle')
+        proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
         if os.path.isfile(proc_file):
             self.lgr.debug('traceProcs pickle from %s' % proc_file)
             proc_pickle = pickle.load( open(proc_file, 'rb') ) 
@@ -55,7 +56,7 @@ class TraceProcs():
             
 
     def pickleit(self, name):
-        proc_file = os.path.join('./', name, 'traceProcs.pickle')
+        proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
         proc_pickle = {}
         proc_pickle['plist'] = self.plist
         proc_pickle['pipe_handle'] = self.pipe_handle

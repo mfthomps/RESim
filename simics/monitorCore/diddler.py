@@ -9,7 +9,7 @@ def nextLine(fh):
        line = fh.readline()
        if line is None or len(line) == 0:
            break
-       if line.strip().startswith('#'):
+       if line.startswith('#'):
            continue
        retval = line.strip('\n')
    return retval
@@ -21,16 +21,24 @@ class Diddler():
             self.was = was
             self.becomes = becomes        
             self.cmds = cmds        
-    def __init__(self, path, mem_utils, lgr):
+    def __init__(self, path, mem_utils, cell_name, lgr):
         self.kind = None
         self.fiddles = [] 
         self.mem_utils = mem_utils
         self.lgr = lgr
         self.stop_hap = None
+        self.cell_name = cell_name
+        self.path = path
+        self.operation = None
         if os.path.isfile(path):
             with open(path) as fh:
                done = False
-               self.kind = nextLine(fh) 
+               kind_line = nextLine(fh) 
+               parts = kind_line.split()
+               self.kind = parts[0]
+               if len(parts) > 1:
+                   self.operation = parts[1]
+               self.lgr.debug('Diddle of kind %s  cell is %s' % (self.kind, self.cell_name))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
@@ -55,7 +63,7 @@ class Diddler():
                           break
                       cmds.append(line)
                    self.fiddles.append(self.Fiddle(match, was, None, cmds=cmds))
-               else: 
+               elif self.kind == 'sub_replace':
                    while not done:
                        match = nextLine(fh) 
                        if match is None:
@@ -64,6 +72,9 @@ class Diddler():
                        was = nextLine(fh)
                        becomes = nextLine(fh) 
                        self.fiddles.append(self.Fiddle(match, was, becomes))
+               else: 
+                   print('Unknown diddler kind: %s' % self.kind)
+                   return
             self.lgr.debug('Diddler loaded %d fiddles of kind %s' % (len(self.fiddles), self.kind))
         else:
             self.lgr.debug('Diddler, no file at %s' % path)
@@ -72,13 +83,14 @@ class Diddler():
         rm_this = None
         for fiddle in self.fiddles:
             #self.lgr.debug('Diddle checkString  %s to  %s' % (fiddle.match, s))
-            if fiddle.match in s:
-                if fiddle.was in s:
-                    self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
-                    new_string = s.replace(fiddle.was, fiddle.becomes)
+            if re.search(fiddle.match, s, re.M|re.I) is not None:
+                if re.search(fiddle.was, s, re.M|re.I) is not None:
+                    #self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
+                    new_string = re.sub(fiddle.was, fiddle.becomes, s)
                     self.mem_utils.writeString(cpu, addr, new_string)
                 else:
-                    self.lgr.debug('Diddle found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                    #self.lgr.debug('Diddle found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                    pass
                      
                 rm_this = fiddle
                 break
@@ -108,9 +120,9 @@ class Diddler():
             bad.  The "was" tells us a bad value, i.e., reason to run commands '''
         rm_this = None
         fiddle = self.fiddles[0]
-        self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
+        #self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
         if re.search(fiddle.match, s, re.M|re.I) is not None:
-            self.lgr.debug('found match of %s in %s' % (fiddle.match, s))
+            #self.lgr.debug('found match of %s in %s' % (fiddle.match, s))
             rm_this = fiddle
             if re.search(fiddle.was, s, re.M|re.I) is not None:
                 SIM_run_alone(self.stopAlone, fiddle)
@@ -130,6 +142,7 @@ class Diddler():
             print('Unknown kind %s' % self.kind)
             return
         if rm_this is not None:
+            self.lgr.debug('Diddler checkString found match cell %s path %s' % (self.cell_name, self.path))
             self.fiddles.remove(rm_this)
             if len(self.fiddles) == 0:
                 self.lgr.debug('Diddler checkString removed last fiddle')
@@ -141,8 +154,12 @@ class Diddler():
         self.lgr.debug('Diddler stop hap')
         for cmd in fiddle.cmds:
             SIM_run_command(cmd)
-        
     
+    def getOperation(self):
+        return self.operation    
+   
+    def getPath(self):
+        return self.path 
                     
         
 if __name__ == '__main__':

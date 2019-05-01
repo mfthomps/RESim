@@ -54,7 +54,7 @@ class RegisterModType():
 
 
 class reverseToCall():
-    def __init__(self, top, param, os_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
+    def __init__(self, top, param, task_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
             #print('call getLogger')
             self.lgr = resim_utils.getLogger(name, logdir)
             self.context_manager = context_manager 
@@ -67,7 +67,7 @@ class reverseToCall():
             self.page_size = page_size
             self.lgr.debug('reverseToCall, in init')
             self.param = param
-            self.os_utils = os_utils
+            self.task_utils = task_utils
             self.decode = None
             ''' hackish for sharing this with genMonitor and cgcMonitor '''
             self.x_pages = None
@@ -143,7 +143,7 @@ class reverseToCall():
                 '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
                 SIM_run_alone(self.watchSysenter, None)
 
-            dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+            dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             self.context_manager.changeDebugPid(pid) 
             self.pid = pid
             self.lgr.debug('reverseToCall setup for pid: %d' % pid)
@@ -241,7 +241,7 @@ class reverseToCall():
         self.got_calls = 0
         self.is_monitor_running.setRunning(True)
         self.first_back = True
-        dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
         my_args = procInfo.procInfo(comm, self.cpu, pid)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -371,7 +371,7 @@ class reverseToCall():
                 self.context_manager.setExitBreak(self.cpu)
         elif len(self.sysenter_cycles) > 0:
             cur_cycles = self.cpu.cycles
-            cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
+            cur_cpu, comm, pid  = self.task_utils.curProc()
             self.lgr.debug('tryBackOne kernel space pid %d expected %d' % (pid, my_args.pid))
             is_exit = self.isExit(instruct[1], eip)
             if pid == self.pid and is_exit:
@@ -427,7 +427,7 @@ class reverseToCall():
         enter the function at its return.
         '''
 
-        dum_cpu, cur_addr, comm, dumpid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+        dum_cpu, cur_addr, comm, dumpid = self.task_utils.currentProcessInfo(self.cpu)
         self.is_monitor_running.setRunning(True)
         self.step_into = step_into
         self.first_back = True
@@ -451,7 +451,7 @@ class reverseToCall():
         self.num_bytes = num_bytes
         self.lgr.debug('\ndoRevToModReg cycle 0x%x for register %s offset is %x' % (self.cpu.cycles, reg, offset))
         self.reg = reg
-        dum_cpu, cur_addr, comm, dumpid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+        dum_cpu, cur_addr, comm, dumpid = self.task_utils.currentProcessInfo(self.cpu)
         self.reg_num = self.cpu.iface.int_register.get_number(reg)
         self.reg_val = self.cpu.iface.int_register.read(self.reg_num)
         eip = self.top.getEIP(self.cpu)
@@ -590,7 +590,7 @@ class reverseToCall():
             if self.num_bytes == 1:
                 address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                 if address is not None:
-                    value = self.os_utils[self.cell_name].getMemUtils().readWord32(self.cpu, address)
+                    value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                     self.lgr.debug('orValue, address is 0x%x value 0x%x' % (address, value))
                     if value == self.value:
                         return True
@@ -612,7 +612,7 @@ class reverseToCall():
                #offset = int(op1, 16)
                if '[' in op1:
                    address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-                   offset = self.os_utils[self.cell_name].getMemUtils().readWord32(self.cpu, address)
+                   offset = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                    self.lgr.debug('followTaint, add check of %s, address 0x%x offset is 0x%x' % (op1, address, offset))
                else:
                    offset = self.decode.getValue(op1, self.cpu, self.lgr)
@@ -651,10 +651,10 @@ class reverseToCall():
             if address is not None:
                 self.lgr.debug('followTaint, yes, address is 0x%x' % address)
                 if self.decode.isByteReg(op0):
-                    value = self.os_utils[self.cell_name].getMemUtils().readByte(self.cpu, address)
+                    value = self.task_utils.getMemUtils().readByte(self.cpu, address)
                 else:
-                    value = self.os_utils[self.cell_name].getMemUtils().readWord32(self.cpu, address)
-                newvalue = self.os_utils[self.cell_name].getMemUtils().getUnsigned(address+self.offset)
+                    value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
+                newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
                 protected_memory = ''
                 if self.top.isProtectedMemory(newvalue):
                     protected_memory = ' protected'
@@ -682,7 +682,7 @@ class reverseToCall():
         '''
         cmd = 'reverse'
         self.lgr.debug('stoppedReverseModReg, entered looking for %s' % self.reg)
-        dum_cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         cpl = memUtils.getCPL(self.cpu)
         if pid == self.pid and cpl != 0:
             reg_mod_type = self.cycleRegisterMod()
@@ -736,7 +736,7 @@ class reverseToCall():
             return
         #cmd = 'reverse-step-instruction'
         cmd = 'reverse'
-        cpu, cur_addr, comm, pid = self.os_utils[self.cell_name].currentProcessInfo(self.cpu)
+        cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         current = SIM_cycle_count(cpu)
         self.lgr.debug('stoppedReverseToCall, entered %d (%s) cycle: 0x%x' % (pid, comm, current))
         #if current < self.top.getFirstCycle():
@@ -859,7 +859,7 @@ class reverseToCall():
         if reversing:
             return
         else:
-            cur_cpu, comm, pid  = self.os_utils[self.cell_name].curProc()
+            cur_cpu, comm, pid  = self.task_utils.curProc()
             if cur_cpu == self.cpu and pid == self.pid:
                 cycles = self.cpu.cycles
                 if cycles not in self.sysenter_cycles:

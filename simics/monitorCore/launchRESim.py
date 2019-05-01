@@ -1,5 +1,11 @@
 import os
 import ConfigParser
+RESIM_REPO = os.getenv('RESIM')
+CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
+if CORE not in sys.path:
+    print("using CORE of %s" % CORE)
+    sys.path.append(CORE)
+import genMonitor
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -31,20 +37,26 @@ That ini file must include and ENV section and a section for each
 component in the simulation.  
 '''
 
+def assignLinkNames(target):
+    cmd = '$%s_eth0 = $eth0' % (target)
+    run_command(cmd)
+    cmd = '$%s_eth1 = $eth1' % (target)
+    run_command(cmd)
+    cmd = '$%s_eth2 = $eth2' % (target)
+    run_command(cmd)
+
 print('Launch RESim')
 SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
 RESIM_TARGET = os.getenv('RESIM_TARGET')
-RESIM_REPO = os.getenv('RESIM')
 config = ConfigParser.ConfigParser()
 config.optionxform = str
-ini_file = '%s.ini' % RESIM_TARGET
+if not RESIM_TARGET.endswith('.ini'):
+    ini_file = '%s.ini' % RESIM_TARGET
+else:
+    ini_file = RESIM_TARGET
 cfg_file = os.path.join(SIMICS_WORKSPACE, ini_file)
 config.read(cfg_file)
 
-CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
-if CORE not in sys.path:
-    print("using CORE of %s" % CORE)
-    sys.path.append(CORE)
 
 
 run_command('add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO)
@@ -60,13 +72,18 @@ RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
 
 not_a_target=['ENV', 'driver']
 
+comp_list = {}
 if RUN_FROM_SNAP is None:
     run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
     run_command('set-min-latency min-latency = 0.01')
     if config.has_section('driver'):
+        comp_list['driver'] = {}
         for name, value in config.items('driver'):
-            cmd = "$%s=%s" % (name, value)
-            run_command(cmd)
+            if name.startswith('$'):
+                cmd = "%s=%s" % (name, value)
+                run_command(cmd)
+            comp_list['driver'][name] = value
+
         print('Start the %s' % config.get('driver', 'host_name'))
         run_command('run-command-file ./targets/%s' % config.get('driver','SIMICS_SCRIPT'))
         run_command('start-agent-manager')
@@ -78,23 +95,32 @@ if RUN_FROM_SNAP is None:
                 done = True 
             count += 1
             print count
+        assignLinkNames('driver')
     for section in config.sections():
         if section in not_a_target:
             continue
+        comp_list[section] = {}
         print('assign %s CLI variables' % section)
         for name, value in config.items(section):
-            cmd = "$%s=%s" % (name, value)
-            run_command(cmd)
+            if name.startswith('$'):
+                cmd = "%s=%s" % (name, value)
+                run_command(cmd)
+            comp_list[section][name] = value
         print('Start the %s' % section)  
         run_command('run-command-file ./targets/%s' % config.get(section,'SIMICS_SCRIPT'))
+        assignLinkNames(section)
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)
     #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
 run_command('log-level 0 -all')
+'''
+Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
+'''
 CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-    run_command('run-python-file getKernelParams.py')
+    gkp = getKernelParams.GetKernelParams()
 else:
-    run_command('run-python-file genMonitor.py')
+    cgc = genMonitor.GenMonitor(comp_list)
+    cgc.doInit()
 

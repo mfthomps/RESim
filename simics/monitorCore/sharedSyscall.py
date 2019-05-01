@@ -4,12 +4,13 @@ import memUtils
 import net
 import ipc
 class SharedSyscall():
-    def __init__(self, top, cpu, cell, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
+    def __init__(self, top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_call = {}
         self.pending_execve = []
         self.lgr = lgr
         self.cpu = cpu
         self.cell = cell
+        self.cell_name = cell_name
         self.task_utils = task_utils
         self.param = param
         self.mem_utils = mem_utils
@@ -149,11 +150,11 @@ class SharedSyscall():
         if exit_info.callnum == self.task_utils.syscallNumber('socketcall'):
             params = exit_info.socket_params
             socket_callname = exit_info.socket_callname
-            socket_syscall = self.top.getSyscall('socketcall')
+            socket_syscall = self.top.getSyscall(self.cell_name, 'socketcall')
         else:
             params = exit_info.socket_params
             socket_callname = self.task_utils.syscallName(exit_info.callnum) 
-            socket_syscall = self.top.getSyscall(socket_callname)
+            socket_syscall = self.top.getSyscall(self.cell_name, socket_callname)
                     
         if socket_callname == "socket" and eax >= 0:
             if pid in self.trace_procs:
@@ -316,7 +317,8 @@ class SharedSyscall():
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s cur_eip 0x%x' % (pid, eax, str(third), str(forth), cur_eip))
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s ' % (pid, eax, str(third), str(forth)))
         callname = self.task_utils.syscallName(exit_info.callnum)
-        #self.lgr.debug('exitHap callnum %d name %s  pid %d' % (exit_info.callnum, callname, pid))
+        self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d break_simulation %r' % (self.cell_name, exit_info.callnum, callname, pid, 
+             exit_info.call_params.break_simulation))
         if callname == 'clone':
             self.lgr.debug('is clone pid %d  eax %d' % (pid, eax))
             if eax == 120:
@@ -360,7 +362,7 @@ class SharedSyscall():
                 self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
                 if '.so.' in exit_info.fname:
-                    open_syscall = self.top.getSyscall('open')
+                    open_syscall = self.top.getSyscall(self.cell_name, 'open')
                     if open_syscall is not None: 
                         open_syscall.watchFirstMmap(pid, exit_info.fname, eax)
                 if self.traceFiles is not None:
@@ -389,17 +391,20 @@ class SharedSyscall():
                 byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
                 trace_msg = ('\treturn from read pid:%d FD: %d count: %d into 0x%x\n\t%s\n' % (pid, exit_info.old_fd, 
                               eax, exit_info.retval_addr, byte_string))
-                if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None:
+                if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None \
+                   and type(exit_info.call_params.match_param) is int:
                     ''' in case we want to break on a read of this data '''
                     self.dataWatch.setRange(exit_info.retval_addr, eax)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
-                    if eax < 1024:
-                        self.lgr.debug('syscall read check diddler count %d' % eax)
+                    if eax < 4028:
+                        self.lgr.debug('sharedSyscall read check diddler count %d' % eax)
                         if exit_info.call_params.match_param.checkString(self.cpu, exit_info.retval_addr, eax):
                             self.lgr.debug('syscall read found final diddler')
+                            self.top.stopTrace(cell_name=self.cell_name)
                             self.stopTrace()
-                            if SIM_simics_is_running():
-                                SIM_break_simulation('diddle done')
+                            if not self.top.remainingCallTraces() and SIM_simics_is_running():
+                                SIM_break_simulation('diddle done on cell %s file: %s' % (self.cell_name, exit_info.call_params.match_param.getPath()))
+                    exit_info.call_params = None
 
 
             elif exit_info.old_fd is not None:
@@ -450,12 +455,12 @@ class SharedSyscall():
             if exit_info.retval_addr is not None:
                 result = self.mem_utils.readWord32(cpu, exit_info.retval_addr)
                 trace_msg = ('\treturn from gettimeofday pid:%d result: 0x%x\n' % (pid, result))
-                timer_syscall = self.top.getSyscall('gettimeofday')
+                timer_syscall = self.top.getSyscall(self.cell_name, 'gettimeofday')
                 if timer_syscall is not None:
                     timer_syscall.checkTimeLoop('gettimeofday', pid)
 
         elif callname == 'waitpid': 
-            timer_syscall = self.top.getSyscall('waitpid')
+            timer_syscall = self.top.getSyscall(self.cell_name, 'waitpid')
             if timer_syscall is not None:
                 timer_syscall.checkTimeLoop('waitpid', pid)
             else:
@@ -545,7 +550,7 @@ class SharedSyscall():
             self.rmExitHap(pid)
             self.stopTrace()
             #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
-            my_syscall = self.top.getSyscall(callname)
+            my_syscall = self.top.getSyscall(self.cell_name, callname)
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:

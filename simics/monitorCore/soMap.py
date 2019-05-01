@@ -7,10 +7,11 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, context_manager, task_utils, targetFS, run_from_snap, lgr):
+    def __init__(self, cell_name, context_manager, task_utils, targetFS, run_from_snap, lgr):
         self.context_manager = context_manager
         self.task_utils = task_utils
         self.targetFS = targetFS
+        self.cell_name = cell_name
         self.so_addr_map = {}
         self.so_file_map = {}
         self.lgr = lgr
@@ -21,7 +22,7 @@ class SOMap():
             self.loadPickle(run_from_snap)
 
     def loadPickle(self, name):
-        somap_file = os.path.join('./', name, 'soMap.pickle')
+        somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
         if os.path.isfile(somap_file):
             self.lgr.debug('SOMap pickle from %s' % somap_file)
             so_pickle = pickle.load( open(somap_file, 'rb') ) 
@@ -40,14 +41,15 @@ class SOMap():
             #self.lgr.debug('SOMap  loadPickle text 0x%x 0x%x' % (self.text_start, self.text_end))
 
     def pickleit(self, name):
-        somap_file = os.path.join('./', name, 'soMap.pickle')
+        somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
         so_pickle = {}
         so_pickle['so_addr_map'] = self.so_addr_map
         so_pickle['so_file_map'] = self.so_file_map
         so_pickle['text_start'] = self.text_start
         so_pickle['text_end'] = self.text_end
         so_pickle['text_prog'] = self.text_prog
-        pickle.dump( so_pickle, open( somap_file, "wb" ) )
+        fd = open( somap_file, "wb") 
+        pickle.dump( so_pickle, fd)
         self.lgr.debug('SOMap pickleit to %s ' % (somap_file))
 
     def isCode(self, address):

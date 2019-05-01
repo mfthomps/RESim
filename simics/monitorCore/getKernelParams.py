@@ -431,7 +431,7 @@ class GetKernelParams():
 
     def checkTasks(self):        
         #self.lgr.debug(self.param.getParamString())
-        self.taskUtils = taskUtils.TaskUtils(self.cpu, self.param, self.mem_utils, self.unistd32, None, self.lgr)
+        self.taskUtils = taskUtils.TaskUtils(self.cpu, self.target, self.param, self.mem_utils, self.unistd32, None, self.lgr)
         swapper_child = self.mem_utils.readPtr(self.cpu, self.idle+self.param.ts_children_list_head) 
         self.lgr.debug('checkTasks swapper_child_next is 0x%x  sib %d' % (swapper_child, self.param.ts_sibling_list_head))
         init = swapper_child - self.param.ts_sibling_list_head
