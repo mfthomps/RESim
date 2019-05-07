@@ -1241,7 +1241,8 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
         }
 
         if (s_found) {
-                gdb->cont_thread = s_thread;
+                //gdb->cont_thread = s_thread;
+                gdb->cont_thread = 0;
                 conf_object_t *cpu = find_cpu_for_active_thread(
                         gdb, gdb->cont_thread);
                 if (cpu) {
@@ -1838,19 +1839,23 @@ read_single_register(gdb_remote_t *gdb, const char *buffer)
         reg_desc_vect_t *rds = VLEN(gdb->register_descriptions) > 0
                 ? &gdb->register_descriptions
                 : &gdb->default_register_descriptions;
+        // HACK
         if (idx >= VLEN(*rds)) {
-                SIM_LOG_INFO(2, &gdb->obj, 0,
-                             "Bad index in single-register read: %zu"
-                             " (there are only %d registers)",
-                             idx, VLEN(*rds));
-
-                /* GDB seems to think we have more registers than we think we
-                   have, and will ask for them with a 'p' query. Returning
-                   unsupported seems to be the right thing to do here,
-                   according to the gdb-serial protocol reference. */
-                send_unsupported(gdb);
-                return;
+            idx = VLEN(*rds)-1;
         }
+        //if (idx >= VLEN(*rds)) {
+        //        SIM_LOG_INFO(2, &gdb->obj, 0,
+        //                     "Bad index in single-register read: %zu"
+        //                     " (there are only %d registers)",
+        //                     idx, VLEN(*rds));
+
+         //       /* GDB seems to think we have more registers than we think we
+         //          have, and will ask for them with a 'p' query. Returning
+         //          unsupported seems to be the right thing to do here,
+         //          according to the gdb-serial protocol reference. */
+         //       send_unsupported(gdb);
+         //       return;
+       // }
 
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu)
