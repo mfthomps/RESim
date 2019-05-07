@@ -1,0 +1,657 @@
+from gdb/remote.c
+-----------------
+
+   GDB Remote communication protocol.
+
+   A debug packet whose contents are <data>
+   is encapsulated for transmission in the form:
+
+	$ <data> # CSUM1 CSUM2
+
+	<data> must be ASCII alphanumeric and cannot include characters
+	'$' or '#'.  If <data> starts with two characters followed by
+	':', then the existing stubs interpret this as a sequence number.
+
+	CSUM1 and CSUM2 are ascii hex representation of an 8-bit 
+	checksum of <data>, the most significant nibble is sent first.
+	the hex digits 0-9,a-f are used.
+
+   Receiver responds with:
+
+	+	- if CSUM is correct and ready for next packet
+	-	- if CSUM is incorrect
+
+   <data> is as follows:
+   Most values are encoded in ascii hex digits.  Signal numbers are according
+   to the numbering in target.h.
+
+	Request		Packet
+
+	set thread	Hct...		Set thread for subsequent operations.
+					c = 'c' for thread used in step and 
+					continue; t... can be -1 for all
+					threads.
+					c = 'g' for thread used in other
+					operations.  If zero, pick a thread,
+					any thread.
+	reply		OK		for success
+			ENN		for an error.
+
+	read registers  g
+	reply		XX....X		Each byte of register data
+					is described by two hex digits.
+					Registers are in the internal order
+					for GDB, and the bytes in a register
+					are in the same order the machine uses.
+			or ENN		for an error.
+
+	write regs	GXX..XX		Each byte of register data
+					is described by two hex digits.
+	reply		OK		for success
+			ENN		for an error
+
+        write reg	Pn...=r...	Write register n... with value r...,
+					which contains two hex digits for each
+					byte in the register (target byte
+					order).
+	reply		OK		for success
+			ENN		for an error
+	(not supported by all stubs).
+
+	read mem	mAA..AA,LLLL	AA..AA is address, LLLL is length.
+	reply		XX..XX		XX..XX is mem contents
+					Can be fewer bytes than requested
+					if able to read only part of the data.
+			or ENN		NN is errno
+
+	write mem	MAA..AA,LLLL:XX..XX
+					AA..AA is address,
+					LLLL is number of bytes,
+					XX..XX is data
+	reply		OK		for success
+			ENN		for an error (this includes the case
+					where only part of the data was
+					written).
+
+	continue	cAA..AA		AA..AA is address to resume
+					If AA..AA is omitted,
+					resume at same address.
+
+	step		sAA..AA		AA..AA is address to resume
+					If AA..AA is omitted,
+					resume at same address.
+
+	continue with	Csig;AA		Continue with signal sig (hex signal
+	signal				number).
+
+	step with	Ssig;AA		Like 'C' but step not continue.
+	signal
+
+	last signal     ?               Reply the current reason for stopping.
+                                        This is the same reply as is generated
+					for step or cont : SAA where AA is the
+					signal number.
+
+	detach          D               Reply OK.
+
+	There is no immediate reply to step or cont.
+	The reply comes when the machine stops.
+	It is		SAA		AA is the signal number.
+
+	or...		TAAn...:r...;n...:r...;n...:r...;
+					AA = signal number
+					n... = register number (hex)
+					  r... = register contents
+					n... = `thread'
+					  r... = thread process ID.  This is
+						 a hex integer.
+					n... = other string not starting 
+					    with valid hex digit.
+					  gdb should ignore this n,r pair
+					  and go on to the next.  This way
+					  we can extend the protocol.
+	or...		WAA		The process exited, and AA is
+					the exit status.  This is only
+					applicable for certain sorts of
+					targets.
+	or...		XAA		The process terminated with signal
+					AA.
+        or...           OXX..XX	XX..XX  is hex encoding of ASCII data. This
+					can happen at any time while the program is
+					running and the debugger should
+					continue to wait for 'W', 'T', etc.
+
+	thread alive	TXX		Find out if the thread XX is alive.
+	reply		OK		thread is still alive
+			ENN		thread is dead
+	
+	remote restart	RXX		Restart the remote server
+
+	extended ops 	!		Use the extended remote protocol.
+					Sticky -- only needs to be set once.
+
+	kill request	k
+
+	toggle debug	d		toggle debug flag (see 386 & 68k stubs)
+	reset		r		reset -- see sparc stub.
+	reserved	<other>		On other requests, the stub should
+					ignore the request and send an empty
+					response ($#<checksum>).  This way
+					we can extend the protocol and GDB
+					can tell whether the stub it is
+					talking to uses the old or the new.
+	search		tAA:PP,MM	Search backwards starting at address
+					AA for a match with pattern PP and
+					mask MM.  PP and MM are 4 bytes.
+					Not supported by all stubs.
+
+	general query	qXXXX		Request info about XXXX.
+	general set	QXXXX=yyyy	Set value of XXXX to yyyy.
+	query sect offs	qOffsets	Get section offsets.  Reply is
+					Text=xxx;Data=yyy;Bss=zzz
+
+	Responses can be run-length encoded to save space.  A '*' means that
+	the next character is an ASCII encoding giving a repeat count which
+	stands for that many repetitions of the character preceding the '*'.
+	The encoding is n+29, yielding a printable character where n >=3 
+	(which is where rle starts to win).  Don't use an n > 126.
+
+	So 
+	"0* " means the same as "0000".
+
+
+
+
+
+
+from texinfo gdb
+----------------
+
+Communication protocol
+......................
+
+   The stub files provided with GDB implement the target side of the
+communication protocol, and the GDB side is implemented in the GDB
+source file `remote.c'.  Normally, you can simply allow these
+subroutines to communicate, and ignore the details.  (If you're
+implementing your own stub file, you can still ignore the details: start
+with one of the existing stub files.  `sparc-stub.c' is the best
+organized, and therefore the easiest to read.)
+
+   However, there may be occasions when you need to know something about
+the protocol--for example, if there is only one serial port to your
+target machine, you might want your program to do something special if
+it recognizes a packet meant for GDB.
+
+   In the examples below, `<-' and `->' are used to indicate
+transmitted and received data respectfully.
+
+   All GDB commands and responses (other than acknowledgments) are sent
+as a PACKET.  A PACKET is introduced with the character `$', this is
+followed by an optional two-digit SEQUENCE-ID and the character `:',
+the actual PACKET-DATA, and the terminating character `#' followed by a
+two-digit CHECKSUM:
+
+     `$'PACKET-DATA`#'CHECKSUM
+
+or, with the optional SEQUENCE-ID:
+     `$'SEQUENCE-ID`:'PACKET-DATA`#'CHECKSUM
+
+The two-digit CHECKSUM is computed as the modulo 256 sum of all
+characters between the leading `$' and the trailing `#' (that
+consisting of both the optional SEQUENCE-ID`:' and the actual
+PACKET-DATA) (an eight bit unsigned checksum).
+
+The two-digit SEQUENCE-ID, when present, is returned with the
+acknowledgment.  Beyond that its meaning is poorly defined.  GDB is not
+known to output SEQUENCE-IDs.
+
+   When either the host or the target machine receives a packet, the
+first response expected is an acknowledgment: either `+' (to indicate
+the package was received correctly) or `-' (to request retransmission):
+
+     <- `$'PACKET-DATA`#'CHECKSUM
+     -> `+'
+
+If the received packet included a SEQUENCE-ID than that is appended to
+a positive acknowledgment:
+
+     <- `$'SEQUENCE-ID`:'PACKET-DATA`#'CHECKSUM
+     -> `+'SEQUENCE-ID
+
+   The host (GDB) sends COMMANDs, and the target (the debugging stub
+incorporated in your program) sends a RESPONSE.  In the case of step
+and continue COMMANDs, the response is only sent when the operation has
+completed (the target has again stopped).
+
+   PACKET-DATA consists of a sequence of characters with the exception
+of `#' and `$' (see `X' packet for an exception). `:' can not appear as
+the third character in a packet.  Fields within the packet should be
+separated using `,' and `;' (unfortunately some packets chose to use
+`:').  Except where otherwise noted all numbers are represented in HEX
+with leading zeros suppressed.
+
+   Response DATA can be run-length encoded to save space.  A `*' means
+that the next character is an ASCII encoding giving a repeat count
+which stands for that many repetitions of the character preceding the
+`*'.  The encoding is `n+29', yielding a printable character where `n
+>=3' (which is where rle starts to win).  The printable characters `$',
+`#', `+' and `-' or with a numeric value greater than 126 should not be
+used.
+
+   Some remote systems have used a different run-length encoding
+mechanism loosely referred to as the cisco encoding.  Following the `*'
+character are two hex digits that indicate the size of the packet.
+
+   So:
+     "`0* '"
+
+means the same as "0000".
+
+   The error response, returned for some packets includes a two
+character error number.  That number is not well defined.
+
+   For any COMMAND not supported by the stub, an empty response
+(`$#00') should be returned.  That way it is possible to extend the
+protocol.  A newer GDB can tell if a packet is supported based on that
+response.
+
+   Below is a complete list of all currently defined COMMANDs and their
+corresponding response DATA:
+
+Packet                 Request                Description                   
+extended ops           `!'                    Use the extended remote       
+*(optional)*                                  protocol.  Sticky--only       
+                                              needs to be set once.  The    
+                                              extended remote protocol      
+                                              support the `R' packet.       
+                       reply `'               Stubs that support the        
+                                              extended remote protocol      
+                                              return `' which,              
+                                              unfortunately, is identical   
+                                              to the response returned by   
+                                              stubs that do not support     
+                                              protocol extensions.          
+last signal            `?'                    Indicate the reason the       
+                                              target halted.  The reply is  
+                                              the same as for step and      
+                                              continue.                     
+                       reply                  see below                     
+reserved               `a'                    Reserved for future use       
+set program arguments  `A'ARGLEN`,'ARGNUM`,'ARG`,...'Initialized `argv[]' array    
+*(reserved)*                                  passed into program. ARGLEN   
+*(optional)*                                  specifies the number of       
+                                              bytes in the hex encoded      
+                                              byte stream ARG.  See         
+                                              `gdbserver' for more details. 
+                       reply `OK'                                           
+                       reply `E'NN                                          
+set baud               `b'BAUD                Change the serial line speed  
+*(deprecated)*                                to BAUD.  JTC: *When does the 
+                                              transport layer state         
+                                              change?  When it's received,  
+                                              or after the ACK is           
+                                              transmitted.  In either       
+                                              case, there are problems if   
+                                              the command or the            
+                                              acknowledgment packet is      
+                                              dropped.* Stan: *If people    
+                                              really wanted to add          
+                                              something like this, and get  
+                                              it working for the first      
+                                              time, they ought to modify    
+                                              ser-unix.c to send some kind  
+                                              of out-of-band message to a   
+                                              specially-setup stub and      
+                                              have the switch happen "in    
+                                              between" packets, so that     
+                                              from remote protocol's point  
+                                              of view, nothing actually     
+                                              happened.*                    
+set breakpoint         `B'ADDR,MODE           Set (MODE is `S') or clear    
+*(deprecated)*                                (MODE is `C') a breakpoint    
+                                              at ADDR.  *This has been      
+                                              replaced by the `Z' and `z'   
+                                              packets.*                     
+continue               `c'ADDR                ADDR is address to resume.    
+                                              If ADDR is omitted, resume at 
+                                              current address.              
+                       reply                  see below                     
+continue with signal   `C'SIG`;'ADDR          Continue with signal SIG      
+*(optional)*                                  (hex signal number).  If      
+                                              `;'ADDR is omitted, resume    
+                                              at same address.              
+                       reply                  see below                     
+toggle debug           `d'                    toggle debug flag.            
+*(deprecated)*                                                              
+detach *(optional)*    `D'                    Detach GDB from the remote    
+                                              system.  Sent to the remote   
+                                              target before GDB             
+                                              disconnects.                  
+                       reply *no response*    GDB does not check for any    
+                                              response after sending this   
+                                              packet                        
+reserved               `e'                    Reserved for future use       
+reserved               `E'                    Reserved for future use       
+reserved               `f'                    Reserved for future use       
+reserved               `F'                    Reserved for future use       
+read registers         `g'                    Read general registers.       
+                       reply XX...            Each byte of register data    
+                                              is described by two hex       
+                                              digits.  The bytes with the   
+                                              register are transmitted in   
+                                              target byte order.  The size  
+                                              of each register and their    
+                                              position within the `g'       
+                                              PACKET are determined by the  
+                                              GDB internal macros           
+                                              REGISTER_RAW_SIZE and         
+                                              REGISTER_NAME macros.  The    
+                                              specification of several      
+                                              standard `g' packets is       
+                                              specified below.              
+                       `E'NN                  for an error.                 
+write regs             `G'XX...               See `g' for a description of  
+                                              the XX... data.               
+                       reply `OK'             for success                   
+                       reply `E'NN            for an error                  
+reserved               `h'                    Reserved for future use       
+set thread             `H'CT...               Set thread for subsequent     
+*(optional)*                                  operations (`m', `M', `g',    
+                                              `G', et.al.).  C = `c' for    
+                                              thread used in step and       
+                                              continue; T... can be -1 for  
+                                              all threads.  C = `g' for     
+                                              thread used in other          
+                                              operations.  If zero, pick a  
+                                              thread, any thread.           
+                       reply `OK'             for success                   
+                       reply `E'NN            for an error                  
+cycle step *(draft)*   `i'ADDR`,'NNN          Step the remote target by a   
+*(optional)*                                  single clock cycle.  If       
+                                              `,'NNN is present, cycle      
+                                              step NNN cycles.  If ADDR is  
+                                              present, cycle step starting  
+                                              at that address.              
+signal then cycle      `I'                    See `i' and `S' for likely    
+step *(reserved)*                             syntax and semantics.         
+*(optional)*                                                                
+reserved               `j'                    Reserved for future use       
+reserved               `J'                    Reserved for future use       
+kill request           `k'                    FIXME: *There is no           
+*(optional)*                                  description of how operate    
+                                              when a specific thread        
+                                              context has been selected     
+                                              (ie. does 'k' kill only that  
+                                              thread?)*.                    
+reserved               `l'                    Reserved for future use       
+reserved               `L'                    Reserved for future use       
+read memory            `m'ADDR`,'LENGTH       Read LENGTH bytes of memory   
+                                              starting at address ADDR.     
+                                              Neither GDB nor the stub      
+                                              assume that sized memory      
+                                              transfers are assumed using   
+                                              word aligned accesses.       
+                                              FIXME: *A word aligned memory 
+                                              transfer mechanism is         
+                                              needed.*                      
+                       reply XX...            XX... is mem contents. Can    
+                                              be fewer bytes than           
+                                              requested if able to read     
+                                              only part of the data.        
+                                              Neither GDB nor the stub      
+                                              assume that sized memory      
+                                              transfers are assumed using   
+                                              word aligned accesses.       
+                                              FIXME: *A word aligned        
+                                              memory transfer mechanism is  
+                                              needed.*                      
+                       reply `E'NN            NN is errno                   
+write mem              `M'ADDR,LENGTH`:'XX... Write LENGTH bytes of memory  
+                                              starting at address ADDR.     
+                                              XX... is the data.            
+                       reply `OK'             for success                   
+                       reply `E'NN            for an error (this includes   
+                                              the case where only part of   
+                                              the data was written).        
+reserved               `n'                    Reserved for future use       
+reserved               `N'                    Reserved for future use       
+reserved               `o'                    Reserved for future use       
+reserved               `O'                    Reserved for future use       
+read reg *(reserved)*  `p'N...                See write register.           
+                       return R....           The hex encoded value of the  
+                                              register in target byte       
+                                              order.                        
+write reg *(optional)* `P'N...`='R...         Write register N... with      
+                                              value R..., which contains    
+                                              two hex digits for each byte  
+                                              in the register (target byte  
+                                              order).                       
+                       reply `OK'             for success                   
+                       reply `E'NN            for an error                  
+general query          `q'QUERY               Request info about QUERY.     
+*(optional)*                                  In general GDB QUERY's have   
+                                              a leading upper case letter.  
+                                              Custom vendor queries         
+                                              should use a company prefix   
+                                              (in lower case) ex:           
+                                              `qfsf.var'.  QUERY may        
+                                              optionally be followed by a   
+                                              `,' or `;' separated list.    
+                                              Stubs must ensure that they   
+                                              match the full QUERY name.    
+                       reply `XX...'          Hex encoded data from query.  
+                                              The reply can not be empty.   
+                       reply `E'NN            error reply                   
+                       reply `'               Indicating an unrecognized    
+                                              QUERY.                        
+general set            `Q'VAR`='VAL           Set value of VAR to VAL.      
+*(optional)*                                  See `q' for a discussing of   
+                                              naming conventions.           
+reset *(deprecated)*   `r'                    Reset the entire system.      
+remote restart         `R'XX                  Restart the remote server.    
+*(optional)*                                  XX while needed has no clear  
+                                              definition.  FIXME: *An       
+                                              example interaction           
+                                              explaining how this packet    
+                                              is used in extended-remote    
+                                              mode is needed*.              
+step *(optional)*      `s'ADDR                ADDR is address to resume.    
+                                              If ADDR is omitted, resume at 
+                                              same address.                 
+                       reply                  see below                     
+step with signal       `S'SIG`;'ADDR          Like `C' but step not         
+*(optional)*                                  continue.                     
+                       reply                  see below                     
+search *(optional)*    `t'ADDR`:'PP`,'MM      Search backwards starting at  
+                                              address ADDR for a match      
+                                              with pattern PP and mask MM.  
+                                              PP and MM are 4 bytes.        
+                                              ADDR must be at least 3       
+                                              digits.                       
+thread alive           `T'XX                  Find out if the thread XX is  
+*(optional)*                                  alive.                        
+                       reply `OK'             thread is still alive         
+                       reply `E'NN            thread is dead                
+reserved               `u'                    Reserved for future use       
+reserved               `U'                    Reserved for future use       
+reserved               `v'                    Reserved for future use       
+reserved               `V'                    Reserved for future use       
+reserved               `w'                    Reserved for future use       
+reserved               `W'                    Reserved for future use       
+reserved               `x'                    Reserved for future use       
+write mem (binary)     `X'ADDR`,'LENGTH:XX... ADDR is address, LENGTH is    
+*(optional)*                                  number of bytes, XX... is     
+                                              binary data.  The characters  
+                                              `$', `#', and `0x7d' are      
+                                              escaped using `0x7d'.         
+                       reply `OK'             for success                   
+                       reply `E'NN            for an error                  
+reserved               `y'                    Reserved for future use       
+reserved               `Y'                    Reserved for future use       
+remove break or        `z'T`,'ADDR`,'LENGTH   See `Z'.                      
+watchpoint *(draft)*                                                        
+*(optional)*                                                                
+insert break or        `Z'T`,'ADDR`,'LENGTH   T is type: `0' - software     
+watchpoint *(draft)*                          breakpoint, `1' - hardware    
+*(optional)*                                  breakpoint, `2' - write       
+                                              watchpoint, `3' - read        
+                                              watchpoint, `4' - access      
+                                              watchpoint; ADDR is address;  
+                                              LENGTH is in bytes.  For a    
+                                              software breakpoint, LENGTH   
+                                              specifies the size of the     
+                                              instruction to be patched.    
+                                              For hardware breakpoints and  
+                                              watchpoints LENGTH specifies  
+                                              the memory region to be       
+                                              monitored.  To avoid          
+                                              potential problems with       
+                                              duplicate packets, the        
+                                              operations should be          
+                                              implemented in an             
+                                              idempotent way.          
+                       reply `E'NN            for an error                  
+                       reply `OK'             for success                   
+                       `'                     If not supported.             
+reserved               <other>                Reserved for future use       
+
+   The `C', `c', `S', `s' and `?' packets can receive any of the below
+as a reply.  In the case of the `C', `c', `S' and `s' packets, that
+reply is only returned when the target halts.  In the below the exact
+meaning of `signal number' is poorly defined.  In general one of the
+UNIX signal numbering conventions is used.
+
+`S'AA                         AA is the signal number                     
+`T'AAN...`:'R...`;'N...`:'R...`;'N...`:'R...`;'AA = two hex digit signal number; N... =    
+                              register number (hex), R...  = target byte  
+                              ordered register contents, size defined by  
+                              `REGISTER_RAW_SIZE'; N... = `thread', R...  
+                              = thread process ID, this is a hex          
+                              integer; N... = other string not starting   
+                              with valid hex digit.  GDB should ignore    
+                              this N..., R... pair and go on to the       
+                              next.  This way we can extend the protocol. 
+`W'AA                         The process exited, and AA is the exit      
+                              status.  This is only applicable for        
+                              certain sorts of targets.                  
+`X'AA                         The process terminated with signal AA.      
+`N'AA`;'TTTTTTTT`;'DDDDDDDD`;'BBBBBBBBAA = signal number; TTTTTTTT = address of   
+*(obsolete)*                  symbol "_start"; DDDDDDDD = base of data    
+                              section; BBBBBBBB = base of bss section.    
+                              *Note: only used by Cisco Systems targets.  
+                              The difference between this reply and the   
+                              "qOffsets" query is that the 'N' packet may 
+                              arrive spontaneously whereas the            
+                              'qOffsets' is a query initiated by the      
+                              host debugger.*                             
+`O'XX...                      XX... is hex encoding of ASCII data.  This  
+                              can happen at any time while the program    
+                              is running and the debugger should          
+                              continue to wait for 'W', 'T', etc.         
+
+   The following set and query packets have already been defined.
+
+current thread `q'`C'         Return the current thread id.               
+               reply `QC'PID  Where PID is a HEX encoded 16 bit process   
+                              id.                                         
+               reply *        Any other reply implies the old pid.        
+compute CRC    `q'`CRC:'ADDR`,'LENGTH                                            
+of memory                                                                 
+block                                                                     
+               reply `E'NN    An error (such as memory fault)             
+               reply `C'CRC32 A 32 bit cyclic redundancy check of the     
+                              specified memory region.                    
+query LIST or  `q'`L'STARTFLAGTHREADCOUNTNEXTTHREADObtain thread information from RTOS.        
+THREADLIST                    Where: STARTFLAG (one hex digit) is one to  
+*(deprecated)*                indicate the first query and zero to        
+                              indicate a subsequent query; THREADCOUNT    
+                              (two hex digits) is the maximum number of   
+                              threads the response packet can contain;    
+                              and NEXTTHREAD (eight hex digits), for      
+                              subsequent queries (STARTFLAG is zero), is  
+                              returned in the response as ARGTHREAD.      
+               reply          Where: COUNT (two hex digits) is the        
+               `q'`M'COUNTDONEARGTHREADTHREAD...number of threads being returned; DONE      
+                              (one hex digit) is zero to indicate more    
+                              threads and one indicates no further        
+                              threads; ARGTHREADID (eight hex digits) is  
+                              NEXTTHREAD from the request packet;         
+                              THREAD... is a sequence of thread IDs from  
+                              the target.  THREADID (eight hex digits).   
+                              See `remote.c:parse_threadlist_response()'. 
+query sect     `q'`Offsets'   Get section offsets.                        
+offs                                                                      
+               reply                                                      
+               `Text='XXX`;Data='YYY`;Bss='ZZZ                                            
+thread info    `q'`P'MODETHREADIDReturns information on THREADID.  Where:    
+request                       MODE is a hex encoded 32 bit mode;          
+                              THREADID is a hex encoded 64 bit thread ID. 
+               reply *        See                                         
+                              `remote.c:remote_unpack_thread_info_response()'.
+remote command `q'`Rcmd,'COMMANDCOMMAND (hex encoded) is passed to the      
+                              local interpreter for execution.  Invalid   
+                              commands should be reported using the       
+                              output string.  Before the final result     
+                              packet, the target may also respond with a  
+                              number of intermediate `O'OUTPUT console    
+                              output packets.  *Implementors should note  
+                              that providing access to a stubs's          
+                              interpreter may have security               
+                              implications*.                              
+               reply `OK'     A command response with no output.          
+               reply OUTPUT   A command response with the hex encoded     
+                              output string OUTPUT.                       
+               reply `E'NN    Indicate a badly formed request.            
+               reply `'       When `q'`Rcmd' is not recognized.           
+
+   The following `g'/`G' packets have previously been defined.  In the
+below, some thirty-two bit registers are transferred as sixty-four
+bits.  Those registers should be zero/sign extended (which?) to fill the
+space allocated.  Register bytes are transferred in target byte order.
+The two nibbles within a register byte are transferred most-significant -
+least-significant.
+
+MIPS32                               All registers are transferred as      
+                                     thirty-two bit quantities in the     
+                                     order: 32 general-purpose; sr; lo;   
+                                     hi; bad; cause; pc; 32               
+                                     floating-point registers; fsr; fir;  
+                                     fp.                                  
+MIPS64                               All registers are transferred as      
+                                     sixty-four bit quantities (including 
+                                     thirty-two bit registers such as     
+                                     `sr').  The ordering is the same as  
+                                     `MIPS32'.                            
+
+   Example sequence of a target being re-started.  Notice how the
+restart does not get any direct output:
+
+     <- `R00'
+     -> `+'
+     *target restarts*
+     <- `?'
+     -> `+'
+     -> `T001:1234123412341234'
+     <- `+'
+
+   Example sequence of a target being stepped by a single instruction:
+
+     <- `G1445...'
+     -> `+'
+     <- `s'
+     -> `+'
+     *time passes*
+     -> `T001:1234123412341234'
+     <- `+'
+     <- `g'
+     -> `+'
+     -> `1455...'
+     <- `+'
+
+   If you have trouble with the serial connection, you can use the
+command `set remotedebug'.  This makes GDB report on all packets sent
+back and forth across the serial line to the remote machine.  The
+packet-debugging information is printed on the GDB standard output
+stream.  `set remotedebug off' turns it off, and `show remotedebug'
+shows you its current state.
