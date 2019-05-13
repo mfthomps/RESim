@@ -31,7 +31,7 @@ def Evalx(cmd):
     retval = '\n'
     simicsString = Eval(cmd)
     #print "string is %s" % simicsString
-    if type(simicsString) is not int and simicsString.endswith('None\n'):
+    if type(simicsString) is str and simicsString.endswith('None\n'):
         l = len(simicsString) - 5
         #print "len is %d" % l
         if l != 0:
@@ -76,7 +76,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
         simicsString = Evalx('SendGDBMonitor("@cgc.getEIPWhenStopped(%s)");' % kernel_ok)
         #print 'ready set'
         #print 'getEIPWhenStopped got %s of type %s' % (simicsString, type(simicsString))
-        if simicsString is not None and type(simicsString) is not int and simicsString != '0' and MAILBOX in simicsString:
+        if simicsString is not None and type(simicsString) is str and simicsString != '0' and MAILBOX in simicsString:
             mail = stripMailbox(simicsString)
             #print 'mail is %s' % mail
             if mail == 'exited':
@@ -91,7 +91,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
                 #print 'getEIPWhenStopped found ip of %x, now empty mailbox' % retval
                 Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
         else:
-            if type(simicsString) is not int and not simicsString.strip().startswith('not stopped') \
+            if type(simicsString) is str and not simicsString.strip().startswith('not stopped') \
                and not simicsString.strip().startswith('End of playback'):
                 # hack until python logging not sent to stdout on rev module
                 simicsString = simicsString.strip()

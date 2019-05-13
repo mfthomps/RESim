@@ -646,9 +646,13 @@ class IdaSIM():
     def doStepOver(self):
         #print('in doStepOver')
         idaapi.step_over()
+        #print('back from step over')
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
+        #print('back getDebuggerEvent')
         cur_addr = idc.GetRegValue(self.PC)
+        #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
+            print('run to user space')
             self.runToUserSpace()
         
     

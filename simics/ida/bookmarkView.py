@@ -121,7 +121,7 @@ class bookmarkView(simplecustviewer_t):
         #print('did refresh of clear')
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        if type(simicsString) is int:
+        if type(simicsString) is int or type(simicsString) is long:
             print('listBookmarks got an int?  %d' % simicsString)
             return
         lines = simicsString.split('\n')
