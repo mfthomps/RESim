@@ -1241,8 +1241,8 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
         }
 
         if (s_found) {
-                //gdb->cont_thread = s_thread;
-                gdb->cont_thread = 0;
+                gdb->cont_thread = s_thread;
+                //gdb->cont_thread = 0;
                 conf_object_t *cpu = find_cpu_for_active_thread(
                         gdb, gdb->cont_thread);
                 if (cpu) {
