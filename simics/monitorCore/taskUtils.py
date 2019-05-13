@@ -292,12 +292,12 @@ class TaskUtils():
             #   self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
             #   #return tasks
             if task_addr is None or task.next is None: 
-                self.lgr.debug('task_addr None')
-                return tasks
+                #self.lgr.debug('task_addr None')
+                break
             if task.comm is None or len(task.comm.strip()) == 0:
                 # cleaner way to know we are done?
                 self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
-                return tasks
+                break
                 #continue
             '''
             else:
@@ -326,6 +326,12 @@ class TaskUtils():
                 for s in task.sibling:
                     if s and s != x:
                         stack.append((s, x))
+
+        ''' TBD: why does current task need to be seperately added, does not appear in task walk? '''
+        task_rec_addr = self.getCurTaskRec()
+        if task_rec_addr not in tasks:
+            task = self.readTaskStruct(task_rec_addr, cpu)
+            tasks[task_rec_addr] = task
         return tasks
 
     def getExitPid(self):
@@ -334,6 +340,37 @@ class TaskUtils():
     def setExitPid(self, pid):
         self.exit_pid = pid
         self.exit_cycles = self.cpu.cycles
+
+    def getGroupLeaderPid(self, pid):
+        retval = None
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+            if ts_list[ts].pid == pid:
+                group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
+                retval = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                break
+        return retval
+
+    def getGroupPids(self, leader_pid):
+        retval = []
+        self.lgr.debug('getGroupPids for %d' % leader_pid)
+        ts_list = self.getTaskStructs()
+        leader_rec = None
+        for ts in ts_list:
+            if ts_list[ts].pid == leader_pid:
+                leader_rec = ts
+                break
+        if leader_rec is None:
+            self.lgr.debug('taskUtils getGroupPids did not find record for leader pid %d' % leader_pid)
+            return None 
+        for ts in ts_list:
+            group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
+            if group_leader == leader_rec:
+                pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                ''' skip if exiting as recorded by syscall '''
+                if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                    retval.append(ts_list[ts].pid)
+        return retval
 
     def getPidsForComm(self, comm_in):
         comm = os.path.basename(comm_in)
@@ -477,7 +514,7 @@ class TaskUtils():
             self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[pid].prog_addr)
         return prog_string, arg_string_list
 
-    def getProcArgsFromStack(self, pid, syscall_info, cpu):
+    def getProcArgsFromStack(self, pid, at_enter, cpu):
         if pid is None:
             return None, None
 
@@ -518,7 +555,7 @@ class TaskUtils():
                        done = True
                     mult = mult + 1
                     i = i + 1
-                if syscall_info.calculated is not None:
+                if not at_enter:
                     ''' ebx not right?  use stack '''
                     sptr = esp + self.mem_utils.WORD_SIZE
                     prog_addr = self.mem_utils.readPtr(cpu, sptr)
@@ -578,7 +615,7 @@ class TaskUtils():
 
     def getProgName(self, pid):
         if pid not in self.exec_addrs:
-            pid = self.getCurrentThreadLeaderPid()
+            pid = self.getGroupLeaderPid(pid)
         if pid in self.exec_addrs:
             return self.exec_addrs[pid].prog_name, self.exec_addrs[pid].arg_list
         else: 
@@ -688,7 +725,7 @@ class TaskUtils():
         return frame
 
     def socketCallName(self, callname):
-        if self.cpu.architecture != 'arm':
+        if self.cpu.architecture != 'arm' and self.mem_utils.WORD_SIZE != 8:
             return 'socketcall'
         else:
             return callname

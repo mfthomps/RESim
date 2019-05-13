@@ -91,6 +91,7 @@ class memUtils():
                 i+=1    
             self.regs['syscall_num'] = self.regs['eax']
             self.regs['syscall_ret'] = self.regs['eax']
+            self.regs['pc'] = self.regs['eip']
         elif arch == 'arm':
             for i in range(13):
                 r = 'R%d' % i
@@ -200,10 +201,13 @@ class memUtils():
             return None
 
     def readPtr(self, cpu, vaddr):
+        size = self.WORD_SIZE
+        #if vaddr < self.param.kernel_base:
+        #    size = min(size, 6)
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
             try:
-                return self.getUnsigned(SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE))
+                return self.getUnsigned(SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size))
             except:
                 return None
         else:

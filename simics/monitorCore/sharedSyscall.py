@@ -3,6 +3,10 @@ import pageUtils
 import memUtils
 import net
 import ipc
+'''
+Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for matched parameters
+are handled by the stopHap in the syscall module that handled the call.
+'''
 class SharedSyscall():
     def __init__(self, top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_call = {}
@@ -40,7 +44,7 @@ class SharedSyscall():
             return None
 
     def stopTrace(self):
-
+        self.lgr.debug('sharedSyscall stopTrace')
         for eip in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[eip])
         self.exit_pids = {}
@@ -115,7 +119,7 @@ class SharedSyscall():
                 exit_break = self.context_manager.genBreakpoint(self.cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip3, 1, 0)
                 self.exit_hap[exit_eip3] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
-                                   None, exit_break, 'exit hap2')
+                                   None, exit_break, 'exit hap3')
                 #self.lgr.debug('sharedSyscall added exit hap3 %d' % self.exit_hap[exit_eip3])
             self.exit_pids[exit_eip3].append(pid)
 
@@ -225,7 +229,7 @@ class SharedSyscall():
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
 
-            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
+            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str and eax > 0:
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                 s = ''.join(map(chr,byte_array))
                 self.lgr.debug('sharedSyscall SEND check string %s against %s' % (s, exit_info.call_params.match_param))
@@ -246,8 +250,16 @@ class SharedSyscall():
             ss = net.SockStruct(self.cpu, params, self.mem_utils)
             trace_msg = ('\treturn from socketcall GETPEERNAME pid:%d, %s  eax: 0x%x\n' % (pid, ss.getString(), eax))
         elif socket_callname == 'setsockopt':
-            optval_val = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-            trace_msg = ('\treturn from socketcall SETSOCKOPT pid:%d optval_val 0x%x  eax: 0x%x\n' % (pid, optval_val, eax))
+            trace_msg = ('\treturn from socketcall SETSOCKOPT pid:%d eax: 0x%x\n' % (pid, eax))
+        elif socket_callname == 'getsockopt':
+            optval_val = ''
+            if exit_info.retval_addr != 0 and eax == 0:
+                count = self.mem_utils.readWord(self.cpu, exit_info.count)
+                rcount = min(count, 10)
+                thebytes, dumb = self.mem_utils.getBytes(self.cpu, rcount, exit_info.retval_addr)
+                optval_val = 'optlen: %d option: %s' % (count, thebytes)
+            trace_msg = ('\treturn from getsockopt %s result %d\n' % (optval_val, eax))
+          
         else:
             #fd = self.mem_utils.readWord32(self.cpu, params)
             #addr = self.mem_utils.readWord32(self.cpu, params+4)
@@ -274,18 +286,25 @@ class SharedSyscall():
             pass
         trace_msg = ''
         if pid == 0:
-            self.lgr.debug('exitHap pid is zero')
+            self.lgr.debug('exitHap cell %s pid is zero' % (self.cell_name))
             return
         ''' If this is a new pid, assume it is a child clone or fork return '''
         if exit_info is None:
             ''' no pending syscall for this pid '''
             if not self.traceProcs.pidExists(pid):
                 ''' new PID, add it without parent for now? ''' 
-                #self.lgr.debug('exitHap call traceProcs.addProc for pid %d' % pid)
+                clonenum = self.task_utils.syscallNumber('clone')
+                for ppid in self.exit_info:
+                    if self.exit_info[ppid].callnum == clonenum:
+                        if self.exit_info[ppid].call_param is not None:
+                            self.lgr.debug('clone returning in child %d parent maybe %d' % (pid, ppid))
+                            SIM_break_simulation('clone returning in child %d parent maybe %d' % (pid, ppid))
+                            return    
+                self.lgr.debug('exitHap clone child return ?? pid %d' % pid)
                 self.traceProcs.addProc(pid, None, comm=comm)
                 return
             if self.isPendingExecve(pid):
-                self.lgr.debug('exitHap call reschedule from execve?  for pid %d  Remove pending' % pid)
+                self.lgr.debug('exitHap cell %s call reschedule from execve?  for pid %d  Remove pending' % (self.cell_name, pid))
                 self.rmPendingExecve(pid)
                 return 
             else:
@@ -303,7 +322,7 @@ class SharedSyscall():
             ret_addr = self.mem_utils.readPtr(cpu, esp)
             if ret_addr > self.param.kernel_base:
                 ''' nested '''
-                self.lgr.debug('sharedSyscall exitHap nested')
+                #self.lgr.debug('sharedSyscall cell %s exitHap nested' % (self.cell_name))
                 #SIM_break_simulation('nested ?')
                 return
 
@@ -317,25 +336,27 @@ class SharedSyscall():
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s cur_eip 0x%x' % (pid, eax, str(third), str(forth), cur_eip))
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s ' % (pid, eax, str(third), str(forth)))
         callname = self.task_utils.syscallName(exit_info.callnum)
-        self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d break_simulation %r' % (self.cell_name, exit_info.callnum, callname, pid, 
-             exit_info.call_params.break_simulation))
+        #self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d ' % (self.cell_name, exit_info.callnum, callname, pid))
         if callname == 'clone':
-            self.lgr.debug('is clone pid %d  eax %d' % (pid, eax))
+            #self.lgr.debug('is clone pid %d  eax %d' % (pid, eax))
             if eax == 120:
                 SIM_break_simulation('clone faux return?')
                 return
             if  pid in self.trace_procs and self.traceProcs.addProc(eax, pid, clone=True):
                 trace_msg = ('\treturn from clone (tracing), new pid:%d  calling pid:%d\n' % (eax, pid))
-                self.lgr.debug('exitHap clone called addProc for pid:%d parent %d' % (eax, pid))
+                #self.lgr.debug('exitHap clone called addProc for pid:%d parent %d' % (eax, pid))
                 self.traceProcs.copyOpen(pid, eax)
             elif pid not in self.trace_procs:
                 trace_msg = ('\treturn from clone, new pid:%d  calling pid:%d\n' % (eax, pid))
             else:
                 ''' must be repeated hap '''
                 return
-            self.top.addProcList(eax, comm)
+            if exit_info.call_params is not None:
+                self.lgr.debug('exitHap clone, run to pid %d' % eax)
+                SIM_run_alone(self.top.toProcPid, eax)
+                exit_info.call_params = None
             
-            dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
+            #dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
             #if dumb_pid is not None:
             #    self.lgr.debug('sharedSyscall adding clone %d to watched pids' % eax)
             #    self.context_manager.addTask(eax)
@@ -362,7 +383,8 @@ class SharedSyscall():
                 self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
                 if '.so.' in exit_info.fname:
-                    open_syscall = self.top.getSyscall(self.cell_name, 'open')
+                    #open_syscall = self.top.getSyscall(self.cell_name, 'open')
+                    open_syscall = exit_info.syscall_module
                     if open_syscall is not None: 
                         open_syscall.watchFirstMmap(pid, exit_info.fname, eax)
                 if self.traceFiles is not None:
@@ -385,7 +407,7 @@ class SharedSyscall():
                     self.traceProcs.pipe(pid, fd1, fd2)
 
         elif callname == 'read':
-            self.lgr.debug('is read eax 0x%x' % eax)
+            #self.lgr.debug('is read eax 0x%x' % eax)
             if eax >= 0 and exit_info.retval_addr is not None:
                 limit = min(eax, 10)
                 byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
@@ -499,7 +521,7 @@ class SharedSyscall():
                     trace_msg = ('\treturn from dup2 pid:%d, old_fd: %d new: %d\n' % (pid, exit_info.old_fd, eax))
                 else:
                     trace_msg = ('\treturn from dup2 pid:%d, old_fd: and new both %d   Eh?\n' % (pid, eax))
-        elif callname == 'mmap2':
+        elif callname == 'mmap2' or callname == 'mmap':
             ''' TBD error handling? '''
             if exit_info.fname is not None and self.soMap is not None:
                 self.lgr.debug('return from mmap pid:%d, addr: 0x%x so fname: %s' % (pid, ueax, exit_info.fname))
@@ -520,13 +542,15 @@ class SharedSyscall():
                 else:
                     trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
 
+        elif callname == 'select' or callname == '_newselect':
+            trace_msg = ('\treturn from %s %s  result: %d' % (callname, exit_info.select_info.getString(self.mem_utils, self.cpu), eax))
         elif callname == 'vfork':
             trace_msg = ('\treturn from vfork in parent %d child pid:%d' % (pid, ueax))
             if pid in self.trace_procs:
                 self.traceProcs.addProc(ueax, pid)
                 self.traceProcs.copyOpen(pid, eax)
         elif callname == 'execve':
-            self.lgr.debug('exitHap from execve pid:%d  remove from pending_execve' % pid)
+            #self.lgr.debug('exitHap from execve pid:%d  remove from pending_execve' % pid)
             if self.isPendingExecve(pid):
                 self.rmPendingExecve(pid)
         elif callname == 'socketcall' or callname.upper() in net.callname:
@@ -534,30 +558,36 @@ class SharedSyscall():
         else:
             trace_msg = ('\treturn from call %s code: 0x%x  pid:%d\n' % (callname, ueax, pid))
 
-        if not self.debugging or (callname != 'clone'):
+        #if not self.debugging or (callname != 'clone'):
+        if True:
             ''' will be done in clone child.  TBD, assumes child runs second? '''
-            self.lgr.debug('exitHap pid %d delete breakpoints' % pid)
+            #self.lgr.debug('exitHap pid %d delete breakpoints' % pid)
             self.rmExitHap(pid)
+
         ''' if debugging a proc, and clone call, add the new process '''
         dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
         if dumb_pid is not None and callname == 'clone':
+            if eax == 0:
+                self.lgr.debug('sharedSyscall clone but eax is zero ??? pid is %d' % pid)
+                return
             self.lgr.debug('sharedSyscall adding clone %d to watched pids' % eax)
             self.context_manager.addTask(eax)
 
         if exit_info.call_params is not None and exit_info.call_params.break_simulation:
+            '''  Use syscall module that got us here to handle stop actions '''
             self.lgr.debug('exitHap found matching call parameter %s' % str(exit_info.call_params.match_param))
             self.context_manager.setIdaMessage(trace_msg)
             self.rmExitHap(pid)
             self.stopTrace()
             #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
-            my_syscall = self.top.getSyscall(self.cell_name, callname)
+            #my_syscall = self.top.getSyscall(self.cell_name, callname)
+            my_syscall = exit_info.syscall_module
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:
                 SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
-        if trace_msg is not None:
-            self.lgr.debug(trace_msg.strip())
     
-        if len(trace_msg.strip())>0:
+        if trace_msg is not None and len(trace_msg.strip())>0:
+            self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
 

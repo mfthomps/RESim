@@ -60,7 +60,7 @@ class CloneChild():
             ueax = self.cpu.iface.int_register.read(reg_num)
             eax = self.mem_utils.getSigned(ueax)
             if eax <= 0:
-                self.lgr.debug('error return from clone? %d' % eax)
+                self.lgr.debug('cloneChild exitHap error return from clone? %d' % eax)
                 self.context_manager.genDeleteHap(self.exit_hap)
                 self.exit_hap = None
             if self.child_pid is not None:

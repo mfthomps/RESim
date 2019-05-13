@@ -128,7 +128,7 @@ class GenContextMgr():
         SIM_run_command(cmd)
         obj = SIM_get_object(context)
         self.resim_context = obj
-        self.lgr.debug('resim_context defined as obj %s' % str(obj))
+        self.lgr.debug('context_manager cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
         ''' avoid searching all task recs to know if pid being watched '''
         self.pid_cache = []
 
@@ -266,13 +266,13 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
-            self.lgr.debug('genContextManager getThreadPids add %d' % (pid))
+            self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
             retval.append(pid)
         return retval
 
     def addNoWatch(self):
         ''' only watch maze exits for the current task. NOTE: assumes those are set after call to this function'''
-        self.lgr.debug('contextManager addNoWatch')
+        self.lgr.debug('contextManager cell %s addNoWatch' % self.cell_name)
         if len(self.nowatch_list) == 0 and len(self.watch_rec_list) == 0:
             ''' had not been watching and tasks.  start so we can not watch this one '''
             self.setTaskHap()
@@ -311,14 +311,14 @@ class GenContextMgr():
         pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
         prev_task = self.task_utils.getCurTaskRec()
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
-        #self.lgr.debug('changeThread from %d to %d cur_addr 0x%x' % (prev_pid, pid, cur_addr))
+        #self.lgr.debug('changeThread from %d to %d cur_addr 0x%x watchlist len is %d' % (prev_pid, pid, cur_addr, len(self.watch_rec_list)))
         pid = None
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
                 We don't have the process rec until it is ready to schedule. '''
             pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
             if pid in self.pending_watch_pids:
-                #self.lgr.debug('add pid %d to watched processes' % pid)
+                #self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
                 self.watch_rec_list.append(cur_addr)
                 self.pending_watch_pids.remove(pid)
 
@@ -396,6 +396,7 @@ class GenContextMgr():
                 self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
                 self.pending_watch_pids.append(pid)
             else:
+                self.lgr.debug('genContextManager, addTask pid %d add rec 0x%x' % (pid, rec))
                 self.watch_rec_list.append(rec)
             self.pid_cache.append(pid)
         else:
@@ -427,7 +428,7 @@ class GenContextMgr():
         self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
-        self.lgr.debug('watchTasks break %d set on physical 0x%x' % (self.task_break, self.phys_current_task))
+        self.lgr.debug('watchTasks cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
 
     def watchTasks(self):
         if self.task_break is not None:
@@ -436,8 +437,11 @@ class GenContextMgr():
         self.setTaskHap()
         self.watching_tasks = True
         ctask = self.task_utils.getCurTaskRec()
+        if ctask in self.watch_rec_list:
+            self.lgr.debug('watchTasks, current task already being watched')
+            return
         pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
-        self.lgr.debug('watchTasks watch record 0x%x pid: %d' % (ctask, pid))
+        self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d' % (self.cell_name, ctask, pid))
         self.watch_rec_list.append(ctask)
         self.pid_cache.append(pid)
       

@@ -45,6 +45,44 @@ def assignLinkNames(target):
     cmd = '$%s_eth2 = $eth2' % (target)
     run_command(cmd)
 
+    cmd = '$%s_switch0 = $switch0_con' % (target)
+    run_command(cmd)
+    cmd = '$%s_switch1 = $switch1_con' % (target)
+    run_command(cmd)
+    cmd = '$%s_switch2 = $switch2_con' % (target)
+    run_command(cmd)
+
+def linkSwitches(target, comp_dict):
+    if comp_dict['ETH0_SWITCH'] != 'NONE':
+        cmd = 'connect $eth0 cnt1 = $%s_con' %  comp_dict['ETH0_SWITCH']
+        run_command(cmd)
+    if comp_dict['ETH1_SWITCH'] != 'NONE':
+        cmd = 'connect $eth1 cnt1 = $%s_con' %  comp_dict['ETH1_SWITCH']
+        run_command(cmd)
+    if comp_dict['ETH2_SWITCH'] != 'NONE':
+        cmd = 'connect $eth2 cnt1 = $%s_con' %  comp_dict['ETH2_SWITCH']
+        run_command(cmd)
+ 
+   
+def createDict(config): 
+    comp_dict = {}
+    if config.has_section('driver'):
+        comp_dict['driver'] = {}
+        for name, value in config.items('driver'):
+            comp_dict['driver'][name] = value
+    for section in config.sections():
+        if section in not_a_target:
+            continue
+        comp_dict[section] = {}
+        print('assign %s CLI variables' % section)
+        ''' hack defaults, Simics CLI has no undefine operation '''
+        comp_dict[section]['ETH0_SWITCH'] = 'switch0'
+        comp_dict[section]['ETH1_SWITCH'] = 'switch1'
+        comp_dict[section]['ETH2_SWITCH'] = 'switch2'
+        for name, value in config.items(section):
+            comp_dict[section][name] = value
+    return comp_dict
+
 print('Launch RESim')
 SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
 RESIM_TARGET = os.getenv('RESIM_TARGET')
@@ -72,17 +110,16 @@ RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
 
 not_a_target=['ENV', 'driver']
 
-comp_list = {}
+comp_dict = createDict(config)
 if RUN_FROM_SNAP is None:
     run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
     run_command('set-min-latency min-latency = 0.01')
     if config.has_section('driver'):
-        comp_list['driver'] = {}
-        for name, value in config.items('driver'):
+        for name in comp_dict['driver']:
+            value = comp_dict['driver'][name]
             if name.startswith('$'):
                 cmd = "%s=%s" % (name, value)
                 run_command(cmd)
-            comp_list['driver'][name] = value
 
         print('Start the %s' % config.get('driver', 'host_name'))
         run_command('run-command-file ./targets/%s' % config.get('driver','SIMICS_SCRIPT'))
@@ -99,16 +136,18 @@ if RUN_FROM_SNAP is None:
     for section in config.sections():
         if section in not_a_target:
             continue
-        comp_list[section] = {}
         print('assign %s CLI variables' % section)
-        for name, value in config.items(section):
+        ''' hack defaults, Simics CLI has no undefine operation '''
+        run_command('$eth_dev=i82543gc')
+        for name in comp_dict[section]:
+            value = comp_dict[section][name]
             if name.startswith('$'):
                 cmd = "%s=%s" % (name, value)
                 run_command(cmd)
-            comp_list[section][name] = value
         print('Start the %s' % section)  
         run_command('run-command-file ./targets/%s' % config.get(section,'SIMICS_SCRIPT'))
         assignLinkNames(section)
+        linkSwitches(section, comp_dict[section])
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)
@@ -121,6 +160,6 @@ CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
     gkp = getKernelParams.GetKernelParams()
 else:
-    cgc = genMonitor.GenMonitor(comp_list)
+    cgc = genMonitor.GenMonitor(comp_dict)
     cgc.doInit()
 

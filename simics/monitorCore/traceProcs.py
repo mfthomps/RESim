@@ -21,7 +21,7 @@ class FileWatch():
         self.outfile = outfile
 
 class TraceProcs():
-    def __init__(self, cell_name, lgr, proc_list, run_from_snap=None):
+    def __init__(self, cell_name, lgr, run_from_snap=None):
         self.lgr = lgr
         self.cell_name = cell_name
         ''' dict of Pinfo indexed by pid '''
@@ -37,10 +37,11 @@ class TraceProcs():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
         else:
-            for pid in proc_list:
-                spid = str(pid)
-                self.setName(spid, proc_list[pid], None, quiet=False)
-                self.init_proc_list[spid] = proc_list[pid]
+            pass
+            #for pid in proc_list:
+            #    spid = str(pid)
+            #    self.setName(spid, proc_list[pid], None, quiet=False)
+            #    self.init_proc_list[spid] = proc_list[pid]
 
     def loadPickle(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
@@ -139,7 +140,7 @@ class TraceProcs():
         self.plist[pid] = newproc 
         if clone:
             if parent is not None and self.plist[parent].prog is not None:
-                self.plist[pid].prog = '%s <clone>' % self.plist[parent].prog
+                self.plist[pid].prog = '%s' % self.plist[parent].prog
             else:
                 self.plist[pid].prog = '<clone>'
         elif comm is not None:  
@@ -281,7 +282,7 @@ class TraceProcs():
         if pid not in self.plist:
             #self.lgr.debug('traceProcs close on unknown pid %d' % pid)
             return
-        self.lgr.debug('try close pid %s fd %d' % (pid, fd))
+        #self.lgr.debug('try close pid %s fd %d' % (pid, fd))
         self.rmFD(pid, fd)
 
     def dup(self, pid, fd_old, fd_new):

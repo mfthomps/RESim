@@ -69,9 +69,9 @@ class SOMap():
             self.lgr.debug('SOMap isCode, pid:%d missing from so_file_map' % pid)
             return False
         for text_seg in self.so_file_map[pid]:
-            end = text_seg.start + text_seg.offset + text_seg.size
-            #print('so compare 0x%x to 0x%x - 0x%x' % (address, text_seg.start, end))
-            if address >= text_seg.start and address <= end:
+            start = text_seg.locate + text_seg.offset
+            end = start + text_seg.size
+            if address >= start and address <= end:
                 return True
         return False
 
@@ -94,22 +94,27 @@ class SOMap():
         self.text_end[pid] = start+size
         self.text_prog[pid] = prog
        
-    def addSO(self, pid, fpath, addr, count):
+    def addSO(self, pid_in, fpath, addr, count):
+        pid = self.getThreadPid(pid_in, quiet=True)
+        if pid is None:
+            pid = pid_in
         if pid not in self.so_addr_map:
             self.so_addr_map[pid] = {}
             self.so_file_map[pid] = {}
 
-        full_path = self.targetFS.getFull(fpath)
-        self.lgr.debug('soMap addSO, fpath is %s  full: %s' % (fpath, full_path))
+        full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
         text_seg = elfText.getText(full_path)
         if text_seg is None:
             self.lgr.debug('SOMap addSO, no file at %s' % full_path)
             return
-        text_seg.start = addr
-        text_seg.size = count
+       
+        text_seg.locate = addr
+        #text_seg.size = count
 
         self.so_addr_map[pid][fpath] = text_seg
         self.so_file_map[pid][text_seg] = fpath
+        self.lgr.debug('soMap addSO pid:%d, full: %s size: 0x%x given count: 0x%x, locate: 0x%x addr: 0x%x off 0x%x  len so_map %d' % (pid, 
+               full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
 
     def showSO(self):
         cpu, comm, pid = self.task_utils.curProc() 
@@ -117,23 +122,29 @@ class SOMap():
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
             print('no so map for %d' % pid)
+        print('SO Map for pid: %d' % pid)
         if pid in self.so_file_map:
-            print('0x%x - 0x%x   %s' % (self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
+            if pid in self.text_start:
+                print('0x%x - 0x%x   %s' % (self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
+            else:
+                print('pid %d not in text sections' % pid)
+                self.lgr.debug('pid %d not in text sections' % pid)
             sort_map = {}
             for text_seg in self.so_file_map[pid]:
-                sort_map[text_seg.start] = text_seg
+                sort_map[text_seg.locate] = text_seg
                 
-            for addr in sorted(sort_map):
-                text_seg = sort_map[addr]
-                #end = text_seg.start + text_seg.offset + text_seg.size
-                end = text_seg.start + text_seg.size
-                print('0x%x - 0x%x 0x%x 0x%x  %s' % (text_seg.start, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
+            for locate in sorted(sort_map):
+                text_seg = sort_map[locate]
+                start = text_seg.locate+text_seg.offset
+                end = locate + text_seg.size
+                print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
         else:
             print('no so map for %d' % pid)
  
     def handleExit(self, pid):
         ''' when a thread leader exits, clone the so map structures to each child, TBD determine new thread leader? '''
         if pid not in self.so_addr_map:
+            self.lgr.debug('SOMap handleExit pid %d not in so_addr map' % pid)
             return
         self.lgr.debug('SOMap handleExit pid %d' % pid)
         pid_list = self.context_manager.getThreadPids()
@@ -144,7 +155,8 @@ class SOMap():
                     self.lgr.debug('SOMap handleExit new pid %d added to SOmap' % tpid)
                     self.so_addr_map[tpid] = self.so_addr_map[pid]
                     self.so_file_map[tpid] = self.so_file_map[pid]
-                    if tpid in self.text_start and pid in self.text_start:
+                    #if tpid in self.text_start and pid in self.text_start:
+                    if pid in self.text_start:
                         self.text_start[tpid] = self.text_start[pid]
                         self.text_end[tpid] = self.text_end[pid]
                         self.text_prog[tpid] = self.text_prog[pid]
@@ -160,7 +172,7 @@ class SOMap():
            del self.text_prog[pid]
 
 
-    def getThreadPid(self, pid):
+    def getThreadPid(self, pid, quiet=False):
         if pid in self.so_file_map:
             return pid
         else:
@@ -172,7 +184,10 @@ class SOMap():
                 for p in pid_list:
                     if p in self.so_file_map:
                         return p
-        self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
+        if not quiet:
+            self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
+        else:
+            self.lgr.debug('SOMap getThreadPid requested unknown pid %d' % pid)
         return None
  
     def getSOPid(self, pid):
@@ -212,9 +227,9 @@ class SOMap():
                 retval = self.text_prog[pid]
             else:
                 for text_seg in sorted(self.so_file_map[pid]):
-                    end = text_seg.start + text_seg.size
-                    #self.lgr.debug('compare 0x%x to range 0x%x - 0x%x' % (addr_in, text_seg.start, end))
-                    if text_seg.start <= addr_in and addr_in <= end:
+                    start = text_seg.locate + text_seg.offset
+                    end = start + text_seg.size
+                    if start <= addr_in and addr_in <= end:
                         retval = self.so_file_map[pid][text_seg]
                         break
             
@@ -233,10 +248,10 @@ class SOMap():
                 retval = self.text_prog[pid], self.text_start[pid], self.text_end[pid]
             else:
                 for text_seg in sorted(self.so_file_map[pid]):
-                    end = text_seg.start + text_seg.size
-                    #self.lgr.debug('compare 0x%x to range 0x%x - 0x%x' % (addr_in, text_seg.start, end))
-                    if text_seg.start <= addr_in and addr_in <= end:
-                        retval = self.so_file_map[pid][text_seg], text_seg.start, end
+                    start = text_seg.locate + text_seg.offset
+                    end = start + text_seg.size
+                    if start <= addr_in and addr_in <= end:
+                        retval = self.so_file_map[pid][text_seg], start, end
                         break
             
         else:

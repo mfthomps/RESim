@@ -2,15 +2,16 @@ import os
 import shlex
 import subprocess
 class Text():
-    def __init__(self, start, offset, size):
-        self.start = start
+    def __init__(self, address, offset, size):
+        self.address = address
         self.offset = offset
         self.size = size
+        self.locate = None
 
 def getText(path):
     if not os.path.isfile(path):
         return None
-    cmd = 'readelf -S %s' % path
+    cmd = 'readelf -WS %s' % path
     grep = 'grep " .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,

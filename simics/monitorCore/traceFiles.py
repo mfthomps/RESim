@@ -42,7 +42,7 @@ class TraceFiles():
             self.lgr.debug('TraceFiles close %d num open files %d'  % (fd, len(self.open_files)))
 
     def write(self, pid, fd, the_bytes):
-        if self.traceProcs is not None:
+        if self.traceProcs is not None and len(self.path_list) > 0:
             fname = self.traceProcs.getFileName(pid, fd)
             self.lgr.debug('TraceFiles write got fname %s' % fname)
             if fname is not None and fname in self.path_list:

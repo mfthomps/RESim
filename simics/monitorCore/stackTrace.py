@@ -47,8 +47,9 @@ class StackTrace():
                 else:        
                     retval = eip
         else:
-            eip = return_to - 8
+            eip = return_to - 2*(self.mem_utils.WORD_SIZE)
             # TBD use instruction length to confirm it is a true call
+            # not always 2* word size?
             while retval is None and eip < return_to:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if instruct[1].startswith(self.callnm):
@@ -106,8 +107,8 @@ class StackTrace():
         done  = False
         count = 0
         #ptr = ebp
-        #ptr = esp
-        ptr = esp + self.mem_utils.WORD_SIZE
+        ptr = esp
+        #ptr = esp + self.mem_utils.WORD_SIZE
         been_in_main = False
         prev_ip = None
         so_checked = []
@@ -122,7 +123,7 @@ class StackTrace():
         ''' record info about current IP '''
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
-        self.lgr.debug('cur eip 0x%x unstruct %s  fname %s' % (eip, instruct, fname))
+        self.lgr.debug('cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct)
             self.frames.append(frame)
@@ -132,6 +133,9 @@ class StackTrace():
 
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
+            # TBD should be part of readPtr?
+            if self.mem_utils.WORD_SIZE == 8:
+                val = val & 0x0000ffffffffffff
             skip_this = False
                 
             if self.soMap.isCode(val):
@@ -198,7 +202,7 @@ class StackTrace():
                         been_in_main = True
                         #self.lgr.debug('stackTrace been in main')
                 else:
-                    #self.lgr.debug('nothing from followCall')
+                    self.lgr.debug('nothing from followCall')
                     pass
             elif val is not None:
                 #self.lgr.debug('ptr 0x%x not code 0x%x' % (ptr, val))
