@@ -1,3 +1,10 @@
+#
+# Common file used for RESim genx86 platforms.
+# WARNING: do not use "if not defined" for defaults
+# defined within RESim configuration files.  It will
+# fail for multi-component simulation (no way to undefine).
+# Put defaults in launchRESim.py
+#
 if not defined cpi             {$cpi             = 1}
 if not defined disk_size       {$disk_size       = 20496236544}
 if not defined disk_image      {}
@@ -18,8 +25,8 @@ if not defined freq_mhz        {$freq_mhz        = 2000}
 if not defined apic_freq_mhz   {$apic_freq_mhz   = 133}
 if not defined use_vmp         {$use_vmp         = TRUE}
 if not defined spi_flash       {$spi_flash       = "spi-flash.bin"}
-if not defined mac_address     {$mac_address     = "00:19:A0:E1:1C:9F"}
 if not defined sata_mode       {$sata_mode       = TRUE}
+
 if $sata_mode {
     if not defined bios         {$bios            = "seabios-simics-x58-ich10-sata-1.6.3-20140611.bin"}
 } else {
@@ -55,11 +62,11 @@ $motherboard = (create-motherboard-x58-ich10 $system.mb
         acpi = $use_acpi
         break_on_reboot = $break_on_reboot
         bios = $bios
-        mac_address = $mac_address
+        mac_address = $mac_address_0
         spi_flash = $spi_flash)
 $southbridge = $motherboard.sb
 $northbridge = $motherboard.nb
-echo "motherboard nic gets mac address "+$mac_address
+echo "motherboard nic gets mac address "+$mac_address_0
 
 ### processor
 $create_processor = "create-processor-" + $cpu_class
@@ -95,26 +102,38 @@ connect $northbridge.gpu $vga.connector_pci_bus
 
 ### nic
 if defined use_broadcom{
-   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_2 mac_address1 = $mac_address_3)
-   echo "pci_slot[0] gets mac address "+ $mac_address_2+" and "+ $mac_address_3
+   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_1 mac_address1 = $mac_address_2)
+   echo "pci_slot[0] gets mac address "+ $mac_address_1+" and "+ $mac_address_2
    connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
 }else{
-   if defined mac_address_2     {
-      $eth_comp = (create-pci-i82559 name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
-      #$eth_comp = (create-pci-i82543gc name = $motherboard.nb.i82543gc mac_address = $mac_address_2)
-      echo "pci_slot[0] gets mac address "+ $mac_address_2
+   # ignore name assignments, simics cli fu
+   if defined mac_address_1     {
+      if $eth_dev == "i82559"{
+          $eth_comp = (create-pci-i82559 name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp = (create-pci-i82546gc name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp = (create-pci-i82543gc name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "pci_slot[0] gets mac address "+ $mac_address_1
       connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
    }
-   if defined mac_address_3 {
-      if $mac_address_3 != "" {
-        $eth_comp2 = (create-pci-i82559 name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
-        #$eth_comp2 = (create-pci-i82543gc name = $motherboard.nb.i82543gc2 mac_address = $mac_address_3)
-        echo "pci_slot[1] gets mac address "+ $mac_address_3
-        connect $motherboard.nb.pci_slot[1] $eth_comp2.connector_pci_bus
+   if defined mac_address_2 {
+      if $eth_dev == "i82559"{
+          $eth_comp2 = (create-pci-i82559 name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp2 = (create-pci-i82546gc name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp2 = (create-pci-i82543gc name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
       }
+      echo "pci_slot[1] gets mac address "+ $mac_address_2
+      connect $motherboard.nb.pci_slot[1] $eth_comp2.connector_pci_bus
    }
 }
-echo "mb has mac address " + $mac_address
 
 
 ### consoles
