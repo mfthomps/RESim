@@ -37,20 +37,36 @@ That ini file must include and ENV section and a section for each
 component in the simulation.  
 '''
 
-def assignLinkNames(target):
-    cmd = '$%s_eth0 = $eth0' % (target)
-    run_command(cmd)
-    cmd = '$%s_eth1 = $eth1' % (target)
-    run_command(cmd)
-    cmd = '$%s_eth2 = $eth2' % (target)
-    run_command(cmd)
+class LinkObject():
+    def __init__(self, name):
+        self.name = name
+        cmd = '%s' % name
+        self.obj = SIM_run_command(cmd)
+        print('self.obj is %s' % self.obj)
 
-    cmd = '$%s_switch0 = $switch0_con' % (target)
+def doEthLink(target, eth):
+    name = '$%s_%s' % (target, eth)
+    cmd = '%s = $%s' % (name, eth)
     run_command(cmd)
-    cmd = '$%s_switch1 = $switch1_con' % (target)
+    link_object = LinkObject(name)
+    return link_object
+    
+def doSwitch(target, switch):
+    name = '$%s_%s' % (target, switch)
+    cmd = '%s = $%s_con' % (name, switch)
     run_command(cmd)
-    cmd = '$%s_switch2 = $switch2_con' % (target)
-    run_command(cmd)
+    link_object = LinkObject(name)
+    return link_object
+    
+def assignLinkNames(target):
+    link_names = []
+    link_names.append(doEthLink(target, 'eth0'))
+    link_names.append(doEthLink(target, 'eth1'))
+    link_names.append(doEthLink(target, 'eth2'))
+    link_names.append(doSwitch(target, 'switch0'))
+    link_names.append(doSwitch(target, 'switch1'))
+    link_names.append(doSwitch(target, 'switch2'))
+    return link_names
 
 def linkSwitches(target, comp_dict):
     if comp_dict['ETH0_SWITCH'] != 'NONE':
@@ -71,7 +87,7 @@ def createDict(config):
         for name, value in config.items('driver'):
             comp_dict['driver'][name] = value
     for section in config.sections():
-        if section in not_a_target:
+        if section in not_a_target and section != 'driver':
             continue
         comp_dict[section] = {}
         print('assign %s CLI variables' % section)
@@ -111,17 +127,19 @@ RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
 not_a_target=['ENV', 'driver']
 
 comp_dict = createDict(config)
+link_dict = {}
 if RUN_FROM_SNAP is None:
     run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
     run_command('set-min-latency min-latency = 0.01')
     if config.has_section('driver'):
+        run_command('$eth_dev=i82543gc')
         for name in comp_dict['driver']:
             value = comp_dict['driver'][name]
             if name.startswith('$'):
                 cmd = "%s=%s" % (name, value)
                 run_command(cmd)
 
-        print('Start the %s' % config.get('driver', 'host_name'))
+        print('Start the %s' % config.get('driver', '$host_name'))
         run_command('run-command-file ./targets/%s' % config.get('driver','SIMICS_SCRIPT'))
         run_command('start-agent-manager')
         done = False
@@ -132,7 +150,8 @@ if RUN_FROM_SNAP is None:
                 done = True 
             count += 1
             print count
-        assignLinkNames('driver')
+        link_dict['driver'] = assignLinkNames('driver')
+        linkSwitches('driver', comp_dict['driver'])
     for section in config.sections():
         if section in not_a_target:
             continue
@@ -146,7 +165,7 @@ if RUN_FROM_SNAP is None:
                 run_command(cmd)
         print('Start the %s' % section)  
         run_command('run-command-file ./targets/%s' % config.get(section,'SIMICS_SCRIPT'))
-        assignLinkNames(section)
+        link_dict[section] = assignLinkNames(section)
         linkSwitches(section, comp_dict[section])
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
@@ -160,6 +179,6 @@ CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
     gkp = getKernelParams.GetKernelParams()
 else:
-    cgc = genMonitor.GenMonitor(comp_dict)
+    cgc = genMonitor.GenMonitor(comp_dict, link_dict)
     cgc.doInit()
 
