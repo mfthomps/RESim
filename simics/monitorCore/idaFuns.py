@@ -5,6 +5,7 @@ class IDAFuns():
     def __init__(self, path, lgr):
         self.funs = {}
         self.lgr = lgr
+        self.did_paths = []
         #self.lgr.debug('IDAFuns for path %s' % path)
         if os.path.isfile(path):
             with open(path) as fh:
@@ -25,11 +26,14 @@ class IDAFuns():
         return fun_path
             
     def add(self, path, offset):
-
+        if path in self.did_paths:
+            return
+        else:
+            self.did_paths.append(path)
         funfile = self.getFunPath(path)
         if os.path.isfile(funfile):
             with open(funfile) as fh:
-                #self.lgr.debug('IDAFuns add for path %s' % path)
+                #self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
                     fun = int(f)+offset
@@ -37,7 +41,7 @@ class IDAFuns():
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     self.funs[fun]['name'] = newfuns[f]['name']
-                    #self.lgr.debug('idaFun add was %s %x %x   now %x %x %x' % (f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
+                    #self.lgr.debug('idaFun add %s was %s %x %x   now %x %x %x' % (newfuns[f]['name'], f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
         else:
             #self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
             pass
@@ -48,6 +52,12 @@ class IDAFuns():
             return True
         else:
             return False
+
+    def getName(self, fun):
+        if fun in self.funs:
+            return self.funs[fun]['name']
+        else:
+            return None
 
     def inFun(self, ip, fun):
         #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
@@ -63,3 +73,5 @@ class IDAFuns():
                 return fun
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
         return None
+
+        
