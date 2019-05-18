@@ -701,7 +701,7 @@ class Syscall():
             ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             for call_param in syscall_info.call_params:
-                if call_param.subcall == 'accept' and call_param.match_param == ss.fd:
+                if call_param.subcall == 'accept' and (call_param.match_param < 0 or call_param.match_param == ss.fd):
                     exit_info.call_params = call_param
                     break
 
@@ -713,8 +713,7 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
 
-        elif socket_callname == "recv" or socket_callname == "recvfrom" or \
-                     socket_callname == "recvmsg": 
+        elif socket_callname == "recv" or socket_callname == "recvfrom":
             exit_info.old_fd = ss.fd
             exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             exit_info.retval_addr = ss.addr
@@ -723,6 +722,18 @@ class Syscall():
                 if type(call_param.match_param) is int and call_param.match_param == ss.fd:
                     exit_info.call_params = call_param
                     break
+        elif socket_callname == "recvmsg": 
+            exit_info.old_fd = frame['param1']
+            exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
+            exit_info.retval_addr = frame['param2']
+            msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'])
+            ida_msg = '%s - %s pid:%d msghdr: 0x%x %s' % (callname, socket_callname, pid, frame['param2'], msghdr.getString())
+
+            for call_param in syscall_info.call_params:
+                if type(call_param.match_param) is int and call_param.match_param == frame['param1']:
+                    exit_info.call_params = call_param
+                    break
+            
         elif socket_callname == "send" or socket_callname == "sendto" or \
                      socket_callname == "sendmsg": 
             exit_info.old_fd = ss.fd

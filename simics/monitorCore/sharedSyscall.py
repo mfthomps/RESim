@@ -225,7 +225,9 @@ class SharedSyscall():
         elif socket_callname == "send" or socket_callname == "sendto" or \
              socket_callname == "sendmsg": 
             if eax >= 0:
-                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
+                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                s = ''.join(map(chr,byte_array))
+                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d\n%s\n' % (socket_callname, pid, exit_info.old_fd, eax, s))
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
 
@@ -237,15 +239,32 @@ class SharedSyscall():
                     ''' no match, set call_param to none '''
                     exit_info.call_params = None
 
-        elif socket_callname == "recv" or socket_callname == "recvfrom" or \
-             socket_callname == "recvmsg": 
+        elif socket_callname == "recv" or socket_callname == "recvfrom":
             if eax >= 0:
-                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d into 0x%x\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr))
+                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                s = ''.join(map(chr,byte_array))
+                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d into 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr, s))
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d into 0x%x\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr))
             if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None:
                 ''' in case we want to break on a read of this data '''
                 self.dataWatch.setRange(exit_info.retval_addr, eax)
+
+        elif socket_callname == "recvmsg": 
+            msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
+            trace_msg = ('\treturn from socketcall %s pid: %d FD: %d count: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+            if eax < 0:
+                trace_msg = ('\error treturn from socketcall %s pid: %d FD: %d exception: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+            else:
+                trace_msg = ('\treturn from socketcall %s pid: %d FD: %d count: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+                msg_iov = msghdr.getIovec()
+                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, msg_iov[0].base)
+                s = ''.join(map(chr,byte_array))
+                trace_msg = trace_msg+'\t'+s+'\n'
+                if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None:
+                    ''' in case we want to break on a read of this data '''
+                    self.dataWatch.setRange(msg_iov[0].base, eax)
+            
         elif socket_callname == "getpeername":
             ss = net.SockStruct(self.cpu, params, self.mem_utils)
             trace_msg = ('\treturn from socketcall GETPEERNAME pid:%d, %s  eax: 0x%x\n' % (pid, ss.getString(), eax))
@@ -376,11 +395,13 @@ class SharedSyscall():
                 ptable_info = pageUtils.findPageTableIA32E(cpu, exit_info.fname_addr, self.lgr)
                 SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
-            if True or eax >= 0:
+            trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, eax, 
+                   exit_info.fname, exit_info.flags, exit_info.mode, eax))
+            self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, 
+                   eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+            if eax >= 0:
                 if pid in self.trace_procs:
                     self.traceProcs.open(pid, comm, exit_info.fname, eax)
-                trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
-                self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
                 if '.so.' in exit_info.fname:
                     #open_syscall = self.top.getSyscall(self.cell_name, 'open')
@@ -436,7 +457,9 @@ class SharedSyscall():
             if eax >= 0 and exit_info.retval_addr is not None:
                 if eax < 1024:
                     byte_string, byte_array = self.mem_utils.getBytes(cpu, eax, exit_info.retval_addr)
-                    trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
+                    s = ''.join(map(chr,byte_array))
+                    #trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
+                    trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, s))
                     if self.traceFiles is not None:
                         self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
