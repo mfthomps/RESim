@@ -117,8 +117,9 @@ class GenMonitor():
     ''' Top level RESim class '''
     SIMICS_BUG=False
     PAGE_SIZE = 4096
-    def __init__(self, comp_dict):
+    def __init__(self, comp_dict, link_dict):
         self.comp_dict = comp_dict
+        self.link_dict = link_dict
         self.param = {}
         self.mem_utils = {}
         self.task_utils = {}
@@ -170,6 +171,7 @@ class GenMonitor():
         self.bookmarks = None
 
         self.genInit(comp_dict)
+        self.reg_list = None
 
     def genInit(self, comp_dict):
         '''
@@ -184,6 +186,16 @@ class GenMonitor():
         target_cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('New log, in genInit')
         self.run_from_snap = os.getenv('RUN_FROM_SNAP')
+        if self.run_from_snap is not None:
+            net_link_file = os.path.join('./', self.run_from_snap, 'net_link.pickle')
+            if os.path.isfile(net_link_file):
+                self.net_links = pickle.load( open(net_link_file, 'rb') )
+                for target in self.net_links:
+                    for link in self.net_links[target]:
+                        cmd = '%s = %s' % (link.name, link.obj)
+                        self.lgr.debug('genInit link cmd is %s' % cmd)
+                        SIM_run_command(cmd)
+
         for cell_name in comp_dict:
             if 'RESIM_PARAM' in comp_dict[cell_name]:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
@@ -196,7 +208,7 @@ class GenMonitor():
                 self.param[cell_name] = pickle.load( open(param_file, 'rb') ) 
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
-                print('Cell %s missing params ' % (cell_name))
+                print('Cell %s missing params, it will not be monitored. ' % (cell_name))
                 self.lgr.debug('Cell %s missing params ' % (cell_name))
                 continue 
             word_size = 4
@@ -218,13 +230,9 @@ class GenMonitor():
             #self.proc_list[cell_name] = {}
             self.stack_base[cell_name] = None
             if self.run_from_snap is not None:
-                #plist_file = os.path.join('./', self.run_from_snap, cell_name, 'proc_list.pickle')
-                #if os.path.isfile(plist_file):
-                #    self.proc_list[cell_name] = pickle.load( open(plist_file, 'rb') ) 
-                #    for pid in self.proc_list[cell_name]:
-                #        self.lgr.debug('proc list loaded pickle %d %s' % (pid, self.proc_list[cell_name][pid]))
                 net_file = os.path.join('./', self.run_from_snap, cell_name, 'net_list.pickle')
-                self.netInfo[cell_name].loadfile(net_file)
+                if os.path.isfile(net_file):
+                    self.netInfo[cell_name].loadfile(net_file)
 
     def getTopComponentName(self, cpu):
          if cpu is not None:
@@ -415,6 +423,7 @@ class GenMonitor():
                         if self.run_from_snap is None and 'DIDDLE' in self.comp_dict[cell_name]:
                             self.is_monitor_running.setRunning(False)
                             self.runToDiddle(self.comp_dict[cell_name]['DIDDLE'], cell_name=cell_name)
+                            print('Diddle pending for cell %s, need to run forward' % cell_name)
                     else:
                         self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -1015,13 +1024,14 @@ class GenMonitor():
                 if instruct[1] == 'int 128' or (not step_into and instruct[1].startswith('call')):
                     self.revToAddr(prev)
                 else:
-                    self.rev_to_call.doRevToCall(step_into, prev)
+                    self.rev_to_call[self.target].doRevToCall(step_into, prev)
             else:
                 self.lgr.debug('prev is none')
-                self.rev_to_call.doRevToCall(step_into, prev)
+                self.rev_to_call[self.target].doRevToCall(step_into, prev)
             self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
             print('reverse execution disabled')
+            self.lgr.debug('reverseToCallInstruction reverse execution disabled')
             self.skipAndMail()
 
     def uncall(self):
@@ -1031,7 +1041,7 @@ class GenMonitor():
         self.context_manager[self.target].clearExitBreak()
         self.lgr.debug('cgcMonitor, uncall')
         self.removeDebugBreaks()
-        self.rev_to_call.doUncall()
+        self.rev_to_call[self.target].doUncall()
    
     def getInstance(self):
         return INSTANCE
@@ -1040,7 +1050,7 @@ class GenMonitor():
         self.lgr.debug('revToModReg for reg %s' % reg)
         self.removeDebugBreaks()
         self.context_manager[self.target].clearExitBreak()
-        self.rev_to_call.doRevToModReg(reg)
+        self.rev_to_call[self.target].doRevToModReg(reg)
 
     def revToAddr(self, address, extra_back=0):
         if self.rev_execution_enabled:
@@ -1192,7 +1202,7 @@ class GenMonitor():
         self.bookmarks.setDebugBookmark(bm)
         self.lgr.debug('BT add bookmark: %s' % bm)
         self.context_manager[self.target].setIdaMessage('')
-        self.stopAtKernelWrite(addr, self.rev_to_call)
+        self.stopAtKernelWrite(addr, self.rev_to_call[self.target])
 
     def revTaintReg(self, reg):
         ''' back track the value in a given register '''
@@ -1208,7 +1218,7 @@ class GenMonitor():
         bm='backtrack START:0x%x inst:"%s" track_reg:%s track_value:0x%x' % (eip, instruct[1], reg, value)
         self.bookmarks.setDebugBookmark(bm)
         self.context_manager[self.target].setIdaMessage('')
-        self.rev_to_call.doRevToModReg(reg, True)
+        self.rev_to_call[self.target].doRevToModReg(reg, True)
 
     def rev1(self):
         if self.rev_execution_enabled:
@@ -1216,7 +1226,7 @@ class GenMonitor():
             dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
             new_cycle = cpu.cycles - 1
          
-            start_cycles = self.rev_to_call.getStartCycles()
+            start_cycles = self.rev_to_call[self.target].getStartCycles()
             if new_cycle >= start_cycles:
                 self.is_monitor_running.setRunning(True)
                 try:
@@ -1529,7 +1539,7 @@ class GenMonitor():
     def getSyscall(self, cell_name, callname):
         if callname in self.call_traces[cell_name]:
             return self.call_traces[cell_name][callname]
-        elif self.trace_all is not None:
+        elif cell_name in self.trace_all:
             return self.trace_all[cell_name]
         else:
             self.lgr.debug('genMonitor getSyscall, not able to return instance for call %s len self.call_traces %d' % (callname, 
@@ -1922,8 +1932,8 @@ class GenMonitor():
             return
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
-        self.lgr.debug('exitMaze, trace_all is %s' % str(self.trace_all))
-        tod_track = self.trace_all
+        self.lgr.debug('exitMaze, trace_all is %s' % str(self.trace_all[self.target]))
+        tod_track = self.trace_all[self.target]
         if tod_track is None: 
             if syscallname in self.call_traces:
                 self.lgr.debug('genMonitor exitMaze pid:%d, using syscall defined for %s' % (pid, syscallname))
@@ -1972,28 +1982,22 @@ class GenMonitor():
         cmd = 'write-configuration %s' % name 
         SIM_run_command(cmd)
         for cell_name in self.cell_config.cell_context:
-            #plist_file = os.path.join('./', name, cell_name, 'proc_list.pickle')
-            #try:
-            #    os.mkdir(os.path.dirname(plist_file))
-            #except OSError as exc:
-            #    if exc.errno != errno.EEXIST:
-            #        raise
-            #    pass
-            #pickle.dump( self.proc_list[cell_name], open( plist_file, "wb" ) )
-            #for pid in self.proc_list[cell_name]:
-            #        self.lgr.debug('proc list pickle %d %s' % (pid, self.proc_list[cell_name][pid]))
+            if cell_name in self.netInfo:
            
-            net_file = os.path.join('./', name, cell_name, 'net_list.pickle')
-            try:
-                os.mkdir(os.path.dirname(net_file))
-            except OSError as exc:
-                if exc.errno != errno.EEXIST:
-                    raise
-                pass
-            self.netInfo[cell_name].pickleit(net_file)
-            self.task_utils[cell_name].pickleit(name)
-            self.soMap[cell_name].pickleit(name)
-            self.traceProcs[cell_name].pickleit(name)
+                net_file = os.path.join('./', name, cell_name, 'net_list.pickle')
+                try:
+                    os.mkdir(os.path.dirname(net_file))
+                except OSError as exc:
+                    if exc.errno != errno.EEXIST:
+                        raise
+                    pass
+                self.netInfo[cell_name].pickleit(net_file)
+                self.task_utils[cell_name].pickleit(name)
+                self.soMap[cell_name].pickleit(name)
+                self.traceProcs[cell_name].pickleit(name)
+
+        net_link_file = os.path.join('./', name, 'net_link.pickle')
+        pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
 
     def showCycle(self):
         pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2055,6 +2059,7 @@ class GenMonitor():
         self.target = target  
         print('Target is now: %s' % target)
         self.lgr.debug('Target is now: %s' % target)
+
  
     
 if __name__=="__main__":        
