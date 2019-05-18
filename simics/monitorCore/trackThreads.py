@@ -53,10 +53,11 @@ class TrackThreads():
         self.lgr.debug('TrackThreads, stop tracking')
         self.context_manager.genDeleteHap(self.call_hap)
         self.context_manager.genDeleteHap(self.execve_hap)
-        self.context_manager.genDeleteHap(self.open_hape)
         for hap in self.exit_hap:
             self.context_manager.genDeleteHap(hap)
-        self.open_syscall.stopTrace()
+        if self.open_syscall is not None:
+            self.open_syscall.stopTrace()
+            self.open_syscall = None
 
     def execveHap(self, dumb, third, forth, memory):
         if self.execve_hap is None:
@@ -141,7 +142,9 @@ class TrackThreads():
             eax = self.mem_utils.getSigned(ueax)
             eip = self.mem_utils.getRegValue(cpu, 'pc')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('trackThreads exitHap eip 0x%x instruct %s'  % (eip, instruct[1]))
+            
+            self.lgr.debug('trackThreads exitHap eip 0x%x instruct %s break mem: 0x%x phys: 0x%x'  % (eip, instruct[1], 
+                  memory.logical_address, memory.physical_address))
             if instruct[1] == 'iretd' or instruct[1] == 'iret64':
                 reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
                 esp = self.cpu.iface.int_register.read(reg_num)
