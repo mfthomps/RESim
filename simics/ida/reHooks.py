@@ -276,7 +276,8 @@ class Hooks(idaapi.UI_Hooks):
             if idaapi.get_tform_type(form) == idaapi.BWN_CALL_STACK:
                 #line = form.GetCurrentLine()
                 pass
-            elif idaapi.get_tform_type(form) == idaapi.BWN_DISASM:
+            elif idaapi.get_tform_type(form) == idaapi.BWN_DISASM or \
+                 idaapi.get_tform_type(form) == idaapi.BWN_DUMP:
                 #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
                 regs = idaapi.ph_get_regnames()
                 idaapi.attach_action_to_popup(form, popup, "revCursor:action", 'RESim/')
