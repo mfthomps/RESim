@@ -38,6 +38,9 @@ class Diddler():
                self.kind = parts[0]
                if len(parts) > 1:
                    self.operation = parts[1]
+               else:
+                   self.lgr.error('Diddle command missing operation %s' % kind_line)
+                   return
                self.lgr.debug('Diddle of kind %s  cell is %s' % (self.kind, self.cell_name))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
