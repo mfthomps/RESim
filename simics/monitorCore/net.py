@@ -160,3 +160,60 @@ class SockStruct():
             retval = ('FD: %d sa_family: %s  TBD' % (self.fd, self.famName()))
         return retval
 
+class Iovec():
+    def __init__(self, base, length):
+        self.base = base
+        self.length = length
+class Msghdr():
+    '''
+           struct iovec {                    /* Scatter/gather array items */
+               void  *iov_base;              /* Starting address */
+               size_t iov_len;               /* Number of bytes to transfer */
+           };
+
+           struct msghdr {
+               void         *msg_name;       /* optional address */
+               socklen_t     msg_namelen;    /* size of address */
+               struct iovec *msg_iov;        /* scatter/gather array */
+               size_t        msg_iovlen;     /* # elements in msg_iov */
+               void         *msg_control;    /* ancillary data, see below */
+               size_t        msg_controllen; /* ancillary data buffer len */
+               int           msg_flags;      /* flags on received message */
+           };
+    '''
+
+    def __init__(self, cpu, mem_utils, msghdr_address):
+        self.msg_name = mem_utils.readPtr(cpu, msghdr_address) 
+        self.msg_namelen = mem_utils.readPtr(cpu, msghdr_address+mem_utils.WORD_SIZE) 
+        self.msg_iov = mem_utils.readPtr(cpu, msghdr_address+2*mem_utils.WORD_SIZE) 
+        self.msg_iovlen = mem_utils.readPtr(cpu, msghdr_address+3*mem_utils.WORD_SIZE) 
+        self.msg_control = mem_utils.readPtr(cpu, msghdr_address+4*mem_utils.WORD_SIZE) 
+        self.msg_controllen = mem_utils.readPtr(cpu, msghdr_address+5*mem_utils.WORD_SIZE) 
+        self.flags = mem_utils.readPtr(cpu, msghdr_address+6*mem_utils.WORD_SIZE) 
+        self.cpu = cpu
+        self.mem_utils = mem_utils
+
+    def getIovec(self):
+        retval = []
+        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_addr = self.msg_iov
+        for i in range(self.msg_iovlen):
+            base = self.mem_utils.readPtr(self.cpu, iov_addr)
+            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            retval.append(Iovec(base, length)) 
+            iov_addr = iov_addr+iov_size
+        return retval
+
+    def getString(self):
+        retval = 'msg_name 0x%x  msg_namelen: %d  msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
+             self.msg_namelen, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
+        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_addr = self.msg_iov
+        iov_string = ''
+        for i in range(self.msg_iovlen):
+            base = self.mem_utils.readPtr(self.cpu, iov_addr)
+            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
+            iov_addr = iov_addr+iov_size
+        retval = retval + iov_string    
+        return retval
