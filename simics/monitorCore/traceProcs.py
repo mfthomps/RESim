@@ -379,7 +379,7 @@ class TraceProcs():
             print('%s %s  %s %s' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args)) 
 
         if len(files) > 0:
-            print('%s    files: %s' % (tabs, files))
+            print('%s    files: %s\n' % (tabs, files))
             self.trace_fh.write('%s    files: %s\n' % (tabs, files))
         if len(pipes) > 0:
             print('%s    pipes: %s' % (tabs, pipes))
