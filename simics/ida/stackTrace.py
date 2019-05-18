@@ -92,3 +92,12 @@ class StackTrace(simplecustviewer_t):
             print('no address found in %s' % line)
             return
         idc.Jump(addr) 
+
+    def OnKeydown(self, vkey, shift):
+        if vkey == 27:
+            print('esc does nothing')
+        else:
+            return False
+        return True
+
+          
