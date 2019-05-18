@@ -69,7 +69,7 @@ class SOMap():
             self.lgr.debug('SOMap isCode, pid:%d missing from so_file_map' % pid)
             return False
         for text_seg in self.so_file_map[pid]:
-            start = text_seg.locate + text_seg.offset
+            start = text_seg.locate 
             end = start + text_seg.size
             if address >= start and address <= end:
                 return True
@@ -227,7 +227,7 @@ class SOMap():
                 retval = self.text_prog[pid]
             else:
                 for text_seg in sorted(self.so_file_map[pid]):
-                    start = text_seg.locate + text_seg.offset
+                    start = text_seg.locate 
                     end = start + text_seg.size
                     if start <= addr_in and addr_in <= end:
                         retval = self.so_file_map[pid][text_seg]
@@ -248,7 +248,8 @@ class SOMap():
                 retval = self.text_prog[pid], self.text_start[pid], self.text_end[pid]
             else:
                 for text_seg in sorted(self.so_file_map[pid]):
-                    start = text_seg.locate + text_seg.offset
+                    #start = text_seg.locate + text_seg.offset
+                    start = text_seg.locate 
                     end = start + text_seg.size
                     if start <= addr_in and addr_in <= end:
                         retval = self.so_file_map[pid][text_seg], start, end
