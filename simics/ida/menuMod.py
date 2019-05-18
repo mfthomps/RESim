@@ -38,7 +38,7 @@ class DoReverseHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
-class DoReverseHandler(idaapi.action_handler_t):
+class DoRevStepOverHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
         self.isim = isim
@@ -219,8 +219,8 @@ def register(isim):
     do_rev_step_over_action = idaapi.action_desc_t(
         'do_rev_step_over:action',
         '^ Rev step over', 
-        DoReverseHandler(isim),
-        'Alt+F8')
+        DoRevStepOverHandler(isim),
+        'Alt+Shift+F8')
 
     do_step_over_action = idaapi.action_desc_t(
         'do_step_over:action',
