@@ -79,15 +79,16 @@ class memUtils():
         self.WORD_SIZE = word_size
         self.param = param
         self.lgr = lgr
-        ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
-        ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags"]
+        self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
+        self.ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
+                     "r12", "r13", "r14", "r15"]
         self.regs = {}
         if arch == 'x86-64':
             i=0
-            for ia32_reg in ia32_regs:
+            for ia32_reg in self.ia32_regs:
                 self.regs[ia32_reg] = ia32_reg
                 if self.WORD_SIZE == 8:
-                    self.regs[ia32_reg] = ia64_regs[i]
+                    self.regs[ia32_reg] = self.ia64_regs[i]
                 i+=1    
             self.regs['syscall_num'] = self.regs['eax']
             self.regs['syscall_ret'] = self.regs['eax']
@@ -180,17 +181,24 @@ class memUtils():
         return retval
 
     def printRegJson(self, cpu):
-        regs = {}
-        for reg in self.regs:
+        if cpu.architecture == 'arm':
+            regs = self.regs.keys()
+        if self.WORD_SIZE == 8:
+            regs = self.ia64_regs
+        else:
+            regs = self.ia32_regs
+
+        reg_values = {}
+        for reg in regs:
             try:
-                reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+                reg_num = cpu.iface.int_register.get_number(reg)
                 reg_value = cpu.iface.int_register.read(reg_num)
             except:
                 ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
                 continue
-            regs[reg] = reg_value
+            reg_values[reg] = reg_value
         
-        s = json.dumps(regs)
+        s = json.dumps(reg_values)
         print s
     
     def readPhysPtr(self, cpu, addr):
