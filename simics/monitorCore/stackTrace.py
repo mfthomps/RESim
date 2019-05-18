@@ -52,6 +52,7 @@ class StackTrace():
             # not always 2* word size?
             while retval is None and eip < return_to:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                #self.lgr.debug('stackTrace followCall instruct %s' % instruct[1])
                 if instruct[1].startswith(self.callnm):
                     parts = instruct[1].split()
                     if len(parts) == 2:
@@ -63,6 +64,7 @@ class StackTrace():
                         if self.soMap.isCode(dst):
                             retval = eip
                         else:
+                            #self.lgr.debug('stackTrace dst not code 0x%x' % dst)
                             eip = eip+1
                     else:        
                         retval = eip
@@ -82,7 +84,8 @@ class StackTrace():
 
     def getFrames(self, count):
         retval = []
-        for i in range(count):
+        max_index = min(count, len(self.frames))
+        for i in range(max_index):
             retval.append(self.frames[i])
         return retval
 
@@ -94,7 +97,26 @@ class StackTrace():
 
     def printTrace(self):
         for frame in self.frames:
-            print('0x%08x %s %s' % (frame.ip, frame.fname, frame.instruct))
+            if frame.fname is not None:
+                fname = os.path.basename(frame.fname)
+            else:
+                fname = 'unknown'
+            if frame.instruct.startswith('call'):
+                parts = frame.instruct.split()
+                try:
+                    faddr = int(parts[1], 16)
+                    #print('faddr 0x%x' % faddr)
+                except:
+                    print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
+                    continue
+                fun_name = self.ida_funs.getName(faddr)
+                if fun_name is not None:
+                    print('0x%08x %s call %s' % (frame.ip, fname, fun_name))
+                else:
+                    #print('nothing for 0x%x' % faddr)
+                    print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
+            else:
+                print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
 
     def doTrace(self):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
@@ -141,10 +163,11 @@ class StackTrace():
             if self.soMap.isCode(val):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
-                   self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
+                   #self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
                    pass
                 else:
-                   self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                   #self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                   pass
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''
@@ -187,7 +210,7 @@ class StackTrace():
                 if call_ip is not None and not skip_this:
                     skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
-                    self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
+                    #self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -197,12 +220,21 @@ class StackTrace():
                         #print('0x%08x  %-s' % (call_ip, fname))
                         frame = self.FrameEntry(call_ip, fname, instruct)
                         self.frames.append(frame)
+                        call_to_s = instruct.split()[1]
+                        call_to = None
+                        try:
+                            call_to = int(call_to_s, 16)
+                        except:
+                            pass 
+                        if call_to is not None:
+                            self.soCheck(call_to)
+
                     prev_ip = call_ip
                     if self.soMap.isMainText(call_ip):
                         been_in_main = True
                         #self.lgr.debug('stackTrace been in main')
                 else:
-                    self.lgr.debug('nothing from followCall')
+                    #self.lgr.debug('nothing from followCall')
                     pass
             elif val is not None:
                 #self.lgr.debug('ptr 0x%x not code 0x%x' % (ptr, val))
@@ -221,7 +253,7 @@ class StackTrace():
             fname, start, end = self.soMap.getSOInfo(eip)
             if fname is not None:
                 full = self.targetFS.getFull(fname)
-                self.lgr.debug('so check of %s full %s' % (fname,full))
+                self.lgr.debug('stackTrace soCheck eip 0x%x not a fun? fname %s full %s start 0x%x' % (eip, fname,full, start))
                 self.ida_funs.add(full, start)
 
 
