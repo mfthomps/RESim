@@ -26,13 +26,13 @@ class SyscallNumbers():
                         try:
                             sym, offset = express.split('+')
                         except:
-                            lgr.debug('No + in %s from \n%s' % (express, line))
+                            #lgr.debug('No + in %s from \n%s' % (express, line))
                             continue
                         base = hackvals[sym]
                         try:
                             callnum = base + int(offset)
                         except:
-                            lgr.debug('expected base10 int in %s' % line)
+                            #lgr.debug('expected base10 int in %s' % line)
                             continue
                     #lgr.debug('assign call # %d to %s' % (callnum, nr))
                     self.syscalls[callnum] = nr
