@@ -92,8 +92,10 @@ class TaskUtils():
         if self.phys_current_task is None:
             ''' address of current_task symbol, pointer at this address points to the current task record '''
             ''' use physical address because some are relative to FS segment '''
-            phys_block = cpu.iface.processor_info.logical_to_physical(param.current_task, Sim_Access_Read)
-            self.phys_current_task = phys_block.address
+            #phys_block = cpu.iface.processor_info.logical_to_physical(param.current_task, Sim_Access_Read)
+            phys = self.mem_utils.v2p(cpu, param.current_task)
+            #self.phys_current_task = phys_block.address
+            self.phys_current_task = phys
             #if param.current_task_fs:
             #    cmd = 'logical-to-physical fs:0x%x' % param.current_task
             #else:
@@ -228,7 +230,10 @@ class TaskUtils():
         if self.param.ts_tgid != None:
             task.tgid = self.mem_utils.readWord32(cpu, addr + self.param.ts_tgid)
         if self.param.ts_comm != None:
+            caddr = addr + self.param.ts_comm
             task.comm = self.mem_utils.readString(cpu, addr + self.param.ts_comm, self.COMM_SIZE)
+            paddr = self.mem_utils.v2p(cpu, caddr)
+            #self.lgr.debug('comm addr is 0x%x  phys 0x%x' % (caddr, paddr))
         for field in ['ts_real_parent',
          'ts_parent']:
          #'ts_p_opptr',
@@ -299,10 +304,10 @@ class TaskUtils():
                 self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
                 break
                 #continue
-            '''
-            else:
-                self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
-            '''
+           
+            #else:
+                #self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
+          
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
             for child in task.children:
@@ -401,9 +406,12 @@ class TaskUtils():
         self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
         return None
  
-    def getTaskListPtr(self):
+    def getTaskListPtr(self, rec=None):
         ''' return address of the task list "next" entry that points to the current task '''
-        task_rec_addr = self.getCurTaskRec()
+        if rec is None:
+            task_rec_addr = self.getCurTaskRec()
+        else:
+            task_rec_addr = rec
         comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
         seen = set()
@@ -431,9 +439,12 @@ class TaskUtils():
                #self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
                return None
 
-            #self.lgr.debug('reading task struct for %x got comm of %s pid %d next %x' % (task_addr, task.comm, task.pid, task.next))
-            if (task.next) == task_rec_addr:
-                return (task_addr + self.param.ts_next)
+            #self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
+            #     task.pid, task.next, task.thread_group.next, self.param.ts_next))
+            if (task.next) == task_rec_addr or task.next == (task_rec_addr+self.param.ts_next):
+                next_addr = task_addr + self.param.ts_next
+                self.lgr.debug('getTaskListPtr return next 0x%x' % next_addr)
+                return next_addr
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
             for child in task.children:
@@ -444,9 +455,12 @@ class TaskUtils():
                 stack.append((task.real_parent, False))
             if self.param.ts_thread_group_list_head != None:
                 if task.thread_group.next:
+                    c = task.thread_group.next + self.mem_utils.WORD_SIZE
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
-                    if (task.thread_group.next) == task_rec_addr:
-                        return (task_addr + self.param.ts_next)
+                    if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
+                        thread_group_addr = task_addr + self.param.ts_thread_group_list_head
+                        self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
+                        return thread_group_addr
                     stack.append((task.thread_group.next, False))
     
             if x is True:
