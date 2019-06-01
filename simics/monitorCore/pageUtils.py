@@ -347,8 +347,12 @@ def findPageTableExtended(cpu, addr, lgr):
             ptable_entry_addr = ptable_base + (WORD_SIZE*ptable)
             lgr.debug('ptable_entry_addr 0x%x  ptable 0x%x' % (ptable_entry_addr, ptable_base))
             ptable_info.ptable_addr = ptable_entry_addr
-            entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
-            lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
+            try:
+                entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
+                lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
+            except:
+                entry = 0
+                lgr.debug('pageUtils nothing mapped for ptable_entry_addr 0x%x' % ptable_entry_addr)
             if entry == 0:
                 return ptable_info
             
