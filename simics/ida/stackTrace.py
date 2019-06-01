@@ -3,6 +3,7 @@ import idc
 from idaapi import simplecustviewer_t
 import gdbProt
 import json
+import os
 import reHooks
 class StackTrace(simplecustviewer_t):
     def __init__(self):
@@ -74,7 +75,9 @@ class StackTrace(simplecustviewer_t):
             #print('instruct is %s' % str(instruct))
             #line = '0x%x %-20s %s' % (entry['ip'], entry['fname'], entry['instruct'])
             fun = idc.GetFunctionName(entry['ip'])
-            line = '0x%08x %-15s %-10s %s' % (entry['ip'], str(entry['fname']), fun, str(instruct))
+            so = str(entry['fname'])
+            fname = os.path.basename(so) 
+            line = '0x%08x %-15s %-10s %s' % (entry['ip'], fname, fun, str(instruct))
             #print("added %s" % line)
             retval.append(str(line))
             self.AddLine(str(line))
