@@ -1,0 +1,21 @@
+$memory_megs=512
+if $memory_megs > 512 {
+    echo "WARNING: Increasing memory size above 512MB can cause qsp-linux to be unable to probe"
+    echo "         for the mtd/flash.";
+}
+
+load-module plain-disk-comp
+
+$rootdisk = (create-plain-disk
+          name = $system.rootdisk
+          file= $root_disk_image
+          size = $root_disk_size)
+connect $system.disk_controller[0] $rootdisk.disk
+
+if ($num_disk_controllers > 1) {
+    $userdisk = (create-plain-disk
+    name = $system.userdisk
+    file = $user_disk_image
+    size = $user_disk_size)
+    connect $system.disk_controller[1] $userdisk.disk
+}

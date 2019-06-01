@@ -1,0 +1,76 @@
+decl {
+    ! Setup a QSP system.
+
+    group "Setup"
+
+    param cpu_switch_time : int = 20000
+    ! Set the cpu-switch-time.
+
+    group "System"
+
+    param num_cores : int = 4
+    ! Number of cores in the target system.
+
+    param freq_mhz : int = 1000
+    ! The processor clock frequency, in MHz.
+
+    param memory_megs : int = 512
+    ! The amount of RAM memory, in MiB.
+
+    param flash_megs : int = 256
+    ! The amount of flash memory, in MiB.
+
+    param board_name : string
+    ! The name of the board.
+
+    group "Devices"
+
+    param num_serial_ports : int = 2
+    ! Number of serial ports.
+
+    param num_network_ports : int = 2
+    ! Number of network ports.
+
+    param num_disk_controllers : int = 2
+    ! Number of disk controllers.
+
+    param num_led_controllers : int = 1
+    ! Number of LED controllers.
+
+    param num_timers : int = 2
+    ! Number of timers.
+
+    #group "Console"
+
+    params from "%simics%/targets/common/console-system.include"
+        except con_name, con_connector
+        result console : string
+
+    group "Components"
+
+    result system : string
+    ! The system component.
+}
+$num_cores=1
+#load-module qsp-system-panel
+load-module qsp-arm-comp
+
+$system = (create-qsp-arm-comp
+           name = $board_name
+           freq_mhz = $freq_mhz
+           memory_megs = $memory_megs
+           flash_megs = $flash_megs
+           cpu_cores = $num_cores
+           serial_ports = $num_serial_ports
+           network_ports = $num_network_ports
+           disk_controllers = $num_disk_controllers
+           led_controllers = $num_led_controllers
+           timers = $num_timers)
+
+if ($num_serial_ports > 0) {
+    $con_connector = $system.serial[0]
+    $con_name = $system.console
+    run-command-file "%simics%/targets/common/console-system.include"
+}
+
+cpu-switch-time $cpu_switch_time

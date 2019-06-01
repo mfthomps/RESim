@@ -1,0 +1,183 @@
+decl {
+    ! Help script to setup Linux
+
+    group "Components"
+
+    param system : string
+    ! The default system component.
+
+    param console : string
+    ! The default console component.
+
+    group "System"
+
+    param system_info : string or nil
+    ! The machine system information, used in GUIs.
+
+    param default_system_info : string
+    ! The default machine system information, used in GUIs.
+
+    param auto_login : bool = FALSE
+    ! Automatically login root to prompt.
+
+    param auto_boot : bool = FALSE
+    ! Automatically boot OS kernel from bootloader.
+
+    param uboot_stop_autoboot : bool = TRUE
+    ! Hit key to stop the autoboot of u-boot.
+
+    group "Runtime"
+
+    param uboot_image : file("*")
+    ! U-Boot image.
+
+    param uboot_addr : int
+    ! U-Boot load address.
+
+    param kernel_image : file("*")
+    ! Kernel image.
+
+    param kernel_addr : int
+    ! Kernel image load address.
+
+    param uboot_prompt : string = ""
+    ! The prompt string indicating UBOOT booting up successfully.
+
+    param dtb_image : file("*")
+    ! DTB file image.
+
+    param dtb_addr : int
+    ! DTB load address.
+
+    param supply_dtb_addr : bool = FALSE
+    ! Supply the DTB address to bootm.
+
+    param uboot_fdt_high : string or nil = NIL
+    ! The u-boot fdt_high environment variable.
+
+    param kernel_cmdline : string = "rw root=0x6300 console=ttyAM0"
+    ! Linux kernel command line arguments, passed via bootloader.
+
+    param kernel_cmdline_append : string = ""
+    ! Append linux kernel command line arguments to kernel_cmdline.
+
+    param login_prompt : string = ""
+    ! Dependent on auto_login. The prompt string to enter login reply.
+
+    param login_reply : string = ""
+    ! Dependent on auto_login and login_prompt. The login string to enter at login prompt.
+
+    param login2_prompt : string = ""
+    ! Dependent on auto_login. The second login string to enter login reply.
+
+    param login2_reply : string = ""
+    ! Dependent on auto_login and login2_prompt. The second login string to enter at login prompt.
+
+    param linux_login_barrier : int or nil = NIL
+    ! The Linux login barrier variable.
+
+    group "Utils"
+
+    param create_simicsfs : bool = FALSE
+    ! Create the SimicsFS object.
+
+    param auto_mount_simicsfs : bool = FALSE
+    ! Dependent on create_simicsfs. Mount simicsfs after booting.
+
+    param simicsfs_root : string = "%script%"
+    ! Dependent on create_simicsfs. Root directory of SimicsFS on the host.
+
+    param simicsfs_addr : int = 0xe0200000
+    ! Dependent on create_simicsfs. SimicsFS mapping address.
+
+    param create_simics_agent : bool = FALSE
+    ! Create the Simics agent and enable agent in OS.
+
+    group "Networking"
+
+    param auto_config_network : bool = FALSE
+    ! Configure the network in bootloader or/and OS.
+
+    param ip_address : string = ""
+    ! The board IP address.
+}
+
+$phys_mem = $system.phys_mem
+$phys_mem.load-file $uboot_image $uboot_addr
+$phys_mem.load-file $kernel_image $kernel_addr
+$phys_mem.load-file $dtb_image $dtb_addr
+
+if ($system_info != NIL) {
+    $system->system_info = $system_info
+} else {
+    if $auto_config_network == TRUE {
+        $system->system_info = $default_system_info + " ( " + $ip_address + " )"
+    } else {
+        $system->system_info = $default_system_info + " (ip not set from script)"
+    }
+}
+
+if $auto_boot {
+    script-branch {
+        $con = $console.con
+        while (1) {
+            if $uboot_stop_autoboot == TRUE {
+                $con.wait-then-write "Hit any key to stop autoboot" "\n"
+            }
+            if $uboot_fdt_high != NIL {
+                $con.wait-then-write -s $uboot_prompt "set fdt_high " + $uboot_fdt_high +"\n"
+            }
+            $con.wait-then-write -s $uboot_prompt "set bootargs " + $kernel_cmdline + " " + $kernel_cmdline_append + "\n"
+            if $supply_dtb_addr == TRUE {
+                $con.wait-then-write -s $uboot_prompt "bootm " + (hex -u $kernel_addr) + " - " + (hex -u $dtb_addr) +"\n"
+            } else {
+                $con.wait-then-write -s $uboot_prompt "bootm " + (hex -u $kernel_addr) + "\n"
+            }
+        }
+    }
+}
+
+if $create_simicsfs == TRUE {
+    @SIM_create_object('hostfs', simenv.system+'.hfs', [])
+    $system.phys_mem.add-map device = $system.hfs base = $simicsfs_addr length = 0x10
+    $system.hfs.root dir = $simicsfs_root
+}
+
+if $auto_login == TRUE {
+    script-branch {
+        $con = $console.con
+        $agent_connected = FALSE
+        while (1) {
+            if $login_reply != "" {
+                $con.wait-then-write -s $login_prompt $login_reply
+            }
+
+            if $login2_reply != "" {
+                $con.wait-then-write $login2_prompt $login2_reply
+            }
+
+            if $auto_mount_simicsfs == TRUE {
+                $con.wait-then-write -s "# "  "mkdir -p /host\n"
+                $con.wait-then-write -s "# "  "mount -t simicsfs none /host\n"
+            }
+
+            if $auto_config_network == TRUE {
+                $con.wait-then-write -s "# "  "ifconfig eth0 " + $ip_address +" \n"
+            }
+
+            if $create_simics_agent == TRUE {
+                $con.wait-then-write -s "# "  "simics-agent --name " + $system + " &\n"
+                $simics_agent = (start-agent-manager name = agent_manager)
+                if $agent_connected == FALSE {
+                    $simics_agent.connect-to-agent identifier = $system name = $system.simics_agent
+                    $agent_connected = TRUE
+                }
+            }
+
+            if $linux_login_barrier != NIL {
+                $con.wait-then-write -s "# "  "\n"
+                wait-for-script-barrier $linux_login_barrier
+            }
+        }
+    }
+}

@@ -1,0 +1,106 @@
+decl {
+    ! QSP ARM - Linux 5 start script.
+
+    group "System"
+
+    param system_info : string or nil = NIL
+    ! The machine system information, used in GUIs.
+
+    group "Devices"
+
+    param rtc_time : string = "2015-10-09 12:00:00"
+    ! The real time clock value at start. 
+
+    #params from "%simics%/targets/qsp-arm/qsp-system.include"
+    params from "qsp-system.include"
+        result system : string
+        result console : string
+    #params from "%simics%/targets/qsp-arm/qsp-linux-system.include"
+    #params from "qsp-linux-system.include"
+        #except system, memory_megs, num_disk_controllers
+        #default root_disk_image = "%simics%/targets/qsp-arm/images/rootfs.ext2"
+        #default user_disk_image = "%simics%/targets/qsp-arm/images/user.ext2.craff"
+
+    param root_disk_image : string
+    param user_disk_image : string
+    param root_disk_size : int
+    param user_disk_size : int
+    #params from "%simics%/targets/common/linux-setup.include"
+    params from "linux-setup.include"
+        except system, system_info, console
+        default uboot_image = "%simics%/targets/qsp-arm/images/u-boot.bin"
+        default uboot_addr = 0x0000000
+        default uboot_prompt = "qsp-arm#"
+        default uboot_fdt_high = "0x20000000"
+        default kernel_image = "%simics%/targets/qsp-arm/images/uImage"
+        default kernel_addr = 0x0800000
+        default dtb_image = "%simics%/targets/qsp-arm/images/qsp.dtb"
+        default dtb_addr = 0x0700000
+        default supply_dtb_addr = TRUE
+        default kernel_cmdline = "rw root=0x6300 console=ttyAM0"
+        default kernel_cmdline_append = ""
+        default auto_login = FALSE
+        default auto_boot = FALSE
+        default login_prompt = "login:"
+        default login_reply = "root\n"
+        default create_simicsfs = TRUE
+        default auto_mount_simicsfs = FALSE
+        default create_simics_agent = FALSE
+        default auto_config_network = FALSE
+        default ip_address = "10.10.0.2"
+
+    #params from "%simics%/targets/qsp-arm/qsp-network.include" except system, num_network_ports
+    #params from "qsp-network.include" except system, num_network_ports
+    #    default create_network = TRUE
+    #    result service_node : string or nil
+    #    result eth_link : string or nil
+
+    #params from "%simics%/targets/common/osa-setup.include" except system
+    #    default tracker_params = "%simics%/targets/qsp-arm/images/qsp-linux.params"
+
+
+    result eth0 : string
+    result eth1 : string
+    result eth2 : string
+    result switch0_con : string
+    result switch1_con : string
+    result switch2_con : string
+}
+#echo "def sys in is "+$default_system_info
+#run-command-file "%simics%/targets/qsp-arm/qsp-system.include"
+run-command-file "%script%/qsp-system.include"
+#run-command-file "%simics%/targets/qsp-arm/qsp-linux-system.include"
+run-command-file "%script%/qsp-linux-system.include" 
+
+instantiate-components
+#run-command-file "%simics%/targets/common/linux-setup.include"
+echo "default_system_info is "+$default_system_info
+run-command-file "%script%/linux-setup.include" 
+#run-command-file "%simics%/targets/qsp-arm/qsp-network.include"
+#run-command-file "%simics%/targets/common/osa-setup.include"
+
+echo "there"
+#
+# set real time clock to allow linux to boot
+#
+if $rtc_time != "disable" {
+    if $rtc_time == "auto" {
+        $board_name.rtc->regs_time_offset = `int(time.time())`
+    } else {
+        try {
+            $board_name.rtc->regs_time_offset = `int(time.mktime(time.strptime(simenv.rtc_time, "%Y-%m-%d %H:%M:%S")))`
+        } except {
+            interrupt-script "Failed to set real time clock to : " + $rtc_time + ". Please ensure $rtc_time format is Year-Month-Day Hour:Minute:Seconds. Set to \"auto\" to use host current system time. Set to \"disable\" to prevent setting real time clock."  
+        }
+    }
+}
+
+$eth0 = $system.eth[0]
+$eth1 = $system.eth[1]
+$eth2 = "None"
+
+$switch0_con = (switch0.get-free-connector)
+$switch1_con = (switch1.get-free-connector)
+$switch2_con = (switch2.get-free-connector)
+
+

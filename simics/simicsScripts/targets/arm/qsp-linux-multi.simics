@@ -1,0 +1,35 @@
+decl {
+
+    group "System"
+
+    param num_boards : int = 2
+    ! Number of boards in a multimachine setup.
+
+    group "Setup"
+
+    param min_latency : float = 0.001
+    ! Set the min-latency.
+
+    group "Networking"
+
+    param base_ip : string = "10.10.0."
+    ! The base IP address, i.e. the first three byte groups.
+
+    param offset_ip : int = 2
+    ! The IP address offset, i.e. the last byte group.
+
+    params from "%simics%/targets/qsp-arm/qsp-linux.simics"
+        default create_network = TRUE
+        default auto_config_network = TRUE
+
+}
+
+foreach $boardnr in (range $num_boards) {
+    $board_name = "board" + $boardnr
+    $base_mac_address = "F6:8B:54:32:" + (hex -u -p $boardnr) + ":"
+
+    $ip_address = $base_ip + ($boardnr + $offset_ip)
+    run-command-file "%simics%/targets/qsp-arm/qsp-linux.simics"
+}
+
+set-min-latency $min_latency

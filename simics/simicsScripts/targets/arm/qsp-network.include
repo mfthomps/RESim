@@ -1,0 +1,34 @@
+decl {
+    ! QSP ARM - Network setup
+
+    group "Components"
+
+    param system : string
+    ! The default system component.
+
+    group "Devices"
+
+    param num_network_ports : int
+    ! Number of network ports.
+
+    group "Networking"
+
+    param base_mac_address : string = ""
+    ! The base MAC address for the target, i.e. the first five octets.
+
+    params from "%simics%/targets/common/ethernet-setup.include"
+        except eth_connector
+        default connect_real_network = "no"
+        result service_node : string or nil
+        result eth_link : string or nil
+}
+
+if $create_network == TRUE {
+    foreach $x in (range $num_network_ports) {
+        $eth_connector = $system + ".eth[" + $x + "]"
+        run-command-file "%simics%/targets/common/ethernet-setup.include"
+        if $base_mac_address != "" {
+            $system.mac[$x]->mac_address = $base_mac_address+(hex -p -u $x)
+        }
+    }
+}
