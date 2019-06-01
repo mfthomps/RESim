@@ -42,14 +42,17 @@ class Pfamily():
         for t in tasks:
             if tasks[t].pid == pid:
                 prec_addr = tasks[t].parent
-                return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
+                if prec_addr in tasks:
+                    return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
+                else:
+                    break
         return None, None, None
 
     def execveHap(self, look4_prec, third, forth, memory):
-        cpu = SIM_current_processor()
-        if cpu != look4_prec.cpu:
-            self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
-            return
+        #cpu = SIM_current_processor()
+        #if cpu != look4_prec.cpu:
+        #    self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
+        #    return
         cpu, comm, pid = self.task_utils.curProc() 
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, None, cpu)
         if look4_prec.proc is not None:
