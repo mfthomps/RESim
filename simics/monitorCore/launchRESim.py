@@ -42,13 +42,15 @@ class LinkObject():
         self.name = name
         cmd = '%s' % name
         self.obj = SIM_run_command(cmd)
-        print('self.obj is %s' % self.obj)
+        #print('self.name is %s self.obj is %s' % (self.name, self.obj))
 
 def doEthLink(target, eth):
     name = '$%s_%s' % (target, eth)
     cmd = '%s = $%s' % (name, eth)
     run_command(cmd)
     link_object = LinkObject(name)
+    if link_object.obj == 'None':
+        return None
     return link_object
     
 def doSwitch(target, switch):
@@ -59,23 +61,27 @@ def doSwitch(target, switch):
     return link_object
     
 def assignLinkNames(target):
-    link_names = []
-    link_names.append(doEthLink(target, 'eth0'))
-    link_names.append(doEthLink(target, 'eth1'))
-    link_names.append(doEthLink(target, 'eth2'))
-    link_names.append(doSwitch(target, 'switch0'))
-    link_names.append(doSwitch(target, 'switch1'))
-    link_names.append(doSwitch(target, 'switch2'))
+    eth_list = ['eth0', 'eth1', 'eth2']
+    sw_list = ['switch0', 'switch1', 'switch2']
+    link_names = {}
+    for eth_name in eth_list:
+        obj = doEthLink(target, eth_name)
+        if obj is not None: 
+            link_names[eth_name] = obj
+    for sw_name in sw_list:
+        obj = doSwitch(target, sw_name)
+        if obj is not None: 
+            link_names[sw_name] = obj
     return link_names
 
-def linkSwitches(target, comp_dict):
-    if comp_dict['ETH0_SWITCH'] != 'NONE':
+def linkSwitches(target, comp_dict, link_names):
+    if comp_dict['ETH0_SWITCH'] != 'NONE' and 'eth0' in link_names:
         cmd = 'connect $eth0 cnt1 = $%s_con' %  comp_dict['ETH0_SWITCH']
         run_command(cmd)
-    if comp_dict['ETH1_SWITCH'] != 'NONE':
+    if comp_dict['ETH1_SWITCH'] != 'NONE' and 'eth1' in link_names:
         cmd = 'connect $eth1 cnt1 = $%s_con' %  comp_dict['ETH1_SWITCH']
         run_command(cmd)
-    if comp_dict['ETH2_SWITCH'] != 'NONE':
+    if comp_dict['ETH2_SWITCH'] != 'NONE' and 'eth2' in link_names:
         cmd = 'connect $eth2 cnt1 = $%s_con' %  comp_dict['ETH2_SWITCH']
         run_command(cmd)
  
@@ -123,6 +129,11 @@ for name, value in config.items('ENV'):
     #print('assigned %s to %s' % (name, value))
 
 RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
+SIMICS_VER = os.getenv('SIMICS_VER')
+if SIMICS_VER is not None:
+    cmd = "$simics_version=%s" % (SIMICS_VER)
+    #print('cmd is %s' % cmd)
+    run_command(cmd)
 
 not_a_target=['ENV', 'driver']
 
@@ -149,24 +160,41 @@ if RUN_FROM_SNAP is None:
             if os.path.isfile('driver-ready.flag'):
                 done = True 
             count += 1
-            print count
+            #print count
         link_dict['driver'] = assignLinkNames('driver')
-        linkSwitches('driver', comp_dict['driver'])
+        linkSwitches('driver', comp_dict['driver'], link_dict['driver'])
     for section in config.sections():
         if section in not_a_target:
             continue
         print('assign %s CLI variables' % section)
         ''' hack defaults, Simics CLI has no undefine operation '''
         run_command('$eth_dev=i82543gc')
+        params=''
         for name in comp_dict[section]:
             value = comp_dict[section][name]
             if name.startswith('$'):
                 cmd = "%s=%s" % (name, value)
                 run_command(cmd)
-        print('Start the %s' % section)  
-        run_command('run-command-file ./targets/%s' % config.get(section,'SIMICS_SCRIPT'))
+                #params=params+(' %s' % cmd[1:])
+        script = config.get(section,'SIMICS_SCRIPT')
+        if 'PLATFORM' in comp_dict[section] and comp_dict[section]['PLATFORM']=='arm':
+            params = params+' default_system_info=%s' % comp_dict[section]['$host_name']
+            params = params+' board_name=%s' % comp_dict[section]['$host_name']
+            params = params+' root_disk_image=%s' % comp_dict[section]['$root_disk_image']
+            params = params+' root_disk_size=%s' % comp_dict[section]['$root_disk_size']
+            params = params+' user_disk_image=%s' % comp_dict[section]['$user_disk_image']
+            params = params+' user_disk_size=%s' % comp_dict[section]['$user_disk_size']
+        else:
+            for name in comp_dict[section]:
+                if name.startswith('$'):
+                    cmd = '%s=%s' % (name[1:], name)
+                    params = params + " "+cmd
+
+        cmd='run-command-file "./targets/%s" %s' % (script, params)
+        print('cmd is %s' % cmd)
+        run_command(cmd)
         link_dict[section] = assignLinkNames(section)
-        linkSwitches(section, comp_dict[section])
+        linkSwitches(section, comp_dict[section], link_dict[section])
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)
