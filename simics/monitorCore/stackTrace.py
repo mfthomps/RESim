@@ -143,6 +143,7 @@ class StackTrace():
             self.lgr.warning('stackTrace has no ida functions')
 
         ''' record info about current IP '''
+        '''
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
         self.lgr.debug('cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
@@ -152,6 +153,7 @@ class StackTrace():
         else:
             frame = self.FrameEntry(eip, fname, instruct)
             self.frames.append(frame)
+        '''
 
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
@@ -163,7 +165,7 @@ class StackTrace():
             if self.soMap.isCode(val):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
-                   #self.lgr.debug('is code: 0x%x from ptr 0x%x   call_ip 0x%x' % (val, ptr, call_ip))
+                   #self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
                    pass
                 else:
                    #self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
