@@ -34,10 +34,10 @@ import time
     If the memory is written by user space, stop there.
 '''
 class findKernelWrite():
-    def __init__(self, top, cpu, cell, addr, os_utils, os_p_utils, context_manager, param, bookmarks, lgr, rev_to_call=None, num_bytes = 1):
+    def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, bookmarks, lgr, rev_to_call=None, num_bytes = 1):
         self.stop_write_hap = None
-        self.os_p_utils = os_p_utils
-        self.os_utils = os_utils
+        self.task_utils = task_utils
+        self.mem_utils = mem_utils
         self.lgr = lgr
         self.top = top
         self.param = param
@@ -64,20 +64,20 @@ class findKernelWrite():
         #    
         #    self.top.skipAndMail()
         #    return
-        dum_cpu, cur_addr, comm, pid = self.os_utils.currentProcessInfo(cpu)
-        my_args = procInfo.procInfo(comm, cpu, pid, None, False)
-        phys_block = cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
+        dumb, comm, pid = self.task_utils.curProc() 
+        my_args = procInfo.procInfo(comm, self.cpu, pid, None, False)
+        phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
             self.lgr.error('findKernelWrite requested address %x, not mapped?' % addr)
             return
         ''' TBD support byte, word, dword '''
         if num_bytes > 1:
-            value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+            value = self.mem_utils.readWord32(self.cpu, self.addr)
         else:
-            value = self.os_p_utils.getMemUtils().readByte(self.cpu, self.addr)
+            value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         self.lgr.debug( 'findKernelWrite of 0x%x to addr %x, phys %x num_bytes: %d' % (value, addr, phys_block.address, num_bytes))
-        pcell = cpu.physical_memory
+        pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, num_bytes, 0)
 
@@ -103,7 +103,7 @@ class findKernelWrite():
         SIM_run_command('reverse')
 
 
-    def writeCallback(self, cell_name, third, forth, memory):
+    def writeCallback(self, cpu, third, forth, memory):
         location = memory.logical_address
         physical = memory.physical_address
         if location is 0 and physical is 0:
@@ -136,9 +136,9 @@ class findKernelWrite():
     def checkWriteValue(self, eip):
         retval = True
         if self.num_bytes > 1:
-            value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+            value = self.mem_utils.readWord32(self.cpu, self.addr)
         else:
-            value = self.os_p_utils.getMemUtils().readByte(self.cpu, self.addr)
+            value = self.mem_utils.readByte(self.cpu, self.addr)
         if value != self.value:
 
             if eip == self.bookmarks.getEIP('_start+1'):
@@ -172,7 +172,7 @@ class findKernelWrite():
         self.lgr.debug('findKernelWrite skipAlone to cycle 0x%x' % cycles)
         cmd = 'skip-to cycle=%d' % cycles
         SIM_run_command(cmd)
-        value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+        value = self.mem_utils.readWord32(self.cpu, self.addr)
         eip = self.top.getEIP(self.cpu)
         if eip == self.bookmarks.getEIP('_start+1'):
             ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
@@ -221,18 +221,25 @@ class findKernelWrite():
     def thinkWeWrote(self):
         #if self.stop_write_hap is None:
         #    return
-        reg_num = self.cpu.iface.int_register.get_number("eip")
-        eip = self.cpu.iface.int_register.read(reg_num)
+        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cycle = self.cpu.cycles
         cpl = memUtils.getCPL(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug( 'in thinkWeWrote, cycle %x eip: %x  %s cpl: %d' % (cycle, eip, str(instruct), cpl))
+        orig_cycle = self.bookmarks.getFirstCycle()
+        self.lgr.debug( 'in thinkWeWrote, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (cycle, eip, str(instruct), cpl, orig_cycle))
+        if cycle <= orig_cycle+1:
+            ida_message = "Content of 0x%x came modified prior to enabling reverse." % self.addr
+            self.lgr.debug('findKernelWrite thinkWeWrote'+ida_msg)
+            self.context_manager.setIdaMessage(ida_message)
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+            return
         if cpl == 0:
             if self.found_kernel_write:
-                self.lgr.debug('stopToCheckWriteCallback found second write?  but we deleted the breakpoint!!!! ignore this and reverse')
+                self.lgr.debug('thinkWeWrote stopToCheckWriteCallback found second write?  but we deleted the breakpoint!!!! ignore this and reverse')
                 #SIM_run_alone(SIM_run_command, 'reverse')
                 return
-            cpu, cur_addr, comm, pid = self.os_utils.currentProcessInfo(self.cpu)
+            dumb, comm, pid = self.task_utils.curProc() 
             ''' get return address '''
             self.found_kernel_write = True
             if self.kernel_write_break is not None:
@@ -254,7 +261,7 @@ class findKernelWrite():
             if not self.checkWriteValue(eip):
                 return
 
-            value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+            value = self.mem_utils.readWord32(self.cpu, self.addr)
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):
                 ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
@@ -282,8 +289,8 @@ class findKernelWrite():
             eip = self.top.getEIP(self.cpu)
             SIM_run_alone(self.cleanup, False)
             if eip == self.bookmarks.getEIP('_start+1'):
-                ida_message = "Content of %s came from loader." % self.addr
-                bm = "backtrack eip:0x%x content of memory:%s came from loader" % (eip, self.addr)
+                ida_message = "Content of %s came modified prior to enabling reverse." % self.addr
+                bm = "backtrack eip:0x%x content of memory:%s modified prior to enabling reverse" % (eip, self.addr)
                 self.bookmarks.setDebugBookmark(bm)
                 self.context_manager.setIdaMessage(ida_message)
                 SIM_run_alone(self.cleanup, False)
@@ -308,7 +315,7 @@ class findKernelWrite():
         current = SIM_cycle_count(self.cpu)
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        value = self.os_p_utils.getMemUtils().readWord32(self.cpu, self.addr)
+        value = self.mem_utils.readWord32(self.cpu, self.addr)
         self.lgr.debug('backOne user space write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x ' % (value, self.addr, current, eip))
         if not self.forward:
             previous = current - 1
