@@ -452,6 +452,7 @@ class SharedSyscall():
 
             elif exit_info.old_fd is not None:
                 trace_msg = ('\treturn from read pid:%d FD: %d exception %d\n' % (pid, exit_info.old_fd, eax))
+                exit_info.call_params = None
 
         elif callname == 'write':
             if eax >= 0 and exit_info.retval_addr is not None:
@@ -601,10 +602,11 @@ class SharedSyscall():
             self.lgr.debug('exitHap found matching call parameter %s' % str(exit_info.call_params.match_param))
             self.context_manager.setIdaMessage(trace_msg)
             self.rmExitHap(pid)
-            self.stopTrace()
             #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_module
+            if not my_syscall.linger: 
+                self.stopTrace()
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:
