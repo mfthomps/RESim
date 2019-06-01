@@ -69,7 +69,6 @@ class reverseToAddr():
             self.is_monitor_running.setRunning(False)
             cycles = 1 + self.extra_back
             self.top.skipAndMail(cycles)
-            self.context_manager.setExitBreak(cpu)
 
     def backOneStopped(self, cpu, one, exception, error_string):
         '''
