@@ -189,6 +189,16 @@ class RunToIOHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class RunToBindHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.runToBind()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class RunToTextHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -303,6 +313,11 @@ def register(isim):
         'Run to IO', 
         RunToIOHandler(isim))
 
+    run_to_bind_action = idaapi.action_desc_t(
+        'run_to_bind:action',
+        'Run to bind', 
+        RunToBindHandler(isim))
+
     run_to_text_action = idaapi.action_desc_t(
         'run_to_text:action',
         'Run to Text segment', 
@@ -330,6 +345,7 @@ def register(isim):
     idaapi.register_action(resynch_action)
     idaapi.register_action(watch_data_action)
     idaapi.register_action(run_to_io_action)
+    idaapi.register_action(run_to_bind_action)
     idaapi.register_action(run_to_text_action)
     idaapi.register_action(rev_to_text_action)
 
@@ -398,6 +414,10 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'run_to_io:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'run_to_bind:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
