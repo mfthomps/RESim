@@ -75,14 +75,16 @@ def getBits( allbits, lsb, msb )
 '''
 
 class memUtils():
-    def __init__(self, word_size, param, lgr, arch='x86-64'):
+    def __init__(self, word_size, param, lgr, arch='x86-64', cell_name='unknown'):
         self.WORD_SIZE = word_size
         self.param = param
+        self.cell_name = cell_name
         self.lgr = lgr
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
         self.ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
         self.regs = {}
+        self.lgr.debug('memUtils init. word size %d  arch is %s' % (word_size, arch))
         if arch == 'x86-64':
             i=0
             for ia32_reg in self.ia32_regs:
@@ -99,7 +101,7 @@ class memUtils():
                 self.regs[r] = r
             self.regs['sp'] = 'sp'
             self.regs['pc'] = 'pc'
-            self.regs['psr'] = 'psr'
+            self.regs['cpsr'] = 'cpsr'
             self.regs['syscall_num'] = 'r7'
             self.regs['syscall_ret'] = 'r0'
             self.regs['eip'] = 'pc'
@@ -136,7 +138,7 @@ class memUtils():
         found at the start of the block. (If there is no zero byte in the
         block, return a string that covers the entire block.)
     '''
-    def readString(self, cpu, vaddr, maxlen):
+    def readStringNOT(self, cpu, vaddr, maxlen):
         s = ''
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(vaddr, Sim_Access_Read)
@@ -146,6 +148,11 @@ class memUtils():
         if phys_block.address == 0:
             return None
         return self.readStringPhys(cpu, phys_block.address, maxlen)
+
+    def readString(self, cpu, vaddr, maxlen):
+        s = ''
+        ps = self.v2p(cpu, vaddr)
+        return self.readStringPhys(cpu, ps, maxlen)
 
     def readStringPhys(self, cpu, paddr, maxlen):
         s = ''
@@ -182,8 +189,9 @@ class memUtils():
 
     def printRegJson(self, cpu):
         if cpu.architecture == 'arm':
+            #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
             regs = self.regs.keys()
-        if self.WORD_SIZE == 8:
+        elif self.WORD_SIZE == 8:
             regs = self.ia64_regs
         else:
             regs = self.ia32_regs
@@ -194,6 +202,7 @@ class memUtils():
                 reg_num = cpu.iface.int_register.get_number(reg)
                 reg_value = cpu.iface.int_register.read(reg_num)
             except:
+                self.lgr.debug('except for %s' % reg)
                 ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
                 continue
             reg_values[reg] = reg_value
@@ -277,7 +286,7 @@ class memUtils():
             #self.current_task[cpu] = phys_addr
             #self.current_task_virt[cpu] = gs_b700
             ct_addr = self.v2p(cpu, gs_b700)
-            self.lgr.debug('getCurrentTask gs_b700 is 0x%x phys is 0x%x' % (gs_b700, ct_addr))
+            self.lgr.debug('memUtils getCurrentTask cell %s gs_b700 is 0x%x phys is 0x%x' % (self.cell_name, gs_b700, ct_addr))
             try:
                 ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
             except:
@@ -295,7 +304,7 @@ class memUtils():
     def getCurrentTaskARM(self, param, cpu):
         reg_num = cpu.iface.int_register.get_number("sp")
         sup_sp = cpu.gprs[1][reg_num]
-        #self.lgr.debug('getCurrentTaskARM sup_sp 0x%x' % sup_sp)
+        self.lgr.debug('getCurrentTaskARM sup_sp 0x%x' % sup_sp)
         if sup_sp == 0:
             return None
         ts = sup_sp & ~(param.thread_size - 1)
@@ -321,17 +330,18 @@ class memUtils():
             esp = self.readPtr(cpu, tr_base + 4)
             if esp is None:
                 return None
-            #print('kernel mode, esp is 0x%x' % esp)
+            self.lgr.debug('kernel mode, esp is 0x%x' % esp)
         else:
             esp = self.getRegValue(cpu, 'esp')
-            #print('user mode, esp is 0x%x' % esp)
+            self.lgr.debug('user mode, esp is 0x%x' % esp)
         ptr = esp - 1 & ~(param.stack_size - 1)
-        #print('ptr is 0x%x' % ptr)
+        self.lgr.debug('ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
-        #print('ret_ptr is 0x%x' % ret_ptr)
-        check_val = self.readPtr(cpu, ret_ptr)
-        if check_val == 0xffffffff:
-            return None
+        if ret_ptr is not None:
+            self.lgr.debug('ret_ptr is 0x%x' % ret_ptr)
+            check_val = self.readPtr(cpu, ret_ptr)
+            if check_val == 0xffffffff:
+                return None
         return ret_ptr
 
     def getBytes(self, cpu, num_bytes, addr):
@@ -352,12 +362,15 @@ class memUtils():
                 bytes_to_read = remain_in_page
             if bytes_to_read > 1024:
                 bytes_to_read = 1024
-            phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
+            #phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
+            phys = self.v2p(cpu, curr_addr)
             #print 'read (bytes_to_read) 0x%x bytes from 0x%x phys:%x ' % (bytes_to_read, curr_addr, phys_block.address)
             try:
-                read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
+                #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
+                read_data = readPhysBytes(cpu, phys, bytes_to_read)
             except valueError:
-                print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
+                #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
+                print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1)
                 print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
                 self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 return retval
@@ -376,13 +389,15 @@ class memUtils():
         return retval, retbytes
 
     def writeWord(self, cpu, address, value):
-        phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-        SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
+        #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+        phys = self.v2p(cpu, address)
+        #SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
+        SIM_write_phys_memory(cpu, phys, value, self.WORD_SIZE)
 
     def getGSCurrent_task_offset(self, cpu):
         gs_base = cpu.ia32_gs_base
         retval = gs_base + self.param.cur_task_offset_into_gs
-        self.lgr.debug('getGSCurrent_task_offset gs base is 0x%x, plus current_task offset is 0x%x' % (gs_base, retval))
+        self.lgr.debug('getGSCurrent_task_offset cell %s gs base is 0x%x, plus current_task offset is 0x%x' % (self.cell_name, gs_base, retval))
         return retval
 
     def writeString(self, cpu, address, string):
@@ -404,7 +419,9 @@ class memUtils():
             #value = int(sub.encode('hex'), 16)
             value = struct.unpack("<L", sub)[0]
             sindex +=4
-            phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-            SIM_write_phys_memory(cpu, phys_block.address, value, count)
+            #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+            phys = self.v2p(cpu, address)
+            #SIM_write_phys_memory(cpu, phys_block.address, value, count)
+            SIM_write_phys_memory(cpu, phys, value, count)
             address += 4
 
