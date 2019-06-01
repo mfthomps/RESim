@@ -26,6 +26,8 @@
 from simics import *
 modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul']
 ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
+ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
+                     "r12", "r13", "r14", "r15"]
 def modifiesOp0(op):
     if op.startswith('mov') or op.startswith('cmov') or op in modifiesOp0_list:
         return True
@@ -48,6 +50,11 @@ def regIsPart(reg1, reg2):
 def isReg(reg):
     if reg in ia32_regs:
         return True
+    if reg in ia64_regs:
+        return True
+    if reg.startswith('r') and (reg.endswith('b') or reg.endswith('w') or reg.endswith('d')):
+        return True
+
     if (len(reg) == 3 and reg.endswith('x')) or (len(reg) == 2 and reg[0] != '0'):
         try:
             dum = int(reg)
@@ -63,6 +70,7 @@ def isByteReg(reg):
         return True
     else:
        return False
+
 def getTopComponentName(cpu):
      names = cpu.name.split('.')
      return names[0]
