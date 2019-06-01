@@ -26,10 +26,10 @@ class TraceOpen():
         self.report_fh = open('/tmp/open.txt', 'w')
 
     def openHap(self, hap_cpu, third, forth, memory):
-        cpu = SIM_current_processor()
-        if cpu != hap_cpu:
-            self.lgr.debug('openHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
-            return
+        #cpu = SIM_current_processor()
+        #if cpu != hap_cpu:
+        #    self.lgr.debug('openHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
+        #    return
         cpu, comm, pid = self.task_utils.curProc() 
         #stack_frame = self.task_utils.frameFromStack()
         stack_frame = self.task_utils.frameFromStackSyscall()

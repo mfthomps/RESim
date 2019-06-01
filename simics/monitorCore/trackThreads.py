@@ -24,18 +24,19 @@ class TrackThreads():
         self.call_hap = None
         self.execve_break = None
         self.execve_hap = None
-        self.startTrack()
         self.finish_hap = {}
         self.finish_break = {}
-
         self.open_syscall = None
 
+
+        ''' NOTHING AFTER THIS CALL! '''
+        self.startTrack()
     def startTrack(self):
          
         if self.call_hap is not None:
             #self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
-        self.lgr.debug('TrackThreads startTrack')
+        self.lgr.debug('TrackThreads startTrack for %s' % self.cell_name)
         callnum = self.task_utils.syscallNumber('clone')
         entry = self.task_utils.getSyscallEntry(callnum)
         self.call_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -45,27 +46,33 @@ class TrackThreads():
         execve_entry = self.task_utils.getSyscallEntry(execve_callnum)
         self.execve_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
         self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-        self.lgr.debug('TrackThreads set execve break at 0x%x clone at 0x%x startTrack return' % (execve_entry, entry))
+        self.lgr.debug('TrackThreads set execve break at 0x%x clone at 0x%x startTrack' % (execve_entry, entry))
 
         self.trackSO()
+        if self.open_syscall is None:
+            self.lgr.debug('wtf, it is none?')
 
     def stopTrack(self):
-        self.lgr.debug('TrackThreads, stop tracking')
+        self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
         self.context_manager.genDeleteHap(self.call_hap)
         self.context_manager.genDeleteHap(self.execve_hap)
-        for hap in self.exit_hap:
-            self.context_manager.genDeleteHap(hap)
+        for pid in self.exit_hap:
+            self.context_manager.genDeleteHap(self.exit_hap[pid])
+        self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
         if self.open_syscall is not None:
+            self.lgr.debug('TrackThreads stopTrack stop open trace')
             self.open_syscall.stopTrace()
             self.open_syscall = None
+        else:
+            self.lgr.debug('TrackThreads stopTrack no open syscall for %s' % self.cell_name)
 
     def execveHap(self, dumb, third, forth, memory):
         if self.execve_hap is None:
             return
-        cpu = SIM_current_processor()
-        if cpu != self.cpu:
-            self.lgr.debug('TrackThreads  execveHap, wrong cpu %s %s' % (cpu.name, self.cpu.name))
-            return
+        #cpu = SIM_current_processor()
+        #if cpu != self.cpu:
+        #    self.lgr.debug('TrackThreads  execveHap, wrong cpu %s %s' % (cpu.name, self.cpu.name))
+        #    return
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.pid_list:
             #self.lgr.debug('TrackThreads  execveHap looked for pid %s, found %d.  Do nothing' % (str(self.pid_list), pid))
@@ -81,10 +88,10 @@ class TrackThreads():
     def cloneHap(self, dumb, third, forth, memory):
         if self.call_hap is None:
             return
-        cpu = SIM_current_processor()
-        if cpu != self.cpu:
-            self.lgr.debug('TrackThreads  cloneHap, wrong cpu %s %s' % (cpu.name, self.cpu.name))
-            return
+        #cpu = SIM_current_processor()
+        #if cpu != self.cpu:
+        #    self.lgr.debug('TrackThreads  cloneHap, wrong cpu %s %s' % (cpu.name, self.cpu.name))
+        #    return
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.pid_list:
             self.lgr.debug('TrackThreads  cloneHap looked for pid %s, found %d.  Do nothing' % (str(self.pid_list), pid))
@@ -129,7 +136,7 @@ class TrackThreads():
         if pid not in self.exit_hap:
             prog = self.traceProcs.getProg(pid)
             if prog is None or prog == 'unknown':
-                self.lgr.debug('trackThreads exitHap assume clone return to child for pid %d ?' % pid)
+                self.lgr.debug('TrackThreads exitHap assume clone return to child for pid %d ?' % pid)
                 self.context_manager.addTask(pid)
                 self.traceProcs.addProc(pid, None, clone=True)
             return
@@ -143,7 +150,7 @@ class TrackThreads():
             eip = self.mem_utils.getRegValue(cpu, 'pc')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             
-            self.lgr.debug('trackThreads exitHap eip 0x%x instruct %s break mem: 0x%x phys: 0x%x'  % (eip, instruct[1], 
+            self.lgr.debug('TrackThreads exitHap eip 0x%x instruct %s break mem: 0x%x phys: 0x%x'  % (eip, instruct[1], 
                   memory.logical_address, memory.physical_address))
             if instruct[1] == 'iretd' or instruct[1] == 'iret64':
                 reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
@@ -273,3 +280,4 @@ class TrackThreads():
         self.open_syscall = syscall.Syscall(None, self.cell_name, self.cell, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, None, callnum_list=[callnum], 
                            soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False)
+        self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
