@@ -4,7 +4,6 @@ from idaapi import Form
 import idc
 import gdbProt
 import regFu
-last_data_watch_count = '32'
 def getHex(s):
     retval = None
     hs = s
@@ -61,14 +60,17 @@ class DataWatchHandler(idaapi.action_handler_t):
         def __init__(self, isim):
             self.isim = isim
             idaapi.action_handler_t.__init__(self)
+            self.last_data_watch_count = '32'
         def activate(self, ctx):
             highlighted = idaapi.get_highlighted_identifier()
             addr = getHex(highlighted)
-            count = idc.AskStr(last_data_watch_count, 'number of bytes to watch?')
+            count = self.last_data_watch_count
+            addr, count = getAddrCount('watch memory', addr, count)
             if count is None:
                 return
-            print('watch %s bytes from 0x%x' % (count, addr))
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, 0x%s)");' % (addr, count)) 
+            print('watch %d bytes from 0x%x' % (count, addr))
+            self.last_data_watch_count = count
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, %s)");' % (addr, count)) 
             eip = gdbProt.getEIPWhenStopped()
             self.isim.signalClient()
             self.isim.showSimicsMessage()
