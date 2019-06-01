@@ -1,0 +1,212 @@
+decl{
+   param cpi             : int             = 1
+   param num_cpus        : int        = 1
+   param num_cores       : int       = -1
+   param num_threads     : int     = -1
+   param memory_megs     : int     = 2048
+   param cpu_class       : string       = "core-i7"
+   param text_console    : bool    = FALSE
+   param uart0_text_console : bool = FALSE
+   param uart1_text_console : bool = FALSE
+   param use_acpi        : bool        = TRUE
+   param gpu             : string             = "accel-vga"
+   param break_on_reboot : bool = FALSE
+   param host_name       : string
+   param freq_mhz        : int        = 2000
+   param apic_freq_mhz   : int   = 133
+   param use_vmp         : bool         = TRUE
+   param spi_flash       : string       = "spi-flash.bin"
+   param system_clock    : bool    = FALSE
+   param system_clock_class : string = "clock"
+   param sata_mode       : bool       = TRUE
+   param vga_bios_image  : string  = "seavgabios-simics-x58-ich10-1.11-20180508.bin"
+   param lan_bios        : string  = ""
+   param connect_usb_tablet : bool = FALSE
+   param os_awareness_enable : bool = TRUE
+
+    param rtc_time : string = "2015-10-09 12:00:00"
+    param use_disk2 : bool = FALSE
+    param use_disk3 : bool = FALSE
+    param disk_image : string
+    param disk2_image : string = ""
+    param disk3_image : string = ""
+    param disk_size : int
+    param disk2_size : int = 0
+    param disk3_size : int = 0
+    param mac_address_0 : string
+    param mac_address_1 : string
+    param mac_address_2 : string
+
+    param eth_dev : string = "i82559"
+    result system : string
+    result southbridge : string
+    result northbridge : string
+    result motherboard : string
+
+}
+if $sata_mode {
+    if not defined bios        {$bios            = "seabios-simics-x58-ich10-sata-1.11-20180508.bin"}
+} else {
+    if not defined bios        {$bios            = "seabios-simics-x58-ich10-ata-1.11-20180508.bin"}
+}
+###
+
+add-directory "%simics%/targets/x86-x58-ich10/images/"
+
+load-module isa-comp
+load-module pci-comp
+load-module std-comp
+load-module x86-comp
+load-module x86-nehalem-comp
+load-module x58-ich10-comp
+load-module memory-comp
+load-module os-awareness
+
+$system = (create-chassis-x58-ich10 name = $host_name)
+
+### motherboard
+$motherboard = (create-motherboard-x58-ich10 $system.mb
+        rtc_time = $rtc_time
+        acpi = $use_acpi
+        break_on_reboot = $break_on_reboot
+        bios = $bios
+        mac_address = $mac_address_0
+        spi_flash = $spi_flash
+        lan_bios = $lan_bios
+	system_clock = $system_clock
+	system_clock_class = $system_clock_class)
+$southbridge = $motherboard.sb
+$northbridge = $motherboard.nb
+
+### processor
+$create_processor = "create-processor-" + $cpu_class
+$cpu = []
+foreach $count in (range $num_cpus) {
+    $cpu[$count] = (exec $create_processor
+                         + " $motherboard.cpu + $count"
+                         + " freq_mhz = $freq_mhz"
+                         + " apic_freq_mhz = $apic_freq_mhz"
+                         + " use_vmp = $use_vmp"
+                         + " cpi = $cpi"
+                         + " n_cores = $num_cores"
+                         + " n_threads = $num_threads")
+    connect $motherboard.socket[$count] $cpu[$count].socket
+}
+
+### memory
+$dimm = (create-simple-memory-module $motherboard.memory
+                                      memory_megs = $memory_megs)
+connect $motherboard.dimm[0] $dimm.mem_bus
+
+### GPU
+if $gpu == "accel-vga" {
+    $vga = (create-pci-accel-vga-comp $motherboard.gpu $vga_bios_image)
+} else {
+    interrupt-script "Undefined GPU" -error
+}
+connect $northbridge.gpu $vga.pci_bus
+
+### consoles
+if $text_console {
+    $console = (create-text-graphics-console-comp $system.console)
+} else {
+    $console = (create-graphics-console-comp $system.console)
+    connect $console.mouse $southbridge.mse_console
+}
+connect $console.keyboard $southbridge.kbd_console
+connect $console.device $vga.console
+
+if $uart0_text_console {
+    create-text-console-comp $system.serconsole
+    connect $system.serconsole.serial $southbridge.serial[0]
+}
+
+if $uart1_text_console {
+    create-text-console-comp $system.serconsole1
+    connect $system.serconsole1.serial $southbridge.serial[1]
+}
+
+### disk
+if defined disk_image {
+    if not (file-exists $disk_image) {
+        interrupt-script "Disk image file not found: " + $disk_image
+    }
+    if $sata_mode {
+        $disk = (create-sata-disk-comp $system.disk
+                                       size = $disk_size
+                                       file = $disk_image)
+    } else {
+        $disk = (create-ide-disk-comp $system.disk
+                                      size = $disk_size
+                                      file = $disk_image)
+    }
+} else {
+    if $sata_mode {
+        $disk = (create-sata-disk-comp $system.disk
+                                      size = $disk_size)
+    } else {
+        $disk = (create-ide-disk-comp $system.disk
+                                      size = $disk_size)
+    }
+}
+if $sata_mode {
+    connect $southbridge.sata_slot[0] $disk.sata_slot
+} else {
+    connect $southbridge.ide_slot[0] $disk.ide_slot
+}
+### CD-ROM
+if $sata_mode {
+    $cdrom = (create-sata-cdrom-comp $system.cdrom)
+    connect $southbridge.sata_slot[1] $cdrom.sata_slot
+} else {
+    $cdrom = (create-ide-cdrom-comp $system.cdrom)
+    connect $southbridge.ide_slot[1] $cdrom.ide_slot
+}
+
+### process tracker
+if $os_awareness_enable {
+    create-os-awareness name = $system + ".software"
+}
+
+### USB Tablet
+if ($connect_usb_tablet == TRUE) {
+    load-module usb-comp
+    $tablet = (create-usb-tablet-component $system.tablet)
+    connect $tablet.usb_host $system.mb.sb.usb_port[0]
+    connect $tablet.abs_mouse $console.abs_mouse
+}
+
+### nic
+if defined use_broadcom{
+   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_1 mac_address1 = $mac_address_2)
+   echo "pci_slot[0] gets mac address "+ $mac_address_1+" and "+ $mac_address_2
+   connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
+}else{
+   # ignore name assignments, simics cli fu
+   if defined mac_address_1     {
+      if $eth_dev == "i82559"{
+          $eth_comp = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp = (create-pci-i82546gc-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "pci_slot[0] gets mac address "+ $mac_address_1
+      connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
+   }
+   if defined mac_address_2 {
+      if $eth_dev == "i82559"{
+          $eth_comp2 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp2 = (create-pci-i82546gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp2 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "pci_slot[1] gets mac address "+ $mac_address_2
+      connect $motherboard.nb.pci_slot[1] $eth_comp2.pci_bus
+   }
+}

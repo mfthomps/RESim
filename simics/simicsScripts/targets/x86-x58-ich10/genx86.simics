@@ -1,8 +1,9 @@
 add-directory "%script%"
 $cpu_class="core-i7-single"
-if not defined rtc_time     {$rtc_time     = "2019-4-25 14:00:00 UTC"}
+if not defined rtc_time     {$rtc_time     = "2019-4-25 14:00:00"}
 if not defined OS_TYPE     {$OS_TYPE     = "linux"}
 if not defined port1     {$port1     = 5022}
+if not defined simic_verson       {$simic_verson       = 4}
 
 $use_bcm_nic = "NO"
 
@@ -12,7 +13,11 @@ if not defined create_network {$create_network = TRUE}
 if not defined connect_real_network {$connect_real_network = FALSE}
 if not defined network_connection {$network_connection = "napt"}
 
-run-command-file "%script%/x86-x58-ich10-system.include"
+if $simics_version == 5 {
+    run-command-file "%script%/x86-x58-ich10-system5.include"
+}else{
+    run-command-file "%script%/x86-x58-ich10-system.include"
+}
 if $use_disk2{
     echo "using 2nd disk image "+$disk2_image
     $disk2 = (create-sata-disk-comp $system.disk2
@@ -39,14 +44,26 @@ connect $system.serconsole1.serial $southbridge.serial[0]
 create-text-console-comp $system.serconsole2
 connect $system.serconsole2.serial $southbridge.serial[1]
 
-if defined use_broadcom{
-   $eth0 = $host_name.mb.nb.bcm5704c.connector_ethernet0
-   $eth2 = $host_name.mb.nb.bcm5704c2.connector_ethernet1
+if $simics_version == 5 {
+    if defined use_broadcom{
+       $eth0 = $host_name.mb.nb.bcm5704c.eth0
+       $eth2 = $host_name.mb.nb.bcm5704c2.eth1
+    }else{
+       # ignore naming, simics cli fu
+       $eth0 = $motherboard.nb.$eth_dev.eth
+       $eth2 = $motherboard.nb.$eth_dev+2.eth
+       $eth1 = $host_name.mb.sb.eth_slot
+    }
 }else{
-   # ignore naming, simics cli fu
-   $eth0 = $motherboard.nb.$eth_dev.connector_ethernet
-   $eth2 = $motherboard.nb.$eth_dev+2.connector_ethernet
-   $eth1 = $host_name.mb.sb.eth_slot
+    if defined use_broadcom{
+       $eth0 = $host_name.mb.nb.bcm5704c.connector_ethernet0
+       $eth2 = $host_name.mb.nb.bcm5704c2.connector_ethernet1
+    }else{
+       # ignore naming, simics cli fu
+       $eth0 = $motherboard.nb.$eth_dev.connector_ethernet
+       $eth2 = $motherboard.nb.$eth_dev+2.connector_ethernet
+       $eth1 = $host_name.mb.sb.eth_slot
+    }
 }
 
 $switch0_con = (switch0.get-free-connector)
