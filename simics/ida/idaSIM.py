@@ -6,6 +6,7 @@ import idautils
 import bpUtils
 import gdbProt
 import origAnalysis
+no_rev = 'reverse execution disabled'
 class IdaSIM():
     def __init__(self, stack_trace, bookmark_view, kernel_base, reg_list, registerMath):
         self.stack_trace = stack_trace
@@ -28,6 +29,13 @@ class IdaSIM():
     def getOrigAnalysis(self):
         return self.origAnalysis
 
+    def checkNoRev(self, ss):
+        if type(ss) is str:
+            if ss.startswith(no_rev):
+                print('Reverse execution is disabled')
+                return False
+        return True 
+
     def doRevToCursor(self):
         cursor = idc.ScreenEA()
         curAddr = idc.GetRegValue(self.PC)
@@ -37,8 +45,10 @@ class IdaSIM():
         #doRevToAddr(cursor)
         command = '@cgc.revToAddr(0x%x, extra_back=%d)' % (cursor, 0)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped()
-        self.signalClient()
+        #print('simicsString <%s>' % simicsString)
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
 
     def XXXXXXXXXXXXXXXsignalClient(self, norev=False):
         start_eip = idc.GetRegValue(self.PC)
@@ -73,6 +83,8 @@ class IdaSIM():
             r = str(reg.upper())
             if r == 'EFLAGS':
                 r = 'EFL'
+            elif r == 'CPSR':
+                r = 'PSR'
             #print('set %s to 0x%x' % (r, regs[reg]))
             idc.SetRegValue(regs[reg], r)
         idc.RefreshDebuggerMemory()
@@ -94,23 +106,24 @@ class IdaSIM():
     
         command = "@cgc.reverseStepInstruction(%d)" % num
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True)");')
-        eip = gdbProt.getEIPWhenStopped()
-        return eip
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
     
     def doRevStepOver(self):
         #print 'in doRevStepOver'
         curAddr = idc.GetRegValue(self.PC)
         prev_eip = idc.PrevHead(curAddr)
+        eip = None
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
         else:
             #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False, prev=0x%x)");' % prev_eip)
-        eip = gdbProt.getEIPWhenStopped()
-        #gdbProt.stepWait()
-        self.signalClient()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
         return eip
     
     def doRevStepInto(self):
@@ -118,15 +131,16 @@ class IdaSIM():
         #eip = reverseStepInstruction()
         curAddr = idc.GetRegValue(self.PC)
         prev_eip = idc.PrevHead(curAddr)
+        eip = None
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True)");')
         else:
             #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True, prev=0x%x)");' % prev_eip)
-        eip = gdbProt.getEIPWhenStopped()
-        #gdbProt.stepWait()
-        self.signalClient()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
         return eip
     
     def doRevFinish(self):
@@ -140,9 +154,9 @@ class IdaSIM():
         else:
             print('use monitor uncall function')
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.uncall()");')
-            eip = gdbProt.getEIPWhenStopped()
-            self.signalClient()
-            #gdbProt.stepWait()
+            if self.checkNoRev(simicsString):
+                eip = gdbProt.getEIPWhenStopped()
+                self.signalClient()
     
     '''
         Issue the Simics "rev" command via GDB and then move forward the actual breakpoint
@@ -158,6 +172,8 @@ class IdaSIM():
         if isBpt > 0:
        	    print 'curAddr is %x, it is a breakpoint, do a rev step over' % curAddr
             addr = self.doRevStepOver()
+            if addr is None:
+                return None
             print 'in doReverse, did RevStepOver got addr of %x' % addr
             isBpt = idc.CheckBpt(addr)
             if isBpt > 0:
@@ -171,28 +187,19 @@ class IdaSIM():
             param = extra_back
         command = '@cgc.doReverse(%s)' % param
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        addr = gdbProt.getEIPWhenStopped()
-        self.signalClient()
-        #print 'reverse addr after stop %x' % addr
-        #GetDebuggerEvent(WFNE_SUSP , 5)
-        #print 'back from getdebugevent'
-        #disabledSet = bpUtils.disableAllBpts(None)
-        #print 'after disable'
-    
-        #gdbProt.stepWait()
-    
-        #print 'after stepInto'
-        #bpUtils.enableBpts(disabledSet)
-        #print 'after enable'
+        addr = None
+        if self.checkNoRev(simicsString):
+            addr = gdbProt.getEIPWhenStopped()
+            self.signalClient()
     
         return addr
     
     def doRevToAddr(self, addr, extra_back=0):
         command = '@cgc.revToAddr(0x%x, extra_back=%d)' % (addr, extra_back)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped()
-        self.signalClient()
-        #gdbProt.stepWait()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
         
     '''
     Run backwards until we find the most recent write to the current SP
@@ -242,9 +249,11 @@ class IdaSIM():
         disabledSet = bpUtils.disableAllBpts(None)
         command = '@cgc.stopAtKernelWrite(0x%x)' % target_addr
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped()
-        #gdbProt.stepWait()
-        self.signalClient()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
+        else:
+            return
         bpUtils.enableBpts(disabledSet)
         if eip >=  self.kernel_base:
             print('previous syscall wrote to address 0x%x' % target_addr)
@@ -252,28 +261,22 @@ class IdaSIM():
             curAddr = idc.GetRegValue(self.PC)
             #print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
             print('Previous instruction  wrote to 0x%x' % (target_addr))
-        # why does the next instruction never return?
-        #curAddr = idc.GetRegValue("EIP")
-        #print('wroteToAddress currAddr is %x' % curAddr)
     
     def trackAddress(self, target_addr):
         disabledSet = bpUtils.disableAllBpts(None)
         command = '@cgc.revTaintAddr(0x%x)' % target_addr
-        print('do command '+command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        print('not get when stopped')
-        eip = gdbProt.getEIPWhenStopped()
-        #gdbProt.stepWait()
-        self.signalClient()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
+        else:
+            return
         bpUtils.enableBpts(disabledSet)
         if eip >=  self.kernel_base:
             print('previous is as far back as we can trace content of address 0x%x' % target_addr)
         else:
             curAddr = idc.GetRegValue(self.PC)
             print('Current instruction (0x%x) is as far back as we can trace 0x%x' % (curAddr, target_addr))
-        # why does the next instruction never return?
-        #curAddr = idc.GetRegValue("EIP")
-        #print('wroteToAddress currAddr is %x' % curAddr)
     
     def showSimicsMessage(self):
         command = '@cgc.idaMessage()' 
@@ -290,9 +293,10 @@ class IdaSIM():
            
     def wroteToRegister(self): 
         highlighted = idaapi.get_highlighted_identifier()
+        '''
         if highlighted is None  or highlighted not in self.reg_list:
            print('%s not in reg list' % highlighted)
-           c=Choose([], "Run backward until selected register modified", 1)
+           c=idaapi.Choose([], "Run backward until selected register modified", 1)
            c.width=50
            c.list = self.reg_list
            chose = c.choose()
@@ -301,12 +305,16 @@ class IdaSIM():
                return
            else:
                highlighted = self.reg_list[chose-1]
+        '''
         print 'Looking for a write to %s...' % highlighted
         command = "@cgc.revToModReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped(2)
-        #gdbProt.stepWait()
-        self.signalClient()
+        eip = None
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
+        else:
+            return
         curAddr = idc.GetRegValue(self.PC)
         print('Current instruction (0x%x) wrote to reg %s' % (curAddr, highlighted))
         return eip
@@ -315,7 +323,7 @@ class IdaSIM():
         highlighted = idaapi.get_highlighted_identifier()
         if highlighted is None  or highlighted not in self.reg_list:
            print('%s not in reg list' % highlighted)
-           c=Choose([], "back track to source of selected register", 1)
+           c=idaapi.Choose([], "back track to source of selected register", 1)
            c.width=50
            c.list = self.reg_list
            chose = c.choose()
@@ -327,9 +335,12 @@ class IdaSIM():
         print 'backtrack to source of to %s...' % highlighted
         command = "@cgc.revTaintReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped(2)
-        #gdbProt.stepWait()
-        self.signalClient()
+        eip = None
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
+        else:
+            return
         curAddr = idc.GetRegValue(self.PC)
         print('Current instruction (0x%x) is as far back as we can trace reg %s' % (curAddr, highlighted))
         self.showSimicsMessage()
@@ -337,7 +348,7 @@ class IdaSIM():
         return eip
      
     def chooseBookmark(self): 
-        c=Choose([], "select a bookmark", 1, deflt=self.recent_bookmark)
+        c=idaapi.Choose([], "select a bookmark", 1, deflt=self.recent_bookmark)
         c.width=50
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
@@ -460,15 +471,16 @@ class IdaSIM():
             #print('runtoSyscall done')
     
     def revToSyscall(self):
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.revToSyscall()");') 
-            eip = gdbProt.getEIPWhenStopped(kernel_ok=True)
-            #print('revtoSyscall, stopped at eip 0x%x, now run to user space.' % eip)
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.revToSyscall()");') 
+        if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
-            #print('revtoSyscall, stopped at eip 0x%x, then stepwait.' % eip)
-            #gdbProt.stepWait()
             self.signalClient()
-            print('revtoSyscall done')
+        else:
+            return
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
+        eip = gdbProt.getEIPWhenStopped()
+        self.signalClient()
+        print('revtoSyscall done')
     
     def revBlock(self):
         cur_addr = idc.GetRegValue(self.PC)
@@ -508,9 +520,11 @@ class IdaSIM():
         command = "@cgc.watchData()" 
         print('called %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('watchData got back %s' % simicsString) 
         time.sleep(1)
         eip = gdbProt.getEIPWhenStopped()
-        self.signalClient()
+        if eip != 0:
+            self.signalClient()
         self.showSimicsMessage()
         
     def runToIO(self):
@@ -644,13 +658,13 @@ class IdaSIM():
             self.runToUserSpace()
     
     def doStepOver(self):
-        #print('in doStepOver')
+        print('in doStepOver')
         idaapi.step_over()
-        #print('back from step over')
+        print('back from step over')
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        #print('back getDebuggerEvent')
+        print('back getDebuggerEvent')
         cur_addr = idc.GetRegValue(self.PC)
-        #print('cur_addr is 0x%x' % cur_addr)
+        print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
             print('run to user space')
             self.runToUserSpace()
@@ -664,6 +678,7 @@ class IdaSIM():
         idaapi.qexit(0)
     
     def resynch(self):
+        print('resynch to server')
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.resynch()");')
         eip = gdbProt.getEIPWhenStopped()
         self.signalClient()
@@ -677,8 +692,9 @@ class IdaSIM():
     def revToText(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.revToText()");')
         time.sleep(1)
-        eip = gdbProt.getEIPWhenStopped()
-        self.signalClient()
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
     
     def exitMaze(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.exitMaze(debugging=True)");')
