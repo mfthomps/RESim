@@ -82,6 +82,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
             if mail == 'exited':
                 retval = 0
                 print('Process exited')
+                done = True
             elif not mail.startswith('ip:'):
                 done = True
                 try:
