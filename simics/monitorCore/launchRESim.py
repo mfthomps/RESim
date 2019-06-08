@@ -180,10 +180,16 @@ if RUN_FROM_SNAP is None:
         if 'PLATFORM' in comp_dict[section] and comp_dict[section]['PLATFORM']=='arm':
             params = params+' default_system_info=%s' % comp_dict[section]['$host_name']
             params = params+' board_name=%s' % comp_dict[section]['$host_name']
+            '''
             params = params+' root_disk_image=%s' % comp_dict[section]['$root_disk_image']
             params = params+' root_disk_size=%s' % comp_dict[section]['$root_disk_size']
             params = params+' user_disk_image=%s' % comp_dict[section]['$user_disk_image']
             params = params+' user_disk_size=%s' % comp_dict[section]['$user_disk_size']
+            '''
+            for name in comp_dict[section]:
+                if name.startswith('$'):
+                    cmd = '%s=%s' % (name[1:], name)
+                    params = params + " "+cmd
         else:
             for name in comp_dict[section]:
                 if name.startswith('$'):
