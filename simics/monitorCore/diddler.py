@@ -11,6 +11,8 @@ def nextLine(fh):
            break
        if line.startswith('#'):
            continue
+       if len(line.strip()) == 0:
+           continue
        retval = line.strip('\n')
    return retval
 
@@ -86,8 +88,18 @@ class Diddler():
         rm_this = None
         for fiddle in self.fiddles:
             #self.lgr.debug('Diddle checkString  %s to  %s' % (fiddle.match, s))
-            if re.search(fiddle.match, s, re.M|re.I) is not None:
-                if re.search(fiddle.was, s, re.M|re.I) is not None:
+            try:
+                match = re.search(fiddle.match, s, re.M|re.I)
+            except:
+                self.lgr.error('diddler subReplace re.search failed on match: %s, str %s' % (fiddle.match, s))
+                return
+            if match is not None:
+                try:
+                    was = re.search(fiddle.was, s, re.M|re.I)
+                except:
+                    self.lgr.error('diddler subReplace re.search failed on was: %s, str %s' % (fiddle.was, s))
+                    return
+                if was is not None:
                     #self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
                     new_string = re.sub(fiddle.was, fiddle.becomes, s)
                     self.mem_utils.writeString(cpu, addr, new_string)
@@ -156,6 +168,7 @@ class Diddler():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.lgr.debug('Diddler stop hap')
         for cmd in fiddle.cmds:
+            self.lgr.debug('run command %s' % cmd)
             SIM_run_command(cmd)
     
     def getOperation(self):
