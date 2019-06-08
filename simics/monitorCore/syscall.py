@@ -142,7 +142,8 @@ class Syscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, callnum_list=None, trace = False, break_on_execve=None, flist_in=None, soMap = None, 
-                   call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False): 
+                   call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
+                   debugging_exit=False): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -152,7 +153,8 @@ class Syscall():
         pid, dumb, cpu = context_manager.getDebugPid()
         self.debugging = False
         self.stop_on_call = stop_on_call
-        if pid is not None:
+        self.debugging_exit = debugging_exit
+        if pid is not None or debugging_exit:
             self.debugging = True
             self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
@@ -311,7 +313,9 @@ class Syscall():
         if self.stop_hap is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
- 
+
+        ''' reset SO map tracking ''' 
+        self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
         self.lgr.debug('syscall stopTrace return')
        
@@ -826,6 +830,7 @@ class Syscall():
             else:
                 for call_param in syscall_info.call_params:
                     if type(call_param.match_param) is str:
+                        self.lgr.debug('syscall open, found match_param %s' % call_param.match_param)
                         exit_info.call_params = call_param
                         break
 
@@ -971,6 +976,7 @@ class Syscall():
                         exit_info.call_params = call_param
                         break
                 elif call_param.match_param.__class__.__name__ == 'Diddler':
+                    ''' handle read diddle during syscall return '''
                     exit_info.call_params = call_param
                     break
 
@@ -993,8 +999,9 @@ class Syscall():
                         self.lgr.debug('syscall write check diddler count %d' % count)
                         if call_param.match_param.checkString(self.cpu, frame['param2'], count):
                             self.lgr.debug('syscall write found final diddler')
-                            self.stopTrace()
-                            if SIM_simics_is_running():
+                            self.top.stopTrace(cell_name=self.cell_name)
+                            if not self.top.remainingCallTraces() and SIM_simics_is_running():
+                                self.top.notRunning(quiet=True)
                                 SIM_break_simulation('diddle done on cell %s file: %s' % (self.cell_name, call_param.match_param.getPath()))
                 else:
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
@@ -1289,13 +1296,17 @@ class Syscall():
             last_one = self.context_manager.rmTask(pid, killed) 
             self.lgr.debug('syscallHap exit pid %d last_one %r debugging %d' % (pid, last_one, self.debugging))
             if last_one and self.debugging:
-                self.lgr.debug('exit or exit_group pid %d' % pid)
+                if self.debugging_exit:
+                    ''' exit before we got to text section '''
+                    self.lgr.debug(' exit of %d before we got to text section ' % pid)
+                    SIM_run_alone(self.top.undoDebug, None)
+                self.lgr.debug('exit or exit_group pid:%d' % pid)
                 self.sharedSyscall.stopTrace()
                 ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
                 self.task_utils.setExitPid(pid)
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
-                SIM_run_alone(self.stopAlone, 'exit or exit_group pid %d' % pid)
+                SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
 
     def getBinders(self):
         return self.binders
