@@ -50,14 +50,9 @@ class TrackThreads():
 
         self.trackSO()
         if self.open_syscall is None:
-            self.lgr.debug('wtf, it is none?')
+            self.lgr.error('trackThreads startTrack, open_syscall is none')
 
-    def stopTrack(self):
-        self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
-        self.context_manager.genDeleteHap(self.call_hap)
-        self.context_manager.genDeleteHap(self.execve_hap)
-        for pid in self.exit_hap:
-            self.context_manager.genDeleteHap(self.exit_hap[pid])
+    def stopSOTrack(self):
         self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
         if self.open_syscall is not None:
             self.lgr.debug('TrackThreads stopTrack stop open trace')
@@ -65,6 +60,14 @@ class TrackThreads():
             self.open_syscall = None
         else:
             self.lgr.debug('TrackThreads stopTrack no open syscall for %s' % self.cell_name)
+
+    def stopTrack(self):
+        self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
+        self.context_manager.genDeleteHap(self.call_hap)
+        self.context_manager.genDeleteHap(self.execve_hap)
+        for pid in self.exit_hap:
+            self.context_manager.genDeleteHap(self.exit_hap[pid])
+        self.stopSOTrack()
 
     def execveHap(self, dumb, third, forth, memory):
         if self.execve_hap is None:
