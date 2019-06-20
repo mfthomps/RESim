@@ -120,6 +120,8 @@ class TraceProcs():
         return self.socket_handle[pid]
 
     def addProc(self, pid, parent, clone=False, comm=None):
+        if pid == 0:
+            return False
         if pid is None:
             self.lgr.error('traceProcs pid is None')
             return False
@@ -220,6 +222,14 @@ class TraceProcs():
             self.plist[pid] = newproc
         self.plist[pid].sockets[sname] = [fd1, fd2]
 
+    def isExternal(self, pid, fd):
+        if pid in self.plist:
+            for s in self.plist[pid].sockets:
+                if fd in self.plist[pid].sockets[s]:
+                    if ':' in s:
+                        return True
+        return False
+    
     def bind(self, pid, fd, name):
         pid = str(pid)
         if pid not in self.plist:
