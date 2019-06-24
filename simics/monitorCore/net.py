@@ -89,6 +89,7 @@ class SockStruct():
         self.length = 0
         self.flags = 0
         if fd is None:
+            ''' must be 32-bit socketcall, find addr.  fd, length and flags are speculative '''
             self.fd = mem_utils.readWord32(cpu, params)
             self.length = mem_utils.readWord32(cpu, params+8)
             self.flags = mem_utils.readWord32(cpu, params+12)
@@ -150,14 +151,17 @@ class SockStruct():
         return flag
 
     def getString(self):
+        fd = ''
+        if self.fd is not None and self.fd >= 0:
+            fd = 'FD: %d' % self.fd
         if self.sa_family is None:
-            retval = ('FD: %d sa_family unknown' % (self.fd))
+            retval = ('%s sa_family unknown' % (fd))
         elif self.sa_family == 1:
-            retval = ('FD: %d sa_family: %s  sa_data: %s' % (self.fd, self.famName(), self.sa_data))
+            retval = ('%s sa_family: %s  sa_data: %s' % (fd, self.famName(), self.sa_data))
         elif self.sa_family == 2:
-            retval = ('FD: %d sa_family: %s  address: %s:%d' % (self.fd, self.famName(), self.dottedIP(), self.port))
+            retval = ('%s sa_family: %s  address: %s:%d' % (fd, self.famName(), self.dottedIP(), self.port))
         else:
-            retval = ('FD: %d sa_family: %s  TBD' % (self.fd, self.famName()))
+            retval = ('%s sa_family: %s  TBD' % (fd, self.famName()))
         return retval
 
 class Iovec():
