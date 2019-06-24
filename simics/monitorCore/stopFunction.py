@@ -17,6 +17,7 @@ def allFuns(flist):
 
 class StopFunction():
     def __init__(self, fun, args, nest=True):
+        ''' the function '''
         self.fun = fun
         self.args = args
         ''' nest implies the function should be invoked with the flist as the parameter '''
@@ -32,3 +33,6 @@ class StopFunction():
             runFun(self)
             for f in flist:
                 runFun(f)
+
+    def getFun(self):
+        return self.fun

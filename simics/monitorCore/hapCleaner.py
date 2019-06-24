@@ -18,8 +18,8 @@ class HapCleaner():
 
 class StopAction():
     ''' hap_clearer is a list of haps to delete
-        breakpoints to be deleted
-        list of functions to be executed '''
+        and breakpoints to be deleted
+        flist is list of functions to be executed of type stopFunction'''
     def __init__(self, hap_cleaner, breakpoints, flist=None, break_addrs = []):
         self.hap_clean = hap_cleaner
         self.break_addrs = break_addrs
@@ -49,3 +49,9 @@ class StopAction():
 
     def addFun(self, fun):
         self.flist.append(fun)
+
+    def listFuns(self):
+        retval = ''
+        for f in self.flist:
+            retval = retval + str(f.getFun()) + ' '
+        return retval
