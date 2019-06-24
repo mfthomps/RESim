@@ -134,6 +134,8 @@ class GenContextMgr():
         self.pid_cache = []
         self.task_rec_hap = {}
         self.task_rec_bp = {}
+        ''' avoid multiple calls to taskRecHap '''
+        self.demise_cache = []
 
     def getRealBreak(self, break_handle):
         for hap in self.haps:
@@ -310,57 +312,57 @@ class GenContextMgr():
         if self.task_hap is None:
             return
         # get the value that will be written into the current thread address
-        cur_addr = SIM_get_mem_op_value_le(memory)
-        pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
+        new_addr = SIM_get_mem_op_value_le(memory)
+        pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
         prev_task = self.task_utils.getCurTaskRec()
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
-        #self.lgr.debug('changeThread from %d to %d cur_addr 0x%x watchlist len is %d' % (prev_pid, pid, cur_addr, len(self.watch_rec_list)))
+        #self.lgr.debug('changeThread from %d to %d new_addr 0x%x watchlist len is %d' % (prev_pid, pid, new_addr, len(self.watch_rec_list)))
         pid = None
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
                 We don't have the process rec until it is ready to schedule. '''
-            pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
+            pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
             if pid in self.pending_watch_pids:
-                #self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
-                self.watch_rec_list[cur_addr] = pid
+                self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
+                self.watch_rec_list[new_addr] = pid
                 self.pending_watch_pids.remove(pid)
-                self.watchExit(rec=cur_addr, pid=pid)
+                self.watchExit(rec=new_addr, pid=pid)
           
 
         if not self.watching_tasks and \
-               (cur_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
+               (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
                and not (self.single_thread and pid != self.debugging_pid):
             ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
                 #self.lgr.debug('resim_context')
-            pid = self.mem_utils.readWord32(cpu, cur_addr + self.param.ts_pid)
-            self.lgr.debug('Now scheduled %d' % pid)
+            pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
+            #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
             only_maze_breaks = False
-            if cur_addr in self.nowatch_list:
+            if new_addr in self.nowatch_list:
                 only_maze_breaks = True
                 #self.lgr.debug('contextManager changedThread, only do maze breaks')
             SIM_run_alone(self.setAllHap, only_maze_breaks)
         elif self.watching_tasks:
             if prev_task in self.nowatch_list:
-                if cur_addr not in self.nowatch_list:
+                if new_addr not in self.nowatch_list:
                     ''' was watching only maze exits, watch everything but maze'''
                     #self.lgr.debug('was watching only maze, now watch all ')
                     SIM_run_alone(self.clearAllHap, False)
                     SIM_run_alone(self.setAllHap, False)
-            elif cur_addr in self.nowatch_list:
+            elif new_addr in self.nowatch_list:
                 ''' was watching everything, watch only maze '''
                 #self.lgr.debug('Now only watch maze')
                 SIM_run_alone(self.clearAllHap, False)
                 SIM_run_alone(self.setAllHap, True)
-            elif len(self.watch_rec_list) > 0 and cur_addr not in self.watch_rec_list:
+            elif len(self.watch_rec_list) > 0 and new_addr not in self.watch_rec_list:
                 ''' Watching processes, but new process should not be watched '''
                 if self.debugging_pid is not None:
                     cpu.current_context = self.default_context
                     #self.lgr.debug('default_context')
-                self.lgr.debug('No longer scheduled')
+                #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 self.clearAllBreak()
                 SIM_run_alone(self.clearAllHap, False)
@@ -390,7 +392,7 @@ class GenContextMgr():
             if pid in self.pid_cache:
                 self.pid_cache.remove(pid)
             
-            if pid in self.task_rec_bp:
+            if pid in self.task_rec_bp and self.task_rec_bp[pid] is not None:
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
                 SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
                 del self.task_rec_bp[pid]
@@ -439,10 +441,23 @@ class GenContextMgr():
             return
         SIM_delete_breakpoint(self.task_break)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
-        self.lgr.debug('stopWatchTasks')
         self.task_hap = None
         self.task_break = None
         self.watching_tasks = False
+        self.watch_rec_list = {}
+        
+        for pid in self.task_rec_bp:    
+            if self.task_rec_bp[pid] is not None:
+                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
+        self.task_rec_bp = {}
+        self.task_rec_hap = {}
+        self.pid_cache = []
+        self.debugging_pid = None
+
+        cpu, dumb, dumb2  = self.task_utils.curProc()
+        cpu.current_context = self.default_context
+        self.lgr.debug('stopWatchTasks restored %s to default context %s' % (cpu.name, str(self.default_context)))
 
     def setTaskHap(self):
         print('debugging_cell is %s' % self.debugging_cell)
@@ -475,7 +490,7 @@ class GenContextMgr():
 
     def singleThread(self, single):
         self.single_thread = single
- 
+
     def setDebugPid(self, debugging_pid, debugging_cellname):
         self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
@@ -485,18 +500,50 @@ class GenContextMgr():
         self.debugging_cell = self.top.getCell()
         self.pid_cache.append(debugging_pid)
 
+    def resetAlone(self, pid):
+        self.lgr.debug('contextManager resetAlone')
+        dead_rec = self.task_utils.getRecAddrForPid(pid)
+        if dead_rec is not None:
+            list_addr = self.task_utils.getTaskListPtr(dead_rec)
+            self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d still found though written by maybe not dead after all? new list_addr is 0x%x' % (dead_rec, 
+                pid, list_addr))
+
+            SIM_delete_breakpoint(self.task_rec_bp[pid])
+            self.task_rec_bp[pid] = None
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])
+            self.task_rec_hap[pid] = None
+            self.watchExit(rec=dead_rec, pid = pid)
+        else: 
+            ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
+            self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
+            exit_syscall = self.top.getSyscall(self.cell_name, 'group_exit')
+            if exit_syscall is not None:
+                ida_msg = 'pid:%d exit via kill?' % pid
+                exit_syscall.handleExit(pid, ida_msg, killed=True)
+            else:
+                self.rmTask(pid)
+        self.demise_cache.remove(pid)
+
     def taskRecHap(self, pid, third, forth, memory):
-        dumb, comm, cur_pid  = self.task_utils.curProc()
-        value = SIM_get_mem_op_value_le(memory)
-        self.lgr.debug('contextManager taskRecHap pid:%d wrote 0x%x to 0x%x watching for demise of %d' % (cur_pid, value, memory.logical_address, pid))
-        if pid not in self.task_rec_hap:
+        if pid not in self.task_rec_hap or pid in self.demise_cache:
             return
-        exit_syscall = self.top.getSyscall(self.cell_name, 'group_exit')
-        if exit_syscall is not None:
-            ida_msg = 'pid:%d exit via kill?' % pid
-            exit_syscall.handleExit(pid, ida_msg, killed=True)
-        else:
-            self.rmTask(pid)
+        dumb, comm, cur_pid  = self.task_utils.curProc()
+        self.lgr.debug('contextManager taskRecHap demise of pid:%d by the hand of cur_pid %d?' % (pid, cur_pid))
+        dead_rec = self.task_utils.getRecAddrForPid(pid)
+        if dead_rec is not None:
+            self.lgr.debug('contextManager taskRecHap got record 0x%x for %d, call resetAlone' % (dead_rec, pid))
+            self.demise_cache.append(pid)
+            SIM_run_alone(self.resetAlone, pid)
+
+        else: 
+            value = SIM_get_mem_op_value_le(memory)
+            self.lgr.debug('contextManager taskRecHap pid:%d wrote 0x%x to 0x%x watching for demise of %d' % (cur_pid, value, memory.logical_address, pid))
+            exit_syscall = self.top.getSyscall(self.cell_name, 'group_exit')
+            if exit_syscall is not None:
+                ida_msg = 'pid:%d exit via kill?' % pid
+                exit_syscall.handleExit(pid, ida_msg, killed=True)
+            else:
+                self.rmTask(pid)
 
     def watchExit(self, rec=None, pid=None):
         dumb, comm, cur_pid  = self.task_utils.curProc()
@@ -517,15 +564,18 @@ class GenContextMgr():
         self.task_rec_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
 
     def setExitBreaks(self):
+        self.lgr.debug('contextManager setExitBreaks')
         for pid in self.task_rec_bp:
             rec = self.task_utils.getRecAddrForPid(pid)
             self.watchExit(rec, pid)
 
     def clearExitBreaks(self):
+        self.lgr.debug('contextManager clearExitBreaks')
         for pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
                 self.task_rec_bp[pid] = None
+                self.lgr.debug('contextManager clearExitBreaks pid:%d' % pid)
         for pid in self.task_rec_hap:
             if self.task_rec_hap[pid] is not None:
                 SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])

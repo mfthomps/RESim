@@ -71,7 +71,7 @@ class TaskStruct(object):
 
 class TaskUtils():
     COMM_SIZE = 16
-    def __init__(self, cpu, cell_name, param, mem_utils, unistd, RUN_FROM_SNAP, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -81,6 +81,7 @@ class TaskUtils():
         self.exit_cycles = 0
         self.exit_pid = 0
         self.exec_addrs = {}
+        self.swapper = None
 
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
@@ -113,6 +114,10 @@ class TaskUtils():
             #    return None
         self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
+        if unistd32 is not None:
+            self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
+        else:
+            self.syscall_numbers32 = None
 
     def getPhysCurrentTask(self):
         return self.phys_current_task
@@ -142,15 +147,19 @@ class TaskUtils():
         return self.cpu, comm, pid 
 
     def findSwapper(self):
+        if self.swapper is not None:
+            task = self.swapper
+        else: 
             #task = SIM_read_phys_memory(cpu, current_task, self.mem_utils.WORD_SIZE)
             task = self.getCurTaskRec()
-            #self.lgr.debug('getCurTask got 0x%x' % task)
+            self.lgr.debug('taskUtils findSwapper got 0x%x' % task)
             cpu = self.cpu
             #task = self.mem_utils.getCurrentTask(self.param, cpu)
             done = False
             while not done:
-                #comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
-                #print 'findSwapper task is %x ' % (task)
+                comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
+                pid = self.mem_utils.readWord32(cpu, task + self.param.ts_pid)
+                #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                 ts_real_parent = self.mem_utils.readPtr(cpu, task + self.param.ts_real_parent)
                 if ts_real_parent == task:
                     #print 'parent is same as task, done?'
@@ -163,7 +172,8 @@ class TaskUtils():
                         #SIM_break_simulation('got zero for ts_real parent')
                         task = None
                         done = True
-            return task    
+            self.swapper = task
+        return task    
     
     def is_kernel_virtual(self, addr):
         return addr >= self.param.kernel_base
@@ -280,12 +290,14 @@ class TaskUtils():
         swapper_addr = self.findSwapper() 
         if swapper_addr is None:
             return tasks
-        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
+        #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
             (task_addr, x,) = stack.pop()
+            #self.lgr.debug('popped task_addr 0x%x' % task_addr)
             if (task_addr, x) in seen:
+                #self.lgr.debug('seen it')
                 continue
             seen.add((task_addr, x))
             seen.add((task_addr, False))
@@ -299,14 +311,14 @@ class TaskUtils():
             if task_addr is None or task.next is None: 
                 #self.lgr.debug('task_addr None')
                 break
-            if task.comm is None or len(task.comm.strip()) == 0:
+            if (task.comm is None or len(task.comm.strip()) == 0) and not (task.pid == 0 and len(stack)==0):
                 # cleaner way to know we are done?
                 self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
                 break
                 #continue
            
             #else:
-                #self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
+            #    self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
           
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
@@ -398,7 +410,7 @@ class TaskUtils():
         return retval
 
     def getRecAddrForPid(self, pid):
-        self.lgr.debug('getRecAddrForPid %d' % pid)
+        #self.lgr.debug('getRecAddrForPid %d' % pid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
            if ts_list[ts].pid == pid:
@@ -459,7 +471,7 @@ class TaskUtils():
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
                     if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
                         thread_group_addr = task_addr + self.param.ts_thread_group_list_head
-                        self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
+                        #self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
                         return thread_group_addr
                     stack.append((task.thread_group.next, False))
     
@@ -635,16 +647,21 @@ class TaskUtils():
         else: 
             return None, None
  
-    def getSyscallEntry(self, callnum):
+    def getSyscallEntry(self, callnum, compat32):
         if self.cpu.architecture == 'arm':
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
-        else:
+        elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
+        else:
+            val = callnum * self.mem_utils.WORD_SIZE - self.param.compat_32_jump
+            val = self.mem_utils.getUnsigned(val)
+            entry = self.mem_utils.readPtr(self.cpu, val)
+            self.lgr.debug('getSyscallEntry call 0x%x val 0x%x entry 0x%x' % (callnum, val,entry))
         return entry
 
     def frameFromStackSyscall(self):
@@ -656,7 +673,7 @@ class TaskUtils():
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             regs_addr = esp + self.mem_utils.WORD_SIZE
             regs = self.mem_utils.readPtr(self.cpu, regs_addr)
-            self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x  regs is 0x%x' % (regs_addr, regs))
+            #self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x  regs is 0x%x' % (regs_addr, regs))
             frame = self.getFrame(regs_addr, self.cpu)
         return frame
     
@@ -713,7 +730,7 @@ class TaskUtils():
             retval['ss'] = SIM_read_phys_memory(cpu, phys_addr+26*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
             return retval
 
-    def frameFromRegs(self, cpu):
+    def frameFromRegs(self, cpu, compat32=False):
         frame = {}
         if cpu.architecture == 'arm':
             frame['param1'] = self.mem_utils.getRegValue(cpu, 'r0')
@@ -722,7 +739,7 @@ class TaskUtils():
             frame['param4'] = self.mem_utils.getRegValue(cpu, 'r3')
             frame['param5'] = self.mem_utils.getRegValue(cpu, 'r4')
             frame['param6'] = self.mem_utils.getRegValue(cpu, 'r5')
-        elif self.mem_utils.WORD_SIZE == 8:
+        elif self.mem_utils.WORD_SIZE == 8 and not compat32:
             frame['param1'] = self.mem_utils.getRegValue(cpu, 'rdi')
             frame['param2'] = self.mem_utils.getRegValue(cpu, 'rsi')
             frame['param3'] = self.mem_utils.getRegValue(cpu, 'rdx')
@@ -738,19 +755,36 @@ class TaskUtils():
             frame['param6'] = self.mem_utils.getRegValue(cpu, 'ebb')
         return frame
 
-    def socketCallName(self, callname):
-        if self.cpu.architecture != 'arm' and self.mem_utils.WORD_SIZE != 8:
+    def socketCallName(self, callname, compat32):
+        if self.cpu.architecture != 'arm' and (self.mem_utils.WORD_SIZE != 8 or compat32):
             return 'socketcall'
         else:
             return callname
 
-    def syscallName(self, callnum):
-        if callnum in self.syscall_numbers.syscalls:
-            return self.syscall_numbers.syscalls[callnum]
+    def syscallName(self, callnum, compat32):
+        if not compat32:
+            if callnum in self.syscall_numbers.syscalls:
+                return self.syscall_numbers.syscalls[callnum]
+            else:
+                return 'not_mapped'
         else:
-            return 'not_mapped'
-    def syscallNumber(self, callname):
-        if callname in self.syscall_numbers.callnums:
-            return self.syscall_numbers.callnums[callname]
+            if callnum in self.syscall_numbers32.syscalls:
+                return self.syscall_numbers32.syscalls[callnum]
+            else:
+                return 'not_mapped'
+
+    def syscallNumber(self, callname, compat32):
+        if not compat32:
+            if callname in self.syscall_numbers.callnums:
+                return self.syscall_numbers.callnums[callname]
+            else:
+                return -1
         else:
-            return -1
+            if callname in self.syscall_numbers32.callnums:
+                return self.syscall_numbers32.callnums[callname]
+            else:
+                return -1
+
+    def getExecMode(self):
+        mode = self.cpu.iface.x86_reg_access.get_exec_mode()
+        return mode

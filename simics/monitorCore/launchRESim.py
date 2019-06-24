@@ -6,6 +6,7 @@ if CORE not in sys.path:
     print("using CORE of %s" % CORE)
     sys.path.append(CORE)
 import genMonitor
+import getKernelParams
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -211,7 +212,7 @@ Either launch monitor, or generate kernel parameter file depending on CREATE_RES
 '''
 CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-    gkp = getKernelParams.GetKernelParams()
+    gkp = getKernelParams.GetKernelParams(comp_dict)
 else:
     cgc = genMonitor.GenMonitor(comp_dict, link_dict)
     cgc.doInit()

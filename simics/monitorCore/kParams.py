@@ -54,6 +54,10 @@ class Kparams():
         if word_size == 8:
             ''' run the findExits.py script to get this last holdout, reported as illegal memory mapping '''
             self.sysexit = 0xffffffff813e909a 
+        #self.compat_32_entry = 0xffffffff813e8fc0
+        self.compat_32_entry = None
+        self.compat_32_compute = None
+        self.compat_32_jump = None
         # arm entry/exit
         self.arm_entry = None
         self.arm_ret = None
@@ -61,6 +65,7 @@ class Kparams():
         self.syscall_compute = None
         self.syscall_jump = None
         self.stack_frame_eip = None
+
 
 
     def printParams(self):

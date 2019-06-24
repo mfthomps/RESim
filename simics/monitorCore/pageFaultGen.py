@@ -261,12 +261,13 @@ class PageFaultGen():
         self.rmExit(pid)
 
     def watchExit(self, dumb=None):
+        # TBD fix compat 32
         cpu, comm, pid = self.task_utils.curProc() 
         prec = Prec(cpu, comm, pid)
-        callnum = self.task_utils.syscallNumber('exit_group')
+        callnum = self.task_utils.syscallNumber('exit_group', False)
         exit_group = self.task_utils.getSyscallEntry(callnum)
         self.exit_break[pid] = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, exit_group, self.mem_utils.WORD_SIZE, 0)
-        callnum = self.task_utils.syscallNumber('exit')
+        callnum = self.task_utils.syscallNumber('exit', False)
         exit = self.task_utils.getSyscallEntry(callnum)
         self.exit_break2[pid] = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, exit, self.mem_utils.WORD_SIZE, 0)
         self.exit_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, prec, self.exit_break[pid], name='watchExit')

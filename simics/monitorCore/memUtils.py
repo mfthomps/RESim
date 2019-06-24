@@ -113,16 +113,21 @@ class memUtils():
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
             if phys_block.address != 0:
+                #self.lgr.debug('get unsigned of of phys 0x%x' % phys_block.address)
                 return self.getUnsigned(phys_block.address)
             else:
+                #self.lgr.debug('phys addr for 0x%x return 0' % v)
                 if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
+                    #self.lgr.debug('get unsigned of 0x%x' % v)
                     return self.getUnsigned(phys_addr)
                 elif cpu.architecture == 'arm':
                     phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                     return self.getUnsigned(phys_addr)
                 else:
-                    return 0
+                    phys_addr = v & ~self.param.kernel_base 
+                    #self.lgr.debug('memUtils v2p  32-bit Mode?    kernel addr base 0x%x  v 0x%x  phys 0x%x' % (self.param.kernel_base, v, phys_addr))
+                    return phys_addr
                     
         except:
             return None
@@ -192,7 +197,12 @@ class memUtils():
             #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
             regs = self.regs.keys()
         elif self.WORD_SIZE == 8:
-            regs = self.ia64_regs
+            ''' check for 32-bit compatibility mode '''
+            mode = self.cpu.iface.x86_reg_access.get_exec_mode()
+            if mode == 4:
+                regs = self.ia64_regs
+            else:
+                regs = self.ia32_regs
         else:
             regs = self.ia32_regs
 

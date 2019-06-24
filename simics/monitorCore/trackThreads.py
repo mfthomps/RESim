@@ -1,7 +1,7 @@
 from simics import *
 import syscall
 class TrackThreads():
-    def __init__(self, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, lgr):
+    def __init__(self, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, compat32, lgr):
         self.traceProcs = traceProcs
         self.parent_pid = pid
         self.pid_list = [pid]
@@ -28,6 +28,7 @@ class TrackThreads():
         self.finish_break = {}
         self.open_syscall = None
         self.first_mmap_hap = {}
+        self.compat32 = compat32
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -37,15 +38,14 @@ class TrackThreads():
         if self.call_hap is not None:
             #self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
-        self.lgr.debug('TrackThreads startTrack for %s' % self.cell_name)
-        # TBD fix for compat 32
-        callnum = self.task_utils.syscallNumber('clone', False)
-        entry = self.task_utils.getSyscallEntry(callnum)
+        self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
+        callnum = self.task_utils.syscallNumber('clone', self.compat32)
+        entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
         self.call_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
         self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, 'nothing', self.call_break, 'trackThreads clone')
 
-        execve_callnum = self.task_utils.syscallNumber('execve', False)
-        execve_entry = self.task_utils.getSyscallEntry(execve_callnum)
+        execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
+        execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
         self.execve_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
         self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
         self.lgr.debug('TrackThreads set execve break at 0x%x clone at 0x%x startTrack' % (execve_entry, entry))
@@ -112,7 +112,7 @@ class TrackThreads():
             self.exit_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, cpu, self.exit_break1[pid], 'trackThreads syscall')
         else: 
             exit_eip3 = None
-            if self.mem_utils.WORD_SIZE == 8:
+            if self.mem_utils.WORD_SIZE == 8 and not self.compat32:
                 stack_frame = self.task_utils.frameFromRegs(cpu)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
@@ -253,8 +253,8 @@ class TrackThreads():
             frame = self.task_utils.frameFromRegs(cpu)
         else:
             frame = self.task_utils.frameFromStackSyscall()
-        callname = self.task_utils.syscallName(syscall_info.callnum)
-        if self.mem_utils.WORD_SIZE == 4: 
+        callname = self.task_utils.syscallName(syscall_info.callnum, self.compat32)
+        if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
             ida_msg = 'firstMmapHap %s pid:%d FD: %d buf: 0x%x len: %d  File FD was %d' % (callname, pid, frame['param3'], frame['param1'], frame['param2'], 
                   syscall_info.fd)
         else:
@@ -287,5 +287,5 @@ class TrackThreads():
     def trackSO(self):
         self.open_syscall = syscall.Syscall(None, self.cell_name, self.cell, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=['open'], 
-                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False)
+                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32)
         self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
