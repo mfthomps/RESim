@@ -483,12 +483,13 @@ class GetKernelParams():
             return
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         
+        dumb, comm, pid = self.taskUtils.curProc() 
         if old == Sim_CPU_Mode_Supervisor and not compat32:
             ''' leaving kernel, capture iret and sysexit '''
             if eip not in self.hits:
                 self.hits.append(eip)
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                self.lgr.debug('entryModeChanged kernel exit eip 0x%x %s' % (eip, instruct[1]))
+                self.lgr.debug('entryModeChanged pid:%d kernel exit eip 0x%x %s' % (pid, eip, instruct[1]))
                 if instruct[1].startswith('iret'):
                     self.param.iretd = eip
                 elif instruct[1] == 'sysexit':
@@ -511,20 +512,21 @@ class GetKernelParams():
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
-            self.lgr.debug('entryModeChanged supervisor eip 0x%x instruct %s' % (eip, instruct[1]))
+            self.prev_instruct = instruct[1]
+            #self.lgr.debug('entryModeChanged pid:%d supervisor eip 0x%x instruct %s' % (pid, eip, instruct[1]))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
-                self.prev_instruct = instruct[1]
                 self.lgr.debug('entryModeChanged found int 128')
                 SIM_break_simulation('found int 128')
             elif self.param.sysenter is None and (instruct[1].startswith('sysenter') or instruct[1].startswith('syscall')):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
-                self.prev_instruct = instruct[1]
                 self.lgr.debug('entryModeChanged found sysenter')
                 SIM_break_simulation('entryModeChanged found sysenter')
-            elif compat32 and instruct[1].startswith('sysenter'):
-                SIM_break_simulation('entryModeChanged found sysenter')
+            elif compat32:
+                if instruct[1].startswith('sysenter') or instruct[1].startswith('int 128'):
+                    self.lgr.debug('mode changed compat32 old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
+                    SIM_break_simulation('entryModeChanged compat32 found sysenter')
             if self.dumb_count > 1000000:
                 self.lgr.debug('entryModeChanged did 1000')
                 SIM_break_simulation('did 10000')
@@ -628,7 +630,7 @@ class GetKernelParams():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('stop hap instruct is %s eip 0x%x  len %d' % (instruct[1], eip, instruct[0]))
+        self.lgr.debug('stop hap instruct is %s prev_instruct %s eip 0x%x  len %d' % (self.prev_instruct, instruct[1], eip, instruct[0]))
         do_not_continue = False
         if self.prev_instruct.startswith('int 128') and self.param.sys_entry is None:
             self.lgr.debug('stopHap is int 128')
@@ -702,14 +704,22 @@ class GetKernelParams():
             return
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('stop hap instruct is %s eip 0x%x  len %d' % (instruct[1], eip, instruct[0]))
-        
-        self.param.compat_32_entry = eip
-        SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        SIM_run_alone(self.findCompute, True)
+        dumb, comm, pid = self.taskUtils.curProc() 
+        self.lgr.debug('stopCompat32Hap pid:%d instruct is %s prev %s  eip 0x%x  len %d' % (pid, instruct[1], self.prev_instruct, eip, instruct[0]))
+       
+        if self.prev_instruct == 'sysenter' and self.param.compat_32_entry is None:
+            self.param.compat_32_entry = eip
+        elif self.prev_instruct == 'int 128' and self.param.compat_32_int128 is None:
+            self.param.compat_32_int128 = eip
+        if self.param.compat_32_entry is not None and self.param.compat_32_int128 is not None:
+            SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            SIM_run_alone(self.findCompute, True)
+        else:
+            SIM_run_alone(SIM_run_command, 'c')
 
     def compat32Entry(self):
+        self.taskUtils = taskUtils.TaskUtils(self.cpu, self.target, self.param, self.mem_utils, self.unistd, self.unistd32, None, self.lgr)
         self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.entryModeChanged, True)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopCompat32Hap, None)
         self.lgr.debug('checkKernelEntry added mode changed and stop hap, continue')
@@ -849,6 +859,8 @@ class GetKernelParams():
 
     def compat32(self):
         self.loadParam()
+        self.param.compat_32_entry = None
+        self.param.compat_32_int128 = None
         self.compat32Entry()
 
     def wtf(self):

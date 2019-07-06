@@ -10,6 +10,13 @@ import stopFunction
 import pageUtils
 import elfText
 import diddler
+import sys
+import copy
+'''
+how does simics not have this in its python sys.path?
+'''
+sys.path.append('/usr/local/lib/python2.7/dist-packages')
+import magic
 '''
     Trace syscalls.  Used for process tracing and debug, e.g., runToConnect.
     When used in debugging, or tracing a single process, we assume that
@@ -243,7 +250,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall cell %s doBreaks reset timeofdaycount' % self.cell_name)
+        self.lgr.debug('syscall cell %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
         if self.call_list is None:
             ''' trace all calls '''
             if self.cpu.architecture == 'arm':
@@ -257,24 +264,31 @@ class Syscall():
             else:
                 syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
 
+                ''' always a sysenter '''
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
                 break_addrs.append(self.param.sysenter)
                 break_list.append(proc_break)
                 if self.param.sys_entry is not None and self.param.sys_entry != 0:
-                    self.lgr.debug('Syscall no callnum, set break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
+                    self.lgr.debug('Syscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
                     proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                     break_addrs.append(self.param.sys_entry)
                     break_list.append(proc_break1)
                     self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, proc_break1, 'syscall'))
-                elif self.param.compat_32_entry is not None and self.param.compat_32_entry != 0:
-                    self.lgr.debug('Syscall no callnum, set break at 0x%x & 0x%x' % (self.param.sysenter, self.param.compat_32_entry))
+                else:
+                    self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
+                    self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, 'syscall'))
+                if self.param.compat_32_entry is not None and self.param.compat_32_entry != 0:
+                    ''' support 32 bit compatability '''
+                    newcall_info = copy.copy(syscall_info)
+                    newcall_info.compat32 = True
+                    self.lgr.debug('Syscall no callnum, compat32 break at 0x%x and 0x%x' % (self.param.compat_32_entry, self.param.compat_32_int128))
                     proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.compat_32_entry, 1, 0)
                     break_addrs.append(self.param.compat_32_entry)
                     break_list.append(proc_break1)
-                    self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, proc_break1, 'syscall'))
-                else:
-                    self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, 'syscall'))
-            syscall_info.compat32 = compat32
+                    proc_break2 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.compat_32_int128, 1, 0)
+                    break_addrs.append(self.param.compat_32_int128)
+                    break_list.append(proc_break2)
+                    self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, newcall_info, proc_break1, proc_break2, 'syscall32'))
         else:
             ''' will stop within the kernel at the computed entry point '''
             for call in self.call_list:
@@ -507,14 +521,32 @@ class Syscall():
             self.lgr.debug('finishParseOpen pid %d got fid none, arm fu?' % (pid))
 
     def addElf(self, prog_string, pid):
+        retval = True
         if self.targetFS is not None and prog_string is not None:
             full_path = self.targetFS.getFull(prog_string)
-            #self.lgr.debug('syscall addElf, prefix is %s progname is %s  full: %s' % (root_prefix, prog_string, full_path))
-            text_segment = elfText.getText(full_path)
-            if self.soMap is not None and text_segment is not None and text_segment.address is not None:
-                self.lgr.debug('syscall addElf 0x%x - 0x%x' % (text_segment.address, text_segment.address+text_segment.size))       
-                self.context_manager.recordText(text_segment.address, text_segment.address+text_segment.size)
-                self.soMap.addText(text_segment.address, text_segment.size, prog_string, pid)
+            if os.path.isfile(full_path):
+                text_segment = elfText.getText(full_path, self.lgr)
+                if text_segment is not None:
+                    if self.soMap is not None:
+                        if text_segment.address is not None:
+                            self.lgr.debug('syscall addElf 0x%x - 0x%x' % (text_segment.address, text_segment.address+text_segment.size))       
+                            self.context_manager.recordText(text_segment.address, text_segment.address+text_segment.size)
+                            self.soMap.addText(text_segment.address, text_segment.size, prog_string, pid)
+                        else:
+                            self.lgr.error('addElf got text segment but no text, unexpected.  pid %d' % pid)
+                else:
+                    self.lgr.debug('syscall addElf, no text segment found, advise SO we have an exec, but no starting map')
+                    if self.soMap is not None:
+                        self.soMap.noText(prog_string, pid)
+                    retval = False
+                    ftype = magic.from_file(full_path)
+                    self.traceProcs.setFileType(pid, ftype) 
+            else:
+                self.lgr.debug('addElf, no file at %s' % full_path)
+                if self.soMap is not None:
+                    self.soMap.noText(prog_string, pid)
+      
+        return retval
 
     def finishParseExecve(self, call_info, third, forth, memory):
         cpu, comm, pid = self.task_utils.curProc() 
@@ -560,8 +592,6 @@ class Syscall():
             #self.lgr.debug('base %s' % base)
             if base.startswith(self.break_on_execve):
                 self.lgr.debug('finishParseExecve execve of %s' % prog_string)
-                if pid is not None:
-                    self.sharedSyscall.rmPendingExecve(pid)
                 SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
             elif base == 'sh' and self.break_on_execve.startswith('sh '):
                 # TBD add bash, etc.
@@ -570,8 +600,6 @@ class Syscall():
                 #self.lgr.debug('syscall execve compare %s to %s' % (base, sw))
                 if base.startswith(sw):
                     self.lgr.debug('finishParseExecve execve of %s %s' % (prog_string, sw))
-                    if pid is not None:
-                        self.sharedSyscall.rmPendingExecve(pid)
                     SIM_run_alone(self.stopAlone, 'execve of %s %s' % (prog_string, sw))
 
     def parseExecve(self, syscall_info):
@@ -631,6 +659,8 @@ class Syscall():
             ida_msg = None
             socket_callnum = frame['param1']
             self.lgr.debug('socketParse socket_callnum is %d' % socket_callnum)
+            #if syscall_info.compat32:
+            #    SIM_break_simulation('socketcall')
             socket_callname = net.callname[socket_callnum].lower()
             exit_info.socket_callname = socket_callname
             if socket_callname != 'socket' and socket_callname != 'setsockopt':
@@ -665,10 +695,10 @@ class Syscall():
             sock_type = sock_type_full & net.SOCK_TYPE_MASK
             try:
                 type_string = net.socktype[sock_type]
-                ida_msg = '%s - %s pid: %s domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, pid, domain, type_string, protocol)
+                ida_msg = '%s - %s pid:%s domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, pid, domain, type_string, protocol)
             except:
                 self.lgr.debug('sharedSyscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
-                ida_msg = '%s - %s pid: %s domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, pid, domain, sock_type, protocol)
+                ida_msg = '%s - %s pid:%d domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, pid, domain, sock_type, protocol)
         elif socket_callname == 'connect':
             ida_msg = '%s - %s pid:%d %s %s  param at: 0x%x' % (callname, socket_callname, pid, ss.getString(), ss.addressInfo(), frame['param2'])
             for call_param in syscall_info.call_params:
@@ -703,7 +733,7 @@ class Syscall():
                 self.connectors.add(pid, prog, ss.dottedIP(), ss.port)
               
         elif socket_callname == 'bind':
-            SIM_break_simulation('bind')
+            #SIM_break_simulation('bind')
             ida_msg = '%s - %s pid:%d socket_string: %s' % (callname, socket_callname, pid, ss.getString())
             for call_param in syscall_info.call_params:
                 if call_param.subcall == 'bind':
@@ -836,14 +866,14 @@ class Syscall():
                 rcount = min(optlen, 80)
                 thebytes, dumb =  self.mem_utils.getBytes(self.cpu, rcount, optval)
                 optval_val = 'option: %s' % thebytes
-            ida_msg = '%s - %s pid: %d FD: %d level: %d  optname: %d optval: 0x%x  oplen %d  %s' % (callname, 
+            ida_msg = '%s - %s pid:%d FD: %d level: %d  optname: %d optval: 0x%x  oplen %d  %s' % (callname, 
                  socket_callname, pid, self.fd, level, optname, optval, optlen, optval_val)
         elif socket_callname == 'socketpair':
             if callname == 'socketcall':
                 exit_info.retval_addr = self.mem_utils.readWord32(self.cpu, frame['param4'])
             else:
                 exit_info.retval_addr = frame['param4']
-            ida_msg = '%s - %s %s pid: %d ' % (callname, socket_callname, taskUtils.stringFromFrame(frame), pid)
+            ida_msg = '%s - %s %s pid:%d ' % (callname, socket_callname, taskUtils.stringFromFrame(frame), pid)
             
         else:
             ida_msg = '%s - %s %s   pid:%d' % (callname, socket_callname, taskUtils.stringFromFrame(frame), pid)
@@ -1114,9 +1144,17 @@ class Syscall():
                     self.context_manager.genDeleteBreakpoint(bp)
                 ''' check functions in list '''
                 self.sharedSyscall.rmExitHap(None)
+
+                ''' TBD do this as a stop function? '''
+                cpu, comm, pid = self.task_utils.curProc() 
+                self.sharedSyscall.rmPendingExecve(pid)
+
                 if self.traceMgr is not None:
                     self.traceMgr.close()
                 self.stop_action.run()
+                for callname in self.call_list:
+                    self.lgr.debug('stopHap call top to remove syscall trace for %s' % callname)
+                    self.top.rmCallTrace(self.cell_name, callname)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
 
@@ -1131,14 +1169,27 @@ class Syscall():
         if syscall_info.cpu != cpu:
             self.lgr.error('syscallHap wrong cell, cur: %s, expected %s' % (cpu.name, syscall_info.cpu.name))
             return
+
         callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
+        if syscall_info.callnum is None:
+           callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
+           syscall_instance = self.top.getSyscall(self.cell_name, callname) 
+           if syscall_instance != self:
+               self.lgr.debug(str(syscall_instance))
+               self.lgr.debug(str(self))
+               self.lgr.debug('syscallHap pid %d callnum %d name %s found more specific syscall hap, so ignore this one' % (pid, callnum, callname))
+               return
+           if callname == 'mmap' and pid in self.first_mmap_hap:
+               return
+        else:
+           callname = self.task_utils.syscallName(syscall_info.callnum, syscall_info.compat32) 
         ''' call 0 is read in 64-bit '''
         if callnum == 0 and self.mem_utils.WORD_SIZE==4:
-        #if callnum == 0:
             self.lgr.debug('syscallHap callnum is zero')
             return
-        self.lgr.debug('syscallhap cell %s for pid %s at 0x%x callnum %d expected %s compat32 %r' % (self.cell_name, pid, break_eip, 
-            callnum, str(syscall_info.callnum), syscall_info.compat32))
+        value = memory.logical_address
+        self.lgr.debug('syscallhap cell %s for pid %s at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r' % (self.cell_name, pid, break_eip, 
+            value, callnum, str(syscall_info.callnum), syscall_info.compat32))
             
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
@@ -1171,11 +1222,7 @@ class Syscall():
         exit_eip2 = None
         exit_eip3 = None
  
-        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry:
-            if break_eip == self.param.compat_32_entry:
-                syscall_info.compat32 = True
-            else:
-                syscall_info.compat32 = False
+        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
             ''' caller frame will be in regs'''
             frame = self.task_utils.frameFromRegs(cpu, compat32=syscall_info.compat32)
             frame_string = taskUtils.stringFromFrame(frame)
@@ -1190,7 +1237,7 @@ class Syscall():
                 #self.lgr.debug('sysenter exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
             
         elif break_eip == self.param.sys_entry:
-            frame = self.task_utils.frameFromRegs(syscall_info.cpu)
+            frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
             ''' fix up regs based on eip and esp found on stack '''
             reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
             esp = self.cpu.iface.int_register.read(reg_num)
@@ -1214,7 +1261,7 @@ class Syscall():
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
-                frame = self.task_utils.frameFromRegs(cpu)
+                frame = self.task_utils.frameFromRegs(cpu, compat32=syscall_info.compat32)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
                 exit_eip3 = self.param.sysret64
@@ -1229,7 +1276,7 @@ class Syscall():
         else:
             value = memory.logical_address
             ''' TBD Simics broken???? occurs due to a mov dword ptr fs:[0xc149b454],ebx '''
-            self.lgr.debug('syscallHap pid: %d unexpected break_ip 0x%x memory says 0x%x len of haps is %d' % (pid, break_eip, value, len(self.proc_hap)))
+            self.lgr.debug('syscallHap pid:%d unexpected break_ip 0x%x memory says 0x%x len of haps is %d' % (pid, break_eip, value, len(self.proc_hap)))
             #SIM_break_simulation('unexpected break eip 0x%x' % break_eip)
 
             return
@@ -1238,7 +1285,6 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is too big... %d' % callnum)
             return
         
-        callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
         if self.sharedSyscall.isPendingExecve(pid):
             if callname == 'close':
                 self.lgr.debug('syscallHap must be a close on exec? pid:%d' % pid)
@@ -1260,10 +1306,10 @@ class Syscall():
                 return
             else:
                 if pending_call == self.task_utils.syscallNumber('pipe', self.compat32) and callnum == self.task_utils.syscallNumber('pipe2', self.compat32):
-                    self.lgr.debug('syscall was pending pipe  pid: %d call %d' % (pid, pending_call))
+                    self.lgr.debug('syscall was pending pipe  pid:%d call %d' % (pid, pending_call))
                     return
                 else:
-                    self.lgr.debug('syscall was pending pid: %d call %d' % (pid, pending_call))
+                    self.lgr.debug('syscall was pending pid:%d call %d' % (pid, pending_call))
                     return
                  
 
@@ -1287,18 +1333,13 @@ class Syscall():
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
         frame_string = taskUtils.stringFromFrame(frame)
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
+
+
         if syscall_info.callnum is not None:
             #self.lgr.debug('syscallHap cell %s callnum %d syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
             #     callnum, syscall_info.callnum, self.stop_on_call))
             if syscall_info.callnum == callnum:
                 exit_info = self.syscallParse(callnum, callname, frame, cpu, pid, syscall_info)
-                #self.lgr.debug('syscall 0x%x from %d (%s) at 0x%x cycles: 0x%x' % (eax, pid, comm, break_eip, cpu.cycles))
-                #if self.break_on_execve is None and len(syscall_info.call_params) == 0:
-                #    if eax != self.task_utils.syscallNumber('gettimeofday'):
-                #        self.lgr.error('syscallHap for specific call, not tod, no parameters.  syscall frame was %s' % frame_string)
-                #        SIM_break_simulation('syscall frame was %s' % frame_string)
-                #    else:
-                #        self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, syscall_info.callnum, exit_info, self.traceProcs, name)
                 if comm != 'tar':
                         #self.lgr.debug('set return ip break at 0x%x' % frame['eip'])
                         #self.exit_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, frame['eip'], 1, 0)
@@ -1314,7 +1355,7 @@ class Syscall():
                             self.lgr.debug('did not add exitHap')
                             pass
                 else:
-                    self.lgr.debug('syscallHap skipping %s, no exit' % comm)
+                    self.lgr.debug('syscallHap skipping tar %s, no exit' % comm)
                 
             else:
                 self.lgr.debug('syscallHap looked for call %d, got %d, calculated 0x%x do nothing' % (syscall_info.callnum, callnum, syscall_info.calculated))
@@ -1324,13 +1365,18 @@ class Syscall():
             exit_info = self.syscallParse(callnum, callname, frame, cpu, pid, syscall_info)
             #self.lgr.debug('syscall looking for any, got %d from %d (%s) at 0x%x ' % (callnum, pid, comm, break_eip))
 
-            if comm != 'tar' and (pid not in self.first_mmap_hap):
+            if comm != 'tar':
                 name = callname+' exit' 
-                #self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
+                self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
                 if self.stop_on_call:
                     cp = CallParams(None, None, break_simulation=True)
                     exit_info.call_params = cp
                 self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, callnum, exit_info, self.traceProcs, name)
+            else:
+                self.lgr.debug('syscallHap pid:%d skip exitHap for tar' % pid)
+
+    def unsetDebuggingExit(self):
+        self.debugging_exit = False
 
     def handleExit(self, pid, ida_msg, killed=False):
             if self.traceProcs is not None:

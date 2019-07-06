@@ -14,6 +14,7 @@ class Pinfo():
         self.wpipe = {}
         ''' dict of lists of FDs for sockets indexed by their address, file name, etc. '''
         self.sockets = {}
+        self.ftype = None
 
 class FileWatch():
     def __init__(self, path, outfile):
@@ -381,11 +382,14 @@ class TraceProcs():
             else:
                 sockets = sockets + ' %s' % (s)
 
+        ftype = ''
+        if self.plist[pid].ftype is not None:
+            ftype = 'file type: '+self.plist[pid].ftype
         if self.plist[pid].args is None:
-            self.trace_fh.write('%s %s  %s\n' % (tabs, pid, self.plist[pid].prog))
+            self.trace_fh.write('%s %s  %s %s\n' % (tabs, pid, self.plist[pid].prog, ftype))
             print('%s %s  %s' % (tabs, pid, self.plist[pid].prog))
         else:
-            self.trace_fh.write('%s %s  %s %s\n' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args)) 
+            self.trace_fh.write('%s %s  %s %s %s\n' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args, ftype)) 
             print('%s %s  %s %s' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args)) 
 
         if len(files) > 0:
@@ -449,3 +453,13 @@ class TraceProcs():
                 if fd in self.plist[pid].files[f]:
                     return f
         return None
+
+    def setFileType(self, pid, ftype):
+        pid = str(pid)
+        if 'elf' in ftype.lower():
+            self.plist[pid].ftype = 'elf'
+        elif 'shell' in ftype.lower(): 
+            self.plist[pid].ftype = 'shell'
+        else:
+            self.lgr.debug('traceProcs pid:%s unknown file type %s' % (pid, ftype))
+        self.lgr.debug('traceProcs pid:%s file type %s' % (pid, self.plist[pid].ftype))
