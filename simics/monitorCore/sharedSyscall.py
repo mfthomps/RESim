@@ -143,6 +143,7 @@ class SharedSyscall():
             self.pending_execve.remove(pid)
         else:
             self.lgr.debug('sharedSyscall rmPendingExecve nothing pending for %d' % pid)
+        self.rmExitHap(pid)
 
     def isPendingExecve(self, pid):
         if pid in self.pending_execve:
@@ -373,7 +374,7 @@ class SharedSyscall():
         eax = self.mem_utils.getSigned(eax)
         #cur_eip = SIM_get_mem_op_value_le(memory)
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s cur_eip 0x%x' % (pid, eax, str(third), str(forth), cur_eip))
-        #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s ' % (pid, eax, str(third), str(forth)))
+        self.lgr.debug('exitHap pid %d eax %d  exit_info.callnum %d  exit_info.compat32 %r' % (pid, eax, exit_info.callnum, exit_info.compat32))
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
         #self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d ' % (self.cell_name, exit_info.callnum, callname, pid))
         if callname == 'clone':
@@ -617,7 +618,7 @@ class SharedSyscall():
         #if not self.debugging or (callname != 'clone'):
         if True:
             ''' will be done in clone child.  TBD, assumes child runs second? '''
-            self.lgr.debug('exitHap pid %d delete breakpoints' % pid)
+            #self.lgr.debug('exitHap pid %d delete breakpoints' % pid)
             self.rmExitHap(pid)
 
         ''' if debugging a proc, and clone call, add the new process '''
