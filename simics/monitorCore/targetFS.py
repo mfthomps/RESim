@@ -7,12 +7,12 @@ class TargetFS():
         if path.startswith('/'):
             path = path[1:]
         full = os.path.join(self.root_prefix, path)
-        if lgr is not None:
-            lgr.debug('TargetFS full %s' % full)
+        #if lgr is not None:
+        #    lgr.debug('TargetFS full %s' % full)
         if os.path.islink(full):
             real = os.readlink(full)
-            if lgr is not None:
-                lgr.debug('TargetFS link real %s' % real)
+            #if lgr is not None:
+            #    lgr.debug('TargetFS link real %s' % real)
             if real.startswith('/'):
                 real = real[1:]
                 retval = os.path.join(self.root_prefix, real)
