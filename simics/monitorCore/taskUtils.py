@@ -767,11 +767,13 @@ class TaskUtils():
                 return self.syscall_numbers.syscalls[callnum]
             else:
                 return 'not_mapped'
-        else:
+        elif self.syscall_numbers32 is not None:
             if callnum in self.syscall_numbers32.syscalls:
                 return self.syscall_numbers32.syscalls[callnum]
             else:
                 return 'not_mapped'
+        else:
+            self.lgr.error('taskUtils syscallName, compat32 but no syscall_numbers32.  Was the unistd file loaded?')
 
     def syscallNumber(self, callname, compat32):
         if not compat32:
