@@ -256,6 +256,9 @@ def findPageTableArm(cpu, va, lgr):
 def findPageTable(cpu, addr, lgr):
     if cpu.architecture == 'arm':
         return findPageTableArm(cpu, addr, lgr)
+
+    elif isIA32E(cpu):
+        return findPageTableIA32E(cpu, addr, lgr) 
     else:
         ptable_info = PtableInfo()
         reg_num = cpu.iface.int_register.get_number("cr3")
