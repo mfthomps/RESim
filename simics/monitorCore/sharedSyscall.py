@@ -342,7 +342,7 @@ class SharedSyscall():
                 self.traceProcs.addProc(pid, None, comm=comm)
                 return
             if self.isPendingExecve(pid):
-                self.lgr.debug('exitHap cell %s call reschedule from execve?  for pid %d  Remove pending' % (self.cell_name, pid))
+                #self.lgr.debug('exitHap cell %s call reschedule from execve?  for pid %d  Remove pending' % (self.cell_name, pid))
                 self.rmPendingExecve(pid)
                 return 
             else:
@@ -374,7 +374,7 @@ class SharedSyscall():
         eax = self.mem_utils.getSigned(eax)
         #cur_eip = SIM_get_mem_op_value_le(memory)
         #self.lgr.debug('exitHap pid %d eax %d third:%s forth:%s cur_eip 0x%x' % (pid, eax, str(third), str(forth), cur_eip))
-        self.lgr.debug('exitHap pid %d eax %d  exit_info.callnum %d  exit_info.compat32 %r' % (pid, eax, exit_info.callnum, exit_info.compat32))
+        #self.lgr.debug('exitHap pid %d eax %d  exit_info.callnum %d  exit_info.compat32 %r' % (pid, eax, exit_info.callnum, exit_info.compat32))
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
         #self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d ' % (self.cell_name, exit_info.callnum, callname, pid))
         if callname == 'clone':
@@ -468,7 +468,7 @@ class SharedSyscall():
                     self.dataWatch.setRange(exit_info.retval_addr, eax)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
                     if eax < 4028:
-                        self.lgr.debug('sharedSyscall %s read check diddler count %d' % (self.cell_name, eax))
+                        #self.lgr.debug('sharedSyscall %s read check diddler count %d' % (self.cell_name, eax))
                         if exit_info.call_params.match_param.checkString(self.cpu, exit_info.retval_addr, eax):
                             self.lgr.debug('syscall read found final diddler')
                             self.top.stopTrace(cell_name=self.cell_name)
@@ -491,7 +491,7 @@ class SharedSyscall():
                     #trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
                     trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, s))
                     if self.traceFiles is not None:
-                        self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
+                        #self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
                         s = ''.join(map(chr,byte_array))
@@ -600,7 +600,7 @@ class SharedSyscall():
                     trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
 
         elif callname == 'select' or callname == '_newselect':
-            trace_msg = ('\treturn from %s %s  result: %d\n' % (callname, exit_info.select_info.getString(self.mem_utils, self.cpu), eax))
+            trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.select_info.getString(self.mem_utils, self.cpu), eax))
         elif callname == 'vfork':
             trace_msg = ('\treturn from vfork in parent %d child pid:%d\n' % (pid, ueax))
             if pid in self.trace_procs:
