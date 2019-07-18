@@ -3,6 +3,7 @@ from simics import *
 Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
 default & RESim.  Also has a carve-out for "maze_exit" breakpoints/haps, managed as an attribute of 
 the hap.  Designed to watch a single thread group.
+There is one instance of this module per cell.
 '''
 class GenBreakpoint():
     def __init__(self, cell, addr_type, mode, addr, length, flags, handle, lgr):
@@ -130,6 +131,7 @@ class GenContextMgr():
         obj = SIM_get_object(context)
         self.resim_context = obj
         self.lgr.debug('context_manager cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
+
         ''' avoid searching all task recs to know if pid being watched '''
         self.pid_cache = []
         self.task_rec_hap = {}
@@ -176,13 +178,17 @@ class GenContextMgr():
         return self.break_handle 
 
     def genBreakpoint(self, cell, addr_type, mode, addr, length, flags):
+        ''' create a GenContextManager breakpoint.  This is not yet set.
+            Determine if the context should be resim, e.g., only when one of our
+            debugging processes is schedule.
+        '''
         handle = self.nextBreakHandle()
         if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
             cell = self.resim_context
             #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr) 
         self.breakpoints.append(bp)
-        #self.lgr.debug('genBreakpoint handle %d  number of breakpoints is now %d' % (handle, len(self.breakpoints)))
+        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d' % (handle, len(self.breakpoints)))
         return handle
 
     def genDeleteBreakpoint(self, handle):
@@ -217,7 +223,7 @@ class GenContextMgr():
                 #self.lgr.debug('genDeleteHap removing hap %d from list' % hap.handle)
                 self.haps.remove(hap)
                 return
-        self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_handle)
+        #self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_handle)
 
     def genHapIndex(self, hap_type, callback, parameter, handle, name=None):
         #self.lgr.debug('genHapIndex break_handle %d' % handle)
@@ -253,7 +259,9 @@ class GenContextMgr():
                 hap.set()
 
     def clearAllBreak(self):
+        ''' Called to clear breaks within the resim context '''
         for bp in self.breakpoints:
+            #if bp.cell == self.resim_context:
             bp.clear()
         
     def clearAllHap(self, keep_maze_breaks=False):
@@ -391,6 +399,7 @@ class GenContextMgr():
             self.lgr.debug('rmTask removing rec 0x%x for pid %d, len now %d' % (rec, pid, len(self.watch_rec_list)))
             if pid in self.pid_cache:
                 self.pid_cache.remove(pid)
+                self.lgr.debug('rmTask remove %d from cache, cache now %s' % (pid, str(self.pid_cache)))
             
             if pid in self.task_rec_bp and self.task_rec_bp[pid] is not None:
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
@@ -421,7 +430,8 @@ class GenContextMgr():
                 self.lgr.debug('genContextManager, addTask pid %d add rec 0x%x' % (pid, rec))
                 self.watch_rec_list[rec] = pid
                 self.watchExit(rec=rec, pid=pid)
-            self.pid_cache.append(pid)
+            if pid not in self.pid_cache:
+                self.pid_cache.append(pid)
         else:
             self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
 
@@ -479,7 +489,8 @@ class GenContextMgr():
         pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
         self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d' % (self.cell_name, ctask, pid))
         self.watch_rec_list[ctask] = pid
-        self.pid_cache.append(pid)
+        if pid not in self.pid_cache:
+            self.pid_cache.append(pid)
         self.watchExit()
       
     def changeDebugPid(self, pid):
@@ -494,11 +505,12 @@ class GenContextMgr():
     def setDebugPid(self, debugging_pid, debugging_cellname):
         self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('resim_context')
+        self.lgr.debug('setDebugPid %d, resim_context' % debugging_pid)
         self.debugging_pid = debugging_pid
         self.debugging_cellname = debugging_cellname
         self.debugging_cell = self.top.getCell()
-        self.pid_cache.append(debugging_pid)
+        if debugging_pid not in self.pid_cache:
+            self.pid_cache.append(debugging_pid)
 
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
@@ -516,7 +528,7 @@ class GenContextMgr():
         else: 
             ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
             self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
-            exit_syscall = self.top.getSyscall(self.cell_name, 'group_exit')
+            exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
             if exit_syscall is not None:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
@@ -538,7 +550,7 @@ class GenContextMgr():
         else: 
             value = SIM_get_mem_op_value_le(memory)
             self.lgr.debug('contextManager taskRecHap pid:%d wrote 0x%x to 0x%x watching for demise of %d' % (cur_pid, value, memory.logical_address, pid))
-            exit_syscall = self.top.getSyscall(self.cell_name, 'group_exit')
+            exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
             if exit_syscall is not None:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
