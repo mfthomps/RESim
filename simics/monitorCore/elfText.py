@@ -34,6 +34,7 @@ def getProgHdr(path):
 def getText(path, lgr):
     if not os.path.isfile(path):
         return None
+    retval = None
     cmd = 'readelf -WS %s' % path
     grep = 'grep " .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
