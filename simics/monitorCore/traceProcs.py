@@ -462,4 +462,11 @@ class TraceProcs():
             self.plist[pid].ftype = 'shell'
         else:
             self.lgr.debug('traceProcs pid:%s unknown file type %s' % (pid, ftype))
-        self.lgr.debug('traceProcs pid:%s file type %s' % (pid, self.plist[pid].ftype))
+        self.lgr.debug('traceProcs setFileType pid:%s file type %s' % (pid, self.plist[pid].ftype))
+
+    def getFileType(self, pid):
+        pid = str(pid)
+        if pid in self.plist:
+            return self.plist[pid].ftype
+        else:
+            return None
