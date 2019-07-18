@@ -109,7 +109,7 @@ class SOMap():
             self.so_file_map[pid] = {}
 
         full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
-        text_seg = elfText.getText(full_path)
+        text_seg = elfText.getText(full_path, self.lgr)
         if text_seg is None:
             self.lgr.debug('SOMap addSO, no file at %s' % full_path)
             return
