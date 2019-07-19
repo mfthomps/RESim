@@ -112,25 +112,33 @@ class memUtils():
     def v2p(self, cpu, v):
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-            if phys_block.address != 0:
-                #self.lgr.debug('get unsigned of of phys 0x%x' % phys_block.address)
-                return self.getUnsigned(phys_block.address)
+        except:
+            return None
+
+        if phys_block.address != 0:
+            #self.lgr.debug('get unsigned of of phys 0x%x' % phys_block.address)
+            return self.getUnsigned(phys_block.address)
+        else:
+            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
+            if not ptable_info.page_exists:
+                self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
+                return None
+            self.lgr.debug('phys addr for 0x%x return 0' % (v))
+            if cpu.architecture == 'arm':
+                phys_addr = v - (self.param.kernel_base - self.param.ram_base)
+                return self.getUnsigned(phys_addr)
             else:
-                #self.lgr.debug('phys addr for 0x%x return 0' % v)
-                if v < self.param.kernel_base:
+                mode = cpu.iface.x86_reg_access.get_exec_mode()
+                if v < self.param.kernel_base and mode == 8:
+                #if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('get unsigned of 0x%x' % v)
-                    return self.getUnsigned(phys_addr)
-                elif cpu.architecture == 'arm':
-                    phys_addr = v - (self.param.kernel_base - self.param.ram_base)
+                    self.lgr.debug('get unsigned of 0x%x mode %d' % (v, mode))
                     return self.getUnsigned(phys_addr)
                 else:
                     phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('memUtils v2p  32-bit Mode?    kernel addr base 0x%x  v 0x%x  phys 0x%x' % (self.param.kernel_base, v, phys_addr))
+                    self.lgr.debug('memUtils v2p  32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (mode, self.param.kernel_base, v, phys_addr))
                     return phys_addr
                     
-        except:
-            return None
 
     def readByte(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
@@ -155,9 +163,26 @@ class memUtils():
         return self.readStringPhys(cpu, phys_block.address, maxlen)
 
     def readString(self, cpu, vaddr, maxlen):
-        s = ''
+        retval = None
         ps = self.v2p(cpu, vaddr)
-        return self.readStringPhys(cpu, ps, maxlen)
+        if ps is not None:
+            remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
+            if remain_in_page < maxlen:
+                self.lgr.debug('remain_in_page %d' % remain_in_page)
+                first_read = self.readStringPhys(cpu, ps, remain_in_page)
+                if first_read is not None and len(first_read) == remain_in_page:
+                    ''' get the rest ''' 
+                    ps = self.v2p(cpu, vaddr+remain_in_page)
+                    self.lgr.debug('first read %s new ps 0x%x' % (first_read, ps))
+                    second_read = self.readStringPhys(cpu, ps, maxlen - remain_in_page)
+                    self.lgr.debug('second read %s from 0x%x' % (second_read, ps))
+                    retval = first_read+second_read
+                else:
+                    retval = first_read
+            else: 
+                retval = self.readStringPhys(cpu, ps, maxlen)
+                #self.lgr.debug('normal read %s from phys 0x%x' % (retval, ps))
+        return retval
 
     def readStringPhys(self, cpu, paddr, maxlen):
         s = ''
@@ -198,7 +223,7 @@ class memUtils():
             regs = self.regs.keys()
         elif self.WORD_SIZE == 8:
             ''' check for 32-bit compatibility mode '''
-            mode = self.cpu.iface.x86_reg_access.get_exec_mode()
+            mode = cpu.iface.x86_reg_access.get_exec_mode()
             if mode == 4:
                 regs = self.ia64_regs
             else:
@@ -296,6 +321,9 @@ class memUtils():
             #self.current_task[cpu] = phys_addr
             #self.current_task_virt[cpu] = gs_b700
             ct_addr = self.v2p(cpu, gs_b700)
+            if ct_addr is None:
+                self.lgr.debug('getCurrentTask finds no phys for 0x%x' % gs_b700)
+                return None
             self.lgr.debug('memUtils getCurrentTask cell %s gs_b700 is 0x%x phys is 0x%x' % (self.cell_name, gs_b700, ct_addr))
             try:
                 ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
@@ -374,16 +402,21 @@ class memUtils():
                 bytes_to_read = 1024
             #phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
             phys = self.v2p(cpu, curr_addr)
+            if phys is None:
+                self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
+                #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
+                return None, None
             #print 'read (bytes_to_read) 0x%x bytes from 0x%x phys:%x ' % (bytes_to_read, curr_addr, phys_block.address)
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
-            except valueError:
+            #except valueError:
+            except:
                 #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
                 print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1)
                 print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
                 self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
-                return retval
+                return retval, retbytes
             holder = ''
             count = 0
             for v in read_data:
