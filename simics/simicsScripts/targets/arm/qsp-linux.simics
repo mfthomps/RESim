@@ -58,7 +58,10 @@ decl {
     #params from "%simics%/targets/common/osa-setup.include" except system
     #    default tracker_params = "%simics%/targets/qsp-arm/images/qsp-linux.params"
 
-
+    param mac_address_0 : string
+    param mac_address_1 : string
+    param mac_address_2 : string
+    param host_name : string
     result eth0 : string
     result eth1 : string
     result eth2 : string
@@ -94,6 +97,8 @@ if $rtc_time != "disable" {
         }
     }
 }
+$system.mac[0]->mac_address = $mac_address_0
+$system.mac[1]->mac_address = $mac_address_1
 
 $eth0 = $system.eth[0]
 $eth1 = $system.eth[1]
