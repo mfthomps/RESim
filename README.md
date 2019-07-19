@@ -18,7 +18,7 @@ Analysis is performed entirely through observation of the simulated target syste
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be *external* because the analysis observation functions have no effect on the state of the simulated system.
 
 Please refer to [the RESim User's Guide](docs/RESim.pdf) for additional information.  A brief demonstration of RESim can be seen here:
-(https://nps.box.com/s/k5oerruixgi3x5pow5huzv0b8i207ukf)
+(https://nps.box.com/s/rf3n104ualg38pon6b7fm6m6wqk9zz50)
 
 RESim is based on a software vetting and forensic analysis platform created for the DARPA Cyber Grand Challenge.  That repo is here:
 https://github.com/mfthomps/cgc-monitor
