@@ -43,7 +43,7 @@ without need for shells, software injection, or kernel symbol tables.   The anal
 \section{Analysis artifacts}
 RESim generates system traces of all processes on a computer, starting with system boot, or at a selected checkpoint.  Trace reports include two components: 
 \begin{enumerate}
-\item A serialized record of system calls, identifying the calling process and selected parameters, e.g., names of files and sockets and IP addresses.
+\item A record of system calls, identifying the calling process and selected parameters, e.g., names of files and sockets and IP addresses.
 \item A process family history for each process and thread that has executed, identifying:
 \begin{enumerate}
 \item Providence, i.e., which process created the process (or thread), and what programs were loaded via the {\tt execve} system call.
@@ -66,8 +66,11 @@ RESim analyzes Linux-based systems for which copies of bootable media or root fi
 extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 
+Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap function call and somehow determine it is mmio purposed.  Then
+set breakpoints...
+
 \section{Work Flow}
-Simulated systems are defined within RESim configuration files that  parameterize pre-defined Simics scripts to identify 
+Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
 processors and interface devices, e.g., network cards, disks and system consoles.  RESim currently includes a generic X86 platform and
 a 32-bit ARM platform. Other platforms can be modeled via Simics, the detailes of which are beyond the scope of this manual.
 Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
@@ -82,8 +85,8 @@ Once the kernel parameters have been extracted, the simulation boots under contr
 \item Run until a specified program is loaded, i.e., via execve
 \item Generate a system trace
 \item Inspect memory and component states
-\item Set and run to breakpoints
-\item Enable reverse execution, i.e., allow reversing from that point forward
+\item Enable reverse execution, i.e., allow reversing to events from that point forward
+\item Set and run to breakpoints, either in the future or in the past.
 \item Target the RESim disassembler/debugger for a specified process
 \end{itemize}
 
@@ -112,13 +115,13 @@ All of the RESim code is available on github at \url{https://github.com/mfthomps
 \begin{itemize}
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
-Tracing continues until the stopTrace command is issued.
+Tracing continues until the stopTrace command is issued.  Also see \ref{postprocessing}
 
 \item {\tt runTo} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
 
 \item {\tt writeConfig} – Uses the Simics write-configuration command to save the simulation state for later loading with read-configuration.  This wrapper also saves process naming information and network configuration commands for reference subsequent to use of the read-configuration function.
 
-\item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.
+\item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  Also see \ref{postprocessing}
 
 \item {\tt showProcTrace} – Generate a process family summary of all processes that executed since the traceProcess (or traceAll) command.
 
@@ -136,11 +139,18 @@ Tracing continues until the stopTrace command is issued.
 
 Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator.  Most of the commands listed below have analogs available from within IDA Pro, once the RESim {\tt rev.py} plugin is loaded.
 
-If execution transfers to a shared object of interest, the associated library file can be found via the getSOFile command described below.  Loading that file into IDA Pro (with the SIMDis plug-ins) will cause IDA to rebase to the address at which the shared object was mapped in the process.
+If execution transfers to a shared object library of interest, the associated library file can be found via the getSOFile command described below.  Loading that file into IDA Pro (with the RESim plug-in) will cause IDA to rebase to the address at which the shared object was mapped in the process.
+
+If you prefix the given process name with {\tt sh }, (sh followed by a space), RESim will look for a shell invocation of the script name that follows the sh.
 
 \item {\tt runToSyscall(call number)} – Continue execution until the specified system call is invoked.  If a value of minus 1 is given, then any system call will stop execution.  If the debugger is active, then execution only halts when the debugged process makes the named call.
 
-\item {\tt runToConnect/runToAccept(search pattern)} – Continue execution until a socket connection to an address matching the given search pattern.
+\item {\tt runToConnect(search pattern)} – Continue execution until a socket connection to an address matching the given search pattern.
+
+\item {\tt runToBind(search pattern)} – Continue execution until a socket bind to an address matching the given search pattern.  Alternately, providing just
+a port number will be translated to the pattern {\tt .*:N} where N is the port number.
+
+\item {\tt runToAccept(FD)} – Continue execution until a return from a socket accept to the given file descriptor.
 
 \item {\tt runToIO(fd)} – Continue execution until a read or write to the given file descriptor.
 
@@ -180,7 +190,10 @@ If execution transfers to a shared object of interest, the associated library fi
 
 \item {\tt showThreads} - List the thread PIDs of the process being debugged.
 
-\item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.
+\item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
+uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
+potential instruction calls are to functions.  The monitor-local {\tt stackTrace} command displays a
+stack trace that uses the IDA function database to resolve names.  (TBD, does not yet handle plt, and thus shows call addresses for such calls).
 \item {\tt writeReg} – Write value to a register (Note: deletes existing bookmarks.)
 \item {\tt writeWord} – Write word to an address. (Note: deletes existing bookmarks.)
 \item {\tt writeString} - Write a string to an addrss. (Note: deletes existing bookmarks.)
@@ -188,10 +201,18 @@ If execution transfers to a shared object of interest, the associated library fi
 \item {\tt runToDiddle()} – Run until a specified read or write system call is encountered, and modify system memory such
 that the result of the read or write is augmented by a named diddle directive file.  See \ref{diddling}
 
+\item {\tt setTarget} -- Select which simulated component to observe and affect with subsequently issued commands.  Target names are as defined in the
+RESim configuration file used to start the session.
+
 \item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to Appendix B for information about what we mean by SEGV, and how we catch it.
 \end{itemize}
 
+\subsection{Postprocessing}
+\label{postprocessing}
+See the scripts in {\tt resim/postScripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
+
 \section{Defining a target system}
+\label{configuration}
 This section assumes some familiarity with Simics.  RESim is invoked from a Simics workspace that contains a RESim configuration file.
 This configuration file identifies disk images used in the simulation and defines network MAC addresses.  
 The file uses {\tt ini} format and has at least two sections: and {\tt ENV} section and one section per computer that will be part
@@ -241,7 +262,13 @@ RESim session.
 \item {\tt RESIM\_UNISTD} Path to a Linux {\tt unistd*.h} file that will be parsed to map system call numbers to system calls.
 \item {\tt RESIM\_ROOT\_PREFIX} Path to the root of a file system containing copies of target executables.  This is used by RESim read elf
 headers of target software and to locate analysis files generated by IDA Pro. 
+\item {\tt BOOT\_CHUNKS} The number of cycles to execute during boot between checks to determine if the compnent has booted enough to track
+its current task pointer.  The intent is to keep this value low enough catch the system shortly after creation of the initial process.
+The default value is 900,000,000, which is too large for some ARM implementations.  While components are booting, RESim uses the smallest
+{\tt BOOT\_CHUNKS} value assigned to any component that has not yet completed its boot.
+\item {\tt DIDDLE} Optional file to pass to the {\tt runToDiddle} command once the component has booted.  See \ref{diddling}.
 \end{itemize}
+
 \subsection{Network definitions}
 \label{networks}
 Three network switches are created, named switch0, switch1 and switch2.   Each generic RESim computer has up to three network interfaces.
@@ -252,7 +279,8 @@ This topology may be modified via entries in computer sections of the RESim conf
 ETH0_SWITCH=switch2
 \end{verbatim}
 \noindent would connect the eth0 deivce to switch2.  A switch value of {\tt NONE} prevents the ethernet device from being connected
-to any switch.
+to any switch.  Note there is no error checking or sanity testing.  In the above example, you would also need to re-assign the eth2 device
+or it will attempt to attach two connections to the same switch port.
 
 Ethernet devices on the generic x86 platform default to the {\tt i82543gc} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
 entry lets you pick one of the following alternate ethernet devices:
@@ -309,6 +337,12 @@ with the target system via its console, e.g., to schedule a new process.
 \item Restart the monitor.sh.  RESim will begin to boot the target and pause once it has confirmed the current task record.  You
 may now use RESim commands listed in \ref{commands}.
 \end{enumerate}
+
+\subsubsection{Kernel Parameters for 32-bit compatability}
+If a 64-bit Linux environment incudes 32-bit applications, first create kernel parameters pre the above, and then run until one of the 32-bit applicatoins
+is scheduled and use @cgc.writeConfig to save
+the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PARAMS to YES.  Then start the monitor and use
+{\tt @gkp.compat32()}.  This will modify the kernel parameters in the .param file to include those needed to monitor 32-bit applications.
 
 \subsection{IDA Pro}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
@@ -404,11 +438,23 @@ the first computers to have reached their initial state will continue on while o
 booting.  Thus, by the time RESim pauses, some computers may have executed beyond the point
 at which a dynamic modification was desired.
 
-To avoid such race conditions, the RESim configuration file can optionally identify diddle files
-for each of the computers in a simulation.  If present, the {\tt runToDiddle} command is executed
+To avoid such race conditions, the RESim configuration file can optionally include the {\tt DIDDLE} directive
+to identify diddle files for each of the computers in a simulation.  If present, the {\tt runToDiddle} command is executed
 as soon as the corresponding computer reaches its initial state.  This ensures that dynamic modifications
 to those computers will occurr while other computers in the simulation continue to boot to their 
 initial states.
+
+\subsubsection{Diddling in the background}
+\label{background_diddle}
+When dynamically analyzing a process or family of threads, RESim generally manages breakpoints for just those processes.
+This optimization can significantly speed up the analysis processes by entirely ignoring system calls and other events
+that occur in processes other than those under analysis.  However, there are times when you need to diddle some other
+process while debugging.  Consider this example: you've directed RSim to debug some program X, and RESim has now detected
+the loading of X and has broken execution.  You now want to observe X, e.g., tracking its I/O to some socket, however you
+know that at some point in the coming system execution, some other process Y will write a value that X will observe (perhaps
+indirectly).  Use of the {\tt background=True} option with the {\tt runToDiddle} command will cause RESim to monitor all
+system calls associated with the diddle, even while you focus on the behavior of X. 
+
 \pagebreak
 \appendix
 \section{Analysis on a custom stripped kernel}
@@ -540,6 +586,38 @@ device that is not modeled.  Use of the diddling function described in \ref{didd
 to load the desired module, without having to modify the disk image.  
 TBD: Explore model building, e.g., to simulate an fpga accessed via a PCI bus device.
 
+\subsection{Examples of I/O Tracking}
+These examples assume you have run a full process trace or a {\tt trace\_all} and have run the postScripts
+per section \ref{postprocessing}.  
+
+\subsubsection{What FD is this?}
+You have created a specific stimulus and would like to understand the resulting behavior of a specific process
+that runs a long time as a service.
+Running a full system trace up to the stimulus as a means of getting context may not be practical.  So you start
+a {\tt traceAll} at some point prior to the external stimulus.  You then see socket activity on a specific FD.
+However the current trace does not include a connection that maps to that FD.  Use the {\tt procTrace.txt}
+file to get the pid of the process as it existed in the full system trace.  Then, if you assume the FD will match
+that from your full system trace (which may be a fine assumption if the connection is long-term), grep on 
+the system call trace, e.g.,
+\begin{verbatim}
+grep "pid:1731" syscall_trace.txt | grep "FD: 11
+\end{verbatim}
+That gives you the port and address information that you can then search for in the {\tt netLinks.txt} file.
+
+\section{Context management implementation notes}
+RESim manages two Simics contexts: the default for the cell, and a ``resim'' context for each cell.
+Contexts are managed within {\tt genContextManager.py}. The resim context is used when watching a specific process
+or thread family.  Otherwise, the default context is used.  The context of each processor is dynamically altered 
+such that breakpoints are only hit when in the corresponding context.  For example, assume we are debugging PID 95
+(for simplicity, assume no threads).
+Whenever PID 95 is schedule, the processor context is set to resim.  The context is returned to the default whenever
+PID 95 is not scheduled.  System call breakpoints set during debugging, e.g., vi runToWrite, will be associated
+with the resim context.  These breakpoints will only be hit when the processor is in the resim context. 
+Breakpoints may be set in the default context while debugging PID 95, e.g., handle a background diddle.  Those
+breakpoints will not be caught when processor is in the resim context.
+TBD: define multiple contexts to allow parallel debugging of different processes on the same cell.  (Parallel 
+debugging of processes on different cells should be easier since they each have independent context managers.)
+
 
 \section{What is different from Simics?}
 RESim is based the Simics simulator, including the \textit{Hindsight} product.  It does not incorporate the \textit{Analyzer} product
@@ -549,11 +627,40 @@ engineer unknown software, and thus does not assume possession of source code or
 
 \section{IDA Pro issues and work arounds}
 The IDA debugger in 7.2 requests more registers than Simics knows about.  The Simics gdb-remote has been modified
-to simply return the value of the highest numbered register that it knows about.
+to simply return the value of the highest numbered register that it knows about.  An alternative is to modify
+xml files in ~/ida-7.2/cfg to only include desired registers.   For ARM (the qsp-arm), the arm-fpa.xml (from gdb source
+tree) needs to be added to the arm-with-neon.xml file in ida/cfg.  The cpsr register (number 25) is not updated by IDA
+unless registers are defined for each register value returned by Simics in the 'g' packet.
 
-The IDA debugger in 7.2 uses thread ID 1 when performing the vCont GDB operation.  The gdb-remote was modified to force
-the thread ID to zero, which is what IDA 6.8 used to send.
+The IDA debugger in 7.2 uses thread ID 1 when performing the vCont GDB operation.  Hex-rays modified the IDA gdb plugin to
+use ID 0, thereby fixingthe problem.
+
+\section{Simics issues and work arounds}
+New-style Simics console management causes an X11 error: ''The program 'simics-common' received an X Window System error.''
+Use:
+\begin{verbatim}
+gsettings set com.canonical.desktop.interface scrollbar-mode normal
+\end{verbatim}
+\noindent to avoid the exception.
 
 \section{Performace tricks}
 Use disable-reverse-execution whenever you do not really need reversing, e.g., while moving forward to a known connect or accept.
+
+\section{Drivers}
+The disk image at 
+\begin{verbatim}
+   eemsWorkspace/ubuntu-epirb2/viper.disk.hd_image.craff
+\end{verbatim}
+\noindent is an Ubuntu 64-bit Linux.  It uses Simics agents to load files per the driver-script.sh in the workspace directory.
+That driver script must include this line at its end:
+\begin{verbatim}
+/usr/bin/simics-agent  --upload driver-ready.flag
+\end{verbatim}
+The launchRESim.py will boot the driver component and will not begin boot of other components until the {\tt driver-ready.flag} appears.
+
+\section{ToDo}
+Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
+process whose record is watched is killed.  Need to also watch "prev" on the subject process?
 \end{document}
+
+
