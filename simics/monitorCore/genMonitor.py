@@ -272,7 +272,7 @@ class GenMonitor():
                 SIM_delete_breakpoint(bp)
             self.is_compat32 = self.compat32()
             ''' check functions in list '''
-            self.lgr.debug('stopHap now run actions %s' % stop_action.listFuns())
+            self.lgr.debug('stopHap compat32 is %r now run actions %s' % (self.is_compat32, stop_action.listFuns()))
             stop_action.run()
             self.lgr.debug('back from stop_action.run')
 
@@ -314,8 +314,13 @@ class GenMonitor():
             SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
-            if flist is not None and len(flist) == 1:
-                flist[0].fun(flist[0].args)
+            if flist is not None: 
+                #if len(flist) == 1:
+                for fun_item in flist:
+                    if len(fun_item.args) ==  0:
+                        fun_item.fun()
+                    else:
+                        fun_item.fun(fun_item.args)
 
     def finishInit(self, cell_name):
         
@@ -642,7 +647,7 @@ class GenMonitor():
                 self.runToText(flist)
                 return
             else:
-                self.lgr.debug('execToText missing binary, just run to user')
+                self.lgr.debug('execToText text segment, just run to user flist')
                 self.toUser(flist)
                 return
         self.lgr.debug('execToText no information about the text segment')
@@ -728,7 +733,7 @@ class GenMonitor():
             f3 = stopFunction.StopFunction(self.setStackBase, [], False)
             f4 = stopFunction.StopFunction(self.debug, [], False)
             flist = [f1, f2, f3, f4]
-            self.toExecve(proc, flist=flist)
+            self.toExecve(proc, flist=flist, binary=True)
 
     def debugThis(self):
         ''' Intended for use while debugging a process that clones and you want to only watch 
@@ -1351,20 +1356,26 @@ class GenMonitor():
             #TBD fix 32-bit compat
             self.call_traces[self.target][call] = self.traceSyscall(callname=call, trace_procs=True, soMap=self.soMap[self.target])
 
-    def stopTrace(self, cell_name=None):
+    def stopTrace(self, cell_name=None, syscall=None):
         if cell_name is None:
             cell_name = self.target
-        self.lgr.debug('stopTrace from genMonitor cell %s' % cell_name)
+        self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given' % cell_name)
         for call in self.call_traces[cell_name]:
-            self.lgr.debug('stopTrace cell %s of call %s' % (cell_name, call))
-            self.call_traces[cell_name][call].stopTrace(immediate=True)
-        self.call_traces[cell_name].clear()   
-        if cell_name in self.trace_all:
+            syscall_trace = self.call_traces[cell_name][call]
+            if syscall is None or syscall_trace == syscall: 
+                self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
+                syscall_trace.stopTrace(immediate=True)
+        if syscall is None or syscall_trace == syscall: 
+            self.call_traces[cell_name].clear()   
+
+        if cell_name in self.trace_all and (syscall is None or self.trace_all[cell_name]==syscall):
             self.trace_all[cell_name].stopTrace(immediate=True)
             del self.trace_all[cell_name]
-        for exit in self.exit_maze:
-            exit.rmAllBreaks()
-        self.traceMgr[cell_name].close()
+
+            for exit in self.exit_maze:
+                exit.rmAllBreaks()
+        if cell_name not in self.trace_all and len(self.call_traces[cell_name]) == 0:
+            self.traceMgr[cell_name].close()
 
     def rmCallTrace(self, cell_name, callname):
         if callname in self.call_traces[cell_name]:
@@ -1448,13 +1459,17 @@ class GenMonitor():
         
         self.traceProcs[self.target].showAll()
  
-    def toExecve(self, comm, flist=None):
+    def toExecve(self, comm, flist=None, binary=False):
         cell = self.cell_config.cell_context[self.target]
             
-        self.call_traces[self.target]['execve'] = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
+        call_params = syscall.CallParams('execve', comm, break_simulation=True)        
+        if binary:
+            call_params.param_flags.append('binary')
+        self.call_traces[self.target]['execve'] = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], 
+                           self.task_utils[self.target], 
                            self.context_manager[self.target], self.traceProcs[self.target], self.sharedSyscall[self.target], self.lgr, 
-                           self.traceMgr[self.target], call_list=['execve'], trace=False, break_on_execve=comm, flist_in = flist, 
-                           netInfo=self.netInfo[self.target], targetFS=self.targetFS[self.target])
+                           self.traceMgr[self.target], call_list=['execve'], trace=False, flist_in = flist, 
+                           netInfo=self.netInfo[self.target], targetFS=self.targetFS[self.target], call_params=[call_params])
         SIM_run_command('c')
 
     def clone(self, nth=1):
@@ -1501,11 +1516,11 @@ class GenMonitor():
         else:
             self.lgr.debug('debugExitHap no so map for %s' % self.target)
         
-        self.lgr.debug('debugExitHap compat32: %r' % self.is_compat32)
         self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, cell, self.param[self.target], 
                        self.mem_utils[self.target], self.task_utils[self.target], 
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
                        call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32)
+        self.lgr.debug('debugExitHap compat32: %r syscall is %s' % (self.is_compat32, str(self.exit_group_syscall[self.target])))
         
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
@@ -1563,20 +1578,36 @@ class GenMonitor():
         SIM_run_command('rev')
 
     def getSyscall(self, cell_name, callname):
+        ''' find the most specific syscall for the given callname '''
         if cell_name in self.exit_group_syscall and callname == 'exit_group':
-            self.lgr.debug('is exit group')
+            #self.lgr.debug('is exit group')
             return self.exit_group_syscall[cell_name]
         elif cell_name in self.call_traces: 
             if callname in self.call_traces[cell_name]:
-                self.lgr.debug('is givn callname %s' % callname)
+                #self.lgr.debug('is given callname %s' % callname)
                 return self.call_traces[cell_name][callname]
             elif cell_name in self.trace_all:
-                self.lgr.debug('is trace all')
+                #self.lgr.debug('is trace all')
                 return self.trace_all[cell_name]
             else:
                 self.lgr.debug('genMonitor getSyscall, not able to return instance for call %s len self.call_traces %d' % (callname, 
                            len(self.call_traces[cell_name])))
         return None
+
+    def tracingAll(self, cell_name, pid):
+        ''' are we tracing all syscalls for the given pid? '''
+        retval = False
+        if cell_name in self.trace_all:
+            debug_pid, dumb, dumb1 = self.context_manager[self.target].getDebugPid() 
+            if debug_pid is None:
+                self.lgr.debug('tracingAll pid none, return true')
+                retval = True
+            else:
+                if self.context_manager[self.target].amWatching(pid):
+                    self.lgr.debug('tracingAll watching pid %d' % pid)
+                    retval = True
+        return retval
+            
 
     def runToText(self, flist = None):
         ''' run until within the currently defined text segment '''
@@ -1634,7 +1665,7 @@ class GenMonitor():
                 return True
         return False
 
-    def runTo(self, call, call_params, cell_name=None, run=True, linger=False):
+    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False):
         if self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
             return
@@ -1643,9 +1674,11 @@ class GenMonitor():
         cell = self.cell_config.cell_context[cell_name]
         self.lgr.debug('genMonitor runTo cellname %s call %s compat32 %r' % (cell_name, call, self.is_compat32))
         self.call_traces[cell_name][call] = syscall.Syscall(self, cell_name, cell, self.param[cell_name], self.mem_utils[cell_name], 
-                               self.task_utils[cell_name], 
-                               self.context_manager[cell_name], None, self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name],
-                               call_list=[call], call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, compat32=self.is_compat32)
+                               self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
+                               self.lgr, self.traceMgr[cell_name],
+                               call_list=[call], call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, 
+                               background=background)
+                               #compat32=self.is_compat32, background=background)
         if run:
             self.is_monitor_running.setRunning(True)
             SIM_run_command('c')
@@ -1681,7 +1714,7 @@ class GenMonitor():
             run = False
         operation = diddle.getOperation()
         self.lgr.debug('runToDiddle file %s cellname %s operation: %s' % (dfile, cell_name, operation))
-        self.runTo(operation, call_params, cell_name=cell_name, run=run)
+        self.runTo(operation, call_params, cell_name=cell_name, run=run, background=True)
 
     def runToWrite(self, substring):
         call_params = syscall.CallParams('write', substring, break_simulation=True)        
@@ -2142,6 +2175,11 @@ class GenMonitor():
             return True
         else:
             return False
+
+    def readString(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        fname = self.mem_utils[self.target].readString(cpu, addr, 256)
+        print fname 
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
