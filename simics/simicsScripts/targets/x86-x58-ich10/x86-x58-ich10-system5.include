@@ -37,7 +37,7 @@ decl{
     param mac_address_1 : string
     param mac_address_2 : string
 
-    param eth_dev : string = "i82559"
+    param eth_dev : string = "i82543gc"
     result system : string
     result southbridge : string
     result northbridge : string
