@@ -9,6 +9,9 @@ class StackTrace():
             self.instruct = instruct
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, lgr):
+        if pid == 0:
+            self.lgr.error('stackTrace asked to trace pid 0?')
+            return
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -157,6 +160,12 @@ class StackTrace():
 
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
+            if val is None:
+                self.lgr.debug('stackTrace, failed to read from 0x%x' % ptr)
+                count += 1
+                ptr = ptr + self.mem_utils.WORD_SIZE
+                done = True
+                continue
             # TBD should be part of readPtr?
             if self.mem_utils.WORD_SIZE == 8:
                 val = val & 0x0000ffffffffffff
@@ -193,7 +202,7 @@ class StackTrace():
                                 fname, start, end = self.soMap.getSOInfo(call_to)
                                 #self.lgr.debug('so checj of %s' % fname)
                                 if fname is not None:
-                                    full_path = self.targetFS.getFull(fname)
+                                    full_path = self.targetFS.getFull(fname, self.lgr)
                                     self.ida_funs.add(full_path, start)
                             so_checked.append(call_to) 
                         if self.ida_funs.isFun(call_to):
@@ -244,7 +253,7 @@ class StackTrace():
             count += 1
             ptr = ptr + self.mem_utils.WORD_SIZE
             if self.stack_base is not None and ptr > self.stack_base:
-                self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
+                #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
 
 
@@ -254,7 +263,7 @@ class StackTrace():
         if self.ida_funs is not None and not self.ida_funs.isFun(eip):
             fname, start, end = self.soMap.getSOInfo(eip)
             if fname is not None:
-                full = self.targetFS.getFull(fname)
+                full = self.targetFS.getFull(fname, self.lgr)
                 self.lgr.debug('stackTrace soCheck eip 0x%x not a fun? fname %s full %s start 0x%x' % (eip, fname,full, start))
                 self.ida_funs.add(full, start)
 
