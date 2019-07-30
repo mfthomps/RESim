@@ -123,7 +123,7 @@ class memUtils():
             if not ptable_info.page_exists:
                 self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
                 return None
-            self.lgr.debug('phys addr for 0x%x return 0' % (v))
+            #self.lgr.debug('phys addr for 0x%x return 0' % (v))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 return self.getUnsigned(phys_addr)
@@ -132,11 +132,11 @@ class memUtils():
                 if v < self.param.kernel_base and mode == 8:
                 #if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
-                    self.lgr.debug('get unsigned of 0x%x mode %d' % (v, mode))
+                    #self.lgr.debug('get unsigned of 0x%x mode %d' % (v, mode))
                     return self.getUnsigned(phys_addr)
                 else:
                     phys_addr = v & ~self.param.kernel_base 
-                    self.lgr.debug('memUtils v2p  32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (mode, self.param.kernel_base, v, phys_addr))
+                    #self.lgr.debug('memUtils v2p  32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (mode, self.param.kernel_base, v, phys_addr))
                     return phys_addr
                     
 
@@ -168,14 +168,14 @@ class memUtils():
         if ps is not None:
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
-                self.lgr.debug('remain_in_page %d' % remain_in_page)
+                #self.lgr.debug('remain_in_page %d' % remain_in_page)
                 first_read = self.readStringPhys(cpu, ps, remain_in_page)
                 if first_read is not None and len(first_read) == remain_in_page:
                     ''' get the rest ''' 
                     ps = self.v2p(cpu, vaddr+remain_in_page)
-                    self.lgr.debug('first read %s new ps 0x%x' % (first_read, ps))
+                    #self.lgr.debug('first read %s new ps 0x%x' % (first_read, ps))
                     second_read = self.readStringPhys(cpu, ps, maxlen - remain_in_page)
-                    self.lgr.debug('second read %s from 0x%x' % (second_read, ps))
+                    #self.lgr.debug('second read %s from 0x%x' % (second_read, ps))
                     retval = first_read+second_read
                 else:
                     retval = first_read
@@ -200,7 +200,8 @@ class memUtils():
     def readWord32(self, cpu, vaddr):
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
-            self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
+            #self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
+            return None
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
         except:
@@ -246,6 +247,9 @@ class memUtils():
         print s
     
     def readPhysPtr(self, cpu, addr):
+        if addr is None:
+            self.lgr.error('readPhysPtr given addr of None')
+            return None
         try:
             return self.getUnsigned(SIM_read_phys_memory(cpu, addr, self.WORD_SIZE))
         except:

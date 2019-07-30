@@ -36,7 +36,7 @@ class TrackThreads():
     def startTrack(self):
          
         if self.call_hap is not None:
-            #self.lgr.debug('TrackThreads startTrack called, but already tracking')
+            self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
         self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
         callnum = self.task_utils.syscallNumber('clone', self.compat32)
@@ -67,6 +67,8 @@ class TrackThreads():
         self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
         self.context_manager.genDeleteHap(self.call_hap)
         self.context_manager.genDeleteHap(self.execve_hap)
+        self.call_hap = None
+        self.execve_hap = None
         for pid in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[pid])
         self.stopSOTrack()
@@ -220,7 +222,7 @@ class TrackThreads():
         if prog_string is None:
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(pid, cpu)
-            call_info = SyscallInfo(cpu, pid, None, None, None)
+            call_info = syscall.SyscallInfo(cpu, pid, None, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
                 self.lgr.error('trackThreads parseExecve zero prog_addr pid %d' % pid)

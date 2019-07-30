@@ -106,6 +106,7 @@ class GenContextMgr():
         self.cpu = cpu
         ''' watch multiple tasks, e.g., threads '''
         self.watch_rec_list = {}
+        self.watch_rec_list_saved = {}
         self.pending_watch_pids = []
         self.nowatch_list = []
         self.watching_tasks = False
@@ -134,6 +135,8 @@ class GenContextMgr():
 
         ''' avoid searching all task recs to know if pid being watched '''
         self.pid_cache = []
+
+        ''' watch pointers to task recs to catch kills '''
         self.task_rec_hap = {}
         self.task_rec_bp = {}
         ''' avoid multiple calls to taskRecHap '''
@@ -407,6 +410,7 @@ class GenContextMgr():
                 del self.task_rec_bp[pid]
                 del self.task_rec_hap[pid]
             if len(self.watch_rec_list) == 0:
+                self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
                 self.debugging_pid = None
                 self.debugging_cellname = None
                 self.debugging_cell = None
@@ -445,6 +449,14 @@ class GenContextMgr():
         else:
             return False
 
+    def restoreDebug(self):
+        self.debugging_pid = self.debugging_pid_saved
+        self.watch_rec_list = self.watch_rec_list_saved.copy()
+        for ctask in self.watch_rec_list:
+            self.pid_cache.append(self.watch_rec_list[ctask])
+        self.cpu.current_context = self.resim_context
+        self.lgr.debug('contextManager restoreDebug set cpu context to resim')
+
     def stopWatchTasks(self):
         if self.task_break is None:
             self.lgr.debug('stopWatchTasks already stopped')
@@ -454,6 +466,8 @@ class GenContextMgr():
         self.task_hap = None
         self.task_break = None
         self.watching_tasks = False
+        self.watch_rec_list_saved = self.watch_rec_list.copy()
+        self.debugging_pid_saved = self.debugging_pid
         self.watch_rec_list = {}
         
         for pid in self.task_rec_bp:    
@@ -467,7 +481,7 @@ class GenContextMgr():
 
         cpu, dumb, dumb2  = self.task_utils.curProc()
         cpu.current_context = self.default_context
-        self.lgr.debug('stopWatchTasks restored %s to default context %s' % (cpu.name, str(self.default_context)))
+        self.lgr.debug('stopWatchTasks reverted %s to default context %s' % (cpu.name, str(self.default_context)))
 
     def setTaskHap(self):
         print('debugging_cell is %s' % self.debugging_cell)

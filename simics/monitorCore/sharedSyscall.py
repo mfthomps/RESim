@@ -84,7 +84,7 @@ class SharedSyscall():
                 self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
 
 
-    def addExitHap(self, pid, exit_eip1, exit_eip2, exit_eip3, callnum, exit_info, traceProcs, name):
+    def addExitHap(self, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, traceProcs, name):
         self.exit_info[pid] = exit_info
         if traceProcs is not None:
             self.trace_procs.append(pid)
@@ -128,12 +128,16 @@ class SharedSyscall():
                 #self.lgr.debug('sharedSyscall added exit hap3 %d' % self.exit_hap[exit_eip3])
             self.exit_pids[exit_eip3].append(pid)
 
+        callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+        if callname == 'execve':
+            self.addPendingExecve(pid)
 
 
         #self.lgr.debug('sharedSyscall addExitHap return pid %d' % pid)
 
 
     def addPendingExecve(self, pid):
+        self.lgr.debug('sharedSyscall addPendingExecve pid:%d' % pid)
         if pid not in self.pending_execve:
             self.pending_execve.append(pid)
 
@@ -265,7 +269,8 @@ class SharedSyscall():
             msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
             trace_msg = ('\treturn from socketcall %s pid:%d FD: %d count: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
             if eax < 0:
-                trace_msg = ('\error treturn from socketcall %s pid:%d FD: %d exception: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+                trace_msg = ('\terror return from socketcall %s pid:%d FD: %d exception: %d %s\n' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+                exit_info.call_params = None
             else:
                 trace_msg = ('\treturn from socketcall %s pid:%d FD: %d count: %d %s' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
                 if pid in self.trace_procs:
@@ -277,9 +282,18 @@ class SharedSyscall():
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, msg_iov[0].base)
                 s = ''.join(map(chr,byte_array))
                 trace_msg = trace_msg+'\t'+s+'\n'
-                if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None:
-                    ''' in case we want to break on a read of this data '''
-                    self.dataWatch.setRange(msg_iov[0].base, eax)
+                if exit_info.call_params is not None:
+                    if exit_info.call_params.break_simulation and self.dataWatch is not None:
+                        ''' in case we want to break on a read of this data '''
+                        self.dataWatch.setRange(msg_iov[0].base, eax)
+                        self.lgr.debug('recvmsg set dataWatch')
+                    if type(exit_info.call_params.match_param) is str:
+                        self.lgr.debug('sharedSyscall recvmsg check string %s against %s' % (s, exit_info.call_params.match_param))
+                        if exit_info.call_params.match_param not in s: 
+                            exit_info.call_params = None
+                    else:
+                        self.lgr.error('sharedSyscall unhandled call_param %s' % (exit_info.call_params))
+                        exit_info.call_params = None
             
         elif socket_callname == "getpeername":
             ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
@@ -342,7 +356,7 @@ class SharedSyscall():
                 self.traceProcs.addProc(pid, None, comm=comm)
                 return
             if self.isPendingExecve(pid):
-                #self.lgr.debug('exitHap cell %s call reschedule from execve?  for pid %d  Remove pending' % (self.cell_name, pid))
+                self.lgr.debug('exitHap cell %s call reschedule from execve?  for pid %d  Remove pending' % (self.cell_name, pid))
                 self.rmPendingExecve(pid)
                 return 
             else:
@@ -468,7 +482,7 @@ class SharedSyscall():
                     self.dataWatch.setRange(exit_info.retval_addr, eax)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
                     if eax < 4028:
-                        #self.lgr.debug('sharedSyscall %s read check diddler count %d' % (self.cell_name, eax))
+                        self.lgr.debug('sharedSyscall %s read check diddler count %d %s' % (self.cell_name, eax, s))
                         if exit_info.call_params.match_param.checkString(self.cpu, exit_info.retval_addr, eax):
                             self.lgr.debug('syscall read found final diddler')
                             self.top.stopTrace(cell_name=self.cell_name)

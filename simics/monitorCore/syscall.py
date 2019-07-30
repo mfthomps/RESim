@@ -337,7 +337,7 @@ class Syscall():
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
-        if not self.top.remainingCallTraces():
+        if self.top is not None and not self.top.remainingCallTraces():
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
@@ -409,9 +409,9 @@ class Syscall():
         except AttributeError:
             sysret64 = None
         if cpu.architecture == 'arm':
-            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, None, None, syscall_info.callnum, exit_info, self.traceProcs, name)
+            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, None, None, exit_info, self.traceProcs, name)
         else:
-            self.sharedSyscall.addExitHap(pid, self.param.sysexit, self.param.iretd, sysret64, syscall_info.callnum, exit_info, self.traceProcs, name)
+            self.sharedSyscall.addExitHap(pid, self.param.sysexit, self.param.iretd, sysret64, exit_info, self.traceProcs, name)
 
     def watchFirstMmap(self, pid, fname, fd, compat32):
         if self.mem_utils.WORD_SIZE == 4:
@@ -547,7 +547,7 @@ class Syscall():
     def addElf(self, prog_string, pid):
         retval = True
         if self.targetFS is not None and prog_string is not None:
-            full_path = self.targetFS.getFull(prog_string)
+            full_path = self.targetFS.getFull(prog_string, self.lgr)
             if os.path.isfile(full_path):
                 text_segment = elfText.getText(full_path, self.lgr)
                 if text_segment is not None:
@@ -582,7 +582,7 @@ class Syscall():
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('finishParseExecve progstring None, arm fu?')
             return
-        self.lgr.debug('finishParseExecve progstring (%s)' % (prog_string))
+        self.lgr.debug('finishParseExecve pid:%d progstring (%s)' % (pid, prog_string))
         nargs = min(4, len(arg_string_list))
         arg_string = ''
         for i in range(nargs):
@@ -627,12 +627,13 @@ class Syscall():
                 if self.traceProcs is not None:
                     ftype = self.traceProcs.getFileType(pid)
                     if ftype is None:
-                        full_path = self.targetFS.getFull(prog_string)
-                        ftype = magic.from_file(full_path)
-                        if ftype is None:
-                            self.lgr.error('finishParseExecve failed to find file type for %s pid %d' % (prog_string, pid))
-                            return
-                    if 'binary' in cp.param_flags and 'elf' not in ftype.lower():
+                        full_path = self.targetFS.getFull(prog_string, self.lgr)
+                        if os.path.isfile(full_path):
+                            ftype = magic.from_file(full_path)
+                            if ftype is None:
+                                self.lgr.error('finishParseExecve failed to find file type for %s pid %d' % (prog_string, pid))
+                                return
+                    if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                         wrong_type = True
                 if not wrong_type:
                     self.lgr.debug('finishParseExecve execve of %s ' % prog_string)
@@ -656,7 +657,6 @@ class Syscall():
             at_enter = False
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, at_enter, cpu)
         #self.lgr.debug('append %d to pending_execve' % pid) 
-        self.sharedSyscall.addPendingExecve(pid)
         pid_list = self.context_manager.getThreadPids()
         db_pid, dumb, dumbcpu = self.context_manager.getDebugPid()
         if pid in pid_list and pid != db_pid:
@@ -667,7 +667,7 @@ class Syscall():
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(pid, cpu)
             call_info = SyscallInfo(cpu, pid, None, None, None)
-            self.lgr.debug('parseExecve prog string missing, set break on 0x%x' % prog_addr)
+            self.lgr.debug('parseExecve pid:%d prog string missing, set break on 0x%x' % (pid, prog_addr))
             if prog_addr == 0:
                 self.lgr.error('parseExecve zero prog_addr pid %d' % pid)
                 SIM_break_simulation('parseExecve zero prog_addr pid %d' % pid)
@@ -855,6 +855,10 @@ class Syscall():
                 if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == frame['param1']:
                     exit_info.call_params = call_param
                     break
+                elif type(call_param.match_param) is str and call_param.subcall == 'recvmsg':
+                    self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
+                    exit_info.call_params = call_param
+                    break
             
         elif socket_callname == "send" or socket_callname == "sendto" or \
                      socket_callname == "sendmsg": 
@@ -883,7 +887,7 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
                 elif type(call_param.match_param) is str and (call_param.subcall == 'send' or call_param.subcall == 'sendto'):
-                    self.lgr.debug('syscall write watch exit for call_param %s' % call_param.match_param)
+                    self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
                     exit_info.call_params = call_param
                     break
 
@@ -1405,9 +1409,9 @@ class Syscall():
                                 exit_info.call_params = cp
                             name = callname+' exit' 
                             #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                            #self.lgr.debug('syscallHap call to addExitHap for pid %d call  %d len %d trace_all %r' % (pid, syscall_info.callnum, 
-                            #   len(syscall_info.call_params), tracing_all))
-                            self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, syscall_info.callnum, exit_info, self.traceProcs, name)
+                            self.lgr.debug('syscallHap call to addExitHap for pid %d call  %d len %d trace_all %r' % (pid, syscall_info.callnum, 
+                               len(syscall_info.call_params), tracing_all))
+                            self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.traceProcs, name)
                         else:
                             self.lgr.debug('did not add exitHap')
                             pass
@@ -1425,11 +1429,11 @@ class Syscall():
 
             if comm != 'tar':
                 name = callname+' exit' 
-                #self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
+                self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
                 if self.stop_on_call:
                     cp = CallParams(None, None, break_simulation=True)
                     exit_info.call_params = cp
-                self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, callnum, exit_info, self.traceProcs, name)
+                self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.traceProcs, name)
             else:
                 self.lgr.debug('syscallHap pid:%d skip exitHap for tar' % pid)
 
