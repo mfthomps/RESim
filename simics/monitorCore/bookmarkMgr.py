@@ -194,18 +194,18 @@ class bookmarkMgr():
             return
         sys.stderr = open('err.txt', 'w')
         dum, dum2, cpu = self.context_mgr.getDebugPid() 
-        self.context_mgr.clearExitBreak()
+        self.context_mgr.clearExitBreaks()
         start_cycle = self.getCycle('_start+1')
         done = False
         if self.top.SIMICS_BUG:
           while not done:
-            SIM_run_command('pselect cpu-name = %s' % cpu.name)
+            SIM_run_command('pselect %s' % cpu.name)
             SIM_run_command('skip-to cycle = 0x%x' % start_cycle)
             cycles = SIM_cycle_count(cpu)
             self.lgr.debug('goToDebugBookmark, did skip to start at cycle %x, expected %x ' % (cycles, start_cycle))
             cycle = self.__bookmarks[mark].cycles
             self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
-            SIM_run_command('pselect cpu-name = %s' % cpu.name)
+            SIM_run_command('pselect %s' % cpu.name)
             SIM_run_command('skip-to cycle=%d' % cycle)
             eip = self.top.getEIP(cpu)
             current = SIM_cycle_count(cpu)
@@ -220,7 +220,7 @@ class bookmarkMgr():
         else:
             cycle = self.__bookmarks[mark].cycles
             self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
-            SIM_run_command('pselect cpu-name = %s' % cpu.name)
+            SIM_run_command('pselect %s' % cpu.name)
             try:
                 SIM_run_command('skip-to cycle=%d' % cycle)
             except:
@@ -233,7 +233,7 @@ class bookmarkMgr():
                 self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
             
 
-        self.context_mgr.setExitBreak(cpu)
+        self.context_mgr.setExitBreaks()
         self.context_mgr.resetBackStop()
         self.top.gdbMailbox('0x%x' % eip)
         self.lgr.debug('goToDebugBookmark set mbox to %x' % eip)
@@ -246,7 +246,7 @@ class bookmarkMgr():
     def skipToOrigin(self):
         dum, dum2, cpu = self.context_mgr.getDebugPid() 
         origin = self.__bookmarks[self.__origin_bookmark].cycles
-        SIM_run_command('pselect cpu-name = %s' % cpu.name)
+        SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % origin)
         current = SIM_cycle_count(cpu)
         eip = self.top.getEIP(cpu)
@@ -261,7 +261,7 @@ class bookmarkMgr():
         if cpu is None:
             dum, dum2, cpu = self.context_mgr.getDebugPid() 
         first = self.__bookmarks['_start+1'].cycles
-        SIM_run_command('pselect cpu-name = %s' % cpu.name)
+        SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % first)
         current = SIM_cycle_count(cpu)
         step = SIM_step_count(cpu)
