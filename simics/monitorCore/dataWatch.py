@@ -50,6 +50,9 @@ class DataWatch():
              
     def readHap(self, index, third, forth, memory):
         #value = SIM_get_mem_op_value_le(memory)
+        if index >= len(self.read_hap):
+            self.lgr.error('dataWatch readHap invalid index %d, only %d read haps' % (index, len(self.read_hap)))
+            return
         if self.read_hap[index] is None:
             return
         op_type = SIM_get_mem_op_type(memory)
