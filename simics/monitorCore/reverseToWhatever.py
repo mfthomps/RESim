@@ -47,5 +47,5 @@ class reverseToWhatever():
         #self.top.gdbMailbox('0x%x' % eip)
         cycles = 1 + self.extra_back
         self.top.skipAndMail(cycles)
-        self.context_manager.setExitBreak(cpu)
+        self.context_manager.setExitBreaks()
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)

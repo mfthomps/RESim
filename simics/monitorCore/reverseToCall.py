@@ -283,7 +283,7 @@ class reverseToCall():
             if eip == self.param.arm_ret:
                 return True
         else: 
-            if instruct == 'sysexit' or instruct == 'iretd':
+            if instruct == 'sysexit' or instruct == 'iretd' or instruct.startswith('sysret'):
                 return True
         return False
 
@@ -368,7 +368,7 @@ class reverseToCall():
                 done = True
                 self.cleanup(self.cpu)
                 self.top.skipAndMail()
-                self.context_manager.setExitBreak(self.cpu)
+                self.context_manager.setExitBreaks()
         elif len(self.sysenter_cycles) > 0:
             cur_cycles = self.cpu.cycles
             cur_cpu, comm, pid  = self.task_utils.curProc()
@@ -521,7 +521,7 @@ class reverseToCall():
             #current = SIM_cycle_count(self.cpu)
             current = self.cpu.cycles
             previous = current - 1
-            SIM_run_command('pselect cpu-name = %s' % self.cpu.name)
+            SIM_run_command('pselect %s' % self.cpu.name)
             SIM_run_command('skip-to cycle = %d' % previous)
             self.lgr.debug('cycleRegisterMod skipped to 0x%x  cycle is 0x%x' % (previous, self.cpu.cycles))
             if self.tooFarBack():
@@ -533,7 +533,8 @@ class reverseToCall():
                 done = True
             else:
                 cur_val = self.cpu.iface.int_register.read(self.reg_num)
-                #self.lgr.debug('compare %x to %x eip: %x' % (cur_val, self.reg_val, eip))
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('compare %x to %x eip: %x' % (cur_val, self.reg_val, eip))
                 '''
                 if cur_val != self.reg_val: 
                     eip = self.top.getEIP(self.cpu)
@@ -570,7 +571,7 @@ class reverseToCall():
                                 done = True
                                 retval = RegisterModType(addr, RegisterModType.ADDR)
                      
-                
+        self.lgr.debug('cycleRegisterMod return') 
         return retval
                        
 
@@ -708,7 +709,7 @@ class reverseToCall():
  
     def cleanup(self, cpu):
         self.lgr.debug('cleanup')
-        self.context_manager.setExitBreak(cpu)
+        self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None

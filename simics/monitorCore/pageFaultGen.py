@@ -292,7 +292,7 @@ class PageFaultGen():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
         self.context_manager.setIdaMessage('SEGV access to memory 0x%x' % prec.cr2)
-        SIM_run_command('pselect cpu-name = %s' % self.cpu.name)
+        SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_alone(self.skipAlone, prec)
 
 

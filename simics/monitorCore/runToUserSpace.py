@@ -71,7 +71,7 @@ class runToUserSpace():
         if pre_call_cycle is not None:
             self.is_monitor_running.setRunning(True)
             self.lgr.debug('revToUser, found previous syscall for %s %d at cycle %x' % (self.cell_name, self.pid, pre_call_cycle))
-            SIM_run_command('pselect cpu-name = %s' % self.cpu.name)
+            SIM_run_command('pselect %s' % self.cpu.name)
             SIM_run_command('skip-to cycle=%d' % pre_call_cycle)
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('revToUser skipped to cycle %x eip: %x' % (pre_call_cycle, eip))

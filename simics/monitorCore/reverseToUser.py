@@ -52,14 +52,14 @@ class ReverseToUser():
         SIM_run_command('reverse') 
 
     def stopHap(self, stop_action, one, exception, error_string):
-        self.lgr.debug('stopHap')
+        self.lgr.debug('reverseToUser stopHap')
         for hc in stop_action.hap_clean.hlist:
             if hc.hap is not None:
-                self.lgr.debug('will delete hap %s' % str(hc.hap))
+                self.lgr.debug('reverseToUser will delete hap %s' % str(hc.hap))
                 SIM_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
-            self.lgr.debug('will delete hap %s' % str(self.stop_hap))
+            self.lgr.debug('reverseToUser will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:

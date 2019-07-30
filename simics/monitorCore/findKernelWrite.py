@@ -281,7 +281,7 @@ class findKernelWrite():
             #msg = '0x%x' % eip
             #self.top.gdbMailbox(msg)
             
-            self.context_manager.setExitBreak(self.cpu)
+            self.context_manager.setExitBreaks()
              
         else:
             if not self.checkWriteValue(eip):
@@ -309,7 +309,7 @@ class findKernelWrite():
             #msg = '0x%x' % eip
             #self.top.gdbMailbox(msg)
             
-            self.context_manager.setExitBreak(self.cpu)
+            self.context_manager.setExitBreaks()
 
     def backOneAlone(self, dum):
         current = SIM_cycle_count(self.cpu)
@@ -319,7 +319,7 @@ class findKernelWrite():
         self.lgr.debug('backOne user space write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x ' % (value, self.addr, current, eip))
         if not self.forward:
             previous = current - 1
-            SIM_run_command('pselect cpu-name = %s' % self.cpu.name)
+            SIM_run_command('pselect %s' % self.cpu.name)
             if SIM_simics_is_running():
                 self.lgr.error('backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
