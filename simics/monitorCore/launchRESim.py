@@ -197,7 +197,10 @@ if RUN_FROM_SNAP is None:
                     cmd = '%s=%s' % (name[1:], name)
                     params = params + " "+cmd
 
-        cmd='run-command-file "./targets/%s" %s' % (script, params)
+        if SIMICS_VER.startswith('4'):
+            cmd='run-command-file "./targets/%s"' % (script)
+        else:
+            cmd='run-command-file "./targets/%s" %s' % (script, params)
         print('cmd is %s' % cmd)
         run_command(cmd)
         link_dict[section] = assignLinkNames(section)
