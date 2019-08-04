@@ -173,6 +173,13 @@ class GenMonitor():
                     self.lgr.debug('Could not find param file at %s -- it will not be monitored' % param_file)
                     continue
                 self.param[cell_name] = pickle.load( open(param_file, 'rb') ) 
+                ''' add new attributes of kParam here for compat with old param files '''
+                if not hasattr(self.param[cell_name], 'compat32_entry'):
+                    self.param[cell_name].compat_32_entry = None
+                    self.param[cell_name].compat_32_int128 = None
+                    self.param[cell_name].compat_32_compute = None
+                    self.param[cell_name].compat_32_jump = None
+
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
                 print('Cell %s missing params, it will not be monitored. ' % (cell_name))
