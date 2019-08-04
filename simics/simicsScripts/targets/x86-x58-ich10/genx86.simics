@@ -1,6 +1,5 @@
 add-directory "%script%"
 $cpu_class="core-i7-single"
-if not defined rtc_time     {$rtc_time     = "2019-4-25 14:00:00"}
 if not defined OS_TYPE     {$OS_TYPE     = "linux"}
 if not defined port1     {$port1     = 5022}
 if not defined simic_verson       {$simic_verson       = 4}
