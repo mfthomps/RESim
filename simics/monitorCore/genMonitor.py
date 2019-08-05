@@ -422,6 +422,14 @@ class GenMonitor():
                     self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
                            cur_task_rec, pid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
                     if tu_cur_task_rec != 0:
+                        if cur_task_rec != tu_cur_task_rec:
+                            self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
+                            pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
+                            tu_pid = self.mem_utils[cell_name].readWord32(cpu, tu_cur_task_rec + self.param[cell_name].ts_pid)
+                            self.lgr.debug('pid %s  tu_pid %s' % (str(pid), str(tu_pid)))
+                            #SIM_break_simulation('no match')
+                            done = False
+                            continue
                         unistd32 = None
                         if cell_name in self.unistd32:
                             unistd32 = self.unistd32[cell_name]
@@ -2216,9 +2224,6 @@ class GenMonitor():
     def mft(self):
         cur_task_rec = self.task_utils[self.target].getCurTaskRec()
         comm = cur_task_rec + self.param[self.target].ts_comm
-        after_comm = cur_task_rec + self.param[self.target].ts_comm + 16 
-        last_switch = after_comm + 8
-        fs = last_switch + 8
         print('comm 0x%x after_comm 0x%x  last_sw 0x%x fs 0x%x' % (comm, after_comm, last_switch, fs))
         
         #pid = self.mem_utils[self.target].readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
