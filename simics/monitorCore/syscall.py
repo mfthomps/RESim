@@ -755,8 +755,11 @@ class Syscall():
                          s = ss.dottedPort()
                          pat = call_param.match_param
                          self.lgr.debug('socketParse look for match %s %s' % (pat, s))
-                         go = re.search(pat, s, re.M|re.I)
-                         
+                         try:
+                             go = re.search(pat, s, re.M|re.I)
+                         except:
+                             self.lgr.error('invalid expression: %s' % pat)
+                             return
                          if len(call_param.match_param.strip()) == 0 or go: 
                              self.lgr.debug('socketParse found match %s %s' % (pat, s))
                              if call_param.nth is not None:

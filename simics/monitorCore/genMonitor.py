@@ -68,6 +68,7 @@ import cellConfig
 
 import json
 import pickle
+import re
 
 
 class Prec():
@@ -1704,6 +1705,11 @@ class GenMonitor():
     def runToConnect(self, addr, nth=None):
         #addr = '192.168.31.52:20480'
         self.lgr.debug('runToConnect to %s' % addr)
+        try:
+            test = re.search(addr, 'nothing', re.M|re.I)
+        except:
+            self.lgr.error('invalid pattern: %s' % addr)
+            return
         ''' NOTE: socketCallName returns "socket" for x86 '''
         call = self.task_utils[self.target].socketCallName('connect', self.is_compat32)
         call_params = syscall.CallParams('connect', addr, break_simulation=True)        
@@ -1768,6 +1774,11 @@ class GenMonitor():
         #addr = '192.168.31.52:20480'
         if type(addr) is int:
             addr = '.*:%d' % addr
+        try:
+            test = re.search(addr, 'nothing', re.M|re.I)
+        except:
+            self.lgr.error('invalid pattern: %s' % addr)
+            return
         call = self.task_utils[self.target].socketCallName('bind', self.is_compat32)
         call_params = syscall.CallParams('bind', addr, break_simulation=True)        
         self.lgr.debug('runToBind to %s ' % (addr))
