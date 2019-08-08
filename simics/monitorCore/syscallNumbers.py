@@ -16,6 +16,9 @@ class SyscallNumbers():
                     if '__NR_syscall_max' in line:
                         continue
                     nr = parts[1][5:]
+                    ''' check for generated unistd file '''
+                    if nr.startswith('ia32_'):
+                        nr = nr[5:]
                     try:
                         callnum = int(parts[2])
                         hackvals[parts[1]] = callnum
