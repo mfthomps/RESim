@@ -118,6 +118,7 @@ class memUtils():
         if phys_block.address != 0:
             #self.lgr.debug('get unsigned of of phys 0x%x' % phys_block.address)
             return self.getUnsigned(phys_block.address)
+
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
             if not ptable_info.page_exists:
@@ -166,6 +167,7 @@ class memUtils():
         retval = None
         ps = self.v2p(cpu, vaddr)
         if ps is not None:
+            #self.lgr.debug('readString vaddr 0x%x ps is 0x%x' % (vaddr, ps))
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
                 #self.lgr.debug('remain_in_page %d' % remain_in_page)
@@ -372,15 +374,15 @@ class memUtils():
             esp = self.readPtr(cpu, tr_base + 4)
             if esp is None:
                 return None
-            self.lgr.debug('kernel mode, esp is 0x%x' % esp)
+            #self.lgr.debug('getCurrentTaskX86 kernel mode, esp is 0x%x' % esp)
         else:
             esp = self.getRegValue(cpu, 'esp')
-            self.lgr.debug('user mode, esp is 0x%x' % esp)
+            #self.lgr.debug('getCurrentTaskX86 user mode, esp is 0x%x' % esp)
         ptr = esp - 1 & ~(param.stack_size - 1)
-        self.lgr.debug('ptr is 0x%x' % ptr)
+        #self.lgr.debug('getCurrentTaskX86 ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
         if ret_ptr is not None:
-            self.lgr.debug('ret_ptr is 0x%x' % ret_ptr)
+            #self.lgr.debug('getCurrentTaskX86 ret_ptr is 0x%x' % ret_ptr)
             check_val = self.readPtr(cpu, ret_ptr)
             if check_val == 0xffffffff:
                 return None
