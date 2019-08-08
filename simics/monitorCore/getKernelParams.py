@@ -83,6 +83,7 @@ class GetKernelParams():
         self.from_boot = False
         self.try_mode_switches = 0 
         self.init_task = None
+        self.fs_base = None
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -95,8 +96,7 @@ class GetKernelParams():
             start = 0xc0000000
         self.lgr.debug('searchCurrentTaskAddr task for task 0x%x fs: %r start at: 0x%x' % (cur_task, self.param.current_task_fs, start))
         if self.param.current_task_fs:
-            fs_base = self.cpu.ia32_fs_base
-            addr = fs_base + (start-self.param.kernel_base)
+            addr = self.fs_base + (start-self.param.kernel_base)
         else:
             phys_block = self.cpu.iface.processor_info.logical_to_physical(start, Sim_Access_Read)
             addr = phys_block.address
@@ -137,8 +137,7 @@ class GetKernelParams():
         for hit in copy_hits:
 
             if self.param.current_task_fs:
-                fs_base = self.cpu.ia32_fs_base
-                addr = fs_base + (hit-self.param.kernel_base)
+                addr = self.fs_base + (hit-self.param.kernel_base)
             else:
                 phys_block = self.cpu.iface.processor_info.logical_to_physical(hit, Sim_Access_Read)
                 addr = phys_block.address
@@ -315,8 +314,7 @@ class GetKernelParams():
     def findSwapper(self):
         self.trecs = []
         if self.param.current_task_fs:
-            fs_base = self.cpu.ia32_fs_base
-            phys = fs_base + (self.param.current_task-self.param.kernel_base)
+            phys = self.fs_base + (self.param.current_task-self.param.kernel_base)
         else:
             #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
             #phys = phys_block.address
@@ -855,6 +853,7 @@ class GetKernelParams():
         SIM_run_command('c')
        
     def go(self): 
+        self.fs_base = self.cpu.ia32_fs_base
         self.runUntilSwapper()
 
     def compat32(self):

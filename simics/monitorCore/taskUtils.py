@@ -93,17 +93,17 @@ class TaskUtils():
         if self.phys_current_task is None:
             ''' address of current_task symbol, pointer at this address points to the current task record '''
             ''' use physical address because some are relative to FS segment '''
-            #phys_block = cpu.iface.processor_info.logical_to_physical(param.current_task, Sim_Access_Read)
-            phys = self.mem_utils.v2p(cpu, param.current_task)
-            #self.phys_current_task = phys_block.address
+
+            if self.param.current_task_fs:
+                phys = cpu.ia32_fs_base + (self.param.current_task-self.param.kernel_base)
+            else:
+                #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
+                #phys = phys_block.address
+                phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+            self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
-            #if param.current_task_fs:
-            #    cmd = 'logical-to-physical fs:0x%x' % param.current_task
-            #else:
-            #    cmd = 'logical-to-physical 0x%x' % param.current_task
-            #SIM_run_command('pselect cpu-name = %s' % cpu.name)
-            #try:
-            #    self.phys_current_task = SIM_run_command(cmd)
+
             if self.phys_current_task > 0xffffffff:
                 self.lgr.debug('TaskUtils cell %s phys address for 0x%x is too large' % (self.cell_name, param.current_task))
                 self.phys_current_task = 0
@@ -125,7 +125,12 @@ class TaskUtils():
     def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0
+        #self.lgr.debug('taskUtils getCurTaskRec read phys from 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
+        #if cur_task_rec is None:
+        #    self.lgr.debug('FAILED')
+        #else:
+        #    self.lgr.debug('taskUtils curTaskRec got task rec 0x%x' % cur_task_rec)
         return cur_task_rec
 
     def pickleit(self, fname):
@@ -139,6 +144,7 @@ class TaskUtils():
         pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
     def curProc(self):
+        #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
@@ -152,7 +158,7 @@ class TaskUtils():
         else: 
             #task = SIM_read_phys_memory(cpu, current_task, self.mem_utils.WORD_SIZE)
             task = self.getCurTaskRec()
-            self.lgr.debug('taskUtils findSwapper got 0x%x' % task)
+            #self.lgr.debug('taskUtils findSwapper got 0x%x' % task)
             cpu = self.cpu
             #task = self.mem_utils.getCurrentTask(self.param, cpu)
             done = False
@@ -273,6 +279,9 @@ class TaskUtils():
             c = self.read_list_head(cpu, addr, self.param.ts_children_list_head, other_offset=self.param.ts_sibling_list_head)
             #if c.next is not None:
                 #print('read clist head children got 0x%x 0x%x' % (c.next, c.prev))
+            if c is None:
+                self.lgr.error('readTaskStruct got none from read_list_head')
+                return None
             task.children = [c.next, c.prev]
             if task.in_sibling_list:
                 s = self.read_list_head(cpu, addr, self.param.ts_sibling_list_head, head_addr=task.in_sibling_list, head_offset=self.param.ts_children_list_head)
@@ -302,6 +311,8 @@ class TaskUtils():
             seen.add((task_addr, x))
             seen.add((task_addr, False))
             task = self.readTaskStruct(task_addr, cpu)
+            if task is None:
+                break
             if task.pid is None:
                 self.lgr.error('got pid of none for addr 0x%x' % task_addr)
             
