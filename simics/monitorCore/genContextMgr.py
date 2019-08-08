@@ -324,10 +324,18 @@ class GenContextMgr():
             return
         # get the value that will be written into the current thread address
         new_addr = SIM_get_mem_op_value_le(memory)
+
+        '''
+        #DEBUG BLOCK
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
+        comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_task = self.task_utils.getCurTaskRec()
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
-        #self.lgr.debug('changeThread from %d to %d new_addr 0x%x watchlist len is %d' % (prev_pid, pid, new_addr, len(self.watch_rec_list)))
+        prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
+        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d' % (prev_pid, prev_comm, pid, 
+            comm, new_addr, len(self.watch_rec_list)))
+        '''
+
         pid = None
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
