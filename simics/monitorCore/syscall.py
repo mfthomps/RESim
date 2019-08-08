@@ -443,7 +443,7 @@ class Syscall():
                 fname.decode('ascii')
             except:
                 SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
-                return
+                return None, None, None, None, None
         cpu, comm, pid = self.task_utils.curProc() 
         ida_msg = '%s flags: 0x%x  mode: 0x%x  fname_addr 0x%x filename: %s   pid:%d' % (callname, flags, mode, fname_addr, fname, pid)
         #self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
@@ -847,12 +847,20 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
         elif socket_callname == "recvmsg": 
-            ''' never 32 bit '''
-            exit_info.old_fd = frame['param1']
-            exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
-            exit_info.retval_addr = frame['param2']
-            msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'])
-            ida_msg = '%s - %s pid:%d msghdr: 0x%x %s' % (callname, socket_callname, pid, frame['param2'], msghdr.getString())
+            
+            if self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
+                exit_info.old_fd = frame['param1']
+                exit_info.retval_addr = frame['param2']
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'])
+                ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, frame['param2'], msghdr.getString())
+            else:
+                params = frame['param2']
+                exit_info.old_fd = self.mem_utils.readWord32(self.cpu, params)
+                msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
+                exit_info.retval_addr = msg_hdr_ptr
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr)
+                ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+            exit_info.call_params = self.sockwatch.getParam(pid, exit_info.old_fd)
 
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == frame['param1']:
@@ -944,6 +952,8 @@ class Syscall():
         if callname == 'open':        
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None:
+                if exit_info.fname_addr is None:
+                    return
                 ''' filename not yet present in ram, do the two step '''
                 ''' TBD think we are triggering off kernel's own read of the fname, then again someitme it seems corrupted...'''
                 ''' Do not use context manager on superstition that filename could be read in some other task context.'''
@@ -1249,8 +1259,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        #self.lgr.debug('syscallHap cell %s for pid:%s at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r' % (self.cell_name, pid, break_eip, 
-        #    value, callnum, str(syscall_info.callnum), syscall_info.compat32))
+        #self.lgr.debug('syscallHap cell %s for pid:%s at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r' % (self.cell_name, 
+        #    pid, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32))
             
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
