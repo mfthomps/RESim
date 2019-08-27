@@ -379,9 +379,37 @@ class GenMonitor():
                run_cycles = min(run_cycles, new)
         self.lgr.debug('getBootCycle return %d' % run_cycles)
         return run_cycles
-    
+   
+    def snapInit(self):
+            for cell_name in self.cell_config.cell_context:
+                if cell_name not in self.param:
+                    ''' not monitoring this cell, no param file '''
+                    continue
+                if cell_name in self.task_utils:
+                    ''' already got taskUtils for this cell '''
+                    continue
+                cpu = self.cell_config.cpuFromCell(cell_name)
+                ''' run until we get something sane '''
+                self.lgr.debug('snapInit cell %s get current task from mem_utils' % cell_name)
+                cur_task_rec = self.mem_utils[cell_name].getCurrentTask(self.param[cell_name], cpu)
+                pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
+                if cur_task_rec is None or cur_task_rec == 0:
+                    self.lgr.error('snapInit: No current task rec')
+                    return  
+                unistd32 = None
+                if cell_name in self.unistd32:
+                    unistd32 = self.unistd32[cell_name]
+                task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
+                    self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                self.task_utils[cell_name] = task_utils
+                self.lgr.debug('snapInit for cell %s, now call to finishInit' % cell_name)
+                self.finishInit(cell_name)
+ 
     def doInit(self):
         self.lgr.debug('genMonitor doInit')
+        if self.run_from_snap is not None:
+            self.snapInit()
+            return
         #SIM_run_command('pselect cpu-name = %s' % cpu.name)
         #run_cycles = 90000000
         #run_cycles =  9000000
@@ -482,7 +510,7 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, port, pid, self.is_compat32))
 
-            self.context_manager[self.target].setDebugPid(pid, self.target)
+            self.context_manager[self.target].setDebugPid(pid, self.target, comm)
             if cpu.architecture == 'arm':
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, port)
             elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
@@ -1378,7 +1406,7 @@ class GenMonitor():
     def stopTrace(self, cell_name=None, syscall=None):
         if cell_name is None:
             cell_name = self.target
-        self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given' % cell_name)
+        self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall))
         for call in self.call_traces[cell_name]:
             syscall_trace = self.call_traces[cell_name][call]
             if syscall is None or syscall_trace == syscall: 
@@ -1540,7 +1568,22 @@ class GenMonitor():
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
                        call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32)
         self.lgr.debug('debugExitHap compat32: %r syscall is %s' % (self.is_compat32, str(self.exit_group_syscall[self.target])))
-        
+       
+    def noReverse(self):
+        self.noWatchSysEnter()
+        cmd = 'disable-reverse-execution'
+        SIM_run_command(cmd)
+        self.lgr.debug('genMonitor noReverse')
+
+    def allowReverse(self):
+        cmd = 'enable-reverse-execution'
+        SIM_run_command(cmd)
+        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        prec = Prec(cpu, None, pid)
+        if pid is not None:
+            self.rev_to_call[self.target].watchSysenter(prec)
+        self.lgr.debug('genMonitor allowReverse')
+ 
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
             self.lgr.debug('restoreDebugBreaks')
@@ -1686,8 +1729,8 @@ class GenMonitor():
                 return True
         return False
 
-    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False):
-        if self.is_monitor_running.isRunning():
+    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, ignore_running=False):
+        if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
             return
         if cell_name is None:
@@ -1704,7 +1747,7 @@ class GenMonitor():
             self.is_monitor_running.setRunning(True)
             SIM_run_command('c')
 
-    def runToClone(self, nth=None):
+    def runToClone(self, nth=1):
         self.lgr.debug('runToClone to %s' % str(nth))
         call_params = syscall.CallParams('clone', None, break_simulation=True)        
         call_params.nth = nth
@@ -1730,7 +1773,7 @@ class GenMonitor():
     def runToDiddle(self, dfile, cell_name=None, background=False):
         if cell_name is None:
             cell_name = self.target
-        diddle = diddler.Diddler(dfile, self.mem_utils[self.target], cell_name, self.lgr)
+        diddle = diddler.Diddler(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)
         operation = diddle.getOperation()
         call_params = syscall.CallParams(operation, diddle, break_simulation=True)        
         if cell_name is None:
@@ -1764,6 +1807,13 @@ class GenMonitor():
         call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
         call_params = syscall.CallParams('send', substring, break_simulation=True)        
         self.lgr.debug('runToSend to %s' % substring)
+        self.runTo(call, call_params)
+
+    def runToSendPort(self, port):
+        call = self.task_utils[self.target].socketCallName('sendto', self.is_compat32)
+        call_params = syscall.CallParams('sendto', port, break_simulation=True)        
+        call_params.param_flags.append(syscall.DEST_PORT)
+        self.lgr.debug('runToSendPort to port %s' % port)
         self.runTo(call, call_params)
 
     def runToReceive(self, substring):
