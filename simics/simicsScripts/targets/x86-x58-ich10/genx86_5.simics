@@ -7,9 +7,12 @@ decl{
     result eth0 : string
     result eth1 : string
     result eth2 : string
-    result switch0_con : string
-    result switch1_con : string
-    result switch2_con : string
+    result eth3 : string
+#    result switch0_con : string
+#    result switch1_con : string
+#    result switch2_con : string
+#    result switch3_con : string
+#    result vswitch1_con : string
 
 }
 
@@ -48,19 +51,7 @@ connect $system.serconsole1.serial $southbridge.serial[0]
 create-text-console-comp $system.serconsole2
 connect $system.serconsole2.serial $southbridge.serial[1]
 
-if defined use_broadcom{
-   $eth0 = $host_name.mb.nb.bcm5704c.eth0
-   $eth2 = $host_name.mb.nb.bcm5704c2.eth1
-}else{
-   # ignore naming, simics cli fu
-   $eth0 = $motherboard.nb.$eth_dev.eth
-   $eth2 = $motherboard.nb.$eth_dev+2.eth
-   $eth1 = $host_name.mb.sb.eth_slot
-}
-
-$switch0_con = (switch0.get-free-connector)
-$switch1_con = (switch1.get-free-connector)
-$switch2_con = (switch2.get-free-connector)
+$eth0 = $host_name.mb.sb.eth_slot
 
 instantiate-components
 
