@@ -73,8 +73,14 @@ class GetKernelParams():
         self.current_task_phys = None
         self.unistd = comp_dict[self.target]['RESIM_UNISTD']
         self.unistd32 = None
+        self.skip_sysenter = False
         if 'RESIM_UNISTD_32' in comp_dict[self.target]:
             self.unistd32 = comp_dict[self.target]['RESIM_UNISTD_32']
+        if 'SYSENTER' in comp_dict[self.target]:
+            self.lgr.debug('SYSENTER is %s' % comp_dict[self.target]['SYSENTER'])
+            if comp_dict[self.target]['SYSENTER'].lower() == 'no':
+                self.lgr.debug('will skip sysenter')
+                self.skip_sysenter = True
 
         self.current_pid = None
         self.task_rec_mode_hap = None
@@ -511,7 +517,7 @@ class GetKernelParams():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
-            #self.lgr.debug('entryModeChanged pid:%d supervisor eip 0x%x instruct %s' % (pid, eip, instruct[1]))
+            self.lgr.debug('entryModeChanged pid:%d supervisor eip 0x%x instruct %s' % (pid, eip, instruct[1]))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
@@ -649,8 +655,8 @@ class GetKernelParams():
             self.param.sysenter = eip 
             #SIM_run_alone(self.findCompute, None)
             
-        if self.param.sysenter is not None and self.param.sys_entry is not None \
-                 and self.param.sysexit is not None and self.param.iretd is not None:
+        if (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
+                 and (self.param.sysexit is not None or self.skip_sysenter) and self.param.iretd is not None:
             SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
