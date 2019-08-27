@@ -19,6 +19,8 @@ class TargetFS():
              if full_fun is not None:              
                  retval = os.path.join(os.path.dirname(full_fun), base)
                  lgr.debug('getFull found file %s' % retval)
+             else:
+                 retval = self.find(base)
         else:     
             if path.startswith('/'):
                 path = path[1:]
