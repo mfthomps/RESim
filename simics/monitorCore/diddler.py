@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import re
+import syscall
 from simics import *
 
 def nextLine(fh):
@@ -16,6 +17,12 @@ def nextLine(fh):
        retval = line.strip('\n')
    return retval
 
+class DiddleSeek():
+    def __init__(self, delta, pid, fd):
+        self.delta = delta
+        self.pid = pid
+        self.fd = fd
+
 class Diddler():
     class Fiddle():
         def __init__(self, match, was, becomes, cmds=[]):
@@ -23,7 +30,10 @@ class Diddler():
             self.was = was
             self.becomes = becomes        
             self.cmds = cmds        
-    def __init__(self, path, mem_utils, cell_name, lgr):
+
+
+    def __init__(self, top, path, mem_utils, cell_name, lgr):
+        self.top = top
         self.kind = None
         self.fiddles = [] 
         self.mem_utils = mem_utils
@@ -77,6 +87,15 @@ class Diddler():
                        was = nextLine(fh)
                        becomes = nextLine(fh) 
                        self.fiddles.append(self.Fiddle(match, was, becomes))
+               elif self.kind == 'script_replace':
+                   while not done:
+                       match = nextLine(fh) 
+                       if match is None:
+                           done = True
+                           break
+                       was = nextLine(fh)
+                       becomes = nextLine(fh) 
+                       self.fiddles.append(self.Fiddle(match, was, becomes))
                else: 
                    print('Unknown diddler kind: %s' % self.kind)
                    return
@@ -100,7 +119,7 @@ class Diddler():
                     self.lgr.error('diddler subReplace re.search failed on was: %s, str %s' % (fiddle.was, s))
                     return
                 if was is not None:
-                    #self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
+                    self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
                     new_string = re.sub(fiddle.was, fiddle.becomes, s)
                     self.mem_utils.writeString(cpu, addr, new_string)
                 else:
@@ -109,6 +128,51 @@ class Diddler():
                      
                 rm_this = fiddle
                 break
+        return rm_this
+
+    def scriptReplace(self, cpu, s, addr, pid, fd):
+        rm_this = None
+        checkline = None
+        for fiddle in self.fiddles:
+            lines = s.splitlines()
+            for line in lines:
+                #self.lgr.debug('Diddle check line %s' % (line))
+                line = line.strip()
+                if len(line) == 0 or line.startswith('#'):
+                    continue
+                elif line.startswith(fiddle.match):
+                    checkline = line
+                    break
+                else:
+                    return None
+            if checkline is None:
+                continue
+            self.lgr.debug('Diddle checkString  %s to line %s' % (fiddle.match, checkline))
+            try:
+                was = re.search(fiddle.was, checkline, re.M|re.I)
+            except:
+                self.lgr.error('diddler subReplace re.search failed on was: %s, str %s' % (fiddle.was, checkline))
+                return None
+            if was is not None:
+                self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, checkline))
+                new_string = re.sub(fiddle.was, fiddle.becomes, s)
+                self.mem_utils.writeString(cpu, addr, new_string)
+                new_line = re.sub(fiddle.was, fiddle.becomes, checkline)
+                if len(checkline) != len(new_line):
+                    delta = len(checkline) - len(new_line)
+                    diddle_lseek = DiddleSeek(delta, pid, fd)
+                    operation = '_llseek'
+                    call_params = syscall.CallParams(operation, diddle_lseek)        
+                    self.top.runTo(operation, call_params, run=False, ignore_running=True)
+                    self.lgr.debug('Diddle set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
+                else:
+                    self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
+            else:
+                #self.lgr.debug('Diddle found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                pass
+                 
+            rm_this = fiddle
+            break
         return rm_this
 
     def fullReplace(self, cpu, s, addr):
@@ -143,12 +207,17 @@ class Diddler():
                 SIM_run_alone(self.stopAlone, fiddle)
         return rm_this
 
-    def checkString(self, cpu, addr, count):
+    def checkString(self, cpu, addr, count, pid=None, fd=None):
         retval = False
         byte_string, byte_array = self.mem_utils.getBytes(cpu, count, addr)
+        if byte_array is None:
+            self.lgr.debug('Diddle checkstring bytearray None from 0x%x' % addr)
+            return retval
         s = ''.join(map(chr,byte_array))
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
+        elif self.kind == 'script_replace':
+            rm_this = self.scriptReplace(cpu, s, addr, pid, fd)
         elif self.kind == 'full_replace':
             rm_this = self.fullReplace(cpu, s, addr)
         elif self.kind == 'match_cmd':
