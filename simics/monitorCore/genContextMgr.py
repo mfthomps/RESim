@@ -101,6 +101,7 @@ class GenContextMgr():
         self.task_utils = task_utils
         self.mem_utils = task_utils.getMemUtils()
         self.debugging_pid = None
+        self.debugging_comm = None
         self.debugging_cellname = None
         self.debugging_cell = None
         self.cpu = cpu
@@ -326,27 +327,28 @@ class GenContextMgr():
         new_addr = SIM_get_mem_op_value_le(memory)
         prev_task = self.task_utils.getCurTaskRec()
 
-        '''
+        
         #DEBUG BLOCK
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d' % (prev_pid, prev_comm, pid, 
-            comm, new_addr, len(self.watch_rec_list)))
-        '''
-
-        pid = None
+        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d' % (prev_pid, prev_comm, pid, 
+        #    comm, new_addr, len(self.watch_rec_list)))
+       
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
                 We don't have the process rec until it is ready to schedule. '''
-            pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
             if pid in self.pending_watch_pids:
                 self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
                 self.watch_rec_list[new_addr] = pid
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
-          
+        if pid not in self.pid_cache and comm == self.debugging_comm:
+           leader_pid = self.task_utils.getCurrentThreadLeaderPid()
+           if leader_pid in self.pid_cache:
+               self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
+               self.addTask(pid)
 
         if not self.watching_tasks and \
                (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
@@ -355,7 +357,6 @@ class GenContextMgr():
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
                 #self.lgr.debug('resim_context')
-            pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
             #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
@@ -420,6 +421,7 @@ class GenContextMgr():
             if len(self.watch_rec_list) == 0:
                 self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
                 self.debugging_pid = None
+                self.debugging_comm = None
                 self.debugging_cellname = None
                 self.debugging_cell = None
                 self.cpu.current_context = self.default_context
@@ -524,11 +526,12 @@ class GenContextMgr():
     def singleThread(self, single):
         self.single_thread = single
 
-    def setDebugPid(self, debugging_pid, debugging_cellname):
+    def setDebugPid(self, debugging_pid, debugging_cellname, debugging_comm):
         self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
         self.lgr.debug('setDebugPid %d, resim_context' % debugging_pid)
         self.debugging_pid = debugging_pid
+        self.debugging_comm = debugging_comm
         self.debugging_cellname = debugging_cellname
         self.debugging_cell = self.top.getCell()
         if debugging_pid not in self.pid_cache:
