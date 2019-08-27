@@ -68,11 +68,28 @@ def setBitRange(initial, value, start):
     retval = initial | shifted
     return retval
 
-'''
-def getBits( allbits, lsb, msb )
-    mask = ~(0xffffffff << (msb + 1 - lsb)) << lsb 
-    return (allbits & mask) >> lsb 
-'''
+param_map = {}
+param_map['arm'] = {}
+param_map['arm']['param1'] = 'r0'
+param_map['arm']['param2'] = 'r1'
+param_map['arm']['param3'] = 'r2'
+param_map['arm']['param4'] = 'r3'
+param_map['arm']['param5'] = 'r4'
+param_map['arm']['param6'] = 'r5'
+param_map['x86_64'] = {}
+param_map['x86_64']['param1'] = 'rdi'
+param_map['x86_64']['param2'] = 'rsi'
+param_map['x86_64']['param3'] = 'rdx'
+param_map['x86_64']['param4'] = 'r10'
+param_map['x86_64']['param5'] = 'r8'
+param_map['x86_64']['param6'] = 'r9'
+param_map['x86_32'] = {}
+param_map['x86_32']['param1'] = 'ebx'
+param_map['x86_32']['param2'] = 'ecx'
+param_map['x86_32']['param3'] = 'edx'
+param_map['x86_32']['param4'] = 'esi'
+param_map['x86_32']['param5'] = 'edi'
+param_map['x86_32']['param6'] = 'ebb'
 
 class memUtils():
     def __init__(self, word_size, param, lgr, arch='x86-64', cell_name='unknown'):
@@ -286,6 +303,23 @@ class memUtils():
         reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
 
+    def kernelArch(self, cpu):
+        if cpu == 'arm':
+            return 'arm'
+        elif self.WORD_SIZE == 8:
+            return 'x86_64'
+        else:
+            return 'x86_32'
+
+    def setRegValue(self, cpu, reg, value):
+        if reg in self.regs:
+            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+        elif reg in param_map[self.kernelArch(cpu)]:
+            reg_num = cpu.iface.int_register.get_number(param_map[self.kernelArch(cpu)][reg])
+        else:
+            reg_num = cpu.iface.int_register.get_number(reg)
+        reg_value = cpu.iface.int_register.write(reg_num, value)
+
     def getESP(self):
         if self.WORD_SIZE == 4:
             return 'esp'
@@ -450,7 +484,7 @@ class memUtils():
         return retval
 
     def writeString(self, cpu, address, string):
-        self.lgr.debug('writeString 0x%x %s' % (address, string))
+        #self.lgr.debug('writeString 0x%x %s' % (address, string))
 
         lcount = len(string)/4
         carry = len(string) % 4
