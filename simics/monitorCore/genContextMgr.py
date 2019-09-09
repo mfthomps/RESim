@@ -101,6 +101,7 @@ class GenContextMgr():
         self.task_utils = task_utils
         self.mem_utils = task_utils.getMemUtils()
         self.debugging_pid = None
+        self.debugging_pid_saved = None
         self.debugging_comm = None
         self.debugging_cellname = None
         self.debugging_cell = None
@@ -125,6 +126,10 @@ class GenContextMgr():
         self.hap_handle = 0
         self.text_start = None
         self.text_end = None
+
+        ''' experiment with tracking task switches among watched pids '''
+        self.task_switch = {}
+
         obj = SIM_get_object(cell_name)
         self.default_context = obj.cell_context
         context = 'RESim_%s' % cell_name
@@ -142,6 +147,9 @@ class GenContextMgr():
         self.task_rec_bp = {}
         ''' avoid multiple calls to taskRecHap '''
         self.demise_cache = []
+
+        ''' used by pageFaultGen to supress breaking on apparent kills '''
+        self.watching_page_faults = False
 
     def getRealBreak(self, break_handle):
         for hap in self.haps:
@@ -345,7 +353,8 @@ class GenContextMgr():
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
         if pid not in self.pid_cache and comm == self.debugging_comm:
-           leader_pid = self.task_utils.getCurrentThreadLeaderPid()
+           group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
+           leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
            if leader_pid in self.pid_cache:
                self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
                self.addTask(pid)
@@ -385,7 +394,17 @@ class GenContextMgr():
                 #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 self.clearAllBreak()
+                #if pid not in self.task_switch:
+                #    self.task_switch[pid] = []
+                #self.task_switch[pid].append(self.cpu.cycles)
                 SIM_run_alone(self.clearAllHap, False)
+            elif len(self.watch_rec_list) > 0:
+                ''' switching between watched pids '''
+                #if pid not in self.task_switch:
+                #    self.task_switch[pid] = []
+                #self.task_switch[pid].append(self.cpu.cycles)
+                pass
+               
 
     def watchOnlyThis(self):
         ctask = self.task_utils.getCurTaskRec()
@@ -554,7 +573,7 @@ class GenContextMgr():
             ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
             self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
             exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
-            if exit_syscall is not None:
+            if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
@@ -576,7 +595,7 @@ class GenContextMgr():
             value = SIM_get_mem_op_value_le(memory)
             self.lgr.debug('contextManager taskRecHap pid:%d wrote 0x%x to 0x%x watching for demise of %d' % (cur_pid, value, memory.logical_address, pid))
             exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
-            if exit_syscall is not None:
+            if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
@@ -637,3 +656,6 @@ class GenContextMgr():
 
     def getRESimContext(self):
         return self.resim_context
+
+    def watchPageFaults(self, watching):
+        self.watching_page_faults = watching
