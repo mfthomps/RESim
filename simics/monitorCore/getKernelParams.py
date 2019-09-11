@@ -102,6 +102,7 @@ class GetKernelParams():
             start = 0xc0000000
         self.lgr.debug('searchCurrentTaskAddr task for task 0x%x fs: %r start at: 0x%x' % (cur_task, self.param.current_task_fs, start))
         if self.param.current_task_fs:
+            self.lgr.debug('searchCurrentTaskAddr fs_base: 0x%x start: 0x%x kernel_base: 0x%x' % (self.fs_base, start, self.param.kernel_base))
             addr = self.fs_base + (start-self.param.kernel_base)
         else:
             phys_block = self.cpu.iface.processor_info.logical_to_physical(start, Sim_Access_Read)
@@ -257,7 +258,10 @@ class GetKernelParams():
                 self.lgr.debug('isThisSwapper found match 0x%x ' % test_task)
                 return real_parent_offset
             else:
-                self.lgr.debug('task was 0x%x test_task 0x%x test_task1 0x%x' % (task, test_task, test_task1))
+                if test_task is not None and test_task1 is not None:
+                    self.lgr.debug('task was 0x%x test_task 0x%x test_task1 0x%x' % (task, test_task, test_task1))
+                else:
+                    self.lgr.debug('test task was None')
                 real_parent_offset += self.mem_utils.WORD_SIZE
         return None
 
@@ -858,8 +862,15 @@ class GetKernelParams():
         self.lgr.debug('setPageFaultHap set exception and stop haps')
         SIM_run_command('c')
        
-    def go(self): 
+    def go(self, force=False): 
+        cpl = memUtils.getCPL(self.cpu)
+        if cpl != 0:
+            print('not in kernel, please run forward until in kernel')
+            return
         self.fs_base = self.cpu.ia32_fs_base
+        if self.fs_base == 0 and not force:
+            print('fs_base is zero, maybe just entered kernel?  consider running ahead a bit, or use gkp.go(True)')
+            return
         self.runUntilSwapper()
 
     def compat32(self):
