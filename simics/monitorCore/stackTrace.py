@@ -3,10 +3,11 @@ import json
 import os
 class StackTrace():
     class FrameEntry():
-        def __init__(self, ip, fname, instruct):
+        def __init__(self, ip, fname, instruct, sp):
             self.ip = ip
             self.fname = fname
             self.instruct = instruct
+            self.sp = sp
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, lgr):
         if pid == 0:
@@ -98,28 +99,31 @@ class StackTrace():
             retval.append(f.ip)
         return retval
 
-    def printTrace(self):
+    def printTrace(self, verbose=False):
         for frame in self.frames:
             if frame.fname is not None:
                 fname = os.path.basename(frame.fname)
             else:
                 fname = 'unknown'
+            sp_string = ''
+            if verbose:
+                sp_string = ' sp: 0x%x' % frame.sp
             if frame.instruct.startswith('call'):
                 parts = frame.instruct.split()
                 try:
                     faddr = int(parts[1], 16)
                     #print('faddr 0x%x' % faddr)
                 except:
-                    print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
+                    print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
                     continue
                 fun_name = self.ida_funs.getName(faddr)
                 if fun_name is not None:
-                    print('0x%08x %s call %s' % (frame.ip, fname, fun_name))
+                    print('%s 0x%08x %s call %s' % (sp_string, frame.ip, fname, fun_name))
                 else:
                     #print('nothing for 0x%x' % faddr)
-                    print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
+                    print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
             else:
-                print('0x%08x %s %s' % (frame.ip, fname, frame.instruct))
+                print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
 
     def doTrace(self):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
@@ -127,7 +131,7 @@ class StackTrace():
         eip = self.top.getEIP(self.cpu)
         fname = self.soMap.getSOFile(eip)
         #print('0x%08x  %-s' % (eip, fname))
-        frame = self.FrameEntry(eip, fname, '')
+        frame = self.FrameEntry(eip, fname, '', esp)
         self.frames.append(frame)
         done  = False
         count = 0
@@ -225,11 +229,11 @@ class StackTrace():
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
-                        frame = self.FrameEntry(call_ip, 'unknown', instruct)
+                        frame = self.FrameEntry(call_ip, 'unknown', instruct, ptr)
                         self.frames.append(frame)
                     else:
                         #print('0x%08x  %-s' % (call_ip, fname))
-                        frame = self.FrameEntry(call_ip, fname, instruct)
+                        frame = self.FrameEntry(call_ip, fname, instruct, ptr)
                         self.frames.append(frame)
                         call_to_s = instruct.split()[1]
                         call_to = None
