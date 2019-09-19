@@ -608,7 +608,7 @@ class GenContextMgr():
             rec = self.task_utils.getCurTaskRec() 
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
-            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d' % (pid, cur_pid))
+            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return
         cell = self.default_context
         #cell = self.resim_context
