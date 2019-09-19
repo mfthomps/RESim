@@ -403,13 +403,15 @@ class TaskUtils():
         return retval
 
     def getPidsForComm(self, comm_in):
-        comm = os.path.basename(comm_in)
+        comm = os.path.basename(comm_in).strip()
         retval = []
         self.lgr.debug('getPidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            if comm.startswith(ts_list[ts].comm):
+            self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            if comm == ts_list[ts].comm or (len(comm)>self.COMM_SIZE and len(ts_list[ts].comm) == self.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
+                self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
                 if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
                     retval.append(ts_list[ts].pid)
@@ -456,20 +458,21 @@ class TaskUtils():
                 continue
             seen.add((task_addr, x))
             seen.add((task_addr, False))
-            #self.lgr.debug('reading task addr 0x%x' % (task_addr))
+            self.lgr.debug('reading task addr 0x%x' % (task_addr))
             task = self.readTaskStruct(task_addr, cpu)
-            if task.pid is None:
-                self.lgr.error('got pid of none for addr 0x%x' % task_addr)
+            if task is None or task.pid is None:
+                self.lgr.error('got task or pid of none for addr 0x%x' % task_addr)
+                return
 
             if task.next == swapper_addr:
-               #self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
+               self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
                return None
 
-            #self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
-            #     task.pid, task.next, task.thread_group.next, self.param.ts_next))
+            self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
+                 task.pid, task.next, task.thread_group.next, self.param.ts_next))
             if (task.next) == task_rec_addr or task.next == (task_rec_addr+self.param.ts_next):
                 next_addr = task_addr + self.param.ts_next
-                self.lgr.debug('getTaskListPtr return next 0x%x' % next_addr)
+                #self.lgr.debug('getTaskListPtr return next 0x%x' % next_addr)
                 return next_addr
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
