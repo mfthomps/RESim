@@ -93,6 +93,9 @@ class SOMap():
         self.text_start[pid] = start
         self.text_end[pid] = start+size
         self.text_prog[pid] = prog
+        if pid not in self.so_addr_map:
+            self.so_addr_map[pid] = {}
+            self.so_file_map[pid] = {}
 
     def noText(self, prog, pid):
         self.lgr.debug('soMap noText, prog %s pid:%d' % (prog, pid))
