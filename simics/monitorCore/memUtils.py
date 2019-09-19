@@ -28,12 +28,13 @@ import json
 import struct
 from simics import *
 MACHINE_WORD_SIZE = 8
-
+class ValueError(Exception):
+    pass
 def readPhysBytes(cpu, paddr, count):
     try:
         return cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, paddr, count, 0)
     except:
-        raise valueError('failed to read %d bytes from 0x%x' % (count, paddr))
+        raise ValueError('failed to read %d bytes from 0x%x' % (count, paddr))
 
 def getCPL(cpu):
     #print('arch %s' % cpu.architecture)
@@ -138,7 +139,7 @@ class memUtils():
 
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
-            if not ptable_info.page_exists:
+            if v < self.param.kernel_base and not ptable_info.page_exists:
                 self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
                 return None
             #self.lgr.debug('phys addr for 0x%x return 0' % (v))
@@ -450,8 +451,8 @@ class memUtils():
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
-            #except valueError:
-            except:
+            except ValueError:
+            #except:
                 #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
                 print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1)
                 print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
