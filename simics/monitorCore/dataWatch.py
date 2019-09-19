@@ -46,7 +46,17 @@ class DataWatch():
             if val is not None:
                 print('%s  reg: 0x%x  addr:0x%x mval: 0x%08x' % (instruct[1], val, addr, mval))
            
-                
+               
+    def stopWatch(self): 
+        self.lgr.debug('dataWatch stopWatch')
+        for index in range(len(self.start)):
+            if self.start[index] == 0:
+                continue
+            if index in self.read_hap:
+                self.context_manager.genDeleteHap(self.read_hap[index])
+            else:
+                self.lgr.debug('dataWatch stopWatch index %d not in read_hap ' % (index))
+        self.read_hap = []
              
     def readHap(self, index, third, forth, memory):
         #value = SIM_get_mem_op_value_le(memory)
@@ -61,12 +71,7 @@ class DataWatch():
         eip = self.top.getEIP(self.cpu)
         if self.show_cmp:
             self.showCmp(addr)
-
-        for index in range(len(self.start)):
-            if self.start[index] == 0:
-                continue
-            self.context_manager.genDeleteHap(self.read_hap[index])
-        self.read_hap = []
+        self.stopWatch()
 
         SIM_run_alone(self.setStopHap, None)
         if op_type == Sim_Trans_Load:
@@ -112,7 +117,7 @@ class DataWatch():
             stop_action.run()
          
     def setStopHap(self, dumb):
-        f1 = stopFunction.StopFunction(self.top.skipAndMail, [], False)
+        f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(self.cpu)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
