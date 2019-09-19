@@ -136,7 +136,11 @@ def getOperands(instruct):
                 ret1 = 'esi'
             ret2 = 'edi'
         elif len(parts) > 1:
-            ret1 = parts[1]
+            ''' TBD this is half-assed '''
+            if parts[1] == 'dword' and parts[2] == 'ptr':
+                ret1 = parts[3]
+            else:
+                ret1 = parts[1]
     else:
         ret2 = parts[1]
         #parts = parts[0].split(' ')
