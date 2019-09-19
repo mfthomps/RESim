@@ -53,7 +53,8 @@ class GetKernelParams():
         self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS
         if self.cpu.architecture == 'arm':
-            obj = SIM_get_object('board')
+            #obj = SIM_get_object('board')
+            obj = SIM_get_object(self.target)
             self.page_fault = 4
         else:
             obj = SIM_get_object(self.target)
@@ -867,10 +868,11 @@ class GetKernelParams():
         if cpl != 0:
             print('not in kernel, please run forward until in kernel')
             return
-        self.fs_base = self.cpu.ia32_fs_base
-        if self.fs_base == 0 and not force:
-            print('fs_base is zero, maybe just entered kernel?  consider running ahead a bit, or use gkp.go(True)')
-            return
+        if self.cpu.architecture != 'arm':
+            self.fs_base = self.cpu.ia32_fs_base
+            if self.fs_base == 0 and not force:
+                print('fs_base is zero, maybe just entered kernel?  consider running ahead a bit, or use gkp.go(True)')
+                return
         self.runUntilSwapper()
 
     def compat32(self):
