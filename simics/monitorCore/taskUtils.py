@@ -102,7 +102,7 @@ class TaskUtils():
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
                 phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
-                self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+                self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
             self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
 
