@@ -50,6 +50,12 @@ class GetKernelParams():
         self.log_dir = '/tmp'
         self.lgr = resim_utils.getLogger('getKernelParams', self.log_dir)
         self.param = kParams.Kparams(self.cpu, word_size)
+
+
+        ''' try first without reference to fs when finding current_task.  If that fails in 3 searches,
+            try making phys addresses relative to the fs base '''
+        self.param.current_task_fs = False
+
         self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS
         if self.cpu.architecture == 'arm':
@@ -91,6 +97,7 @@ class GetKernelParams():
         self.try_mode_switches = 0 
         self.init_task = None
         self.fs_base = None
+        self.search_count = 0
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -103,13 +110,15 @@ class GetKernelParams():
             start = 0xc0000000
         self.lgr.debug('searchCurrentTaskAddr task for task 0x%x fs: %r start at: 0x%x' % (cur_task, self.param.current_task_fs, start))
         if self.param.current_task_fs:
-            self.lgr.debug('searchCurrentTaskAddr fs_base: 0x%x start: 0x%x kernel_base: 0x%x' % (self.fs_base, start, self.param.kernel_base))
+            ''' physical address relative to fs_base '''
+            self.lgr.debug('searchCurrentTaskAddr orig fs_base: 0x%x current fs_base 0x%x start: 0x%x kernel_base: 0x%x' % (self.fs_base, 
+                   self.cpu.ia32_fs_base, start, self.param.kernel_base))
             addr = self.fs_base + (start-self.param.kernel_base)
         else:
             phys_block = self.cpu.iface.processor_info.logical_to_physical(start, Sim_Access_Read)
             addr = phys_block.address
         #print('cmd is %s' % cmd)
-        self.lgr.debug('start search addr 0x%x' % addr)
+        self.lgr.debug('start search phys addr addr 0x%x' % addr)
         got_count = 0
         offset = 0
         for i in range(14000000):
@@ -124,8 +133,15 @@ class GetKernelParams():
                 self.lgr.error('got None at 0x%x' % addr)
                 return 
             if val == cur_task:
-                vaddr = start+offset
-                self.lgr.debug('got match at addr: 0x%x vaddr: 0x%x' % (addr, vaddr))
+                if self.param.current_task_fs:
+                    #addr = self.fs_base + (vaddr-self.param.kernel_base)
+                    vaddr = addr - self.fs_base + self.param.kernel_base
+                    self.lgr.debug('got match at addr: 0x%x vaddr: 0x%x offset 0x%x orig fs_base 0x%x now 0x%x' % (addr, vaddr, offset, self.fs_base,
+                      self.cpu.ia32_fs_base))
+                else:
+                    vaddr = start+offset
+                    self.lgr.debug('got match at addr: 0x%x vaddr: 0x%x offset 0x%x ' % (addr, vaddr, offset))
+ 
                 self.hits.append(vaddr)
                 got_count += 1
                 #break
@@ -168,11 +184,13 @@ class GetKernelParams():
             self.task_rec_mode_hap = None
 
     def getCurrentTaskPtr(self):
+        ''' Find the current_task address.  Method varies by cpu type '''
         print('Searching for current_task, this may take a moment...')
         self.idle = None
         if self.cpu.architecture == 'arm':
             self.param.current_task_fs = False
         if self.mem_utils.WORD_SIZE == 4:
+            ''' use mode haps and brute force search for values that match the current task value '''
             self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
             self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.currentTaskStopHap, None)
             self.lgr.debug('getCurrentTaskPtr added mode and stop haps')
@@ -197,6 +215,8 @@ class GetKernelParams():
         self.findSwapper()
 
     def taskModeChanged(self, cpu, one, old, new):
+        ''' search kernel memory for the current_task address that seems to match
+            the task address found for the current process '''
         if self.task_rec_mode_hap is None:
             return
         ''' find the current_task record pointer ''' 
@@ -248,7 +268,21 @@ class GetKernelParams():
             SIM_run_alone(self.delTaskModeAlone, None)
         if self.param.current_task is not None:
             self.lgr.debug('getCurrentTaskPtr got current task')
-            SIM_break_simulation('got current task')
+            if self.param.current_task_fs:
+                phys = self.fs_base + (self.param.current_task-self.param.kernel_base)
+                self.lgr.debug('findSwapper use fs_base phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+            else:
+                #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
+                #phys = phys_block.address
+                phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+            self.current_task_phys = phys
+            SIM_break_simulation('got current task 0x%x phys: 0x%x' % (self.param.current_task, phys))
+        else:
+            self.search_count += 1
+            if self.search_count > 3:
+                self.param.current_task_fs = True
+            
 
     def isThisSwapper(self, task):
         real_parent_offset = 0
@@ -324,24 +358,16 @@ class GetKernelParams():
 
     def findSwapper(self):
         self.trecs = []
-        if self.param.current_task_fs:
-            phys = self.fs_base + (self.param.current_task-self.param.kernel_base)
-        else:
-            #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
-            #phys = phys_block.address
-            phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
-            self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
-            
-        self.current_task_phys = phys
         pcell = self.cpu.physical_memory
-        self.task_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, phys, self.mem_utils.WORD_SIZE, 0)
+        self.task_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, self.current_task_phys, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.swapperStopHap, None)
-        self.lgr.debug('findSwapper set break at 0x%x (phys 0x%x) and callback, now continue' % (self.param.current_task, phys))
+        self.lgr.debug('findSwapper set break at 0x%x (phys 0x%x) and callback, now continue' % (self.param.current_task, self.current_task_phys))
         #SIM_run_command('c')
     
     def runUntilSwapper(self):
         ''' run until it appears that the swapper is running.  Will set self.idle, real_parent, siblings '''
+        ''' Will first find the current_task adress if not already set '''
         self.lgr.debug('runUntilSwapper')
         if self.param.current_task is None:
             self.lgr.debug('will get Current Task Ptr, may take a minute')
@@ -864,6 +890,7 @@ class GetKernelParams():
         SIM_run_command('c')
        
     def go(self, force=False): 
+        ''' Initial method for gathering kernel parameters.  Will chain a number of functions, the first being runUntilSwapper '''
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
             print('not in kernel, please run forward until in kernel')
