@@ -248,6 +248,10 @@ class GetKernelParams():
                             self.lgr.debug('getCurrentTaskPtr set current_task_fs to False')
                             self.param.current_task_fs = False
                             self.searchCurrentTaskAddr(ta)
+                        if not self.param.current_task_fs and self.param.current_task is None:
+                            self.search_count += 1
+                            if self.search_count > 3:
+                                self.param.current_task_fs = True
                  
                     else:
                         self.lgr.debug('getCurrentTaskPtr adding trec 0x%x' % ta)
@@ -278,10 +282,6 @@ class GetKernelParams():
                 self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
             self.current_task_phys = phys
             SIM_break_simulation('got current task 0x%x phys: 0x%x' % (self.param.current_task, phys))
-        else:
-            self.search_count += 1
-            if self.search_count > 3:
-                self.param.current_task_fs = True
             
 
     def isThisSwapper(self, task):
