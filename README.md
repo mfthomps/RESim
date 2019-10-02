@@ -17,7 +17,7 @@ based on system events, e.g., change a password file entry when read by the *su*
 Analysis is performed entirely through observation of the simulated target system’s memory and processor state, 
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be *external* because the analysis observation functions have no effect on the state of the simulated system.
 
-Please refer to [the RESim User's Guide](docs/RESim.pdf) for additional information.  A brief demonstration of RESim can be seen here:
+Please refer to [the RESim User's Guide](docs/RESim-UsersGuide.pdf) for additional information.  A brief demonstration of RESim can be seen here:
 (https://nps.box.com/s/rf3n104ualg38pon6b7fm6m6wqk9zz50)
 
 RESim is based on a software vetting and forensic analysis platform created for the DARPA Cyber Grand Challenge.  That repo is here:
