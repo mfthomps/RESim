@@ -23,7 +23,7 @@
 \newpage
 
 \section{Introduction}
-Imagine you would like to analyze the processes running on computers within a system, including the programs they execute and the data they consume and exchange.   And assume you’d like to perform this analysis dynamically, but without ever running your own software on those systems and without ever having a shell on the systems.
+Imagine you would like to analyze the processes running on computers within a network, including the programs they execute and the data they consume and exchange.   And assume you’d like to perform this analysis dynamically, but without ever running your own software on those systems and without ever having a shell on the systems.
 
 RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics\footnote{ Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.} 
 platform's high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.
@@ -38,7 +38,7 @@ A RESim simulation can be paused for inspection, e.g., when a specified process 
 based on system events, e.g., change a password file entry when read by the {\tt su} program (see \ref{diddling}.
 
 Analysis is performed entirely through observation of the simulated target system's memory and processor state, 
-without need for shells, software injection, or kernel symbol tables.   The analysis is said to be \textit{external} because the analysis observation functions have no effect on the state of the simulated system.
+without need for shells, software injection, or kernel symbol tables.   The analysis is said to be \textit{external} because the analysis observation functions have no effect on the state of the simulated system \footnote{See \ref{external} for an example of the implications}.
 
 \section{Analysis artifacts}
 RESim generates system traces of all processes on a computer, starting with system boot, or at a selected checkpoint.  Trace reports include two components: 
@@ -113,13 +113,14 @@ All of the RESim code is available on github at \url{https://github.com/mfthomps
 \section{RESim commands}
 \label{commands}
 \begin{itemize}
+\item {\tt tasks} -- List currently executing process names and their PIDs.
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
 Tracing continues until the stopTrace command is issued.  Also see \ref{postprocessing}
 
 \item {\tt runTo} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
 
-\item {\tt writeConfig} – Uses the Simics write-configuration command to save the simulation state for later loading with read-configuration.  This wrapper also saves process naming information and network configuration commands for reference subsequent to use of the read-configuration function.
+\item {\tt writeConfig} – Uses the Simics write-configuration command to save the simulation state for later loading with read-configuration.  This wrapper also saves process naming information, shared object maps and network configuration commands for reference subsequent to use of the read-configuration function.
 
 \item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  Also see \ref{postprocessing}
 
@@ -186,7 +187,7 @@ a port number will be translated to the pattern {\tt .*:N} where N is the port n
 
 \item {\tt goToDebugBookmark} – jump to the given bookmark, restoring execution state to that which existed when the bookmark was set.
 
-\item {\tt watchData} – run forward until a specified memory area is read.  Intended for use in finding references to data consumed via a read system call.  Data watch parameters are automatically set on a read during a debug session, allowing the analyst to simply invoke the watchData function to find references to the buffer.
+\item {\tt watchData} – run forward until a specified memory area is read.  Intended for use in finding references to data consumed via a read system call.  Data watch parameters are automatically set on a read during a debug session, allowing the analyst to simply invoke the watchData function to find references to the buffer.  List data watches using {\tt showDataWatch}.
 
 \item {\tt showThreads} - List the thread PIDs of the process being debugged.
 
@@ -204,7 +205,7 @@ that the result of the read or write is augmented by a named diddle directive fi
 \item {\tt setTarget} -- Select which simulated component to observe and affect with subsequently issued commands.  Target names are as defined in the
 RESim configuration file used to start the session.
 
-\item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to Appendix B for information about what we mean by SEGV, and how we catch it.
+\item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to \ref{SEGV} for information about what we mean by SEGV, and how we catch it.
 \end{itemize}
 
 \subsection{Postprocessing}
@@ -245,7 +246,8 @@ to this section.
 \item {\tt \$disk2\_size} Size of 2nd disk\_image
 \item {\tt \$disk3\_image} Path to the 3nd disk
 \item {\tt \$disk3\_size} Size of 3nd disk\_image
-\item {\tt \$mac\_address} Enclose in double quotes
+\item {\tt \$mac\_address\_0} Enclose in double quotes
+\item {\tt \$mac\_address\_1} Enclose in double quotes
 \item {\tt \$mac\_address\_2} Enclose in double quotes
 \item {\tt \$mac\_address\_3} Enclose in double quotes
 \item {\tt \$eth\_device} Alternet ethernet device, see \ref{networks} below.
@@ -294,6 +296,8 @@ Simics CLI variables are assigned to each computer ethernet link using the conve
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
 are named using the convention {\tt \$TARGET\_switch0}.  These CLI variable names may be referenced in user-supplied scripts, or in 
 diddling directives of type {\tt match\_cmd}.  See \ref{diddling}.
+
+The {\tt eth1} cli name is assigned to the motherboard ethernet slot. the eth0, eth2 get northbridge slots and eth3 gets a southbridge pci slot.
 
 \subsection{Driver component}
 Each simulation can have an optional driver component -- designated by assigning the string {\tt driver} to the corresponding
@@ -396,6 +400,26 @@ root::
 \end{verbatim}
 \noindent This example might be run when the {\tt su} command is captured in the debugger.
 
+\item {\tt script\_replace <operation>}-- Replace a substring within a script buffer with a given string.
+The intended use is to dynamically modify commands read from script files. Some implementations read 8k
+from the script file, operate on the next no-comment line, and then advance the file pointer and repeat.  This causes your diddle target to be read
+many times.  With a script\_replace diddle, the target match is only considered when it matches the start
+of the first non-comment line of a read buffer. 
+The directives file includes one or more sets of directives.
+The directives use regular expression syntax.
+An example directives file looks like:
+\begin{verbatim}
+script_replace read
+#
+# match
+# was
+# becomes
+modprobe e1000e
+modprobe e1000e
+modprobe e100
+\end{verbatim}
+\noindent This example might be run when the {\tt su} command is captured in the debugger.
+
 \item {\tt full\_replace <operation>} -- Replace the entire write or read buffer with a given string.
 The directives file includes a single directive whose replacement string may include multiple lines.
 \begin{verbatim}
@@ -455,6 +479,30 @@ know that at some point in the coming system execution, some other process Y wil
 indirectly).  Use of the {\tt background=True} option with the {\tt runToDiddle} command will cause RESim to monitor all
 system calls associated with the diddle, even while you focus on the behavior of X. 
 
+\section{Implementation strategy}
+This section discusses our approach to implementing RESim, and some implications for the analyst.
+RESim primarily gathers information about a system through monitoring of events, i.e., observed via callbacks tied to 
+breakpoints.  Two key features of RESim enable its flexibility and performance.  
+\begin{enumerate}
+\item Other than basic task record structures, the implementation has very little knowledge of kernel internals.
+This is a key design goal.  
+\item RESim only monitors events when directed to do so.
+\end{enumerate}
+\noindent Implications of these design properties can be seen by considering example sessions.  Assume you boot a system in RESim and let it run a bit without
+directing any analysis.  The {\tt tasks} directive will list currently running tasks.  However, RESim would have no knowldege of full program names and arguments
+provided to execve.  In this example, directing RESim to debug a currently running PID results in a debug session with limited stack traces because
+it would not have information from the ELF header\footnote{Unless used with the IDA client}  or shared object map information.  It would not have
+information about open files.
+That information would be collected if the {\tt traceAll} directive were used, or, for a single program, the {\tt debugProc} directive were used prior to the
+process start.
+
+RESim maintains information it has gathered, and does so across debug sessions and across checkpoints written via {\tt writeConfig}.  For example, if you
+use {\tt debugProc} to isolate a program, and then stop debugging that program and then return to it, the shared object information is maintained.
+
+Other than IDA analysis, we do not maintain state across different sessions (i.e., sessions not bridged by a {\tt writeConfig} and [\tt RUN\_FROM\_SNAP snapshot directive.
+Shared object maps vary by alsr.
+
+
 \pagebreak
 \appendix
 \section{Analysis on a custom stripped kernel}
@@ -470,7 +518,7 @@ Once the address containing the pointer to the current task record address is lo
 find the remaining parameters.
 
 \section{Detecting SEGV on a stripped Linux Kernel}
-
+\label{SEGV}
 This note summarizes a strategy for catching SEGV exceptions using Simics while monitoring applications on a stripped kernel, i.e., where no reliable symbol table exists and {\tt /proc/kallsyms} has not been read.  In other words, this strategy does not rely on detecting execution of selected kernel code, e.g., signal handling.
 
 Simics can be trivially programmed to catch and report processor exceptions, e.g., SIGILL.  However, the hardware SEGV exception does not typically occur in the Linux execution environment.  Rather, a page fault initiates a sequence in which the kernel concludes that the task does not have the referenced memory address allocated, and thus terminates the task with a SEGV exception.
@@ -498,6 +546,7 @@ While tracing system calls of a process, invocations of "readtimeofday" are trac
 RESim includes an optional function to ensure that the number of breakpoints does not exceed 4 (the quantity of hardware breakpoints supported by x86).  If more than 4 breakpoints are found the analyst can guide the removal of breakpoints. RESim will automatically execute the loop a large number of times in order to identify comparisons that may be converging.  And the user is informed of those to aid the reduction of the quantity of breakpoints.  (Note that in the context of this issue, there are less than or equal to 4 breakpoints and more than 4.  There is probably a lot more than 4 as well, but we've not yet quantified its effects.)
 
 \section{Breakpoints can be complicated: Real and virtual addresses}
+\label{external}
 Use of a full system simulator enables \textit{external} dynamic analysis of the system.  The analysis is said to be
 “external” because the analysis mechanism’s implementation, e.g., the setting of breakpoints,  does not 
 share processor state with the target.
@@ -591,7 +640,7 @@ These examples assume you have run a full process trace or a {\tt trace\_all} an
 per section \ref{postprocessing}.  
 
 \subsubsection{What FD is this?}
-You have created a specific stimulus and would like to understand the resulting behavior of a specific process
+You have created a input stimulus and would like to understand the resulting behavior of a specific process
 that runs a long time as a service.
 Running a full system trace up to the stimulus as a means of getting context may not be practical.  So you start
 a {\tt traceAll} at some point prior to the external stimulus.  You then see socket activity on a specific FD.
@@ -661,6 +710,27 @@ The launchRESim.py will boot the driver component and will not begin boot of oth
 \section{ToDo}
 Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
 process whose record is watched is killed.  Need to also watch "prev" on the subject process?
+
+Convert traces to csv and explore data presentation strategies for navigating processes and IPC.
+
+Feature to flexibly identify user-space libraries to be traced.
+
+Test Simics 7 changes to ensure they work on older Simics; ifdef if necessary.
+
+Enhance the {\tt dataWatch} function to detect mmove memcpy, etc., to expand watch to new buffers.
+And detect generic C++ string allocator, and expand watch.
+
+\subsection{Missed threads when debugging}
+When a process is identified for debugging, e.g., via debugPidGroup, RESim attempts to include actions by all threads in the thread group.  It uses the
+TrackThreads class to catch clones of the process.  Also, the genContextManager watches for scheduling of unknown pids having the comm of the debugging
+pid.  We can perhaps remove the tracking of clones from TrackThreads?
+
+\subsection{I/O via threads}
+Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
+lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
+runToSyscall until that pid is created.
+
+
 \end{document}
 
 
