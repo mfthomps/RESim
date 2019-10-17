@@ -102,6 +102,13 @@ class SOMap():
         self.text_prog[pid] = prog
         self.text_start[pid] = None
         self.text_end[pid] = None
+
+    def setContext(self, pid_in):
+        pid = self.getThreadPid(pid_in, quiet=True)
+        if pid in self.text_start:
+            self.context_manager.recordText(self.text_start[pid], self.text_end[pid])
+        else:
+            self.lgr.error('soMap setContext, no context for pid %d' % pid)
        
     def addSO(self, pid_in, fpath, addr, count):
         pid = self.getThreadPid(pid_in, quiet=True)
