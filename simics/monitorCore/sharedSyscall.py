@@ -47,6 +47,11 @@ class SharedSyscall():
         if pid in self.exit_info:
             if name in self.exit_info[pid]:
                 return self.exit_info[pid][name].callnum
+            elif len(self.exit_info[pid]) > 0:
+                existing = next(iter(self.exit_info[pid]))
+                self.lgr.debug('sharedSyscall getPendingCall, no call for %s, returning for %s' % (name, existing))
+                return self.exit_info[pid][existing].callnum
+          
         return None
 
     def stopTrace(self):
@@ -89,6 +94,7 @@ class SharedSyscall():
         if pid not in self.exit_info:
             self.exit_info[pid] = {}
         self.exit_info[pid][name] = exit_info
+        self.lgr.debug('sharedSyscall addExitHap name %s' % name)
         if traceProcs is not None:
             self.trace_procs.append(pid)
         self.exit_names[pid] = name
@@ -206,8 +212,8 @@ class SharedSyscall():
         elif socket_callname == "accept":
             new_fd = eax
             if new_fd < 0:
-                return 
-            if exit_info.sock_struct.addr != 0:
+                trace_msg = ('\terror return from socketcall ACCEPT pid:%d, error: %d\n' % (pid, eax))
+            elif exit_info.sock_struct.addr != 0:
                 ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils, fd=new_fd)
                 if ss.sa_family == 1:
                     if pid in self.trace_procs:
@@ -241,7 +247,8 @@ class SharedSyscall():
                     s = ''.join(map(chr,byte_array))
                 else:
                     s = '<< NOT MAPPED >>'
-                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d\n%s\n' % (socket_callname, pid, exit_info.old_fd, eax, s))
+                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d from 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, 
+                    eax, exit_info.retval_addr, s))
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
 
@@ -268,13 +275,17 @@ class SharedSyscall():
                     src_ss = net.SockStruct(self.cpu, exit_info.fname_addr, self.mem_utils, fd=-1)
                     src = 'from: %s' % src_ss.getString()
 
-                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d into 0x%x %s\n%s\n' % (socket_callname, pid, 
-                     exit_info.old_fd, eax, exit_info.retval_addr, src, s))
+                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, pid, 
+                     exit_info.old_fd, exit_info.sock_struct.length, eax, exit_info.retval_addr, src, s))
+                my_syscall = exit_info.syscall_instance
+                if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                    ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length)
+                    if my_syscall.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False)
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d into 0x%x\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr))
-            if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None:
-                ''' in case we want to break on a read of this data '''
-                self.dataWatch.setRange(exit_info.retval_addr, eax)
 
         elif socket_callname == "recvmsg": 
             self.lgr.debug('doSockets recvmsg')
@@ -298,8 +309,8 @@ class SharedSyscall():
                 trace_msg = trace_msg+'\t'+s+'\n'
                 if exit_info.call_params is not None:
                     if exit_info.call_params.break_simulation and self.dataWatch is not None:
-                        ''' in case we want to break on a read of this data '''
-                        self.dataWatch.setRange(msg_iov[0].base, eax)
+                        ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
+                        self.dataWatch.setRange(msg_iov[0].base, exit_info.sock_struct.length)
                         self.lgr.debug('recvmsg set dataWatch')
                     if type(exit_info.call_params.match_param) is str:
                         self.lgr.debug('sharedSyscall recvmsg check string %s against %s' % (s, exit_info.call_params.match_param))
@@ -453,11 +464,11 @@ class SharedSyscall():
                 exit_info.fname = 'unknown'
             trace_msg = ('\treturn from mkdir pid:%d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 
-        elif callname == 'open':
+        elif callname == 'open' or callname == 'openat':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
             if exit_info.fname is None:
                 self.lgr.error('fname is None? in exit from open pid %d fname addr was 0x%x' % (pid, exit_info.fname_addr))
-                ptable_info = pageUtils.findPageTableIA32E(self.cpu, exit_info.fname_addr, self.lgr)
+                #ptable_info = pageUtils.findPageTableIA32E(self.cpu, exit_info.fname_addr, self.lgr)
                 SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
             trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, eax, 
@@ -506,8 +517,9 @@ class SharedSyscall():
                               eax, exit_info.retval_addr, s))
                 if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None \
                    and type(exit_info.call_params.match_param) is int:
-                    ''' in case we want to break on a read of this data '''
-                    self.dataWatch.setRange(exit_info.retval_addr, eax)
+                    ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
+                    self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read')
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.count)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
                     if eax < 16000:
                         diddler = exit_info.call_params.match_param
@@ -530,10 +542,10 @@ class SharedSyscall():
 
         elif callname == 'write':
             if eax >= 0 and exit_info.retval_addr is not None:
-                if eax < 1024:
+                    max_len = min(eax, 1024)
                     byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                     if byte_array is not None:
-                        s = ''.join(map(chr,byte_array))
+                        s = ''.join(map(chr,byte_array[:max_len]))
                     else:
                         s = '<<NOT MAPPED>>'
                     #trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
@@ -542,7 +554,6 @@ class SharedSyscall():
                         #self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
-                        s = ''.join(map(chr,byte_array))
                         self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
                         if exit_info.call_params.match_param not in s:
                             ''' no match, set call_param to none '''
@@ -553,9 +564,6 @@ class SharedSyscall():
                         self.lgr.debug('type of param %s' % (type(exit_info.call_params.match_param)))
                     if self.all_write:
                         self.allWrite.write(comm, pid, exit_info.old_fd, s)
-                else:
-                    trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n' % (pid, exit_info.old_fd, eax))
-                    exit_info.call_params = None
             else:
                 exit_info.call_params = None
 

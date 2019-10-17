@@ -141,6 +141,8 @@ class GenMonitor():
 
         self.is_compat32 = False
 
+        self.relocate_funs = {}
+
     def genInit(self, comp_dict):
         '''
         remove all previous breakpoints.  
@@ -394,7 +396,7 @@ class GenMonitor():
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.lgr)
+                  self.mem_utils[cell_name], self.param[cell_name], self.lgr)
             self.traceFiles[cell_name] = traceFiles.TraceFiles(self.traceProcs[cell_name], self.lgr)
             self.sharedSyscall[cell_name] = sharedSyscall.SharedSyscall(self, cpu, cell, cell_name, self.param[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -592,6 +594,7 @@ class GenMonitor():
                 full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
                 self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
                 self.getIDAFuns(full_path)
+                self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
         else:
             ''' already debugging as current process '''
             pass
@@ -834,6 +837,7 @@ class GenMonitor():
 
     def debugPidList(self, pid_list, debug_function):
         #self.stopTrace()
+        self.soMap[self.target].setContext(pid_list[0])
         self.lgr.debug('debugPidList cell %s' % self.target)
         f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
@@ -1155,6 +1159,7 @@ class GenMonitor():
         return INSTANCE
 
     def revToModReg(self, reg):
+        reg = reg.lower()
         self.lgr.debug('revToModReg for reg %s' % reg)
         self.removeDebugBreaks()
         self.rev_to_call[self.target].doRevToModReg(reg)
@@ -1296,7 +1301,7 @@ class GenMonitor():
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite for 0x%x num bytes %d' % (addr, num_bytes))
             cell = self.cell_config.cell_context[self.target]
             self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                self.context_manager[self.target], self.param[self.target], self.bookmarks, self.lgr, rev_to_call, num_bytes) 
+                self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, num_bytes) 
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -1324,6 +1329,7 @@ class GenMonitor():
 
     def revTaintReg(self, reg):
         ''' back track the value in a given register '''
+        reg = reg.lower()
         self.lgr.debug('revTaintReg for %s' % reg)
         if self.reverseEnabled():
             self.removeDebugBreaks()
@@ -1441,7 +1447,7 @@ class GenMonitor():
 
     def traceProcesses(self, new_log=True):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        call_list = ['vfork','fork', 'clone','execve','open','pipe','pipe2','close','dup','dup2','socketcall', 
+        call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
                      'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday']
         if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
             call_list.remove('socketcall')
@@ -1910,8 +1916,8 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params)
 
-    def runToIO(self, fd):
-        call_params = syscall.CallParams(None, fd, break_simulation=True)        
+    def runToIO(self, fd, linger=False, break_simulation=True):
+        call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToIO on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1928,7 +1934,7 @@ class GenMonitor():
 
         the_syscall = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params], targetFS=self.targetFS[self.target])
+                               calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         # TBD provide function to override
@@ -2038,14 +2044,14 @@ class GenMonitor():
 
     def stackTrace(self, verbose=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.lgr)
+        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self):
         pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.lgr)
+        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
         return st
 
     def getStackTrace(self):
@@ -2054,7 +2060,7 @@ class GenMonitor():
         pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.lgr)
+        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], self.task_utils[self.target], self.stack_base[self.target], self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
         j = st.getJson() 
         self.lgr.debug(j)
         #print j
@@ -2095,7 +2101,7 @@ class GenMonitor():
 
     def stopDataWatch(self):
         self.lgr.debug('genMonitor stopDataWatch')
-        self.dataWatch[self.target].stopWatch()
+        self.dataWatch[self.target].stopWatch(break_simulation=True)
 
     def showDataWatch(self):
         self.dataWatch[self.target].showWatch()
@@ -2344,6 +2350,21 @@ class GenMonitor():
         fname = self.mem_utils[self.target].readString(cpu, addr, 256)
         print fname 
 
+    def trackIO(self, fd):
+        self.runToIO(fd, linger=True, break_simulation=False)
+
+    def stopTrackIO(self):
+        self.stopTrace()
+        self.stopDataWatch()
+
+    def getWatchMarks(self):
+        watch_marks = self.dataWatch[self.target].getWatchMarks()
+        jmarks = json.dumps(watch_marks)
+        print jmarks
+
+    def goToDataMark(self, index):
+        self.dataWatch[self.target].goToMark(index)
+        
     def mft(self):
         cur_task_rec = self.task_utils[self.target].getCurTaskRec()
         comm = cur_task_rec + self.param[self.target].ts_comm
