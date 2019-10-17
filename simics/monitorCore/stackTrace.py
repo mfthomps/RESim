@@ -9,9 +9,9 @@ class StackTrace():
             self.instruct = instruct
             self.sp = sp
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, lgr):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr):
         if pid == 0:
-            self.lgr.error('stackTrace asked to trace pid 0?')
+            lgr.error('stackTrace asked to trace pid 0?')
             return
         self.top = top
         self.cpu = cpu
@@ -24,12 +24,13 @@ class StackTrace():
         self.task_utils = task_utils
         self.stack_base = stack_base
         self.ida_funs = ida_funs
+        self.relocate_funs = relocate_funs
         if cpu.architecture == 'arm':
-            self.callnm = 'bl'
-            self.jmpnm = 'bx'
+            self.callmn = 'bl'
+            self.jmpmn = 'bx'
         else:
-            self.callnm = 'call'
-            self.jmpnm = 'jmp'
+            self.callmn = 'call'
+            self.jmpmn = 'jmp'
 
         self.doTrace()
 
@@ -38,7 +39,7 @@ class StackTrace():
         if self.cpu.architecture == 'arm':
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            if instruct[1].startswith(self.callnm):
+            if instruct[1].startswith(self.callmn):
                 parts = instruct[1].split()
                 if len(parts) == 2:
                     try:
@@ -57,7 +58,7 @@ class StackTrace():
             while retval is None and eip < return_to:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 #self.lgr.debug('stackTrace followCall instruct %s' % instruct[1])
-                if instruct[1].startswith(self.callnm):
+                if instruct[1].startswith(self.callmn):
                     parts = instruct[1].split()
                     if len(parts) == 2:
                         try:
@@ -108,7 +109,7 @@ class StackTrace():
             sp_string = ''
             if verbose:
                 sp_string = ' sp: 0x%x' % frame.sp
-            if frame.instruct.startswith('call'):
+            if frame.instruct.startswith(self.callmn):
                 parts = frame.instruct.split()
                 try:
                     faddr = int(parts[1], 16)
@@ -215,7 +216,7 @@ class StackTrace():
                                 #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                         else:
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
-                            if tmp_instruct.startswith(self.jmpnm):
+                            if tmp_instruct.startswith(self.jmpmn):
                                 skip_this = True
                                 #self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
                             else:
@@ -225,6 +226,17 @@ class StackTrace():
                 if call_ip is not None and not skip_this:
                     skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
+                    
+                    if instruct.startswith(self.callmn):
+                        parts = instruct.split()
+                        if len(parts) == 2:
+                            try:
+                                addr = int(parts[1], 16)
+                                if addr in self.relocate_funs:
+                                    instruct = '%s   %s' % (self.callmn, self.relocate_funs[addr])
+                            except ValueError:
+                                pass
+                                
                     #self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
@@ -274,3 +286,24 @@ class StackTrace():
 
     def countFrames(self):
         return len(self.frames)
+
+    def memcpy(self):
+        retval = None
+        frame = self.frames[1]
+        self.lgr.debug('memcpy frame instruct is %s' % frame.instruct)
+        if frame.instruct is not None:
+            parts = frame.instruct.split()
+            if len(parts) == 2:
+                fun = parts[1].split('@')[0]
+                if fun == 'memcpy' or fun == 'memmove':
+                    self.lgr.debug('StackFrame memcpy, is %s, sp is 0x%x' % (fun, frame.sp))
+                    retval = frame.sp
+                    #if fun.strip() == 'memmove':
+                    #    SIM_break_simulation('memmove')       
+                #elif fun.strip() == 'xmlStrcmp':
+                #    SIM_break_simulation('xml')       
+                else:
+                    self.lgr.debug('no soap, fun is <%s>' % fun)
+        return retval
+
+

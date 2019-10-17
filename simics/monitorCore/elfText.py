@@ -53,6 +53,21 @@ def getText(path, lgr):
         lgr.debug('elfText getText not elf at %s' % path)
     return retval
 
+def getRelocate(path, lgr):
+    cmd = 'readelf -r %s' % path
+    proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = proc1.communicate()
+    retval = {}
+    for line in output[0].splitlines():
+        parts = line.split()
+        if len(parts) == 5:
+            try:
+                addr = int(parts[3], 16)
+            except:
+                continue
+            retval[addr] = parts[4]
+    return retval
+
 def getTextNOTUSED(path, lgr):
     if not os.path.isfile(path):
         return None
