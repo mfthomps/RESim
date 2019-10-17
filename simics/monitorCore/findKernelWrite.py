@@ -27,6 +27,7 @@ import simics
 from simics import *
 import memUtils
 import decode
+import decodeArm
 import procInfo
 import time
 '''
@@ -34,7 +35,7 @@ import time
     If the memory is written by user space, stop there.
 '''
 class findKernelWrite():
-    def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, bookmarks, lgr, rev_to_call=None, num_bytes = 1):
+    def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -42,6 +43,7 @@ class findKernelWrite():
         self.top = top
         self.param = param
         self.context_manager = context_manager
+        self.dataWatch = dataWatch
         self.cpu = cpu
         self.start_cycle = cpu.cycles
         self.found_kernel_write = False
@@ -56,8 +58,14 @@ class findKernelWrite():
         self.kernel_exit_break1 = None
         self.kernel_exit_break2 = None
         self.exit_hap = None
+        self.exit_hap2 = None
         self.stop_exit_hap = None
         self.cell = cell
+        if cpu.architecture == 'arm':
+            self.decode = decodeArm
+            self.lgr.debug('findKernelWrite using arm decoder')
+        else:
+            self.decode = decode
         #if top.isProtectedMemory(addr):
         #    self.lgr.debug('findKernelWrite refuses to find who wrote to magic page')
         #    self.context_manager.setIdaMessage('findKernelWrite refuses to find who wrote to magic page')
@@ -178,9 +186,16 @@ class findKernelWrite():
             ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
             bm = None
         else:
-            ida_message = 'Kernel wrote 0x%x to address: 0x%x' % (value, self.addr)
+            data_str = ''
+            if self.dataWatch is not None:
+                data_watch = self.dataWatch.findRange(self.addr)
+                if data_watch is not None:
+                    offset = self.addr - data_watch
+                    data_str = 'Offset %d from start of buffer at 0x%x' % (offset, data_watch)
+                   
+            ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
             self.lgr.debug('set ida msg to %s' % ida_message)
-            bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
+            bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
         if bm is not None:
             self.bookmarks.setDebugBookmark(bm)
         self.context_manager.setIdaMessage(ida_message)
@@ -202,13 +217,17 @@ class findKernelWrite():
         self.lgr.debug('findKernelWrite exitAlone cycles: 0x%x' % cycles)
         self.stop_exit_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 		    self.stopExit, cycles)
-        self.context_manager.genDeleteHap(self.exit_hap)
-        self.exit_hap = None
+        if self.exit_hap is not None:
+            self.context_manager.genDeleteHap(self.exit_hap)
+            self.exit_hap = None
+        if self.exit_hap2 is not None:
+            self.context_manager.genDeleteHap(self.exit_hap2)
+            self.exit_hap2 = None
         SIM_break_simulation('exitAlone')
    
     def exitHap(self, exit_info, third, forth, memory):
         ''' we hit one of the sysexit breakpoints '''
-        if self.exit_hap is None:
+        if self.exit_hap is None and self.exit_hap2 is None:
             return
         target_cycles = self.cpu.cycles + 1
         self.lgr.debug('findKernelWrite exitHap target cycles set to 0x%x' % target_cycles)
@@ -246,13 +265,23 @@ class findKernelWrite():
                 self.lgr.debug('deleting breakpoint %d' % self.kernel_write_break)
                 SIM_delete_breakpoint(self.kernel_write_break)
                 self.kernel_write_break = None
-
-            self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
-                                                        Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
-            self.kernel_exit_break2 = self.context_manager.genBreakpoint(self.cell, 
-                                                        Sim_Break_Linear, Sim_Access_Execute, self.param.iretd, 1, 0)
-            self.exit_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.exitHap, 
-                                                           None, self.kernel_exit_break1, self.kernel_exit_break2, 'findKernelWrite exits')
+            self.lgr.debug('thinkWeWrote, set breaks on exit to user')
+            if self.cpu.architecture == 'arm':
+                self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
+                                                        Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
+                self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
+                                                           None, self.kernel_exit_break1, 'findKernelWrite armexit')
+            else:
+                if self.param.sysexit is not None:
+                    self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
+                                                            Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+                    self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
+                                                           None, self.kernel_exit_break1, 'findKernelWrite sysexit')
+                if self.param.iretd is not None:
+                    self.kernel_exit_break2 = self.context_manager.genBreakpoint(self.cell, 
+                                                            Sim_Break_Linear, Sim_Access_Execute, self.param.iretd, 1, 0)
+                    self.exit_hap2 = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
+                                                           None, self.kernel_exit_break2, 'findKernelWrite iretd')
             self.cleanup()
             SIM_run_alone(SIM_run_command, 'continue')
 
@@ -301,6 +330,7 @@ class findKernelWrite():
                 self.lgr.debug( 'thinkWeWrote eip is %x in user space,  stop here and reverse 2  : may break if page fault?' % eip)
                 self.top.skipAndMail(cycles=2)
             else:
+                self.lgr.debug('thinkWeWrote, call backOneAlone')
                 SIM_run_alone(self.backOneAlone, None)
             #self.top.skipAndMail()
             #previous = SIM_cycle_count(my_args.cpu) - 1
@@ -334,37 +364,37 @@ class findKernelWrite():
             self.forward_break = None
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        mn = decode.getMn(instruct[1])
-        self.lgr.debug('stopToCheckWriteCallback BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
+        mn = self.decode.getMn(instruct[1])
+        self.lgr.debug('backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
         bm = 'backtrack eip:0x%x inst:"%s"' % (eip, instruct[1])
         self.bookmarks.setDebugBookmark(bm)
         self.lgr.debug('BT bookmark: %s' % bm)
-        if decode.modifiesOp0(mn):
-            self.lgr.debug('stopToCheckWriteCallback get operands from %s' % instruct[1])
-            op1, op0 = decode.getOperands(instruct[1])
-            actual_addr = decode.getAddressFromOperand(self.cpu, op0, self.lgr)
+        if self.decode.modifiesOp0(mn):
+            self.lgr.debug('backOneAlone get operands from %s' % instruct[1])
+            op1, op0 = self.decode.getOperands(instruct[1])
+            actual_addr = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
             if actual_addr is None:
                 self.lgr.error('failed to get op0 address from %s' % instruct[1])
                 return
             offset = self.addr - actual_addr
             self.lgr.debug('stopToCheckWriteCallback cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
                  op0, op1, actual_addr, self.addr, offset))
-            if decode.isIndirect(op1):
+            if self.decode.isIndirect(op1):
                 reg_num = self.cpu.iface.int_register.get_number(op1)
                 address = self.cpu.iface.int_register.read(reg_num)
                 new_address = address+offset
                 #if not self.top.isProtectedMemory(new_address):
                 if not self.top.isProtectedMemory(new_address) and not '[' in op0:
-                    self.lgr.debug('stopToCheckWriteCallback, %s is indirect, check for write to 0x%x' % (op1, new_address))
+                    self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
                     self.top.stopAtKernelWrite(new_address, self.rev_to_call)
                 else:
-                    self.lgr.debug('stopToCheckWriteCallback is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
+                    self.lgr.debug('backOneAlone is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
                     self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
  
-            elif decode.isReg(op1):
+            elif self.decode.isReg(op1):
                 reg_num = self.cpu.iface.int_register.get_number(op1)
                 value = self.cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('stopToCheckWriteCallback %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                self.lgr.debug('backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
                 self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
             else:
                 value = None
@@ -374,20 +404,35 @@ class findKernelWrite():
                    pass
                 if value is not None:
                     if self.top.isProtectedMemory(value):
-                        self.lgr.debug('stopToCheckWriteCallback, found protected memory %x ' % value)
+                        self.lgr.debug('backOneAlone, found protected memory %x ' % value)
                         SIM_run_alone(self.cleanup, False)
                         self.top.skipAndMail()
                     else:
                         ''' stumped, constant loaded into memory '''
-                        self.lgr.debug('stopToCheckWriteCallback, found constant %x, stumped' % value)
+                        self.lgr.debug('backOneAlone, found constant %x, stumped' % value)
                         SIM_run_alone(self.cleanup, False)
                         self.top.skipAndMail()
-                     
-                   
         elif mn == 'push':
-            op1, op0 = decode.getOperands(instruct[1])
-            self.lgr.debug('stopToCheckWriteCallback is push reg %s, find mod', op0)
-            self.rev_to_call.doRevToModReg(op0, taint=True, value=self.value, num_bytes = self.num_bytes)
+            op1, op0 = self.decode.getOperands(instruct[1])
+            self.lgr.debug('backOneAlone push op0 is %s' % op0)
+            if self.decode.isReg(op0): 
+                self.lgr.debug('backOneAlone is push reg %s, find mod', op0)
+                self.rev_to_call.doRevToModReg(op0, taint=True, value=self.value, num_bytes = self.num_bytes)
+            else:
+                new_address = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
+                self.lgr.debug('backOneAlone is push addr 0x%x', new_address)
+                self.top.stopAtKernelWrite(new_address, self.rev_to_call)
+
+        elif self.cpu.architecture == 'arm' and mn.startswith('stm'):
+            reg = self.decode.armSTM(self.cpu, instruct[1], self.addr, self.lgr)
+            if reg is not None:
+                self.lgr.debug('backOneAlone is stm... reg %s, find mod', reg)
+                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes)
+        elif self.cpu.architecture == 'arm' and mn.startswith('str'):
+            reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
+            if reg is not None:
+                self.lgr.debug('backOneAlone is str... reg %s, find mod', reg)
+                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes)
 
         else:
             self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))
