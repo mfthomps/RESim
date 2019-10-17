@@ -1,6 +1,6 @@
 from simics import *
 modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc']
-reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r6', 'r6',' r7', 'r8', 'r9', 'r10', 'r11', 'r12']
+reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6',' r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 def modifiesOp0(mn):
     for mop in modsOp0:
         if mn.startswith(mop):
@@ -25,21 +25,30 @@ def isIndirect(reg):
     return False    
 
 def regIsPart(op, reg):
-    return op == reg
+    return op.lower() == reg.lower()
 
 def isByteReg(reg):
     return False
 
 def getRegValue(cpu, reg):
-    reg_num = cpu.iface.int_register.get_number(reg)
+    try:
+       reg_num = cpu.iface.int_register.get_number(reg)
+    except:
+       print('decodeArm getRegvalue failed reg <%s> cpu:%s' % (reg, str(cpu)))
+       return None
     reg_value = cpu.iface.int_register.read(reg_num)
     return reg_value
 
-def getValue(cpu, item):
+def getValue(cpu, item, lgr=None):
     value = None
+    if lgr is not None:
+        lgr.debug('getValue for <%s>' % item)
     if isReg(item):
-        value = getRegValue(cpu, value)
+        value = getRegValue(cpu, item)
+        if lgr is not None:
+            lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):
+        lgr.debug('getValue NOT A REG <%s>' % item)
         if item.startswith('#0x'):
             try:
                 value = int(item[3:], 16)
@@ -50,7 +59,9 @@ def getValue(cpu, item):
                 value = int(item[1:])
             except:
                 return None
-    return None 
+    elif lgr is not None:
+        lgr.debug('getValue failed to get value of <%s>' % item)
+    return value 
         
 
 def getAddressFromOperand(cpu, op, lgr):
@@ -63,15 +74,15 @@ def getAddressFromOperand(cpu, op, lgr):
         value = 0
         parts = express.split(',')
         for p in parts:
-            v = getValue(cpu, p) 
+            v = getValue(cpu, p.strip(), lgr=lgr) 
             if v is not None:
                 value += v
             else:
-                self.lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
+                lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
                 return None    
         retval = value
     else:
-        self.lgr.debug('getAddressFromOperand nothing from %s' % op)
+        lgr.debug('getAddressFromOperand nothing from %s' % op)
     return retval
            
 def armWriteBack(instruct, reg):
@@ -83,18 +94,71 @@ def armWriteBack(instruct, reg):
             return True 
     return False
 
-def armLDM(cpu, instruct, reg):
+def armSTR(cpu, instruct, addr, lgr):
+    lgr.debug('armSTR')
+    op1, op0 = getOperands(instruct)
+    mn = getMn(instruct)
+    retval = None
+    if isReg(op0):
+        retval = op0
+    return retval
+
+def armSTM(cpu, instruct, addr, lgr):
+    lgr.debug('armSTM')
     op1, op0 = getOperands(instruct)
     mn = getMn(instruct)
     retval = None
     if op1.startswith('{') and op1.endswith('}'):
         regset = op1[1:-1]
-        regs = regset.split(',')
-        if reg in regset:
-            index = regset.index(reg)
+        xregs = regset.split(',')
+        regs = map(str.strip, xregs)
+        if op0.endswith('!'):
+            op0 = op0[:-1]
+        mul = 1
+        if 'd' in mn:
+            mul = -1
+        before = 0
+        if 'b' in mn:
+            before = 1
+        reg_addr = getRegValue(cpu, op0)
+        offset = (addr - reg_addr) * mul
+        ''' TBD 64-bit '''
+        count = (offset/4 - before)
+        lgr.debug('armSTM addr 0x%x reg_addr 0x%x offset %d count %d mul %d before %d' % (addr, reg_addr, offset, count, mul, before))
+        if count < 0 or count > len(regs)-1:
+            lgr.error('count %d out of range with regs %s' % (count, str(regs)))
+        if mul < 0:    
+            regs.reverse() 
+        retval = regs[count].strip()
+    return retval
+
+def armLDM(cpu, instruct, reg, lgr):
+    op1, op0 = getOperands(instruct)
+    mn = getMn(instruct)
+    retval = None
+    ''' incrementing or decrementing from addr in reg? '''
+    mul = 1
+    if len(mn) > 3 and 'd' in mn[3:]:
+        mul = -1
+    ''' adjusting before xfer or after '''
+    before = 0
+    if 'b' in mn:
+        before = 1
+    if op1.startswith('{') and op1.endswith('}'):
+        regset = op1[1:-1]
+        xregs = regset.split(',')
+        regs = map(str.strip, xregs)
+        if reg in regs:
+            if mul < 0:
+                regs.reverse()
+            index = regs.index(reg) - before
             ''' TBD 64 bit?? '''
             offset = index * 4
             if op0.endswith('!'):
                 op0 = op0[:-1]
-            retval = getRegValue(cpu, op0)
+            reg_addr = getRegValue(cpu, op0)
+            retval = reg_addr + (offset * mul)
+            lgr.debug('decodeArm armLDM reg %s, base %s base reg_addr value 0x%x index %d before %d mul %d returning 0x%x' % (reg, op0, reg_addr, index, before, mul, retval))
+        else:
+            lgr.error('reg %s not in %s' % (reg, str(regs)))
     return retval
