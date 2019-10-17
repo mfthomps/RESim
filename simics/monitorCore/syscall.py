@@ -470,9 +470,15 @@ class Syscall():
         self.first_mmap_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.firstMmapHap, syscall_info, proc_break, 'watchFirstMmap')
         
     def parseOpen(self, frame, callname):
-        fname_addr = frame['param1']
-        flags = frame['param2']
-        mode = frame['param3']
+        self.lgr.debug('parseOpen for %s' % callname)
+        if callname == 'openat':
+            fname_addr = frame['param2']
+            flags = frame['param3']
+            mode = frame['param4']
+        else:
+            fname_addr = frame['param1']
+            flags = frame['param2']
+            mode = frame['param3']
         fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
         if fname is not None:
             try:
@@ -481,7 +487,11 @@ class Syscall():
                 SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
                 return None, None, None, None, None
         cpu, comm, pid = self.task_utils.curProc() 
-        ida_msg = '%s flags: 0x%x  mode: 0x%x  fname_addr 0x%x filename: %s   pid:%d' % (callname, flags, mode, fname_addr, fname, pid)
+        if callname == 'openat':
+            ida_msg = '%s flags: 0x%x  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  pid:%d' % (callname, flags, 
+                mode, fname_addr, fname, frame['param1'], pid)
+        else:
+            ida_msg = '%s flags: 0x%x  mode: 0x%x  fname_addr 0x%x filename: %s   pid:%d' % (callname, flags, mode, fname_addr, fname, pid)
         #self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
         self.context_manager.setIdaMessage(ida_msg)
         #if fname is None:
@@ -763,7 +773,7 @@ class Syscall():
             socket_callname = callname
             self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
-                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'])
+                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
         exit_info.sock_struct = ss
 
@@ -1030,10 +1040,13 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, pid, callnum, syscall_info.compat32)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        if callname == 'open':        
+        self.lgr.debug('syscallParse pid:%d callname <%s>' % (pid, callname))
+        if callname == 'open' or callname == 'openat':        
+            self.lgr.debug('syscallParse, yes is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None:
                 if exit_info.fname_addr is None:
+                    self.lgr.debug('exit_info.fname_addr is none')
                     return
                 ''' filename not yet present in ram, do the two step '''
                 ''' TBD think we are triggering off kernel's own read of the fname, then again someitme it seems corrupted...'''
@@ -1094,9 +1107,11 @@ class Syscall():
 
         elif callname == 'dup':        
             exit_info.old_fd = frame['param1']
+            ida_msg = '%s pid:%d fid:%d' % (callname, pid, frame['param1'])
         elif callname == 'dup2':        
             exit_info.old_fd = frame['param1']
             exit_info.new_fd = frame['param2']
+            ida_msg = '%s pid:%d fid:%d newfid:%d' % (callname, pid, frame['param1'], frame['param2'])
         elif callname == 'clone':        
 
             flags = frame['param1']
@@ -1212,6 +1227,7 @@ class Syscall():
             exit_info.old_fd = frame['param1']
             ida_msg = 'read pid:%d (%s) FD: %d buf: 0x%x count: %d' % (pid, comm, frame['param1'], frame['param2'], frame['param3'])
             exit_info.retval_addr = frame['param2']
+            exit_info.count = frame['param3']
             ''' check runToIO '''
             for call_param in syscall_info.call_params:
                 ''' look for matching FD '''
@@ -1470,6 +1486,9 @@ class Syscall():
             elif callname == 'exit_group':
                 self.lgr.debug('syscallHap exit_group called from within execve %d' % pid)
                 return
+            elif callname == 'uname':
+                self.lgr.debug('syscallHap uname called from within execve %d' % pid)
+                return
             else:
                 self.lgr.error('fix this, syscall within exec? pid:%d call: %s' % (pid, callname))
                 SIM_break_simulation('fix this')
@@ -1549,8 +1568,8 @@ class Syscall():
             #self.lgr.debug('syscall looking for any, got %d from %d (%s) at 0x%x ' % (callnum, pid, comm, break_eip))
 
             if comm != 'tar':
-                name = callname+' exit' 
-                self.lgr.debug('syscllHap call to addExitHap for pid %d' % pid)
+                name = callname+'-exit' 
+                self.lgr.debug('syscallHap call to addExitHap for pid %d' % pid)
                 if self.stop_on_call:
                     cp = CallParams(None, None, break_simulation=True)
                     exit_info.call_params = cp
