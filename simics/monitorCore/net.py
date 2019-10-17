@@ -89,8 +89,8 @@ class NetAddresses():
             self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
-    def __init__(self, cpu, params, mem_utils, fd=None):
-        self.length = 0
+    def __init__(self, cpu, params, mem_utils, fd=None, length=0):
+        self.length = length
         self.flags = 0
         if fd is None:
             ''' must be 32-bit socketcall, find addr.  fd, length and flags are speculative '''
