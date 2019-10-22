@@ -160,7 +160,9 @@ class PageFaultGen():
         else:
             #self.lgr.debug('eip 0x%x not mapped' % eip)
             pass
-        if pageUtils.isIA32E(cpu):
+        if cpu.architecture == 'arm':
+            page_info = pageUtils.findPageTableArm(self.cpu, cr2, self.lgr)
+        elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, cr2, self.lgr)
         else:
             page_info = pageUtils.findPageTable(self.cpu, cr2, self.lgr)
@@ -245,6 +247,14 @@ class PageFaultGen():
             self.lgr.debug('stopWatchPageFaults delete excption_hap')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap)
             self.exception_hap = None
+        if self.fault_hap1 is not None:
+            self.lgr.debug('stopWatchPageFaults delete fault_hap1')
+            SIM_hap_delete_callback_id("Core_Exception", self.fault_hap1)
+            self.fault_hap1 = None
+        if self.fault_hap2 is not None:
+            self.lgr.debug('stopWatchPageFaults delete fault_hap2')
+            SIM_hap_delete_callback_id("Core_Exception", self.fault_hap2)
+            self.fault_hap2 = None
         if pid is not None:
             if pid in self.exit_hap: 
                 #self.lgr.debug('stopWatchPageFaults delete exit_hap')
