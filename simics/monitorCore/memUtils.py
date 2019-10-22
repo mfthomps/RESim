@@ -95,6 +95,10 @@ param_map['x86_32']['param6'] = 'ebb'
 class memUtils():
     def __init__(self, word_size, param, lgr, arch='x86-64', cell_name='unknown'):
         self.WORD_SIZE = word_size
+        if word_size == 4:
+            self.SIZE_MASK = 0xffffffff
+        else:
+            self.SIZE_MASK = 0xffffffffffffffff
         self.param = param
         self.cell_name = cell_name
         self.lgr = lgr
