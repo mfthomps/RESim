@@ -581,7 +581,7 @@ class GenMonitor():
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.is_compat32, self.lgr)
 
 
-            #self.watchPageFaults(pid)
+            self.watchPageFaults(pid)
 
             self.sharedSyscall[self.target].setDebugging(True)
  
@@ -953,7 +953,7 @@ class GenMonitor():
     def getReg(self, reg, cpu):
         target = self.cell_config.cpu_cell[cpu]
         value = self.mem_utils[target].getRegValue(cpu, reg)
-        self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
+        #self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
         return value
 
     class cycleRecord():
@@ -2359,8 +2359,12 @@ class GenMonitor():
 
     def getWatchMarks(self):
         watch_marks = self.dataWatch[self.target].getWatchMarks()
-        jmarks = json.dumps(watch_marks)
-        print jmarks
+        try:
+            jmarks = json.dumps(watch_marks)
+            print jmarks
+        except Exception as e:
+            self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
+            self.lgr.debug('error %s' % str(e))
 
     def goToDataMark(self, index):
         self.dataWatch[self.target].goToMark(index)
