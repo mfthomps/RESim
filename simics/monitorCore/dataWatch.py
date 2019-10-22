@@ -38,7 +38,7 @@ class DataWatch():
             retval['msg'] = self.msg
             return retval
 
-    def setRange(self, start, length):
+    def setRange(self, start, length, msg):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x' % (start, length))
         end = start+length
         overlap = False
@@ -52,6 +52,16 @@ class DataWatch():
         if not overlap:
             self.start.append(start)
             self.length.append(length)
+        eip = self.top.getEIP(self.cpu)
+        fixed = unicode(msg, errors='replace')
+        self.watch_marks.append(self.WatchMark(self.cpu.cycles, eip, fixed))
+
+    def close(self, fd):
+        ''' called when FD is closed and we might be doing a trackIO '''
+        eip = self.top.getEIP(self.cpu)
+        msg = 'closed FD: %d' % fd
+        self.watch_marks.append(self.WatchMark(self.cpu.cycles, eip, msg))
+        
 
     def watch(self, show_cmp=False, break_simulation=None):
         self.lgr.debug('DataWatch watch show_cmp: %r' % show_cmp)
@@ -77,7 +87,19 @@ class DataWatch():
                 val = self.mem_utils.getRegValue(self.cpu, op1)
             if val is not None:
                 print('%s  reg: 0x%x  addr:0x%x mval: 0x%08x' % (instruct[1], val, addr, mval))
-           
+          
+    def getCmp(self):
+        retval = '' 
+        eip = self.top.getEIP(self.cpu)
+        for i in range(10):
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            if instruct[1].startswith('cmp'):
+                retval = instruct[1]
+                break
+            else:
+                eip = eip + instruct[0]
+        return retval
+            
                
     def stopWatch(self, break_simulation=None): 
         self.lgr.debug('dataWatch stopWatch')
@@ -115,8 +137,9 @@ class DataWatch():
         self.context_manager.genDeleteHap(self.return_hap)
         ''' TBD assumes arm memcpy starts with a LDM     R1!, {R3-R8,R12,LR} '''
         length = (new_src - src) + 0x20
-        self.setRange(dest, length) 
-        self.lgr.debug('dataWatch returnHap, return from memcpy src: 0x%x dest: 0x%x new_src: 0x%x ' % (src, dest, new_src))
+        msg = 'copy %d bytes from 0x%x to 0x%x' % (length, src, dest)
+        self.setRange(dest, length, msg) 
+        self.lgr.debug('dataWatch returnHap, return from memcpy src: 0x%x dest: 0x%x new_src: 0x%x length %d ' % (src, dest, new_src, length))
         #SIM_break_simulation('return hap')
         #return
         self.watch()
@@ -150,8 +173,8 @@ class DataWatch():
             return
         op_type = SIM_get_mem_op_type(memory)
         addr = memory.logical_address
-        #self.lgr.debug('dataWatch readHap index %d addr 0x%x' % (index, addr))
         eip = self.top.getEIP(self.cpu)
+        #self.lgr.debug('dataWatch readHap index %d addr 0x%x eip 0x%x' % (index, addr, eip))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -161,32 +184,32 @@ class DataWatch():
             SIM_run_alone(self.setStopHap, None)
         offset = addr - self.start[index]
         cpl = memUtils.getCPL(self.cpu)
+        start, end = self.context_manager.getText()
+        call_sp = None
+        if eip > end and cpl != 0:
+            ''' from so library, check for cpy functions '''
+            if not self.break_simulation:
+                ''' prevent stack trace from triggering haps '''
+                self.stopWatch()
+            st = self.top.getStackTraceQuiet()
+            self.lgr.debug('%s' % st.getJson()) 
+            ''' look for memcpy'ish... TBD generalize '''
+            ret_ip = st.memcpy()
+            if ret_ip is not None:
+                self.lgr.debug('DataWatch readHap ret_ip 0x%x' % (ret_ip))
+                SIM_run_alone(self.handleMemcpy, ret_ip)
+            else:
+                self.lgr.debug('DataWatch readHap not memcpy, reset the watch')
+                self.watch()
         if op_type == Sim_Trans_Load:
-            start, end = self.context_manager.getText()
-            call_sp = None
-            if eip > end and cpl != 0:
-                ''' from so library, check for cpy functions '''
-                if not self.break_simulation:
-                    ''' prevent stack trace from triggering haps '''
-                    self.stopWatch()
-                st = self.top.getStackTraceQuiet()
-                self.lgr.debug('%s' % st.getJson()) 
-                ''' look for memcpy'ish... TBD generalize '''
-                call_sp = st.memcpy()
-                if call_sp is not None:
-                    ret_ip = self.mem_utils.readPtr(self.cpu, call_sp)
-                    self.lgr.debug('DataWatch readHap call_sp 0x%x ret_ip 0x%x' % (call_sp, ret_ip))
-                    SIM_run_alone(self.handleMemcpy, ret_ip)
-                else:
-                    self.lgr.debug('DataWatch readHap not memcpy, reset the watch')
-                    self.watch()
 
             self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) eip: 0x%x cycle:0x%x' % (addr, 
                     offset, self.length[index], self.start[index], eip, self.cpu.cycles))
             msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
-                    offset, self.length[index], self.start[index], eip))
+                        offset, self.length[index], self.start[index], eip))
             self.context_manager.setIdaMessage(msg)
-            self.watch_marks.append(self.WatchMark(self.cpu.cycles, eip, msg))
+            mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (addr, offset, self.start[index], self.length[index], self.getCmp())
+            self.watch_marks.append(self.WatchMark(self.cpu.cycles, eip, mark_msg))
             if self.break_simulation:
                 SIM_break_simulation('DataWatch read data')
 
