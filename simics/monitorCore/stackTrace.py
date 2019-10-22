@@ -263,7 +263,7 @@ class StackTrace():
                 else:
                     #self.lgr.debug('nothing from followCall')
                     pass
-            elif val is not None:
+            elif val is not None and val != 0:
                 #self.lgr.debug('ptr 0x%x not code 0x%x' % (ptr, val))
                 pass
             count += 1
@@ -289,21 +289,41 @@ class StackTrace():
 
     def memcpy(self):
         retval = None
-        frame = self.frames[1]
-        self.lgr.debug('memcpy frame instruct is %s' % frame.instruct)
-        if frame.instruct is not None:
-            parts = frame.instruct.split()
-            if len(parts) == 2:
-                fun = parts[1].split('@')[0]
-                if fun == 'memcpy' or fun == 'memmove':
-                    self.lgr.debug('StackFrame memcpy, is %s, sp is 0x%x' % (fun, frame.sp))
-                    retval = frame.sp
-                    #if fun.strip() == 'memmove':
-                    #    SIM_break_simulation('memmove')       
-                #elif fun.strip() == 'xmlStrcmp':
-                #    SIM_break_simulation('xml')       
-                else:
-                    self.lgr.debug('no soap, fun is <%s>' % fun)
+        if len(self.frames) < 2:
+            self.lgr.debug('memcpy, only %d frames' % len(self.frames))
+            if self.cpu.architecture == 'arm':
+                ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
+                lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                ''' TBD also for 64-bit? '''
+                call_instr = lr-4
+                instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
+                self.lgr.debug('memcpy lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
+                parts = instruct[1].split()
+                try:
+                    call_addr = int(parts[1],16)
+                    if call_addr in self.relocate_funs:
+                        rel_instruct = '%s   %s' % (self.callmn, self.relocate_funs[call_addr])
+                        self.lgr.debug('memcpy call is is %s' % rel_instruct)
+                        retval = lr
+                except ValueError:
+                    pass
+             
+        else:
+            frame = self.frames[1]
+            self.lgr.debug('memcpy frame instruct is %s' % frame.instruct)
+            if frame.instruct is not None:
+                parts = frame.instruct.split()
+                if len(parts) == 2:
+                    fun = parts[1].split('@')[0]
+                    if fun == 'memcpy' or fun == 'memmove':
+                        self.lgr.debug('StackFrame memcpy, is %s, sp is 0x%x' % (fun, frame.sp))
+                        retval = self.mem_utils.readPtr(self.cpu, frame.sp)
+                        #if fun.strip() == 'memmove':
+                        #    SIM_break_simulation('memmove')       
+                    #elif fun.strip() == 'xmlStrcmp':
+                    #    SIM_break_simulation('xml')       
+                    else:
+                        self.lgr.debug('no soap, fun is <%s>' % fun)
         return retval
 
 
