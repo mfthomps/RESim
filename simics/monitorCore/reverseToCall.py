@@ -47,6 +47,8 @@ class RegisterModType():
     UNKNOWN = 0
     REG = 1
     ADDR = 2
+    ''' pursuing taint via other means '''
+    BAIL = 3
     def __init__(self, value, mod_type, src_reg=None):
         self.value = value
         self.mod_type = mod_type
@@ -90,6 +92,11 @@ class reverseToCall():
             self.start_cycles = None
             self.page_faults = None
             self.frame_ips = []
+            self.uncall_hap = None
+            self.uncall_break = None
+            self.value = None
+            self.save_cycle = None
+            self.save_reg_mod = None
 
     def getStartCycles(self):
         return self.start_cycles
@@ -290,6 +297,8 @@ class reverseToCall():
 
     def isExit(self, instruct, eip):
         if self.cpu.architecture == 'arm':
+            lr = self.top.getReg('lr', self.cpu)
+            #if eip == self.param.arm_ret or (instruct.startswith('mov') and instruct.endswith('lr') and lr < self.param.kernel_base):
             if eip == self.param.arm_ret:
                 return True
         else: 
@@ -452,35 +461,99 @@ class reverseToCall():
     def jumpOverKernel(self, pid):
         retval = False
         cur_cycles = self.cpu.cycles
-        self.lgr.debug('doRevToModReg kernel space pid %d' % (pid))
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        self.lgr.debug('doRevToModReg kernel space pid %d eip:0x%x %s' % (pid, eip, instruct[1]))
         is_exit = self.isExit(instruct[1], eip)
         if pid in self.sysenter_cycles and is_exit:
-            self.lgr.debug('doRevToModReg is sysexit, cur_cycles is 0x%x' % cur_cycles)
+            self.lgr.debug('jumpOverKernel is sysexit, cur_cycles is 0x%x' % cur_cycles)
+            '''
+            prev_cycles = 0
+            got_it = None
+            page_cycles = self.sysenter_cycles[pid]
+            if self.page_faults is not None:
+                self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+            for cycles in sorted(page_cycles, reverse=True):
+            #for cycles in sorted(page_cycles):
+                self.lgr.debug('jumpOverKernel cur_cycles 0x%x cycles: 0x%x prev: 0x%x' % (cur_cycles, cycles, prev_cycles))
+                if cycles < cur_cycles:
+                    self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                    #got_it = prev_cycles - 1
+                    got_it = cycles - 1
+                    break
+                else:
+                    #self.lgr.debug('jumpOverKernel is not cycle 0x%x' % (cycles))
+                    prev_cycles = cycles
+
+            if not got_it:
+                self.lgr.debug('jumpOverKernel nothing between, assume last cycle of 0x%x' % prev_cycles)
+                got_it = prev_cycles - 1
+            '''
+
+
             prev_cycles = None
             got_it = None
             page_cycles = self.sysenter_cycles[pid]
             if self.page_faults is not None:
-                self.lgr.debug('doRevToModReg adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                self.lgr.debug('tryBackOne adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
                 page_cycles = page_cycles + self.page_faults.getFaultingCycles()
             for cycles in sorted(page_cycles):
                 if cycles > cur_cycles:
-                    self.lgr.debug('doRevToModReg found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                    self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
                     got_it = prev_cycles - 1
                     break
                 else:
-                    #self.lgr.debug('doRevToModReg is not cycle 0x%x' % (cycles))
+                    self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
                     prev_cycles = cycles
 
             if not got_it:
-                self.lgr.debug('doRevToModReg nothing between, assume last cycle of 0x%x' % prev_cycles)
+                self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
                 got_it = prev_cycles - 1
+
             cmd = 'skip-to cycle = %d ' % got_it
             SIM_run_command(cmd)
-            self.lgr.debug('doRevToModReg did skip')
+            dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+            rval = self.top.getReg(self.reg, self.cpu) 
+            self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
+            if rval == self.reg_val:
+                retval = True
+            else:
+                retval = False
+                self.lgr.error('jumpOverKernel failed to maintain register')
         else:
-            self.lgr.error('doRevToModReg in kernel, but not exit %s' % instruct[1])
+            forward = self.cpu.cycles+1
+            cmd = 'skip-to cycle = %d ' % forward
+            SIM_run_command(cmd)
+            eip = self.top.getEIP(self.cpu)
+            self.lgr.error('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], eip-1))
+            cell = self.top.getCell()
+            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, eip-1, 1, 0)
+            self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
+            SIM_run_alone(SIM_run_command, 'rev')
+        return retval
+
+    def kernInterruptHap(self, my_args, one, exception, error_string):
+        if self.uncall_break is None:
+            return
+        eip = self.top.getEIP(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        self.lgr.debug('kernInterruptHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
+              pid, self.pid, self.reg, self.reg_val))
+        if pid == self.pid:
+            SIM_delete_breakpoint(self.uncall_break)
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
+            self.uncall_break = None
+            val = self.top.getReg(self.reg, self.cpu) 
+            if val == self.reg_val:
+                self.lgr.debug('kernInterruptHap reg %s still 0x%x, now cycle back through instructions, but run alone' % (self.reg, val))
+                SIM_run_alone(self.cycleAlone, None)
+            else: 
+                self.lgr.error('kernInterruptHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
+                
+        else:
+            self.lgr.debug('kernInterruptHap, wrong pid, rev')
+            SIM_run_alone(SIM_run_command, 'rev')
 
     '''
     BEWARE syntax errors are not seen.  TBD make unit test
@@ -514,7 +587,9 @@ class reverseToCall():
                 if not self.tooFarBack():
     
                     if len(self.sysenter_cycles[pid]) > 0:
-                        self.jumpOverKernel(pid)
+                        if not self.jumpOverKernel(pid):
+                            self.lgr.debug('doRevModReg failed to jump over kernel')
+                            done = True
                     else:
                         my_args = procInfo.procInfo(comm, self.cpu, self.pid)
                         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -533,7 +608,7 @@ class reverseToCall():
                 else:
                     self.lgr.debug('doRevModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles))
                     done=True
-            else:
+            elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
                 ''' current eip modifies self.reg, done, or continue taint '''
                 self.lgr.debug('reverseToModReg got mod reg right off')
@@ -547,6 +622,9 @@ class reverseToCall():
                             self.followTaint(reg_mod_type)
                     else:
                         self.lgr.debug('doRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
+            else:
+                self.lgr.debug('doRevModReg bailed, maybe trying uncall')
+                done=True
 
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
@@ -577,7 +655,8 @@ class reverseToCall():
         '''
         retval = None
         done = False
-        self.lgr.debug('cycleRegisterMod start for %s' % self.reg)
+        cur_val = self.cpu.iface.int_register.read(self.reg_num)
+        self.lgr.debug('cycleRegisterMod start for %s value 0x%x cur_val 0x%x' % (self.reg, self.reg_val, cur_val))
         while not done:
             #current = SIM_cycle_count(self.cpu)
             current = self.cpu.cycles
@@ -595,7 +674,7 @@ class reverseToCall():
             else:
                 cur_val = self.cpu.iface.int_register.read(self.reg_num)
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('compare %x to %x eip: %x' % (cur_val, self.reg_val, eip))
+                self.lgr.debug('crm compare %x to %x eip: %x' % (cur_val, self.reg_val, eip))
                 '''
                 if cur_val != self.reg_val: 
                     eip = self.top.getEIP(self.cpu)
@@ -605,7 +684,7 @@ class reverseToCall():
                     self.is_monitor_running.setRunning(False)
                 '''
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('cycleRegisterMod do disassemble for eip 0x%x' % eip)
+                #self.lgr.debug('cycleRegisterMod do disassemble for eip 0x%x' % eip)
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('cycleRegisterMod disassemble for eip 0x%x is %s' % (eip, str(instruct)))
                 mn = self.decode.getMn(instruct[1])
@@ -614,16 +693,17 @@ class reverseToCall():
                     if self.decode.modifiesOp0(mn):
                         self.lgr.debug('get operands from %s' % instruct[1])
                         op1, op0 = self.decode.getOperands(instruct[1])
-                        self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s  compare <%s> to <%s>' % (mn, op0, op1, op0, self.reg))
+                        self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
                         if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg):
                             self.lgr.debug('cycleRegisterMod at %x, we are done' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
                                 addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
-                            elif mn.startswith('mov') and self.deocdeisReg(op1):
+                            elif mn.startswith('mov') and self.decode.isReg(op1):
                                 retval = RegisterModType(op1, RegisterModType.REG)
                                 
                     elif self.cpu.architecture == 'arm': 
@@ -634,16 +714,65 @@ class reverseToCall():
                                 done = True
                                 retval = RegisterModType(None, RegisterModType.UNKNOWN)
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
-                            self.lgr.debug('cycleRegisterMod at %x, is ldm instruction' % eip)
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
-                            if addr is not None:
+                            rval = self.task_utils.getMemUtils().readPtr(self.cpu, addr)
+                            self.lgr.debug('cycleRegisterMod at %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x' % (eip, addr, rval, self.reg_val))
+                            if rval != self.reg_val:
+                                self.lgr.error('cycleRegisterMod wrong value')
                                 done = True
-                                retval = RegisterModType(addr, RegisterModType.ADDR)
+                                retval = RegisterModType(None, RegisterModType.BAIL)
+                            elif addr is not None:
+                                done = True
+                                pc_addr = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
+                                if pc_addr is not None:
+                                    pc = self.task_utils.getMemUtils().readPtr(self.cpu, pc_addr)
+                                    self.lgr.debug('cycleRegisterMod try uncalling pc_addr 0x%x  pc 0x%x' % (pc_addr, pc))
+                                    cell = self.top.getCell()
+                                    pre_call = pc - 4
+                                    self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, pre_call, 1, 0)
+                                    self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.uncallHap, None)
+                                    retval = RegisterModType(None, RegisterModType.BAIL)
+                                    self.lgr.debug('cycleRegisterMod set break number %d stop hap, now rev to 0x%x' % (self.uncall_break, pre_call))
+                                    self.save_cycle = self.cpu.cycles
+                                    SIM_run_alone(SIM_run_command,'rev')
+                                else:
+                                    retval = RegisterModType(addr, RegisterModType.ADDR)
                             else:
                                 self.lgr.debug('cycleRegisterMod at %x, ldm instruction got None for addr' % eip)
                      
         self.lgr.debug('cycleRegisterMod return') 
         return retval
+
+    def uncallHap(self, my_args, one, exception, error_string):
+        if self.uncall_break is None:
+            return
+        eip = self.top.getEIP(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        self.lgr.debug('uncallHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
+              pid, self.pid, self.reg, self.reg_val))
+        if pid == self.pid:
+            SIM_delete_breakpoint(self.uncall_break)
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
+            self.uncall_break = None
+            val = self.top.getReg(self.reg, self.cpu) 
+            if val == self.reg_val:
+                self.lgr.debug('uncallHap reg %s still 0x%x, now cycle back through instructions, but run alone' % (self.reg, val))
+                SIM_run_alone(self.cycleAlone, None)
+            else: 
+                self.lgr.debug('uncallHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
+                cmd = 'skip-to cycle = %d ' % self.save_cycle
+                SIM_run_command(cmd)
+                if not self.taint:
+                    self.cleanup(self.cpu)
+                else:
+                    if self.cpu.architecture == 'arm':
+                        self.followTaintArm(self.save_reg_mod)
+                    else:
+                        self.followTaint(self.save_reg_mod)
+                
+        else:
+            self.lgr.debug('uncallHap, wrong pid, rev')
+            SIM_run_alone(SIM_run_command, 'rev')
                        
 
     def multOne(self, op0, mn):
@@ -682,11 +811,7 @@ class reverseToCall():
                 self.top.stopAtKernelWrite(address, self)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
-                stuff = reg_mod_type.split(',')
-                reg = stuff[0]
-                self.lgr.debug('followTaint, reg of %s ' % (reg))
-                self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.doRevToModReg(reg, taint=True)
+                self.doRevToModReg(reg_mod_type.value, taint=True)
                  
 
     def followTaint(self, reg_mod_type):
@@ -767,37 +892,40 @@ class reverseToCall():
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
                 self.top.skipAndMail()
-        
+       
+    def cycleAlone(self, dumb): 
+        self.lgr.debug('cycleAlone, entered looking for %s' % self.reg)
+        cmd = 'reverse'
+        reg_mod_type = self.cycleRegisterMod()
+        if reg_mod_type is None:
+            if not self.tooFarBack():
+                ''' stepped back into kernel, rev '''
+                self.lgr.debug('cycleAlone must have entered kernel, continue to previous place where this process ran')
+                SIM_run_alone(SIM_run_command, cmd)
+            else:
+                self.lgr.debug('cycleAlone must have backed to first cycle 0x%x' % self.start_cycles)
+        elif reg_mod_type.mod_type != RegisterModType.BAIL:
+            ''' current eip modifies self.reg, done, or continue taint '''
+            if not self.taint:
+                self.cleanup(self.cpu)
+            else:
+                if not self.tooFarBack():
+                    if self.cpu.architecture == 'arm':
+                        self.followTaintArm(reg_mod_type)
+                    else:
+                        self.followTaint(reg_mod_type)
+                else:
+                    self.lgr.debug('cycleAlone must backed to first cycle 0x%x' % self.start_cycles)
  
     def stoppedReverseModReg(self, my_args, one, exception, error_string):
         '''
         Invoked when the simulation stops while looking for a modified register
         '''
-        cmd = 'reverse'
         self.lgr.debug('stoppedReverseModReg, entered looking for %s' % self.reg)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         cpl = memUtils.getCPL(self.cpu)
         if pid == self.pid and cpl != 0:
-            reg_mod_type = self.cycleRegisterMod()
-            if reg_mod_type is None:
-                if not self.tooFarBack():
-                    ''' stepped back into kernel, rev '''
-                    self.lgr.debug('stoppedReverseModReg must have entered kernel, continue to previous place where this process ran')
-                    SIM_run_alone(SIM_run_command, cmd)
-                else:
-                    self.lgr.debug('stoppedReverseModReg must have backed to first cycle 0x%x' % self.start_cycles)
-            else:
-                ''' current eip modifies self.reg, done, or continue taint '''
-                if not self.taint:
-                    self.cleanup(self.cpu)
-                else:
-                    if not self.tooFarBack():
-                        if self.cpu.architecture == 'arm':
-                            self.followTaintArm(reg_mod_type)
-                        else:
-                            self.followTaint(reg_mod_type)
-                    else:
-                        self.lgr.debug('stoppedReverseModReg must backed to first cycle 0x%x' % self.start_cycles)
+            self.cycleAlone(None)
         else:
             self.lgr.error('stoppedReverseModReg wrong process or in kernel pid %d expected %d' % (pid, self.pid))
             SIM_run_alone(SIM_run_command, cmd)
