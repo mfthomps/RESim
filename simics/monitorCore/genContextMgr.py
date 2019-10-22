@@ -357,7 +357,7 @@ class GenContextMgr():
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
            if leader_pid in self.pid_cache:
                self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
-               self.addTask(pid)
+               self.addTask(pid, new_addr)
 
         if not self.watching_tasks and \
                (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
@@ -365,7 +365,7 @@ class GenContextMgr():
             ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
-                #self.lgr.debug('resim_context')
+                self.lgr.debug('resim_context')
             #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
@@ -390,7 +390,7 @@ class GenContextMgr():
                 ''' Watching processes, but new process should not be watched '''
                 if self.debugging_pid is not None:
                     cpu.current_context = self.default_context
-                    #self.lgr.debug('default_context')
+                    self.lgr.debug('default_context')
                 #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 self.clearAllBreak()
@@ -453,8 +453,9 @@ class GenContextMgr():
                 self.lgr.debug('rmTask remaining debug recs %s' % str(self.watch_rec_list))
         return retval
 
-    def addTask(self, pid):
-        rec = self.task_utils.getRecAddrForPid(pid)
+    def addTask(self, pid, rec=None):
+        if rec is None:
+            rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.watch_rec_list:
             if rec is None:
                 self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
