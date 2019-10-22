@@ -280,7 +280,7 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
-                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length)
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, trace_msg)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False)
@@ -310,7 +310,7 @@ class SharedSyscall():
                 if exit_info.call_params is not None:
                     if exit_info.call_params.break_simulation and self.dataWatch is not None:
                         ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
-                        self.dataWatch.setRange(msg_iov[0].base, exit_info.sock_struct.length)
+                        self.dataWatch.setRange(msg_iov[0].base, exit_info.sock_struct.length, trace_msg)
                         self.lgr.debug('recvmsg set dataWatch')
                     if type(exit_info.call_params.match_param) is str:
                         self.lgr.debug('sharedSyscall recvmsg check string %s against %s' % (s, exit_info.call_params.match_param))
@@ -471,9 +471,9 @@ class SharedSyscall():
                 #ptable_info = pageUtils.findPageTableIA32E(self.cpu, exit_info.fname_addr, self.lgr)
                 SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
-            trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (pid, eax, 
+            trace_msg = ('\treturn from open pid:%d FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (pid, eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
-            self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0x%x mode: 0x%x eax: 0x%x' % (pid, comm, 
+            self.lgr.debug('return from open pid:%d (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (pid, comm, 
                    eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
             if eax >= 0:
                 if pid in self.trace_procs:
@@ -519,7 +519,7 @@ class SharedSyscall():
                    and type(exit_info.call_params.match_param) is int:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read')
-                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.count)
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, trace_msg)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
                     if eax < 16000:
                         diddler = exit_info.call_params.match_param
@@ -608,6 +608,8 @@ class SharedSyscall():
                 trace_msg = ('\treturn from close pid:%d, FD: %d  eax: 0x%x\n' % (pid, exit_info.old_fd, eax))
                 if self.traceFiles is not None:
                     self.traceFiles.close(exit_info.old_fd)
+                if exit_info.call_params is not None:
+                    self.dataWatch.close(exit_info.old_fd)
             else:
                 trace_msg = ('\terror return from close pid:%d, FD: %d  eax: 0x%x\n' % (pid, exit_info.old_fd, eax))
             
