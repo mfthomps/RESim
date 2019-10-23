@@ -111,6 +111,9 @@ Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are 
 All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}
 
 \section{RESim commands}
+The following RESim commands are issued at the Simics command prompt, naming the commands as methods of the {\tt cgc} python module,
+e.g., "{\tt @cgc.tasks()}".
+
 \label{commands}
 \begin{itemize}
 \item {\tt tasks} -- List currently executing process names and their PIDs.
@@ -188,6 +191,11 @@ a port number will be translated to the pattern {\tt .*:N} where N is the port n
 \item {\tt goToDebugBookmark} – jump to the given bookmark, restoring execution state to that which existed when the bookmark was set.
 
 \item {\tt watchData} – run forward until a specified memory area is read.  Intended for use in finding references to data consumed via a read system call.  Data watch parameters are automatically set on a read during a debug session, allowing the analyst to simply invoke the watchData function to find references to the buffer.  List data watches using {\tt showDataWatch}.
+Note however, that data watches are based on the len field given in the read or recv, and thus data references are not necessarily to data actually read (e.g., a read of ten bytes
+that returns one byte would break on a reference to the fifth byte in the buffer.)
+
+\item {\tt trackIO(FD)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated list of data watch bookmarks that indicate execution
+points of relevant IO and references to received data.  This list of bookmarks is displayed in the IDA client {\tt data watch} window (right click and refresh).
 
 \item {\tt showThreads} - List the thread PIDs of the process being debugged.
 
