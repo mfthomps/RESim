@@ -187,3 +187,10 @@ class bookmarkView(simplecustviewer_t):
         #print('%d %d %d %d' % (x1, y1, x2, y2)) 
         for lineno in range(y1, y2+1):
             print self.GetLine(lineno)[0]
+
+    def OnKeydown(self, vkey, shift):
+        if vkey == 27:
+            print('esc does nothing')
+        else:
+            return False
+        return True
