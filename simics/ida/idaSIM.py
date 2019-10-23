@@ -6,17 +6,18 @@ import idautils
 import bpUtils
 import gdbProt
 import origAnalysis
+import regFu
 no_rev = 'reverse execution disabled'
 class IdaSIM():
-    def __init__(self, stack_trace, bookmark_view, kernel_base, reg_list, registerMath):
+    def __init__(self, stack_trace, bookmark_view, data_watch, kernel_base, reg_list):
         self.stack_trace = stack_trace
+        self.data_watch = data_watch
         self.bookmark_view = bookmark_view
         self.just_debug = False
         self.recent_bookmark = 1
         self.recent_fd = '1'
         self.kernel_base = kernel_base
         self.reg_list = reg_list
-        self.registerMath = registerMath
         self.origAnalysis = origAnalysis.OrigAnalysis(idc.GetInputFile())
         proc_info = idaapi.get_inf_structure()
         if proc_info.procName == 'ARM':
@@ -96,8 +97,6 @@ class IdaSIM():
             print('in kernel, run to user')
         self.updateStackTrace()
 
-    def updateStackTrace(self):
-        stack_trace_results = self.stack_trace.updateStackTrace()
 
     '''
         reverse-step-instruction, but within current process, return new eip
@@ -321,8 +320,10 @@ class IdaSIM():
         
     def trackRegister(self): 
         highlighted = idaapi.get_highlighted_identifier()
-        if highlighted is None  or highlighted not in self.reg_list:
+        if highlighted is None  or not self.isReg(highlighted):
            print('%s not in reg list' % highlighted)
+           print('%s' % str(self.reg_list))
+           return
            c=idaapi.Choose([], "back track to source of selected register", 1)
            c.width=50
            c.list = self.reg_list
@@ -335,6 +336,7 @@ class IdaSIM():
         print 'backtrack to source of to %s...' % highlighted
         command = "@cgc.revTaintReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('trackRegister got simicsString %s' % simicsString)
         eip = None
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
@@ -626,6 +628,9 @@ class IdaSIM():
     
     def updateStackTrace(self):
         stack_trace_results = self.stack_trace.updateStackTrace()
+
+    def updateDataWatch(self):
+        data_watch_results = self.data_watch.updateDataWatch()
     
     def rebuildStackTrace(self):
         print 'rebuilding stack trace'
@@ -658,13 +663,13 @@ class IdaSIM():
             self.runToUserSpace()
     
     def doStepOver(self):
-        print('in doStepOver')
+        #print('in doStepOver')
         idaapi.step_over()
-        print('back from step over')
+        #print('back from step over')
         idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        print('back getDebuggerEvent')
+        #print('back getDebuggerEvent')
         cur_addr = idc.GetRegValue(self.PC)
-        print('cur_addr is 0x%x' % cur_addr)
+        #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
             print('run to user space')
             self.runToUserSpace()
@@ -719,5 +724,48 @@ class IdaSIM():
         print('continueForward got eip 0x%x' % eip)
         self.signalClient()
         self.bookmark_list = self.bookmark_view.updateBookmarkView()
-    
+   
+    def isReg(self, reg): 
+        ''' TBD must be better way to get list of registers from ida '''
+        if len(reg) == 3 and reg.startswith('e'):
+            reg = reg[1:]
+        if reg in self.reg_list:
+            return True 
+        else:
+            return False
 
+    def registerMath(self): 
+        retval = None
+        if regFu.isHighlightedEffective():
+            retval = regFu.getOffset()
+        else:
+            #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp']
+            highlighted = idaapi.get_highlighted_identifier()
+            retval = None
+            if highlighted is not None:
+                print 'highlighted is %s' % highlighted
+                if self.isReg(highlighted):
+                    retval = idc.GetRegValue(highlighted)
+                else:
+                    try:
+                        retval = int(highlighted, 16)
+                    except:
+                        pass
+                    if retval is None:
+                        ''' TBD this is broken, manually manage register list? '''
+                        for reg in self.reg_list:
+                            if highlighted.startswith(reg):
+                                rest = highlighted[len(reg):]
+                                value = None
+                                try:
+                                    value = int(rest[1:])
+                                except:
+                                    pass
+                                if value is not None:
+                                    if rest.startswith('+'):
+                                        regvalue = idc.GetRegValue(reg)
+                                        retval = regvalue + value
+                                    elif rest.startswith('-'):
+                                        regvalue = idc.GetRegValue(reg)
+                                        retval = regvalue - value
+        return retval

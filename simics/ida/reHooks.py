@@ -4,6 +4,7 @@ from idaapi import Form
 import idc
 import gdbProt
 import regFu
+import getAddrCount
 def getHex(s):
     retval = None
     hs = s
@@ -60,12 +61,12 @@ class DataWatchHandler(idaapi.action_handler_t):
         def __init__(self, isim):
             self.isim = isim
             idaapi.action_handler_t.__init__(self)
-            self.last_data_watch_count = '32'
+            self.last_data_watch_count = 32
         def activate(self, ctx):
             highlighted = idaapi.get_highlighted_identifier()
             addr = getHex(highlighted)
             count = self.last_data_watch_count
-            addr, count = getAddrCount('watch memory', addr, count)
+            addr, count = getAddrCount.getAddrCount('watch memory', addr, count)
             if count is None:
                 return
             print('watch %d bytes from 0x%x' % (count, addr))

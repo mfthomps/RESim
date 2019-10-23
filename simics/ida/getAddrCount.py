@@ -1,3 +1,5 @@
+import idaapi
+from idaapi import Form
 def getAddrCount(title, addr, count):
     s = """%s
     <~E~nter address:N:32:16::>
