@@ -123,6 +123,7 @@ class memUtils():
                 self.regs[r] = r
             self.regs['sp'] = 'sp'
             self.regs['pc'] = 'pc'
+            self.regs['lr'] = 'lr'
             self.regs['cpsr'] = 'cpsr'
             self.regs['syscall_num'] = 'r7'
             self.regs['syscall_ret'] = 'r0'
