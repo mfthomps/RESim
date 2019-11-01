@@ -175,6 +175,7 @@ class GenContextMgr():
         return self.debugging_cell
 
     def recordText(self, start, end):
+        self.lgr.debug('contextMgr recordText 0x%x 0x%x' % (start, end))
         self.text_start = start
         self.text_end = end
 
@@ -358,6 +359,7 @@ class GenContextMgr():
            if leader_pid in self.pid_cache:
                self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
                self.addTask(pid, new_addr)
+               self.top.addProc(pid, leader_pid, comm)
 
         if not self.watching_tasks and \
                (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
@@ -365,7 +367,7 @@ class GenContextMgr():
             ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
-                self.lgr.debug('resim_context')
+                #self.lgr.debug('resim_context')
             #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
@@ -390,7 +392,7 @@ class GenContextMgr():
                 ''' Watching processes, but new process should not be watched '''
                 if self.debugging_pid is not None:
                     cpu.current_context = self.default_context
-                    self.lgr.debug('default_context')
+                    #self.lgr.debug('default_context')
                 #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 self.clearAllBreak()
@@ -485,7 +487,7 @@ class GenContextMgr():
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('contextManager restoreDebug set cpu context to resim')
+        self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchTasks(self):
         if self.task_break is None:
@@ -607,6 +609,9 @@ class GenContextMgr():
         if pid is None:
             pid = cur_pid
             rec = self.task_utils.getCurTaskRec() 
+        if rec is None:
+            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
+            return
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
             self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
