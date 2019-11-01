@@ -77,6 +77,7 @@ class reverseToCall():
             self.reg = None
             self.reg_num = None
             self.reg_val = None
+            self.prev_reg_val = None
             self.stop_hap = None
             self.uncall = False
             self.is_monitor_running = is_monitor_running
@@ -97,6 +98,7 @@ class reverseToCall():
             self.value = None
             self.save_cycle = None
             self.save_reg_mod = None
+            self.ida_funs = None
 
     def getStartCycles(self):
         return self.start_cycles
@@ -324,12 +326,28 @@ class reverseToCall():
             if instruct.startswith('call'):
                return True
         return False
-        
-    def isRet(self, instruct):
+       
+    def sameFun(self, eip):
+        ''' return true if ida_fun set and given ip in same function as previous ip ''' 
+        ''' TBD not used '''
+        retval = False
+        if self.ida_funs is not None:
+            f = self.ida_funs.getFun(eip)
+            if f is not None:
+                fp = self.ida_funs.getFun(self.previous_eip)
+                if fp == f:
+                    retval = True
+        return retval
+
+    def isRet(self, instruct, eip):
         if self.cpu.architecture == 'arm':
             parts = instruct.split()
             if parts[0].strip().startswith('ld') and parts[1].startswith('pc'):
-                return True
+                op2, op1 = self.decode.getOperands(instruct)
+                #if '[' in op2 and 'pc' in op2:
+                if op2 == 'lr':
+                    return True
+                return False
             if parts[0].strip().startswith('ldm') and 'pc' in instruct:
                 return True
 
@@ -383,7 +401,7 @@ class reverseToCall():
         done = False
         if cpl > 0:
             self.lgr.debug('tryBackOne user space')
-            if self.step_into or not self.isRet(instruct[1]):
+            if self.step_into or not self.isRet(instruct[1], eip):
                 self.lgr.debug('tryBackOne worked ok')
                 done = True
                 self.cleanup(self.cpu)
@@ -407,7 +425,7 @@ class reverseToCall():
                         got_it = prev_cycles - 1
                         break
                     else:
-                        self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
+                        #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
                         prev_cycles = cycles
 
                 if not got_it:
@@ -504,7 +522,7 @@ class reverseToCall():
                     got_it = prev_cycles - 1
                     break
                 else:
-                    self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
+                    #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
                     prev_cycles = cycles
 
             if not got_it:
@@ -520,7 +538,10 @@ class reverseToCall():
                 retval = True
             else:
                 retval = False
-                self.lgr.error('jumpOverKernel failed to maintain register')
+                self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
+                user_cycles = cur_cycles+1
+                cmd = 'skip-to cycle = %d ' % user_cycles
+                SIM_run_command(cmd)
         else:
             forward = self.cpu.cycles+1
             cmd = 'skip-to cycle = %d ' % forward
@@ -531,6 +552,7 @@ class reverseToCall():
             self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, eip-1, 1, 0)
             self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
             SIM_run_alone(SIM_run_command, 'rev')
+            retval = None
         return retval
 
     def kernInterruptHap(self, my_args, one, exception, error_string):
@@ -576,6 +598,7 @@ class reverseToCall():
         except:
             self.lgr.error('doRevToModReg got bad regnum %d for reg <%s>' % (self.reg_num, reg))
             return
+        self.prev_reg_val = self.reg_val
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('doRevToModReg starting at %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         done = False
@@ -587,8 +610,20 @@ class reverseToCall():
                 if not self.tooFarBack():
     
                     if len(self.sysenter_cycles[pid]) > 0:
-                        if not self.jumpOverKernel(pid):
-                            self.lgr.debug('doRevModReg failed to jump over kernel')
+                        kjump = self.jumpOverKernel(pid)
+                        if kjump is None:
+                            self.lgr.debug('doRevModReg must be reversing to point kernel entry via asynch interrupt')
+                            done = True
+                        elif not kjump:
+                            eip = self.top.getEIP(self.cpu)
+                            self.lgr.debug('doRevModReg kernel changed register? eip now 0x%x' % eip)
+                            rval = self.top.getReg(self.reg, self.cpu) 
+                            ida_message = 'Kernel modified register %s to 0x%x' % (self.reg, rval)
+                            bm = "backtrack eip:0x%x follows kernel modification of reg:%s to 0x%x" % (eip, self.reg, rval)
+                            self.bookmarks.setDebugBookmark(bm)
+                            self.context_manager.setIdaMessage(ida_message)
+                            self.cleanup(self.cpu)
+                            self.top.skipAndMail()
                             done = True
                     else:
                         my_args = procInfo.procInfo(comm, self.cpu, self.pid)
@@ -616,6 +651,9 @@ class reverseToCall():
                     self.cleanup(self.cpu)
                 else:
                     if not self.tooFarBack():
+                        eip = self.top.getEIP(self.cpu)
+                        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                        self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                         if self.cpu.architecture == 'arm':
                             self.followTaintArm(reg_mod_type)
                         else:
@@ -694,6 +732,7 @@ class reverseToCall():
                         self.lgr.debug('get operands from %s' % instruct[1])
                         op1, op0 = self.decode.getOperands(instruct[1])
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
+                        #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
                         if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg):
                             self.lgr.debug('cycleRegisterMod at %x, we are done' % eip)
                             done = True
@@ -705,6 +744,22 @@ class reverseToCall():
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('mov') and self.decode.isReg(op1):
                                 retval = RegisterModType(op1, RegisterModType.REG)
+                            elif mn.startswith('add') or mn.startswith('sub'):
+                                parts = op1.split(',') 
+                                if len(parts) == 2:
+                                   rn = parts[0].strip()
+                                   if self.decode.isReg(rn):
+                                       op2 = parts[1].strip()
+                                       if not self.decode.isReg(op2):
+                                           retval = RegisterModType(rn, RegisterModType.REG)
+                                       else: 
+                                           op2_val = self.top.getReg(op2, self.cpu) 
+                                           if op2_val == self.reg_val:
+                                               retval = RegisterModType(op2, RegisterModType.REG)
+                                           else:
+                                               rn_val = self.top.getReg(rn, self.cpu) 
+                                               if rn_val == self.reg_val:
+                                                   retval = RegisterModType(rn, RegisterModType.REG)
                                 
                     elif self.cpu.architecture == 'arm': 
                         if ']!' in instruct[1]:
@@ -716,12 +771,14 @@ class reverseToCall():
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
                             rval = self.task_utils.getMemUtils().readPtr(self.cpu, addr)
-                            self.lgr.debug('cycleRegisterMod at %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x' % (eip, addr, rval, self.reg_val))
-                            if rval != self.reg_val:
-                                self.lgr.error('cycleRegisterMod wrong value')
+                            self.lgr.debug('cycleRegisterMod at %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x prev 0x%x' % (eip, addr, 
+                                    rval, self.reg_val, self.prev_reg_val))
+                            if abs(rval - self.prev_reg_val) > 64:
+                                self.lgr.error('cycleRegisterMod wrong value (diff > 64)')
                                 done = True
                                 retval = RegisterModType(None, RegisterModType.BAIL)
                             elif addr is not None:
+                                self.prev_reg_val = rval
                                 done = True
                                 pc_addr = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
                                 if pc_addr is not None:
@@ -974,7 +1031,7 @@ class reverseToCall():
             if self.first_back and self.isSyscall(instruct[1]):
                 self.lgr.debug('stoppedReverseToCall first back is syscall at %x, we are done' % eip)
                 self.cleanup(cpu)
-            elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1]) or self.step_into):
+            elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1], eip) or self.step_into):
                 self.lgr.debug('stoppedReverseToCall first back not a ret or step_into at %x, we are done' % eip)
                 self.cleanup(cpu)
             elif self.isCall(instruct[1]):
@@ -988,7 +1045,7 @@ class reverseToCall():
                 else:
                    self.lgr.debug('stoppedReverseToCall 0x%x got call %s   got_calls %d, need %d' % (eip, instruct[1], self.got_calls, self.need_calls))
                    SIM_run_alone(SIM_run_command, cmd)
-            elif self.isRet(instruct[1]):
+            elif self.isRet(instruct[1], eip):
                 self.need_calls += 1
                 self.lgr.debug('stoppedReverseToCall 0x%x got ret %s  need: %d' % (eip, instruct[1], self.need_calls))
                 if self.first_back and not self.uncall:
@@ -1098,3 +1155,5 @@ class reverseToCall():
                     self.sysenter_cycles[pid].append(cycles)
             
 
+    def setIdaFuns(self, ida_funs):
+        self.ida_funs = ida_funs
