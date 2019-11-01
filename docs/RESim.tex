@@ -196,6 +196,7 @@ that returns one byte would break on a reference to the fifth byte in the buffer
 
 \item {\tt trackIO(FD)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of bookmarks is displayed in the IDA client {\tt data watch} window (right click and refresh).
+Note this command may not stop on its own, but can be interrupted using <ctl> C.
 
 \item {\tt showThreads} - List the thread PIDs of the process being debugged.
 
@@ -714,6 +715,26 @@ That driver script must include this line at its end:
 /usr/bin/simics-agent  --upload driver-ready.flag
 \end{verbatim}
 The launchRESim.py will boot the driver component and will not begin boot of other components until the {\tt driver-ready.flag} appears.
+
+\section{Simics user notes}
+This section includes ad-hoc suggestions for users with little Simics experience.
+
+\begin{itemize}
+\item Simics documentation is in the doc directory relative to workspace directories.
+
+\item See the \textit{ethernet...} manual for connecting real networks.
+
+\item Use wireshark <switch> to see traffic going through one of the switches.
+
+\item The enable-realtime-mode prevents the simulation from running faster than real time.  Useful when trying to login
+to a virtual console, or avoid network timeouts.  Also useful when working remotely and you cannot get a ctl C in 
+edgewise.
+
+\item The "x" command at the simics command line displays memory values.  Use "help" and "apropos" to find other commands of interest.
+
+\item To save changes made to an OS disk image, use save-persistent-state; and then exit simics and use the bin/checkpoint\_merge command
+to create a new craff file (found in the checkpoint directory).
+\end{itemize}
 
 \section{ToDo}
 Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
