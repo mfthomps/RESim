@@ -3,7 +3,7 @@ For each function, look for a reference to string containing ": START".  When fo
 assume that is a log message artifact containing the name of the function.  Use that
 to rename the function so it matches the original C.  Intended for stripped files.
 '''    
-ea = ScreenEA()
+ea = get_screen_ea()
 for function_ea in Functions(SegStart(ea), SegEnd(ea)):
     fun_name = GetFunctionName(function_ea)
     end = FindFuncEnd(function_ea)

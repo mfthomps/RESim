@@ -3,11 +3,23 @@ import json
 import idaapi
 import idc
 import idautils
+import ida_nalt
+import ida_dbg
+import ida_kernwin
 import bpUtils
 import gdbProt
 import origAnalysis
 import regFu
 no_rev = 'reverse execution disabled'
+def getHighlight():
+    v = ida_kernwin.get_current_viewer()
+    t = ida_kernwin.get_highlight(v)
+    retval = None
+    if t is None:
+        print('Nothing highlighted in viewer %s' % str(v))
+    else:
+        retval, flags = t 
+    return retval
 class IdaSIM():
     def __init__(self, stack_trace, bookmark_view, data_watch, kernel_base, reg_list):
         self.stack_trace = stack_trace
@@ -18,7 +30,7 @@ class IdaSIM():
         self.recent_fd = '1'
         self.kernel_base = kernel_base
         self.reg_list = reg_list
-        self.origAnalysis = origAnalysis.OrigAnalysis(idc.GetInputFile())
+        self.origAnalysis = origAnalysis.OrigAnalysis(ida_nalt.get_root_filename())
         proc_info = idaapi.get_inf_structure()
         if proc_info.procName == 'ARM':
             self.PC='pc'
@@ -38,8 +50,8 @@ class IdaSIM():
         return True 
 
     def doRevToCursor(self):
-        cursor = idc.ScreenEA()
-        curAddr = idc.GetRegValue(self.PC)
+        cursor = idc.get_screen_ea()
+        curAddr = idc.get_reg_value(self.PC)
         if cursor == curAddr:
             print 'attempt to go back to where you are ignored'
             return
@@ -52,7 +64,7 @@ class IdaSIM():
             self.signalClient()
 
     def XXXXXXXXXXXXXXXsignalClient(self, norev=False):
-        start_eip = idc.GetRegValue(self.PC)
+        start_eip = idc.get_reg_value(self.PC)
         if not norev:
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.rev1()");')
             eip = gdbProt.getEIPWhenStopped()
@@ -61,19 +73,19 @@ class IdaSIM():
                 return
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         idaapi.step_into()
-        idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        new_eip = idc.GetRegValue(self.PC)
+        ida_dbg.wait_for_next_event(idc.WFNE_SUSP, -1)
+        new_eip = idc.get_reg_value(self.PC)
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
             print('in kernel, run to user')
         self.updateStackTrace()
 
     def signalClient(self, norev=False):
-        start_eip = idc.GetRegValue(self.PC)
+        start_eip = idc.get_reg_value(self.PC)
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         if norev:
             idaapi.step_into()
-            idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
+            ida_dbg.wait_for_next_event(idc.WFNE_SUSP, -1)
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.printRegJson()");')
         try:
             regs = json.loads(simicsString)
@@ -87,11 +99,11 @@ class IdaSIM():
             elif r == 'CPSR':
                 r = 'PSR'
             #print('set %s to 0x%x' % (r, regs[reg]))
-            idc.SetRegValue(regs[reg], r)
-        idc.RefreshDebuggerMemory()
+            idc.set_reg_value(regs[reg], r)
+        ida_dbg.refresh_debugger_memory()
 
 
-        new_eip = idc.GetRegValue(self.PC)
+        new_eip = idc.get_reg_value(self.PC)
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
             print('in kernel, run to user')
@@ -111,8 +123,8 @@ class IdaSIM():
     
     def doRevStepOver(self):
         #print 'in doRevStepOver'
-        curAddr = idc.GetRegValue(self.PC)
-        prev_eip = idc.PrevHead(curAddr)
+        curAddr = idc.get_reg_value(self.PC)
+        prev_eip = idc.prev_head(curAddr)
         eip = None
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
@@ -128,8 +140,8 @@ class IdaSIM():
     def doRevStepInto(self):
         #print 'in doRevStepInto'
         #eip = reverseStepInstruction()
-        curAddr = idc.GetRegValue(self.PC)
-        prev_eip = idc.PrevHead(curAddr)
+        curAddr = idc.get_reg_value(self.PC)
+        prev_eip = idc.prev_head(curAddr)
         eip = None
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
@@ -145,7 +157,7 @@ class IdaSIM():
     def doRevFinish(self):
         #print 'doRevFinish'
         #doRevCommand('uncall-function')
-        cur_addr = idc.GetRegValue(self.PC)
+        cur_addr = idc.get_reg_value(self.PC)
         f = idc.GetFunctionAttr(cur_addr, idc.FUNCATTR_START)
         if f != idaapi.BADADDR: 
             print('doRevFinish got function start at 0x%x, go there, and further back 1' % f) 
@@ -162,7 +174,7 @@ class IdaSIM():
     '''
     def doReverse(self, extra_back=None):
         print 'in doReverse'
-        curAddr = idc.GetRegValue(self.PC)
+        curAddr = idc.get_reg_value(self.PC)
         #goNowhere()
         #print('doReverse, back from goNowhere curAddr is %x' % curAddr)
         isBpt = idc.CheckBpt(curAddr)
@@ -204,7 +216,7 @@ class IdaSIM():
     Run backwards until we find the most recent write to the current SP
     '''
     def wroteToSP(self):
-        sp = idc.GetRegValue(self.SP)
+        sp = idc.get_reg_value(self.SP)
         print 'Running backwards to previous write to ESP:0x%x' % sp
         self.wroteToAddress(sp)
      
@@ -220,14 +232,14 @@ class IdaSIM():
     def getUIAddress(self, prompt):    
         value = self.registerMath()
         if value is None:
-            value = idc.GetRegValue(self.SP)
-        target_addr = idc.AskAddr(value, prompt)
+            value = idc.get_reg_value(self.SP)
+        target_addr = ida_kernwin.ask_addr(value, prompt)
         return target_addr
     
     def writeWord(self):
         print('Write Word')
-        addr = idc.AskAddr(0, 'Address to modify')
-        value = idc.AskAddr(0, 'Value')
+        addr = ida_kernwin.ask_addr(0, 'Address to modify')
+        value = ida_kernwin.ask_addr(0, 'Value')
         command = '@cgc.writeWord(0x%x, 0x%x)' % (addr, value)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     
@@ -257,7 +269,7 @@ class IdaSIM():
         if eip >=  self.kernel_base:
             print('previous syscall wrote to address 0x%x' % target_addr)
         else:
-            curAddr = idc.GetRegValue(self.PC)
+            curAddr = idc.get_reg_value(self.PC)
             #print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
             print('Previous instruction  wrote to 0x%x' % (target_addr))
     
@@ -274,7 +286,7 @@ class IdaSIM():
         if eip >=  self.kernel_base:
             print('previous is as far back as we can trace content of address 0x%x' % target_addr)
         else:
-            curAddr = idc.GetRegValue(self.PC)
+            curAddr = idc.get_reg_value(self.PC)
             print('Current instruction (0x%x) is as far back as we can trace 0x%x' % (curAddr, target_addr))
     
     def showSimicsMessage(self):
@@ -291,7 +303,7 @@ class IdaSIM():
     
            
     def wroteToRegister(self): 
-        highlighted = idaapi.get_highlighted_identifier()
+        highlighted = getHighlight()
         '''
         if highlighted is None  or highlighted not in self.reg_list:
            print('%s not in reg list' % highlighted)
@@ -314,12 +326,12 @@ class IdaSIM():
             self.signalClient()
         else:
             return
-        curAddr = idc.GetRegValue(self.PC)
+        curAddr = idc.get_reg_value(self.PC)
         print('Current instruction (0x%x) wrote to reg %s' % (curAddr, highlighted))
         return eip
         
     def trackRegister(self): 
-        highlighted = idaapi.get_highlighted_identifier()
+        highlighted = getHighlight()
         if highlighted is None  or not self.isReg(highlighted):
            print('%s not in reg list' % highlighted)
            print('%s' % str(self.reg_list))
@@ -343,7 +355,7 @@ class IdaSIM():
             self.signalClient()
         else:
             return
-        curAddr = idc.GetRegValue(self.PC)
+        curAddr = idc.get_reg_value(self.PC)
         print('Current instruction (0x%x) is as far back as we can trace reg %s' % (curAddr, highlighted))
         self.showSimicsMessage()
         bookmark_list = self.bookmark_view.updateBookmarkView()
@@ -369,7 +381,7 @@ class IdaSIM():
             print('user canceled')
          
     def askGoToBookmark(self):
-        mark = idc.AskStr('myBookmark', 'Name of bookmark to jump to:')
+        mark = ida_kernwin.ask_str('myBookmark', 'Name of bookmark to jump to:')
         if mark is not None and mark != 0:
             self.goToBookmarkRefresh(mark)
     
@@ -434,7 +446,7 @@ class IdaSIM():
         Force ida to send server the current breakpoints
         '''
         #print('in goNowhere')
-        #curAddr = idc.GetRegValue("EIP")
+        #curAddr = idc.get_reg_value("EIP")
         #print('in goNowhere back from getReg')
         #bptEnabled, disabledSet = setAndDisable(curAddr)
         #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.skipAndMail()");') 
@@ -451,7 +463,7 @@ class IdaSIM():
         self.signalClient()
     
     def runToSyscall(self):
-            value = idc.AskLong(0, "Syscall number?")
+            value = ida_kernwin.ask_long(0, "Syscall number?")
             print('run to syscall of %d' % value)
             if value == 0:
                 simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToSyscall()");') 
@@ -466,7 +478,7 @@ class IdaSIM():
             #print('runtoSyscall, stopped at eip 0x%x, then stepwait.' % eip)
             #gdbProt.stepWait()
             self.signalClient(norev=True)
-            eax = idc.GetRegValue("EAX")
+            eax = idc.get_reg_value("EAX")
             print('Syscall result: %d' % int(eax))
             #print('runtoSyscall rev over')
             #doRevStepOver()
@@ -485,7 +497,7 @@ class IdaSIM():
         print('revtoSyscall done')
     
     def revBlock(self):
-        cur_addr = idc.GetRegValue(self.PC)
+        cur_addr = idc.get_reg_value(self.PC)
         f = idaapi.get_func(cur_addr)
         if f is None:
             print('Ida analysis sees no function, cannot perform this function')
@@ -531,7 +543,7 @@ class IdaSIM():
         
     def runToIO(self):
         print('runToIO')
-        result = idc.AskStr(self.recent_fd, 'FD ?')
+        result = ida_kernwin.ask_str(self.recent_fd, 'FD ?')
         if result is None:
             return
         self.recent_fd = result
@@ -547,7 +559,7 @@ class IdaSIM():
 
     def runToAccept(self):
         print('runToAccept')
-        result = idc.AskStr(self.recent_fd, 'FD ?')
+        result = ida_kernwin.ask_str(self.recent_fd, 'FD ?')
         if result is None:
             return
         self.recent_fd = result
@@ -563,7 +575,7 @@ class IdaSIM():
     
     def runToOpen(self):
         print('runToOpen')
-        result = idc.AskStr('?', 'filename substring')
+        result = ida_kernwin.ask_str('?', 'filename substring')
         if result is None:
             return
         command = "@cgc.runToOpen('%s')" % result
@@ -576,7 +588,7 @@ class IdaSIM():
 
     def runToWrite(self):
         print('runToWrite')
-        result = idc.AskStr('?', 'String')
+        result = ida_kernwin.ask_str('?', 'String')
         if result is None:
             return
         command = "@cgc.runToWrite('%s')" % result
@@ -589,7 +601,7 @@ class IdaSIM():
 
     def runToConnect(self):
         print('runToConnect')
-        result = idc.AskStr('?', 'Network address as ip:port (or regex)')
+        result = ida_kernwin.ask_str('?', 'Network address as ip:port (or regex)')
         if result is None:
             return
         #result = '192.168.31.52:20480'
@@ -603,7 +615,7 @@ class IdaSIM():
     
     def runToBind(self):
         print('runToBind')
-        result = idc.AskStr('?', 'Network address as ip:port (or regex)')
+        result = ida_kernwin.ask_str('?', 'Network address as ip:port (or regex)')
         if result is None:
             return
         #result = '192.168.31.52:20480'
@@ -621,6 +633,9 @@ class IdaSIM():
         if addr is not None:
             self.goNowhere()
     
+    def updateBookmarkView(self):
+        bookmark_list = self.bookmark_view.updateBookmarkView()
+
     def rebuildBookmarkView(self):
         print 'rebuilding bookmark view'
         self.bookmark_view.Create(self)
@@ -644,10 +659,10 @@ class IdaSIM():
     
     def recordText(self):
         for seg_ea in idautils.Segments():
-            print('seg: %s' % idc.SegName(seg_ea))
-            if idc.SegName(seg_ea) == '.text':
-                start = idc.SegStart(seg_ea)
-                end = idc.SegEnd(seg_ea)
+            print('seg: %s' % idc.get_segm_name(seg_ea))
+            if idc.get_segm_name(seg_ea) == '.text':
+                start = idc.get_segm_attr(seg_ea, idc.SEGATTR_START)
+                end = idc.get_segm_attr(seg_ea, idc.SEGATTR_END)
                 print('text at 0x%x - 0x%x' % (start, end))
                 gdbProt.Evalx('SendGDBMonitor("@cgc.recordText(0x%x, 0x%x)");' % (start, end)) 
                 break
@@ -657,8 +672,8 @@ class IdaSIM():
     def doStepInto(self):
         #print('in doInto')
         idaapi.step_into()
-        idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
-        cur_addr = idc.GetRegValue(self.PC)
+        ida_dbg.wait_for_next_event(idc.WFNE_SUSP, -1)
+        cur_addr = idc.get_reg_value(self.PC)
         if cur_addr > self.kernel_base:
             self.runToUserSpace()
     
@@ -666,9 +681,9 @@ class IdaSIM():
         #print('in doStepOver')
         idaapi.step_over()
         #print('back from step over')
-        idc.GetDebuggerEvent(idc.WFNE_SUSP, -1)
+        ida_dbg.wait_for_next_event(idc.WFNE_SUSP, -1)
         #print('back getDebuggerEvent')
-        cur_addr = idc.GetRegValue(self.PC)
+        cur_addr = idc.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
             print('run to user space')
@@ -740,12 +755,12 @@ class IdaSIM():
             retval = regFu.getOffset()
         else:
             #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp']
-            highlighted = idaapi.get_highlighted_identifier()
+            highlighted = getHighlight()
             retval = None
             if highlighted is not None:
                 print 'highlighted is %s' % highlighted
                 if self.isReg(highlighted):
-                    retval = idc.GetRegValue(highlighted)
+                    retval = idc.get_reg_value(highlighted)
                 else:
                     try:
                         retval = int(highlighted, 16)
@@ -763,9 +778,9 @@ class IdaSIM():
                                     pass
                                 if value is not None:
                                     if rest.startswith('+'):
-                                        regvalue = idc.GetRegValue(reg)
+                                        regvalue = idc.get_reg_value(reg)
                                         retval = regvalue + value
                                     elif rest.startswith('-'):
-                                        regvalue = idc.GetRegValue(reg)
+                                        regvalue = idc.get_reg_value(reg)
                                         retval = regvalue - value
         return retval

@@ -23,8 +23,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 import idaapi
+import ida_dbg
 import idc
-from idc import Eval
+from idc import eval_idc as Eval
 import time
 MAILBOX='mailbox:'
 def Evalx(cmd):
@@ -108,5 +109,5 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
 
 def stepWait():
     idc.StepInto()
-    event = idc.GetDebuggerEvent(idc.WFNE_ANY, -1)
+    event = ida_dbg.wait_for_next_event(idc.WFNE_ANY, -1)
 

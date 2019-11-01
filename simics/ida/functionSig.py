@@ -40,7 +40,7 @@ def getBlockSig(block):
 
 def findBlock():
     a_hash = None
-    ea = idc.ScreenEA()
+    ea = idc.get_screen_ea()
     print('get block for %x' % ea)
     f = idaapi.get_func(ea)
     fc = idaapi.FlowChart(f)
@@ -126,7 +126,7 @@ def findMatch(base_sigs, function_ea, bar=0.85):
 
 def genSignatures():
 
-    ea = idc.ScreenEA()
+    ea = idc.get_screen_ea()
     sig_dir = '/tmp'
     fname = idaapi.get_root_filename() 
     print('file is %s' % fname)
@@ -184,9 +184,9 @@ def querySignatures():
     with open(rcb_file) as fh:
         print('got blocks from %s' % rcb_file)
         base_json = json.load(fh)
-        ea = idc.ScreenEA()
+        ea = idc.get_screen_ea()
         #print('find match for 0x%x' % ea) 
-        #findMatch(base_json, idc.ScreenEA())
+        #findMatch(base_json, idc.get_screen_ea())
         
         seg_start = idc.SegStart(ea)
         seg_end = idc.SegEnd(ea)
@@ -202,7 +202,7 @@ def querySignatures():
 if __name__ == '__main__':
     
 
-    ea = idc.ScreenEA()
+    ea = idc.get_screen_ea()
     sig_dir = '/tmp'
     fname = idaapi.get_root_filename() 
     print('file is %s' % fname)

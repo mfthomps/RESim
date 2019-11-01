@@ -1,10 +1,25 @@
 import idaapi
+import ida_kernwin
+import ida_dbg
 import time
-from idaapi import Form
+from ida_kernwin import Form
 import idc
 import gdbProt
 import regFu
 import getAddrCount
+import setAddrValue
+import setAddrString
+
+def getHighlight():
+    v = ida_kernwin.get_current_viewer()
+    t = ida_kernwin.get_highlight(v)
+    retval = None
+    if t is None:
+        print('Nothing highlighted in viewer %s' % str(v))
+    else:
+        retval, flags = t 
+    return retval
+
 def getHex(s):
     retval = None
     hs = s
@@ -22,7 +37,7 @@ class RevToHandler(idaapi.action_handler_t):
             self.isim = isim
         # reverse to the highlighted address
         def activate(self, ctx):
-            highlighted = idaapi.get_highlighted_identifier()
+            highlighted = getHighlight()
             addr = getHex(highlighted)
             command = '@cgc.revToAddr(0x%x, extra_back=0)' % (addr)
             print('cmd: %s' % command)
@@ -40,8 +55,8 @@ class ModRegHandler(idaapi.action_handler_t):
             idaapi.action_handler_t.__init__(self)
             self.isim = isim
         def activate(self, ctx):
-            highlighted = idaapi.get_highlighted_identifier()
-            current = idc.GetRegValue(highlighted)
+            highlighted = getHighlight()
+            current = idc.get_reg_value(highlighted)
             default = '%x' % current
             print('default %s' % default)
             #prompt = 'Value to write to %s (in hex, no prefix)' % highlighted
@@ -63,7 +78,7 @@ class DataWatchHandler(idaapi.action_handler_t):
             idaapi.action_handler_t.__init__(self)
             self.last_data_watch_count = 32
         def activate(self, ctx):
-            highlighted = idaapi.get_highlighted_identifier()
+            highlighted = getHighlight()
             addr = getHex(highlighted)
             count = self.last_data_watch_count
             addr, count = getAddrCount.getAddrCount('watch memory', addr, count)
@@ -116,7 +131,7 @@ class DisHandler(idaapi.action_handler_t):
 
         # Disassemble SO
         def activate(self, ctx):
-            eip = idc.ScreenEA()
+            eip = idc.get_screen_ea()
             fun_eip = self.isim.getOrigAnalysis().origFun(eip)
                
             return 1
@@ -129,6 +144,7 @@ class ModMemoryHandler(idaapi.action_handler_t):
         def __init__(self, isim):
             idaapi.action_handler_t.__init__(self)
             self.isim = isim
+            self.last_data_mem_set = 0
 
         # Modify memory
         def activate(self, ctx):
@@ -138,7 +154,7 @@ class ModMemoryHandler(idaapi.action_handler_t):
                 print('effective addr 0x%x value %s' % (addr, simicsString))
                 value = getHex(simicsString)
             else:
-                highlighted = idaapi.get_highlighted_identifier()
+                highlighted = getHighlight()
                 addr = getHex(highlighted)
                 if addr is None:
                     print('ModMemoryHandler unable to parse hex from %s' % highlighted)
@@ -147,20 +163,20 @@ class ModMemoryHandler(idaapi.action_handler_t):
                 print('addr 0x%x value %s' % (addr, simicsString))
                 value = getHex(simicsString)
 
-            # Sample form from kernwin.hpp
-            s = """Modify memory
-            Address: %$
-            <~E~nter value:S:32:16::>
-            """
-            num = Form.NumericArgument('N', value=value)
-            ok = idaapi.AskUsingForm(s,
-                    Form.NumericArgument('$', addr).arg,
-                    num.arg)
-            if ok == 1:
-                print("You entered: %x" % num.value)
-                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, num.value)) 
-                time.sleep(1)
-                idc.RefreshDebuggerMemory()
+            val = self.last_data_mem_set
+            addr, val = setAddrValue.setAddrValue('watch memory', addr, val)
+            if val is None:
+                return
+            self.last_data_mem_set = val
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, val)) 
+            time.sleep(2)
+            self.isim.updateBookmarkView()
+            self.isim.updateDataWatch()
+            ida_dbg.refresh_debugger_memory()
+            ida_kernwin.refresh_idaview_anyway()
+            ida_kernwin.refresh_choosers()
+            print('Bookmarks cleared -- select origin bookmark to return to this cycle')
+            print('Note: data watches previous to this point are retained, but associated bookmarks are deleted')
 
         # This action is always available.
         def update(self, ctx):
@@ -179,7 +195,7 @@ class StringMemoryHandler(idaapi.action_handler_t):
                 print('effective addr 0x%x value %s' % (addr, simicsString))
                 value = simicsString
             else:
-                highlighted = idaapi.get_highlighted_identifier()
+                highlighted = getHighlight()
                 addr = getHex(highlighted)
                 if addr is None:
                     print('ModMemoryHandler unable to parse hex from %s' % highlighted)
@@ -188,27 +204,27 @@ class StringMemoryHandler(idaapi.action_handler_t):
                 print('addr 0x%x value %s' % (addr, simicsString))
                 value = simicsString
 
-            # Sample form from kernwin.hpp
-            s = """Modify memory
-            Address: %$
-            <~E~nter value:t40:80:50::>
-            """
-            ti = idaapi.textctrl_info_t(value)
-            ok = idaapi.AskUsingForm(s, Form.NumericArgument('$', addr).arg, idaapi.pointer(idaapi.c_void_p.from_address(ti.clink_ptr)))
-            '''
-            string = Form.StringArgument(value)
-            ok = idaapi.AskUsingForm(s,
-                    Form.NumericArgument('$', addr).arg,
-                    string.arg)
-            '''
-            if ok == 1:
-                arg = "'%s'" % ti.text.strip()
-                print("You entered: %s <%s>" % (ti.text, arg))
-                cmd = "@cgc.writeString(0x%x, %s)" % (addr, arg) 
-                print cmd
-                simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % (cmd)) 
-                time.sleep(1)
-                idc.RefreshDebuggerMemory()
+            sas = setAddrString.SetAddrString()
+            sas.Compile()
+            sas.iAddr.value = addr 
+            sas.iStr1.value = value 
+            ok = sas.Execute()
+            if ok != 1:
+                return
+            self.last_data_mem_set = sas.iStr1.value
+            #sparm = "'%s'" % sas.iStr1.value
+            sparm = "'%s'" % str(sas.iStr1.value).strip()
+            dog = 'SendGDBMonitor("@cgc.writeString(0x%x, %s)");' % (sas.iAddr.value, sparm)
+            print('dog is <%s>' % dog)
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeString(0x%x, %s)");' % (sas.iAddr.value, sparm))
+            time.sleep(2)
+            self.isim.updateBookmarkView()
+            self.isim.updateDataWatch()
+            ida_dbg.refresh_debugger_memory()
+            ida_kernwin.refresh_idaview_anyway()
+            ida_kernwin.refresh_choosers()
+            print('Bookmarks cleared -- select origin bookmark to return to this cycle')
+            print('Note: data watches previous to this point are retained, but associated bookmarks are deleted')
 
         # This action is always available.
         def update(self, ctx):
@@ -264,29 +280,29 @@ def register(isim):
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
 
-class Hooks(idaapi.UI_Hooks):
-        def populating_tform_popup(self, form, popup):
+class Hooks(ida_kernwin.UI_Hooks):
+        def populating_widget_popup(self, form, popup):
             # You can attach here.
             pass
 
-        def finish_populating_tform_popup(self, form, popup):
+        def finish_populating_widget_popup(self, form, popup):
             # Or here, after the popup is done being populated by its owner.
 
             # We will attach our action to the context menu
             # for the 'Functions window' widget.
             # The action will be be inserted in a submenu of
             # the context menu, named 'Others'.
-            if idaapi.get_tform_type(form) == idaapi.BWN_CALL_STACK:
+            if idaapi.get_widget_type(form) == idaapi.BWN_CALL_STACK:
                 #line = form.GetCurrentLine()
                 pass
-            elif idaapi.get_tform_type(form) == idaapi.BWN_DISASM or \
-                 idaapi.get_tform_type(form) == idaapi.BWN_DUMP:
+            elif idaapi.get_widget_type(form) == idaapi.BWN_DISASM or \
+                 idaapi.get_widget_type(form) == idaapi.BWN_DUMP:
                 #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
                 regs = idaapi.ph_get_regnames()
                 idaapi.attach_action_to_popup(form, popup, "revCursor:action", 'RESim/')
                 idaapi.attach_action_to_popup(form, popup, "dis:action", 'RESim/')
 
-                highlighted = idaapi.get_highlighted_identifier()
+                highlighted = getHighlight()
                 if highlighted is not None:
                     if highlighted in regs:
                         idaapi.attach_action_to_popup(form, popup, "modReg:action", 'RESim/')

@@ -25,6 +25,8 @@
 
 import time
 import idaapi
+import ida_idaapi
+import ida_dbg
 import idc
 import idautils
 import bpUtils
@@ -169,7 +171,7 @@ def getAddress(simicsString):
     return addr
 
 def getCPL():
-        cs = idc.GetRegValue("CS")
+        cs = idc.get_reg_value("CS")
         return cs & 3
 def generateSignatures():
         functionSig.genSignatures()
@@ -441,9 +443,9 @@ if __name__ == "__main__":
     #primePump()
     #nameSysCalls(True)
     #print('back from nameSysCalls')
-    form=idaapi.find_tform("Stack view")
+    form=idaapi.find_widget("Stack view")
     #print('do switch')
-    idaapi.switchto_tform(form, True)
+    idaapi.activate_widget(form, True)
     #print('now create bookmark_view')
     print('RESim Ida Client Version 1.2')
     isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, kernel_base, reg_list)
@@ -467,8 +469,8 @@ if __name__ == "__main__":
     re_hooks = reHooks.Hooks()
     re_hooks.hook()
     
-    form=idaapi.find_tform("IDA View-EIP")
-    idaapi.switchto_tform(form, True)
+    form=idaapi.find_widget("IDA View-EIP")
+    idaapi.activate_widget(form, True)
     # MakeCode(eip)
 
     '''
@@ -491,7 +493,7 @@ if __name__ == "__main__":
     
         isim.showSimicsMessage()
     
-        RefreshDebuggerMemory()
+        ida_dbg.refresh_debugger_memory()
     #checkHelp()
     isim.recordText()
     isim.showSimicsMessage()
@@ -499,4 +501,4 @@ if __name__ == "__main__":
         # first origin is sometimes off, call twice.
         #goToOrigin()
         pass
-    Batch(0)
+    idc.batch(0)

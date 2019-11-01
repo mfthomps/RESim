@@ -24,7 +24,7 @@
 '''
 import idaapi
 import idc
-from idaapi import simplecustviewer_t
+from ida_kernwin import simplecustviewer_t
 import gdbProt
 import bpUtils
 
@@ -65,7 +65,7 @@ class bookmarkView(simplecustviewer_t):
             self.AddBookmarkHandler(self), 
             None)
         idaapi.register_action(add_bookmark_action)
-        form = idaapi.get_current_tform()
+        form = idaapi.get_current_widget()
         idaapi.attach_action_to_popup(form, None, 'add_bookmark:action')
         self.Show()
 
@@ -76,7 +76,7 @@ class bookmarkView(simplecustviewer_t):
         #gdbProt.stepWait()
 
     def goToBookmarkRefresh(self, mark):
-        if True or mark != '_start+1':
+        if mark != 'origin' and mark != '<None>':
             simicsString = gdbProt.goToBookmark(mark)
             if simicsString == "reverse disabled":
                 print('Reverse execution is disabled')
@@ -88,7 +88,8 @@ class bookmarkView(simplecustviewer_t):
             ''' monitor goToFirst will now handle missing page, and it starts in user space '''
             ''' TBD will end up at second instruction '''
             print('goToBookmarkRefresh, is start_1, goToFirst')
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToFirst()");') 
+            #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToFirst()");') 
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.goToOrigin()");') 
             eip = gdbProt.getEIPWhenStopped()
             
             #gdbProt.stepWait()
@@ -154,7 +155,7 @@ class bookmarkView(simplecustviewer_t):
     
     def askSetBookmark(self):
         #print('askSetBookmark')
-        addr = idc.GetRegValue(self.isim.PC)
+        addr = idc.get_reg_value(self.isim.PC)
         instruct = idc.GetDisasm(addr)
         if ';' in instruct:
             instruct, dumb = instruct.rsplit(';', 1)

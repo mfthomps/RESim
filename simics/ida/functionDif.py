@@ -59,9 +59,9 @@ def difSignatures():
     with open(rcb_file) as fh:
         print('got blocks from %s' % rcb_file)
         base_json = json.load(fh)
-        ea = idc.ScreenEA()
+        ea = idc.get_screen_ea()
         #print('find match for 0x%x' % ea) 
-        #findMatch(base_json, idc.ScreenEA())
+        #findMatch(base_json, idc.get_screen_ea())
         print('try %x' % ea) 
         difFun(base_json, ea)
         print('%d functions in base' % len(base_json))
@@ -72,7 +72,7 @@ def difSignatures():
 if __name__ == '__main__':
     
 
-    ea = idc.ScreenEA()
+    ea = idc.get_screen_ea()
     sig_dir = '/tmp'
     fname = idaapi.get_root_filename() 
     print('file is %s' % fname)

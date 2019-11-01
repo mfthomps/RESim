@@ -1,6 +1,6 @@
 import json
 funs = {}
-ea = ScreenEA()
+ea = get_screen_ea()
 print 'ea is %x' % ea
 fname = GetInputFile()
 print('inputfile %s' % fname)
