@@ -45,12 +45,41 @@ domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPL
 FIONBIO = 0x5421
 FIONREAD = 0x541B
 
-F_DUPFD = 0 
+''' fcntl commands '''
+F_CNTL_CMDS = [ 'F_DUPFD', 'F_GETFD', 'F_SETFD', 'F_GETFL', 'F_SETFL', 'F_GETLK', 'F_SETLK', 'F_SETLKW', 'F_SETOWN', 'F_GETOWN', 'F_SETSIG', 'F_GETSIG' ]
+
 
 O_NONBLOCK  =   0x00004000
 O_CLOEXEC   =   0x02000000        
+O_ACCMODE   =   00000003
+O_RDONLY    =   00000000
+O_WRONLY    =   00000001
+O_RDWR      =   00000002
+O_CREAT     =   00000100        
+O_EXCL      =   00000200       
+O_NOCTTY    =   00000400      
+O_TRUNC     =   00001000     
+O_APPEND    =   00002000
+O_NONBLOCK  =   00004000
+O_SYNC      =   00010000
+FASYNC      =   00020000    
+O_DIRECT    =   00040000   
+O_LARGEFILE =   00100000
+O_DIRECTORY =   00200000  
+O_NOFOLLOW  =   00400000 
 
+def fcntlCmdIs(cmd, s):
+    retval = False
+    if cmd in range(len(F_CNTL_CMDS)):
+        if F_CNTL_CMDS[cmd] == s:
+            retval = True
+    return retval
 
+def fcntlCmd(cmd):
+    retval =  str(cmd)
+    if cmd in range(len(F_CNTL_CMDS)):
+        retval = F_CNTL_CMDS[cmd] 
+    return retval
 
 class NetInfo():
     def __init__(self, ip, mask, broadcast, dev, label):
@@ -102,6 +131,7 @@ class SockStruct():
             self.fd = fd
             #self.addr = mem_utils.readWord32(cpu, params)
             self.addr = params
+            self.length = length
         self.port = None
         self.sin_addr = None
         self.sa_data = None
