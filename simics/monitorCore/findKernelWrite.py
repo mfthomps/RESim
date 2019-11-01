@@ -84,7 +84,8 @@ class findKernelWrite():
         else:
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
-        self.lgr.debug( 'findKernelWrite of 0x%x to addr %x, phys %x num_bytes: %d' % (value, addr, phys_block.address, num_bytes))
+        dumb, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug( 'findKernelWrite pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, num_bytes, 0)
@@ -180,22 +181,27 @@ class findKernelWrite():
         self.lgr.debug('findKernelWrite skipAlone to cycle 0x%x' % cycles)
         cmd = 'skip-to cycle=%d' % cycles
         SIM_run_command(cmd)
-        value = self.mem_utils.readWord32(self.cpu, self.addr)
         eip = self.top.getEIP(self.cpu)
-        if eip == self.bookmarks.getEIP('_start+1'):
-            ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
-            bm = None
-        else:
-            data_str = ''
-            if self.dataWatch is not None:
-                data_watch = self.dataWatch.findRange(self.addr)
-                if data_watch is not None:
-                    offset = self.addr - data_watch
-                    data_str = 'Offset %d from start of buffer at 0x%x' % (offset, data_watch)
+        value = self.mem_utils.readWord32(self.cpu, self.addr)
+        if value is None:
+            ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
+            bm = "backtrack eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
+        else: 
+            eip = self.top.getEIP(self.cpu)
+            if eip == self.bookmarks.getEIP('_start+1'):
+                ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
+                bm = None
+            else:
+                data_str = ''
+                if self.dataWatch is not None:
+                    data_watch = self.dataWatch.findRange(self.addr)
+                    if data_watch is not None:
+                        offset = self.addr - data_watch
+                        data_str = 'Offset %d from start of buffer at 0x%x' % (offset, data_watch)
                    
-            ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
-            self.lgr.debug('set ida msg to %s' % ida_message)
-            bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
+                ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
+                self.lgr.debug('set ida msg to %s' % ida_message)
+                bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
         if bm is not None:
             self.bookmarks.setDebugBookmark(bm)
         self.context_manager.setIdaMessage(ida_message)
@@ -245,11 +251,24 @@ class findKernelWrite():
         cpl = memUtils.getCPL(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         orig_cycle = self.bookmarks.getFirstCycle()
-        self.lgr.debug( 'in thinkWeWrote, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (cycle, eip, str(instruct), cpl, orig_cycle))
-        if cycle <= orig_cycle+1:
-            ida_message = "Content of 0x%x came modified prior to enabling reverse." % self.addr
-            self.lgr.debug('findKernelWrite thinkWeWrote'+ida_msg)
-            self.context_manager.setIdaMessage(ida_message)
+        dumb, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug( 'in thinkWeWrote pid:%d, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (pid, cycle, eip, str(instruct), cpl, orig_cycle))
+        if cycle <= orig_cycle:
+            range_start = self.dataWatch.findRange(self.addr)
+            range_msg = ''
+            if range_start is not None:
+                offset = self.addr - range_start
+                range_msg = ' And that is %d bytes from buffer starting at 0x%x' % (offset, range_start)
+            ida_msg = "Content of 0x%x was modified prior to enabling reverse execution. %s" % (self.addr, range_msg)
+            self.lgr.debug('findKernelWrite thinkWeWrote '+ida_msg)
+            self.context_manager.setIdaMessage(ida_msg)
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+            return
+        elif pid == 0:
+            ida_msg = "Content of 0x%x was modified in pid ZERO?" % self.addr
+            self.lgr.error('findKernelWrite thinkWeWrote '+ida_msg)
+            self.context_manager.setIdaMessage(ida_msg)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
@@ -258,7 +277,6 @@ class findKernelWrite():
                 self.lgr.debug('thinkWeWrote stopToCheckWriteCallback found second write?  but we deleted the breakpoint!!!! ignore this and reverse')
                 #SIM_run_alone(SIM_run_command, 'reverse')
                 return
-            dumb, comm, pid = self.task_utils.curProc() 
             ''' get return address '''
             self.found_kernel_write = True
             if self.kernel_write_break is not None:
@@ -286,7 +304,7 @@ class findKernelWrite():
             SIM_run_alone(SIM_run_command, 'continue')
 
         elif self.found_kernel_write:
-            self.lgr.debug('thinkWeWrote, BACKTRACK user space address 0x%x after finding kernel write to  0x%x' % (eip, self.addr))
+            self.lgr.debug('thinkWeWrote, BACKTRACK pid:%d user space address 0x%x after finding kernel write to  0x%x' % (pid, eip, self.addr))
             if not self.checkWriteValue(eip):
                 return
 
@@ -346,7 +364,8 @@ class findKernelWrite():
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         value = self.mem_utils.readWord32(self.cpu, self.addr)
-        self.lgr.debug('backOne user space write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x ' % (value, self.addr, current, eip))
+        dumb, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug('backOne user space pid: %d write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x ' % (pid, value, self.addr, current, eip))
         if not self.forward:
             previous = current - 1
             SIM_run_command('pselect %s' % self.cpu.name)
@@ -425,8 +444,10 @@ class findKernelWrite():
 
         elif self.cpu.architecture == 'arm' and mn.startswith('stm'):
             reg = self.decode.armSTM(self.cpu, instruct[1], self.addr, self.lgr)
+            self.lgr.debug('back from armSTM reg: %s cycle 0x%x' % (reg, self.cpu.cycles))
             if reg is not None:
-                self.lgr.debug('backOneAlone is stm... reg %s, find mod', reg)
+                rval = self.mem_utils.getRegValue(self.cpu, reg)
+                self.lgr.debug('backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
                 self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes)
         elif self.cpu.architecture == 'arm' and mn.startswith('str'):
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
