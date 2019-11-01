@@ -236,7 +236,8 @@ class PageFaultGen():
         cell_name = self.top.getTopComponentName(cpu)
         cpu, comm, pid = self.task_utils.curProc() 
         if exception_number != 7:
-            self.lgr.debug('fault_callback %d (%s) got fault 0x%x' % (pid, comm, exception_number))
+            #self.lgr.debug('fault_callback %d (%s) got fault 0x%x' % (pid, comm, exception_number))
+            pass
 
     def stopWatchPageFaults(self, pid = None):
         if self.fault_hap is not None:
