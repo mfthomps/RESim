@@ -214,6 +214,9 @@ class SharedSyscall():
             if new_fd < 0:
                 trace_msg = ('\terror return from socketcall ACCEPT pid:%d, error: %d\n' % (pid, eax))
             elif exit_info.sock_struct.addr != 0:
+                in_ss = exit_info.sock_struct
+                addr_len = self.mem_utils.readWord32(self.cpu, in_ss.length)
+                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (in_ss.addr, in_ss.length, addr_len))
                 ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils, fd=new_fd)
                 if ss.sa_family == 1:
                     if pid in self.trace_procs:
@@ -226,8 +229,16 @@ class SharedSyscall():
                     trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d sa_family: %s  addr: %s\n' % (pid, exit_info.sock_struct.fd,
                        new_fd, ss.famName(), ss.getName()))
                 else:
-                    trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d sa_family: %s  SA Family not handled\n' % (pid, exit_info.sock_struct.fd,
-                       new_fd, ss.famName()))
+                    trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d sa_family: %s  SA Family not handled addr: 0x%x\n' % (pid, 
+                         exit_info.sock_struct.fd, new_fd, ss.famName(), exit_info.sock_struct.addr))
+                    #SIM_break_simulation(trace_msg)
+                my_syscall = exit_info.syscall_instance
+                if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                    ''' in case we want to break on a read of address data '''
+                    self.dataWatch.setRange(in_ss.addr, addr_len, trace_msg)
+                    if my_syscall.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False)
             else:
                 trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d NULL addr\n' % (pid, exit_info.sock_struct.fd, new_fd))
         elif socket_callname == "socketpair":
@@ -281,6 +292,10 @@ class SharedSyscall():
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
                     self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, trace_msg)
+                    if exit_info.fname_addr is not None:
+                        count = self.mem_utils.readWord32(self.cpu, exit_info.count)
+                        msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
+                        self.dataWatch.setRange(exit_info.fname_addr, count, msg)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False)
@@ -359,6 +374,17 @@ class SharedSyscall():
         if did_exit:
             self.lgr.debug('exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
+
+    def fcntl(self, pid, eax, exit_info):
+        if net.fcntlCmdIs(exit_info.cmd, 'F_DUPFD'):
+            if pid in self.trace_procs:
+                self.traceProcs.dup(pid, exit_info.old_fd, eax)
+            trace_msg = ('\treturn from fcntl64 F_DUPFD pid %d, old_fd: %d new: %d\n' % (pid, exit_info.old_fd, eax))
+        elif net.fcntlCmdIs(exit_info.cmd, 'F_GETFL'):
+            trace_msg = ('\treturn from fcntl64 F_GETFL pid %d, old_fd: %d  flags: 0%o\n' % (pid, exit_info.old_fd, eax))
+        else:
+            trace_msg = ('\treturn from fcntl64  pid %d, old_fd: %d retval: %d\n' % (pid, exit_info.old_fd, eax))
+            return trace_msg
         
     def handleExit(self, exit_info, pid, comm):
         ''' 
@@ -434,6 +460,7 @@ class SharedSyscall():
             #if eax == 120:
             #    SIM_break_simulation('clone faux return?')
             #    return
+            self.top.recordStackBase(eax, exit_info.fname_addr)
             if  pid in self.trace_procs and self.traceProcs.addProc(eax, pid, clone=True):
                 trace_msg = ('\treturn from clone (tracing), new pid:%d  calling pid:%d\n' % (eax, pid))
                 #self.lgr.debug('exitHap clone called addProc for pid:%d parent %d' % (eax, pid))
@@ -450,6 +477,8 @@ class SharedSyscall():
                     self.lgr.debug('exitHap clone, run to pid %d' % eax)
                     SIM_run_alone(self.top.toProcPid, eax)
                     exit_info.call_params = None
+                    my_syscall = exit_info.syscall_instance
+                    my_syscall.stopTrace()
             
             #dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
             #if dumb_pid is not None:
@@ -614,12 +643,10 @@ class SharedSyscall():
                 trace_msg = ('\terror return from close pid:%d, FD: %d  eax: 0x%x\n' % (pid, exit_info.old_fd, eax))
             
         elif callname == 'fcntl64':        
-            if eax >= 0 and exit_info.cmd == net.F_DUPFD:
-                if pid in self.trace_procs:
-                    self.traceProcs.dup(pid, exit_info.old_fd, eax)
-                trace_msg = ('\treturn from fcntl64 F_DUPFD pid %d, old_fd: %d new: %d\n' % (pid, exit_info.old_fd, eax))
+            if eax >= 0:
+                trace_msg = self.fcntl(pid, eax, exit_info)
             else:
-                trace_msg = ('\treturn from fcntl64  pid %d, old_fd: %d retval: %d\n' % (pid, exit_info.old_fd, eax))
+                trace_msg = ('\terror return from fcntl64  pid %d, old_fd: %d retval: %d\n' % (pid, exit_info.old_fd, eax))
 
         elif callname == 'dup':
             #self.lgr.debug('exit pid %d from dup eax %x, old_fd is %d' % (pid, eax, exit_info.old_fd))

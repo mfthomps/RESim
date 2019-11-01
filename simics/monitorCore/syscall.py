@@ -221,6 +221,7 @@ class Syscall():
         self.stop_maze_hap = None
         self.targetFS = targetFS
         self.linger = linger
+        self.linger_cycles = []
         self.compat32 = compat32
         self.background_break = None
         self.background_hap = None
@@ -341,7 +342,7 @@ class Syscall():
                 syscall_info = SyscallInfo(self.cpu, None, callnum, entry, self.trace, self.call_params)
                 syscall_info.compat32 = compat32
                 if not background:
-                    #self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
+                    self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     proc_break1 = None
                     break_list.append(proc_break)
@@ -878,7 +879,8 @@ class Syscall():
                     break
 
         elif socket_callname == 'accept':
-            ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
+            phys = self.mem_utils.v2p(self.cpu, ss.addr)
+            ida_msg = '%s - %s pid:%d FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, pid, ss.fd, ss.addr, ss.length, phys)
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             for call_param in syscall_info.call_params:
                 if call_param.subcall == 'accept' and (call_param.match_param < 0 or call_param.match_param == ss.fd):
@@ -898,22 +900,26 @@ class Syscall():
             exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             exit_info.retval_addr = ss.addr
             src_addr = None
+            src_addr_len = 0
             if socket_callname == 'recvfrom':
                 if callname == 'socketcall':        
                     src_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+16)
+                    src_addr_len = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
                 else:
                     src_addr = frame['param5']
+                    src_addr_len = frame['param6']
                     #SIM_break_simulation('recvfrom param5 0x%x' % src_addr)
             if src_addr is not None and src_addr != 0:
                 source_ss = net.SockStruct(self.cpu, src_addr, self.mem_utils, fd=-1)
                 exit_info.fname_addr = src_addr
-                ida_msg = '%s - %s pid:%d len: %d %s' % (callname, socket_callname, pid, ss.length, source_ss.getString())
+                exit_info.count = src_addr_len
+                ida_msg = '%s - %s pid:%d FD: %d len: %d' % (callname, socket_callname, pid, ss.fd, ss.length)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
                 #    SIM_break_simulation(ida_msg)
             else:
-                ida_msg = '%s - %s pid:%d len: %d %s' % (callname, socket_callname, pid, ss.length, ss.getString())
+                ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'recv') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
                     exit_info.call_params = call_param
@@ -1116,12 +1122,16 @@ class Syscall():
 
             flags = frame['param1']
             child_stack = frame['param2']
+            exit_info.fname_addr = child_stack
             ida_msg = '%s pid:%d flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, pid, flags, 
                 child_stack, frame['param3'], frame['param4'], frame['param5'])
               
             self.context_manager.setIdaMessage(ida_msg)
             for call_param in syscall_info.call_params:
-                exit_info.call_params = call_param
+                if call_param.nth is not None:
+                    call_param.count = call_param.count + 1
+                    if call_param.count >= call_param.nth:
+                        exit_info.call_params = call_param
                 break
             #self.traceProcs.close(pid, fd)
         elif callname == 'pipe' or callname == 'pipe2':        
@@ -1175,11 +1185,15 @@ class Syscall():
 
         elif callname == 'fcntl64':        
             fd = frame['param1']
-            cmd = frame['param2']
+            cmd_val = frame['param2']
+            cmd = net.fcntlCmd(cmd_val)
             arg = frame['param3']
-            ida_msg = 'fcntl64 pid:%d FD: %d command: %d arg: %d\n\t%s' % (pid, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
+            if cmd == 'F_SETFD':
+                ida_msg = 'fcntl64 pid:%d FD: %d %s flags: 0%o' % (pid, fd, cmd, arg)
+            else:
+                ida_msg = 'fcntl64 pid:%d FD: %d command: %s arg: %d\n\t%s' % (pid, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
             exit_info.old_fd = fd
-            exit_info.cmd = cmd
+            exit_info.cmd = cmd_val
             
             for call_param in syscall_info.call_params:
                 if call_param.match_param == fd:
@@ -1356,6 +1370,13 @@ class Syscall():
         if syscall_info.cpu != cpu:
             self.lgr.error('syscallHap wrong cell, cur: %s, expected %s' % (cpu.name, syscall_info.cpu.name))
             return
+
+        if self.linger:
+            if cpu.cycles in self.linger_cycles:
+                self.lgr.debug('syscalHap for lingering call we already made.')
+                return
+            else:
+                self.linger_cycles.append(cpu.cycles)
 
         callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
         if syscall_info.callnum is None:
