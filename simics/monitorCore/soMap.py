@@ -59,7 +59,7 @@ class SOMap():
         pid = self.getSOPid(pid)
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
-            self.lgr.debug('SOMap isCode, pid:%d missing from so_file_map' % pid)
+            self.lgr.debug('SOMap isCode, regot pid after getSOPid failed, pid:%d missing from so_file_map' % pid)
             return False
         if pid in self.text_start and address >= self.text_start[pid] and address <= self.text_end[pid]:
             return True
@@ -105,6 +105,8 @@ class SOMap():
 
     def setContext(self, pid_in):
         pid = self.getThreadPid(pid_in, quiet=True)
+        if pid is None:
+            pid = pid_in
         if pid in self.text_start:
             self.context_manager.recordText(self.text_start[pid], self.text_end[pid])
         else:
