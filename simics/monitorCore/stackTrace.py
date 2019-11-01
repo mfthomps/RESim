@@ -3,11 +3,12 @@ import json
 import os
 class StackTrace():
     class FrameEntry():
-        def __init__(self, ip, fname, instruct, sp):
+        def __init__(self, ip, fname, instruct, sp, ret_addr=None):
             self.ip = ip
             self.fname = fname
             self.instruct = instruct
             self.sp = sp
+            self.ret_addr = ret_addr
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr):
         if pid == 0:
@@ -34,23 +35,26 @@ class StackTrace():
 
         self.doTrace()
 
+    def isArmCall(self, instruct):
+        retval = False
+        if instruct.startswith(self.callmn):
+            retval = True
+        elif instruct.startswith('ldr'):
+            parts = instruct.split()
+            if parts[1].strip().lower() == 'pc,':
+               retval = True
+        return retval
+            
     def followCall(self, return_to):
         retval = None
         if self.cpu.architecture == 'arm':
+            self.lgr.debug('followCall return_to 0x%x' % return_to)
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            if instruct[1].startswith(self.callmn):
-                parts = instruct[1].split()
-                if len(parts) == 2:
-                    try:
-                        dst = int(parts[1],16)
-                    except:
-                        retval = eip
-                        return retval
-                    if self.soMap.isCode(dst):
-                        retval = eip
-                else:        
-                    retval = eip
+            self.lgr.debug('followCall instruct is %s' % instruct[1])
+            if self.isArmCall(instruct[1]):
+                self.lgr.debug('followCall arm eip 0x%x' % eip)
+                retval = eip
         else:
             eip = return_to - 2*(self.mem_utils.WORD_SIZE)
             # TBD use instruction length to confirm it is a true call
@@ -117,7 +121,9 @@ class StackTrace():
                 except:
                     print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
                     continue
-                fun_name = self.ida_funs.getName(faddr)
+                fun_name = None
+                if self.ida_funs is not None:
+                    fun_name = self.ida_funs.getName(faddr)
                 if fun_name is not None:
                     print('%s 0x%08x %s call %s' % (sp_string, frame.ip, fname, fun_name))
                 else:
@@ -126,14 +132,51 @@ class StackTrace():
             else:
                 print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
 
+    def getFunName(self, instruct):
+        parts = instruct[1].split()
+        fun = None
+        try:
+            call_addr = int(parts[1],16)
+            #self.lgr.debug('getFunName call_addr 0x%x' % call_addr)
+            if call_addr in self.relocate_funs:
+                fun = self.relocate_funs[call_addr]
+                #self.lgr.debug('getFunName 0x%x in relocate funs fun is %s' % (call_addr, fun))
+            elif self.ida_funs is not None:
+                #self.lgr.debug('getFunName is 0x%x in ida_funs?' % call_addr)
+                fun = self.ida_funs.getName(call_addr)
+            else:
+                fun = call_addr
+        except ValueError:
+            self.lgr.debug('getFunName, %s not a hex' % parts[1])
+            pass
+        return fun
+
+    def isCallToMe(self, fname):
+        ''' if looks like a call to current function, add frame? '''
+        if self.cpu.architecture == 'arm':
+            ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
+            lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+            ''' TBD also for 64-bit? '''
+            call_instr = lr-4
+            instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
+            if instruct[1].startswith(self.callmn):
+                #self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
+                fun = self.getFunName(instruct)
+                new_instruct = '%s   %s' % (self.callmn, fun)
+                frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr)
+                self.frames.append(frame)
+
     def doTrace(self):
+        if self.pid == 0:
+            self.lgr.debug('stackTrack doTrace called with pid 0')
+            return
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        self.lgr.debug('stackTrace doTrace esp is 0x%x' % esp)
         eip = self.top.getEIP(self.cpu)
-        fname = self.soMap.getSOFile(eip)
+        self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
+        #fname = self.soMap.getSOFile(eip)
         #print('0x%08x  %-s' % (eip, fname))
-        frame = self.FrameEntry(eip, fname, '', esp)
-        self.frames.append(frame)
+        #frame = self.FrameEntry(eip, fname, '', esp)
+        #self.frames.append(frame)
         done  = False
         count = 0
         #ptr = ebp
@@ -143,7 +186,7 @@ class StackTrace():
         prev_ip = None
         so_checked = []
         if self.soMap.isMainText(eip):
-            self.lgr.debug('stackTrace starting in main text')
+            #self.lgr.debug('stackTrace starting in main text')
             been_in_main = True
             prev_ip = eip
         #prev_ip = eip
@@ -151,17 +194,18 @@ class StackTrace():
             self.lgr.warning('stackTrace has no ida functions')
 
         ''' record info about current IP '''
-        '''
+       
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
-        self.lgr.debug('cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
+        #self.lgr.debug('cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
-            frame = self.FrameEntry(eip, 'unknown', instruct)
+            frame = self.FrameEntry(eip, 'unknown', instruct, esp)
             self.frames.append(frame)
         else:
-            frame = self.FrameEntry(eip, fname, instruct)
+            frame = self.FrameEntry(eip, fname, instruct, esp)
             self.frames.append(frame)
-        '''
+
+        self.isCallToMe(fname)
 
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
@@ -237,7 +281,7 @@ class StackTrace():
                             except ValueError:
                                 pass
                                 
-                    #self.lgr.debug('followCall call_ip 0x%x %s' % (call_ip, instruct))
+                    #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s' % (call_ip, instruct))
                     fname = self.soMap.getSOFile(val)
                     if fname is None:
                         #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -272,6 +316,20 @@ class StackTrace():
                 #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
 
+        
+        if len(self.frames) < 2:
+            #self.lgr.debug('doTrace, only %d frames' % len(self.frames))
+            if self.cpu.architecture == 'arm':
+                ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
+                lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                ''' TBD also for 64-bit? '''
+                call_instr = lr-4
+                instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
+                #self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
+                fun = self.getFunName(instruct)
+                new_instruct = '%s   %s' % (self.callmn, fun)
+                frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr)
+                self.frames.append(frame)
 
     def soCheck(self, eip):
 
@@ -283,41 +341,62 @@ class StackTrace():
                 self.lgr.debug('stackTrace soCheck eip 0x%x not a fun? fname %s full %s start 0x%x' % (eip, fname,full, start))
                 self.ida_funs.add(full, start)
 
-
     def countFrames(self):
         return len(self.frames)
 
-    def memcpy(self):
+    class MemStuff():
+        def __init__(self, ret_addr, fun):
+            self.ret_addr = ret_addr
+            self.fun = fun
+
+    def memsomething(self):
         retval = None
+        ''' TBD remove first if? doTrace now ensures two frames? '''
         if len(self.frames) < 2:
-            self.lgr.debug('memcpy, only %d frames' % len(self.frames))
+            self.lgr.debug('memsomething, only %d frames' % len(self.frames))
             if self.cpu.architecture == 'arm':
                 ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
                 lr = self.mem_utils.getRegValue(self.cpu, 'lr')
                 ''' TBD also for 64-bit? '''
                 call_instr = lr-4
                 instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
-                self.lgr.debug('memcpy lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
+                self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
                 parts = instruct[1].split()
                 try:
                     call_addr = int(parts[1],16)
+                    self.lgr.debug('memsomething call_addr 0x%x' % call_addr)
+                    fun = None
                     if call_addr in self.relocate_funs:
-                        rel_instruct = '%s   %s' % (self.callmn, self.relocate_funs[call_addr])
-                        self.lgr.debug('memcpy call is is %s' % rel_instruct)
-                        retval = lr
+                        fun = self.relocate_funs[call_addr]
+                        self.lgr.debug('memsomething 0x%x in relocate funs fun is %s' % (call_addr, fun))
+                    elif self.ida_funs is not None:
+                        self.lgr.debug('memsomething is 0x%x in ida_funs?' % call_addr)
+                        fun = self.ida_funs.getName(call_addr)
+                    if fun is not None:
+                        rel_instruct = '%s   %s' % (self.callmn, fun)
+                        self.lgr.debug('memsomething call is is %s' % rel_instruct)
+                        retval = self.MemStuff(lr, fun)
                 except ValueError:
+                    self.lgr.debug('memsomething, %s not a hex' % parts[1])
                     pass
              
         else:
             frame = self.frames[1]
-            self.lgr.debug('memcpy frame instruct is %s' % frame.instruct)
+            self.lgr.debug('memsomething frame instruct is %s' % frame.instruct)
             if frame.instruct is not None:
                 parts = frame.instruct.split()
                 if len(parts) == 2:
                     fun = parts[1].split('@')[0]
-                    if fun == 'memcpy' or fun == 'memmove':
-                        self.lgr.debug('StackFrame memcpy, is %s, sp is 0x%x' % (fun, frame.sp))
-                        retval = self.mem_utils.readPtr(self.cpu, frame.sp)
+                    if fun == 'memcpy' or fun == 'memmove' or fun == 'memcmp':
+                        self.lgr.debug('StackFrame memsomething, is %s, sp is 0x%x' % (fun, frame.sp))
+                        if frame.sp > 0:
+                            ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
+                        elif frame.ret_addr is not None:
+                            ret_addr = frame.ret_addr
+                        else:
+                            self.lgr.error('memsomething sp is zero and no ret_addr?')
+                            ret_addr = None
+                        retval = self.MemStuff(ret_addr, fun)
                         #if fun.strip() == 'memmove':
                         #    SIM_break_simulation('memmove')       
                     #elif fun.strip() == 'xmlStrcmp':
