@@ -38,7 +38,7 @@ That ini file must include and ENV section and a section for each
 component in the simulation.  
 '''
 
-global cgc
+global cgc, gkp
 class LinkObject():
     def __init__(self, name):
         self.name = name
@@ -146,7 +146,7 @@ def checkVLAN(config):
 
 class LaunchRESim():
     def __init__(self):
-        global cgc
+        global cgc, gkp
         print('Launch RESim')
         SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
         RESIM_INI = os.getenv('RESIM_INI')
@@ -283,7 +283,7 @@ class LaunchRESim():
             linkSwitches(section, self.comp_dict[section], self.link_dict[section])
 
     def go(self):
-        global cgc
+        global cgc, gkp
         self.doSections()
         cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict)
         cgc.doInit()
