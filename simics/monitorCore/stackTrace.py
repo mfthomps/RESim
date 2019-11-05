@@ -10,7 +10,7 @@ class StackTrace():
             self.sp = sp
             self.ret_addr = ret_addr
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr, max_frames=None):
         if pid == 0:
             lgr.error('stackTrace asked to trace pid 0?')
             return
@@ -25,6 +25,7 @@ class StackTrace():
         self.task_utils = task_utils
         self.stack_base = stack_base
         self.ida_funs = ida_funs
+        self.max_frames = max_frames
         self.relocate_funs = relocate_funs
         if cpu.architecture == 'arm':
             self.callmn = 'bl'
@@ -151,20 +152,25 @@ class StackTrace():
             pass
         return fun
 
-    def isCallToMe(self, fname):
+    def isCallToMe(self, fname, eip):
         ''' if looks like a call to current function, add frame? '''
         if self.cpu.architecture == 'arm':
             ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
             ''' TBD also for 64-bit? '''
             call_instr = lr-4
-            instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
-            if instruct[1].startswith(self.callmn):
-                #self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
-                fun = self.getFunName(instruct)
-                new_instruct = '%s   %s' % (self.callmn, fun)
-                frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr)
-                self.frames.append(frame)
+            if self.ida_funs is not None:
+                cur_fun = self.ida_funs.getFun(eip)
+                ret_to = self.ida_funs.getFun(lr)
+                self.lgr.debug('isCallToMe eip: 0x%x (fun 0x%x) lr 0x%x (fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                if cur_fun != ret_to:
+                    instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
+                    if instruct[1].startswith(self.callmn):
+                        #self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
+                        fun = self.getFunName(instruct)
+                        new_instruct = '%s   %s' % (self.callmn, fun)
+                        frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr)
+                        self.frames.append(frame)
 
     def doTrace(self):
         if self.pid == 0:
@@ -205,7 +211,7 @@ class StackTrace():
             frame = self.FrameEntry(eip, fname, instruct, esp)
             self.frames.append(frame)
 
-        self.isCallToMe(fname)
+        self.isCallToMe(fname, eip)
 
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
@@ -315,8 +321,10 @@ class StackTrace():
             if self.stack_base is not None and ptr > self.stack_base:
                 #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
+            if self.max_frames is not None and len(self.frames)>= self.max_frames:
+                done = True
 
-        
+        ''' TBD remove, not used, handled at start? ''' 
         if len(self.frames) < 2:
             #self.lgr.debug('doTrace, only %d frames' % len(self.frames))
             if self.cpu.architecture == 'arm':

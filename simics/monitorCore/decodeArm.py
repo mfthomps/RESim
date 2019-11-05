@@ -1,4 +1,5 @@
 from simics import *
+import armCond
 modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 def modifiesOp0(mn):
@@ -162,3 +163,17 @@ def armLDM(cpu, instruct, reg, lgr):
         else:
             lgr.error('reg %s not in %s' % (reg, str(regs)))
     return retval
+
+def isCall(cpu, instruct):
+    N, Z, C, V = armCond.flags(cpu)
+    if instruct.startswith('ble'):
+        return Z or (N and not V) or (not N and V)
+    if instruct.startswith('blt'):
+        return (N and not V) or (not N and V)
+    if instruct.startswith('blo'):
+        return (not C)
+    if instruct.startswith('bls'):
+       return (not C) or Z
+    elif instruct.startswith('bl'):
+       return True
+    return False

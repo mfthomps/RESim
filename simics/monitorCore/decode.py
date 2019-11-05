@@ -297,5 +297,10 @@ def getUnmapped(cpu, instruct, lgr):
                 pass
     return None
            
-    
+   
+def isCall(cpu, instruct): 
+    if instruct.startswith('call'):
+       return True
+    else:
+       return False
      

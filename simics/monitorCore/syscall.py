@@ -1609,7 +1609,7 @@ class Syscall():
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
             if self.soMap is not None:
-                self.soMap.handleExit(pid)
+                self.soMap.handleExit(pid, killed)
             else:
                 self.lgr.debug('syscallHap exit soMap is None, callnum is %s' % (syscall_info.callnum))
             last_one = self.context_manager.rmTask(pid, killed) 
