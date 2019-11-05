@@ -10,6 +10,7 @@ if [ "$#" -ne 1 ]; then
     exit
 fi
 export SIMICS_VER=4.8
+export RESIM_INI=$1
 export RESIM_TARGET=$1
 export SIMICS_WORKSPACE=`pwd`
 export SIMICS=/mnt/simics/simics-4.8/simics-4.8.145

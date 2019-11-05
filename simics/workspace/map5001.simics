@@ -1,0 +1,4 @@
+connect-real-network 10.0.0.91 switch0
+
+connect-real-network-port-in target-port = 5001 host-port = 5001 ethernet-link = switch0 target-ip = 10.0.0.91
+
