@@ -58,10 +58,12 @@ class GetKernelParams():
 
         self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS
+        self.data_abort = None
         if self.cpu.architecture == 'arm':
             #obj = SIM_get_object('board')
             obj = SIM_get_object(self.target)
             self.page_fault = 4
+            self.data_abort = 1
         else:
             obj = SIM_get_object(self.target)
             self.page_fault = 14
@@ -76,6 +78,7 @@ class GetKernelParams():
         self.stop_hap = None
         self.entry_mode_hap = None
         self.page_hap = None
+        self.page_hap2 = None
         self.prev_instruct = ''
         self.current_task_phys = None
         self.unistd = comp_dict[self.target]['RESIM_UNISTD']
@@ -431,10 +434,12 @@ class GetKernelParams():
         for i in range(800):
             init_pid = self.mem_utils.readWord32(self.cpu, self.init_task+pid_offset)
             next_pid = self.mem_utils.readWord32(self.cpu, init_next+pid_offset)
+            next_next_pid = self.mem_utils.readWord32(self.cpu, next_pid+pid_offset)
             init_pid_g = self.mem_utils.readWord32(self.cpu, self.init_task+pid_offset+4)
             next_pid_g = self.mem_utils.readWord32(self.cpu, init_next+pid_offset+4)
-            if init_pid == 1 and init_pid_g ==1 and ((next_pid == 2 and next_pid_g == 2) or (next_pid == 0 and next_pid_g == 0)):
-                #self.lgr.debug('getInit looking for pid, got 1 at offset %d' % pid_offset)
+            #if init_pid == 1 and init_pid_g ==1 and ((next_pid == 2 and next_pid_g == 2) or (next_pid == 0 and next_pid_g == 0)):
+            if init_pid == 1 and init_pid_g ==1 and ((next_pid == 2 and next_pid_g == 2)):
+                self.lgr.debug('getInit looking for pid, got 1 at offset %d  next_pid %d' % (pid_offset, next_pid))
                 self.param.ts_pid = pid_offset
                 self.param.ts_tgid = pid_offset+4
                 break
@@ -849,25 +854,53 @@ class GetKernelParams():
 
     def pageStopHap(self, dumb, one, exception, error_string):
         if self.page_stop_hap is not None:
-            SIM_run_alone(self.stepGetEIP, None)
+            SIM_run_alone(self.stepGetEIP, dumb)
+    
+    def dataAbortStopHap(self, dumb, one, exception, error_string):
+        self.lgr.debug('dataAbortStopHap')
+        if self.data_abort_hap is not None:
+            SIM_run_alone(self.stepGetDataAbortEIP, dumb)
     
     def stepGetEIP(self, dumb):
         if self.param.page_fault is None:
             SIM_run_command('si -q')
             self.param.page_fault = self.mem_utils.getRegValue(self.cpu, 'eip')
-            self.lgr.debug('pageStopHap page_fault at 0x%x' % self.param.page_fault)
+            self.lgr.debug('stepGetEIP page_fault at 0x%x' % self.param.page_fault)
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.page_stop_hap)
             SIM_hap_delete_callback_id("Core_Exception", self.page_hap)
             SIM_break_simulation('stepGetEIP')
             self.page_hap = None
+            if self.cpu.architecture != 'arm':
+                self.saveParam()
+            else:
+                SIM_run_alone(self.setDataAbortHap, None)
+                
+
+    def stepGetDataAbortEIP(self, dumb):
+        if self.param.data_abort is None:
+            SIM_run_command('si -q')
+            self.param.data_abort = self.mem_utils.getRegValue(self.cpu, 'eip')
+            self.lgr.debug('stepGetDataAbortEIP data_abort at 0x%x' % self.param.data_abort)
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.data_abort_hap)
+            SIM_hap_delete_callback_id("Core_Exception", self.page_hap2)
+            SIM_break_simulation('stepGetDataAbortEIP')
+            self.page_hap2 = None
             self.saveParam()
+        else:
+            self.lgr.debug('stepGetDataAbortEIP param.data_abort is not none')
 
     def delPageHapAlone(self, dumb):
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.page_stop_hap)
         SIM_hap_delete_callback_id("Core_Exception", self.page_hap)
         self.page_hap = None
 
-    def pageFaultHap(self, cpu, one, exception_number):
+    def delAbortHapAlone(self, dumb):
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.page_stop_hap)
+        SIM_hap_delete_callback_id("Core_Exception", self.page_hap2)
+        self.page_hap = None
+
+    def pageFaultHap(self, kind, one, exception_number):
+        self.lgr.debug('pageFaultHap except %d' % exception_number)
         if self.page_hap is None:
             return
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -879,15 +912,40 @@ class GetKernelParams():
             self.param.page_fault = eip
             self.lgr.debug('pageFaultHap page_fault right off at 0x%x' % self.param.page_fault)
             SIM_run_alone(self.delPageHapAlone, None)
-            self.saveParam()
+            if self.cpu.architecture != 'arm':
+                self.saveParam()
+            else:
+                SIM_run_alone(self.setDataAbortHap, None)
         
+    def dataAbortHap(self, kind, one, exception_number):
+        if self.page_hap2 is None:
+            return
+        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+        self.lgr.debug('dataAbort eip 0x%x' % eip)
+        SIM_break_simulation('dataAbortHap')
+        return
+        if eip < self.param.kernel_base: 
+            SIM_break_simulation('dataAbortHap')
+        else:
+            self.param.page_fault = eip
+            self.lgr.debug('dataAbort page_fault right off at 0x%x' % self.param.page_fault)
+            SIM_run_alone(self.delAbortHapAlone, None)
+            self.saveParam()
 
     def setPageFaultHap(self, dumb):
         self.page_hap = SIM_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
-                 self.pageFaultHap, self.cpu, self.page_fault)
-        self.page_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.pageStopHap, None)
+                 self.pageFaultHap, 'prefetch abort', self.page_fault)
+        self.page_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.pageStopHap, 'prefetch abort')
         self.lgr.debug('setPageFaultHap set exception and stop haps')
         SIM_run_command('c')
+
+    def setDataAbortHap(self, dumb):
+        if self.data_abort is not None:
+            self.page_hap2 = SIM_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
+                 self.dataAbortHap, 'data abort', self.data_abort)
+            self.data_abort_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.dataAbortStopHap, 'data abort')
+            self.lgr.debug('setDataAbortHap set exception and stop haps')
+            SIM_run_command('c')
        
     def go(self, force=False): 
         ''' Initial method for gathering kernel parameters.  Will chain a number of functions, the first being runUntilSwapper '''

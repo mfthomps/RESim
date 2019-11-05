@@ -448,8 +448,8 @@ class TaskUtils():
         if swapper_addr is None:
             self.lgr.debug('getTaskListPtr got None for swapper, pid:%d %s' % (pid, comm))
             return None
-        self.lgr.debug('getTaskListPtr look for next pointer to current task 0x%x pid: %d (%s) using swapper_addr of %x' % (task_rec_addr, 
-                        pid, comm,  swapper_addr))
+        #self.lgr.debug('getTaskListPtr look for next pointer to current task 0x%x pid: %d (%s) using swapper_addr of %x' % (task_rec_addr, 
+        #                pid, comm,  swapper_addr))
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -458,7 +458,7 @@ class TaskUtils():
                 continue
             seen.add((task_addr, x))
             seen.add((task_addr, False))
-            self.lgr.debug('reading task addr 0x%x' % (task_addr))
+            #self.lgr.debug('reading task addr 0x%x' % (task_addr))
             task = self.readTaskStruct(task_addr, cpu)
             if task is None or task.pid is None:
                 self.lgr.error('got task or pid of none for addr 0x%x' % task_addr)
@@ -468,11 +468,11 @@ class TaskUtils():
                self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
                return None
 
-            self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
-                 task.pid, task.next, task.thread_group.next, self.param.ts_next))
+            #self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
+            #     task.pid, task.next, task.thread_group.next, self.param.ts_next))
             if (task.next) == task_rec_addr or task.next == (task_rec_addr+self.param.ts_next):
                 next_addr = task_addr + self.param.ts_next
-                #self.lgr.debug('getTaskListPtr return next 0x%x' % next_addr)
+                #self.lgr.debug('getTaskListPtr return next 0x%x  pid:%d (%s)' % (next_addr, task.pid, task.comm))
                 return next_addr
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task

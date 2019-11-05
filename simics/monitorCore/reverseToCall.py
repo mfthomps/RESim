@@ -27,7 +27,6 @@ from simics import *
 import procInfo
 import traceback
 import sys
-import pageUtils
 import logging
 import decode
 import decodeArm
@@ -308,25 +307,6 @@ class reverseToCall():
                 return True
         return False
 
-        
-    def isCall(self, instruct):
-        if self.cpu.architecture == 'arm':
-            N, Z, C, V = armCond.flags(self.cpu)
-            if instruct.startswith('ble'):
-                return Z or (N and not V) or (not N and V)
-            if instruct.startswith('blt'):
-                return (N and not V) or (not N and V)
-            if instruct.startswith('blo'):
-                return (not C)
-            if instruct.startswith('bls'):
-               return (not C) or Z
-            elif instruct.startswith('bl'):
-               return True
-        else:
-            if instruct.startswith('call'):
-               return True
-        return False
-       
     def sameFun(self, eip):
         ''' return true if ida_fun set and given ip in same function as previous ip ''' 
         ''' TBD not used '''
@@ -409,7 +389,7 @@ class reverseToCall():
                 self.context_manager.setExitBreaks()
         elif len(self.sysenter_cycles[pid]) > 0:
             cur_cycles = self.cpu.cycles
-            self.lgr.debug('tryBackOne kernel space pid %d expected %d' % (pid, my_args.pid))
+            self.lgr.debug('tryOneStopped kernel space pid %d expected %d' % (pid, my_args.pid))
             is_exit = self.isExit(instruct[1], eip)
             if pid in self.sysenter_cycles and is_exit:
                 self.lgr.debug('tryOneStopped is sysexit, cur_cycles is 0x%x' % cur_cycles)
@@ -1034,7 +1014,7 @@ class reverseToCall():
             elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1], eip) or self.step_into):
                 self.lgr.debug('stoppedReverseToCall first back not a ret or step_into at %x, we are done' % eip)
                 self.cleanup(cpu)
-            elif self.isCall(instruct[1]):
+            elif self.decode.isCall(self.cpu, instruct[1]):
                 self.got_calls += 1
                 if self.got_calls == self.need_calls:
                     self.lgr.debug('stoppedReverseToCall %s at %x we must be done' % (instruct[1], eip))
@@ -1157,3 +1137,5 @@ class reverseToCall():
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
+
+

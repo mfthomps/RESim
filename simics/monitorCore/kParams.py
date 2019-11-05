@@ -63,6 +63,7 @@ class Kparams():
         self.arm_entry = None
         self.arm_ret = None
         self.page_fault = None
+        self.data_abort = None
         self.syscall_compute = None
         self.syscall_jump = None
         self.stack_frame_eip = None

@@ -182,6 +182,8 @@ class GenMonitor():
                     self.param[cell_name].compat_32_int128 = None
                     self.param[cell_name].compat_32_compute = None
                     self.param[cell_name].compat_32_jump = None
+                if not hasattr(self.param[cell_name], 'data_abort'):
+                    self.param[cell_name].data_abort = None
 
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
@@ -599,9 +601,13 @@ class GenMonitor():
                 self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
 
                 text_segment = elfText.getText(full_path, self.lgr)
-                self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
-                self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
-                self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
+                if text_segment is not None:
+                    self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
+                    self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
+                    self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
+                    self.dataWatch[self.target].setIdaFuns(self.ida_funs)
+                else:
+                    self.lgr.error('debug, text segment None for %s' % full_path)
         else:
             ''' already debugging as current process '''
             pass
@@ -842,6 +848,9 @@ class GenMonitor():
 
     def debugPidGroup(self, pid):
         leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
+        if leader_pid is None:
+            self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
+            return
         self.lgr.debug('debugPidGroup cell %s pid %d found leader %d' % (self.target, pid, leader_pid))
         pid_list = self.task_utils[self.target].getGroupPids(leader_pid)
         self.debugPidList(pid_list, self.debugGroup)
@@ -1275,6 +1284,7 @@ class GenMonitor():
         if pid is None:
             pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
+        self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
         self.page_faults[self.target].stopWatchPageFaults(pid)
@@ -2070,7 +2080,7 @@ class GenMonitor():
                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self):
+    def getStackTraceQuiet(self, max_frames=None):
         pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2079,7 +2089,7 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
+                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr, max_frames=max_frames)
         return st
 
     def getStackTrace(self):

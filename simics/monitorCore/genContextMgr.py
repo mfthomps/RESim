@@ -106,6 +106,7 @@ class GenContextMgr():
         self.debugging_cellname = None
         self.debugging_cell = None
         self.cpu = cpu
+        self.pageFaultGen = None
         ''' watch multiple tasks, e.g., threads '''
         self.watch_rec_list = {}
         self.watch_rec_list_saved = {}
@@ -141,6 +142,7 @@ class GenContextMgr():
 
         ''' avoid searching all task recs to know if pid being watched '''
         self.pid_cache = []
+        self.group_leader = None
 
         ''' watch pointers to task recs to catch kills '''
         self.task_rec_hap = {}
@@ -265,6 +267,8 @@ class GenContextMgr():
     def setAllBreak(self):
         for bp in self.breakpoints:
             bp.set()
+        if self.pageFaultGen is not None:
+            self.pageFaultGen.recordPageFaults()
 
     def setAllHap(self, only_maze_breaks=False):
         for hap in self.haps:
@@ -276,6 +280,8 @@ class GenContextMgr():
         for bp in self.breakpoints:
             #if bp.cell == self.resim_context:
             bp.clear()
+        if self.pageFaultGen is not None:
+            self.pageFaultGen.stopPageFaults()
         
     def clearAllHap(self, keep_maze_breaks=False):
         #self.lgr.debug('clearAllHap start')
@@ -292,7 +298,7 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             pid = self.watch_rec_list[rec]
-            self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
+            #self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
             retval.append(pid)
         return retval
 
@@ -360,6 +366,7 @@ class GenContextMgr():
                self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
                self.addTask(pid, new_addr)
                self.top.addProc(pid, leader_pid, comm)
+               self.watchExit(new_addr, pid)
 
         if not self.watching_tasks and \
                (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
@@ -538,6 +545,11 @@ class GenContextMgr():
         if pid not in self.pid_cache:
             self.pid_cache.append(pid)
         self.watchExit()
+        self.pageFaultGen.recordPageFaults()
+        group_leader = self.task_utils.getGroupLeaderPid(pid)
+        if group_leader != self.group_leader:
+            self.lgr.debug('contextManager watchTasks set group leader to %d' % group_leader)
+            self.group_leader = group_leader
       
     def changeDebugPid(self, pid):
         if pid not in self.pid_cache:
@@ -559,6 +571,25 @@ class GenContextMgr():
         if debugging_pid not in self.pid_cache:
             self.pid_cache.append(debugging_pid)
 
+    def killGroup(self, lead_pid, exit_syscall):
+        if lead_pid == self.group_leader:
+            self.lgr.debug('contextManager killGroup %d is leader, pid_cache is %s' % (lead_pid, str(self.pid_cache)))
+            cache_copy = list(self.pid_cache)
+            for pid in cache_copy:
+                ida_msg = 'killed %d member of group led by %d' % (pid, lead_pid) 
+                exit_syscall.handleExit(pid, ida_msg, killed=True)
+                self.rmTask(pid, killed=True)
+                if pid in self.demise_cache:
+                    self.demise_cache.remove(pid)
+                if self.pageFaultGen is not None:
+                    self.pageFaultGen.handleExit(pid)
+            self.clearExitBreaks()
+        elif self.group_leader != None:
+            self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
+        else:
+            self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
+        
+
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
         dead_rec = self.task_utils.getRecAddrForPid(pid)
@@ -578,12 +609,18 @@ class GenContextMgr():
             exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
             if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
+                self.killGroup(pid, exit_syscall)
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
                 self.rmTask(pid)
-        self.demise_cache.remove(pid)
+                if self.pageFaultGen is not None:
+                    self.pageFaultGen.handleExit(pid)
+                self.clearExitBreaks()
+        if pid in self.demise_cache:
+            self.demise_cache.remove(pid)
 
     def taskRecHap(self, pid, third, forth, memory):
+        self.lgr.debug('taskRecHap pid %d' % pid)
         if pid not in self.task_rec_hap or pid in self.demise_cache:
             return
         dumb, comm, cur_pid  = self.task_utils.curProc()
@@ -600,6 +637,7 @@ class GenContextMgr():
             exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
             if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
+                self.killGroup(pid, exit_syscall)
                 exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
                 self.rmTask(pid)
@@ -665,3 +703,6 @@ class GenContextMgr():
 
     def watchPageFaults(self, watching):
         self.watching_page_faults = watching
+
+    def callMe(self, pageFaultGen):
+        self.pageFaultGen = pageFaultGen
