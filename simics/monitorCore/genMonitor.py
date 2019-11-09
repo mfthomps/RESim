@@ -184,6 +184,9 @@ class GenMonitor():
                     self.param[cell_name].compat_32_jump = None
                 if not hasattr(self.param[cell_name], 'data_abort'):
                     self.param[cell_name].data_abort = None
+                    self.param[cell_name].prefetch_abort = None
+                if not hasattr(self.param[cell_name], 'arm_ret2'):
+                    self.param[cell_name].arm_ret2 = None
 
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
@@ -806,6 +809,14 @@ class GenMonitor():
     def recordStackBase(self, pid, sp):
         self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
         self.stack_base[self.target][pid] = sp
+
+    def recordStackClone(self, pid, parent):
+        sp = self.track_threads[self.target].getChildStack(parent)
+        self.stack_base[self.target][pid] = sp
+        if sp is not None:
+            self.lgr.debug('recordStackClone pid: %d 0x%x parent: %d' % (pid, sp, parent))
+        else:
+            self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
         
     def debugProc(self, proc):
         if type(proc) is not str:
@@ -1069,15 +1080,19 @@ class GenMonitor():
         return pid
 
     def goToOrigin(self):
+        self.removeDebugBreaks()
+        self.stopTrackIO()
         pid = self.getBookmarkPid()
         self.lgr.debug('goToOrigin for pid %d' % pid)
         msg = self.bookmarks.goToOrigin()
         self.context_manager[self.target].setIdaMessage(msg)
+        self.restoreDebugBreaks(was_watching=True)
+        self.context_manager[self.target].watchTasks()
 
     def goToDebugBookmark(self, mark):
         self.lgr.debug('goToDebugBookmark %s' % mark)
         self.removeDebugBreaks()
-        self.stopDataWatch() 
+        self.stopTrackIO()
         if len(self.call_traces[self.target]) > 0: 
             print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
             self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
@@ -1085,12 +1100,12 @@ class GenMonitor():
             for call in self.call_traces[self.target]:
                 self.lgr.debug('remaining trace %s' % call)
             return
-        self.stopDataWatch() 
         mark = mark.replace('|','"')
         pid = self.getBookmarkPid()
         msg = self.bookmarks.goToDebugBookmark(mark)
         self.context_manager[self.target].setIdaMessage(msg)
         self.restoreDebugBreaks(was_watching=True)
+        self.context_manager[self.target].watchTasks()
 
     def showCallTraces(self):
         for call in self.call_traces[self.target]:
@@ -2075,7 +2090,6 @@ class GenMonitor():
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
-            return
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
         st.printTrace(verbose)
@@ -2416,7 +2430,9 @@ class GenMonitor():
             self.lgr.debug('error %s' % str(e))
 
     def goToDataMark(self, index):
+        self.stopTrackIO()
         self.dataWatch[self.target].goToMark(index)
+        self.context_manager[self.target].watchTasks()
         
     def mft(self):
         cur_task_rec = self.task_utils[self.target].getCurTaskRec()
@@ -2427,6 +2443,14 @@ class GenMonitor():
     
     def addProc(self, pid, leader_pid, comm):    
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm)
+
+    def injectIO(self, watch_mark, dfile, fd):
+        ''' Go to the given watch mark (or the origin if the watch mark does not exist),
+            which we assume follows a read, recv, etc.  Then write the dfile content into
+            memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
+            to match the length of the  dfile.  Finally, run trackIO on the given file descriptor.
+        '''
+        pass
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
