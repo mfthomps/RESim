@@ -29,6 +29,8 @@ class TrackThreads():
         self.open_syscall = None
         self.first_mmap_hap = {}
         self.compat32 = compat32
+        self.clone_hap = None
+        self.child_stacks = {}
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -47,6 +49,7 @@ class TrackThreads():
         self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
         self.trackSO()
+        self.trackClone()
         if self.open_syscall is None:
             self.lgr.error('trackThreads startTrack, open_syscall is none')
 
@@ -187,3 +190,29 @@ class TrackThreads():
                            self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=['open'], 
                            soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32)
         self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
+
+    def cloneHap(self, dumb, third, forth, memory):
+        cpu, comm, pid = self.task_utils.curProc() 
+        if cpu.architecture == 'arm':
+            frame = self.task_utils.frameFromRegs(cpu)
+        else:
+            frame = self.task_utils.frameFromStackSyscall()
+        flags = frame['param1']
+        child_stack = frame['param2']
+        self.lgr.debug('cloneHap pid:%d flags:0x%x  stack:0x%x' % (pid, flags, child_stack))
+        if pid not in self.child_stacks:
+            self.child_stacks[pid] = []
+        self.child_stacks[pid].append(child_stack)
+
+    def getChildStack(self, pid):
+        if pid in self.child_stacks and len(self.child_stacks[pid]) > 0:
+            return self.child_stacks[pid].pop(0)
+        else:
+            return None
+
+    def trackClone(self):
+        callnum = self.task_utils.syscallNumber('clone', self.compat32)
+        entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
+        self.lgr.debug('trackClone entry 0x%x' % entry)
+        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+        self.clone_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, None, proc_break, 'track-clone')
