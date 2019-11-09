@@ -62,6 +62,7 @@ class Kparams():
         # arm entry/exit
         self.arm_entry = None
         self.arm_ret = None
+        self.arm_ret2 = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None

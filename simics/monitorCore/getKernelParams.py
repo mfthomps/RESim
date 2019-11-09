@@ -101,6 +101,7 @@ class GetKernelParams():
         self.init_task = None
         self.fs_base = None
         self.search_count = 0
+        self.test_count = 0
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -507,8 +508,15 @@ class GetKernelParams():
             if eip not in self.hits:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if instruct[1] == '<illegal memory mapping>':
-                    self.param.arm_ret = eip
-                    self.lgr.debug('entryModeChanged ARM, nothing mapped at eip 0x%x' % eip)
+                    self.lgr.debug('entryModeChanged ARM, nothing mapped at eip 0x%x ' % (eip))
+                    if self.param.arm_ret is None:
+                        self.param.arm_ret = eip
+                    elif self.param.arm_ret2 is None:
+                        if eip != self.param.arm_ret:
+                            self.param.arm_ret2 = eip
+                    else:
+                        SIM_break_simulation('entryModeChanged found two rets: 0x%x 0x%x' % (self.param.arm_ret, self.param.arm_ret2))
+                    
         elif old == Sim_CPU_Mode_User:
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -720,7 +728,7 @@ class GetKernelParams():
             self.lgr.debug('stopHapARM set arm_entry to 0x%x' % eip) 
             self.param.arm_entry = eip 
             
-        if self.param.arm_entry is not None and self.param.arm_ret is not None:
+        if self.param.arm_entry is not None and self.param.arm_ret is not None and self.param.arm_ret2 is not None:
             SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
