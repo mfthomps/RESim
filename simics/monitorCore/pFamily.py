@@ -41,7 +41,10 @@ class Pfamily():
     def parentInfo(self, pid, tasks):
         for t in tasks:
             if tasks[t].pid == pid:
-                prec_addr = tasks[t].parent
+                if tasks[t].group_leader != t:
+                    prec_addr = tasks[t].group_leader
+                else:
+                    prec_addr = tasks[t].parent
                 if prec_addr in tasks:
                     return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
                 else:
