@@ -67,10 +67,14 @@ def getValue(cpu, item, lgr=None):
 
 def getAddressFromOperand(cpu, op, lgr):
     retval = None
+    express = None
     if op[0] == '[' and op[-1] == ']':
         express = op[1:-1]
     elif op[0] == '[' and op[-2:-1] == ']!':
         express = op[1:-2]
+    elif op[0] == '[' and '],' in op:
+        rb = op.find(']')
+        express = op[1:rb]
     if express is not None:
         value = 0
         parts = express.split(',')
