@@ -363,10 +363,12 @@ class GenContextMgr():
            group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
            if leader_pid in self.pid_cache:
-               self.lgr.debug('contextManager adding clone %d (%s)' % (pid, comm))
+               ''' TBD, we have no reason to believe this clone is created by the group leader? Using parent or real_parent is no help'''
+               self.lgr.debug('contextManager adding clone %d (%s) leader is %d' % (pid, comm, leader_pid))
                self.addTask(pid, new_addr)
                self.top.addProc(pid, leader_pid, comm)
                self.watchExit(new_addr, pid)
+               self.top.recordStackClone(pid, leader_pid)
 
         if not self.watching_tasks and \
                (new_addr in self.watch_rec_list or (len(self.watch_rec_list) == 0 and  len(self.nowatch_list) > 0)) \
@@ -533,8 +535,11 @@ class GenContextMgr():
         if self.task_break is not None:
             #self.lgr.debug('watchTasks called, but already watching')
             return
-        self.setTaskHap()
+        if self.task_break is None:
+            self.setTaskHap()
         self.watching_tasks = True
+        self.watchExit()
+        self.pageFaultGen.recordPageFaults()
         ctask = self.task_utils.getCurTaskRec()
         if ctask in self.watch_rec_list:
             self.lgr.debug('watchTasks, current task already being watched')
@@ -544,8 +549,6 @@ class GenContextMgr():
         self.watch_rec_list[ctask] = pid
         if pid not in self.pid_cache:
             self.pid_cache.append(pid)
-        self.watchExit()
-        self.pageFaultGen.recordPageFaults()
         group_leader = self.task_utils.getGroupLeaderPid(pid)
         if group_leader != self.group_leader:
             self.lgr.debug('contextManager watchTasks set group leader to %d' % group_leader)
@@ -577,10 +580,10 @@ class GenContextMgr():
             cache_copy = list(self.pid_cache)
             for pid in cache_copy:
                 ida_msg = 'killed %d member of group led by %d' % (pid, lead_pid) 
-                exit_syscall.handleExit(pid, ida_msg, killed=True)
-                self.rmTask(pid, killed=True)
-                if pid in self.demise_cache:
-                    self.demise_cache.remove(pid)
+                exit_syscall.handleExit(pid, ida_msg, killed=True, retain_so=True)
+                #self.rmTask(pid, killed=True)
+                #if pid in self.demise_cache:
+                #    self.demise_cache.remove(pid)
                 if self.pageFaultGen is not None:
                     self.pageFaultGen.handleExit(pid)
             self.clearExitBreaks()
@@ -610,7 +613,7 @@ class GenContextMgr():
             if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 self.killGroup(pid, exit_syscall)
-                exit_syscall.handleExit(pid, ida_msg, killed=True)
+                #exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
                 self.rmTask(pid)
                 if self.pageFaultGen is not None:
@@ -638,7 +641,7 @@ class GenContextMgr():
             if exit_syscall is not None and not self.watching_page_faults:
                 ida_msg = 'pid:%d exit via kill?' % pid
                 self.killGroup(pid, exit_syscall)
-                exit_syscall.handleExit(pid, ida_msg, killed=True)
+                #exit_syscall.handleExit(pid, ida_msg, killed=True)
             else:
                 self.rmTask(pid)
 
