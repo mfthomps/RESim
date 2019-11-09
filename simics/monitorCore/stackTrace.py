@@ -9,6 +9,8 @@ class StackTrace():
             self.instruct = instruct
             self.sp = sp
             self.ret_addr = ret_addr
+        def dumpString(self):
+            return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, self.ret_addr)
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr, max_frames=None):
         if pid == 0:
@@ -49,12 +51,12 @@ class StackTrace():
     def followCall(self, return_to):
         retval = None
         if self.cpu.architecture == 'arm':
-            self.lgr.debug('followCall return_to 0x%x' % return_to)
+            #self.lgr.debug('followCall return_to 0x%x' % return_to)
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('followCall instruct is %s' % instruct[1])
+            #self.lgr.debug('followCall instruct is %s' % instruct[1])
             if self.isArmCall(instruct[1]):
-                self.lgr.debug('followCall arm eip 0x%x' % eip)
+                #self.lgr.debug('followCall arm eip 0x%x' % eip)
                 retval = eip
         else:
             eip = return_to - 2*(self.mem_utils.WORD_SIZE)
@@ -126,7 +128,7 @@ class StackTrace():
                 if self.ida_funs is not None:
                     fun_name = self.ida_funs.getName(faddr)
                 if fun_name is not None:
-                    print('%s 0x%08x %s call %s' % (sp_string, frame.ip, fname, fun_name))
+                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, self.callmn, fun_name))
                 else:
                     #print('nothing for 0x%x' % faddr)
                     print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
@@ -148,12 +150,13 @@ class StackTrace():
             else:
                 fun = call_addr
         except ValueError:
-            self.lgr.debug('getFunName, %s not a hex' % parts[1])
+            #self.lgr.debug('getFunName, %s not a hex' % parts[1])
             pass
         return fun
 
     def isCallToMe(self, fname, eip):
-        ''' if looks like a call to current function, add frame? '''
+        ''' if LR looks like a call to current function, add frame? '''
+        retval = eip
         if self.cpu.architecture == 'arm':
             ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
@@ -162,7 +165,9 @@ class StackTrace():
             if self.ida_funs is not None:
                 cur_fun = self.ida_funs.getFun(eip)
                 ret_to = self.ida_funs.getFun(lr)
-                self.lgr.debug('isCallToMe eip: 0x%x (fun 0x%x) lr 0x%x (fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                if cur_fun is not None and ret_to is not None:
+                    #self.lgr.debug('isCallToMe eip: 0x%x (fun 0x%x) lr 0x%x (fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                    pass
                 if cur_fun != ret_to:
                     instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
                     if instruct[1].startswith(self.callmn):
@@ -171,14 +176,20 @@ class StackTrace():
                         new_instruct = '%s   %s' % (self.callmn, fun)
                         frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr)
                         self.frames.append(frame)
+                        #self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
+                        retval = lr
+        return retval
 
     def doTrace(self):
         if self.pid == 0:
-            self.lgr.debug('stackTrack doTrace called with pid 0')
+            #self.lgr.debug('stackTrack doTrace called with pid 0')
             return
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
+        if self.stack_base is not None:
+            self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
+        else:
+            self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
         #fname = self.soMap.getSOFile(eip)
         #print('0x%08x  %-s' % (eip, fname))
         #frame = self.FrameEntry(eip, fname, '', esp)
@@ -192,7 +203,7 @@ class StackTrace():
         prev_ip = None
         so_checked = []
         if self.soMap.isMainText(eip):
-            #self.lgr.debug('stackTrace starting in main text')
+            self.lgr.debug('stackTrace starting in main text')
             been_in_main = True
             prev_ip = eip
         #prev_ip = eip
@@ -203,16 +214,16 @@ class StackTrace():
        
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
-        #self.lgr.debug('cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
+        #self.lgr.debug('StackTrace doTrace begin cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp)
             self.frames.append(frame)
         else:
             frame = self.FrameEntry(eip, fname, instruct, esp)
             self.frames.append(frame)
-
-        self.isCallToMe(fname, eip)
-
+        ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
+        prev_ip = self.isCallToMe(fname, eip)
+        #self.lgr.debug('doTrace back from isCallToMe')
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
@@ -395,7 +406,7 @@ class StackTrace():
                 parts = frame.instruct.split()
                 if len(parts) == 2:
                     fun = parts[1].split('@')[0]
-                    if fun == 'memcpy' or fun == 'memmove' or fun == 'memcmp':
+                    if fun == 'memcpy' or fun == 'memmove' or fun == 'memcmp' or fun == 'strcpy' or fun == 'strncpy':
                         self.lgr.debug('StackFrame memsomething, is %s, sp is 0x%x' % (fun, frame.sp))
                         if frame.sp > 0:
                             ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
