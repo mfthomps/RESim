@@ -446,7 +446,7 @@ class Syscall():
         except AttributeError:
             sysret64 = None
         if cpu.architecture == 'arm':
-            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, None, None, exit_info, self.traceProcs, name)
+            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, self.param.arm_ret2, None, exit_info, self.traceProcs, name)
         else:
             self.sharedSyscall.addExitHap(pid, self.param.sysexit, self.param.iretd, sysret64, exit_info, self.traceProcs, name)
 
@@ -1461,6 +1461,7 @@ class Syscall():
         elif break_eip == self.param.arm_entry:
             #self.lgr.debug('sys_entry frame %s' % frame_string)
             exit_eip1 = self.param.arm_ret
+            exit_eip2 = self.param.arm_ret2
             frame = self.task_utils.frameFromRegs(cpu)
             frame_string = taskUtils.stringFromFrame(frame)
             #SIM_break_simulation(frame_string)
@@ -1470,6 +1471,7 @@ class Syscall():
             if self.cpu.architecture == 'arm':
                 frame = self.task_utils.frameFromRegs(cpu)
                 exit_eip1 = self.param.arm_ret
+                exit_eip2 = self.param.arm_ret2
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
@@ -1601,7 +1603,7 @@ class Syscall():
     def unsetDebuggingExit(self):
         self.debugging_exit = False
 
-    def handleExit(self, pid, ida_msg, killed=False):
+    def handleExit(self, pid, ida_msg, killed=False, retain_so=False):
             if self.traceProcs is not None:
                 self.traceProcs.exit(pid)
             self.lgr.debug(ida_msg)
@@ -1609,11 +1611,12 @@ class Syscall():
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
             if self.soMap is not None:
-                self.soMap.handleExit(pid, killed)
+                if not retain_so:
+                    self.soMap.handleExit(pid, killed)
             else:
-                self.lgr.debug('syscallHap exit soMap is None, callnum is %s' % (syscall_info.callnum))
+                self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
-            self.lgr.debug('syscallHap exit pid %d last_one %r debugging %d' % (pid, last_one, self.debugging))
+            self.lgr.debug('syscallHap handleExit pid %d last_one %r debugging %d retain_so %r' % (pid, last_one, self.debugging, retain_so))
             if last_one and self.debugging:
                 if self.debugging_exit:
                     ''' exit before we got to text section '''
