@@ -717,10 +717,13 @@ class reverseToCall():
                             self.lgr.debug('cycleRegisterMod at %x, we are done' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
-                            if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
+                            #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
+                            if mn.startswith('ldr') and op1.startswith('['):
+                                self.lgr.debug('is ldr op1 is %s' % op1)
                                 addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
+                                    self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('mov') and self.decode.isReg(op1):
                                 retval = RegisterModType(op1, RegisterModType.REG)
@@ -837,7 +840,7 @@ class reverseToCall():
     def followTaintArm(self, reg_mod_type):
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('followTaintArm %s' % instruct[0])
+        self.lgr.debug('followTaintArm %s' % instruct[1])
         if reg_mod_type is not None:
             if reg_mod_type.mod_type == RegisterModType.ADDR:
                 address = reg_mod_type.value
