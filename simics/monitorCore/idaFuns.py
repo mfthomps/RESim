@@ -62,10 +62,10 @@ class IDAFuns():
     def inFun(self, ip, fun):
         #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
         if fun in self.funs:
+            #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
                 return True
-        else:
-            return False 
+        return False 
 
     def getFun(self, ip):
         for fun in self.funs:
