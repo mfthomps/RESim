@@ -59,6 +59,7 @@ class SharedSyscall():
         for eip in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[eip])
         self.exit_pids = {}
+        self.exit_info = {}
 
     def showExitHaps(self):
         for eip in self.exit_pids:
@@ -362,7 +363,7 @@ class SharedSyscall():
 
     def exitHap(self, dumb, third, forth, memory):
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('sharedSyscall exitHap %d (%s)' % (pid, comm))
+        self.lgr.debug('sharedSyscall exitHap %d (%s) third: %s  forth: %s' % (pid, comm, str(third), str(forth)))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:
