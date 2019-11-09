@@ -1,5 +1,6 @@
 import idaapi
 import idc
+import ida_kernwin
 def getHighlight():
     v = ida_kernwin.get_current_viewer()
     t = ida_kernwin.get_highlight(v)

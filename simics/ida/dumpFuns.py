@@ -2,14 +2,16 @@ import json
 funs = {}
 ea = get_screen_ea()
 print 'ea is %x' % ea
-fname = GetInputFile()
+fname = get_root_filename()
 print('inputfile %s' % fname)
-for function_ea in Functions(SegStart(ea), SegEnd(ea)):
+start = get_segm_start(ea)
+end = get_segm_end(ea)
+for function_ea in Functions(start,  end):
     funs[function_ea] = {}
-    end = GetFunctionAttr(function_ea, FUNCATTR_END)
+    end = get_func_attr(function_ea, 4)
     funs[function_ea]['start'] = function_ea
     funs[function_ea]['end'] = end
-    funs[function_ea]['name'] = GetFunctionName(function_ea)
+    funs[function_ea]['name'] = get_func_name(function_ea)
 
 with open(fname+'.funs', "w") as fh:
     json.dump(funs, fh)

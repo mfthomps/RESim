@@ -72,7 +72,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
         count += 1
         if count == 50:
             print("waiting for response from monitor...")
-            idc.Warning("may take a while")
+            #idc.Warning("may take a while")
         time.sleep(delay)
         simicsString = Evalx('SendGDBMonitor("@cgc.getEIPWhenStopped(%s)");' % kernel_ok)
         #print 'ready set'

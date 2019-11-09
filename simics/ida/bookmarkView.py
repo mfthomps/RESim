@@ -24,6 +24,7 @@
 '''
 import idaapi
 import idc
+import ida_kernwin
 from ida_kernwin import simplecustviewer_t
 import gdbProt
 import bpUtils
@@ -164,7 +165,7 @@ class bookmarkView(simplecustviewer_t):
     
         #print('eip %x  instruct: %s' % (addr, instruct))
         default = '0x%x: %s' % (addr, instruct) 
-        mark = idc.AskStr(default, 'Name of new bookmark:')
+        mark = ida_kernwin.ask_str(default, 0, 'Name of new bookmark:')
         if mark != 0 and mark != 'None':
             self.setBookmark(mark)
             self.updateBookmarkView()

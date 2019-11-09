@@ -150,24 +150,19 @@ class ModMemoryHandler(idaapi.action_handler_t):
         def activate(self, ctx):
             if regFu.isHighlightedEffective():
                 addr = regFu.getOffset()
-                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
-                print('effective addr 0x%x value %s' % (addr, simicsString))
-                value = getHex(simicsString)
             else:
                 highlighted = getHighlight()
                 addr = getHex(highlighted)
-                if addr is None:
-                    print('ModMemoryHandler unable to parse hex from %s' % highlighted)
-                    return
-                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
-                print('addr 0x%x value %s' % (addr, simicsString))
-                value = getHex(simicsString)
 
-            val = self.last_data_mem_set
-            addr, val = setAddrValue.setAddrValue('watch memory', addr, val)
-            if val is None:
+            sas = setAddrValue.SetAddrValue()
+            sas.Compile()
+            sas.iAddr.value = addr 
+            sas.iRawHex.value = idc.get_wide_dword(sas.iAddr.value)
+            ok = sas.Execute()
+            if ok != 1:
                 return
-            self.last_data_mem_set = val
+            val = sas.iRawHex.value
+            addr = sas.iAddr.value
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, val)) 
             time.sleep(2)
             self.isim.updateBookmarkView()
