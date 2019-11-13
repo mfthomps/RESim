@@ -234,6 +234,9 @@ class PageFaultGen():
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             proc_break2 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, proc_break2, name='watchPageFaults')
+            max_intr = 255
+            self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
+                     self.faultCallback, self.cpu, 0, 13) 
         else:
             #self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
@@ -252,15 +255,7 @@ class PageFaultGen():
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         if cpu.architecture == 'arm':
-            #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
-            if exception_number == 1:
-                reg_num = self.cpu.iface.int_register.get_number("combined_data_far")
-                cr2 = self.cpu.iface.int_register.read(reg_num)
-                reg_num = self.cpu.iface.int_register.get_number("lr")
-                mem = self.cpu.iface.int_register.read(reg_num) - 8
-                #self.lgr.debug('referenced address from combined_data_far is 0x%x LR is 0x%x' % (cr2, mem))
-                if eip == 0xc013fea8:
-                    SIM_break_simulation('Data Abort')
+            self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
         else:
             #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
             pass

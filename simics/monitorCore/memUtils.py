@@ -483,6 +483,24 @@ class memUtils():
         #SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
         SIM_write_phys_memory(cpu, phys, value, self.WORD_SIZE)
 
+    def writeBytes(self, cpu, address, bstring):
+        lcount = len(bstring)/4
+        carry = len(bstring) % 4
+        if carry != 0:
+            lcount += 1
+        print lcount
+        sindex = 0
+        for i in range(lcount):
+            eindex = min(sindex+4, len(bstring))
+            value = bstring[sindex:eindex] 
+            count = len(value)
+            sindex +=4
+            #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+            phys = self.v2p(cpu, address)
+            #SIM_write_phys_memory(cpu, phys_block.address, value, count)
+            SIM_write_phys_memory(cpu, phys, value, count)
+            address += 4
+
     def getGSCurrent_task_offset(self, cpu):
         gs_base = cpu.ia32_gs_base
         retval = gs_base + self.param.cur_task_offset_into_gs

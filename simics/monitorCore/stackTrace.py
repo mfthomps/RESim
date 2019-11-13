@@ -1,6 +1,7 @@
 from simics import *
 import json
 import os
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy']
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None):
@@ -370,43 +371,27 @@ class StackTrace():
 
     def memsomething(self):
         retval = None
-        ''' TBD remove first if? doTrace now ensures two frames? '''
-        if len(self.frames) < 2:
-            self.lgr.debug('memsomething, only %d frames' % len(self.frames))
-            if self.cpu.architecture == 'arm':
-                ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
-                lr = self.mem_utils.getRegValue(self.cpu, 'lr')
-                ''' TBD also for 64-bit? '''
-                call_instr = lr-4
-                instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
-                self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
-                parts = instruct[1].split()
-                try:
-                    call_addr = int(parts[1],16)
-                    self.lgr.debug('memsomething call_addr 0x%x' % call_addr)
-                    fun = None
-                    if call_addr in self.relocate_funs:
-                        fun = self.relocate_funs[call_addr]
-                        self.lgr.debug('memsomething 0x%x in relocate funs fun is %s' % (call_addr, fun))
-                    elif self.ida_funs is not None:
-                        self.lgr.debug('memsomething is 0x%x in ida_funs?' % call_addr)
-                        fun = self.ida_funs.getName(call_addr)
-                    if fun is not None:
-                        rel_instruct = '%s   %s' % (self.callmn, fun)
-                        self.lgr.debug('memsomething call is is %s' % rel_instruct)
-                        retval = self.MemStuff(lr, fun)
-                except ValueError:
-                    self.lgr.debug('memsomething, %s not a hex' % parts[1])
-                    pass
-             
-        else:
-            frame = self.frames[1]
+        for i in range(1,3):
+            if len(self.frames) < i+1:
+                break
+            frame = self.frames[i]
             self.lgr.debug('memsomething frame instruct is %s' % frame.instruct)
             if frame.instruct is not None:
                 parts = frame.instruct.split()
                 if len(parts) == 2:
                     fun = parts[1].split('@')[0]
-                    if fun == 'memcpy' or fun == 'memmove' or fun == 'memcmp' or fun == 'strcpy' or fun == 'strncpy':
+                    try:
+                        fun_hex = int(fun, 16) 
+                        if self.ida_funs is not None:
+                            fun_name = self.ida_funs.getName(fun_hex)
+                            self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                            if fun_name is not None:
+                                fun = fun_name
+                        else:
+                            self.lgr.debug('No ida_funs')
+                    except ValueError:
+                        pass
+                    if fun in mem_funs:
                         self.lgr.debug('StackFrame memsomething, is %s, sp is 0x%x' % (fun, frame.sp))
                         if frame.sp > 0:
                             ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
@@ -416,6 +401,7 @@ class StackTrace():
                             self.lgr.error('memsomething sp is zero and no ret_addr?')
                             ret_addr = None
                         retval = self.MemStuff(ret_addr, fun)
+                        break
                         #if fun.strip() == 'memmove':
                         #    SIM_break_simulation('memmove')       
                     #elif fun.strip() == 'xmlStrcmp':

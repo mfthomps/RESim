@@ -205,6 +205,7 @@ class TrackThreads():
         self.child_stacks[pid].append(child_stack)
 
     def getChildStack(self, pid):
+        ''' TBD assumes first scheduled clone is the one first created '''
         if pid in self.child_stacks and len(self.child_stacks[pid]) > 0:
             return self.child_stacks[pid].pop(0)
         else:

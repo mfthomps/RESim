@@ -2431,8 +2431,10 @@ class GenMonitor():
 
     def goToDataMark(self, index):
         self.stopTrackIO()
-        self.dataWatch[self.target].goToMark(index)
-        self.context_manager[self.target].watchTasks()
+        cycle = self.dataWatch[self.target].goToMark(index)
+        if cycle is not None:
+            self.context_manager[self.target].watchTasks()
+        return cycle
         
     def mft(self):
         cur_task_rec = self.task_utils[self.target].getCurTaskRec()
@@ -2449,8 +2451,36 @@ class GenMonitor():
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
             to match the length of the  dfile.  Finally, run trackIO on the given file descriptor.
+            Assumes we are stopped.  
         '''
-        pass
+        if not os.path.isfile(dfile):
+            print('File not found at %s\n\n' % dfile)
+            return
+        cycle = None
+        if watch_mark is not None and watch_mark >= 0:
+            cycle = self.goToDataMark(watch_mark)
+        if watch_mark is None or cycle == None:
+            self.goToOrigin()
+            print('No watch mark, going to Origin')
+        ''' Add memUtil function to put byte array into memory '''
+        byte_string = None
+        with open(dfile) as fh:
+            byte_string = fh.read()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        lenreg = None
+        if cpu.architecture == 'arm':
+            addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
+            lenreg = 'r0'
+        else:
+            print('injectIO not implemented for x86 yet')
+            return
+        self.lgr.debug('byte_string is %s' % str(byte_string))
+        self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
+        self.writeRegValue(lenreg, len(byte_string))
+        self.lgr.debug('injectIO from file %s to FD %d. %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
+        print('tracking IO to %d' % fd)
+        self.trackIO(fd)    
+        
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -18,8 +18,11 @@ class WatchMarks():
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
-            offset = src - buf_start
-            self.msg = 'Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+            if buf_start is not None:
+                offset = src - buf_start
+                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+            else:
+                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
         def getMsg(self):
             return self.msg
 
@@ -155,7 +158,10 @@ class WatchMarks():
 
     def compare(self, ours, theirs, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        the_str = self.mem_utils.readString(self.cpu, theirs, count)
+        if count > 0:
+            the_str = self.mem_utils.readString(self.cpu, theirs, count).decode('ascii', 'replace')
+        else:
+            the_str = ''
         cm = self.CompareMark(ours, theirs, count, the_str, buf_start) 
         self.removeRedundantDataMark(ours)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
