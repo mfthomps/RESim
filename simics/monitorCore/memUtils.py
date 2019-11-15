@@ -42,7 +42,7 @@ def getCPL(cpu):
         ''' TBD FIX this! '''
         reg_num = cpu.iface.int_register.get_number("pc")
         pc = cpu.iface.int_register.read(reg_num)
-        print('pc is 0x%x' % pc)
+        #print('pc is 0x%x' % pc)
         if pc > 0xc0000000:
             return 0
         else:
@@ -529,6 +529,10 @@ class memUtils():
             #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
             phys = self.v2p(cpu, address)
             #SIM_write_phys_memory(cpu, phys_block.address, value, count)
-            SIM_write_phys_memory(cpu, phys, value, count)
+            try:
+                SIM_write_phys_memory(cpu, phys, value, count)
+            except TypeError:
+                self.lgr.error('writeString failed writing to 0x%x, value %s' % (phys, value))
+                return
             address += 4
 
