@@ -1,18 +1,18 @@
 from ida_kernwin import Form
-class GetAddrCount(Form):
+class SetAddrString(Form):
     def __init__(self):
         Form.__init__(self, r"""STARTITEM {id:iAddr}
 BUTTON YES* OK
 BUTTON CANCEL Cancel
-Get address and count for memory watch
+Modify memory with a string
 
 {FormChangeCb}
+<#Hint1#Enter string  :{iStr1}>
 <##Enter an address      :{iAddr}>
-<##Enter count           :{iRawHex}>
 
 """, {
+            'iStr1': Form.StringInput(),
             'iAddr': Form.NumericInput(tp=Form.FT_ADDR),
-            'iRawHex': Form.NumericInput(tp=Form.FT_ADDR),
             'iButton1': Form.ButtonInput(self.OnButton1),
             'iButton2': Form.ButtonInput(self.OnButton2),
             'FormChangeCb': Form.FormChangeCb(self.OnFormChange),
@@ -29,4 +29,6 @@ Get address and count for memory watch
 
     def OnFormChange(self, fid):
         return 1
+
+
 

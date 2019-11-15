@@ -81,12 +81,20 @@ class DataWatchHandler(idaapi.action_handler_t):
             highlighted = getHighlight()
             addr = getHex(highlighted)
             count = self.last_data_watch_count
-            addr, count = getAddrCount.getAddrCount('watch memory', addr, count)
-            if count is None:
+
+            gac = getAddrCount.GetAddrCount()
+            gac.Compile()
+            gac.iAddr.value = addr 
+            gac.iRawHex.value = count
+            ok = gac.Execute()
+            if ok != 1:
                 return
+            count = gac.iRawHex.value
+            addr = gac.iAddr.value
+
             print('watch %d bytes from 0x%x' % (count, addr))
             self.last_data_watch_count = count
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, %s)");' % (addr, count)) 
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.watchData(0x%x, %d)");' % (addr, count)) 
             eip = gdbProt.getEIPWhenStopped()
             self.isim.signalClient()
             self.isim.showSimicsMessage()
