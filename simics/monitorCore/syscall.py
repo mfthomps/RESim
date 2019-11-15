@@ -984,12 +984,12 @@ class Syscall():
                     break
                 elif DEST_PORT in call_param.param_flags: 
                     if dest_ss is not None:
-                        if str(dest_ss.port) == call_param.match_param:
+                        if dest_ss.port == call_param.match_param:
                             self.lgr.debug('call param DEST_PORT found')
                             exit_info.call_params = call_param
                             break
                         else:
-                            self.lgr.debug('syscall no match of %s to %s in  sendto from %d' % (call_param.match_param, str(dest_ss.port), pid))
+                            self.lgr.debug('syscall no match of %d to %d in  sendto from %d' % (call_param.match_param, dest_ss.port, pid))
                     else:
                         self.lgr.debug('syscall no ss in sendto from %d' % pid)
                 
