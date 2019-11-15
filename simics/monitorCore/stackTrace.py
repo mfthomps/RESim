@@ -11,7 +11,10 @@ class StackTrace():
             self.sp = sp
             self.ret_addr = ret_addr
         def dumpString(self):
-            return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, self.ret_addr)
+            if self.ret_addr is not None:
+                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, self.ret_addr)
+            else:
+                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ' % (self.ip, self.fname, self.instruct, self.sp)
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, lgr, max_frames=None):
         if pid == 0:
@@ -222,6 +225,7 @@ class StackTrace():
         else:
             frame = self.FrameEntry(eip, fname, instruct, esp)
             self.frames.append(frame)
+        #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
         #self.lgr.debug('doTrace back from isCallToMe')
@@ -281,6 +285,9 @@ class StackTrace():
                             if tmp_instruct.startswith(self.jmpmn):
                                 skip_this = True
                                 #self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
+                            elif addr in self.relocate_funs:
+                                #self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
+                                skip_this = True
                             else:
                                 #self.lgr.debug('stackTrace 0x%x is not a function?' % call_to)
                                 pass
@@ -334,6 +341,7 @@ class StackTrace():
                 #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
             if self.max_frames is not None and len(self.frames)>= self.max_frames:
+                self.lgr.debug('stackFrames got max frames, done')
                 done = True
 
         ''' TBD remove, not used, handled at start? ''' 
