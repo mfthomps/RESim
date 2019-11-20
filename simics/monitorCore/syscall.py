@@ -297,25 +297,27 @@ class Syscall():
                 syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
 
                 if self.param.sysenter is not None:
+                    proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
+                    break_addrs.append(self.param.sysenter)
+                    break_list.append(proc_break)
                     if self.param.sys_entry is not None and self.param.sys_entry != 0:
-                        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
-                        break_addrs.append(self.param.sysenter)
-                        break_list.append(proc_break)
-                        if self.param.sys_entry is not None and self.param.sys_entry != 0:
-                            self.lgr.debug('Syscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
-                            proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
-                            break_addrs.append(self.param.sys_entry)
-                            break_list.append(proc_break1)
-                            self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, proc_break1, 'syscall'))
-                        else:
-                            self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
-                            self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, 'syscall'))
+                        ''' Has sys_entry as well. '''
+                        self.lgr.debug('Syscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
+                        proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
+                        break_addrs.append(self.param.sys_entry)
+                        break_list.append(proc_break1)
+                        self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, proc_break1, 'syscall'))
+                    else:
+                        self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
+                        self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, 'syscall'))
                 elif self.param.sys_entry is not None and self.param.sys_entry != 0:
                         self.lgr.debug('Syscall no callnum, set sys_entry break at 0x%x' % (self.param.sys_entry))
                         proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                         break_addrs.append(self.param.sys_entry)
                         break_list.append(proc_break1)
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break1, 'syscall'))
+                else:
+                    self.lgr.debug('SysCall no call list, no breaks set.  parms: %s' % self.param.getParamString())
                 if self.param.compat_32_entry is not None and self.param.compat_32_entry != 0:
                     ''' support 32 bit compatability '''
                     newcall_info = copy.copy(syscall_info)
@@ -328,13 +330,14 @@ class Syscall():
                     break_addrs.append(self.param.compat_32_int128)
                     break_list.append(proc_break2)
                     self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, newcall_info, proc_break1, proc_break2, 'syscall32'))
+        
         else:
             ''' will stop within the kernel at the computed entry point '''
             for call in self.call_list:
                 # TBD fix for compat 32
                 callnum = self.task_utils.syscallNumber(call, compat32)
                 if callnum is not None and callnum < 0:
-                    self.lgr.error('Syscall bad call number %d' % callnum)
+                    self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
                 entry = self.task_utils.getSyscallEntry(callnum, compat32)
                 #phys = self.mem_utils.v2p(cpu, entry)
@@ -395,7 +398,7 @@ class Syscall():
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        self.lgr.debug('syscall stopTrace return')
+        self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def firstMmapHap(self, syscall_info, third, forth, memory):
         ''' invoked after mmap call, looking to track SO libraries.  Intended to be called after open of .so. '''
@@ -1272,7 +1275,7 @@ class Syscall():
                 elif call_param.match_param.__class__.__name__ == 'Diddler':
                     if count < 4028:
                         self.lgr.debug('syscall write check diddler count %d' % count)
-                        diddler = exit_info.call_params.match_param
+                        diddler = call_param.match_param
                         if diddler.checkString(self.cpu, frame['param2'], count):
                             self.lgr.debug('syscall write found final diddler %s' % diddler.getPath())
                             self.top.stopTrace(cell_name=self.cell_name, syscall=self)
@@ -1400,8 +1403,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
-            pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
+        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
             
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
