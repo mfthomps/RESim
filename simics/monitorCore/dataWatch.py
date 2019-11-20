@@ -8,7 +8,8 @@ import elfText
 import memUtils
 import watchMarks
 import backStop
-BACK_STOP_CYCLES = 50000
+from stackTrace import mem_funs
+BACK_STOP_CYCLES = 5000000
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -30,6 +31,8 @@ class DataWatch():
         self.return_hap = None
         self.prev_cycle = None
         self.ida_funs = None
+        self.relocatables = None
+        self.user_iterators = None
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
         if cpu.architecture == 'arm':
@@ -37,7 +40,7 @@ class DataWatch():
         else:
             self.decode = decode
 
-    def setRange(self, start, length, msg):
+    def setRange(self, start, length, msg=None, max_len=None):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x' % (start, length))
         end = start+length
         overlap = False
@@ -54,7 +57,7 @@ class DataWatch():
             self.cycle.append(self.cpu.cycles)
         if msg is not None:
             fixed = unicode(msg, errors='replace')
-            self.watchMarks.markCall(fixed)
+            self.watchMarks.markCall(fixed, max_len)
 
     def close(self, fd):
         ''' called when FD is closed and we might be doing a trackIO '''
@@ -181,6 +184,11 @@ class DataWatch():
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (mem_something.dest, mem_something.count))
             buf_start = self.findRange(mem_something.dest)
             self.watchMarks.memset(mem_something.dest, mem_something.count, buf_start)
+        elif mem_something.fun not in mem_funs:
+            ''' assume iterator '''
+            self.lgr.debug('dataWatch returnHap, return from iterator %s src: 0x%x ' % (mem_something.fun, mem_something.src))
+            buf_start = self.findRange(mem_something.src)
+            self.watchMarks.iterator(mem_something.fun, mem_something.src, buf_start)
         else:
             self.lgr.error('dataWatch returnHap no handler for %s' % mem_something.fun)
         #SIM_break_simulation('return hap')
@@ -188,8 +196,15 @@ class DataWatch():
         self.watch()
 
     def walkAlone(self, mem_something):        
+        if self.ida_funs is not None:
+            self.top.stopThreadTrack()
             ''' Step backwards until we reach a call.  Assumes we start near the beginning of a mem function '''
-            self.lgr.debug('mem_mem_something is %s' % str(mem_something))
+            ip = self.top.getEIP(self.cpu)
+            fun = self.ida_funs.getFun(ip)
+            if fun is not None:
+                self.lgr.debug('walkAlone, ip 0x%x, fun is %s' % (ip, fun))
+            else:
+                self.lgr.debug('walkAlone, ip 0x%x NO FUN')
             done = False
             bound = 0
             while not done:
@@ -200,13 +215,30 @@ class DataWatch():
                 instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
                 self.lgr.debug('skipped to 0x%x, landed at 0x%x  pc: 0x%x instruct %s' % (back_one, self.cpu.cycles, pc, instruct[1]))
                 if self.decode.isCall(self.cpu, instruct[1]):
-                    done = True
+                    parts = instruct[1].split()
+                    call_to = parts[1]
+                    try:
+                        dest = int(call_to, 16)
+                        if dest == fun:
+                            done = True
+                            self.lgr.debug('walkAlone found call to 0x%x' % fun)
+                        elif dest in self.relocatables:
+                            done = True
+                            self.lgr.debug('walkAlone found relocatable call to %s' % self.relocatables[dest])
+                        elif self.user_iterators.isIterator(dest):
+                            done = True
+                            self.lgr.debug('walkAlone found call to iterator 0x%x' % dest)
+                        else: 
+                            self.lgr.debug('walkAlone is call, but not to function containing PC 0x%x' % pc)
+                    except ValueError:
+                        pass
                 bound += 1
                 if bound > 50:
                     print('call not found all all that')
                     return
             
-            self.lgr.debug('memstuffStopHap, got call %s' % instruct[1])
+            self.top.startThreadTrack()
+            self.lgr.debug('walkAlone, got call %s' % instruct[1])
             if mem_something.fun == 'memcpy' or mem_something.fun == 'memmove' or mem_something.fun == 'mempcpy': 
                 mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                 mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
@@ -223,6 +255,8 @@ class DataWatch():
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memcpy_return_hap')
             self.lgr.debug('walkAlone set hap on ret_ip at 0x%x Now run!' % mem_something.ret_ip)
             SIM_run_command('c')
+        else:
+            self.lgr.debug('walkAlone, no ida functions')
 
 
     def runToReturnAlone(self, mem_something):
@@ -276,7 +310,12 @@ class DataWatch():
                 mem_something.count = self.getStrLen(mem_something.src)        
                 self.lgr.debug('handleMemStuff strcmp, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
                 SIM_run_alone(self.runToReturnAlone, mem_something)
+            elif mem_something.fun not in mem_funs: 
+                ''' assume it is a user iterator '''
+                self.lgr.debug('handleMemStuff assume iterator, src: 0x%x ' % (mem_something.src))
+                SIM_run_alone(self.runToReturnAlone, mem_something)
             else: 
+                ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
             	     self.memstuffStopHap, mem_something)
                 SIM_break_simulation('handle memstuff')
@@ -303,7 +342,7 @@ class DataWatch():
             return
         self.prev_cycle = self.cpu.cycles
 
-        if self.back_stop is not None:
+        if self.back_stop is not None and not self.break_simulation:
             self.back_stop.setFutureCycle(BACK_STOP_CYCLES)
         if index >= len(self.read_hap):
             self.lgr.error('dataWatch readHap invalid index %d, only %d read haps' % (index, len(self.read_hap)))
@@ -338,15 +377,16 @@ class DataWatch():
             #mem_stuff = self.isMemSomething(eip) 
             if mem_stuff is not None:
                 self.lgr.debug('DataWatch readHap ret_ip 0x%x' % (mem_stuff.ret_addr))
-                
+                ''' src is the referenced memory address by default ''' 
                 mem_something = self.MemSomething(mem_stuff.fun, mem_stuff.ret_addr, addr, None, None)
                 SIM_run_alone(self.handleMemStuff, mem_something)
             else:
                 self.lgr.debug('DataWatch readHap not memsomething, reset the watch')
                 self.watch()
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         if op_type == Sim_Trans_Load:
-            self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) eip: 0x%x cycle:0x%x' % (addr, 
-                    offset, self.length[index], self.start[index], eip, self.cpu.cycles))
+            self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) eip: 0x%x <%s> cycle:0x%x' % (addr, 
+                    offset, self.length[index], self.start[index], eip, instruct[1], self.cpu.cycles))
             msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
                         offset, self.length[index], self.start[index], eip))
             self.context_manager.setIdaMessage(msg)
@@ -359,12 +399,6 @@ class DataWatch():
                 if not self.break_simulation:
                     self.stopWatch()
                 SIM_run_alone(self.kernelReturn, addr)
-            elif call_sp is None:
-                ''' not kernel and not library copy. look for compare '''
-                for i in range(3):
-                    instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                    self.lgr.debug('\t\t0x%x  %s' % (eip, instruct[1]))
-                    eip = eip + instruct[0]
 
         elif cpl > 0:
             self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, self.length[index], self.start[index], eip))
@@ -391,7 +425,7 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d' % (eip, break_num, self.start[index], end, self.length[index], index))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
-        if self.back_stop is not None:
+        if self.back_stop is not None and not self.break_simulation:
             self.back_stop.setFutureCycle(BACK_STOP_CYCLES)
 
     def stopHap(self, stop_action, one, exception, error_string):
@@ -451,6 +485,7 @@ class DataWatch():
     def clearWatches(self, cycle=None):
         self.lgr.debug('DataWatch clear Watches')
         self.stopWatch()
+        self.break_simulation = True
         if cycle is None:
             del self.start[:]
             del self.length[:]
@@ -471,3 +506,35 @@ class DataWatch():
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
+
+    def setRelocatables(self, relocatables):
+        self.relocatables = relocatables
+
+    def setCallback(self, callback):
+        ''' what should backStop call when no activity for N cycles? '''
+        self.back_stop.setCallback(callback)
+
+    def showWatchMarks(self):
+        self.watchMarks.showMarks()
+
+    def tagIterator(self, index):
+        ''' Call from IDA Client to collapse a range of data references into the given watch mark index ''' 
+        if self.ida_funs is not None:
+            watch_mark = self.watchMarks.getMarkFromIndex(index)
+            if watch_mark is not None:
+                fun = self.ida_funs.getFun(watch_mark.ip)
+                if fun is None:
+                    self.lgr.error('DataWatch tagIterator failed to get function for 0x%x' % ip)
+                else:
+                    self.user_iterators.add(fun)
+                    self.lgr.debug('DataWatch added iterator for function 0x%x' % fun)
+            else:
+                self.lgr.error('failed to get watch mark for index %d' % index)
+
+    def setUserIterators(self, user_iterators):
+        self.user_iterators = user_iterators
+
+    def wouldBreakSimulation(self):
+        if self.break_simulation:
+            return True
+        return False

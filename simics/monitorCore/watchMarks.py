@@ -4,11 +4,18 @@ class WatchMarks():
         self.mem_utils = mem_utils
         self.cpu = cpu
         self.lgr = lgr
-        self.prev_ip = None
+        self.prev_ip = []
 
+    def showMarks(self):
+        i = 0
+        for mark in self.mark_list:
+            print('%d %s' % (i, mark.msg.getMsg()))
+            i += 1
+        
     class CallMark():
-        def __init__(self, msg):
+        def __init__(self, msg, max_len):
             self.msg = msg
+            self.max_len = max_len
         def getMsg(self):
             return self.msg
 
@@ -76,7 +83,17 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class IteratorMark():
+        def __init__(self, fun, addr, buf_start): 
+            self.fun = fun
+            self.addr = addr
+            offset = addr - buf_start
+            self.msg = 'iterator %s %x (%d bytes into buffer at 0x%x)' % (fun, addr, offset, buf_start)
+        def getMsg(self):
+            return self.msg
+
     class WatchMark():
+        ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
         def __init__(self, cycle, ip, msg):
             self.cycle = cycle
             self.ip = ip
@@ -88,22 +105,28 @@ class WatchMarks():
             retval['msg'] = self.msg.getMsg()
             return retval
 
-    def markCall(self, msg):
+    def recordIP(self, ip):
+        self.prev_ip.append(ip)
+        if len(self.prev_ip) > 4:
+            self.prev_ip.pop(0)
+
+    def markCall(self, msg, max_len):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.CallMark(msg)
+        cm = self.CallMark(msg, max_len)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
-        self.prev_ip = ip
+        self.recordIP(ip)
    
     def dataRead(self, addr, start, length, cmp_ins): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         ''' TBD generalize for loops that make multiple refs? '''
-        if ip != self.prev_ip:
+        if ip not in self.prev_ip:
             dm = self.DataMark(addr, start, length, cmp_ins)
             self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
             self.lgr.debug('watchMarks dataRead 0x%x %s' % (ip, dm.getMsg()))
+            self.prev_ip = []
         else:
-            if self.prev_ip is not None:
+            if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
                 self.lgr.debug('pm class is %s' % pm.msg.__class__.__name__)
                 if isinstance(pm.msg, self.DataMark):
@@ -113,7 +136,13 @@ class WatchMarks():
                     dm = self.DataMark(addr, start, length, cmp_ins)
                     self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
                     self.lgr.debug('watchMarks dataRead followed markCall 0x%x %s' % (ip, dm.getMsg()))
-        self.prev_ip = ip
+        self.recordIP(ip)
+
+    def getMarkFromIndex(self, index):
+        if index < len(self.mark_list):
+            return self.mark_list[index]
+        else:
+            return None
 
     def getWatchMarks(self):
         retval = []
@@ -129,7 +158,7 @@ class WatchMarks():
             return None
 
     def removeRedundantDataMark(self, dest):
-        if self.prev_ip is not None:
+        if len(self.prev_ip) > 0:
             pm = self.mark_list[-1]
             if isinstance(pm.msg, self.DataMark):
                 if pm.msg.addr == dest:
@@ -167,7 +196,13 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks compare 0x%x %s' % (ip, cm.getMsg()))
 
+    def iterator(self, fun, src, buf_start):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        im = self.IteratorMark(fun, src, buf_start)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, im))        
+        self.lgr.debug('watchMarks iterator 0x%x %s' % (ip, im.getMsg()))
+
     def clearWatchMarks(self): 
         del self.mark_list[:] 
-        self.prev_ip = None
+        self.prev_ip = []
 
