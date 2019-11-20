@@ -528,11 +528,14 @@ class memUtils():
             sindex +=4
             #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
             phys = self.v2p(cpu, address)
+            if phys is None:
+                self.lgr.error('writeString got None as phys addr for 0x%x' % address)
+                return
             #SIM_write_phys_memory(cpu, phys_block.address, value, count)
             try:
                 SIM_write_phys_memory(cpu, phys, value, count)
             except TypeError:
-                self.lgr.error('writeString failed writing to 0x%x, value %s' % (phys, value))
+                self.lgr.error('writeString failed writing to phys 0x%x (vert 0x%x), value %s' % (phys, address, value))
                 return
             address += 4
 
