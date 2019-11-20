@@ -366,7 +366,7 @@ class GenContextMgr():
                ''' TBD, we have no reason to believe this clone is created by the group leader? Using parent or real_parent is no help'''
                self.lgr.debug('contextManager adding clone %d (%s) leader is %d' % (pid, comm, leader_pid))
                self.addTask(pid, new_addr)
-               self.top.addProc(pid, leader_pid, comm)
+               self.top.addProc(pid, leader_pid, comm, clone=True)
                self.watchExit(new_addr, pid)
                self.top.recordStackClone(pid, leader_pid)
 
@@ -651,11 +651,11 @@ class GenContextMgr():
             pid = cur_pid
             rec = self.task_utils.getCurTaskRec() 
         if rec is None:
-            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
+            #self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
             return
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
-            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            #self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return
         cell = self.default_context
         #cell = self.resim_context
