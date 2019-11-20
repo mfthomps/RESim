@@ -1133,7 +1133,8 @@ class Syscall():
             for call_param in syscall_info.call_params:
                 if call_param.nth is not None:
                     call_param.count = call_param.count + 1
-                    if call_param.count >= call_param.nth:
+                    ''' negative nth means stop in parent '''
+                    if call_param.count >= abs(call_param.nth):
                         exit_info.call_params = call_param
                 break
             #self.traceProcs.close(pid, fd)
@@ -1250,6 +1251,7 @@ class Syscall():
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
                     if call_param.match_param == frame['param1']:
+                        self.lgr.debug('syscall read add param break_sim is %r' % call_param.break_simulation)
                         exit_info.call_params = call_param
                         break
                 elif call_param.match_param.__class__.__name__ == 'Diddler':

@@ -480,11 +480,12 @@ class SharedSyscall():
                 
             if exit_info.call_params is not None:
                 if exit_info.call_params.nth is not None:
-                    self.lgr.debug('exitHap clone, run to pid %d' % eax)
-                    SIM_run_alone(self.top.toProcPid, eax)
-                    exit_info.call_params = None
-                    my_syscall = exit_info.syscall_instance
-                    my_syscall.stopTrace()
+                    if exit_info.call_params.nth >= 0:
+                        self.lgr.debug('exitHap clone, run to pid %d' % eax)
+                        SIM_run_alone(self.top.toProcPid, eax)
+                        exit_info.call_params = None
+                        my_syscall = exit_info.syscall_instance
+                        my_syscall.stopTrace()
             
             #dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
             #if dumb_pid is not None:
@@ -550,11 +551,15 @@ class SharedSyscall():
                     s = '<<NOT MAPPED>>'
                 trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x\n\t%s\n' % (pid, comm, exit_info.old_fd, 
                               eax, exit_info.retval_addr, s))
-                if exit_info.call_params is not None and exit_info.call_params.break_simulation and self.dataWatch is not None \
+                my_syscall = exit_info.syscall_instance
+                if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None \
                    and type(exit_info.call_params.match_param) is int:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read')
                     self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, trace_msg)
+                    if my_syscall.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
                     if eax < 16000:
                         diddler = exit_info.call_params.match_param
