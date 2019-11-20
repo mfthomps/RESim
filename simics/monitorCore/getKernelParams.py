@@ -202,6 +202,8 @@ class GetKernelParams():
             gs_b700 = self.mem_utils.getGSCurrent_task_offset(self.cpu)
             self.param.current_task = self.mem_utils.getUnsigned(gs_b700)
             self.param.current_task_phys = self.mem_utils.v2p(self.cpu, gs_b700)
+            self.current_task = self.param.current_task
+            self.current_task_phys = self.param.current_task_phys
             gs_base = self.cpu.ia32_gs_base
             self.lgr.debug('64-bit gs_base is 0x%x  gs_b700 0x%x current_task at 0x%x  phys 0x%x' % (gs_base, gs_b700, self.param.current_task, self.param.current_task_phys))
             self.findSwapper()
@@ -363,6 +365,7 @@ class GetKernelParams():
     def findSwapper(self):
         self.trecs = []
         pcell = self.cpu.physical_memory
+        self.lgr.debug('findSwapper set break at 0x%x (phys 0x%x) and callback, now continue' % (self.param.current_task, self.current_task_phys))
         self.task_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, self.current_task_phys, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.swapperStopHap, None)
