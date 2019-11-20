@@ -237,9 +237,13 @@ class SharedSyscall():
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of address data '''
                     self.dataWatch.setRange(in_ss.addr, addr_len, trace_msg)
-                    if my_syscall.linger: 
+                    #if my_syscall.linger: 
+                    ''' TBD better way to distinguish linger from trackIO '''
+                    if not self.dataWatch.wouldBreakSimulation():
                         self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False)
+                        #self.dataWatch.watch(break_simulation=False)
+                        self.lgr.debug('sharedSyscall accept call dataWatch watch')
+                        self.dataWatch.watch(break_simulation=exit_info.call_params.break_simulation)
             else:
                 trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d NULL addr\n' % (pid, exit_info.sock_struct.fd, new_fd))
         elif socket_callname == "socketpair":
@@ -292,7 +296,8 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
-                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, trace_msg)
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, msg=trace_msg, 
+                               max_len=exit_info.sock_struct.length)
                     if exit_info.fname_addr is not None:
                         count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                         msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
@@ -363,7 +368,7 @@ class SharedSyscall():
 
     def exitHap(self, dumb, third, forth, memory):
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('sharedSyscall exitHap %d (%s) third: %s  forth: %s' % (pid, comm, str(third), str(forth)))
+        #self.lgr.debug('sharedSyscall exitHap %d (%s) third: %s  forth: %s' % (pid, comm, str(third), str(forth)))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:
