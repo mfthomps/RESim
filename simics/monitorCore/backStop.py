@@ -36,6 +36,8 @@ class BackStop():
             self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x' % (self.cpu.name, self.cpu.cycles))
             self.clearCycle()
             SIM_break_simulation('hit final cycle')
+            if self.callback is not None:
+                self.callback()
         else: 
             self.lgr.debug('backStop cycle_handler lingering after cpu set to None, ignore')
             SIM_continue(0)
@@ -51,7 +53,11 @@ class BackStop():
             self.lgr = lgr
         self.cycle_event = None 
         self.cpu = cpu
+        self.callback = None
         self.lgr.debug('backStop init cpu %s' % self.cpu.name)
+
+    def setCallback(self, callback):
+        self.callback = callback
 
     def clearCycle(self):
         if self.cycle_event is not None:
@@ -67,7 +73,7 @@ class BackStop():
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = self.cpu.cycles + cycles
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
-        self.lgr.debug('backStop setRelativeCycle, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
+        self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
 
     def setFutureCycle(self, cycles):
         SIM_run_alone(self.setFutureCycleAlone, cycles)
