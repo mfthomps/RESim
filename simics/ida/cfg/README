@@ -1,0 +1,2 @@
+Copy these files into the ~/ida../config directory to force IDA to ask for registerrs in a manner that does
+not confuse Simics.
