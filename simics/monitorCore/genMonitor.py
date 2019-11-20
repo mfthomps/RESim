@@ -65,6 +65,7 @@ import connector
 import diddler
 import targetFS
 import cellConfig
+import userIterators
 
 import json
 import pickle
@@ -130,6 +131,7 @@ class GenMonitor():
         self.rev_execution_enabled = False
         self.run_from_snap = None
         self.ida_funs = None
+        self.user_iterators = None
         self.binders = binder.Binder()
         self.connectors = connector.Connector()
         self.auto_maze=False
@@ -389,7 +391,7 @@ class GenMonitor():
                 return
 
             cur_task_rec = self.mem_utils[cell_name].getCurrentTask(self.param[cell_name], cpu)
-            self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
+            #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
@@ -609,6 +611,8 @@ class GenMonitor():
                     self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
                     self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
                     self.dataWatch[self.target].setIdaFuns(self.ida_funs)
+                    self.dataWatch[self.target].setUserIterators(self.user_iterators)
+                    self.dataWatch[self.target].setRelocatables(self.relocate_funs)
                 else:
                     self.lgr.error('debug, text segment None for %s' % full_path)
         else:
@@ -706,6 +710,8 @@ class GenMonitor():
     
     def getIDAFuns(self, full_path):
         fun_path = full_path+'.funs'
+        iterator_path = full_path+'.iterators'
+        self.user_iterators = userIterators.UserIterators(iterator_path)
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
             if os.path.islink(full_path):
@@ -1510,7 +1516,10 @@ class GenMonitor():
     def stopTrace(self, cell_name=None, syscall=None):
         if cell_name is None:
             cell_name = self.target
-        self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall))
+        if syscall is not None:
+            self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall.name))
+        else:
+            self.lgr.debug('genMonitor stopTrace from genMonitor cell %s no given syscall' % (cell_name))
 
         dup_traces = self.call_traces[cell_name].copy()
         for call in dup_traces:
@@ -1518,6 +1527,7 @@ class GenMonitor():
             if syscall is None or syscall_trace == syscall: 
                 self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
                 syscall_trace.stopTrace(immediate=True)
+                self.rmCallTrace(cell_name, call)
 
         #if syscall is None or syscall_trace == syscall: 
         #    self.call_traces[cell_name].clear()   
@@ -1532,7 +1542,9 @@ class GenMonitor():
             self.traceMgr[cell_name].close()
 
     def rmCallTrace(self, cell_name, callname):
+        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
+            self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
 
     def traceFile(self, path):
@@ -1596,6 +1608,11 @@ class GenMonitor():
         self.restoreDebugBreaks(was_watching=True)
         self.sharedSyscall[self.target].setDebugging(True)
 
+    def startThreadTrack(self):
+        for cell_name in self.track_threads:
+            self.lgr.debug('startThreadTrack for %s' % cell_name)
+            self.track_threads[cell_name].startTrack()
+        
     def stopThreadTrack(self):
         for cell_name in self.track_threads:
             self.lgr.debug('stopThreadTrack for %s' % cell_name)
@@ -1834,7 +1851,8 @@ class GenMonitor():
     def remainingCallTraces(self):
         for cell_name in self.call_traces:
             if len(self.call_traces[cell_name]) > 0:
-                self.lgr.debug('remainingCallTraces found remain for cell %s  %s' % (cell_name, str(self.call_traces[cell_name].keys)))
+                for ct in self.call_traces[cell_name]:
+                    self.lgr.debug('remainingCallTraces found remain for cell %s call %s' % (cell_name, ct))
                 return True
         return False
 
@@ -1964,9 +1982,11 @@ class GenMonitor():
         if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.callname[1:]:
+                self.lgr.debug('runToIO adding call <%s>' % scall.lower())
                 calls.append(scall.lower())
         if self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('_llseek')
+            calls.remove('_newselect')
             calls.append('lseek')
             calls.remove('send')
             calls.remove('recv')
@@ -2091,7 +2111,7 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
+                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr)
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None):
@@ -2103,7 +2123,7 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr, max_frames=max_frames)
+                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr, max_frames=max_frames)
         return st
 
     def getStackTrace(self):
@@ -2117,7 +2137,7 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.lgr)
+                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr)
         j = st.getJson() 
         self.lgr.debug(j)
         #print j
@@ -2167,15 +2187,17 @@ class GenMonitor():
         self.dataWatch[self.target].showWatch()
 
     def watchData(self, start=None, length=None, show_cmp=False):
+        self.lgr.debug('genMonitor watchData')
         if start is not None:
-            self.lgr.debug('watchData 0x%x count %d' % (start, length))
-            self.dataWatch[self.target].setRange(start, length) 
+            self.lgr.debug('genMonitory watchData 0x%x count %d' % (start, length))
+            msg = "User range 0x%x count %d" % (start, length)
+            self.dataWatch[self.target].setRange(start, length, msg) 
         self.is_monitor_running.setRunning(True)
         if self.dataWatch[self.target].watch(show_cmp):
             SIM_run_command('c')
         else: 
             print('no data being watched')
-            self.lgr.debug('genMonitor watchDAta no data being watched')
+            self.lgr.debug('genMonitor watchData no data being watched')
             self.is_monitor_running.setRunning(False)
 
     def isProtectedMemory(self, addr):
@@ -2413,12 +2435,17 @@ class GenMonitor():
     def trackIO(self, fd):
         self.lgr.debug('trackIO FD: %d' % fd)
         self.dataWatch[self.target].watch(break_simulation=False)
+        ''' what to do when backstop is reached (N cycles with no activity '''
+        self.dataWatch[self.target].setCallback(self.stopTrackIO)
         self.runToIO(fd, linger=True, break_simulation=False)
 
     def stopTrackIO(self):
         self.lgr.debug('stopTrackIO')
         self.stopTrace()
         self.stopDataWatch()
+
+    def showWatchMarks(self):
+        self.dataWatch[self.target].showWatchMarks()
 
     def getWatchMarks(self):
         watch_marks = self.dataWatch[self.target].getWatchMarks()
@@ -2443,10 +2470,10 @@ class GenMonitor():
         
         #pid = self.mem_utils[self.target].readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
     
-    def addProc(self, pid, leader_pid, comm):    
-        self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm)
+    def addProc(self, pid, leader_pid, comm, clone=False):    
+        self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
 
-    def injectIO(self, watch_mark, dfile, fd):
+    def injectIO(self, dfile, fd):
         ''' Go to the given watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2456,12 +2483,6 @@ class GenMonitor():
         if not os.path.isfile(dfile):
             print('File not found at %s\n\n' % dfile)
             return
-        cycle = None
-        if watch_mark is not None and watch_mark >= 0:
-            cycle = self.goToDataMark(watch_mark)
-        if watch_mark is None or cycle == None:
-            self.goToOrigin()
-            print('No watch mark, going to Origin')
         ''' Add memUtil function to put byte array into memory '''
         byte_string = None
         with open(dfile) as fh:
@@ -2474,13 +2495,23 @@ class GenMonitor():
         else:
             print('injectIO not implemented for x86 yet')
             return
-        self.lgr.debug('byte_string is %s' % str(byte_string))
+        self.lgr.debug('Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
         self.writeRegValue(lenreg, len(byte_string))
-        self.lgr.debug('injectIO from file %s to FD %d. %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
-        print('tracking IO to %d' % fd)
-        self.trackIO(fd)    
-        
+        ''' writeRegValue clears bookmarks, but we want to clear current cycle marks as well '''
+        prev_cycle = cpu.cycles - 1
+        self.dataWatch[self.target].clearWatches(prev_cycle)
+        if fd >= 0:
+            self.lgr.debug('injectIO from file %s %d. %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
+            msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
+            self.dataWatch[self.target].setRange(addr, len(byte_string), msg)
+            print('tracking IO to %d' % fd)
+            self.trackIO(fd)    
+        else:
+            self.lgr.debug('injectIO from file %s to. %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+    
+    def tagIterator(self, index):    
+        self.dataWatch[self.target].tagIterator(index)
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
