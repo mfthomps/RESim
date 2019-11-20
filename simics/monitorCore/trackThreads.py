@@ -75,6 +75,7 @@ class TrackThreads():
             self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
+        self.stopTrackClone()
 
 
     def execveHap(self, dumb, third, forth, memory):
@@ -212,8 +213,14 @@ class TrackThreads():
             return None
 
     def trackClone(self):
+        if self.clone_hap is None:
+            return
         callnum = self.task_utils.syscallNumber('clone', self.compat32)
         entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
         self.lgr.debug('trackClone entry 0x%x' % entry)
         proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
         self.clone_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, None, proc_break, 'track-clone')
+
+    def stopTrackClone(self):
+        if self.clone_hap is not None:
+            self.context_manager.genDelete(self.clone_hap) 
