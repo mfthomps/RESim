@@ -234,9 +234,9 @@ class PageFaultGen():
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             proc_break2 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, proc_break2, name='watchPageFaults')
-            max_intr = 255
-            self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
-                     self.faultCallback, self.cpu, 0, 13) 
+            #max_intr = 255
+            #self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
+            #         self.faultCallback, self.cpu, 0, 13) 
         else:
             #self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
