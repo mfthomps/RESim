@@ -1,3 +1,4 @@
+from simics import *
 import os
 import pickle
 import elfText
@@ -7,7 +8,7 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class SOMap():
-    def __init__(self, cell_name, context_manager, task_utils, targetFS, run_from_snap, lgr):
+    def __init__(self, top, cell_name, cell, context_manager, task_utils, targetFS, run_from_snap, lgr):
         self.context_manager = context_manager
         self.task_utils = task_utils
         self.targetFS = targetFS
@@ -15,9 +16,13 @@ class SOMap():
         self.so_addr_map = {}
         self.so_file_map = {}
         self.lgr = lgr
+        self.top = top
+        self.cell = cell
         self.text_start = {}
         self.text_end = {}
         self.text_prog = {}
+        self.hap_list = []
+        self.stop_hap = None
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -111,7 +116,21 @@ class SOMap():
             self.context_manager.recordText(self.text_start[pid], self.text_end[pid])
         else:
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
-       
+      
+    def setIdaFuns(self, ida_funs):
+        self.ida_funs = ida_funs
+        for pid in self.so_file_map:
+            sort_map = {}
+            for text_seg in self.so_file_map[pid]:
+                sort_map[text_seg.locate] = text_seg
+
+            for locate in sorted(sort_map, reverse=True):
+                text_seg = sort_map[locate]
+                fpath = self.so_file_map[pid][text_seg]
+                full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
+                self.ida_funs.add(full_path, locate)
+            
+ 
     def addSO(self, pid_in, fpath, addr, count):
         pid = self.getThreadPid(pid_in, quiet=True)
         if pid is None:
@@ -133,6 +152,9 @@ class SOMap():
         self.so_file_map[pid][text_seg] = fpath
         self.lgr.debug('soMap addSO pid:%d, full: %s size: 0x%x given count: 0x%x, locate: 0x%x addr: 0x%x off 0x%x  len so_map %d' % (pid, 
                full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
+
+        start = text_seg.locate
+        self.ida_funs.add(full_path, start)
 
     def showSO(self, pid=None):
         if pid is None:
@@ -304,6 +326,19 @@ class SOMap():
                         retval = self.so_addr_map[pid][fpath]
                         break
             if retval is None:
+                for fpath in self.so_addr_map[pid]:
+                    base = os.path.basename(fpath)
+                    in_base = os.path.basename(in_fname)
+                    self.lgr.debug('compare %s to %s' % (base, in_base))
+                    if in_base.startswith(base):
+                        if retval is not None:
+                            self.lgr.debug('SOMap getSOAddr multiple so files with fname %s' % in_fname)
+                            break
+                        else:
+                            retval = self.so_addr_map[pid][fpath]
+                            break
+
+            if retval is None:
                 self.lgr.debug('SOMap getSOAddr could not find so map for %d <%s>' % (pid, in_fname))
                 self.lgr.debug('text_prog is <%s>' % self.text_prog[pid])
                 
@@ -313,4 +348,66 @@ class SOMap():
         return retval
     
 
+    def stopHap(self, cpu, one, exception, error_string):
+        if self.stop_hap is not None:
+            eip = self.top.getEIP(cpu)
+            self.lgr.debug('soMap stopHap ip: 0x%x' % eip)
+            self.top.skipAndMail()
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+
+    def stopAlone(self, cpu):
+        if len(self.hap_list) > 0:
+            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            	     self.stopHap, cpu)
+            self.lgr.debug('soMap stopAlone')
+            for hap in self.hap_list:
+                self.context_manager.genDeleteHap(hap)
+            del self.hap_list[:]
+
+            SIM_break_simulation('soMap')
+
+    def knownHap(self, pid, third, forth, memory):
+        if len(self.hap_list) > 0:
+            cpu, comm, cur_pid = self.task_utils.curProc() 
+            if pid == cur_pid: 
+                value = memory.logical_address
+                fname, start, end = self.getSOInfo(value)
+                if fname is not None and start is not None:
+                    self.lgr.debug('soMap knownHap pid:%d memory 0x%x %s start:0x%x end:0x%x' % (pid, value, fname, start, end))
+                else:
+                    self.lgr.debug('soMap knownHap pid:%d memory 0x%x NO mapping file %s' % (pid, value, fname))
+
+                SIM_run_alone(self.stopAlone, cpu)                
+            #else:
+            #    self.lgr.debug('soMap knownHap wrong pid, wanted %d got %d' % (pid, cur_pid))
         
+    def runToKnown(self, skip=None):        
+       cpu, comm, cur_pid = self.task_utils.curProc() 
+       map_pid = self.getSOPid(cur_pid)
+       if map_pid in self.text_start: 
+           start =  self.text_start[map_pid] 
+           length = self.text_end[map_pid] - self.text_start[map_pid] 
+           proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
+           #self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
+       else:
+           self.lgr.debug('soMap runToKnown no text for %d' % map_pid)
+       if map_pid in self.so_file_map:
+            for text_seg in self.so_file_map[map_pid]:
+                start = text_seg.locate+text_seg.offset
+                length = text_seg.size
+                end = start+length
+                if skip is None or not (skip >= start and skip <= end):
+                    proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
+                else:
+                    self.lgr.debug('soMap runToKnow, skip %s' % (self.so_file_map[map_pid][text_seg]))
+                #self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x' % (self.so_file_map[map_pid][text_seg], start, length))
+       else:
+           self.lgr.debug('soMap runToKnown no so_file_map for %d' % map_pid)
+       if len(self.hap_list) > 0:  
+           return True
+       else:
+           return False
+                
