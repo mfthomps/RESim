@@ -9,7 +9,7 @@ import memUtils
 import watchMarks
 import backStop
 from stackTrace import mem_funs
-BACK_STOP_CYCLES = 5000000
+import os
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -35,6 +35,13 @@ class DataWatch():
         self.user_iterators = None
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
+        back_stop_string = os.getenv('BACK_STOP_CYCLES')
+        if back_stop_string is None:
+            self.back_stop_cycles = 5000000
+        else:
+            self.back_stop_cycles = int(back_stop_string)
+        
+        lgr.debug('DataWatch init with back_stop_cycles %d' % self.back_stop_cycles)
         if cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
@@ -114,7 +121,7 @@ class DataWatch():
                     self.context_manager.genDeleteHap(self.read_hap[index])
             else:
                 self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
-        self.read_hap = []
+        del self.read_hap[:]
         if break_simulation is not None: 
             self.break_simulation = break_simulation
         if self.return_hap is not None:
@@ -340,10 +347,12 @@ class DataWatch():
         ''' watched data has been read (or written) '''
         if self.cpu.cycles == self.prev_cycle:
             return
+        if len(self.read_hap) == 0:
+            return
         self.prev_cycle = self.cpu.cycles
 
         if self.back_stop is not None and not self.break_simulation:
-            self.back_stop.setFutureCycle(BACK_STOP_CYCLES)
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
         if index >= len(self.read_hap):
             self.lgr.error('dataWatch readHap invalid index %d, only %d read haps' % (index, len(self.read_hap)))
             return
@@ -426,7 +435,7 @@ class DataWatch():
             self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d' % (eip, break_num, self.start[index], end, self.length[index], index))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
         if self.back_stop is not None and not self.break_simulation:
-            self.back_stop.setFutureCycle(BACK_STOP_CYCLES)
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
 
     def stopHap(self, stop_action, one, exception, error_string):
         if stop_action is None or stop_action.hap_clean is None:
