@@ -1,4 +1,5 @@
 import os
+import glob
 class TargetFS():
     def __init__(self, root_prefix):
         self.root_prefix = root_prefix
@@ -34,6 +35,10 @@ class TargetFS():
                     retval = os.path.join(self.root_prefix, real)
                 else:
                     retval = os.path.join(os.path.dirname(full), real)
+            elif not os.path.isfile(full):
+                flist = glob.glob(full+'*')
+                if len(flist) > 0:
+                    retval = flist[0]
             else:
                 retval = full
         return retval
