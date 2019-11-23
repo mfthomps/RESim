@@ -31,7 +31,6 @@ class reverseToAddr():
         self.context_manager = context_manager
         self.is_monitor_running = is_monitor_running
         self.extra_back = extra_back
-        self.lgr.debug('reverseToAddr init addr 0x%x, extra_back=%d' % (address, extra_back))
         self.is_monitor_running.setRunning(True)
         mode = Sim_Access_Execute
         phys_block = cpu.iface.processor_info.logical_to_physical(address, mode)
@@ -42,6 +41,7 @@ class reverseToAddr():
         else:
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
             return
+        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d' % (address, phys_block.address, extra_back))
         self.one_stop_hap = None
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 	     self.stopHap, cpu)
