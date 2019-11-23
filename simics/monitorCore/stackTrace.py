@@ -317,11 +317,11 @@ class StackTrace():
                     if instruct.startswith(self.callmn):
                         fun_hex, fun = self.getFunName(instruct)
                         if fun is not None:
-                            instruct = '%s   %s' % (self.callmn, fun_name)
+                            instruct = '%s   %s' % (self.callmn, fun)
                         if fun_hex is not None:
                             self.soCheck(fun_hex)
                                 
-                        #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s' % (call_ip, instruct))
+                        self.lgr.debug('ADD STACK FRAME FOR 0x%x %s' % (call_ip, instruct))
                         fname = self.soMap.getSOFile(val)
                         if fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
