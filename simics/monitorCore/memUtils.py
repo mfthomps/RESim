@@ -483,6 +483,10 @@ class memUtils():
         #SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
         SIM_write_phys_memory(cpu, phys, value, self.WORD_SIZE)
 
+    def writeWord32(self, cpu, address, value):
+        phys = self.v2p(cpu, address)
+        SIM_write_phys_memory(cpu, phys, value, 4)
+
     def writeBytes(self, cpu, address, bstring):
         lcount = len(bstring)/4
         carry = len(bstring) % 4
