@@ -397,8 +397,8 @@ class reverseToCall():
                 got_it = None
                 page_cycles = self.sysenter_cycles[pid]
                 if self.page_faults is not None:
-                    self.lgr.debug('tryBackOne adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                    page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                    self.lgr.debug('tryBackOne NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                    #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
                 for cycles in sorted(page_cycles):
                     if cycles > cur_cycles:
                         self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
@@ -494,7 +494,7 @@ class reverseToCall():
             got_it = None
             page_cycles = self.sysenter_cycles[pid]
             if self.page_faults is not None:
-                self.lgr.debug('tryBackOne adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
                 page_cycles = page_cycles + self.page_faults.getFaultingCycles()
             for cycles in sorted(page_cycles):
                 if cycles > cur_cycles:
