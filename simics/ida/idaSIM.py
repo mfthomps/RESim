@@ -3,6 +3,7 @@ import json
 import idaapi
 import idc
 import idautils
+import ida_segment
 import ida_nalt
 import ida_dbg
 import ida_kernwin
@@ -784,3 +785,17 @@ class IdaSIM():
                                         regvalue = idc.get_reg_value(reg)
                                         retval = regvalue - value
         return retval
+    def reBase(self):
+        fname = ida_nalt.get_root_filename()
+        command = "@cgc.getSOFromFile('%s')" % fname
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('so stuff: %s' % simicsString) 
+        adders = simicsString.split(':')[1]
+        start = adders.split('-')[0]
+        try:
+            start_hex = int(start,16)
+        except ValueError:
+            print('could not get hex from %s' % start)
+            return 
+        ida_segment.rebase_program(start_hex, 0) 
+        #ida_segment.rebase_program()

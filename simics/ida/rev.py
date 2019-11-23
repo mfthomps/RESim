@@ -202,6 +202,10 @@ def doKeyMap(isim):
     #AddHotkey("F9", 'f9')
     #idaapi.add_menu_item("Debugger/Attach to process", "continue", "F9", 0, isim.continueForward, None)
 
+    idaapi.CompileLine('static key_alt_R() { RunPythonStatement("isim.rebase()"); }')
+    AddHotkey("Alt+Shift+R", 'key_alt_R')
+    idaapi.add_menu_item("Debugger/Attach to process", "Rebase", "Alt+Shift+R", 0, isim.rebase, None)
+
     idaapi.CompileLine('static key_alt_f9() { RunPythonStatement("isim.doReverse()"); }')
     AddHotkey("Alt+Shift+F9", 'key_alt_f9')
     idaapi.add_menu_item("Debugger/Attach to process", "^ Reverse continue process", "Alt+Shift+F9", 0, isim.doReverse, None)
@@ -502,3 +506,4 @@ if __name__ == "__main__":
         #goToOrigin()
         pass
     idc.batch(0)
+
