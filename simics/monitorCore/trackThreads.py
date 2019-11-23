@@ -187,8 +187,11 @@ class TrackThreads():
 
 
     def trackSO(self):
+        call_list = ['open', 'mmap']
+        if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
+            call_list.append('mmap2')
         self.open_syscall = syscall.Syscall(None, self.cell_name, self.cell, self.param, self.mem_utils, self.task_utils, 
-                           self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=['open'], 
+                           self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=call_list,
                            soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32)
         self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 

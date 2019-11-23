@@ -226,6 +226,8 @@ class Syscall():
         self.background_break = None
         self.background_hap = None
         self.name = name
+        self.watch_first_mmap = None
+        self.mmap_fname = None
 
         if trace is None and self.traceMgr is not None:
             tf = '/tmp/syscall_trace.txt'
@@ -400,78 +402,10 @@ class Syscall():
         self.bang_you_are_dead = True
         self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
-    def firstMmapHap(self, syscall_info, third, forth, memory):
-        ''' invoked after mmap call, looking to track SO libraries.  Intended to be called after open of .so. '''
-        cpu, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug('firstMmapHap in pid %d look for pid %d' % (pid, syscall_info.pid))
-        if syscall_info.pid not in self.first_mmap_hap:
-            return
-        if syscall_info.cpu is not None and cpu != syscall_info.cpu:
-            self.lgr.debug('firstMmapHap, wrong cpu %s %s' % (cpu.name, syscall_info.cpu.name))
-            return
-        if syscall_info.pid is not None and pid != syscall_info.pid:
-            self.lgr.debug('firstMmapHap, wrong pid %d %d' % (pid, syscall_info.pid))
-            return
-        if self.debugging and not self.context_manager.amWatching(pid):
-            self.lgr.debug('firstMmapHap looked  found %d.  Do nothing' % (pid))
-            return
-        if self.bang_you_are_dead:
-            self.lgr.error('firstMmapHap call to dead hap pid %d' % pid) 
-            return
-        if cpu.architecture == 'arm':
-            frame = self.task_utils.frameFromRegs(cpu)
-        else:
-            frame = self.task_utils.frameFromStackSyscall()
-        callname = self.task_utils.syscallName(syscall_info.callnum, syscall_info.compat32)
-        if self.mem_utils.WORD_SIZE == 4: 
-            ida_msg = 'firstMmapHap %s pid:%d FD: %d buf: 0x%x len: %d  File FD was %d' % (callname, pid, frame['param3'], frame['param1'], frame['param2'], 
-                  syscall_info.fd)
-        else:
-            ida_msg = 'firstMmapHap %s pid:%d FD: %d buf: 0x%x len: %d offset: 0x%x  File FD was %d' % (callname, pid, 
-               frame['param5'], frame['param1'], frame['param2'], frame['param6'], syscall_info.fd)
-
-        self.lgr.debug(ida_msg)
-        if self.traceMgr is not None:
-            self.traceMgr.write(ida_msg+'\n')
-        syscall_info.call_count = syscall_info.call_count+1
-        #self.lgr.debug('firstMmapHap delete self?')
-        self.context_manager.genDeleteHap(self.first_mmap_hap[pid])
-        del self.first_mmap_hap[pid]
-        syscall_info.call_count = syscall_info.call_count+1
-        exit_info = ExitInfo(self, cpu, pid, syscall_info.callnum, syscall_info.compat32)
-        exit_info.fname = syscall_info.fname
-        exit_info.count = frame['param2']
-        exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
-        name = 'firstMmap exit'
-        try:
-            ''' backward compatibility '''
-            sysret64 = self.param.sysret64
-        except AttributeError:
-            sysret64 = None
-        if cpu.architecture == 'arm':
-            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, self.param.arm_ret2, None, exit_info, self.traceProcs, name)
-        else:
-            self.sharedSyscall.addExitHap(pid, self.param.sysexit, self.param.iretd, sysret64, exit_info, self.traceProcs, name)
-
     def watchFirstMmap(self, pid, fname, fd, compat32):
-        if self.mem_utils.WORD_SIZE == 4:
-            callnum = self.task_utils.syscallNumber('mmap2', compat32)
-        else:
-            callnum = self.task_utils.syscallNumber('mmap', compat32)
-        if callnum < 0:
-            self.lgr.error('watchFirstMmap failed to find mmap2 call from syscallNumber module')
-            return
-        entry = self.task_utils.getSyscallEntry(callnum, compat32)
-        #self.lgr.debug('watchFirstMmap callnum is %s entry 0x%x' % (callnum, entry))
-        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-        syscall_info = SyscallInfo(self.cpu, pid, callnum, entry, True)
-        syscall_info.fname = fname
-        syscall_info.pid = pid
-        syscall_info.fd = fd
-        if pid in self.first_mmap_hap:
-            self.context_manager.genDeleteHap(self.first_mmap_hap[pid])
-            del self.first_mmap_hap[pid]
-        self.first_mmap_hap[pid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.firstMmapHap, syscall_info, proc_break, 'watchFirstMmap')
+        self.watch_first_mmap = fd
+        self.mmap_fname = fname
+        return
         
     def parseOpen(self, frame, callname):
         self.lgr.debug('parseOpen for %s' % callname)
@@ -1133,9 +1067,11 @@ class Syscall():
             for call_param in syscall_info.call_params:
                 if call_param.nth is not None:
                     call_param.count = call_param.count + 1
+                    self.lgr.debug('syscall clone call_param.count %d call_param.nth %d' % (call_param.count, call_param.nth))
                     ''' negative nth means stop in parent '''
                     if call_param.count >= abs(call_param.nth):
                         exit_info.call_params = call_param
+                        self.lgr.debug('syscall clone added call_param')
                 break
             #self.traceProcs.close(pid, fd)
         elif callname == 'pipe' or callname == 'pipe2':        
@@ -1292,11 +1228,16 @@ class Syscall():
         elif callname == 'mmap' or callname == 'mmap2':        
             exit_info.count = frame['param2']
             if self.mem_utils.WORD_SIZE == 4: 
-                ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d' % (callname, pid, frame['param3'], frame['param1'], frame['param2'])
+                fd = frame['param3']
+                ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d' % (callname, pid, fd, frame['param1'], frame['param2'])
             else:
+                fd = frame['param5']
                 ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
-                   frame['param5'], frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
+                    fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 self.lgr.debug(taskUtils.stringFromFrame(frame))
+            if self.watch_first_mmap == fd:
+                exit_info.fname = self.mmap_fname
+                self.watch_first_mmap = None
 
         elif callname == 'select' or callname == '_newselect':        
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
@@ -1390,7 +1331,7 @@ class Syscall():
            if syscall_instance != self and syscall_instance.isBackground() == self.isBackground():
                #self.lgr.debug(str(syscall_instance))
                #self.lgr.debug(str(self))
-               #self.lgr.debug('syscallHap tracing all pid %d callnum %d name %s found more specific syscall hap, so ignore this one' % (pid, callnum, callname))
+               self.lgr.debug('syscallHap tracing all pid %d callnum %d name %s found more specific syscall hap, so ignore this one' % (pid, callnum, callname))
                return
            if callname == 'mmap' and pid in self.first_mmap_hap:
                return
@@ -1407,7 +1348,7 @@ class Syscall():
         value = memory.logical_address
         #self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
         #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
-            
+           
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
             return
