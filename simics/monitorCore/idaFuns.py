@@ -33,7 +33,7 @@ class IDAFuns():
         funfile = self.getFunPath(path)
         if os.path.isfile(funfile):
             with open(funfile) as fh:
-                #self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
+                self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
                     fun = int(f)+offset
@@ -53,6 +53,12 @@ class IDAFuns():
         else:
             return False
 
+    def getAddr(self, name):
+        for fun in self.funs:
+            if self.funs[fun]['name'] == name:
+                return self.funs[fun]['start']
+        return None
+ 
     def getName(self, fun):
         if fun in self.funs:
             return self.funs[fun]['name']
