@@ -37,6 +37,7 @@ class SharedSyscall():
         self.allWrite = allWrite.AllWrite()
 
     def trackSO(self, track_so):
+        #self.lgr.debug('sharedSyscall track_so %r' % track_so)
         self.track_so = track_so
 
     def setDebugging(self, debugging):
@@ -480,6 +481,7 @@ class SharedSyscall():
                 
             if exit_info.call_params is not None:
                 if exit_info.call_params.nth is not None:
+                    self.lgr.debug('exitHap clone, nth is %d' % exit_info.call_params.nth)
                     if exit_info.call_params.nth >= 0:
                         self.lgr.debug('exitHap clone, run to pid %d' % eax)
                         SIM_run_alone(self.top.toProcPid, eax)
@@ -515,11 +517,14 @@ class SharedSyscall():
                 if pid in self.trace_procs:
                     self.traceProcs.open(pid, comm, exit_info.fname, eax)
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
-                if '.so.' in exit_info.fname and self.track_so:
+                if ('.so.' in exit_info.fname or exit_info.fname.endswith('.so')) and self.track_so:
+                    self.lgr.debug('is open so')
                     #open_syscall = self.top.getSyscall(self.cell_name, 'open')
                     open_syscall = exit_info.syscall_instance
                     if open_syscall is not None: 
                         open_syscall.watchFirstMmap(pid, exit_info.fname, eax, exit_info.compat32)
+                    else:
+                        self.lgr.debug('sharedSyscall no syscall_instance in exit_info %d' % pid)
                 if self.traceFiles is not None:
                     self.traceFiles.open(exit_info.fname, eax)
             if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
