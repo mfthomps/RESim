@@ -403,7 +403,7 @@ class GenMonitor():
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
-            self.soMap[cell_name] = soMap.SOMap(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+            self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.param[cell_name], self.lgr)
             self.traceFiles[cell_name] = traceFiles.TraceFiles(self.traceProcs[cell_name], self.lgr)
@@ -609,6 +609,7 @@ class GenMonitor():
                 if text_segment is not None:
                     self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
                     self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
+                    self.soMap[self.target].setIdaFuns(self.ida_funs)
                     self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
                     self.dataWatch[self.target].setIdaFuns(self.ida_funs)
                     self.dataWatch[self.target].setUserIterators(self.user_iterators)
@@ -1493,9 +1494,10 @@ class GenMonitor():
     def traceProcesses(self, new_log=True):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
-                     'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday']
+                     'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
         if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
             call_list.remove('socketcall')
+            call_list.remove('mmap2')
             for scall in net.callname[1:]:
                 call_list.append(scall.lower())
         if self.mem_utils[self.target].WORD_SIZE == 8:
@@ -1542,9 +1544,9 @@ class GenMonitor():
             self.traceMgr[cell_name].close()
 
     def rmCallTrace(self, cell_name, callname):
-        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
+        #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
-            self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
+            #self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
 
     def traceFile(self, path):
@@ -2005,6 +2007,23 @@ class GenMonitor():
         eip = self.getEIP(cpu)
         retval = self.getSO(eip)
         return retval
+
+    def getSOFromFile(self, fname):
+        text_seg  = self.soMap[self.target].getSOAddr(fname) 
+        if text_seg is None:
+            self.lgr.error('getSO no map for %s' % fname)
+            return
+        if text_seg.address is not None:
+            if text_seg.locate is not None:
+                start = text_seg.locate+text_seg.offset
+                end = start + text_seg.size
+            else:
+                start = text_seg.address
+                end = text_seg.address + text_seg_size
+            retval = ('%s:0x%x-0x%x' % (fname, start, end))
+            print(retval)
+        else:
+            print('None')
 
     def getSO(self, eip):
         fname = self.getSOFile(eip)
@@ -2512,6 +2531,30 @@ class GenMonitor():
     
     def tagIterator(self, index):    
         self.dataWatch[self.target].tagIterator(index)
+
+    def runToKnown(self, go=True):
+        self.soMap[self.target].runToKnown()
+        if go:
+            SIM_run_command('c')
+
+    def runToOther(self, go=True):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        self.soMap[self.target].runToKnown(eip)
+        if go:
+            SIM_run_command('c')
+
+    def modFunction(self, fun, offset, word):
+        addr = self.ida_funs.getAddr(fun)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        if addr is not None:
+            new_addr = addr+offset
+            self.mem_utils[self.target].writeWord32(cpu, new_addr, word)
+            self.lgr.debug('modFunction wrote 0x%x to 0x%x' % (word, new_addr))
+            self.lgr.debug('modFunction, disable reverse execution to clear bookmarks, then set origin')
+            self.clearBookmarks()
+        else:
+            self.lgr.error('modFunction, no address found for %s' % (fun))
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
