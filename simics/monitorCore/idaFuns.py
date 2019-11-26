@@ -56,8 +56,8 @@ class IDAFuns():
     def getAddr(self, name):
         for fun in self.funs:
             if self.funs[fun]['name'] == name:
-                return self.funs[fun]['start']
-        return None
+                return self.funs[fun]['start'], self.funs[fun]['end']
+        return None, None
  
     def getName(self, fun):
         if fun in self.funs:
