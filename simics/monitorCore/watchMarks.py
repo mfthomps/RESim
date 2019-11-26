@@ -9,7 +9,7 @@ class WatchMarks():
     def showMarks(self):
         i = 0
         for mark in self.mark_list:
-            print('%d %s' % (i, mark.msg.getMsg()))
+            print('%d %s  ip:0x%x' % (i, mark.mark.getMsg(), mark.ip))
             i += 1
         
     class CallMark():
@@ -56,7 +56,7 @@ class WatchMarks():
             if self.end_addr is None:
                 mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
-                length = self.end_addr- self.addr
+                length = self.end_addr- self.addr + 1
                 mark_msg = 'Iterate over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, 
                      self.end_addr, length, self.offset, self.start, self.length, self.cmp_ins)
             return mark_msg
@@ -97,12 +97,12 @@ class WatchMarks():
         def __init__(self, cycle, ip, msg):
             self.cycle = cycle
             self.ip = ip
-            self.msg = msg
+            self.mark = msg
         def getJson(self):
             retval = {}
             retval['cycle'] = self.cycle
             retval['ip'] = self.ip
-            retval['msg'] = self.msg.getMsg()
+            retval['msg'] = self.mark.getMsg()
             return retval
 
     def recordIP(self, ip):
@@ -128,14 +128,14 @@ class WatchMarks():
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
-                self.lgr.debug('pm class is %s' % pm.msg.__class__.__name__)
-                if isinstance(pm.msg, self.DataMark):
-                    pm.msg.addrRange(addr)
+                self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
+                if isinstance(pm.mark, self.DataMark):
+                    pm.mark.addrRange(addr)
                     self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
                     dm = self.DataMark(addr, start, length, cmp_ins)
                     self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
-                    self.lgr.debug('watchMarks dataRead followed markCall 0x%x %s' % (ip, dm.getMsg()))
+                    self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
 
     def getMarkFromIndex(self, index):
@@ -160,8 +160,8 @@ class WatchMarks():
     def removeRedundantDataMark(self, dest):
         if len(self.prev_ip) > 0:
             pm = self.mark_list[-1]
-            if isinstance(pm.msg, self.DataMark):
-                if pm.msg.addr == dest:
+            if isinstance(pm.mark, self.DataMark):
+                if pm.mark.addr == dest:
                     ''' a copy record for the same data read previously recorded, remove the redundant data read '''
                     del self.mark_list[-1]
 
