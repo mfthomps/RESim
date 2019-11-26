@@ -66,6 +66,7 @@ import diddler
 import targetFS
 import cellConfig
 import userIterators
+import trackFunctionWrite
 
 import json
 import pickle
@@ -109,6 +110,7 @@ class GenMonitor():
         self.traceOpen = {}
         self.traceProcs = {}
         self.dataWatch = {}
+        self.trackFunction = {}
         self.traceFiles = {}
         self.sharedSyscall = {}
 
@@ -406,6 +408,9 @@ class GenMonitor():
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.param[cell_name], self.lgr)
+            self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[self.target], self.mem_utils[self.target], 
+                  self.task_utils[self.target], 
+                  self.context_manager[self.target], self.lgr)
             self.traceFiles[cell_name] = traceFiles.TraceFiles(self.traceProcs[cell_name], self.lgr)
             self.sharedSyscall[cell_name] = sharedSyscall.SharedSyscall(self, cpu, cell, cell_name, self.param[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -1975,8 +1980,9 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params)
 
-    def runToIO(self, fd, linger=False, break_simulation=True):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
+        call_params.nth = count
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToIO on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2475,9 +2481,25 @@ class GenMonitor():
             self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
 
+    def getWriteMarks(self):
+        self.lgr.debug('genMonitor getWritemarks')
+        watch_marks = self.trackFunction[self.target].getWatchMarks()
+        try:
+            jmarks = json.dumps(watch_marks)
+            print jmarks
+        except Exception as e:
+            self.lgr.debug('getWriteMarks, json dumps failed on %s' % str(watch_marks))
+            self.lgr.debug('error %s' % str(e))
+
     def goToDataMark(self, index):
         self.stopTrackIO()
         cycle = self.dataWatch[self.target].goToMark(index)
+        if cycle is not None:
+            self.context_manager[self.target].watchTasks()
+        return cycle
+
+    def goToWriteMark(self, index):
+        cycle = self.trackFunction[self.target].goToMark(index)
         if cycle is not None:
             self.context_manager[self.target].watchTasks()
         return cycle
@@ -2530,6 +2552,7 @@ class GenMonitor():
             self.lgr.debug('injectIO from file %s to. %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
     
     def tagIterator(self, index):    
+        ''' User drive identification of an iterating function -- will collapse many watch marks into one '''
         self.dataWatch[self.target].tagIterator(index)
 
     def runToKnown(self, go=True):
@@ -2538,6 +2561,7 @@ class GenMonitor():
             SIM_run_command('c')
 
     def runToOther(self, go=True):
+        ''' Continue execution until a different library is entered, or main text is returned to '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         self.soMap[self.target].runToKnown(eip)
@@ -2545,7 +2569,9 @@ class GenMonitor():
             SIM_run_command('c')
 
     def modFunction(self, fun, offset, word):
-        addr = self.ida_funs.getAddr(fun)
+        ''' write a given word at the offset of a start of a function.  Intended to force a return
+            of a specific value.  Assumes you provide proper machine code. '''
+        addr, end = self.ida_funs.getAddr(fun)
         cpu = self.cell_config.cpuFromCell(self.target)
         if addr is not None:
             new_addr = addr+offset
@@ -2555,6 +2581,21 @@ class GenMonitor():
             self.clearBookmarks()
         else:
             self.lgr.error('modFunction, no address found for %s' % (fun))
+
+    def trackFunctionWrite(self, fun):
+        ''' When the given function is entered, begin tracking memory addresses that are written to.
+            Stop on exit of the function. '''
+        self.lgr.debug('genMonitor trackFunctionWrite %s' % fun)
+        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+
+        read_watch_marks = self.dataWatch[self.target].getWatchMarks()
+        self.trackFunction[self.target].trackFunction(pid, fun, self.ida_funs, read_watch_marks)
+
+    def saveMemory(self, addr, size, fname):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        byte_array = self.mem_utils[self.target].readBytes(cpu, addr, size)
+        with open(fname, 'w') as fh:
+            fh.write(byte_array)
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
