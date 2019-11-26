@@ -175,17 +175,6 @@ class memUtils():
         found at the start of the block. (If there is no zero byte in the
         block, return a string that covers the entire block.)
     '''
-    def readStringNOT(self, cpu, vaddr, maxlen):
-        s = ''
-        try:
-            phys_block = cpu.iface.processor_info.logical_to_physical(vaddr, Sim_Access_Read)
-        except:
-            print('memUtils, readString, could not read 0x%x' % vaddr)
-            return None
-        if phys_block.address == 0:
-            return None
-        return self.readStringPhys(cpu, phys_block.address, maxlen)
-
     def readString(self, cpu, vaddr, maxlen):
         retval = None
         ps = self.v2p(cpu, vaddr)
@@ -222,6 +211,38 @@ class memUtils():
         else: 
             return None
     
+    def readBytes(self, cpu, vaddr, maxlen):
+        ''' return a bytearray of maxlen read from vaddr '''
+        remain = maxlen
+        start = vaddr
+        retval = ()
+        while remain > 0:
+            count = min(remain, 1024)
+            ps = self.v2p(cpu, start)
+            if ps is not None:
+                remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
+                if remain_in_page < count:
+                    self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
+                    first_read = readPhysBytes(cpu, ps, remain_in_page)
+                    if first_read is not None and len(first_read) == remain_in_page:
+                        ''' get the rest ''' 
+                        ps = self.v2p(cpu, start+remain_in_page)
+                        self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
+                        second_read = readPhysBytes(cpu, ps, count - remain_in_page)
+                        self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
+                        retval = retval+first_read+second_read
+                    else:
+                        retval = retval+first_read
+                else: 
+                    retval = retval+readPhysBytes(cpu, ps, count)
+                    self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+            self.lgr.debug('readBytes got %d' % len(retval))
+            start = start+count
+            remain = remain - count
+        retval = bytearray(retval)
+        return retval
+
+
     def readWord32(self, cpu, vaddr):
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
