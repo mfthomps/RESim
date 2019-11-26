@@ -859,7 +859,12 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'recv') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
-                    exit_info.call_params = call_param
+                    if call_param.nth is not None:
+                        call_param.count = call_param.count + 1
+                        if call_param.count >= call_param.nth:
+                            exit_info.call_params = call_param
+                    else:
+                        exit_info.call_params = call_param
                     break
         elif socket_callname == "recvmsg": 
             
