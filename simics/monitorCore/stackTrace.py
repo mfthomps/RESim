@@ -380,7 +380,7 @@ class StackTrace():
             if len(self.frames) < i+1:
                 break
             frame = self.frames[i]
-            self.lgr.debug('memsomething frame instruct is %s' % frame.instruct)
+            self.lgr.debug('StackFram memsomething frame instruct is %s' % frame.instruct)
             if frame.instruct is not None:
                 if frame.fun_name is not None:
                     fun = frame.fun_name
@@ -398,7 +398,11 @@ class StackTrace():
                         except ValueError:
                             pass
 
-                    if fun in mem_funs or self.user_iterators.isIterator(frame.fun_addr):
+                    if fun in mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
+                        if fun in mem_funs:
+                            self.lgr.debug('fun in mem_funs %s' % fun)
+                        if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
+                            self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
                         self.lgr.debug('StackFrame memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
                         if frame.sp > 0:
                             ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)

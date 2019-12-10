@@ -20,7 +20,8 @@ class UserIterators():
                 for fun in self.iterators:
                     fh.write('0x%x\n' % fun)
 
-    def isIterator(self, fun):
+    def isIterator(self, fun, lgr):
+        #lgr.debug('isIterator 0x%x in %s' % (fun, str(self.iterators)))
         if fun in self.iterators:
             return True
         return False
