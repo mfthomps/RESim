@@ -1109,8 +1109,8 @@ class GenMonitor():
             print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
             self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
             self.showHaps()
-            for call in self.call_traces[self.target]:
-                self.lgr.debug('remaining trace %s' % call)
+            #for call in self.call_traces[self.target]:
+            #    self.lgr.debug('remaining trace %s' % call)
             return
         mark = mark.replace('|','"')
         pid = self.getBookmarkPid()
@@ -1532,7 +1532,7 @@ class GenMonitor():
         for call in dup_traces:
             syscall_trace = dup_traces[call]
             if syscall is None or syscall_trace == syscall: 
-                self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
+                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
                 syscall_trace.stopTrace(immediate=True)
                 self.rmCallTrace(cell_name, call)
 
@@ -1990,7 +1990,7 @@ class GenMonitor():
         if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.callname[1:]:
-                self.lgr.debug('runToIO adding call <%s>' % scall.lower())
+                #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
                 calls.append(scall.lower())
         if self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('_llseek')
@@ -2169,6 +2169,10 @@ class GenMonitor():
         return j
 
     def clearBookmarks(self):
+        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None:
+            print('** Not debugging?? **')
+            return False
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
@@ -2179,6 +2183,7 @@ class GenMonitor():
         self.stopTrackIO()
         self.dataWatch[self.target].clearWatches(cpu.cycles)
         self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
+        return True
 
     def writeRegValue(self, reg, value):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2530,20 +2535,33 @@ class GenMonitor():
             byte_string = fh.read()
         cpu = self.cell_config.cpuFromCell(self.target)
         lenreg = None
+        lenreg2 = None
         if cpu.architecture == 'arm':
             addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
+            ''' Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
+                the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
+            lenreg2 = 'r7'
         else:
             print('injectIO not implemented for x86 yet')
             return
+        prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
+        if len(byte_string) > prev_len:
+           
+            a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
+            if a.lower() != 'y':
+                return
         self.lgr.debug('Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
         self.writeRegValue(lenreg, len(byte_string))
+        if lenreg2 is not None:
+            self.writeRegValue(lenreg2, len(byte_string))
         ''' writeRegValue clears bookmarks, but we want to clear current cycle marks as well '''
         prev_cycle = cpu.cycles - 1
         self.dataWatch[self.target].clearWatches(prev_cycle)
         if fd >= 0:
-            self.lgr.debug('injectIO from file %s %d. %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
+            self.lgr.debug('injectIO from file %s %d. Length register %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
+            print('injectIO from file %s %d. Length register %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
             msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
             self.dataWatch[self.target].setRange(addr, len(byte_string), msg)
             print('tracking IO to %d' % fd)
