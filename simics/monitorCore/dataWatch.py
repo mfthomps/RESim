@@ -58,6 +58,10 @@ class DataWatch():
                     overlap = True
                     self.lgr.debug('DataWatch setRange found overlap, skip it')
                     break
+                elif self.start[index] >= start and this_end <= end:
+                    self.lgr.debug('DataWatch setRange found subrange, replace it')
+                    self.start[index] = start
+                    self.length[index] = length
         if not overlap:
             self.start.append(start)
             self.length.append(length)
@@ -70,7 +74,7 @@ class DataWatch():
         ''' called when FD is closed and we might be doing a trackIO '''
         eip = self.top.getEIP(self.cpu)
         msg = 'closed FD: %d' % fd
-        self.watchMarks.markCall(msg)
+        self.watchMarks.markCall(msg, None)
         
 
     def watch(self, show_cmp=False, break_simulation=None):
@@ -232,7 +236,7 @@ class DataWatch():
                         elif dest in self.relocatables:
                             done = True
                             self.lgr.debug('walkAlone found relocatable call to %s' % self.relocatables[dest])
-                        elif self.user_iterators.isIterator(dest):
+                        elif self.user_iterators.isIterator(dest, self.lgr):
                             done = True
                             self.lgr.debug('walkAlone found call to iterator 0x%x' % dest)
                         else: 
@@ -254,8 +258,8 @@ class DataWatch():
                 mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                 mem_something.src = None
             elif mem_something.fun == 'memcmp':
-                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r4')
-                mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r12')
+                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
+                mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
                 mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r1')
             cell = self.top.getCell()
             proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
