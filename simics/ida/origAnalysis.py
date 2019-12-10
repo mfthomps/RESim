@@ -1,15 +1,18 @@
 import idc
 import idautils
 import idaapi
+import ida_funcs
+import ida_bytes
 import os
 import json
+import glob
 import gdbProt
 class OrigAnalysis():
 
     def __init__(self, path):
-        self.root_prefix = '/mnt/vdr_img/rootfs'
         self.funs = {}
         self.funnames = []
+        self.root_path = path
         funfile = path+'.funs'
         if os.path.isfile(funfile):
             print('function file: %s' % funfile)
@@ -28,6 +31,20 @@ class OrigAnalysis():
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
         return None
 
+    def getRootPrefix(self, sofile):
+        parts = sofile.split('/')
+        top = parts[1]
+        print('top %s' % top)
+        parts = self.root_path.split('/')
+        prefix = '/'
+        for p in parts:
+            print('check %s' % p)
+            if p == top:
+                break
+            else:
+                prefix = os.path.join(prefix, p)
+                print('prefix now %s' % prefix)
+        return prefix
 
     def origFun(self, ip):
         print('look for fun having ip 0x%x' % ip)
@@ -41,7 +58,8 @@ class OrigAnalysis():
                 if '-' not in start_end:
                     print('Bad response from getSO: %s' % simicsString)
                     return
-                full = os.path.join(self.root_prefix, sofile[1:])
+                root_prefix = self.getRootPrefix(sofile)
+                full = os.path.join(root_prefix, sofile[1:])
                 sopath = self.getFunPath(full)
                 start, end = start_end.split('-')
                 start = int(start, 16)
@@ -49,24 +67,25 @@ class OrigAnalysis():
                 self.add(sopath, start)
                 fun = self.getFun(ip)
                 print('start 0x%x end 0x%x' % (start, end))
-                idaapi.analyze_area(start, end)
+                #idaapi.analyze_area(start, end)
+                idc.plan_and_wait(start, end)
                 for fun in sorted(self.funs):
                     if fun >= start and fun <= end:
                         name = str(self.funs[fun]['name'])
                         nea = idaapi.get_name_ea(idaapi.BADADDR, name)
                         if nea != idaapi.BADADDR:
                            name = name+'_so' 
-                        idc.MakeName(int(fun), name)
+                        idc.set_name(int(fun), name, idc.SN_CHECK)
                         print('made name for 0x%x  %s' % (int(fun), name))
                 for fun in self.funs:
                     if fun >= start and fun <= end:
                         #print('fun 0x%x name <%s>' % (fun, name))
-                        idc.MakeFunction(fun, idaapi.BADADDR)
+                        ida_funcs.add_func(fun, idaapi.BADADDR)
         
         elif fun is not None:
                 print('Do one fun 0x%x' % fun)
                 for i in range(self.funs[fun]['start'], self.funs[fun]['end']):
-                    idc.MakeUnkn(i, 1)
+                    ida_bytes.del_items(i, 1)
                 idaapi.auto_mark_range(self.funs[fun]['start'], self.funs[fun]['end'], 25)
                 idaapi.autoWait()
                 return fun
@@ -81,6 +100,17 @@ class OrigAnalysis():
                 actual = os.path.join(os.path.dirname(path), os.readlink(path))
                 print('actual  %s' % actual)
                 fun_path = actual+'.funs'
+            else:
+                basename = os.path.basename(path)
+                dpath = os.path.dirname(path)
+                so_index = basename.find('.so')
+                gname = basename[:so_index+3]+'*'+'.funs'
+                gpath = os.path.join(dpath, gname)
+                print('look for glob %s' % gpath)
+                flist = glob.glob(gpath)
+                if len(flist) > 0:
+                    fun_path = flist[0]
+                
         return fun_path
             
     def add(self, funfile, offset):

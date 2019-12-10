@@ -33,7 +33,7 @@ def getOffset():
         index = 1
         want = ov1
     ''' Convert to numberic from symbol '''
-    idc.OpSeg(ip, index)
+    idc.op_seg(ip, index)
     if '[' in want and '+' in want or '-' in want:
         op = idc.print_operand(ip, index)
         print('op is %s' % op)
@@ -49,7 +49,7 @@ def getOffset():
             value = int(value, 16)
         except:
             print('unable to parse int from %s' % value)
-            idc.OpStkvar(ip, 0)
+            idc.op_stkvar(ip, 0)
             return retval
         
         if '+' in val:
@@ -59,7 +59,7 @@ def getOffset():
         print('effective addr is 0x%x' % retval)
     
     ''' Convert back to symbol, e.g., var_11'''
-    idc.OpStkvar(ip, index)
+    idc.op_stkvar(ip, index)
     return retval
 
 def isHighlightedEffective():

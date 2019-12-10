@@ -1,4 +1,7 @@
 import idaapi
+import ida_bytes
+import ida_struct
+import idautils
 import ida_kernwin
 import ida_dbg
 import time
@@ -30,6 +33,115 @@ def getHex(s):
     except:
         pass
     return retval
+
+def getRegOffset(eax, reg, opnum):
+    try:
+        reg_val = idc.get_reg_value(reg)
+    except: 
+        ''' reg is a symbol, get its value and read memory at that address '''
+        x = idc.get_name_ea_simple(reg)
+        reg_val = idc.read_dbg_dword(x)
+    offset = idc.get_operand_value(eax, opnum)
+    retval = reg_val+offset
+    return retval 
+
+def getRefAddr():
+    ''' Get address from the operand currently under the cursor.
+        If just a register, use that.  If calculated within brackets,
+        try decoding that.
+    '''
+    retval = None
+    eax = idaapi.get_screen_ea()
+    flags = ida_bytes.get_full_flags(eax)
+    if ida_bytes.is_code(flags):
+        opnum = idaapi.get_opnum()
+        op_type = idc.get_operand_type(eax, opnum)
+        op = idc.print_operand(eax, opnum)
+        #if op_type == idc.o_disp:
+        if op_type == 4:
+            ''' displacement from reg address '''
+            val = op.split('[', 1)[1].split(']')[0]
+            if ',' in val:
+                reg = val.split(',')[0]
+                retval = getRegOffset(eax, reg, opnum)
+            elif '+' in val:
+                reg = val.split('+')[0]
+                retval = getRegOffset(eax, reg, opnum)
+            else:
+                try:
+                    retval = idc.get_reg_value(val)
+                except: 
+                   print('%s not a reg' % reg)
+        elif op_type == 3:
+            retval = idc.get_operand_value(eax, opnum)
+        elif op_type == 1:
+            retval = idc.get_reg_value(op)
+        else:
+            print('Op type %d not handled' % op_type)
+    else:
+        return eax
+    return retval
+   
+
+def getFieldName(ea, offset):
+    '''
+    Get an IDA Structure field for a given offset into a structure at a given
+    field.  Display as full element name, qualified with array indices as appropriate.
+
+    We assume that "offset" is into the sid alone, not relative to the start of the
+    parent structure.  First get the sid of the top-level struct as given by ea.
+    Then loop:
+       get name of struct at current offset into current sid
+       if name is none, we are in an array, and past the first element
+           get last member of current sid
+           get the next offset after the last member
+           assume that offset is the size of the array elements
+           use MOD to get offset into element strcture
+           get name can continue; if no name, bail
+    '''
+    full_name = None        
+    ti = idaapi.opinfo_t()
+    f = ida_bytes.get_full_flags(ea)
+    if ida_bytes.get_opinfo(ti, ea, 0, f):
+       #print ("tid=%08x - %s" % (ti.tid, ida_struct.get_struc_name(ti.tid)))
+       sid = ti.tid
+       full_name = ida_struct.get_struc_name(sid)
+       cur_offset = offset
+       while True:
+           element = None
+           prev = idc.get_prev_offset(sid, cur_offset)
+           #print('prev is %d ' % (prev))
+           mn = idc.get_member_name(sid, cur_offset)
+           #print('get_member_name sid 0x%x offset %d got %s' % (sid, cur_offset, mn))
+           if mn is None:
+               #print('mn none')
+               last = idc.get_last_member(sid)
+               over = idc.get_next_offset(sid, last)
+               #print('last %d  over %d' % (last, over))
+               element = int(cur_offset / over)
+               cur_offset = cur_offset % over
+               mn = idc.get_member_name(sid, cur_offset)
+               #print('in array get_member_name sid 0x%x offset %d got %s array element %d' % (sid, cur_offset, mn, element))
+               if mn is None:
+                   break
+           mem_off = idc.get_member_offset(sid, mn)
+           #print('mn now %s offset %d' % (mn, mem_off))
+           if element is None:
+               full_name = full_name+'.'+mn
+           else:
+               full_name = '%s[%d].%s' % (full_name, element, mn)
+           sid = idc.get_member_strid(sid, cur_offset)
+           #print('new sid 0x%x cur_offset %d' % (sid, cur_offset))
+           cur_offset = cur_offset - mem_off
+
+           if sid < 0:
+               #print('sid bad')
+               break
+       #print('full name: %s' % full_name)
+
+    else:
+       print('failed to get opinfo for 0x%x' % ea)
+    return full_name
 
 class RevToHandler(idaapi.action_handler_t):
         def __init__(self, isim):
@@ -156,22 +268,31 @@ class ModMemoryHandler(idaapi.action_handler_t):
 
         # Modify memory
         def activate(self, ctx):
+            addr = getRefAddr()
+            if addr is None:
+                highlighted = getHighlight()
+                addr = getHex(highlighted)
+            '''
             if regFu.isHighlightedEffective():
                 addr = regFu.getOffset()
             else:
                 highlighted = getHighlight()
                 addr = getHex(highlighted)
+            '''
 
             sas = setAddrValue.SetAddrValue()
             sas.Compile()
             sas.iAddr.value = addr 
+            sas.iOffset.value = 0 
             sas.iRawHex.value = idc.get_wide_dword(sas.iAddr.value)
             ok = sas.Execute()
             if ok != 1:
                 return
             val = sas.iRawHex.value
             addr = sas.iAddr.value
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (addr, val)) 
+            offset = sas.iOffset.value
+            new_addr = addr+offset
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeWord(0x%x, 0x%x)");' % (new_addr, val)) 
             time.sleep(2)
             self.isim.updateBookmarkView()
             self.isim.updateDataWatch()
@@ -233,6 +354,36 @@ class StringMemoryHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+class StructFieldHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+    
+        def activate(self, ctx):
+            print('Structure field')
+            ref_addr = getRefAddr()
+            if ref_addr is not None:
+
+                heads = idautils.Heads(0,ref_addr)
+                h = None
+                for h in heads:
+                    pass
+                if h is None:
+                    print('No heads between zero and ref_addr 0x%x?' % ref_addr)
+                    return
+                offset = ref_addr - h
+                field = getFieldName(h, offset)
+                if field is not None:
+                    print('Field offset %d from 0x%x is %s' % (offset, h, field))
+            else:
+                print('Did not get reference address')
+          
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     rev_to_action_desc = idaapi.action_desc_t(
        'rev:action',
@@ -274,6 +425,11 @@ def register(isim):
        'modify memory (string)',
        StringMemoryHandler(isim)
        )
+    struct_field_action_desc = idaapi.action_desc_t(
+       'structField:action',
+       'Structure field',
+       StructFieldHandler(isim)
+       )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
@@ -282,6 +438,7 @@ def register(isim):
     idaapi.register_action(rev_addr_action_desc)
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
+    idaapi.register_action(struct_field_action_desc)
 
 class Hooks(ida_kernwin.UI_Hooks):
         def populating_widget_popup(self, form, popup):
@@ -301,6 +458,8 @@ class Hooks(ida_kernwin.UI_Hooks):
             elif idaapi.get_widget_type(form) == idaapi.BWN_DISASM or \
                  idaapi.get_widget_type(form) == idaapi.BWN_DUMP:
                 #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
+
+
                 regs = idaapi.ph_get_regnames()
                 idaapi.attach_action_to_popup(form, popup, "revCursor:action", 'RESim/')
                 idaapi.attach_action_to_popup(form, popup, "dis:action", 'RESim/')
@@ -317,6 +476,9 @@ class Hooks(ida_kernwin.UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "stringMemory:action", 'RESim/')
+                opnum = idaapi.get_opnum()
+                if opnum >= 0:
+                    idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/')
                             
 
 #register()

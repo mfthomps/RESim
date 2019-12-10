@@ -34,6 +34,7 @@ import gdbProt
 import bookmarkView
 import stackTrace
 import dataWatch
+import writeWatch
 #import okTextForm
 import waitDialog
 import functionSig
@@ -43,6 +44,7 @@ import menuMod
 idaapi.require("idaSIM")
 idaapi.require("stackTrace")
 idaapi.require("dataWatch")
+idaapi.require("writeWatch")
 idaapi.require("bookmarkView")
 idaapi.require("reHooks")
 idaapi.require("menuMod")
@@ -442,6 +444,7 @@ if __name__ == "__main__":
     bookmark_view = bookmarkView.bookmarkView()
     stack_trace = stackTrace.StackTrace()
     data_watch = dataWatch.DataWatch()
+    write_watch = writeWatch.WriteWatch()
     #print('back from init bookmarkView')
     keymap_done = False
     #primePump()
@@ -452,7 +455,7 @@ if __name__ == "__main__":
     idaapi.activate_widget(form, True)
     #print('now create bookmark_view')
     print('RESim Ida Client Version 1.2')
-    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, kernel_base, reg_list)
+    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, write_watch, kernel_base, reg_list)
     bookmark_view.Create(isim)
     bookmark_view.register()
     bookmark_list = bookmark_view.updateBookmarkView()
@@ -468,6 +471,9 @@ if __name__ == "__main__":
 
     data_watch.Create(isim)
     data_watch.register()
+   
+    write_watch.Create(isim)
+    write_watch.register()
    
     reHooks.register(isim)
     re_hooks = reHooks.Hooks()

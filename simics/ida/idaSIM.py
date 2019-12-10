@@ -22,16 +22,17 @@ def getHighlight():
         retval, flags = t 
     return retval
 class IdaSIM():
-    def __init__(self, stack_trace, bookmark_view, data_watch, kernel_base, reg_list):
+    def __init__(self, stack_trace, bookmark_view, data_watch, write_watch, kernel_base, reg_list):
         self.stack_trace = stack_trace
         self.data_watch = data_watch
+        self.write_watch = write_watch
         self.bookmark_view = bookmark_view
         self.just_debug = False
         self.recent_bookmark = 1
         self.recent_fd = '1'
         self.kernel_base = kernel_base
         self.reg_list = reg_list
-        self.origAnalysis = origAnalysis.OrigAnalysis(ida_nalt.get_root_filename())
+        self.origAnalysis = origAnalysis.OrigAnalysis(ida_nalt.get_input_file_path())
         proc_info = idaapi.get_inf_structure()
         if proc_info.procName == 'ARM':
             self.PC='pc'
@@ -647,6 +648,9 @@ class IdaSIM():
 
     def updateDataWatch(self):
         data_watch_results = self.data_watch.updateDataWatch()
+    
+    def updateWriteWatch(self):
+        write_watch_results = self.write_watch.updateWriteWatch()
     
     def rebuildStackTrace(self):
         print 'rebuilding stack trace'

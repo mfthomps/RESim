@@ -27,6 +27,17 @@ import idaapi
 '''
 Define action handlers for RESim menu extensions.
 '''
+class ShowCycleHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+
+    def activate(self, ctx):
+        self.isim.showCycle()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class RebaseHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -240,6 +251,12 @@ class RunToHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 def register(isim):
+    do_show_cycle_action = idaapi.action_desc_t(
+        'do_show_cycle:action',
+        'show cycle', 
+        ShowCycleHandler(isim),
+        'Alt+Shift+C')
+
     do_rebase_action = idaapi.action_desc_t(
         'do_rebase:action',
         'rebase library', 
@@ -360,6 +377,7 @@ def register(isim):
         RevToTextHandler(isim))
 
     idaapi.unregister_action("ThreadStepOver")
+    idaapi.register_action(do_show_cycle_action)
     idaapi.register_action(do_rebase_action)
     idaapi.register_action(do_reverse_action)
     idaapi.register_action(do_rev_step_over_action)
@@ -384,6 +402,10 @@ def register(isim):
 
 
 def attach():
+    idaapi.attach_action_to_menu(
+        'Debugger/Run to cursor',
+        'do_show_cycle:action',
+        idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Run to cursor',
         'do_rebase:action',
