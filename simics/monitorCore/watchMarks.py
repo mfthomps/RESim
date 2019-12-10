@@ -51,18 +51,20 @@ class WatchMarks():
             self.length = length
             self.cmp_ins = cmp_ins
             self.end_addr = None
+            self.loop_count = 0
 
         def getMsg(self):
             if self.end_addr is None:
                 mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
                 length = self.end_addr- self.addr + 1
-                mark_msg = 'Iterate over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, 
+                mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
                      self.end_addr, length, self.offset, self.start, self.length, self.cmp_ins)
             return mark_msg
 
         def addrRange(self, addr):
             self.end_addr = addr
+            self.loop_count += 1
 
     class KernelMark():
         def __init__(self, addr, count):
@@ -78,8 +80,11 @@ class WatchMarks():
             self.ours = ours    
             self.theirs = theirs    
             self.count = count    
-            offset = ours - buf_start
-            self.msg = 'memcmp 0x%x (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (ours, offset, buf_start, self.the_str, theirs, count)
+            if buf_start is not None:
+                offset = ours - buf_start
+                self.msg = 'memcmp 0x%x (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (ours, offset, buf_start, self.the_str, theirs, count)
+            else:
+                self.msg = 'memcmp 0x%x (unknown buffer) to %s (at 0x%x, %d bytes)' % (ours, self.the_str, theirs, count)
         def getMsg(self):
             return self.msg
 
@@ -188,7 +193,10 @@ class WatchMarks():
     def compare(self, ours, theirs, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if count > 0:
-            the_str = self.mem_utils.readString(self.cpu, theirs, count).decode('ascii', 'replace')
+            the_str = self.mem_utils.readString(self.cpu, theirs, count)
+       
+            if the_str is not None:
+                the_str = the_str.decode('ascii', 'replace')
         else:
             the_str = ''
         cm = self.CompareMark(ours, theirs, count, the_str, buf_start) 
