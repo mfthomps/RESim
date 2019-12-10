@@ -183,12 +183,20 @@ class memUtils():
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
                 #self.lgr.debug('remain_in_page %d' % remain_in_page)
-                first_read = self.readStringPhys(cpu, ps, remain_in_page)
+                try:
+                    first_read = self.readStringPhys(cpu, ps, remain_in_page)
+                except ValueError:
+                    self.lgr.debug('memUtils readString value error reading %d bytes from 0x%x' % (remain_in_page, ps))
+                    return retval
                 if first_read is not None and len(first_read) == remain_in_page:
                     ''' get the rest ''' 
                     ps = self.v2p(cpu, vaddr+remain_in_page)
                     #self.lgr.debug('first read %s new ps 0x%x' % (first_read, ps))
-                    second_read = self.readStringPhys(cpu, ps, maxlen - remain_in_page)
+                    try:
+                        second_read = self.readStringPhys(cpu, ps, maxlen - remain_in_page)
+                    except ValueError:
+                        self.lgr.debug('memUtils readString 2nd read value error reading %d bytes from 0x%x' % (remain_in_page, ps))
+                        return retval
                     #self.lgr.debug('second read %s from 0x%x' % (second_read, ps))
                     retval = first_read+second_read
                 else:
