@@ -549,7 +549,7 @@ class reverseToCall():
             val = self.top.getReg(self.reg, self.cpu) 
             if val == self.reg_val:
                 self.lgr.debug('kernInterruptHap reg %s still 0x%x, now cycle back through instructions, but run alone' % (self.reg, val))
-                SIM_run_alone(self.cycleAlone, None)
+                SIM_run_alone(self.cycleAlone, pid)
             else: 
                 self.lgr.error('kernInterruptHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
                 
@@ -776,6 +776,7 @@ class reverseToCall():
                                     self.save_cycle = self.cpu.cycles
                                     SIM_run_alone(SIM_run_command,'rev')
                                 else:
+                                    self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr' % (eip, addr))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             else:
                                 self.lgr.debug('cycleRegisterMod at %x, ldm instruction got None for addr' % eip)
@@ -797,7 +798,7 @@ class reverseToCall():
             val = self.top.getReg(self.reg, self.cpu) 
             if val == self.reg_val:
                 self.lgr.debug('uncallHap reg %s still 0x%x, now cycle back through instructions, but run alone' % (self.reg, val))
-                SIM_run_alone(self.cycleAlone, None)
+                SIM_run_alone(self.cycleAlone, pid)
             else: 
                 self.lgr.debug('uncallHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
                 cmd = 'skip-to cycle = %d ' % self.save_cycle
@@ -933,7 +934,7 @@ class reverseToCall():
                 self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
                 self.top.skipAndMail()
        
-    def cycleAlone(self, dumb): 
+    def cycleAlone(self, pid): 
         self.lgr.debug('cycleAlone, entered looking for %s' % self.reg)
         cmd = 'reverse'
         reg_mod_type = self.cycleRegisterMod()
@@ -941,7 +942,9 @@ class reverseToCall():
             if not self.tooFarBack():
                 ''' stepped back into kernel, rev '''
                 self.lgr.debug('cycleAlone must have entered kernel, continue to previous place where this process ran')
-                SIM_run_alone(SIM_run_command, cmd)
+                #SIM_run_alone(SIM_run_command, cmd)
+                self.jumpOverKernel(pid)
+                SIM_run_alone(self.cycleAlone, pid)
             else:
                 self.lgr.debug('cycleAlone must have backed to first cycle 0x%x' % self.start_cycles)
         elif reg_mod_type.mod_type != RegisterModType.BAIL:
@@ -950,6 +953,7 @@ class reverseToCall():
                 self.cleanup(self.cpu)
             else:
                 if not self.tooFarBack():
+                    self.lgr.debug('cycleAlone, not too far back, follow taint?')
                     if self.cpu.architecture == 'arm':
                         self.followTaintArm(reg_mod_type)
                     else:
@@ -965,7 +969,7 @@ class reverseToCall():
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         cpl = memUtils.getCPL(self.cpu)
         if pid == self.pid and cpl != 0:
-            self.cycleAlone(None)
+            self.cycleAlone(pid)
         else:
             self.lgr.error('stoppedReverseModReg wrong process or in kernel pid %d expected %d' % (pid, self.pid))
             SIM_run_alone(SIM_run_command, cmd)
