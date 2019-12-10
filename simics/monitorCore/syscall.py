@@ -347,7 +347,7 @@ class Syscall():
                 syscall_info = SyscallInfo(self.cpu, None, callnum, entry, self.trace, self.call_params)
                 syscall_info.compat32 = compat32
                 if not background:
-                    self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
+                    #self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     proc_break1 = None
                     break_list.append(proc_break)
@@ -372,7 +372,7 @@ class Syscall():
         #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
-            self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
+            #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
@@ -400,7 +400,7 @@ class Syscall():
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        self.lgr.debug('syscall stopTrace return for %s' % self.name)
+        #self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
         self.watch_first_mmap = fd
@@ -1248,7 +1248,7 @@ class Syscall():
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
-            ida_msg = '%s %s\n' % (callname, exit_info.select_info.getString())
+            ida_msg = '%s pid:%d %s\n' % (callname, pid, exit_info.select_info.getString())
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -1324,7 +1324,7 @@ class Syscall():
 
         if self.linger:
             if cpu.cycles in self.linger_cycles:
-                self.lgr.debug('syscalHap for lingering call we already made.')
+                #self.lgr.debug('syscalHap for lingering call we already made.')
                 return
             else:
                 self.linger_cycles.append(cpu.cycles)

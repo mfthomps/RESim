@@ -56,7 +56,7 @@ class SharedSyscall():
         return None
 
     def stopTrace(self):
-        self.lgr.debug('sharedSyscall stopTrace')
+        #self.lgr.debug('sharedSyscall stopTrace')
         for eip in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[eip])
         self.exit_pids = {}
