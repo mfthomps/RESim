@@ -165,7 +165,7 @@ def armLDM(cpu, instruct, reg, lgr):
             retval = reg_addr + (offset * mul)
             lgr.debug('decodeArm armLDM reg %s, base %s base reg_addr value 0x%x index %d before %d mul %d returning 0x%x' % (reg, op0, reg_addr, index, before, mul, retval))
         else:
-            lgr.error('reg %s not in %s' % (reg, str(regs)))
+            lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
 
 def isCall(cpu, instruct):
