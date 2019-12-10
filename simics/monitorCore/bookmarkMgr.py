@@ -231,6 +231,8 @@ class bookmarkMgr():
             step = SIM_step_count(cpu)
             if cycle is not None and self.__bookmarks[mark].steps is not None:
                 self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
+            if current != cycle or eip != self.__bookmarks[mark].eip:
+                self.lgr.error('goToDebugBookmark, simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
             
 
         self.context_mgr.setExitBreaks()
