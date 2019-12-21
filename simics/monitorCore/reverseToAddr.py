@@ -25,13 +25,17 @@
 
 from simics import *
 class reverseToAddr():
-    def __init__(self, address, context_manager, is_monitor_running, top, cpu, lgr, extra_back=0):
+    def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, lgr, extra_back=0):
         self.top = top
         self.lgr = lgr
         self.context_manager = context_manager
         self.is_monitor_running = is_monitor_running
         self.extra_back = extra_back
         self.is_monitor_running.setRunning(True)
+        self.task_utils = task_utils
+        cpu, comm, pid  = task_utils.curProc()
+        self.cpu = cpu
+        self.pid = pid
         mode = Sim_Access_Execute
         phys_block = cpu.iface.processor_info.logical_to_physical(address, mode)
         if phys_block.address != 0:
@@ -41,14 +45,25 @@ class reverseToAddr():
         else:
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
             return
-        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d' % (address, phys_block.address, extra_back))
+        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
         self.one_stop_hap = None
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 	     self.stopHap, cpu)
         SIM_run_command('reverse')
 
+    def goBackAlone(self, dumb):
+        backone = self.cpu.cycles - 1 
+        cmd = 'skip-to cycle = %d ' % backone
+        SIM_run_command(cmd)
+        SIM_run_command('rev')
+
     def stopHap(self, cpu, one, exception, error_string):
         if self.stop_hap is None:
+            return
+        cpu, comm, pid  = self.task_utils.curProc()
+        if pid != self.pid:
+            self.lgr.debug('reverseToAddr stopHap wrong pid got %d wanted %d cycles: 0x%x' % (pid, self.pid, cpu.cycles))
+            SIM_run_alone(self.goBackAlone, None)
             return
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None 
@@ -56,7 +71,7 @@ class reverseToAddr():
         self.the_break = None
  
         eip = self.top.getEIP()
-        self.lgr.debug('reverseToAddr stopHap eip: %x' % eip)
+        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
         #self.top.gdbMailbox('0x%x' % eip)
         if self.extra_back > 0:
             self.lgr.debug('stopHap asked to go back extra %d' % self.extra_back)
