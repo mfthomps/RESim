@@ -37,12 +37,14 @@ class PtableInfo():
         self.ptable_addr = None
         self.page_addr = None
         self.entry_size = 4
+        self.nx = 0
+        self.entry = None
     def valueString(self):
         retval =  'pdir_protect: %s ptable_protect: %s ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), str(self.ptable_protect), self.ptable_exists, self.page_exists)
         if self.ptable_addr is not None:
             retval = retval + ' ptable_addr: 0x%x' % self.ptable_addr
         if self.page_addr is not None:
-            retval = retval + ' page_addr: 0x%x' % self.page_addr
+            retval = retval + ' page_addr: 0x%x  nx:%d entry:0x%x' % (self.page_addr, self.nx, self.entry)
         return retval
 
 class PageAddrInfo():
@@ -50,6 +52,25 @@ class PageAddrInfo():
         self.logical = logical
         self.physical = physical
         self.entry = entry
+
+class PageEntryInfo():
+    def __init__(self, entry, arch):
+        if arch != 'arm':
+            self.writable = memUtils.testBit(entry, 1)
+            self.accessed = memUtils.testBit(entry, 5)
+        else:
+            self.nx = memUtils.testBit(entry, 0)
+            ap = memUtils.bitRange(entry, 4, 5)
+            self.accessed = True
+            self.writable = False
+            if ap == 1 or ap == 0:
+                self.accessed = False
+                self.writable = False
+            if ap == 3:
+                self.writable = True
+            
+
+            
 
 ''' return start and end adjusted to be on page boundaries '''
 def unsigned64(val):
@@ -251,6 +272,8 @@ def findPageTableArm(cpu, va, lgr):
     small_page_base = memUtils.bitRange(sld, 12, 31)
     s_shifted = small_page_base << 12
     ptable_info.page_addr = s_shifted
+    ptable_info.nx = memUtils.testBit(sld, 0)
+    ptable_info.entry = sld
     return ptable_info 
 
 def findPageTable(cpu, addr, lgr):
