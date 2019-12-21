@@ -67,6 +67,7 @@ import targetFS
 import cellConfig
 import userIterators
 import trackFunctionWrite
+import pageUtils
 
 import json
 import pickle
@@ -351,7 +352,7 @@ class GenMonitor():
         if cpl == 0:
             dumb, dumb, pid = self.task_utils[self.target].curProc() 
             ''' use debug process if defined, otherwise default to current process '''
-            debug_pid, dumb, dumb = self.context_manager[self.target].getDebugPid() 
+            debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
             if debug_pid is not None:
                 if debug_pid != pid:
                     ''' debugging, but not this pid.  likely a clone '''
@@ -366,6 +367,9 @@ class GenMonitor():
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
+            # TBD wtf?
+            #status = self.is_monitor_running.isRunning()
+            #if not status:
             SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
@@ -540,7 +544,7 @@ class GenMonitor():
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
         SIM_run_command('enable-reverse-execution')
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
 
     def debugGroup(self):
@@ -549,7 +553,7 @@ class GenMonitor():
     def debug(self, group=False):
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         cell = self.cell_config.cell_context[self.target]
         if pid is None:
             ''' Our first debug '''
@@ -557,7 +561,6 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, port, pid, self.is_compat32))
 
-            self.context_manager[self.target].setDebugPid(pid, self.target, comm)
             if cpu.architecture == 'arm':
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, port)
             elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
@@ -572,10 +575,10 @@ class GenMonitor():
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
             self.setDebugBookmark('origin', cpu)
             self.bookmarks.setOrigin(cpu)
+            self.context_manager[self.target].watchTasks(set_debug_pid=True)
             ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
             self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
 
-            self.context_manager[self.target].watchTasks()
             if group:
                 leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
                 self.lgr.debug('genManager debug, will debug entire process group under leader %d' % leader_pid)
@@ -606,21 +609,24 @@ class GenMonitor():
             if self.targetFS[self.target] is not None and prog_name is not None:
                 sindex = 0
                 full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
-                self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
-                self.getIDAFuns(full_path)
-                self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
-
-                text_segment = elfText.getText(full_path, self.lgr)
-                if text_segment is not None:
-                    self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
-                    self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
-                    self.soMap[self.target].setIdaFuns(self.ida_funs)
-                    self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
-                    self.dataWatch[self.target].setIdaFuns(self.ida_funs)
-                    self.dataWatch[self.target].setUserIterators(self.user_iterators)
-                    self.dataWatch[self.target].setRelocatables(self.relocate_funs)
+                if full_path is not None:
+                    self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
+                    self.getIDAFuns(full_path)
+                    self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
+    
+                    text_segment = elfText.getText(full_path, self.lgr)
+                    if text_segment is not None:
+                        self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
+                        self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
+                        self.soMap[self.target].setIdaFuns(self.ida_funs)
+                        self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
+                        self.dataWatch[self.target].setIdaFuns(self.ida_funs)
+                        self.dataWatch[self.target].setUserIterators(self.user_iterators)
+                        self.dataWatch[self.target].setRelocatables(self.relocate_funs)
+                    else:
+                        self.lgr.error('debug, text segment None for %s' % full_path)
                 else:
-                    self.lgr.error('debug, text segment None for %s' % full_path)
+                    self.lgr.error('Failed to get full path for %s' % prog_name)
         else:
             ''' already debugging as current process '''
             pass
@@ -862,9 +868,15 @@ class GenMonitor():
     def debugThis(self):
         ''' Intended for use while debugging a process that clones and you want to only watch 
             the current clone '''
-        self.context_manager.watchOnlyThis()
+        self.context_manager[self.target].watchOnlyThis()
         print('now debugging only:')
+        self.lgr.debug('debugThis')
         self.show()
+
+    def debugAll(self):
+        self.context_manager[self.target].watchAll()
+        self.lgr.debug('debugAll')
+        print('watching all threads')
  
     def debugPid(self, pid):
         self.debugPidList([pid], self.debug)
@@ -989,7 +1001,7 @@ class GenMonitor():
 
     def getEIP(self, cpu=None):
         if cpu is None:
-            dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            dum, cpu = self.context_manager[self.target].getDebugPid() 
             if cpu is None:
                 cpu = self.cell_config.cpuFromCell(self.target)
         target = self.cell_config.cpu_cell[cpu]
@@ -1025,7 +1037,7 @@ class GenMonitor():
             self.gdb_mailbox = None
 
     def runSkipAndMailAlone(self, cycles): 
-        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMailAlone")
             return
@@ -1062,7 +1074,7 @@ class GenMonitor():
 
     def skipAndMail(self, cycles=1):
 
-        dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        dum, cpu = self.context_manager[self.target].getDebugPid() 
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMail")
             return
@@ -1086,7 +1098,7 @@ class GenMonitor():
         self.restoreDebugBreaks()
 
     def getBookmarkPid(self):
-        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             pid = self.task_utils[self.target].getExitPid()
         return pid
@@ -1133,7 +1145,7 @@ class GenMonitor():
 
     def doReverse(self, extra_back=0):
         if self.reverseEnabled():
-            dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            dum, cpu = self.context_manager[self.target].getDebugPid() 
             self.lgr.debug('doReverse entered, extra_back is %s' % str(extra_back))
             self.removeDebugBreaks()
             reverseToWhatever.reverseToWhatever(self, self.context_manager[self.target], cpu, self.lgr, extra_back=extra_back)
@@ -1143,14 +1155,14 @@ class GenMonitor():
             self.skipAndMail()
 
     def printCycle(self):
-        dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        dum, cpu = self.context_manager[self.target].getDebugPid() 
         cell_name = self.getTopComponentName(cpu)
         current = cpu.cycles
         print 'current cycle for %s is %x' % (cell_name, current)
 
     ''' more experiments '''
     def reverseStepInstruction(self, num=1):
-        dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        dum, cpu = self.context_manager[self.target].getDebugPid() 
         cell_name = self.getTopComponentName(cpu)
         dum_cpu, comm, pid  = self.task_utils[self.target].curProc()
         eip = self.getEIP()
@@ -1176,7 +1188,7 @@ class GenMonitor():
     
     def reverseToCallInstruction(self, step_into, prev=None):
         if self.reverseEnabled():
-            dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            dum, cpu = self.context_manager[self.target].getDebugPid() 
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
@@ -1198,7 +1210,7 @@ class GenMonitor():
             self.skipAndMail()
 
     def uncall(self):
-        dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        dum, cpu = self.context_manager[self.target].getDebugPid() 
         cell_name = self.getTopComponentName(cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils[self.target].currentProcessInfo(cpu)
         self.lgr.debug('cgcMonitor, uncall')
@@ -1216,10 +1228,11 @@ class GenMonitor():
 
     def revToAddr(self, address, extra_back=0):
         if self.reverseEnabled():
-            pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
             self.removeDebugBreaks()
-            reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.is_monitor_running, self, cpu, self.lgr, extra_back=extra_back)
+            reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
+                           self.lgr, extra_back=extra_back)
             self.lgr.debug('back from reverseToAddr')
         else:
             print('reverse execution disabled')
@@ -1231,7 +1244,7 @@ class GenMonitor():
         self.lgr.debug('getEIP when stopped')
         simics_status = SIM_simics_is_running()
         resim_status = self.is_monitor_running.isRunning()
-        debug_pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        debug_pid, cpu = self.context_manager[self.target].getDebugPid() 
         if not resim_status and debug_pid is None:
             retval = 'mailbox:exited'
             self.lgr.debug('getEIPWhenStopped debug_pid is gone, return %s' % retval)
@@ -1241,7 +1254,7 @@ class GenMonitor():
         eip = self.getEIP(cpu)
         if resim_status and not simics_status:
             self.lgr.debug('getEIPWhenStopped Simics not running, RESim thinks it is running.  Perhaps gdb breakpoint?')
-            pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             SIM_run_command('pselect %s' % cpu.name)
             self.context_manager[self.target].setIdaMessage('Stopped at debugger breakpoint?')
             retval = 'mailbox:0x%x' % eip
@@ -1288,7 +1301,7 @@ class GenMonitor():
         self.context_manager[self.target].showIdaMessage()
 
     def resynch(self):
-        debug_pid, debug_cell, debug_cpu = self.context_manager[self.target].getDebugPid() 
+        debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid() 
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('resynch to pid: %d' % debug_pid)
         #self.is_monitor_running.setRunning(True)
@@ -1309,7 +1322,7 @@ class GenMonitor():
 
     def watchPageFaults(self, pid=None):
         if pid is None:
-            pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         self.page_faults[self.target].recordPageFaults()
 
@@ -1328,11 +1341,16 @@ class GenMonitor():
 
     def getCPU(self):
         return self.cell_config.cpuFromCell(self.target)
+ 
+    def skipBackToUser(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.rev_to_call[self.target].jumpOverKernel(pid)
 
     def reverseToUser(self):
+        ''' Note: may not stop in current pid, see skipBacktoUser '''
         self.removeDebugBreaks()
-        cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
+        cpu = self.cell_config.cpuFromCell(self.target)
         rtu = reverseToUser.ReverseToUser(self.param[self.target], self.lgr, cpu, cell)
 
     def getDebugFirstCycle(self):
@@ -1348,7 +1366,7 @@ class GenMonitor():
         '''
         if self.reverseEnabled():
             self.removeDebugBreaks()
-            pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite for 0x%x num bytes %d' % (addr, num_bytes))
             cell = self.cell_config.cell_context[self.target]
             self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
@@ -1364,7 +1382,7 @@ class GenMonitor():
         self.lgr.debug('revTaintAddr for 0x%x' % addr)
         if self.reverseEnabled():
             self.removeDebugBreaks()
-            pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             cell_name = self.getTopComponentName(cpu)
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -1384,7 +1402,7 @@ class GenMonitor():
         self.lgr.debug('revTaintReg for %s' % reg)
         if self.reverseEnabled():
             self.removeDebugBreaks()
-            pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             cell_name = self.getTopComponentName(cpu)
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -1401,7 +1419,7 @@ class GenMonitor():
 
     def rev1NoMail(self):
         self.lgr.debug('rev1NoMail')
-        dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        dum, cpu = self.context_manager[self.target].getDebugPid() 
         new_cycle = cpu.cycles - 1
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle = %d' % new_cycle)
@@ -1410,7 +1428,7 @@ class GenMonitor():
     def rev1(self):
         if self.reverseEnabled():
             self.removeDebugBreaks()
-            dum, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+            dum, cpu = self.context_manager[self.target].getDebugPid() 
             new_cycle = cpu.cycles - 1
          
             start_cycles = self.rev_to_call[self.target].getStartCycles()
@@ -1433,7 +1451,7 @@ class GenMonitor():
 
     def test1(self):
         
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         cycles = cpu.cycles
         print('first skip-to cycle=0x%x' % cycles)
         for i in range(200):
@@ -1579,7 +1597,7 @@ class GenMonitor():
             print('Unknown target %s' % target)
             return
         cell = self.cell_config.cell_context[target]
-        pid, cell_name, cpu = self.context_manager[target].getDebugPid() 
+        pid, cpu = self.context_manager[target].getDebugPid() 
         if pid is not None:
             tf = '/tmp/syscall_trace-%s-%d.txt' % (target, pid)
         else:
@@ -1600,6 +1618,7 @@ class GenMonitor():
         self.sharedSyscall[self.target].setDebugging(False)
 
     def stopDebug(self):
+        ''' stop all debugging '''
         self.lgr.debug('stopDebug')
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
@@ -1709,7 +1728,7 @@ class GenMonitor():
     def allowReverse(self):
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         prec = Prec(cpu, None, pid)
         if pid is not None:
             self.rev_to_call[self.target].watchSysenter(prec)
@@ -1718,8 +1737,9 @@ class GenMonitor():
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
             self.lgr.debug('restoreDebugBreaks')
-            self.context_manager[self.target].restoreDebug() 
-            pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+            #self.context_manager[self.target].restoreDebug() 
+            self.context_manager[self.target].resetWatchTasks() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             if pid is not None:
                 if not was_watching:
                     self.context_manager[self.target].watchTasks()
@@ -1737,7 +1757,7 @@ class GenMonitor():
  
     def removeDebugBreaks(self, keep_watching=False):
         self.lgr.debug('genMod removeDebugBreaks')
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.stopWatchPageFaults(pid)
         if not keep_watching:
             self.context_manager[self.target].stopWatchTasks()
@@ -1794,7 +1814,7 @@ class GenMonitor():
         ''' are we tracing all syscalls for the given pid? '''
         retval = False
         if cell_name in self.trace_all:
-            debug_pid, dumb, dumb1 = self.context_manager[self.target].getDebugPid() 
+            debug_pid, dumb1 = self.context_manager[self.target].getDebugPid() 
             if debug_pid is None:
                 self.lgr.debug('tracingAll pid none, return true')
                 retval = True
@@ -1816,7 +1836,7 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
         proc_break = self.context_manager[self.target].genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, start, count, 0)
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             self.lgr.debug('runToText, not debugging yet, assume current process')
             cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1858,8 +1878,8 @@ class GenMonitor():
     def remainingCallTraces(self):
         for cell_name in self.call_traces:
             if len(self.call_traces[cell_name]) > 0:
-                for ct in self.call_traces[cell_name]:
-                    self.lgr.debug('remainingCallTraces found remain for cell %s call %s' % (cell_name, ct))
+                #for ct in self.call_traces[cell_name]:
+                #    self.lgr.debug('remainingCallTraces found remain for cell %s call %s' % (cell_name, ct))
                 return True
         return False
 
@@ -2063,7 +2083,7 @@ class GenMonitor():
         return fname
 
     def showThreads(self):
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             self.lgr.error('showThreads debug pid from context manager is none?')
             return
@@ -2140,7 +2160,7 @@ class GenMonitor():
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None):
-        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         if pid not in self.stack_base[self.target]:
@@ -2153,7 +2173,7 @@ class GenMonitor():
 
     def getStackTrace(self):
         ''' used by IDA client '''
-        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('genMonitor getStackTrace pid %d' % pid)
@@ -2169,9 +2189,10 @@ class GenMonitor():
         return j
 
     def clearBookmarks(self):
-        pid, dum2, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             print('** Not debugging?? **')
+            self.lgr.debug('clearBookmarks, Not debugging?? **')
             return False
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
@@ -2302,7 +2323,7 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor exitMaze, using new syscall for traceAll')
         one_proc = False
-        dbgpid, dumb, dumb1 = self.context_manager[self.target].getDebugPid() 
+        dbgpid, dumb1 = self.context_manager[self.target].getDebugPid() 
         if dbgpid is not None:
             one_proc = True
         em = exitMaze.ExitMaze(self, cpu, cell, pid, tod_track, self.context_manager[self.target], self.task_utils[self.target], self.mem_utils[self.target], debugging, one_proc, self.lgr)
@@ -2356,7 +2377,7 @@ class GenMonitor():
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
 
     def showCycle(self):
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         cycles = self.bookmarks.getCurrentCycle(cpu)
         print ('cpu cycles since _start: 0x%x' % cycles)
         
@@ -2380,13 +2401,13 @@ class GenMonitor():
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         value = self.mem_utils[self.target].readWord32(cpu, addr)
         print('0x%x' % value)
 
     def printRegJson(self):
         self.lgr.debug('printRegJson')
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.mem_utils[self.target].printRegJson(cpu)
 
     def flushTrace(self):
@@ -2405,7 +2426,7 @@ class GenMonitor():
             print pid
         
     def reportMode(self):
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         
@@ -2474,6 +2495,9 @@ class GenMonitor():
         self.stopTrace()
         self.stopDataWatch()
 
+    def clearWatches(self):
+        self.dataWatch[self.target].clearWatches()
+
     def showWatchMarks(self):
         self.dataWatch[self.target].showWatchMarks()
 
@@ -2500,21 +2524,131 @@ class GenMonitor():
         self.stopTrackIO()
         cycle = self.dataWatch[self.target].goToMark(index)
         if cycle is not None:
-            self.context_manager[self.target].watchTasks()
+            self.context_manager[self.target].watchTasks(set_debug_pid=True)
         return cycle
 
     def goToWriteMark(self, index):
         cycle = self.trackFunction[self.target].goToMark(index)
         if cycle is not None:
-            self.context_manager[self.target].watchTasks()
+            self.context_manager[self.target].watchTasks(set_debug_pid=True)
         return cycle
+       
+    def mft4(self, pid): 
+        want =  0xdf953b00
+        wantX = 0xdf950000
+        ts_next = self.param[self.target].ts_next
+        cpu = self.cell_config.cpuFromCell(self.target)
+        tr = self.task_utils[self.target].getRecAddrForPid(pid)
+        ts_group_lead = self.param[self.target].ts_group_leader
+        print('group lead 0x%x' % ts_group_lead)
+        group_head = ts_group_lead + 0xe*4
+        ts_group_head = self.param[self.target].ts_thread_group_list_head
+        print('group head 0x%x ts_group_head 0x%x' % (group_head, ts_group_head))
+        group_tr = self.mem_utils[self.target].readPtr(cpu, tr+group_head) - group_head
+        lh = self.task_utils[self.target].read_list_head(cpu, group_tr, group_head)
+
+        s = self.task_utils[self.target].readTaskStruct(group_tr-group_head, cpu)
+        print('pid %d' % s.pid)
+        print('pid: %d tr: 0x%x group_head: %d group_tr: 0x%x head_pid: %d' % (pid, tr, group_head, group_tr, s.pid))
+
+        print('lh next 0x%x' % lh.next)
+
+
+    def mft3(self, pid): 
+        want =  0xdf953b00
+        wantX = 0xdf950000
+        ts_next = self.param[self.target].ts_next
+        cpu = self.cell_config.cpuFromCell(self.target)
+        tr = self.task_utils[self.target].getRecAddrForPid(pid)
+        ts_group_lead = self.param[self.target].ts_group_leader
+        group_head = ts_group_lead + 17*4
+        print('group head 0x%x' % group_head)
+        for i in range(0, 120, 4):
+            offset = ts_group_lead + i
+            '''
+            value = self.mem_utils[self.target].readPtr(cpu, tr+offset)
+            masked = value & 0xffff0000
+            print('got 0x%x offset 0x%x ' % (value, offset))
+            if masked == wantX:
+                print('got#### 0x%x offset 0x%x ' % (value, offset))
+            
+            '''
+            lh = self.task_utils[self.target].read_list_head(cpu, tr, offset)
+            #if lh is not None and lh.next == want:
+            if lh is not None and lh.next is not None:
+                masked = lh.next and 0xffff0000
+                try:
+                    value = self.mem_utils[self.target].readPtr(cpu, tr+offset)
+                    s = self.task_utils[self.target].readTaskStruct(value-offset, cpu)
+                except:
+                    continue
+                if s is not None:
+                    print('value 0x%x got 0x%x offset 0x%x pid: %d' % (value, lh.next, i/4, s.pid))
+                
+
+
+        '''
+        group_head = ts_group_lead + 17*4
+        value = self.mem_utils[self.target].readPtr(cpu, tr+group_head) 
+        print('tr 0x%x  tr_group head is 0x%x' % (tr, tr+group_head))
+        print('leader 0x%x  group_head 0x%x   value there is 0x%x' % (ts_group_lead, group_head, value))
+        #ts_childr = self.param[self.target].ts_thread_group_list_head
+        ts_childr = group_head
+        lh = self.task_utils[self.target].read_list_head(cpu, tr, ts_childr)
+        print('list head next 0x%x  list head prev 0x%x' % (lh.next, lh.prev))
+        '''
         
-    def mft(self):
-        cur_task_rec = self.task_utils[self.target].getCurTaskRec()
-        comm = cur_task_rec + self.param[self.target].ts_comm
-        print('comm 0x%x after_comm 0x%x  last_sw 0x%x fs 0x%x' % (comm, after_comm, last_switch, fs))
-        
-        #pid = self.mem_utils[self.target].readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+
+    def mft2(self, pid):
+        ts_next = self.param[self.target].ts_next
+        ts_prev = self.param[self.target].ts_prev
+        ts_thread = self.param[self.target].ts_thread_group_list_head
+        ts_childr = self.param[self.target].ts_children_list_head
+        print('ts_next %d  ts_prev %d  thread_group %d child_list %d' % (ts_next, ts_prev, ts_thread, ts_childr))
+        ts_parent = self.param[self.target].ts_parent
+        ts_real_parent = self.param[self.target].ts_real_parent
+        cpu = self.cell_config.cpuFromCell(self.target)
+        leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
+        print('leader of %d is %d' % (pid, leader_pid))
+
+        tr = self.task_utils[self.target].getRecAddrForPid(pid)
+        s = self.task_utils[self.target].readTaskStruct(tr, cpu)
+        print('tr is 0x%x  pid %d ' % (tr, pid))
+        prev_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_prev) 
+        prev_tr = prev_trx - ts_next
+        prev_s = self.task_utils[self.target].readTaskStruct(prev_tr, cpu)
+
+        next_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_next)
+        next_tr = next_trx - ts_next
+        next_s = self.task_utils[self.target].readTaskStruct(next_tr, cpu)
+
+        childr_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_childr)
+        childr_tr = childr_trx 
+        childr_s = self.task_utils[self.target].readTaskStruct(childr_tr, cpu)
+
+        print('prev trx 0x%x prev rec 0x%x pid: %d' % (prev_trx, prev_tr, prev_s.pid))
+        print('next trx 0x%x next rec 0x%x pid: %d' % (next_trx, next_tr, next_s.pid))
+        print('childr trx 0x%x childr rec 0x%x pid: %d' % (childr_trx, childr_tr, childr_s.pid))
+        ''' 
+        print('pid %d  comm %s group_leader 0x%x prev 0x%x next 0x%x' % (s.pid, s.comm, s.group_leader, (s.next-ts_next), (s.prev-ts_prev)))
+        clh = self.param[self.target].ts_children_list_head
+        if clh is not None:
+            val = self.mem_utils[self.target].readPtr(cpu, tr+clh) - clh
+            print('child list head is 0x%x' % val)
+            child = self.task_utils[self.target].readTaskStruct(val, cpu)
+            print('child pid %d' % child.pid)
+        slh = self.param[self.target].ts_sibling_list_head
+        if slh is not None:
+            val = self.mem_utils[self.target].readPtr(cpu, tr+slh) - slh
+            print('sib list head is 0x%x' % val)
+            sib = self.task_utils[self.target].readTaskStruct(val, cpu)
+            print('sib pid %d' % sib.pid)
+        ''' 
+
+    def mft(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        s = self.task_utils[self.target].readTaskStruct(addr, cpu)
+        print('pid %d  comm %s group_leader 0x%x prev 0x%x next 0x%x' % (s.pid, s.comm, s.group_leader, s.next, s.prev))
     
     def addProc(self, pid, leader_pid, comm, clone=False):    
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
@@ -2604,7 +2738,7 @@ class GenMonitor():
         ''' When the given function is entered, begin tracking memory addresses that are written to.
             Stop on exit of the function. '''
         self.lgr.debug('genMonitor trackFunctionWrite %s' % fun)
-        pid, cell_name, cpu = self.context_manager[self.target].getDebugPid() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
 
         read_watch_marks = self.dataWatch[self.target].getWatchMarks()
         self.trackFunction[self.target].trackFunction(pid, fun, self.ida_funs, read_watch_marks)
@@ -2614,6 +2748,16 @@ class GenMonitor():
         byte_array = self.mem_utils[self.target].readBytes(cpu, addr, size)
         with open(fname, 'w') as fh:
             fh.write(byte_array)
+
+    def pageInfo(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr)
+        print(ptable_info.valueString())
+
+    def toPid(self, pid):
+        self.lgr.debug('genMonitor toPid')
+        self.context_manager[self.target].catchPid(pid, self.toUser)
+        SIM_run_command('c')
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
