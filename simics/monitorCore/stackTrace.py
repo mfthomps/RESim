@@ -193,11 +193,14 @@ class StackTrace():
                             if fun_hex in self.relocate_funs:
                                 fun = self.relocate_funs[fun_hex]
                                 new_instruct = '%s   0x%x' % (self.callmn, fun)
-                            else:
+                            elif fun_hex is not None:
                                 new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
+                            else:
+                                self.lgr.debug('stackFrame isCallToMe, no function call found in %s' % instruct[1])
+                                return retval
                         frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
                         self.frames.append(frame)
-                        self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
+                        #self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
                         retval = lr
         return retval
 
@@ -224,7 +227,7 @@ class StackTrace():
         prev_ip = None
         so_checked = []
         if self.soMap.isMainText(eip):
-            self.lgr.debug('stackTrace starting in main text')
+            self.lgr.debug('stackTrace starting in main text set prev_ip to 0x%x' %eip)
             been_in_main = True
             prev_ip = eip
         #prev_ip = eip
@@ -245,7 +248,7 @@ class StackTrace():
         #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
-        #self.lgr.debug('doTrace back from isCallToMe')
+        #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
@@ -288,15 +291,28 @@ class StackTrace():
                             ''' should we add ida function analysys? '''
                             if not self.ida_funs.isFun(call_to):
                                 fname, start, end = self.soMap.getSOInfo(call_to)
-                                #self.lgr.debug('so checj of %s' % fname)
+                                #self.lgr.debug('so check of %s' % fname)
                                 if fname is not None:
                                     full_path = self.targetFS.getFull(fname, self.lgr)
                                     self.ida_funs.add(full_path, start)
                             so_checked.append(call_to) 
                         if self.ida_funs.isFun(call_to):
                             if not self.ida_funs.inFun(prev_ip, call_to):
-                                skip_this = True
-                                #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
+                                first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
+                                #self.lgr.debug('first_instruct is %s' % first_instruct)
+                                if self.cpu.architecture == 'arm' and first_instruct.lower().startswith('b '):
+                                    fun_hex, fun = self.getFunName(first_instruct)
+                                    #self.lgr.debug('direct branch 0x%x %s' % (fun_hex, fun))
+                                    if not (self.ida_funs.isFun(fun_hex) and self.ida_funs.inFun(prev_ip, fun_hex)):
+                                        skip_this = True
+                                        #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+                                    else:
+                                        ''' record the direct branch, e.g., B fuFun '''
+                                        frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
+                                        self.frames.append(frame)
+                                else:
+                                    skip_this = True
+                                    #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                         else:
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
@@ -321,7 +337,7 @@ class StackTrace():
                         if fun_hex is not None:
                             self.soCheck(fun_hex)
                                 
-                        self.lgr.debug('ADD STACK FRAME FOR 0x%x %s' % (call_ip, instruct))
+                        #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s.  prev_ip will become 0x%x' % (call_ip, instruct, call_ip))
                         fname = self.soMap.getSOFile(val)
                         if fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
@@ -336,7 +352,7 @@ class StackTrace():
                             been_in_main = True
                             #self.lgr.debug('stackTrace been in main')
                     else:
-                        self.lgr.debug('doTrace not a call? %s' % instruct)
+                        #self.lgr.debug('doTrace not a call? %s' % instruct)
                         frame = self.FrameEntry(call_ip, fname, instruct, ptr, None, None)
                         self.frames.append(frame)
                 else:
@@ -351,7 +367,7 @@ class StackTrace():
                 #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
             if self.max_frames is not None and len(self.frames)>= self.max_frames:
-                self.lgr.debug('stackFrames got max frames, done')
+                #self.lgr.debug('stackFrames got max frames, done')
                 done = True
 
 
