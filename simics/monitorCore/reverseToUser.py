@@ -18,11 +18,17 @@ class ReverseToUser():
         prev_physical = None
         pcell = cpu.physical_memory
         for page_info in pages:
-            writable = memUtils.testBit(page_info.entry, 1)
-            accessed = memUtils.testBit(page_info.entry, 5)
-            if writable or not accessed:
-                self.lgr.debug('will skip %r %r' % (writable, accessed)) 
-                continue
+            if cpu.architecture != 'arm':
+                writable = memUtils.testBit(page_info.entry, 1)
+                accessed = memUtils.testBit(page_info.entry, 5)
+                if writable or not accessed:
+                    #self.lgr.debug('ReverseToUser will skip %r %r' % (writable, accessed)) 
+                    continue
+            else:
+                nx = memUtils.testBit(page_info.entry, 0)
+                if nx:
+                    #self.lgr.debug('ReverseToUser will skip nx')
+                    continue
             self.lgr.debug('phys: 0x%x  logical: 0x%x' % (page_info.physical, page_info.logical))
             if range_start is None:
                 range_start = page_info.physical
