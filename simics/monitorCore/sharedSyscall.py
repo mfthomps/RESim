@@ -718,7 +718,7 @@ class SharedSyscall():
 
 
         ''' if debugging a proc, and clone call, add the new process '''
-        dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
+        dumb_pid, dumb2 = self.context_manager.getDebugPid() 
         if dumb_pid is not None and callname == 'clone':
             if eax == 0:
                 self.lgr.debug('sharedSyscall clone but eax is zero ??? pid is %d' % pid)

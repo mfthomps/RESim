@@ -523,6 +523,8 @@ class reverseToCall():
                 cmd = 'skip-to cycle = %d ' % user_cycles
                 SIM_run_command(cmd)
         else:
+            ''' assume entered kernel due to interrupt? '''
+            ''' cheesy.. go back to user space and then previous instruction? '''
             forward = self.cpu.cycles+1
             cmd = 'skip-to cycle = %d ' % forward
             SIM_run_command(cmd)

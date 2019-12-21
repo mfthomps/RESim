@@ -23,6 +23,7 @@ class SOMap():
         self.text_prog = {}
         self.hap_list = []
         self.stop_hap = None
+        self.ida_funs = None
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -154,7 +155,8 @@ class SOMap():
                full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
 
         start = text_seg.locate
-        self.ida_funs.add(full_path, start)
+        if self.ida_funs is not None:
+            self.ida_funs.add(full_path, start)
 
     def showSO(self, pid=None):
         if pid is None:

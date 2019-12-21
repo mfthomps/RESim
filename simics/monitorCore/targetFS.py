@@ -36,9 +36,12 @@ class TargetFS():
                 else:
                     retval = os.path.join(os.path.dirname(full), real)
             elif not os.path.isfile(full):
+                lgr.debug('TargetFS getFull no file at %s -- use glob' % full)
                 flist = glob.glob(full+'*')
                 if len(flist) > 0:
                     retval = flist[0]
+                else:
+                    lgr.debug('TargetFS getFull, no glob at %s' % (full+'*'))
             else:
                 retval = full
         return retval

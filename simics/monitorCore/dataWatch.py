@@ -14,6 +14,7 @@ class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
     def __init__(self, top, cpu, page_size, context_manager, mem_utils, param, lgr):
+        ''' data watch structures reflecting what we are watching '''
         self.start = []
         self.length = []
         self.cycle = []
