@@ -183,7 +183,7 @@ class Syscall():
         self.task_utils = task_utils
         self.context_manager = context_manager
         ''' mostly a test if we are debugging. not very clean '''
-        pid, dumb, cpu = context_manager.getDebugPid()
+        pid, cpu = context_manager.getDebugPid()
         self.debugging = False
         self.stop_on_call = stop_on_call
         self.debugging_exit = debugging_exit
@@ -653,7 +653,7 @@ class Syscall():
         self.lgr.debug('parseExecve len of arg_string_list %d' % len(arg_string_list))
           
         pid_list = self.context_manager.getThreadPids()
-        db_pid, dumb, dumbcpu = self.context_manager.getDebugPid()
+        db_pid, dumbcpu = self.context_manager.getDebugPid()
         if pid in pid_list and pid != db_pid:
             self.lgr.debug('syscall parseExecve remove %d from list being watched.' % (pid))
             self.context_manager.rmTask(pid)
@@ -1655,7 +1655,7 @@ class Syscall():
         ''' Is this syscall hap watching background processes? '''
         retval = False
         if self.background_break != None:
-            pid, dumb, cpu = self.context_manager.getDebugPid()
+            pid, cpu = self.context_manager.getDebugPid()
             if pid is not None:
                 ''' debugging some process, and we are background.  thus we are in a different context than the process being debugged. '''
                 retval = True
