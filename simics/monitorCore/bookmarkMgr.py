@@ -22,7 +22,9 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-
+'''
+Manage bookmarks.  the __bookmarks key is the text of the bookmark
+'''
 from simics import *
 from collections import OrderedDict
 import memUtils
@@ -55,7 +57,7 @@ class bookmarkMgr():
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         self.lgr.debug('setDebugBookmark mark: %s' % mark)
         if cpu is None: 
-            dum, dum2, cpu = self.context_mgr.getDebugPid() 
+            dum, cpu = self.context_mgr.getDebugPid() 
         cell_name = self.top.getTopComponentName(cpu)
         steps = None
         if cycles is None:
@@ -176,9 +178,23 @@ class bookmarkMgr():
             else:
                 self.lgr.debug('clearOtherBookmarks skipping %s prefix %s keep %s' % (mark, prefix, keep_mark))
 
+    def getSorted(self):
+        retval = []
+        d = OrderedDict()
+        for mark in self.__bookmarks:
+            d[self.__bookmarks[mark].cycles] = mark
+        for cycle in sorted(d):
+            retval.append(d[cycle])
+            #print('%s 0x%x' % (d[cycle], cycle))
+
+        return retval
+
     def listBookmarks(self):
         i = 0
-        for mark in self.__bookmarks:
+        marks = self.getSorted()
+        #for mark in self.__bookmarks:
+        for mark in marks:
+            #for mark in self.__bookmarks:
             i += 1
             print('%d : %s' % (i, mark))
         self.lgr.debug('listBookmarks done')
@@ -193,7 +209,7 @@ class bookmarkMgr():
             self.lgr.error('goToDebugBookmark could not find cycle for mark %s' % mark)
             return
         sys.stderr = open('err.txt', 'w')
-        dum, dum2, cpu = self.context_mgr.getDebugPid() 
+        dum, cpu = self.context_mgr.getDebugPid() 
         self.context_mgr.clearExitBreaks()
         start_cycle = self.getCycle('_start+1')
         done = False
@@ -246,7 +262,7 @@ class bookmarkMgr():
         return self.__mark_msg[self.__origin_bookmark]
 
     def skipToOrigin(self):
-        dum, dum2, cpu = self.context_mgr.getDebugPid() 
+        dum, cpu = self.context_mgr.getDebugPid() 
         origin = self.__bookmarks[self.__origin_bookmark].cycles
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % origin)
@@ -261,7 +277,7 @@ class bookmarkMgr():
     def skipToFirst(self, cpu=None):
         # TBD NOT USED
         if cpu is None:
-            dum, dum2, cpu = self.context_mgr.getDebugPid() 
+            dum, cpu = self.context_mgr.getDebugPid() 
         first = self.__bookmarks['_start+1'].cycles
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % first)
