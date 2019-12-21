@@ -88,6 +88,7 @@ class WriteMarks():
             else:
                 self.lgr.error('writeMarks dataWrite, len of prev_ip is zero?')
         self.recordIP(ip)
+        return len(self.mark_list)
 
     def getWatchMarks(self):
         retval = []
