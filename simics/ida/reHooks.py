@@ -1,4 +1,5 @@
 import idaapi
+import ida_funcs
 import ida_bytes
 import ida_struct
 import idautils
@@ -12,6 +13,21 @@ import regFu
 import getAddrCount
 import setAddrValue
 import setAddrString
+
+def getRegVarValue(reg):
+    ea = idaapi.get_screen_ea()
+    regvar_map = {}
+    fn = ida_funcs.get_func(ea)
+    if fn:
+        for rv in fn.regvars:
+            regvar_map[rv.user] = rv.canon
+    if reg in regvar_map:
+        reg = regvar_map[reg]
+    else:
+        print('%s not in map' % (reg))
+    retval = idc.get_reg_value(reg)
+    return retval
+
 
 def getHighlight():
     v = ida_kernwin.get_current_viewer()
@@ -35,12 +51,12 @@ def getHex(s):
     return retval
 
 def getRegOffset(eax, reg, opnum):
-    try:
-        reg_val = idc.get_reg_value(reg)
-    except: 
-        ''' reg is a symbol, get its value and read memory at that address '''
-        x = idc.get_name_ea_simple(reg)
-        reg_val = idc.read_dbg_dword(x)
+    reg_val = getRegVarValue(reg)
+    #except: 
+    #    ''' reg is a symbol, get its value and read memory at that address '''
+    #    x = idc.get_name_ea_simple(reg)
+    #    reg_val = idc.read_dbg_dword(x)
+    #    print('reg %s is symbol, got x of 0x%x, read that to get 0x%x' % (reg, x, reg_val))
     offset = idc.get_operand_value(eax, opnum)
     retval = reg_val+offset
     return retval 
@@ -51,35 +67,36 @@ def getRefAddr():
         try decoding that.
     '''
     retval = None
-    eax = idaapi.get_screen_ea()
-    flags = ida_bytes.get_full_flags(eax)
+    ea = idaapi.get_screen_ea()
+    flags = ida_bytes.get_full_flags(ea)
     if ida_bytes.is_code(flags):
         opnum = idaapi.get_opnum()
-        op_type = idc.get_operand_type(eax, opnum)
-        op = idc.print_operand(eax, opnum)
+        op_type = idc.get_operand_type(ea, opnum)
+        op = idc.print_operand(ea, opnum)
+        print('is code, type %d op %s' % (op_type, op))
         #if op_type == idc.o_disp:
         if op_type == 4:
             ''' displacement from reg address '''
             val = op.split('[', 1)[1].split(']')[0]
             if ',' in val:
                 reg = val.split(',')[0]
-                retval = getRegOffset(eax, reg, opnum)
+                retval = getRegOffset(ea, reg, opnum)
             elif '+' in val:
                 reg = val.split('+')[0]
-                retval = getRegOffset(eax, reg, opnum)
+                retval = getRegOffset(ea, reg, opnum)
             else:
                 try:
-                    retval = idc.get_reg_value(val)
+                    retval = getRegVarValue(val)
                 except: 
                    print('%s not a reg' % reg)
         elif op_type == 3:
-            retval = idc.get_operand_value(eax, opnum)
+            retval = idc.get_operand_value(ea, opnum)
         elif op_type == 1:
-            retval = idc.get_reg_value(op)
+            retval = getRegVarValue(op)
         else:
             print('Op type %d not handled' % op_type)
     else:
-        return eax
+        return ea
     return retval
    
 
@@ -99,6 +116,7 @@ def getFieldName(ea, offset):
            use MOD to get offset into element strcture
            get name can continue; if no name, bail
     '''
+    print('getFieldName 0x%x' % ea)
     full_name = None        
     ti = idaapi.opinfo_t()
     f = ida_bytes.get_full_flags(ea)
@@ -168,7 +186,7 @@ class ModRegHandler(idaapi.action_handler_t):
             self.isim = isim
         def activate(self, ctx):
             highlighted = getHighlight()
-            current = idc.get_reg_value(highlighted)
+            current = getRegVarValue(highlighted)
             default = '%x' % current
             print('default %s' % default)
             #prompt = 'Value to write to %s (in hex, no prefix)' % highlighted
@@ -361,8 +379,8 @@ class StructFieldHandler(idaapi.action_handler_t):
 
     
         def activate(self, ctx):
-            print('Structure field')
             ref_addr = getRefAddr()
+            print('Structure field ref_addr 0x%x' % ref_addr)
             if ref_addr is not None:
 
                 heads = idautils.Heads(0,ref_addr)
@@ -373,6 +391,7 @@ class StructFieldHandler(idaapi.action_handler_t):
                     print('No heads between zero and ref_addr 0x%x?' % ref_addr)
                     return
                 offset = ref_addr - h
+                print('call getFieldName h 0x%x offset 0%d' % (h, offset))
                 field = getFieldName(h, offset)
                 if field is not None:
                     print('Field offset %d from 0x%x is %s' % (offset, h, field))
