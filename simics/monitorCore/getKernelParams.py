@@ -322,7 +322,9 @@ class GetKernelParams():
             self.param.ts_children_list_head = real_parent_offset + self.getOff(2)
             self.param.ts_sibling_list_head = real_parent_offset + self.getOff(4)
             self.param.ts_group_leader = real_parent_offset + self.getOff(6)
-            self.param.ts_thread_group_list_head = self.param.ts_group_leader+self.getOff(15)
+            # pidtype_max is 3?  pid_link is hlist_node and pointer.  hlist_node is two pointers.  total 4 words x 3 is 12 words?
+            # no idea how we get 8 words from group leader...  works on arm
+            self.param.ts_thread_group_list_head = self.param.ts_group_leader+self.getOff(14)
 
             parent = self.mem_utils.readPtr(self.cpu, task+self.param.ts_parent) 
             group_leader = self.mem_utils.readPtr(self.cpu, task+self.param.ts_group_leader) 
