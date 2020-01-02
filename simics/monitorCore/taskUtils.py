@@ -532,9 +532,9 @@ class TaskUtils():
     def getExecProgAddr(self, pid, cpu):
         return self.exec_addrs[pid].prog_addr
 
-    def modExecParam(self, pid, cpu, diddle):
+    def modExecParam(self, pid, cpu, dmod):
         for arg_addr in self.exec_addrs[pid].arg_addr_list:
-            if diddle.checkString(cpu, arg_addr, 100):
+            if dmod.checkString(cpu, arg_addr, 100):
                 SIM_break_simulation('modified execve param')
      
     def readExecParamStrings(self, pid, cpu):

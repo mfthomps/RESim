@@ -9,7 +9,7 @@ import memUtils
 import stopFunction
 import pageUtils
 import elfText
-import diddler
+import dmod
 import sys
 import copy
 '''
@@ -605,7 +605,7 @@ class Syscall():
         
             
         if cp is not None: 
-            if cp.match_param.__class__.__name__ == 'Diddler':
+            if cp.match_param.__class__.__name__ == 'Dmod':
                self.task_utils.modExecParam(pid, self.cpu, cp.match_param)
             else: 
 
@@ -1165,12 +1165,12 @@ class Syscall():
             exit_info.old_fd = fd
             for call_param in syscall_info.call_params:
                 #self.lgr.debug('llseek call_params class is %s' % call_param.match_param.__class__.__name__)
-                if call_param.match_param.__class__.__name__ == 'DiddleSeek':
+                if call_param.match_param.__class__.__name__ == 'DmodSeek':
                     if pid == call_param.match_param.pid and fd == call_param.match_param.fd:
                         self.lgr.debug('syscall llseek would adjust by %d' % call_param.match_param.delta)
                         ''' assume seek cur, moving backwards, so negate the delta Assumes 32-bit x86?'''
                         if low is None:
-                            self.lgr.error('syscall llseek diddle no low offset in frame ')
+                            self.lgr.error('syscall llseek dmod no low offset in frame ')
                         else:
                             new_value = low + call_param.match_param.delta
                             self.mem_utils.setRegValue(self.cpu, 'param3', new_value)
@@ -1195,8 +1195,8 @@ class Syscall():
                         self.lgr.debug('syscall read add param break_sim is %r' % call_param.break_simulation)
                         exit_info.call_params = call_param
                         break
-                elif call_param.match_param.__class__.__name__ == 'Diddler':
-                    ''' handle read diddle during syscall return '''
+                elif call_param.match_param.__class__.__name__ == 'Dmod':
+                    ''' handle read dmod during syscall return '''
                     exit_info.call_params = call_param
                     break
 
@@ -1215,18 +1215,18 @@ class Syscall():
                     self.lgr.debug('write match param for pid:%d is string, add to exit info' % pid)
                     exit_info.call_params = call_param
                     break
-                elif call_param.match_param.__class__.__name__ == 'Diddler':
+                elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if count < 4028:
-                        self.lgr.debug('syscall write check diddler count %d' % count)
-                        diddler = call_param.match_param
-                        if diddler.checkString(self.cpu, frame['param2'], count):
-                            self.lgr.debug('syscall write found final diddler %s' % diddler.getPath())
+                        self.lgr.debug('syscall write check dmod count %d' % count)
+                        mod = call_param.match_param
+                        if mod.checkString(self.cpu, frame['param2'], count):
+                            self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
                             self.top.stopTrace(cell_name=self.cell_name, syscall=self)
                             if not self.top.remainingCallTraces() and SIM_simics_is_running():
                                 self.top.notRunning(quiet=True)
-                                SIM_break_simulation('diddle done on cell %s file: %s' % (self.cell_name, diddler.getPath()))
+                                SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
                             else:
-                                print('%s performed' % diddler.getPath())
+                                print('%s performed' % mod.getPath())
                 else:
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  

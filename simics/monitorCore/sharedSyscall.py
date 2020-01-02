@@ -565,19 +565,19 @@ class SharedSyscall():
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False)
-                elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Diddler':
+                elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Dmod':
                     if eax < 16000:
-                        diddler = exit_info.call_params.match_param
-                        self.lgr.debug('sharedSyscall %s read check diddler %s count %d %s' % (self.cell_name, diddler.getPath(), eax, s))
-                        if diddler.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
-                            self.lgr.debug('sharedSyscall read found final diddler')
+                        dmod = exit_info.call_params.match_param
+                        self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
+                        if dmod.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
+                            self.lgr.debug('sharedSyscall read found final dmod')
                             self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                             self.stopTrace()
                             if not self.top.remainingCallTraces() and SIM_simics_is_running():
                                 self.top.notRunning(quiet=True)
-                                SIM_break_simulation('diddle done on cell %s file: %s' % (self.cell_name, diddler.getPath()))
+                                SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                             else:
-                                print('%s performed' % diddler.getPath())
+                                print('%s performed' % dmod.getPath())
                     exit_info.call_params = None
 
 

@@ -62,7 +62,7 @@ import idaFuns
 import traceMgr
 import binder
 import connector
-import diddler
+import dmod
 import targetFS
 import cellConfig
 import userIterators
@@ -514,13 +514,13 @@ class GenMonitor():
                         self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
                         self.finishInit(cell_name)
                         run_cycles = self.getBootCycleChunk()
-                        if self.run_from_snap is None and 'DIDDLE' in self.comp_dict[cell_name]:
+                        if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
                             self.is_monitor_running.setRunning(False)
-                            dlist = self.comp_dict[cell_name]['DIDDLE'].split(';')
-                            for diddle in dlist:
-                                diddle = diddle.strip()
-                                self.runToDiddle(diddle, cell_name=cell_name)
-                                print('Diddle %s pending for cell %s, need to run forward' % (diddle, cell_name))
+                            dlist = self.comp_dict[cell_name]['DMOD'].split(';')
+                            for dmod in dlist:
+                                dmod = dmod.strip()
+                                self.runToDmod(dmod, cell_name=cell_name)
+                                print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
                     else:
                         self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -1890,7 +1890,7 @@ class GenMonitor():
         if cell_name is None:
             cell_name = self.target
         cell = self.cell_config.cell_context[cell_name]
-        ''' qualify call with name, e.g, for multiple diddles on reads '''
+        ''' qualify call with name, e.g, for multiple dmod on reads '''
         call_name = call
         if name is not None:
             call_name = '%s-%s' % (call, name)
@@ -1925,22 +1925,22 @@ class GenMonitor():
         call_params.nth = nth
         self.runTo(call, call_params)
 
-    def setDiddle(self, dfile):
-        self.runToDiddle(dfile, cell_name = self.target)
+    def setDmod(self, dfile):
+        self.runToDmod(dfile, cell_name = self.target)
 
-    def runToDiddle(self, dfile, cell_name=None, background=False):
+    def runToDmod(self, dfile, cell_name=None, background=False):
         if cell_name is None:
             cell_name = self.target
-        diddle = diddler.Diddler(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)
-        operation = diddle.getOperation()
-        call_params = syscall.CallParams(operation, diddle, break_simulation=True)        
+        mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)
+        operation = mod.getOperation()
+        call_params = syscall.CallParams(operation, mod, break_simulation=True)        
         if cell_name is None:
             cell_name = self.target
             run = True
         else:
             run = False
-        operation = diddle.getOperation()
-        self.lgr.debug('runToDiddle file %s cellname %s operation: %s' % (dfile, cell_name, operation))
+        operation = mod.getOperation()
+        self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
         self.runTo(operation, call_params, cell_name=cell_name, run=run, background=background, name=dfile)
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
 

@@ -17,13 +17,13 @@ def nextLine(fh):
        retval = line.strip('\n')
    return retval
 
-class DiddleSeek():
+class DmodSeek():
     def __init__(self, delta, pid, fd):
         self.delta = delta
         self.pid = pid
         self.fd = fd
 
-class Diddler():
+class Dmod():
     class Fiddle():
         def __init__(self, match, was, becomes, cmds=[]):
             self.match = match
@@ -51,9 +51,9 @@ class Diddler():
                if len(parts) > 1:
                    self.operation = parts[1]
                else:
-                   self.lgr.error('Diddle command missing operation %s' % kind_line)
+                   self.lgr.error('Dmod command missing operation %s' % kind_line)
                    return
-               self.lgr.debug('Diddle of kind %s  cell is %s' % (self.kind, self.cell_name))
+               self.lgr.debug('Dmod of kind %s  cell is %s' % (self.kind, self.cell_name))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
@@ -97,33 +97,33 @@ class Diddler():
                        becomes = nextLine(fh) 
                        self.fiddles.append(self.Fiddle(match, was, becomes))
                else: 
-                   print('Unknown diddler kind: %s' % self.kind)
+                   print('Unknown dmod kind: %s' % self.kind)
                    return
-            self.lgr.debug('Diddler loaded %d fiddles of kind %s' % (len(self.fiddles), self.kind))
+            self.lgr.debug('Dmod loaded %d fiddles of kind %s' % (len(self.fiddles), self.kind))
         else:
-            self.lgr.debug('Diddler, no file at %s' % path)
+            self.lgr.debug('Dmod, no file at %s' % path)
 
     def subReplace(self, cpu, s, addr):
         rm_this = None
         for fiddle in self.fiddles:
-            #self.lgr.debug('Diddle checkString  %s to  %s' % (fiddle.match, s))
+            #self.lgr.debug('Dmod checkString  %s to  %s' % (fiddle.match, s))
             try:
                 match = re.search(fiddle.match, s, re.M|re.I)
             except:
-                self.lgr.error('diddler subReplace re.search failed on match: %s, str %s' % (fiddle.match, s))
+                self.lgr.error('dmod subReplace re.search failed on match: %s, str %s' % (fiddle.match, s))
                 return
             if match is not None:
                 try:
                     was = re.search(fiddle.was, s, re.M|re.I)
                 except:
-                    self.lgr.error('diddler subReplace re.search failed on was: %s, str %s' % (fiddle.was, s))
+                    self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (fiddle.was, s))
                     return
                 if was is not None:
-                    self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
+                    self.lgr.debug('Dmod replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
                     new_string = re.sub(fiddle.was, fiddle.becomes, s)
                     self.mem_utils.writeString(cpu, addr, new_string)
                 else:
-                    #self.lgr.debug('Diddle found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                    #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
                     pass
                      
                 rm_this = fiddle
@@ -136,7 +136,7 @@ class Diddler():
         for fiddle in self.fiddles:
             lines = s.splitlines()
             for line in lines:
-                #self.lgr.debug('Diddle check line %s' % (line))
+                #self.lgr.debug('Dmod check line %s' % (line))
                 line = line.strip()
                 if len(line) == 0 or line.startswith('#'):
                     continue
@@ -147,28 +147,28 @@ class Diddler():
                     return None
             if checkline is None:
                 continue
-            self.lgr.debug('Diddle checkString  %s to line %s' % (fiddle.match, checkline))
+            self.lgr.debug('Dmod checkString  %s to line %s' % (fiddle.match, checkline))
             try:
                 was = re.search(fiddle.was, checkline, re.M|re.I)
             except:
-                self.lgr.error('diddler subReplace re.search failed on was: %s, str %s' % (fiddle.was, checkline))
+                self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (fiddle.was, checkline))
                 return None
             if was is not None:
-                self.lgr.debug('Diddle replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, checkline))
+                self.lgr.debug('Dmod replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, checkline))
                 new_string = re.sub(fiddle.was, fiddle.becomes, s)
                 self.mem_utils.writeString(cpu, addr, new_string)
                 new_line = re.sub(fiddle.was, fiddle.becomes, checkline)
                 if len(checkline) != len(new_line):
                     delta = len(checkline) - len(new_line)
-                    diddle_lseek = DiddleSeek(delta, pid, fd)
+                    diddle_lseek = DmodSeek(delta, pid, fd)
                     operation = '_llseek'
                     call_params = syscall.CallParams(operation, diddle_lseek)        
                     self.top.runTo(operation, call_params, run=False, ignore_running=True)
-                    self.lgr.debug('Diddle set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
+                    self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
                 else:
                     self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
             else:
-                #self.lgr.debug('Diddle found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
                 pass
                  
             rm_this = fiddle
@@ -185,7 +185,7 @@ class Diddler():
             count_addr = esp + 3*self.mem_utils.WORD_SIZE
             self.mem_utils.writeWord(cpu, count_addr, count)
             #cpu.iface.int_register.write(reg_num, count)
-            self.lgr.debug('diddle fullReplace %s in %s wrote %d bytes' % (fiddle.match, s, count))
+            self.lgr.debug('dmod fullReplace %s in %s wrote %d bytes' % (fiddle.match, s, count))
             rm_this = fiddle
             #SIM_break_simulation('deeedee')
         return rm_this
@@ -211,7 +211,7 @@ class Diddler():
         retval = False
         byte_string, byte_array = self.mem_utils.getBytes(cpu, count, addr)
         if byte_array is None:
-            self.lgr.debug('Diddle checkstring bytearray None from 0x%x' % addr)
+            self.lgr.debug('Dmod checkstring bytearray None from 0x%x' % addr)
             return retval
         s = ''.join(map(chr,byte_array))
         if self.kind == 'sub_replace':
@@ -226,16 +226,16 @@ class Diddler():
             print('Unknown kind %s' % self.kind)
             return
         if rm_this is not None:
-            self.lgr.debug('Diddler checkString found match cell %s path %s' % (self.cell_name, self.path))
+            self.lgr.debug('Dmod checkString found match cell %s path %s' % (self.cell_name, self.path))
             self.fiddles.remove(rm_this)
             if len(self.fiddles) == 0:
-                self.lgr.debug('Diddler checkString removed last fiddle')
+                self.lgr.debug('Dmod checkString removed last fiddle')
                 retval = True
         return retval
 
     def stopHap(self, fiddle, one, exception, error_string):
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        self.lgr.debug('Diddler stop hap')
+        self.lgr.debug('Dmod stop hap')
         for cmd in fiddle.cmds:
             self.lgr.debug('run command %s' % cmd)
             SIM_run_command(cmd)
@@ -249,4 +249,4 @@ class Diddler():
         
 if __name__ == '__main__':
     print('begin')
-    d = Diddler('dog.diddle')
+    d = Dmod('dog.dmod')
