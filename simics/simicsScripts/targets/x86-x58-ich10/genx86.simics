@@ -32,7 +32,7 @@ if $use_disk3{
     connect $southbridge.sata_slot[3] $disk3.sata_slot
 }
 
-#instantiate-components
+instantiate-components
 
 $system.cell->time_quantum = 0.0001
 
@@ -43,31 +43,20 @@ connect $system.serconsole1.serial $southbridge.serial[0]
 create-text-console-comp $system.serconsole2
 connect $system.serconsole2.serial $southbridge.serial[1]
 
-if $simics_version == 5 {
-    if defined use_broadcom{
-       $eth0 = $host_name.mb.nb.bcm5704c.eth0
-       $eth2 = $host_name.mb.nb.bcm5704c2.eth1
-    }else{
-       # ignore naming, simics cli fu
-       $eth0 = $motherboard.nb.$eth_dev.eth
-       $eth2 = $motherboard.nb.$eth_dev+2.eth
-       $eth1 = $host_name.mb.sb.eth_slot
-    }
+if defined use_broadcom{
+   $eth0 = $host_name.mb.nb.bcm5704c.connector_ethernet0
+   $eth2 = $host_name.mb.nb.bcm5704c2.connector_ethernet1
 }else{
-    if defined use_broadcom{
-       $eth0 = $host_name.mb.nb.bcm5704c.connector_ethernet0
-       $eth2 = $host_name.mb.nb.bcm5704c2.connector_ethernet1
-    }else{
-       # ignore naming, simics cli fu
-       $eth0 = $motherboard.nb.$eth_dev.connector_ethernet
-       $eth2 = $motherboard.nb.$eth_dev+2.connector_ethernet
-       $eth1 = $host_name.mb.sb.eth_slot
-    }
+   # ignore naming, simics cli fu
+   $eth0 = $motherboard.nb.$eth_dev.connector_ethernet
+   $eth2 = $motherboard.nb.$eth_dev+2.connector_ethernet
+   $eth3 = "None"
+   $eth1 = $host_name.mb.sb.eth_slot
 }
 
-#$switch0_con = (switch0.get-free-connector)
-#$switch1_con = (switch1.get-free-connector)
-#$switch2_con = (switch2.get-free-connector)
+$switch0_con = (switch0.get-free-connector)
+$switch1_con = (switch1.get-free-connector)
+$switch2_con = (switch2.get-free-connector)
 
 #echo "eth0 is "+$eth0
 #connect $eth0 cnt1 = $switch0_con

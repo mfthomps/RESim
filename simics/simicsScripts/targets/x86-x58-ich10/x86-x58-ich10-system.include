@@ -106,6 +106,7 @@ if defined use_broadcom{
    echo "pci_slot[0] gets mac address "+ $mac_address_1+" and "+ $mac_address_2
    connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
 }else{
+   # ignore name assignments, simics cli fu
    if defined mac_address_1     {
       if $eth_dev == "i82559"{
           $eth_comp = (create-pci-i82559 name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
@@ -118,7 +119,6 @@ if defined use_broadcom{
       }
       echo "pci_slot[0] gets mac address "+ $mac_address_1
       connect $motherboard.nb.pci_slot[0] $eth_comp.connector_pci_bus
-      $eth1 = $motherboard.nb.$eth_dev.connector_ethernet
    }
    if defined mac_address_2 {
       if $eth_dev == "i82559"{
@@ -132,22 +132,21 @@ if defined use_broadcom{
       }
       echo "pci_slot[1] gets mac address "+ $mac_address_2
       connect $motherboard.nb.pci_slot[1] $eth_comp2.connector_pci_bus
-      $eth2 = $motherboard.nb.$eth_dev+2.connector_ethernet
    }
-   if $mac_address_3 != "None"{
-      echo "mac addr 3 is "+$mac_address_3
+   if defined mac_address_3 {
       if $eth_dev == "i82559"{
-          $eth_comp3 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          $eth_comp3 = (create-pci-i82559 name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
       }else if $eth_dev == "i82546bg" {
-          $eth_comp3 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          $eth_comp3 = (create-pci-i82546gc name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
       }else if $eth_dev == "i82543gc" {
-          $eth_comp3 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          echo "eh? pci_slot[0] gets mac address "+ $mac_address_3
+          $eth_comp3 = (create-pci-i82543gc name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
+      connect $motherboard.sb.pci_slot[0] $eth_comp3.connector_pci_bus
       echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
-      connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
-      $eth3 = $motherboard.nb.$eth_dev+3.connector_ethernet
+
    }
 }
 
