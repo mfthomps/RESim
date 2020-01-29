@@ -48,6 +48,9 @@ decl{
     result eth3 : string
 
 }
+$eth1 = "None"
+$eth2 = "None"
+$eth3 = "None"
 if $sata_mode {
     if not defined bios        {$bios            = "seabios-simics-x58-ich10-sata-1.11-20180508.bin"}
 } else {
@@ -64,7 +67,8 @@ load-module x86-comp
 load-module x86-nehalem-comp
 load-module x58-ich10-comp
 load-module memory-comp
-load-module os-awareness
+load-module i82574-v2-comp
+#load-module os-awareness
 
 $system = (create-chassis-x58-ich10 name = $host_name)
 
@@ -168,9 +172,9 @@ if $sata_mode {
 }
 
 ### process tracker
-if $os_awareness_enable {
-    create-os-awareness name = $system + ".software"
-}
+#if $os_awareness_enable {
+#    create-os-awareness name = $system + ".software"
+#}
 
 ### USB Tablet
 if ($connect_usb_tablet == TRUE) {
@@ -196,6 +200,8 @@ if defined use_broadcom{
       }else if $eth_dev == "i82543gc" {
           $eth_comp = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
           #$eth_comp = (create-pci-dec21140a-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
@@ -211,6 +217,8 @@ if defined use_broadcom{
           $eth_comp2 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
       }else if $eth_dev == "i82543gc" {
           $eth_comp2 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp2 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
@@ -226,11 +234,22 @@ if defined use_broadcom{
           $eth_comp3 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
       }else if $eth_dev == "i82543gc" {
           $eth_comp3 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp3 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          echo "eth_comp3 is "+$eth_comp3
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
-      echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
-      connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
+      # TBD simics error  "AttributeError: 'pre_obj' object has no attribute 'pci_devices'"
+      if $eth_dev == "i82574_v2" {
+          instantiate-components 
+          echo "pci express pcie_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.nb.pcie_slot[0] $eth_comp3.pci_bus
+          echo "connect "+$motherboard+".nb.pcie_slot[0] "+$eth_comp3+".pci_bus"
+      }else{
+          echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
+      }
       $eth3 = $motherboard.nb.$eth_dev+3.eth
    }
 }
