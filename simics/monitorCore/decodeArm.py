@@ -163,7 +163,7 @@ def armLDM(cpu, instruct, reg, lgr):
                 op0 = op0[:-1]
             reg_addr = getRegValue(cpu, op0)
             retval = reg_addr + (offset * mul)
-            lgr.debug('decodeArm armLDM reg %s, base %s base reg_addr value 0x%x index %d before %d mul %d returning 0x%x' % (reg, op0, reg_addr, index, before, mul, retval))
+            #lgr.debug('decodeArm armLDM reg %s, base %s base reg_addr value 0x%x index %d before %d mul %d returning 0x%x' % (reg, op0, reg_addr, index, before, mul, retval))
         else:
             lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
