@@ -176,7 +176,7 @@ class StackTrace():
                 cur_fun = self.ida_funs.getFun(eip)
                 ret_to = self.ida_funs.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
-                    #self.lgr.debug('isCallToMe eip: 0x%x (fun 0x%x) lr 0x%x (fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
                     pass
                 if cur_fun != ret_to:
                     try:
@@ -185,23 +185,24 @@ class StackTrace():
                         self.lgr.debug('StackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
                         return retval 
                     if instruct[1].startswith(self.callmn):
-                        #self.lgr.debug('memsomething lr 0x%x  call_in 0x%x  ins: %s' % (lr, call_instr, instruct[1]))
                         fun_hex, fun = self.getFunName(instruct[1])
-                        if fun is not None:
-                            new_instruct = '%s   %s' % (self.callmn, fun)
-                        else:
-                            if fun_hex in self.relocate_funs:
-                                fun = self.relocate_funs[fun_hex]
-                                new_instruct = '%s   0x%x' % (self.callmn, fun)
-                            elif fun_hex is not None:
-                                new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
+                        if fun_hex == cur_fun:
+                            if fun is not None:
+                                new_instruct = '%s   %s' % (self.callmn, fun)
+                                self.lgr.debug('fun not none %s' % fun)
                             else:
-                                self.lgr.debug('stackFrame isCallToMe, no function call found in %s' % instruct[1])
-                                return retval
-                        frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
-                        self.frames.append(frame)
-                        #self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
-                        retval = lr
+                                self.lgr.debug('fun is None')
+                                if fun_hex in self.relocate_funs:
+                                    fun = self.relocate_funs[fun_hex]
+                                    new_instruct = '%s   0x%x' % (self.callmn, fun)
+                                    self.lgr.debug('fun relocate %s' % fun)
+                                else:
+                                    self.lgr.debug('fun_hex is 0x%x' % fun_hex)
+                                    new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
+                            frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
+                            self.frames.append(frame)
+                            self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
+                            retval = lr
         return retval
 
     def doTrace(self):
@@ -305,14 +306,14 @@ class StackTrace():
                                     #self.lgr.debug('direct branch 0x%x %s' % (fun_hex, fun))
                                     if not (self.ida_funs.isFun(fun_hex) and self.ida_funs.inFun(prev_ip, fun_hex)):
                                         skip_this = True
-                                        #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+                                        #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                     else:
                                         ''' record the direct branch, e.g., B fuFun '''
                                         frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                         self.frames.append(frame)
                                 else:
                                     skip_this = True
-                                    #self.lgr.debug('StackTrace addr 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
+                                    #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                         else:
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
