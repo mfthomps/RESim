@@ -6,7 +6,7 @@ the hap.  Designed to watch a single thread group.
 There is one instance of this module per cell.
 '''
 class GenBreakpoint():
-    def __init__(self, cell, addr_type, mode, addr, length, flags, handle, lgr):
+    def __init__(self, cell, addr_type, mode, addr, length, flags, handle, lgr, prefix=None):
         self.cell = cell
         self.addr_type = addr_type
         self.mode = mode
@@ -16,6 +16,7 @@ class GenBreakpoint():
         self.break_num = None
         self.lgr = lgr
         self.handle = handle
+        self.prefix = prefix
 
         self.set()
 
@@ -60,9 +61,15 @@ class GenHap():
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
 
     def set(self, immediate=True):
+        ''' NOTE: different calls to SIM_brekapoint below '''
         if len(self.breakpoint_list) > 1:
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+                if bp.prefix is not None:
+                    command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                    SIM_run_alone(SIM_run_command, command)
+                    #self.lgr.debug('contextManager prefix cmd: %s' % command)
+
                 #self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
             bs = self.breakpoint_list[0]
             be = self.breakpoint_list[-1]
@@ -78,6 +85,10 @@ class GenHap():
             bp = self.breakpoint_list[0]
             #self.lgr.debug('bp.cell is %s' % str(bp.cell))
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+            if bp.prefix is not None:
+                command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                SIM_run_alone(SIM_run_command, command)
+                #self.lgr.debug('contextManager prefix cmd: %s' % command)
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -194,7 +205,7 @@ class GenContextMgr():
         self.break_handle = self.break_handle+1
         return self.break_handle 
 
-    def genBreakpoint(self, cell, addr_type, mode, addr, length, flags):
+    def genBreakpoint(self, cell, addr_type, mode, addr, length, flags, prefix=None):
         ''' create a GenContextManager breakpoint.  This is not yet set.
             Determine if the context should be resim, e.g., only when one of our
             debugging processes is schedule.
@@ -203,9 +214,9 @@ class GenContextMgr():
         if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
             cell = self.resim_context
             #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
-        bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr) 
+        bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
-        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d' % (handle, len(self.breakpoints)))
+        self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
         return handle
 
     def genDeleteBreakpoint(self, handle):
