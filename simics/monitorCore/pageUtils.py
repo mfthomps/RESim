@@ -31,6 +31,7 @@ class PtableInfo():
     def __init__(self):
         self.pdir_protect = None
         self.ptable_protect = None
+        self.page_protect = None
         self.ptable_exists = False
         self.page_exists = False
         self.pdir_addr = None
@@ -40,11 +41,15 @@ class PtableInfo():
         self.nx = 0
         self.entry = None
     def valueString(self):
-        retval =  'pdir_protect: %s ptable_protect: %s ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), str(self.ptable_protect), self.ptable_exists, self.page_exists)
+        retval =  'pdir_protect: %s ptable_protect: %s page_protect %s  ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), 
+             str(self.ptable_protect), str(self.page_protect), self.ptable_exists, self.page_exists)
         if self.ptable_addr is not None:
             retval = retval + ' ptable_addr: 0x%x' % self.ptable_addr
-        if self.page_addr is not None:
-            retval = retval + ' page_addr: 0x%x  nx:%d entry:0x%x' % (self.page_addr, self.nx, self.entry)
+        if self.entry is not None:
+            if self.page_addr is not None:
+                retval = retval + ' page_addr: 0x%x  nx:%d entry:0x%x' % (self.page_addr, self.nx, self.entry)
+        else:
+            retval = retval + ' page-addr: 0x%x  nx: %d  Entry is None' % (self.page_addr, self.nx) 
         return retval
 
 class PageAddrInfo():
@@ -281,8 +286,10 @@ def findPageTable(cpu, addr, lgr):
         return findPageTableArm(cpu, addr, lgr)
 
     elif isIA32E(cpu):
+        #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr) 
     else:
+        #lgr.debug('findPageTable not IA32E')
         ptable_info = PtableInfo()
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
@@ -328,6 +335,7 @@ def findPageTable(cpu, addr, lgr):
             #lgr.debug('phys addr is 0x%x' % paddr)
             return ptable_info
         else:
+            #lgr.debug('call findPageTableExtend')
             return findPageTableExtended(cpu, addr, lgr)
 
 def findPageTableExtended(cpu, addr, lgr):
@@ -341,7 +349,7 @@ def findPageTableExtended(cpu, addr, lgr):
         cr4 = cpu.iface.int_register.read(reg_num)
         ''' determine if PAE being used '''
         addr_extend = memUtils.testBit(cr4, 5)
-        #print('addr_extend is %d' % addr_extend)
+        #lgr.debug('addr_extend is %d' % addr_extend)
         if addr_extend != 0:
             ''' 
             Extended page table.  
@@ -378,7 +386,7 @@ def findPageTableExtended(cpu, addr, lgr):
                 #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
             except:
                 entry = 0
-                #lgr.debug('pageUtils nothing mapped for ptable_entry_addr 0x%x' % ptable_entry_addr)
+                lgr.debug('pageUtils nothing mapped for ptable_entry_addr 0x%x' % ptable_entry_addr)
             if entry == 0:
                 return ptable_info
             
@@ -392,6 +400,7 @@ def findPageTableExtended(cpu, addr, lgr):
             return ptable_info
         else:
             lgr.error('addr_extended is zero?')
+        return ptable_info
 
 def isIA32E(cpu):
     reg_num = cpu.iface.int_register.get_number("cr4")
