@@ -330,6 +330,13 @@ class memUtils():
         else:
             return None
 
+    def readMemory(self, cpu, vaddr, size):
+        phys = self.v2p(cpu, vaddr)
+        if phys is not None:
+            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size)
+        else:
+            return None
+
     def getRegValue(self, cpu, reg):
         if reg in self.regs:
             reg_num = cpu.iface.int_register.get_number(self.regs[reg])
