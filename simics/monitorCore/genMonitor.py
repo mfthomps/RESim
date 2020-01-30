@@ -68,6 +68,7 @@ import cellConfig
 import userIterators
 import trackFunctionWrite
 import pageUtils
+import ropCop
 
 import json
 import pickle
@@ -114,6 +115,7 @@ class GenMonitor():
         self.trackFunction = {}
         self.traceFiles = {}
         self.sharedSyscall = {}
+        self.ropCop = {}
 
 
 
@@ -623,6 +625,8 @@ class GenMonitor():
                         self.dataWatch[self.target].setIdaFuns(self.ida_funs)
                         self.dataWatch[self.target].setUserIterators(self.user_iterators)
                         self.dataWatch[self.target].setRelocatables(self.relocate_funs)
+                        self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
+                             text_segment.address, text_segment.size, self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                 else:
@@ -1747,6 +1751,8 @@ class GenMonitor():
                 self.rev_to_call[self.target].watchSysenter(prec)
                 if self.target in self.track_threads:
                     self.track_threads[self.target].startTrack()
+                if self.target in self.ropCop:
+                    self.ropCop[self.target].setHap()
             self.debugExitHap()
             self.context_manager[self.target].setExitBreaks()
             self.debug_breaks_set = True
@@ -1767,6 +1773,8 @@ class GenMonitor():
         if self.target in self.exit_group_syscall:
             self.exit_group_syscall[self.target].stopTrace()
             del self.exit_group_syscall[self.target]
+        if self.target in self.ropCop:
+            self.ropCop[self.target].clearHap()
         self.context_manager[self.target].clearExitBreaks()
         self.debug_breaks_set = False
 
