@@ -1,0 +1,46 @@
+Summary of CADET01 example.
+
+Use the ubuntu_driver.ini configuration script.  This includes a driver computer and the
+target "ubuntu" system that runs the vulnerable cadet service.
+
+As the driver boots, login to it (mike/password) and tee up the ./client.py script
+
+When RESim presents the simics> prompt, direct it to debug cadet01:
+   @cgc.debugProc('cadet01')
+
+Then continue the simulation and hit <enter> on the ./client.py command.
+
+RESim will stop the simulation when it detects a ROP caused by an overwrite of an return
+address from the cgc_check function (which used to return to main).
+
+Start IDA with msc/cadet01, and attach the process.
+Run the rev.py "recent script".
+
+View the stack and observe the return address is to somewhere within the cgc_check function.
+
+Use the reverse track address function to trace content of stack in IDA.  Note IDA output window
+identifies bytes written to address by kernel (during receive operation).  
+Use "stack trace" window to view call frames.  Double click
+the call to cgc_receive_delim, then reverse to cursor.  Note return pointer was written at offset 92
+into the buffer address stored at (esp+4).    Note esp+8 is the max count (128).  Then in the function preface,
+note the buffer is only 0x40 (0x58-0x18) (64)bytes.  The vars will get trashed during any overflow, so the
+content of the buffer matters.
+
+A notional view of the stack (aslr will vary it):
+
+Low memory
+
+
+   bfdd05fc   080489e1     ret to cgc_check from cgc_receive_delim
+
+
+   bfdd0610   rec buffer
+
+
+   bfdd066c    08048912    ret to main from cgc_check
+
+
+High memory
+
+
+

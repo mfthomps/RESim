@@ -5,7 +5,7 @@
 # 
 #
 #/usr/bin/simics-agent --executable --overwrite --download server --to /usr/bin
-#/usr/bin/simics-agent  --overwrite --download index.html --to /home/mike
+/usr/bin/simics-agent  --overwrite --download client.py --to /home/mike
 
 # NOTE: default driver image has 10.0.0.91 as IP, redefine that.
 ip addr del 10.0.0.91/24 dev ens25
