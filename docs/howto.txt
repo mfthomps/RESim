@@ -1,0 +1,80 @@
+Instructions for accessing RESim remotely on a RESim server
+
+Set up your ~/.ssh/config file to identify the gateway and RESim server.  An example
+assuming your assigned RESim server is bladet9:
+
+  Host cgc-gw
+   IdentityFile        ~/.ssh/id_mfthomps_gfe
+   User                mfthomps
+   ServerAliveInterval 1
+   ServerAliveCountMax 60
+   TCPKeepAlive        yes
+   HostName            205.155.65.172
+
+ Host bladet9
+  HostName             bladet9
+  User                 mike
+  IdentityFile         ~/.ssh/id_mfthomps_gfe
+  ProxyCommand         ssh -q cgc-gw nc 10.20.200.159 22
+
+Create an ssh agent on your local Linux.  E.g., source this script (using
+your ssh id file):
+
+   eval `ssh-agent`
+   ssh-add ~/.ssh/id_mfthomps_gfe
+
+You should now be able to ssh to the RESim server, e.g., 
+   ssh -X bladet9
+
+Configure your git on RESim server to use a proxy:
+    git config --global http.proxy http://webproxy:3128
+    git config --global https.proxy https://webproxy:3128
+
+Add to your .bashrc:
+    export http_proxy=http://webproxy:3128
+    export https_proxy=https://webproxy:3128
+
+Use git to clone the RESim repo on the RESim server.
+
+Create a "workspace" directory, and cd to it.  Then initialize
+it as a Simics workspace:
+    /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
+
+Get the Simics license server running:
+   ./simics-gui -licenense-file /mnt/simics/simics-4.8.75/licenses/24B6FDF7BB64.lic
+
+Then quit.
+Use 
+   ps aux | grep lmgrd 
+to confirm
+
+Test RESim using a VDR image.  Copy these files into your workspace directory:
+    ~mike/workspace/VDR_alone.ini
+    ~mike/workspace/monitor.sh
+    ~mike/workspace/VDR.param
+
+(Edit VDR_alone.ini to remove any snapshot directives)
+
+You should be able to start RESim:
+    ./monitor.sh VDR_alone
+
+
+Configure IDA for remote use:
+Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
+IDA Python plugins)
+
+On the computer upon which you'll run IDA, create a ssh tunnel for use by the GDB port:
+    ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null bladet9
+
+Start Ida and configure the debugger to use gdb, localhost and port 9123
+
+
+
+System settings (Already done on bladet9)
+
+install python-magic from gz file:  pip install <path>
+configure /etc/apt/apt.conf for proxy
+    Acquire::http::Proxy "http://webproxy:3128";
+
+Install xterm
+    apt-get install xterm
