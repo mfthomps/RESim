@@ -1762,7 +1762,7 @@ class GenMonitor():
 
  
     def removeDebugBreaks(self, keep_watching=False):
-        self.lgr.debug('genMod removeDebugBreaks')
+        self.lgr.debug('genMon removeDebugBreaks')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.stopWatchPageFaults(pid)
         if not keep_watching:
@@ -2766,6 +2766,12 @@ class GenMonitor():
         self.lgr.debug('genMonitor toPid')
         self.context_manager[self.target].catchPid(pid, self.toUser)
         SIM_run_command('c')
+
+    def cleanMode(self):
+        if self.mode_hap is not None:
+            print('mode_hap was lingering, delete it')
+            SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
