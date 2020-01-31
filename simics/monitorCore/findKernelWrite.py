@@ -234,10 +234,10 @@ class findKernelWrite():
         self.stop_exit_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 		    self.stopExit, cycles)
         if self.exit_hap is not None:
-            self.context_manager.genDeleteHap(self.exit_hap)
+            self.context_manager.genDeleteHap(self.exit_hap, immediate=True)
             self.exit_hap = None
         if self.exit_hap2 is not None:
-            self.context_manager.genDeleteHap(self.exit_hap2)
+            self.context_manager.genDeleteHap(self.exit_hap2, immediate=True)
             self.exit_hap2 = None
         SIM_break_simulation('exitAlone')
    
@@ -302,7 +302,7 @@ class findKernelWrite():
             SIM_run_command(cmd)
             self.forward_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.hitForwardCallback, None, self.kernel_write_break)
 
-            self.lgr.debug('thinkWeWrote, set breaks on exit to user')
+            self.lgr.debug('thinkWeWrote, forward_hap is %d  set breaks on exit to user' % (self.forward_hap))
             if self.cpu.architecture == 'arm':
                 self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
                                                         Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
@@ -497,7 +497,8 @@ class findKernelWrite():
             SIM_delete_breakpoint(self.forward_break)
             self.forward_break = None
         if self.forward_hap is not None:
+            self.lgr.debug('cleanup delete forward_hap %d' % self.forward_hap)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.forward_hap)
-
+            self.forward_hap = None
                 
 
