@@ -69,6 +69,7 @@ import userIterators
 import trackFunctionWrite
 import pageUtils
 import ropCop
+import coverage
 
 import json
 import pickle
@@ -149,6 +150,7 @@ class GenMonitor():
         self.is_compat32 = False
 
         self.relocate_funs = {}
+        self.coverage = None
 
     def genInit(self, comp_dict):
         '''
@@ -629,6 +631,7 @@ class GenMonitor():
                              text_segment.address, text_segment.size, self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
+                    self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.lgr)
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
         else:
@@ -2772,6 +2775,14 @@ class GenMonitor():
             print('mode_hap was lingering, delete it')
             SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
+
+    def watchROP(self):
+        self.ropCop[self.target].watchROP()
+    def mapCoverage(self):
+        self.coverage.cover()
+
+    def showCoverage(self):
+        self.coverage.showCoverage()
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
