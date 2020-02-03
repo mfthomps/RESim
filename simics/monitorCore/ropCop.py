@@ -12,15 +12,19 @@ class RopCop():
         self.size = size
         self.lgr = lgr
         self.stop_hap = None
+        self.watching = False
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
             self.decode = decode
 
-        self.setHap()
+    def watchROP(self):
+        self.watching = True
 
     def setHap(self):
+        if not self.watching:
+            return
         if self.cpu.architecture == 'arm':
             prefix = 'ldm'
             self.callmn = 'bl'
