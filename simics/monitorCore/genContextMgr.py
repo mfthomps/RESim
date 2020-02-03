@@ -216,7 +216,7 @@ class GenContextMgr():
             #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
-        self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
+        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
         return handle
 
     def genDeleteBreakpoint(self, handle):
@@ -273,6 +273,7 @@ class GenContextMgr():
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
                 hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=False)
+                #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
@@ -505,6 +506,16 @@ class GenContextMgr():
         else:
             self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
 
+    def watchingThis(self):
+        ctask = self.task_utils.getCurTaskRec()
+        dumb, comm, cur_pid  = self.task_utils.curProc()
+        if cur_pid in self.pid_cache or ctask in self.watch_rec_list:
+            #self.lgr.debug('am watching pid:%d' % cur_pid)
+            return True
+        else:
+            #self.lgr.debug('not watching %d' % cur_pid)
+            return False
+
     def amWatching(self, pid):
         ctask = self.task_utils.getCurTaskRec()
         dumb, comm, cur_pid  = self.task_utils.curProc()
@@ -643,32 +654,39 @@ class GenContextMgr():
             self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
         
 
+    def deadParrot(self, pid):
+        ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
+        self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
+        exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
+        if exit_syscall is not None and not self.watching_page_faults:
+            ida_msg = 'pid:%d exit via kill?' % pid
+            self.killGroup(pid, exit_syscall)
+            #exit_syscall.handleExit(pid, ida_msg, killed=True)
+        else:
+            self.rmTask(pid)
+            if self.pageFaultGen is not None:
+                self.pageFaultGen.handleExit(pid)
+            self.clearExitBreaks()
+
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
         dead_rec = self.task_utils.getRecAddrForPid(pid)
         if dead_rec is not None:
             list_addr = self.task_utils.getTaskListPtr(dead_rec)
-            self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d still found though written by maybe not dead after all? new list_addr is 0x%x' % (dead_rec, 
-                pid, list_addr))
+            if list_addr is not None:
+                self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d still found though written by maybe not dead after all? new list_addr is 0x%x' % (dead_rec, 
+                    pid, list_addr))
 
-            SIM_delete_breakpoint(self.task_rec_bp[pid])
-            self.task_rec_bp[pid] = None
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])
-            self.task_rec_hap[pid] = None
-            self.watchExit(rec=dead_rec, pid = pid)
-        else: 
-            ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
-            self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
-            exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
-            if exit_syscall is not None and not self.watching_page_faults:
-                ida_msg = 'pid:%d exit via kill?' % pid
-                self.killGroup(pid, exit_syscall)
-                #exit_syscall.handleExit(pid, ida_msg, killed=True)
+                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                self.task_rec_bp[pid] = None
+                SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])
+                self.task_rec_hap[pid] = None
+                self.watchExit(rec=dead_rec, pid = pid)
             else:
-                self.rmTask(pid)
-                if self.pageFaultGen is not None:
-                    self.pageFaultGen.handleExit(pid)
-                self.clearExitBreaks()
+                self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d EXCEPT new list_addr is None' % (dead_rec, pid))
+                self.deadParrot(pid)
+        else: 
+            self.deadParrot(pid)
         if pid in self.demise_cache:
             self.demise_cache.remove(pid)
 
@@ -763,3 +781,6 @@ class GenContextMgr():
 
     def callMe(self, pageFaultGen):
         self.pageFaultGen = pageFaultGen
+
+    def getResimContext(self):
+        return self.resim_context
