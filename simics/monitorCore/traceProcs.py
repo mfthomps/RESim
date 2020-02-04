@@ -442,8 +442,8 @@ class TraceProcs():
     def getNetworkAddresses(self):
         for pid in self.plist:
             info = self.plist[pid].args
-            if info is not None and '/bin/ip addr add' in self.plist[pid].args:
-                print info.args
+            if info is not None and '/bin/ip addr add' in info:
+                print info
 
     def getFileName(self, pid, fd):
         pid = str(pid)
