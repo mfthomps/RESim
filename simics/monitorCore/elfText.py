@@ -42,7 +42,7 @@ def getProgHdr(path):
     return Text(addr, 0, size)
 
 def getText(path, lgr):
-    if not os.path.isfile(path):
+    if path is None or not os.path.isfile(path):
         return None
     retval = None
     ftype = magic.from_file(path)
