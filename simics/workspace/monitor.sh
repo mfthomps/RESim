@@ -2,7 +2,9 @@
 #
 #  Define path to the local RESim repo
 #
-export RESIM=/mnt/cgc-monitor/RESim
+if [[ -z "$RESIM" ]]; then
+    export RESIM=/mnt/cgc-monitor/RESim
+fi
 
 if [ "$#" -ne 1 ]; then
     echo "usage: ./monitor.sh <target>"
