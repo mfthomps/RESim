@@ -22,6 +22,7 @@ class RopCop():
 
     def watchROP(self):
         self.watching = True
+        self.setHap()
 
     def setHap(self):
         if not self.watching:
