@@ -1,5 +1,10 @@
 Instructions for accessing RESim remotely on a RESim server
 
+These instructions assume your remote RESim server is bladet9.  Adjust as needed.
+
+Add bladet9 to your /etc/hosts:
+    10.20.200.158 bladet8
+
 Set up your ~/.ssh/config file to identify the gateway and RESim server.  An example
 assuming your assigned RESim server is bladet9:
 
@@ -26,6 +31,8 @@ your ssh id file):
 You should now be able to ssh to the RESim server, e.g., 
    ssh -X bladet9
 
+See the System Setup section if this RESim server has not yet been configured.
+
 Configure your git on RESim server to use a proxy:
     git config --global http.proxy http://webproxy:3128
     git config --global https.proxy https://webproxy:3128
@@ -33,20 +40,28 @@ Configure your git on RESim server to use a proxy:
 Add to your .bashrc:
     export http_proxy=http://webproxy:3128
     export https_proxy=https://webproxy:3128
+    export RESIM=~/git/RESIM
 
-Use git to clone the RESim repo on the RESim server.
+Use git to clone the RESim repo on the RESim server, e.g., 
+   mkdir ~/git
+   cd ~/git
+   git clone https://github.com/mfthomps/RESim.git
 
 Create a "workspace" directory, and cd to it.  Then initialize
 it as a Simics workspace:
     /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
 
-Get the Simics license server running:
-   ./simics-gui -licenense-file /mnt/simics/simics-4.8.75/licenses/24B6FDF7BB64.lic
+Get the Simics license server running  (name the license file that matches your ethernet MAC address:
+   ./simics-gui -license-file /mnt/simics/simics-4.8.75/licenses/24B6FDF7BB64.lic
 
 Then quit.
 Use 
    ps aux | grep lmgrd 
 to confirm
+
+Install the vmx kernel module (Simics VMP)
+   bin/vmp-kernel-install
+   (follow instructions to enable on reboot)
 
 Test RESim using a VDR image.  Copy these files into your workspace directory:
     ~mike/workspace/VDR_alone.ini
@@ -69,12 +84,36 @@ On the computer upon which you'll run IDA, create a ssh tunnel for use by the GD
 Start Ida and configure the debugger to use gdb, localhost and port 9123
 
 
+**** System Setup (Only needed during initial setup of a RESim system) ***
 
-System settings (Already done on bladet9)
+Add the following to the server /etc/hosts:
+   10.20.200.41 webproxy
+
+Modify /etc/apt/apt.conf to include:
+   Acquier::http::Proxy "http://webproxy:3128";
+
+Confirm the /etc/apt/sources.list refers to the proper mirror, e.g., 
+    deb http://us.archive.ubuntu.com/ubuntu trusty universe
+    deb http://us.archive.ubuntu.com/ubuntu trusty main restricted
+    deb http://us.archive.ubuntu.com/ubuntu trusty-updates main restricted
+
+
+Create a mount point and add entry to the /etc/fstab:
+    sudo mkdir /mnt/re_images
+    sudo chmod a+rwx /mnt/re_images/
+    webproxy:/ubuntu_img /mnt/re_images nfs4 auto 0 0
+
+Create link to shared images:
+    sudo mkdir /eems_images
+    cd /eems_images
+    sudo ln -s /mnt/re_images ubuntu_img
+
 
 install python-magic from gz file:  pip install <path>
-configure /etc/apt/apt.conf for proxy
-    Acquire::http::Proxy "http://webproxy:3128";
+   sudo pip install /mnt/re_images/python_pkgs/python-magic-0.4.15.tar.gz
 
 Install xterm
     apt-get install xterm
+
+Install git
+    apt-get install git
