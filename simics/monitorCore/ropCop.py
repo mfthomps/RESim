@@ -11,6 +11,7 @@ class RopCop():
         self.text = text
         self.size = size
         self.lgr = lgr
+        self.rop_hap = None
         self.stop_hap = None
         self.watching = False
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
