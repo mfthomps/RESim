@@ -1,0 +1,212 @@
+\documentclass[titlepage]{article}
+\usepackage{geometry}
+\geometry{a4paper, total={170mm,257mm},left=20mm, top=10mm,}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=black]{hyperref}
+\usepackage{bookmark}
+\usepackage{graphicx}
+\usepackage{titling}
+\graphicspath{ {images/} }
+
+\pretitle{%
+  \begin{center}
+  \LARGE
+    \includegraphics[width=6cm]{resim.eps}\\[\smallskipamount]
+}
+\posttitle{\end{center}}
+\begin{document}
+\title {%
+  RESim Remote Access Guide \\
+  \large Configuring RESim servers and clients}
+\maketitle
+\section{Introduction}
+
+This guide provides instructions for accessing RESim remotely on a RESim server
+
+These instructions assume your remote RESim server is bladet9.  Adjust as needed based on the
+server assigned to you.
+
+\section{Client setup}
+Perform these steps on the computer that you will use to access RESim.  These instructions
+assume a Linux host upon which IDA Pro is installed, e.g., a VM.
+
+Use {\tt ssh-keygen} to create an ssh key pair and send the public key to mfthomps@nps.edu
+along with a requested user ID.  You will then receive an assigned server name and IP address.
+After receiving the reply, do the following:
+
+\begin{itemize}
+
+\item Add the assigned blade and IP address to your /etc/hosts:
+\begin{verbatim}
+    10.20.200.159 bladet9
+\end{verbatim}
+
+\item Set up your ~/.ssh/config file to identify the gateway and RESim server.  An example
+assuming your assigned RESim server is bladet9.  Replace that, and the ProxyCommand IP with 
+those assigned to you.  Also replace the IdentifyFile with your own,
+and replace both User fields with your assigned login ID.:
+
+\begin{verbatim}
+Host cgc-gw
+   IdentityFile        ~/.ssh/id_mfthomps_gfe
+   User                mfthomps
+   ServerAliveInterval 1
+   ServerAliveCountMax 60
+   TCPKeepAlive        yes
+   HostName            205.155.65.172
+
+Host bladet9
+  HostName             bladet9
+  User                 mike
+  IdentityFile         ~/.ssh/id_mfthomps_gfe
+  ProxyCommand         ssh -q cgc-gw nc 10.20.200.159 22
+\end{verbatim}
+
+\item Create an ssh agent on your local Linux.  E.g., source this script (using
+your ssh id file):
+
+\begin{verbatim}
+   eval `ssh-agent`
+   ssh-add ~/.ssh/id_mfthomps_gfe
+\end{verbatim}
+
+\item You should now be able to ssh to the RESim server, e.g., 
+\begin{verbatim}
+   ssh -X bladet9
+\end{verbatim}
+
+\end{itemize}
+
+\subsection{IDA}
+Configure IDA for remote use:
+\begin{itemize}
+\item Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
+IDA Python plugins)
+
+\item On the computer upon which you'll run IDA, create a ssh tunnel for use by the GDB port:
+\begin{verbatim}
+ ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null bladet9
+\end{verbatim}
+
+\item Start Ida and configure the debugger to use gdb, localhost and port 9123
+\end{itemize}
+
+\section{Configure RESim Server}
+See section \ref{section-system} if this RESim server has not yet been configured.
+
+\textbf{Steps below are implemented in RESim/simics/setup/config-resim-user.sh}
+The following steps are taken for each user on the RESim server.
+\begin{itemize}
+\item Configure your git on RESim server to use a proxy:
+\begin{verbatim}
+    git config --global http.proxy http://webproxy:3128
+    git config --global https.proxy https://webproxy:3128
+\end{verbatim}
+
+\item Add to your .bashrc:
+\begin{verbatim}
+    export http_proxy=http://webproxy:3128
+    export https_proxy=https://webproxy:3128
+    export RESIM=~/git/RESIM
+\end{verbatim}
+\item Start a new shell to inherit those variables:
+\begin{verbatim}
+   bash
+\end{verbatim}
+
+\item Use git to clone the RESim repo on the RESim server, e.g., 
+\begin{verbatim}
+   mkdir ~/git
+   cd ~/git
+   git clone https://github.com/mfthomps/RESim.git
+\end{verbatim}
+
+\item Create a "workspace" directory, and cd to it.  Then initialize
+it as a Simics workspace:
+\begin{verbatim}
+    /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
+\end{verbatim}
+
+
+\item Copy the files in git/RESim/simics/workspace to your workspace, and follow the README instructions.
+\end{itemize}
+
+
+
+\section{System Setup} 
+\label{section-system}
+These steps are only required once for each new server.
+\textbf{Steps below are implemented in RESim/simics/setup/config-resim-server.sh}
+
+
+\begin{itemize}
+\item Add the following to the server /etc/hosts:
+\begin{verbatim}
+   10.20.200.41 webproxy
+\end{verbatim}
+
+\item Modify /etc/apt/apt.conf to include:
+\begin{verbatim}
+   Acquire::http::Proxy "http://webproxy:3128";
+\end{verbatim}
+
+\item Confirm the /etc/apt/sources.list refers to the proper mirror, e.g., 
+\begin{verbatim}
+    deb http://us.archive.ubuntu.com/ubuntu trusty universe
+    deb http://us.archive.ubuntu.com/ubuntu trusty main restricted
+    deb http://us.archive.ubuntu.com/ubuntu trusty-updates main restricted
+\end{verbatim}
+
+
+\item Create a mount point and add entry to the /etc/fstab:
+\begin{verbatim}
+    sudo mkdir /mnt/re_images
+    sudo chmod a+rwx /mnt/re_images/
+    Add to /etc/fstab:  webproxy:/ubuntu_img /mnt/re_images nfs4 auto 0 0
+\end{verbatim}
+
+\item Create link to shared images:
+\begin{verbatim}
+    sudo mkdir /eems_images
+    cd /eems_images
+    sudo ln -s /mnt/re_images ubuntu_img
+\end{verbatim}
+
+
+\item Install python-magic from gz file:  pip install <path>
+\begin{verbatim}
+   sudo pip install /mnt/re_images/python_pkgs/python-magic-0.4.15.tar.gz
+\end{verbatim}
+
+\item Install xterm
+\begin{verbatim}
+    apt-get install xterm
+\end{verbatim}
+
+\item Install git
+\begin{verbatim}
+    apt-get install git
+\end{verbatim}
+\end{itemize}
+
+\section{Configure Simics licenses}
+\textbf{These steps are automated in the RESim/setup/config-simics.sh script.}
+\begin{itemize}
+\item Get the Simics license server running  (name the license file that matches your ethernet MAC address:
+\begin{verbatim}
+   ./simics-gui -license-file /mnt/simics/simics-4.8.75/licenses/24B6FDF7BB64.lic
+\end{verbatim}
+
+\item Then quit.
+Use 
+\begin{verbatim}
+   ps aux | grep lmgrd 
+\end{verbatim}
+to confirm
+
+\item Install the vmx kernel module (Simics VMP)
+\begin{verbatim}
+   bin/vmp-kernel-install
+   (follow instructions to enable on reboot)
+\end{verbatim}
+\end{itemize}
+\end{document}

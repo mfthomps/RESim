@@ -41,7 +41,7 @@ Analysis is performed entirely through observation of the simulated target syste
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be \textit{external} because the analysis observation functions have no effect on the state of the simulated system \footnote{See \ref{external} for an example of the implications}.
 
 \section{Analysis artifacts}
-RESim generates system traces of all processes on a computer, starting with system boot, or at a selected checkpoint.  Trace reports include two components: 
+RESim generates system traces of all processes on a computer, starting with system boot, or from a selected checkpoint.  Trace reports include two components: 
 \begin{enumerate}
 \item A record of system calls, identifying the calling process and selected parameters, e.g., names of files and sockets and IP addresses.
 \item A process family history for each process and thread that has executed, identifying:
@@ -66,8 +66,6 @@ RESim analyzes Linux-based systems for which copies of bootable media or root fi
 extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 
-Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap function call and somehow determine it is mmio purposed.  Then
-set breakpoints...
 
 \section{Work Flow}
 Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
@@ -75,10 +73,13 @@ processors and interface devices, e.g., network cards, disks and system consoles
 a 32-bit ARM platform. Other platforms can be modeled via Simics, the detailes of which are beyond the scope of this manual.
 Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
 
-RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task records and addresses of selected kernel symbols.  The {\tt getKernelParams} utility automatically analyzes a running kernel and extracts the parameters required by RESim.  
-This utility allows RESim to analyze disparate Linux kernels without a priori knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
+RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task 
+records and addresses of selected kernel symbols.  A directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
+and extract the desired parameters.  This allows RESim to analyze disparate Linux kernels without a priori 
+knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
 
-Once the kernel parameters have been extracted, the simulation boots under control of RESim, which then presents the user with a command line interface console.  This console manages the simulation via a combination of RESim and Simics commands, including commands to:
+Once the kernel parameters have been extracted, the RESim configuration file is modified to reference the parameter file, and the simulation is restarted. The user is
+presented with a command line interface console.  This console manages the simulation via a combination of RESim and Simics commands, including commands to:
 \begin{itemize}
 \item Start or stop (pause) the simulation
 \item Run until a specified process is scheduled
@@ -87,7 +88,7 @@ Once the kernel parameters have been extracted, the simulation boots under contr
 \item Inspect memory and component states
 \item Enable reverse execution, i.e., allow reversing to events from that point forward
 \item Set and run to breakpoints, either in the future or in the past.
-\item Target the RESim disassembler/debugger for a specified process
+\item Target RESim to focus on a specific process thread group, e.g., for dynamic analysis using IDA Pro.
 \end{itemize}
 
 When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
@@ -105,7 +106,7 @@ RESim extends IDA Pro debugger functions and the analyst accesses these function
 \end{itemize}
 
 \section{Development and Availability}
-In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
+In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
 Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
 All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}
@@ -247,6 +248,8 @@ Useful if you are in some library called by some other library, and you want to 
 values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD accept an assembly statement?
 
 \item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to \ref{SEGV} for information about what we mean by SEGV, and how we catch it.
+
+\item {\tt watchROP} -- Watch for return instructions that do not seem to follow calls.  This is available while debugging a process.
 \end{itemize}
 
 \subsection{Postprocessing}
@@ -533,6 +536,19 @@ know that at some point in the coming system execution, some other process Y wil
 indirectly).  Use of the {\tt background=True} option with the {\tt runToDmod} command will cause RESim to monitor all
 system calls associated with the Dmod, even while you focus on the behavior of X. 
 
+\section{Example workflows}
+\subsubsection{Watch consumption of a UDP packet}
+Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
+Start the monitor and map the desired port to a real ethernet device.
+Debug the desired process/pid, e.g., {\tt @cgc.debugPidGroup(875)}.  Track the IO, e.g., {\tt @cgc.trackIO(14)},
+then cat the packet, e.g.,
+\begin{verbatim}
+    cat mypacket > /dev/udp/127.0.0.1/60005
+\end{verbatim}
+
+Start IDA with the desired program.  Attached to the process and run the rev.py plugin.  Then go to the ``data watch'' window and
+refresh.  That will list all instances of references to the content of the UDP packet. 
+
 \section{Implementation strategy}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
 RESim primarily gathers information about a system through monitoring of events, i.e., observed via callbacks tied to 
@@ -795,6 +811,9 @@ Test Simics 7 changes to ensure they work on older Simics; ifdef if necessary.
 
 Enhance the {\tt dataWatch} function to detect mmove memcpy, etc., to expand watch to new buffers.
 And detect generic C++ string allocator, and expand watch.
+
+Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap function call and somehow determine it is mmio purposed.  Then
+set breakpoints...
 
 \subsection{Missed threads when debugging}
 When a process is identified for debugging, e.g., via debugPidGroup, RESim attempts to include actions by all threads in the thread group.  It uses the
