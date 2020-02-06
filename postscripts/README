@@ -1,0 +1,4 @@
+Do postprocessing on trace files.  Run from scripts from the 
+the postscripts directory, providing the path to syscall_trace.txt directory.
+
+genRpt.sh will generate all reports.
