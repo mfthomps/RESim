@@ -1940,6 +1940,9 @@ class GenMonitor():
         self.runToDmod(dfile, cell_name = self.target)
 
     def runToDmod(self, dfile, cell_name=None, background=False):
+        if not os.path.isfile(dfile):
+            print('No file found at %s' % dfile)
+            return
         if cell_name is None:
             cell_name = self.target
         mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)

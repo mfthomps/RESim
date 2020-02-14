@@ -191,7 +191,7 @@ class TaskUtils():
         next = self.mem_utils.readPtr(cpu, addr + offset)
         #self.lgr.debug('read_list_head addr 0x%x  offset is 0x%x effective 0x%x  read 0x%x' % (addr, offset, (addr+offset), next)) 
         if next is None:
-            self.lgr.error('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
+            self.lgr.debug('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
             return None
         prev = self.mem_utils.readPtr(cpu, addr + offset + self.mem_utils.WORD_SIZE)
         if prev is None:
@@ -224,12 +224,13 @@ class TaskUtils():
     def readTaskStruct(self, addr, cpu):
         """Read the task_struct at addr and return a TaskStruct object
         with the information."""
+        #self.lgr.debug('readTaskStruct for addr 0x%x' % addr)
         addr = self.mem_utils.getUnsigned(addr)
         task = TaskStruct(addr=addr)
         if self.param.ts_next != None:
             if self.param.ts_next_relative:
                 assert self.param.ts_prev == self.param.ts_next + self.mem_utils.WORD_SIZE
-                #print('read ts_next')
+                #self.lgr.debug('readTaskStruct bout to call read_list_head addr 0x%x' % addr)
                 task.tasks = self.read_list_head(cpu, addr, self.param.ts_next)
             else:
                 task.tasks = ListHead(self.mem_utils.readPtr(cpu, addr + self.param.ts_next), self.mem_utils.readPtr( cpu, addr + self.param.ts_prev))
@@ -244,7 +245,8 @@ class TaskUtils():
         if self.param.ts_pid != None:
             task.pid = self.mem_utils.readWord32(cpu, addr + self.param.ts_pid)
             if task.pid is None:
-                self.lgr.error('readTaskStruct got pid of none for addr 0x%x' % addr)
+                self.lgr.debug('readTaskStruct got pid of none for addr 0x%x' % addr)
+                return None
         if self.param.ts_tgid != None:
             task.tgid = self.mem_utils.readWord32(cpu, addr + self.param.ts_tgid)
         if self.param.ts_comm != None:
@@ -282,7 +284,7 @@ class TaskUtils():
             #if c.next is not None:
                 #print('read clist head children got 0x%x 0x%x' % (c.next, c.prev))
             if c is None:
-                self.lgr.error('readTaskStruct got none from read_list_head')
+                self.lgr.debug('readTaskStruct got none from read_list_head addr 0x%x' % addr)
                 return None
             task.children = [c.next, c.prev]
             if task.in_sibling_list:

@@ -101,7 +101,7 @@ class Dmod():
                    return
             self.lgr.debug('Dmod loaded %d fiddles of kind %s' % (len(self.fiddles), self.kind))
         else:
-            self.lgr.debug('Dmod, no file at %s' % path)
+            self.lgr.error('Dmod, no file at %s' % path)
 
     def subReplace(self, cpu, s, addr):
         rm_this = None
