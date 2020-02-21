@@ -1,4 +1,8 @@
-from ida_kernwin import Form
+import idaapi
+if idaapi.IDA_SDK_VERSION <= 699:
+    from idaapi import Form
+else:
+    from ida_kernwin import Form
 class SetAddrString(Form):
     def __init__(self):
         Form.__init__(self, r"""STARTITEM {id:iAddr}

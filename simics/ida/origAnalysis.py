@@ -1,8 +1,7 @@
 import idc
 import idautils
 import idaapi
-import ida_funcs
-import ida_bytes
+import idaversion
 import os
 import json
 import glob
@@ -10,6 +9,9 @@ import gdbProt
 class OrigAnalysis():
 
     def __init__(self, path):
+        if path is None:
+           print('No progam path!')
+           return
         self.funs = {}
         self.funnames = []
         self.root_path = path
@@ -80,12 +82,12 @@ class OrigAnalysis():
                 for fun in self.funs:
                     if fun >= start and fun <= end:
                         #print('fun 0x%x name <%s>' % (fun, name))
-                        ida_funcs.add_func(fun, idaapi.BADADDR)
+                        idaversion.add_func(fun, idaapi.BADADDR)
         
         elif fun is not None:
                 print('Do one fun 0x%x' % fun)
                 for i in range(self.funs[fun]['start'], self.funs[fun]['end']):
-                    ida_bytes.del_items(i, 1)
+                    idaversion.del_items(i, 1)
                 idaapi.auto_mark_range(self.funs[fun]['start'], self.funs[fun]['end'], 25)
                 idaapi.autoWait()
                 return fun

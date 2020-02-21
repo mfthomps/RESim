@@ -24,8 +24,11 @@
 '''
 import idaapi
 import idc
-import ida_kernwin
-from ida_kernwin import simplecustviewer_t
+import idaversion
+if idaapi.IDA_SDK_VERSION == 680:
+    from idaapi import simplecustviewer_t
+else:
+    from ida_kernwin import simplecustviewer_t
 import gdbProt
 import bpUtils
 
@@ -66,7 +69,7 @@ class bookmarkView(simplecustviewer_t):
             self.AddBookmarkHandler(self), 
             None)
         idaapi.register_action(add_bookmark_action)
-        form = idaapi.get_current_widget()
+        form = idaversion.get_current_widget()
         idaapi.attach_action_to_popup(form, None, 'add_bookmark:action')
         self.Show()
 
@@ -156,7 +159,7 @@ class bookmarkView(simplecustviewer_t):
     
     def askSetBookmark(self):
         #print('askSetBookmark')
-        addr = idc.get_reg_value(self.isim.PC)
+        addr = idaversion.get_reg_value(self.isim.PC)
         instruct = idc.GetDisasm(addr)
         if ';' in instruct:
             instruct, dumb = instruct.rsplit(';', 1)
@@ -165,7 +168,7 @@ class bookmarkView(simplecustviewer_t):
     
         #print('eip %x  instruct: %s' % (addr, instruct))
         default = '0x%x: %s' % (addr, instruct) 
-        mark = ida_kernwin.ask_str(default, 0, 'Name of new bookmark:')
+        mark = idaversion.ask_str(default, 0, 'Name of new bookmark:')
         if mark != 0 and mark != 'None':
             self.setBookmark(mark)
             self.updateBookmarkView()

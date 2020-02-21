@@ -1,20 +1,14 @@
 import idaapi
 import idc
-import ida_kernwin
-from idaapi import simplecustviewer_t
+if idaapi.IDA_SDK_VERSION <= 699:
+    from idaapi import simplecustviewer_t
+else:
+    from ida_kernwin import simplecustviewer_t
 import gdbProt
 import json
 import os
 import reHooks
-def getHighlight():
-    v = ida_kernwin.get_current_viewer()
-    t = ida_kernwin.get_highlight(v)
-    retval = None
-    if t is None:
-        print('Nothing highlighted in viewer %s' % str(v))
-    else:
-        retval, flags = t 
-    return retval
+import idaversion
 class StackTrace(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -31,7 +25,7 @@ class StackTrace(simplecustviewer_t):
             return idaapi.AST_ENABLE_ALWAYS
 
     def revTo(self):
-        highlighted = getHighlight()
+        highlighted = idaversion.getHighlight()
         addr = reHooks.getHex(highlighted)
         command = '@cgc.revToAddr(0x%x, extra_back=0)' % (addr)
         #print('cmd: %s' % command)
@@ -52,7 +46,7 @@ class StackTrace(simplecustviewer_t):
 
     def register(self):
 
-        form = idaapi.get_current_widget()
+        form = idaversion.get_current_widget()
         the_name = "reverse to"
         idaapi.register_action(idaapi.action_desc_t(the_name, "reverse to", self.stacktrace_handler(self.revTo)))
         idaapi.attach_action_to_popup(form, None, the_name)
@@ -84,7 +78,7 @@ class StackTrace(simplecustviewer_t):
             instruct = idc.GetDisasm(entry['ip'])
             #print('instruct is %s' % str(instruct))
             #line = '0x%x %-20s %s' % (entry['ip'], entry['fname'], entry['instruct'])
-            fun = idc.get_func_name(entry['ip'])
+            fun = idaversion.get_func_name(entry['ip'])
             so = str(entry['fname'])
             fname = os.path.basename(so) 
             line = '0x%08x %-15s %-10s %s' % (entry['ip'], fname, fun, str(instruct))

@@ -1,25 +1,16 @@
 import idaapi
 import idc
-import ida_kernwin
-def getHighlight():
-    v = ida_kernwin.get_current_viewer()
-    t = ida_kernwin.get_highlight(v)
-    retval = None
-    if t is None:
-        print('Nothing highlighted in viewer %s' % str(v))
-    else:
-        retval, flags = t 
-    return retval
+import idaversion
 def getOffset():
     '''
     Assuming an offset, e.g., "var_11" is highlighted, and
     assuming bp is proper, get the calculated address.
     '''
     retval = None
-    ip = idc.get_screen_ea()
+    ip = idaversion.get_screen_ea()
     
     print('ip is 0x%x' % ip)
-    highlighted = getHighlight()
+    highlighted = idaversion.getHighlight()
     print('highlighted is %s' % highlighted)
     
     ov0 = idc.print_operand(ip, 0)
@@ -43,7 +34,7 @@ def getOffset():
             reg,value = val.split('+')
         else:
             reg,value = val.split('-')
-        reg_val = idc.get_reg_value(reg)
+        reg_val = idaversion.get_reg_value(reg)
         try:
             value = value.strip('h')
             value = int(value, 16)
@@ -63,11 +54,11 @@ def getOffset():
     return retval
 
 def isHighlightedEffective():
-    ip = idc.get_screen_ea()
+    ip = idaversion.get_screen_ea()
     instr = idc.GetDisasm(ip)
     if '[' in instr:
         val = instr.split('[', 1)[1].split(']')[0]
-        highlighted = getHighlight()
+        highlighted = idaversion.getHighlight()
         if highlighted in val:
             return True
         else:

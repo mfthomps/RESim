@@ -1,20 +1,11 @@
 import idaapi
 import idc
-import ida_kernwin
+import idaversion
 from idaapi import simplecustviewer_t
 import gdbProt
 import json
 import os
 import reHooks
-def getHighlight():
-    v = ida_kernwin.get_current_viewer()
-    t = ida_kernwin.get_highlight(v)
-    retval = None
-    if t is None:
-        print('Nothing highlighted in viewer %s' % str(v))
-    else:
-        retval, flags = t 
-    return retval
 class DataWatch(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -43,7 +34,7 @@ class DataWatch(simplecustviewer_t):
 
     def register(self):
 
-        form = idaapi.get_current_widget()
+        form = idaversion.get_current_widget()
         the_name = "refresh_data"
         idaapi.register_action(idaapi.action_desc_t(the_name, "refresh data", self.datawatch_handler(self.updateDataWatch)))
         idaapi.attach_action_to_popup(form, None, the_name)

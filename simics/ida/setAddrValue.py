@@ -1,4 +1,8 @@
-from ida_kernwin import Form
+import idaapi
+if idaapi.IDA_SDK_VERSION <= 699:
+    from idaapi import Form
+else:
+    from ida_kernwin import Form
 import idc
 class SetAddrValue(Form):
     def __init__(self):
@@ -34,7 +38,7 @@ Modify word
             addr = self.GetControlValue(self.iAddr)
             offset = self.GetControlValue(self.iOffset)
             new_addr = addr+offset
-            val = idc.get_wide_dword(new_addr)
+            val = idaversion.get_wide_dword(new_addr)
             print('add 0%x contains 0x%x' % (new_addr, val))
             self.SetControlValue(self.iRawHex, val)
         return 1
@@ -42,7 +46,7 @@ Modify word
 sav = SetAddrValue()
 sav.Compile()
 sav.iAddr.value = 0xb5f28680
-val = idc.get_wide_dword(sav.iAddr.value)
+val = idaversion.get_wide_dword(sav.iAddr.value)
 sav.iRawHex.value = val
 sav.Execute()
 

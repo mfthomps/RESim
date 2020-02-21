@@ -1,12 +1,12 @@
 import idaapi
 import idc
-import ida_dbg
+import idaversion
 def disableAllBpts(exempt):
-    qty = ida_dbg.get_bpt_qty()
+    qty = idaversion.get_bpt_qty()
     disabledSet = []
     for i in range(qty):
-	bptEA = idc.get_bpt_ea(i)
-        bptStat = ida_dbg.check_bpt(bptEA)
+	bptEA = idaversion.get_bpt_ea(i)
+        bptStat = idaversion.check_bpt(bptEA)
 	if bptStat > 0:
 	    if exempt is None or exempt != bptEA:
 	        disabledSet.append(bptEA)

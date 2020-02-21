@@ -1,12 +1,13 @@
 import idaapi
-import ida_funcs
-import ida_bytes
-import ida_struct
 import idautils
-import ida_kernwin
-import ida_dbg
+import idaversion
 import time
-from ida_kernwin import Form
+if idaapi.IDA_SDK_VERSION <= 699:
+    from idaapi import Form
+    from idaapi import UI_Hooks
+else:
+    from ida_kernwin import Form
+    from ida_kernwin import UI_Hooks
 import idc
 import gdbProt
 import regFu
@@ -14,30 +15,7 @@ import getAddrCount
 import setAddrValue
 import setAddrString
 
-def getRegVarValue(reg):
-    ea = idaapi.get_screen_ea()
-    regvar_map = {}
-    fn = ida_funcs.get_func(ea)
-    if fn:
-        for rv in fn.regvars:
-            regvar_map[rv.user] = rv.canon
-    if reg in regvar_map:
-        reg = regvar_map[reg]
-    else:
-        print('%s not in map' % (reg))
-    retval = idc.get_reg_value(reg)
-    return retval
 
-
-def getHighlight():
-    v = ida_kernwin.get_current_viewer()
-    t = ida_kernwin.get_highlight(v)
-    retval = None
-    if t is None:
-        print('Nothing highlighted in viewer %s' % str(v))
-    else:
-        retval, flags = t 
-    return retval
 
 def getHex(s):
     retval = None
@@ -51,13 +29,13 @@ def getHex(s):
     return retval
 
 def getRegOffset(eax, reg, opnum):
-    reg_val = getRegVarValue(reg)
+    reg_val = idaversion.getRegVarValue(reg)
     #except: 
     #    ''' reg is a symbol, get its value and read memory at that address '''
     #    x = idc.get_name_ea_simple(reg)
     #    reg_val = idc.read_dbg_dword(x)
     #    print('reg %s is symbol, got x of 0x%x, read that to get 0x%x' % (reg, x, reg_val))
-    offset = idc.get_operand_value(eax, opnum)
+    offset = idaversion.get_operand_value(eax, opnum)
     retval = reg_val+offset
     return retval 
 
@@ -67,11 +45,11 @@ def getRefAddr():
         try decoding that.
     '''
     retval = None
-    ea = idaapi.get_screen_ea()
-    flags = ida_bytes.get_full_flags(ea)
-    if ida_bytes.is_code(flags):
+    ea = idaversion.get_screen_ea()
+    flags = idaversion.get_full_flags(ea)
+    if idaversion.is_code(flags):
         opnum = idaapi.get_opnum()
-        op_type = idc.get_operand_type(ea, opnum)
+        op_type = idaversion.get_operand_type(ea, opnum)
         op = idc.print_operand(ea, opnum)
         print('is code, type %d op %s' % (op_type, op))
         #if op_type == idc.o_disp:
@@ -86,13 +64,13 @@ def getRefAddr():
                 retval = getRegOffset(ea, reg, opnum)
             else:
                 try:
-                    retval = getRegVarValue(val)
+                    retval = idaversion.getRegVarValue(val)
                 except: 
                    print('%s not a reg' % reg)
         elif op_type == 3:
-            retval = idc.get_operand_value(ea, opnum)
+            retval = idaversion.get_operand_value(ea, opnum)
         elif op_type == 1:
-            retval = getRegVarValue(op)
+            retval = idaversion.getRegVarValue(op)
         else:
             print('Op type %d not handled' % op_type)
     else:
@@ -119,36 +97,36 @@ def getFieldName(ea, offset):
     print('getFieldName 0x%x' % ea)
     full_name = None        
     ti = idaapi.opinfo_t()
-    f = ida_bytes.get_full_flags(ea)
-    if ida_bytes.get_opinfo(ti, ea, 0, f):
-       #print ("tid=%08x - %s" % (ti.tid, ida_struct.get_struc_name(ti.tid)))
+    f = idaversion.get_full_flags(ea)
+    if idaversion.get_opinfo(ti, ea, 0, f):
+       #print ("tid=%08x - %s" % (ti.tid, idaversion.get_struc_name(ti.tid)))
        sid = ti.tid
-       full_name = ida_struct.get_struc_name(sid)
+       full_name = idaversion.get_struc_name(sid)
        cur_offset = offset
        while True:
            element = None
-           prev = idc.get_prev_offset(sid, cur_offset)
+           prev = idaversion.get_prev_offset(sid, cur_offset)
            #print('prev is %d ' % (prev))
-           mn = idc.get_member_name(sid, cur_offset)
+           mn = idaversion.get_member_name(sid, cur_offset)
            #print('get_member_name sid 0x%x offset %d got %s' % (sid, cur_offset, mn))
            if mn is None:
                #print('mn none')
-               last = idc.get_last_member(sid)
-               over = idc.get_next_offset(sid, last)
+               last = idaversion.get_last_member(sid)
+               over = idaversion.get_next_offset(sid, last)
                #print('last %d  over %d' % (last, over))
                element = int(cur_offset / over)
                cur_offset = cur_offset % over
-               mn = idc.get_member_name(sid, cur_offset)
+               mn = idaversion.get_member_name(sid, cur_offset)
                #print('in array get_member_name sid 0x%x offset %d got %s array element %d' % (sid, cur_offset, mn, element))
                if mn is None:
                    break
-           mem_off = idc.get_member_offset(sid, mn)
+           mem_off = idaversion.get_member_offset(sid, mn)
            #print('mn now %s offset %d' % (mn, mem_off))
            if element is None:
                full_name = full_name+'.'+mn
            else:
                full_name = '%s[%d].%s' % (full_name, element, mn)
-           sid = idc.get_member_strid(sid, cur_offset)
+           sid = idaversion.get_member_strid(sid, cur_offset)
            #print('new sid 0x%x cur_offset %d' % (sid, cur_offset))
            cur_offset = cur_offset - mem_off
 
@@ -167,7 +145,7 @@ class RevToHandler(idaapi.action_handler_t):
             self.isim = isim
         # reverse to the highlighted address
         def activate(self, ctx):
-            highlighted = getHighlight()
+            highlighted = idaversion.getHighlight()
             addr = getHex(highlighted)
             command = '@cgc.revToAddr(0x%x, extra_back=0)' % (addr)
             print('cmd: %s' % command)
@@ -185,8 +163,8 @@ class ModRegHandler(idaapi.action_handler_t):
             idaapi.action_handler_t.__init__(self)
             self.isim = isim
         def activate(self, ctx):
-            highlighted = getHighlight()
-            current = getRegVarValue(highlighted)
+            highlighted = idaversion.getHighlight()
+            current = idaversion.getRegVarValue(highlighted)
             default = '%x' % current
             print('default %s' % default)
             #prompt = 'Value to write to %s (in hex, no prefix)' % highlighted
@@ -208,7 +186,7 @@ class DataWatchHandler(idaapi.action_handler_t):
             idaapi.action_handler_t.__init__(self)
             self.last_data_watch_count = 32
         def activate(self, ctx):
-            highlighted = getHighlight()
+            highlighted = idaversion.getHighlight()
             addr = getHex(highlighted)
             count = self.last_data_watch_count
 
@@ -269,7 +247,7 @@ class DisHandler(idaapi.action_handler_t):
 
         # Disassemble SO
         def activate(self, ctx):
-            eip = idc.get_screen_ea()
+            eip = idaversion.get_screen_ea()
             fun_eip = self.isim.getOrigAnalysis().origFun(eip)
                
             return 1
@@ -288,13 +266,13 @@ class ModMemoryHandler(idaapi.action_handler_t):
         def activate(self, ctx):
             addr = getRefAddr()
             if addr is None:
-                highlighted = getHighlight()
+                highlighted = idaversion.getHighlight()
                 addr = getHex(highlighted)
             '''
             if regFu.isHighlightedEffective():
                 addr = regFu.getOffset()
             else:
-                highlighted = getHighlight()
+                highlighted = idaversion.getHighlight()
                 addr = getHex(highlighted)
             '''
 
@@ -302,7 +280,7 @@ class ModMemoryHandler(idaapi.action_handler_t):
             sas.Compile()
             sas.iAddr.value = addr 
             sas.iOffset.value = 0 
-            sas.iRawHex.value = idc.get_wide_dword(sas.iAddr.value)
+            sas.iRawHex.value = idaversion.get_wide_dword(sas.iAddr.value)
             ok = sas.Execute()
             if ok != 1:
                 return
@@ -314,9 +292,9 @@ class ModMemoryHandler(idaapi.action_handler_t):
             time.sleep(2)
             self.isim.updateBookmarkView()
             self.isim.updateDataWatch()
-            ida_dbg.refresh_debugger_memory()
-            ida_kernwin.refresh_idaview_anyway()
-            ida_kernwin.refresh_choosers()
+            idaversion.refresh_debugger_memory()
+            idaversion.refresh_idaview_anyway()
+            idaversion.refresh_choosers()
             print('Bookmarks cleared -- select origin bookmark to return to this cycle')
             print('Note: data watches previous to this point are retained, but associated bookmarks are deleted')
 
@@ -362,9 +340,9 @@ class StringMemoryHandler(idaapi.action_handler_t):
             time.sleep(2)
             self.isim.updateBookmarkView()
             self.isim.updateDataWatch()
-            ida_dbg.refresh_debugger_memory()
-            ida_kernwin.refresh_idaview_anyway()
-            ida_kernwin.refresh_choosers()
+            idaversion.refresh_debugger_memory()
+            idaversion.refresh_idaview_anyway()
+            idaversion.refresh_choosers()
             print('Bookmarks cleared -- select origin bookmark to return to this cycle')
             print('Note: data watches previous to this point are retained, but associated bookmarks are deleted')
 
@@ -459,7 +437,7 @@ def register(isim):
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
 
-class Hooks(ida_kernwin.UI_Hooks):
+class Hooks(UI_Hooks):
         def populating_widget_popup(self, form, popup):
             # You can attach here.
             pass
@@ -471,11 +449,11 @@ class Hooks(ida_kernwin.UI_Hooks):
             # for the 'Functions window' widget.
             # The action will be be inserted in a submenu of
             # the context menu, named 'Others'.
-            if idaapi.get_widget_type(form) == idaapi.BWN_CALL_STACK:
+            if idaversion.get_widget_type(form) == idaapi.BWN_CALL_STACK:
                 #line = form.GetCurrentLine()
                 pass
-            elif idaapi.get_widget_type(form) == idaapi.BWN_DISASM or \
-                 idaapi.get_widget_type(form) == idaapi.BWN_DUMP:
+            elif idaversion.get_widget_type(form) == idaapi.BWN_DISASM or \
+                 idaversion.get_widget_type(form) == idaapi.BWN_DUMP:
                 #regs =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
 
 
