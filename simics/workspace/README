@@ -8,6 +8,12 @@ As the driver boots, login to it (mike/password) and tee up the ./client.py scri
 When RESim presents the simics> prompt, direct it to debug cadet01:
    @cgc.debugProc('cadet01')
 
+Save snapshot for future runs without having to boot
+   @cgc.writeConfig('cadet')
+
+Direct RESim to watch for ROP:
+   @cgc.watchROP()
+
 Then continue the simulation and hit <enter> on the ./client.py command.
 
 RESim will stop the simulation when it detects a ROP caused by an overwrite of an return

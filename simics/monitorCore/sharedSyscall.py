@@ -248,6 +248,9 @@ class SharedSyscall():
             else:
                 trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d NULL addr\n' % (pid, exit_info.sock_struct.fd, new_fd))
         elif socket_callname == "socketpair":
+            if exit_info.retval_addr is None:
+                self.lgr.error('sharedSyscall socketpair got null retval addr')
+                return 'socketpair bad retval addr?'
             fd1 = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
             fd2 = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr+4)
             if pid in self.trace_procs:

@@ -20,8 +20,8 @@ class RopCop():
         else:
             self.decode = decode
 
-    def watchROP(self):
-        self.watching = True
+    def watchROP(self, watching=True):
+        self.watching = watching
         self.setHap()
 
     def setHap(self):
@@ -99,7 +99,8 @@ class RopCop():
         if self.stop_hap is None:  
             return
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        self.lgr.debug('ropCop stopHap, call skipAndMail')
+        self.watchROP(watching=False)
+        self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')
         self.top.skipAndMail()
 
     def clearHap(self):
