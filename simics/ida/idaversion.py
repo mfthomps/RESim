@@ -6,6 +6,8 @@ else:
     import ida_idaapi
     import ida_dbg
     import ida_kernwin
+    import ida_nalt
+    import idc
 
 def refresh_debugger_memory():
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -31,11 +33,11 @@ def wait_for_next_event(kind, flag):
     else:
         event = ida_dbg.wait_for_next_event(kind, flag)
 
-def ask_str(default, val, label):
+def ask_str(default, label, hist=0):
     if idaapi.IDA_SDK_VERSION <= 699:
         mark = idc.AskStr(default, label)
     else:
-        mark = ida_kernwin.ask_str(default, val, label)
+        mark = ida_kernwin.ask_str(default, hist, label)
     return mark
 
 def getHighlight():
@@ -142,23 +144,17 @@ def get_root_file_name():
     else:
         retval = ida_nalt.root_file_name()
 
-def ask_addr():
+def ask_addr(value, prompt):
     if idaapi.IDA_SDK_VERSION <= 699:
-        retval = idc.AskAddr()
+        retval = idc.AskAddr(value, prompt)
     else:
-        retval = ida_kernwin.ask_addr()
+        retval = ida_kernwin.ask_addr(value, prompt)
 
-def ask_string():
+def ask_long(value, prompt):
     if idaapi.IDA_SDK_VERSION <= 699:
-        retval = idc.AskString()
+        retval = idc.AskLong(value, prompt)
     else:
-        retval = ida_kernwin.ask_string()
-
-def ask_long():
-    if idaapi.IDA_SDK_VERSION <= 699:
-        retval = idc.AskLong()
-    else:
-        retval = ida_kernwin.ask_long()
+        retval = ida_kernwin.ask_long(value, prompt)
 
 def rebase_program(start_hex, offset):
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -177,7 +173,7 @@ def find_widget(title):
     if idaapi.IDA_SDK_VERSION <= 699:
         form = idaapi.find_tform(title)
     else:
-        form=kernwin.find_widget(title)
+        form=ida_kernwin.find_widget(title)
     return form
 
 def activate_widget(form, active):

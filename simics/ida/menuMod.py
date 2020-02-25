@@ -1,4 +1,5 @@
 import idaapi
+import os
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -250,6 +251,35 @@ class RunToHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class ContinueForwardHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.continueForward()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+class TrackIOHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.trackIO()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+class RunToAcceptHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.runToAccept()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     do_show_cycle_action = idaapi.action_desc_t(
         'do_show_cycle:action',
@@ -277,7 +307,7 @@ def register(isim):
 
     do_step_over_action = idaapi.action_desc_t(
         'do_step_over:action',
-        'Step over (reSim)', 
+        'Step over (RESim)', 
         DoStepOverHandler(isim),
         'F8')
 
@@ -376,6 +406,24 @@ def register(isim):
         'Rev to Text segment', 
         RevToTextHandler(isim))
 
+    track_io_action = idaapi.action_desc_t(
+        'track_io:action',
+        'Track IO', 
+        TrackIOHandler(isim))
+
+    run_to_accept_action = idaapi.action_desc_t(
+        'run_to_accept:action',
+        'Run to accept', 
+        RunToAcceptHandler(isim))
+
+    this_dir = os.path.dirname(os.path.realpath(__file__))
+    play_icon = os.path.join(this_dir, "play.png")
+    continue_forward_action = idaapi.action_desc_t(
+        'continue_forward:action',
+        'Continue process(RESim)', 
+        ContinueForwardHandler(isim),
+        'F9', 'Continue', idaapi.load_custom_icon(file_name=play_icon, format="png"))
+
     idaapi.unregister_action("ThreadStepOver")
     idaapi.register_action(do_show_cycle_action)
     idaapi.register_action(do_rebase_action)
@@ -399,35 +447,27 @@ def register(isim):
     idaapi.register_action(run_to_connect_action)
     idaapi.register_action(run_to_text_action)
     idaapi.register_action(rev_to_text_action)
+    idaapi.register_action(continue_forward_action)
+    idaapi.register_action(track_io_action)
+    idaapi.register_action(run_to_accept_action)
 
 
 def attach():
+    ''' Determines where entry appears in menu '''
     idaapi.attach_action_to_menu(
-        'Debugger/Run to cursor',
-        'do_show_cycle:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/Run to cursor',
-        'do_rebase:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/Run to cursor',
-        'do_reverse:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/Run to cursor',
-        'do_rev_step_over:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/Step over',
+        'Debugger/Step into',
         'do_step_over:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/Step over (RESim)',
+        'do_rev_step_over:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Step into',
         'do_rev_step_into:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/Run to Cursor',
+        'Debugger/Run until return',
         'do_rev_finish:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
@@ -436,39 +476,22 @@ def attach():
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/^ Rev to Cursor',
-        'do_wrote_to_sp:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/^ Rev to Cursor',
-        'do_wrote_to_address:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/^ Rev to Cursor',
-        'track_address:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/^ Rev to Cursor',
-        'wrote_register:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/^ Rev to Cursor',
-        'track_register:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/^ Rev to Cursor',
         'run_to_user:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
-        'run_to_syscall:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/Continue process',
         'resynch:action',
         idaapi.SETMENU_APP) 
+    '''
+    RESim submenu
+    '''
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'watch_data:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'track_io:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
@@ -477,6 +500,10 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'run_to_bind:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'run_to_accept:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
@@ -489,4 +516,43 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'rev_to_text:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'do_wrote_to_sp:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'do_wrote_to_address:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'track_address:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'wrote_register:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'track_register:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'do_show_cycle:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'do_rebase:action',
+        idaapi.SETMENU_APP) 
+
+    idaapi.attach_action_to_menu(
+        'Debugger/Continue process', 
+        'continue_forward:action',
+        idaapi.SETMENU_APP) 
+    #idaapi.unregister_action("ProcessStart")
+    idaapi.attach_action_to_toolbar("DebugToolBar", "continue_forward:action")
+    idaapi.attach_action_to_menu(
+        'Debugger/Continue process(RESim)', 
+        'do_reverse:action',
         idaapi.SETMENU_APP) 

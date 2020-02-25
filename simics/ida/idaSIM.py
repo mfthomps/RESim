@@ -605,7 +605,7 @@ class IdaSIM():
     
     def runToBind(self):
         print('runToBind')
-        result = idaversion.ask_str('?', 'Network address as ip:port (or regex)')
+        result = idaversion.ask_str('?', 'Network address as ip\:port (or regex)')
         if result is None:
             return
         #result = '192.168.31.52:20480'
@@ -790,3 +790,16 @@ class IdaSIM():
             print('could not get hex from %s' % start)
             return 
         idaversion.rebase_program(start_hex, 0) 
+
+    def trackIO(self):
+
+        result = idaversion.ask_str(self.recent_fd, 'FD ?', hist=2)
+        if result is None:
+            return
+        self.recent_fd = result
+        fd = int(result)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.trackIO(%d)");' % fd)
+        time.sleep(1)
+        eip = gdbProt.getEIPWhenStopped()
+        self.signalClient()
+        self.updateDataWatch()
