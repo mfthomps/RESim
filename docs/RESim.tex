@@ -250,11 +250,15 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 \item {\tt catchCorruption} – Watch for events symptomatic of memory corruption errors, e.g., SEGV or SIGILL exceptions resulting from buffer overflows.  This is automatically enabled during debug sessions. Refer to \ref{SEGV} for information about what we mean by SEGV, and how we catch it.
 
 \item {\tt watchROP} -- Watch for return instructions that do not seem to follow calls.  This is available while debugging a process.
+
+\item {\tt autoMaze} -- Avoid being prompted when tracing detects a crude timing loop or other events that are repeated many times in a loop.
+See section \ref{maze}.
+
 \end{itemize}
 
 \subsection{Postprocessing}
 \label{postprocessing}
-See the scripts in {\tt resim/postScripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
+See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
 
 \section{Defining a target system}
 \label{configuration}
@@ -398,7 +402,13 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 
 \subsection{IDA Pro}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
-{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  Then, from IDA, run this script:
+{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
+
+The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is localhost and the port is 9123.  Save those as 
+the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
+and to only log the exception.  Save the settings.  You should only need to do this step once.
+
+The first time you open a given program in IDA, run this script (from File / Script file):
 \begin{verbatim}
 $RESIM/simics/ida/dumpFuns.py 
 \end{verbatim}
@@ -407,8 +417,7 @@ $RESIM/simics/ida/dumpFuns.py
 From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc<program>} command, naming the program of interest.
 RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
 Using {\tt debugProc} rather than {\tt debugPid} allows RESim to collect shared object information for the target process.
-You may now attach the IDA gdb debugger to the process (be sure to set the IDA debug port to that displayed at the Simics command prompt.)
-After the debugger has attached, run this IDA plugin:
+You may now attach the IDA gdb debugger to the process.   After the debugger has attached, run this IDA plugin script:
 \begin{verbatim}
 $RESIM/simics/ida/rev.py
 \end{verbatim}
@@ -613,12 +622,14 @@ When the program of interest is loaded via an execve system call, breakpoints ar
 RESim maintains maps of addresses of shared library files.   When a shared object is called, the IDA Pro client retrieves the shared library name from the RESim server and displays it for the user.  When the user opens that file in IDA Pro, and attaches the debugger, the IDA Pro plug-in retrieves the address of the library and causes IDA to rebase using that offset.
 
 \section{Analysis of programs with crude timing loops}
-
+\label{maze}
 Consider a program that reads data from a network interface by first setting the socket to non-blocking mode and then looping on a read system call until 30 seconds have expired.  The program spins instead of sleeping.  It calls "read" and "gettimeofday" hundreds of thousands of times.
 
 Creating a process trace on such a program could take hours (or days) because the simulation breaks and then continues on each system call.  This note describes how RESim identifies this condition as it occurs, and semi-automated steps it takes to disable system call tracing until the offending loop is exited.  
 
 While tracing system calls of a process, invocations of "readtimeofday" are tracked and compared to a frequency threshold.  When it appears that the program is spinning on a clock, the user is prompted with an option to attempt to exit the loop. If the user so chooses, RESim will step through a single circuit of the timing loop, recording instructions at the outermost level of scope. It then searches the recorded instructions to identify all conditional jump instructions, and their destinations. Each destination is inspected to determine if it was encountered within the loop.  If not, the destination and the comparison operator that controlled the jump is recorded.  Breakpoints are set on each such destination address.  We then disable all other breakpoints, e.g., those involved in tracing and context management, and run until we reach a breakpoint.  
+This feature is called a \textit{maze exit}.  If you would like to avoid the prompts, use the {\tt @cgc.autoMaze()} function to cause the system
+to automatically try ot exit mazes as efficiently as it can.
 
 RESim includes an optional function to ensure that the number of breakpoints does not exceed 4 (the quantity of hardware breakpoints supported by x86).  If more than 4 breakpoints are found the analyst can guide the removal of breakpoints. RESim will automatically execute the loop a large number of times in order to identify comparisons that may be converging.  And the user is informed of those to aid the reduction of the quantity of breakpoints.  (Note that in the context of this issue, there are less than or equal to 4 breakpoints and more than 4.  There is probably a lot more than 4 as well, but we've not yet quantified its effects.)
 
