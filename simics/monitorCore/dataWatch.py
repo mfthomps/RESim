@@ -41,6 +41,8 @@ class DataWatch():
             self.back_stop_cycles = 5000000
         else:
             self.back_stop_cycles = int(back_stop_string)
+        ''' Do not set backstop until first read, otherwise accept followed by writes will trigger it. '''
+        self.use_back_stop = False
         
         lgr.debug('DataWatch init with back_stop_cycles %d' % self.back_stop_cycles)
         if cpu.architecture == 'arm':
@@ -48,8 +50,11 @@ class DataWatch():
         else:
             self.decode = decode
 
-    def setRange(self, start, length, msg=None, max_len=None):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x' % (start, length))
+        if not self.use_back_stop and back_stop:
+            self.use_back_stop = True
+
         end = start+length
         overlap = False
         for index in range(len(self.start)):
@@ -63,6 +68,12 @@ class DataWatch():
                     self.lgr.debug('DataWatch setRange found subrange, replace it')
                     self.start[index] = start
                     self.length[index] = length
+                    overlap = True
+                    break
+                elif start == (this_end+1):
+                    self.length[index] = self.length[index]+length
+                    overlap = True
+                    break
         if not overlap:
             self.start.append(start)
             self.length.append(length)
@@ -356,7 +367,7 @@ class DataWatch():
             return
         self.prev_cycle = self.cpu.cycles
 
-        if self.back_stop is not None and not self.break_simulation:
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         if index >= len(self.read_hap):
             self.lgr.error('dataWatch readHap invalid index %d, only %d read haps' % (index, len(self.read_hap)))
@@ -439,7 +450,7 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d' % (eip, break_num, self.start[index], end, self.length[index], index))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
-        if self.back_stop is not None and not self.break_simulation:
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
 
     def stopHap(self, stop_action, one, exception, error_string):

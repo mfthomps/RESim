@@ -2177,6 +2177,11 @@ class GenMonitor():
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
+        else:
+            cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
+            if pid != cur_pid:
+                self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
+                return ""
         if pid not in self.stack_base[self.target]:
             stack_base = None
         else:
@@ -2190,6 +2195,11 @@ class GenMonitor():
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
+        else:
+            cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
+            if pid != cur_pid:
+                self.lgr.debug('getSTackTrace not in expected pid %d, current is %d' % (pid, cur_pid))
+                return "{}"
         self.lgr.debug('genMonitor getStackTrace pid %d' % pid)
         if pid not in self.stack_base[self.target]:
             stack_base = None

@@ -237,7 +237,7 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of address data '''
-                    self.dataWatch.setRange(in_ss.addr, addr_len, trace_msg)
+                    self.dataWatch.setRange(in_ss.addr, addr_len, trace_msg, back_stop=False)
                     #if my_syscall.linger: 
                     ''' TBD better way to distinguish linger from trackIO '''
                     if not self.dataWatch.wouldBreakSimulation():

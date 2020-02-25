@@ -30,7 +30,8 @@ Manage cycle events to limit how far a session can run without some intervening 
 '''
 class BackStop():
     def cycle_handler(self, obj, cycles):
-        print "Printing from the cycle handler"
+        if self.back_stop_cycle is None:
+            return
         self.lgr.debug("backStop, cycle_handler ")
         if self.cpu is not None:
             self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x' % (self.cpu.name, self.cpu.cycles))

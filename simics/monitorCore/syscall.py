@@ -1309,6 +1309,7 @@ class Syscall():
                         self.top.rmCallTrace(self.cell_name, callname)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
+                self.top.skipAndMail()
 
         
     def syscallHap(self, syscall_info, third, forth, memory):

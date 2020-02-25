@@ -206,7 +206,7 @@ class StackTrace():
         return retval
 
     def doTrace(self):
-        if self.pid == 0:
+        if self.pid == 0 or self.pid == 1:
             #self.lgr.debug('stackTrack doTrace called with pid 0')
             return
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
