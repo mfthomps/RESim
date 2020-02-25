@@ -33,7 +33,7 @@ if True:
           print('got nothting, bye')
           exit(1)
         print('got %s' % got)
-        time.sleep(3) 
+        #time.sleep(3) 
         got = sock.recv(1024)
         print('got %s' % got)
 
