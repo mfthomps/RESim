@@ -550,7 +550,8 @@ def attach():
         'Debugger/Continue process', 
         'continue_forward:action',
         idaapi.SETMENU_APP) 
-    #idaapi.unregister_action("ProcessStart")
+    if idaapi.IDA_SDK_VERSION >= 740:
+        idaapi.unregister_action("ProcessStart")
     idaapi.attach_action_to_toolbar("DebugToolBar", "continue_forward:action")
     idaapi.attach_action_to_menu(
         'Debugger/Continue process(RESim)', 
