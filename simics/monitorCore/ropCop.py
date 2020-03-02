@@ -99,6 +99,7 @@ class RopCop():
         if self.stop_hap is None:  
             return
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')
         self.top.skipAndMail()
