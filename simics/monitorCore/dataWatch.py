@@ -396,6 +396,9 @@ class DataWatch():
                 ''' prevent stack trace from triggering haps '''
                 self.stopWatch()
             st = self.top.getStackTraceQuiet(max_frames=3)
+            if st is None:
+                self.lgr.debug('stack trace is None, wrong pid?')
+                return
             #self.lgr.debug('%s' % st.getJson()) 
             ''' look for memcpy'ish... TBD generalize '''
             mem_stuff = st.memsomething()
