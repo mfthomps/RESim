@@ -2,7 +2,7 @@ from simics import *
 import decode
 import decodeArm
 class RopCop():
-    def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, lgr):
+    def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, bookmarks, lgr):
         self.context_manager = context_manager
         self.top = top
         self.cpu = cpu
@@ -11,6 +11,7 @@ class RopCop():
         self.text = text
         self.size = size
         self.lgr = lgr
+        self.bookmarks = bookmarks
         self.rop_hap = None
         self.stop_hap = None
         self.watching = False
@@ -72,7 +73,7 @@ class RopCop():
                 eip = eip+1
         if not done:
             self.lgr.debug('********************* not call prior to 0x%x' % (return_to))
-            SIM_run_alone(self.stopAlone, None)
+            SIM_run_alone(self.stopAlone, return_to)
   
 
     def ropHapArm(self, dumb, third, forth, memory):
@@ -88,20 +89,24 @@ class RopCop():
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
             if not self.isArmCall(prev_instruct[1]):
                 self.lgr.debug('********************* not call %s  at 0x%x' % (prev_instruct[1], pc))
-                SIM_run_alone(self.stopAlone, None)
+                SIM_run_alone(self.stopAlone, ret_addr)
 
-    def stopAlone(self, dumb):
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, None)
+    def stopAlone(self, ret_addr):
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
         print('Possible ROP')
         SIM_break_simulation('ROP ?')
 
-    def stopHap(self, my_args, one, exception, error_string):
+    def stopHap(self, ret_addr, one, exception, error_string):
         if self.stop_hap is None:  
             return
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')
+        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
+        bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
+        self.bookmarks.setDebugBookmark(bm)
         self.top.skipAndMail()
 
     def clearHap(self):
