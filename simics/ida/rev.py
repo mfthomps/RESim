@@ -512,3 +512,4 @@ if __name__ == "__main__":
         pass
     idaversion.batch(0)
 
+    print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)

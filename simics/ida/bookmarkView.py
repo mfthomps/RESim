@@ -158,7 +158,7 @@ class bookmarkView(simplecustviewer_t):
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     
     def askSetBookmark(self):
-        #print('askSetBookmark')
+        print('askSetBookmark')
         addr = idaversion.get_reg_value(self.isim.PC)
         instruct = idc.GetDisasm(addr)
         if ';' in instruct:
@@ -168,9 +168,11 @@ class bookmarkView(simplecustviewer_t):
     
         #print('eip %x  instruct: %s' % (addr, instruct))
         default = '0x%x: %s' % (addr, instruct) 
-        mark = idaversion.ask_str(default, 0, 'Name of new bookmark:')
+        mark = idaversion.ask_str(default, 'Name of new bookmark:')
+        print('got mark of %s' % mark)
         if mark != 0 and mark != 'None':
             self.setBookmark(mark)
+            print('do update of bookmark, go mark of %s' % mark)
             self.updateBookmarkView()
 
     def printBookmarks(self):

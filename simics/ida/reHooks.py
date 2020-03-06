@@ -315,7 +315,7 @@ class StringMemoryHandler(idaapi.action_handler_t):
                 print('effective addr 0x%x value %s' % (addr, simicsString))
                 value = simicsString
             else:
-                highlighted = getHighlight()
+                highlighted = idaversion.getHighlight()
                 addr = getHex(highlighted)
                 if addr is None:
                     print('ModMemoryHandler unable to parse hex from %s' % highlighted)
@@ -461,7 +461,7 @@ class Hooks(UI_Hooks):
                 idaapi.attach_action_to_popup(form, popup, "revCursor:action", 'RESim/')
                 idaapi.attach_action_to_popup(form, popup, "dis:action", 'RESim/')
 
-                highlighted = getHighlight()
+                highlighted = idaversion.getHighlight()
                 if highlighted is not None:
                     if highlighted in regs:
                         idaapi.attach_action_to_popup(form, popup, "modReg:action", 'RESim/')

@@ -137,24 +137,28 @@ def get_input_file_path():
         retval = idc.GetInputFilePath()
     else:
         retval = ida_nalt.get_input_file_path()
+    return retval
 
 def get_root_file_name():
     if idaapi.IDA_SDK_VERSION <= 699:
         retval = idc.GetRootFileName()
     else:
         retval = ida_nalt.root_file_name()
+    return retval
 
 def ask_addr(value, prompt):
     if idaapi.IDA_SDK_VERSION <= 699:
         retval = idc.AskAddr(value, prompt)
     else:
         retval = ida_kernwin.ask_addr(value, prompt)
+    return retval
 
 def ask_long(value, prompt):
     if idaapi.IDA_SDK_VERSION <= 699:
         retval = idc.AskLong(value, prompt)
     else:
         retval = ida_kernwin.ask_long(value, prompt)
+    return retval
 
 def rebase_program(start_hex, offset):
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -201,12 +205,14 @@ def get_segm_name(seg_ea):
         retval = idc.SegName(seg_ea)
     else:
         retval = idc.get_segm_name(seg_ea)
+    return retval
 
-def get_segm_attr(seg_ea):
+def get_segm_attr(seg_ea, attr):
     if idaapi.IDA_SDK_VERSION <= 699:
-        retval = idc.GetSegmentAttr(seg_ea)
+        retval = idc.GetSegmentAttr(seg_ea, attr)
     else:
-        retval = idc.get_segm_attr(seg_ea)
+        retval = idc.get_segm_attr(seg_ea, attr)
+    return retval
 
 def batch(num):
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -246,11 +252,13 @@ def get_operand_value(eax, opnum):
         offset = idc.GetOperandValue(eax, opnum)
     else:
         offset = idc.get_operand_value(eax, opnum)
+
 def get_operand_type(eax, opnum):
     if idaapi.IDA_SDK_VERSION <= 699:
         offset = idc.GetOpType(eax, opnum)
     else:
         offset = idc.get_operand_type(eax, opnum)
+    return offset
 
 def get_func_name(ea):
     if idaapi.IDA_SDK_VERSION <= 699:
