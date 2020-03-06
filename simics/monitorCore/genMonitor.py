@@ -77,10 +77,11 @@ import re
 
 
 class Prec():
-    def __init__(self, cpu, proc, pid=None):
+    def __init__(self, cpu, proc, pid=None, who=None):
         self.cpu = cpu
         self.proc = proc
         self.pid = pid
+        self.who = who
         self.debugging = False
 
 class GenMonitor():
@@ -628,7 +629,7 @@ class GenMonitor():
                         self.dataWatch[self.target].setUserIterators(self.user_iterators)
                         self.dataWatch[self.target].setRelocatables(self.relocate_funs)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
-                             text_segment.address, text_segment.size, self.lgr)
+                             text_segment.address, text_segment.size, self.bookmarks, self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.lgr)
@@ -1699,11 +1700,11 @@ class GenMonitor():
             return
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu != prec.cpu or pid not in prec.pid:
-            self.lgr.debug('text hap, wrong something pid:%d prec pid list %s' % (pid, str(prec.pid)))
+            self.lgr.debug('%s hap, wrong something pid:%d prec pid list %s' % (prec.who, pid, str(prec.pid)))
             return
         #cur_eip = SIM_get_mem_op_value_le(memory)
         eip = self.getEIP(cpu)
-        self.lgr.debug('textHap, must be in text eip is 0x%x' % eip)
+        self.lgr.debug('textHap eip is 0x%x' % eip)
         self.is_monitor_running.setRunning(False)
         self.exit_group_syscall[self.target].unsetDebuggingExit()
         SIM_break_simulation('text hap')
@@ -1851,10 +1852,10 @@ class GenMonitor():
         if pid is None:
             self.lgr.debug('runToText, not debugging yet, assume current process')
             cpu, comm, pid = self.task_utils[self.target].curProc() 
-            prec = Prec(cpu, None, [pid])
+            prec = Prec(cpu, None, [pid], who='to text')
         else:
             pid_list = self.context_manager[self.target].getThreadPids()
-            prec = Prec(cpu, None, pid_list)
+            prec = Prec(cpu, None, pid_list, who='to text')
         if flist is None:
             prec.debugging = True
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
@@ -2180,8 +2181,11 @@ class GenMonitor():
         else:
             cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
             if pid != cur_pid:
-                self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
-                return ""
+                if not self.context_manager[self.target].amWatching(cur_pid):
+                    self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
+                    return None
+                else:
+                    pid = cur_pid
         if pid not in self.stack_base[self.target]:
             stack_base = None
         else:
@@ -2796,6 +2800,32 @@ class GenMonitor():
 
     def showCoverage(self):
         self.coverage.showCoverage()
+
+    def runToStack(self):
+        ''' 3 pages for now? '''
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        esp = self.mem_utils[self.target].getRegValue(cpu, 'esp')
+        base = esp & 0xffffff000
+        cell = self.cell_config.cell_context[self.target]
+        proc_break = self.context_manager[self.target].genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, base, 0x3000, 0)
+        pid_list = self.context_manager[self.target].getThreadPids()
+        prec = Prec(cpu, None, pid_list, who='to stack')
+        prec.debugging = True
+        f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
+        flist = [f1]
+
+        self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'stack_hap')
+
+        hap_clean = hapCleaner.HapCleaner(cpu)
+        hap_clean.add("GenContext", self.proc_hap)
+        stop_action = hapCleaner.StopAction(hap_clean, None, flist)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+          self.stopHap, stop_action)
+
+        self.context_manager[self.target].watchTasks()
+        self.lgr.debug('runToStack hap set, now run. flist in stophap is %s' % stop_action.listFuns())
+        SIM_run_alone(SIM_run_command, 'continue')
+        
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
