@@ -292,7 +292,7 @@ class memUtils():
                 reg_num = cpu.iface.int_register.get_number(reg)
                 reg_value = cpu.iface.int_register.read(reg_num)
             except:
-                self.lgr.debug('except for %s' % reg)
+                #self.lgr.debug('except for %s' % reg)
                 ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
                 continue
             reg_values[reg] = reg_value
