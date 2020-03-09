@@ -580,7 +580,9 @@ class GenMonitor():
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
             self.setDebugBookmark('origin', cpu)
             self.bookmarks.setOrigin(cpu)
-            self.context_manager[self.target].watchTasks(set_debug_pid=True)
+            ''' tbd, this is likely already set by some other action, no harm '''
+            self.context_manager[self.target].watchTasks()
+            self.context_manager[self.target].setDebugPid()
             ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
             self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
 
@@ -629,7 +631,7 @@ class GenMonitor():
                         self.dataWatch[self.target].setUserIterators(self.user_iterators)
                         self.dataWatch[self.target].setRelocatables(self.relocate_funs)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
-                             text_segment.address, text_segment.size, self.bookmarks, self.lgr)
+                             text_segment.address, text_segment.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.lgr)
@@ -837,6 +839,9 @@ class GenMonitor():
         self.stack_base[self.target][pid] = sp
 
     def recordStackClone(self, pid, parent):
+        if self.target not in self.track_threads:
+            self.lgr.error('recordStackClone without track_threads loaded')
+            return
         sp = self.track_threads[self.target].getChildStack(parent)
         self.stack_base[self.target][pid] = sp
         if sp is not None:
