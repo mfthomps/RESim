@@ -2,7 +2,7 @@ from simics import *
 import decode
 import decodeArm
 class RopCop():
-    def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, bookmarks, lgr):
+    def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
         self.context_manager = context_manager
         self.top = top
         self.cpu = cpu
@@ -11,6 +11,7 @@ class RopCop():
         self.text = text
         self.size = size
         self.lgr = lgr
+        self.task_utils = task_utils
         self.bookmarks = bookmarks
         self.rop_hap = None
         self.stop_hap = None
@@ -23,6 +24,7 @@ class RopCop():
 
     def watchROP(self, watching=True):
         self.watching = watching
+        self.lgr.debug('watchROP %r' % watching)
         self.setHap()
 
     def setHap(self):
@@ -38,6 +40,7 @@ class RopCop():
             self.callmn = 'call'
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
             self.rop_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.ropHap, None, proc_break, 'rop_hap')
+        self.lgr.debug('ropCop setHap done on 0x%x size 0x%x' % (self.text, self.size))
 
     def isArmCall(self, instruct):
         retval = False
@@ -106,6 +109,8 @@ class RopCop():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
+        dumb, comm, cur_pid  = self.task_utils.curProc()
+        self.lgr.debug('ropCop stopHap %s pid:%d' % (bm, cur_pid))
         self.bookmarks.setDebugBookmark(bm)
         self.top.skipAndMail()
 
