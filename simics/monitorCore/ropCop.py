@@ -16,6 +16,8 @@ class RopCop():
         self.rop_hap = None
         self.stop_hap = None
         self.watching = False
+        ''' hack to keep hap from invoking twice '''
+        self.in_process = False
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
@@ -30,6 +32,7 @@ class RopCop():
     def setHap(self):
         if not self.watching:
             return
+        self.in_process = False
         if self.cpu.architecture == 'arm':
             prefix = 'ldm'
             self.callmn = 'bl'
@@ -54,6 +57,11 @@ class RopCop():
 
     def ropHap(self, dumb, third, forth, memory):
         ''' callback when ret or pop executed'''
+        if self.rop_hap is None:  
+            return
+        if self.in_process:
+            self.lgr.debug('ropHap, in progress, return')
+            return
         #addr = memory.logical_address
         #instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
         #current_eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -76,11 +84,17 @@ class RopCop():
                 eip = eip+1
         if not done:
             self.lgr.debug('********************* not call prior to 0x%x' % (return_to))
+            self.in_process = True
             SIM_run_alone(self.stopAlone, return_to)
   
 
     def ropHapArm(self, dumb, third, forth, memory):
         ''' callback when ret or pop executed'''
+        if self.rop_hap is None:  
+            return
+        if self.in_process:
+            self.lgr.debug('ropHap, in progress, return')
+            return
         addr = memory.logical_address
         instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
         if 'pc' in instruct[1]:
@@ -91,6 +105,7 @@ class RopCop():
             prev_instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
             if not self.isArmCall(prev_instruct[1]):
+                self.in_process = True
                 self.lgr.debug('********************* not call %s  at 0x%x' % (prev_instruct[1], pc))
                 SIM_run_alone(self.stopAlone, ret_addr)
 
@@ -119,3 +134,4 @@ class RopCop():
             self.context_manager.genDeleteHap(self.rop_hap, immediate=True)
             self.lgr.debug('ropCop cleared hap %d' % self.rop_hap)
             self.rop_hap = None
+        self.did_these = []
