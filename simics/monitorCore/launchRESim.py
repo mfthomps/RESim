@@ -157,6 +157,9 @@ class LaunchRESim():
         else:
             ini_file = RESIM_INI
         cfg_file = os.path.join(SIMICS_WORKSPACE, ini_file)
+        if not os.path.isfile(ini_file):
+            print('File not found: %s' % ini_file)
+            exit(1)
         self.config.read(cfg_file)
         
         
@@ -204,7 +207,7 @@ class LaunchRESim():
                 run_command('start-agent-manager')
                 done = False
                 count = 0
-                while not done: 
+                while not done and not DRIVER_WAIT: 
                     run_command('c 50000000000')
                     if os.path.isfile('driver-ready.flag'):
                         done = True 
