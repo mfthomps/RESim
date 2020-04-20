@@ -172,7 +172,7 @@ the nth recv call.
 
 \item {\tt revInto} – Reverse execution to the previous instruction in user space within the debugged process. 
 
-\item {\tt revOver} – Reverse execution to the previous instruction in the debugged process – without entering functions, e.g., any function that may have returned to the current EIP.
+\item {\tt revOver} – Reverse execution to the previous instruction in the debugged process – without entering functions, e.g., any function that may have returned to the current EIP.  Note that ROP may throw this off, causing you to land at the earliest recorded bookmark.  Use {\tt revInto} to reverse following a ROP.
 
 \item {\tt uncall} – Reverse execution until the call instruction that entered the current function.
 
@@ -371,7 +371,12 @@ $RESIM/simics/workspace/monitor.sh
 Steps to define and run a RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
 computer upon which Simics is installed with a x86-x58-ich10 platform.
 \begin{enumerate}
-\item Create a Simics workspace.
+\item Create a Simics workspace, e.g.,
+\begin{verbatim}
+mkdir mywork; cd mywork
+../install/simics-5/simics-5.0.185/bin/project-setup
+\end{verbatim}
+
 \item Copy files from {\tt \$RESIM/simics/workspace} into the new workspace.
 \item Clone the RESim repo 
 \item Modify the monitor.sh script to reflect your Simics installation and the path to your RESim repo.
@@ -785,10 +790,35 @@ Use disable-reverse-execution whenever you do not really need reversing, e.g., w
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind is created.
 
+\section{New disk images}
+For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
+the file, and run with realtime enabled.  After the install, use save-persistent-state, and then rename the resulting craff as
+needed.
+
+When using real networks, configure the image routing and resolv.conf, using your ip address:
+\begin{verbatim}
+route add default gw 10.10.0.1
+echo nameserver 10.10.0.1 > /etc/resolv.conf
+\end{verbatim}
+
+If building a new driver, use the DRIVER\_WAIT directive in the ini file to prevent RESim from waiting for the driver to finish 
+(the driver\_ready.flag) -- at least until you finish configuring a driver.
+
 \section{Driver platforms}
 The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.ini} example has the Simics Agent pre-installed.  The
 {\tt driver-script.sh} in that directory can be copied and modified within your workspace.  The driver will download that shell script and execute
 it when booting.  Your target will not boot until that script finishes (and creates the driver-ready.flag file).
+
+To update the driver, e.g., with new packages, use the driver.ini configuration.  Then use mapdriver.simics to connect to the real network.
+You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and the do\_merge.sh to
+created a merged craff.  \textbf{Do not} forget to shutdown or sync before saving state!.  Give the driver craff a name that does not conflict with exising names.
+
+Large scp operations may stall.  Consider using the simics-agent to move files to the driver.  However,
+these only happen one file at a time, so use tar.
+
+Add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
+driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
+and execute the driver-script.sh from the workspace.
 
 \section{Simics user notes}
 This section includes ad-hoc suggestions for users with little Simics experience.
