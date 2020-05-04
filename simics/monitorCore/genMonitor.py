@@ -416,7 +416,7 @@ class GenMonitor():
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.param[cell_name], self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.param[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[self.target], self.mem_utils[self.target], 
                   self.task_utils[self.target], 
                   self.context_manager[self.target], self.lgr)
@@ -1109,6 +1109,8 @@ class GenMonitor():
 
         #self.stopTrace()
         self.restoreDebugBreaks()
+        if self.coverage is not None:
+            self.coverage.saveCoverage()
 
     def getBookmarkPid(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -1400,7 +1402,8 @@ class GenMonitor():
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
             value = self.mem_utils[self.target].readWord32(cpu, addr)
-            bm='backtrack START:0x%x inst:"%s" track_addr:0x%x track_value:0x%x' % (eip, instruct[1], addr, value)
+            track_num = self.bookmarks.setTrackNum()
+            bm='backtrack START:%d 0x%x inst:"%s" track_addr:0x%x track_value:0x%x' % (track_num, eip, instruct[1], addr, value)
             self.bookmarks.setDebugBookmark(bm)
             self.lgr.debug('BT add bookmark: %s' % bm)
             self.context_manager[self.target].setIdaMessage('')
@@ -1422,7 +1425,8 @@ class GenMonitor():
             reg_num = cpu.iface.int_register.get_number(reg)
             value = cpu.iface.int_register.read(reg_num)
             self.lgr.debug('revTaintReg for reg value %x' % value)
-            bm='backtrack START:0x%x inst:"%s" track_reg:%s track_value:0x%x' % (eip, instruct[1], reg, value)
+            track_num = self.bookmarks.setTrackNum()
+            bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
             self.bookmarks.setDebugBookmark(bm)
             self.context_manager[self.target].setIdaMessage('')
             self.rev_to_call[self.target].doRevToModReg(reg, True)
@@ -1786,6 +1790,8 @@ class GenMonitor():
             self.ropCop[self.target].clearHap()
         self.context_manager[self.target].clearExitBreaks()
         self.debug_breaks_set = False
+        if self.coverage is not None:
+            self.coverage.stopCover()
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -2206,9 +2212,10 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         else:
             cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-            if pid != cur_pid:
-                self.lgr.debug('getSTackTrace not in expected pid %d, current is %d' % (pid, cur_pid))
+            if not self.context_manager[self.target].amWatching(cur_pid):
+                self.lgr.debug('getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
                 return "{}"
+            pid = cur_pid
         self.lgr.debug('genMonitor getStackTrace pid %d' % pid)
         if pid not in self.stack_base[self.target]:
             stack_base = None
@@ -2252,7 +2259,7 @@ class GenMonitor():
         self.mem_utils[self.target].writeWord(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
-        self.lgr.debug('writeWord, disable reverse execution to clear bookmarks, then set origin')
+        self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
         self.clearBookmarks()
 
     def writeString(self, address, string):
@@ -2511,10 +2518,16 @@ class GenMonitor():
                 return True
         return False
 
-    def readString(self, addr):
+    def readString(self, addr, size=256):
         cpu = self.cell_config.cpuFromCell(self.target)
-        fname = self.mem_utils[self.target].readString(cpu, addr, 256)
+        fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print fname 
+
+    def retrack(self):
+        self.lgr.debug('retrack')
+        self.dataWatch[self.target].watch(break_simulation=False)
+        self.dataWatch[self.target].setCallback(self.stopTrackIO)
+        SIM_run_command('c')
 
     def trackIO(self, fd):
         self.lgr.debug('trackIO FD: %d' % fd)
@@ -2527,6 +2540,9 @@ class GenMonitor():
         self.lgr.debug('stopTrackIO')
         self.stopTrace()
         self.stopDataWatch()
+        self.dataWatch[self.target].rmBackStop()
+        if self.coverage is not None:
+            self.coverage.saveCoverage()
 
     def clearWatches(self):
         self.dataWatch[self.target].clearWatches()
@@ -2554,6 +2570,7 @@ class GenMonitor():
             self.lgr.debug('error %s' % str(e))
 
     def goToDataMark(self, index):
+        self.lgr.debug('goToDataMark(%d)' % index)
         self.stopTrackIO()
         cycle = self.dataWatch[self.target].goToMark(index)
         if cycle is not None:
@@ -2737,7 +2754,7 @@ class GenMonitor():
             self.lgr.debug('injectIO from file %s to. %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
     
     def tagIterator(self, index):    
-        ''' User drive identification of an iterating function -- will collapse many watch marks into one '''
+        ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
         self.dataWatch[self.target].tagIterator(index)
 
     def runToKnown(self, go=True):
@@ -2800,12 +2817,17 @@ class GenMonitor():
 
     def watchROP(self):
         self.ropCop[self.target].watchROP()
+
     def mapCoverage(self):
         self.coverage.cover()
 
     def showCoverage(self):
         self.coverage.showCoverage()
 
+    def stopCoverage(self):
+        self.lgr.debug('stopCoverage')
+        if self.coverage is not None:
+            self.coverage.stopCover()
     def runToStack(self):
         ''' 3 pages for now? '''
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2830,7 +2852,39 @@ class GenMonitor():
         self.context_manager[self.target].watchTasks()
         self.lgr.debug('runToStack hap set, now run. flist in stophap is %s' % stop_action.listFuns())
         SIM_run_alone(SIM_run_command, 'continue')
-        
+    
+    def rmBackStop(self):
+        self.lgr.debug('rmBackStop')
+        self.dataWatch[self.target].rmBackStop()    
+
+    def saveHits(self, fname):
+        self.lgr.debug('saveHits %s' % fname)
+        self.coverage.saveHits(fname)
+
+    def difCoverage(self, fname):
+        self.coverage.difCoverage(fname)
+
+    def precall(self, pid):
+        self.lgr.debug('precall pid:%d' % pid)
+        cycle_list = self.rev_to_call[self.target].getEnterCycles(pid)
+        if cycle_list is None:
+            print('No cycles for pid %d' % pid)
+        else:
+            ''' find latest cycle that preceeds current cycle '''
+            cpu = self.cell_config.cpuFromCell(self.target)
+            prev_cycle = None
+            for cycle in reversed(cycle_list):
+                if cycle < cpu.cycles:
+                    prev_cycle = cycle
+                    break
+            if prev_cycle is None:
+                print('No cycle found for pid %d that is earlier than current cycle 0x%x' % (pid, cpu.cycles))  
+            else:
+                SIM_run_command('pselect %s' % cpu.name)
+                previous = prev_cycle-1
+                cmd='skip-to cycle=%d' % previous
+                self.lgr.debug('precall cmd: %s' % cmd)
+                SIM_run_command(cmd)
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
