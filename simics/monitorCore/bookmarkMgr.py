@@ -39,6 +39,11 @@ class bookmarkMgr():
         self.top = top
         self.context_mgr = context_mgr
         self.lgr = lgr
+        self.track_num = 0
+
+    def setTrackNum(self):
+        self.track_num += 1
+        return self.track_num
 
     def clearMarks(self):
         self.lgr.debug('bookmarkMgr, clearMarks')
@@ -53,6 +58,10 @@ class bookmarkMgr():
             if mark.strip().endswith(delta_str):
                 return True
         return False
+
+    def setBacktrackBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
+        mark = 'backtrack %d %s' % (self.track_num, mark)
+        setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=msg)
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         self.lgr.debug('setDebugBookmark mark: %s' % mark)
