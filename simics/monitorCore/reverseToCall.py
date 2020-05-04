@@ -601,8 +601,8 @@ class reverseToCall():
                             self.lgr.debug('doRevModReg kernel changed register? eip now 0x%x' % eip)
                             rval = self.top.getReg(self.reg, self.cpu) 
                             ida_message = 'Kernel modified register %s to 0x%x' % (self.reg, rval)
-                            bm = "backtrack eip:0x%x follows kernel modification of reg:%s to 0x%x" % (eip, self.reg, rval)
-                            self.bookmarks.setDebugBookmark(bm)
+                            bm = "eip:0x%x follows kernel modification of reg:%s to 0x%x" % (eip, self.reg, rval)
+                            self.bookmarks.setBacktrackBookmark(bm)
                             self.context_manager.setIdaMessage(ida_message)
                             self.cleanup(self.cpu)
                             self.top.skipAndMail()
@@ -635,7 +635,7 @@ class reverseToCall():
                     if not self.tooFarBack():
                         eip = self.top.getEIP(self.cpu)
                         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                        self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                        self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                         if self.cpu.architecture == 'arm':
                             self.followTaintArm(reg_mod_type)
                         else:
@@ -849,7 +849,7 @@ class reverseToCall():
                 address = reg_mod_type.value
                 value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
-                self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.cleanup(self.cpu)
                 self.top.stopAtKernelWrite(address, self)
             elif reg_mod_type.mod_type == RegisterModType.REG:
@@ -881,16 +881,16 @@ class reverseToCall():
                if offset is not None and offset <= 8:
                    ''' wth, just an address adjustment? '''
                    self.lgr.debug('followTaint, add of %x, assume address adjust, e.g., heap struct' % offset)
-                   self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                   self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                    self.doRevToModReg(op0, taint=True)
                    return 
             self.lgr.debug('followTaint, not a move, we are stumped')
-            self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
+            self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
             self.top.skipAndMail()
 
         elif mn == 'pop':
             esp = self.top.getReg('esp', self.cpu) 
-            self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
+            self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
             self.cleanup(self.cpu)
             self.top.stopAtKernelWrite(esp, self)
 
@@ -900,7 +900,7 @@ class reverseToCall():
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
             self.lgr.debug('followTaint, is indrect reg, track %s' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-            self.bookmarks.setDebugBookmark('backtrack switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
+            self.bookmarks.setBacktrackBookmark('switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
             self.doRevToModReg(op1, taint=True)
 
         #elif mn == 'lea':
@@ -921,10 +921,10 @@ class reverseToCall():
                     protected_memory = ' protected'
                 self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
-                    self.bookmarks.setDebugBookmark('taint branch %s eip:0x%x inst:%s' % (protected_memory, eip, instruct[1]))
+                    self.bookmarks.setBacktrackBookmark('taint branch %s eip:0x%x inst:%s' % (protected_memory, eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch %s eip:0x%x inst %s' % (protected_memory, eip, instruct[1]))
                 else:
-                    self.bookmarks.setDebugBookmark('backtrack%s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
+                    self.bookmarks.setBacktrackBookmark('%s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack %s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
                 self.cleanup(self.cpu)
                 if len(protected_memory) == 0:
@@ -933,7 +933,7 @@ class reverseToCall():
                     self.top.skipAndMail()
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
-                self.bookmarks.setDebugBookmark('backtrack eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
+                self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
                 self.top.skipAndMail()
        
     def cycleAlone(self, pid): 
@@ -1148,3 +1148,8 @@ class reverseToCall():
         self.ida_funs = ida_funs
 
 
+    def getEnterCycles(self, pid):
+        retval = None
+        if pid in self.sysenter_cycles:
+            retval = self.sysenter_cycles[pid]
+        return retval

@@ -184,11 +184,14 @@ class findKernelWrite():
         cmd = 'skip-to cycle=%d' % cycles
         SIM_run_command(cmd)
         eip = self.top.getEIP(self.cpu)
-        value = self.mem_utils.readMemory(self.cpu, self.addr, self.memory_transaction.size)
+        if self.memory_transaction is None:
+           value = None
+        else:
+            value = self.mem_utils.readMemory(self.cpu, self.addr, self.memory_transaction.size)
         #value = self.mem_utils.readWord32(self.cpu, self.addr)
         if value is None:
             ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
-            bm = "backtrack eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
+            bm = "eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
         else: 
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):
@@ -205,14 +208,14 @@ class findKernelWrite():
                 self.lgr.debug('skipAlone access to 0x%x' % self.memory_transaction.logical_address)
                 if self.memory_transaction.logical_address == self.addr:
                     ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
-                    bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
+                    bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
                 else:
                     ida_message = 'Kernel wrote to address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
-                    bm = "backtrack eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
+                    bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
                 self.lgr.debug('set ida msg to %s' % ida_message)
         if bm is not None:
-            self.bookmarks.setDebugBookmark(bm)
+            self.bookmarks.setBacktrackBookmark(bm)
         self.context_manager.setIdaMessage(ida_message)
         SIM_run_alone(self.cleanup, False)
         self.top.skipAndMail()
@@ -335,9 +338,9 @@ class findKernelWrite():
             else:
                 ida_message = 'Kernel wrote 0x%x to address: 0x%x' % (value, self.addr)
                 self.lgr.debug('set ida msg to %s' % ida_message)
-                bm = "backtrack eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
+                bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
             if bm is not None:
-                self.bookmarks.setDebugBookmark(bm)
+                self.bookmarks.setBacktrackBookmark(bm)
             self.context_manager.setIdaMessage(ida_message)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
@@ -356,8 +359,8 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             if eip == self.bookmarks.getEIP('_start+1'):
                 ida_message = "Content of %s came modified prior to enabling reverse." % self.addr
-                bm = "backtrack eip:0x%x content of memory:%s modified prior to enabling reverse" % (eip, self.addr)
-                self.bookmarks.setDebugBookmark(bm)
+                bm = "eip:0x%x content of memory:%s modified prior to enabling reverse" % (eip, self.addr)
+                self.bookmarks.setBacktrackBookmark(bm)
                 self.context_manager.setIdaMessage(ida_message)
                 SIM_run_alone(self.cleanup, False)
                 self.top.skipAndMail()
@@ -404,8 +407,8 @@ class findKernelWrite():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         mn = self.decode.getMn(instruct[1])
         self.lgr.debug('backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
-        bm = 'backtrack eip:0x%x inst:"%s"' % (eip, instruct[1])
-        self.bookmarks.setDebugBookmark(bm)
+        bm = 'eip:0x%x inst:"%s"' % (eip, instruct[1])
+        self.bookmarks.setBacktrackBookmark(bm)
         self.lgr.debug('BT bookmark: %s' % bm)
         if self.decode.modifiesOp0(mn):
             self.lgr.debug('backOneAlone get operands from %s' % instruct[1])
