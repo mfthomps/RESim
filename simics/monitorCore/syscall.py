@@ -182,7 +182,7 @@ class Syscall():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.context_manager = context_manager
-        ''' mostly a test if we are debugging. not very clean '''
+        ''' mostly a test if we are debugging (if pid is not none). not very clean '''
         pid, cpu = context_manager.getDebugPid()
         self.debugging = False
         self.stop_on_call = stop_on_call
@@ -709,7 +709,7 @@ class Syscall():
         else:
             ''' callname is the socket function '''
             socket_callname = callname
-            self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
+            #self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
@@ -1312,11 +1312,13 @@ class Syscall():
                 self.top.skipAndMail()
 
         
-    def syscallHap(self, syscall_info, third, forth, memory):
+    def syscallHap(self, syscall_info, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
+        #self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        #self.lgr.debug('name %s' % (memory.ini_ptr.name))
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, pid = self.task_utils.curProc() 
         if syscall_info.cpu != cpu:
