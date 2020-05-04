@@ -734,7 +734,9 @@ class GenContextMgr():
             return
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
-            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
+                has no place in the task list? '''
+            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return
         cell = self.default_context
         #cell = self.resim_context
