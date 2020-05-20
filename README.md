@@ -21,6 +21,7 @@ Please refer to [the RESim User's Guide](docs/RESim-UsersGuide.pdf) for addition
 (https://nps.box.com/s/rf3n104ualg38pon6b7fm6m6wqk9zz50)
 
 RESim is based on a software vetting and forensic analysis platform created for the DARPA Cyber Grand Challenge.  That repo is here:
-https://github.com/mfthomps/cgc-monitor
+https://github.com/mfthomps/cgc-monitor.  A paper describing that work is at https://www.sciencedirect.com/science/article/pii/S1742287618301920
+And a fine summary of the use of Simics in the CGC Monitor is at https://software.intel.com/content/www/us/en/develop/blogs/simics-software-automates-cyber-grand-challenge-validation.html
 
 [1]Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.
