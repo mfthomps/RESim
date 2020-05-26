@@ -128,9 +128,18 @@ it as a Simics workspace:
 \end{verbatim}
 
 
-\item Copy the files in git/RESim/simics/workspace to your workspace, and follow the README instructions.
+\item Copy the files in {\tt git/RESim/simics/workspace} to your workspace, and follow the README instructions.
 \end{itemize}
 
+\section{Workspaces}
+The steps above are intended to allow you to run tests using the CADET01 service. 
+For each new project, create and initialize a new workspace.  Simply create a directory
+with an informative name, cd to it and run this command:
+\begin{verbatim}
+    /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
+\end{verbatim}
+
+Then copy the monitor.sh from {\tt git/RESim/simics/workspace} to your workspace.
 
 
 \section{System Setup} 
