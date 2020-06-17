@@ -2864,7 +2864,9 @@ class GenMonitor():
     def difCoverage(self, fname):
         self.coverage.difCoverage(fname)
 
-    def precall(self, pid):
+    def precall(self, pid=None):
+        if pid is None:
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('precall pid:%d' % pid)
         cycle_list = self.rev_to_call[self.target].getEnterCycles(pid)
         if cycle_list is None:
