@@ -41,7 +41,7 @@ class isMonitorRunning():
         retval = False
         status = SIM_simics_is_running()
         if status: 
-            self.lgr.debug('isMonitorRunning, simics is running')
+            self.lgr.debug('isMonitorRunning, simics is running, value: %r' % status)
             retval = True
         else: 
             self.my_lock.acquire()
