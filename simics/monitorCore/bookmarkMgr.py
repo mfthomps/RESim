@@ -61,7 +61,7 @@ class bookmarkMgr():
 
     def setBacktrackBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         mark = 'backtrack %d %s' % (self.track_num, mark)
-        setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=msg)
+        self.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=msg)
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         self.lgr.debug('setDebugBookmark mark: %s' % mark)
