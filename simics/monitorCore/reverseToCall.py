@@ -34,6 +34,7 @@ import memUtils
 import pageUtils
 import resim_utils
 import armCond
+import time
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -296,6 +297,25 @@ class reverseToCall():
         SIM_run_command(cmd)
         self.top.skipAndMail()
 
+    def skipToTest(self, cycle):
+        while SIM_simics_is_running():
+            self.lgr.error('skipToTest but simics running')
+            time.sleep(1)
+        retval = True
+        SIM_run_command('pselect %s' % self.cpu.name)
+        cmd = 'skip-to cycle = %d ' % cycle
+        SIM_run_command(cmd)
+        now = self.cpu.cycles
+        if now != cycle:
+            self.lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
+            time.sleep(1)
+            SIM_run_command(cmd)
+            now = self.cpu.cycles
+            if now != cycle:
+                self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
+                retval = False
+        return retval
+    
     def isExit(self, instruct, eip):
         if self.cpu.architecture == 'arm':
             lr = self.top.getReg('lr', self.cpu)
@@ -457,38 +477,15 @@ class reverseToCall():
         self.tryBackOne(my_args)
 
     def jumpOverKernel(self, pid):
+        ''' returns True if skip works and reg unchanged, False if changed or None if left in kernel'''
         retval = False
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('doRevToModReg kernel space pid %d eip:0x%x %s' % (pid, eip, instruct[1]))
+        self.lgr.debug('jumpOverKernel kernel space pid %d eip:0x%x %s' % (pid, eip, instruct[1]))
         is_exit = self.isExit(instruct[1], eip)
         if pid in self.sysenter_cycles and is_exit:
             self.lgr.debug('jumpOverKernel is sysexit, cur_cycles is 0x%x' % cur_cycles)
-            '''
-            prev_cycles = 0
-            got_it = None
-            page_cycles = self.sysenter_cycles[pid]
-            if self.page_faults is not None:
-                self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                page_cycles = page_cycles + self.page_faults.getFaultingCycles()
-            for cycles in sorted(page_cycles, reverse=True):
-            #for cycles in sorted(page_cycles):
-                self.lgr.debug('jumpOverKernel cur_cycles 0x%x cycles: 0x%x prev: 0x%x' % (cur_cycles, cycles, prev_cycles))
-                if cycles < cur_cycles:
-                    self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
-                    #got_it = prev_cycles - 1
-                    got_it = cycles - 1
-                    break
-                else:
-                    #self.lgr.debug('jumpOverKernel is not cycle 0x%x' % (cycles))
-                    prev_cycles = cycles
-
-            if not got_it:
-                self.lgr.debug('jumpOverKernel nothing between, assume last cycle of 0x%x' % prev_cycles)
-                got_it = prev_cycles - 1
-            '''
-
 
             prev_cycles = None
             got_it = None
@@ -498,7 +495,7 @@ class reverseToCall():
                 page_cycles = page_cycles + self.page_faults.getFaultingCycles()
             for cycles in sorted(page_cycles):
                 if cycles > cur_cycles:
-                    self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                    self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
                     got_it = prev_cycles - 1
                     break
                 else:
@@ -506,33 +503,48 @@ class reverseToCall():
                     prev_cycles = cycles
 
             if not got_it:
-                self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
+                self.lgr.debug('jumpOverKernel nothing between, assume last cycle of 0x%x' % prev_cycles)
                 got_it = prev_cycles - 1
 
-            cmd = 'skip-to cycle = %d ' % got_it
-            SIM_run_command(cmd)
+            status = SIM_simics_is_running()
+            if status:
+                self.lgr.error('jumpOverKernel found simics running prior to skip to')
+                return None
+            skip_ok = self.skipToTest(got_it)
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             rval = self.top.getReg(self.reg, self.cpu) 
             self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
+            if not skip_ok:
+                self.lgr.error('jumpOverKernel skip-to failed')
+                return None
             if rval == self.reg_val:
                 retval = True
             else:
                 retval = False
                 self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
                 user_cycles = cur_cycles+1
-                cmd = 'skip-to cycle = %d ' % user_cycles
-                SIM_run_command(cmd)
+                skip_ok = self.skipToTest(user_cycles)
+                if not skip_ok:
+                    return None
         else:
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''
-            forward = self.cpu.cycles+1
-            cmd = 'skip-to cycle = %d ' % forward
-            SIM_run_command(cmd)
-            eip = self.top.getEIP(self.cpu)
-            self.lgr.error('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], eip-1))
+            if self.cpu.architecture == 'arm' and (instruct[1].startswith('bx lr')):
+                eip = self.top.getReg('lr', self.cpu)
+                self.lgr.debug('jumpOverKernel got lr value 0x%x' % eip)
+            else:
+                forward = self.cpu.cycles+1
+                skip_ok = skipToTest(forward)
+                if not skip_ok:
+                    return None
+                eip = self.top.getEIP(self.cpu)
+                dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+                self.lgr.debug('skipped to 0x%x got 0x%x eip 0x%x pid is %d' % (forward, self.cpu.cycles, eip, pid))
+            self.lgr.error('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], eip-4))
             cell = self.top.getCell()
-            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, eip-1, 1, 0)
+            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, eip-4, 1, 0)
             self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
+            self.lgr.debug('break set at 0x%x now do rev' % (eip-4))
             SIM_run_alone(SIM_run_command, 'rev')
             retval = None
         return retval
@@ -570,7 +582,7 @@ class reverseToCall():
         self.taint = taint
         self.value = value
         self.num_bytes = num_bytes
-        self.lgr.debug('\ndoRevToModReg cycle 0x%x for register %s offset is %x' % (self.cpu.cycles, reg, offset))
+        self.lgr.debug('\ndoRevToModReg cycle 0x%x for register %s offset is %d taint: %r' % (self.cpu.cycles, reg, offset, taint))
         self.reg = reg
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         self.pid = pid
@@ -628,7 +640,7 @@ class reverseToCall():
             elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
                 ''' current eip modifies self.reg, done, or continue taint '''
-                self.lgr.debug('reverseToModReg got mod reg right off')
+                self.lgr.debug('reverseToModReg got mod reg right off self.taint is %r' % self.taint)
                 if not self.taint:
                     self.cleanup(self.cpu)
                 else:
@@ -681,9 +693,11 @@ class reverseToCall():
             #current = SIM_cycle_count(self.cpu)
             current = self.cpu.cycles
             previous = current - 1
-            SIM_run_command('pselect %s' % self.cpu.name)
-            SIM_run_command('skip-to cycle = %d' % previous)
+            skip_ok = self.skipToTest(previous)
             self.lgr.debug('cycleRegisterMod skipped to 0x%x  cycle is 0x%x' % (previous, self.cpu.cycles))
+            if not skip_ok:
+                self.lgr.error('cycleRegisterMod, skipped to wrong cycle')
+                return None
             if self.tooFarBack():
                 self.lgr.debug('cycleRegisterMod prev cycle 0x%x prior to first 0x%x, stop here' %(previous, self.start_cycles))
                 break
@@ -778,7 +792,7 @@ class reverseToCall():
                                     self.save_cycle = self.cpu.cycles
                                     SIM_run_alone(SIM_run_command,'rev')
                                 else:
-                                    self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr' % (eip, addr))
+                                    self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr 0x%x' % (eip, addr))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             else:
                                 self.lgr.debug('cycleRegisterMod at %x, ldm instruction got None for addr' % eip)
@@ -803,8 +817,9 @@ class reverseToCall():
                 SIM_run_alone(self.cycleAlone, pid)
             else: 
                 self.lgr.debug('uncallHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
-                cmd = 'skip-to cycle = %d ' % self.save_cycle
-                SIM_run_command(cmd)
+                skip_ok = self.skipToTest(self.save_cycle)
+                if not skip_ok:
+                    return
                 if not self.taint:
                     self.cleanup(self.cpu)
                 else:
@@ -945,8 +960,11 @@ class reverseToCall():
                 ''' stepped back into kernel, rev '''
                 self.lgr.debug('cycleAlone must have entered kernel, continue to previous place where this process ran')
                 #SIM_run_alone(SIM_run_command, cmd)
-                self.jumpOverKernel(pid)
-                SIM_run_alone(self.cycleAlone, pid)
+                reg_ok = self.jumpOverKernel(pid)
+                if reg_ok: 
+                    SIM_run_alone(self.cycleAlone, pid)
+                else:
+                    self.lgr.debug('cycleAlone, assume jumpOverKernel took over the search')
             else:
                 self.lgr.debug('cycleAlone must have backed to first cycle 0x%x' % self.start_cycles)
         elif reg_mod_type.mod_type != RegisterModType.BAIL:
