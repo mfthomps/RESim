@@ -35,6 +35,8 @@ class DataWatch():
         self.ida_funs = None
         self.relocatables = None
         self.user_iterators = None
+        self.other_starts = [] # buffer starts that were skipped because they were subranges.
+        self.other_lengths = [] 
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
@@ -64,6 +66,9 @@ class DataWatch():
                 if self.start[index] <= start and this_end >= end:
                     overlap = True
                     self.lgr.debug('DataWatch setRange found overlap, skip it')
+                    if start not in self.other_starts:
+                        self.other_starts.append(start)
+                        self.other_lengths.append(length)
                     break
                 elif self.start[index] >= start and this_end <= end:
                     self.lgr.debug('DataWatch setRange found subrange, replace it')
@@ -359,7 +364,18 @@ class DataWatch():
                     retval = True
         return retval
             
-
+    def getStartLength(self, index, addr):
+        hap_start = self.start[index]
+        i = 0
+        ret_start = hap_start
+        ret_length = self.length[index]
+        for start in self.other_starts:
+            if start > hap_start and start <= addr:
+                ret_start = start
+                ret_length = self.other_lengths[i]
+                break
+        return ret_start, ret_length
+                
     def readHap(self, index, third, forth, memory):
         ''' watched data has been read (or written) '''
         if self.cpu.cycles == self.prev_cycle:
@@ -390,7 +406,9 @@ class DataWatch():
             self.lgr.debug('readHap will break_simulation, set the stop hap')
             self.stopWatch()
             SIM_run_alone(self.setStopHap, None)
-        offset = addr - self.start[index]
+
+        start, length = self.getStartLength(index, addr) 
+        offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         #start, end = self.context_manager.getText()
@@ -419,12 +437,11 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         if op_type == Sim_Trans_Load:
             self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
-                    offset, self.length[index], self.start[index], pid, eip, instruct[1], self.cpu.cycles))
+                    offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
             msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
-                        offset, self.length[index], self.start[index], eip))
+                        offset, length, start, eip))
             self.context_manager.setIdaMessage(msg)
-            #mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (addr, offset, self.start[index], self.length[index], self.getCmp())
-            self.watchMarks.dataRead(addr, self.start[index], self.length[index], self.getCmp())
+            self.watchMarks.dataRead(addr, start, length, self.getCmp())
             if self.break_simulation:
                 SIM_break_simulation('DataWatch read data')
 
@@ -434,8 +451,8 @@ class DataWatch():
                 SIM_run_alone(self.kernelReturn, addr)
 
         elif cpl > 0:
-            self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, self.length[index], self.start[index], pid, eip))
-            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, self.length[index], self.start[index], eip))
+            self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
+            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
             if self.break_simulation:
                 ''' TBD when to treat buffer as unused?  does it matter?'''
                 self.start[index] = 0
@@ -527,6 +544,8 @@ class DataWatch():
             del self.start[:]
             del self.length[:]
             del self.cycle[:]
+            self.other_starts = []
+            self.other_lengths = []
         else:
             found = None
             for index in range(len(self.cycle)):
