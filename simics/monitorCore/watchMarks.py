@@ -128,7 +128,7 @@ class WatchMarks():
         if ip not in self.prev_ip:
             dm = self.DataMark(addr, start, length, cmp_ins)
             self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
-            self.lgr.debug('watchMarks dataRead 0x%x %s' % (ip, dm.getMsg()))
+            self.lgr.debug('watchMarks dataRead 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
             self.prev_ip = []
         else:
             if len(self.prev_ip) > 0:
