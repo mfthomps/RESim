@@ -37,6 +37,7 @@ class DataWatch():
         self.user_iterators = None
         self.other_starts = [] # buffer starts that were skipped because they were subranges.
         self.other_lengths = [] 
+        self.retrack = False
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
@@ -373,6 +374,7 @@ class DataWatch():
             if start > hap_start and start <= addr:
                 ret_start = start
                 ret_length = self.other_lengths[i]
+                self.lgr.debug('getStartLength replaced buffer start %x with %x' % (hap_start, ret_start))
                 break
         return ret_start, ret_length
                 
@@ -457,6 +459,10 @@ class DataWatch():
                 ''' TBD when to treat buffer as unused?  does it matter?'''
                 self.start[index] = 0
                 SIM_break_simulation('DataWatch written data')
+        elif self.retrack:
+            self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here.' % (addr, offset, length, start, pid, eip))
+            self.stopWatch()
+ 
        
     def showWatch(self):
         for index in range(len(self.start)):
@@ -600,3 +606,6 @@ class DataWatch():
 
     def rmBackStop(self):
         self.use_back_stop = False
+
+    def setRetrack(self, value):
+        self.retrack = value
