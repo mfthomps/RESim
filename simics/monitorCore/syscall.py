@@ -1317,7 +1317,7 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        #self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('name %s' % (memory.ini_ptr.name))
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, pid = self.task_utils.curProc() 
@@ -1332,7 +1332,14 @@ class Syscall():
             else:
                 self.linger_cycles.append(cpu.cycles)
 
-        callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
+        if not self.param.arm_svc:
+            callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
+        else:
+            lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+            val = self.mem_utils.readWord(self.cpu, lr-4)
+            callnum = val & 0xfff
+            self.lgr.debug('syscallHap svc_call lr 0x%x val 0x%x callnum  is %d' % (lr, val, callnum))
+
         if syscall_info.callnum is None:
            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
            syscall_instance = self.top.getSyscall(self.cell_name, callname) 
@@ -1354,8 +1361,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        #self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
-        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
+            pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')

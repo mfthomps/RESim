@@ -70,6 +70,7 @@ import trackFunctionWrite
 import pageUtils
 import ropCop
 import coverage
+import taskSwitches
 
 import json
 import pickle
@@ -197,6 +198,8 @@ class GenMonitor():
                     self.param[cell_name].prefetch_abort = None
                 if not hasattr(self.param[cell_name], 'arm_ret2'):
                     self.param[cell_name].arm_ret2 = None
+                if not hasattr(self.param[cell_name], 'arm_svc'):
+                    self.param[cell_name].arm_svc = False
 
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
@@ -1791,7 +1794,7 @@ class GenMonitor():
         self.context_manager[self.target].clearExitBreaks()
         self.debug_breaks_set = False
         if self.coverage is not None:
-            self.coverage.stopCover()
+            self.coverage.stopCover(keep_hits=True)
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -2527,6 +2530,7 @@ class GenMonitor():
         self.lgr.debug('retrack')
         self.dataWatch[self.target].watch(break_simulation=False)
         self.dataWatch[self.target].setCallback(self.stopTrackIO)
+        self.dataWatch[self.target].setRetrack(True)
         SIM_run_command('c')
 
     def trackIO(self, fd):
@@ -2541,8 +2545,10 @@ class GenMonitor():
         self.stopTrace()
         self.stopDataWatch()
         self.dataWatch[self.target].rmBackStop()
+        self.dataWatch[self.target].setRetrack(False)
         if self.coverage is not None:
             self.coverage.saveCoverage()
+        
 
     def clearWatches(self):
         self.dataWatch[self.target].clearWatches()
@@ -2887,6 +2893,10 @@ class GenMonitor():
                 cmd='skip-to cycle=%d' % previous
                 self.lgr.debug('precall cmd: %s' % cmd)
                 SIM_run_command(cmd)
+
+    def taskSwitches(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        ts = taskSwitches.TaskSwitches(cpu, self.mem_utils[self.target], self.task_utils[self.target], self.param[self.target], self.lgr)
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

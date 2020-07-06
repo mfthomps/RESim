@@ -1,10 +1,14 @@
 class Kparams():
-    def __init__(self, cpu, word_size=4):
+    def __init__(self, cpu, word_size, platform):
         ''' assumptions '''
         #self.kernel_base = 3221225472
 
+        #if cpu.architecture == 'arm':
         if cpu.architecture == 'arm':
-            self.ram_base = 268435456
+            if platform != 'arm5':
+                self.ram_base = 268435456
+            else:
+                self.ram_base = 0
             self.thread_size = 8192
         else:
             self.ram_base = 0
@@ -68,7 +72,8 @@ class Kparams():
         self.syscall_compute = None
         self.syscall_jump = None
         self.stack_frame_eip = None
-
+        # arm call-specific svc 
+        self.arm_svc = False
 
 
     def printParams(self):

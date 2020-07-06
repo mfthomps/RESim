@@ -49,7 +49,7 @@ class GetKernelParams():
         print('using target of %s' % self.target)
         self.log_dir = '/tmp'
         self.lgr = resim_utils.getLogger('getKernelParams', self.log_dir)
-        self.param = kParams.Kparams(self.cpu, word_size)
+        self.param = kParams.Kparams(self.cpu, word_size, comp_dict[self.target]['PLATFORM'])
 
 
         ''' try first without reference to fs when finding current_task.  If that fails in 3 searches,
@@ -244,7 +244,7 @@ class GetKernelParams():
                 #print('pid is %d' % tmp_pid)
                 if ta not in self.trecs:
                     if len(self.hits) == 0:
-                        self.lgr.debug('getCurrentTaskPtr find current for ta 0x%x' % ta)
+                        self.lgr.debug('getCurrentTaskPtr search current for ta 0x%x' % ta)
                         self.searchCurrentTaskAddr(ta)
                         self.trecs.append(ta)
                         if self.param.current_task_fs and not self.from_boot and (len(self.hits) > 0 and len(self.hits)<3):
@@ -256,6 +256,7 @@ class GetKernelParams():
                             self.searchCurrentTaskAddr(ta)
                         if not self.param.current_task_fs and self.param.current_task is None:
                             self.search_count += 1
+                            self.lgr.debug('getCurrentTaskPtr added to search count, now %d' % self.search_count)
                             if self.search_count > 3:
                                 self.param.current_task_fs = True
                  
@@ -405,7 +406,7 @@ class GetKernelParams():
             else:
                 next_offset += 4
         if self.param.ts_next is None:
-            self.lgr.error('failed to find ts_next')
+            self.lgr.debug('failed to find ts_next')
 
     def getInit(self):
         ''' Assuming we have swapper in init.idle, find init and use it to locate
@@ -456,22 +457,22 @@ class GetKernelParams():
          
         if self.param.ts_pid is not None:
             got_comm = False
-            #self.lgr.debug('getInit look for comm from task 0x%x' % (self.init_task))
+            self.lgr.debug('getInit look for comm from task 0x%x' % (self.init_task))
             while not got_comm:
                 comm_offset = self.param.ts_pid+8
                 #self.lgr.debug('getInit real comm at %d' % (self.real_param.ts_comm))
                 for i in range(800):
                     comm = self.mem_utils.readString(self.cpu, self.init_task+comm_offset, 16)
-                    if comm.startswith('init') or comm.startswith('systemd'):
+                    if comm.startswith('init') or comm.startswith('systemd') or comm.startswith('linuxrc') or comm.startswith('swapper'):
                         self.lgr.debug('getInit found comm %s at %d' % (comm, comm_offset))
                         self.param.ts_comm = comm_offset
                         got_comm = True
                         break
                     else:
-                        #self.lgr.debug('offset %d comm: %s' % (comm_offset, comm))
+                        self.lgr.debug('offset %d comm: %s' % (comm_offset, comm))
                         pass
                     comm_offset += 4
-                #self.lgr.debug('getInit out of comm loop')
+                self.lgr.debug('getInit out of comm loop')
                 if not got_comm:
                     SIM_run_command('c 50000000')
         else:
@@ -526,10 +527,15 @@ class GetKernelParams():
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if self.param.arm_entry is None and instruct[1].startswith('svc 0'):
-                self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
+                self.lgr.debug('mode changed svc old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
                 self.prev_instruct = instruct[1]
                 self.lgr.debug('entryModeChanged ARM found svc 0')
                 SIM_break_simulation('entryModeChanged found svc 0')
+            elif self.param.arm_entry is None and instruct[1].startswith('svc'):
+                self.lgr.debug('mode changed svn 0x9000 old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
+                self.prev_instruct = instruct[1]
+                self.lgr.debug('entryModeChanged ARM found svc 9999..')
+                SIM_break_simulation('entryModeChanged found svc 9999')
 
     def entryModeChanged(self, compat32, one, old, new):
         if self.entry_mode_hap is None:
@@ -727,11 +733,15 @@ class GetKernelParams():
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         call_num = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('stop hap instruct is %s eip 0x%x  len %d prev is %s' % (instruct[1], eip, instruct[0], self.prev_instruct))
+        self.lgr.debug('stopHapARM instruct is %s eip 0x%x  len %d prev is %s' % (instruct[1], eip, instruct[0], self.prev_instruct))
         do_not_continue = False
         if self.param.arm_entry is None and self.prev_instruct.startswith('svc 0'): 
             self.lgr.debug('stopHapARM set arm_entry to 0x%x' % eip) 
             self.param.arm_entry = eip 
+        elif self.param.arm_entry is None and self.prev_instruct.startswith('svc'): 
+            self.lgr.debug('stopHapARM SVC 0x9000 set arm_entry to 0x%x' % eip) 
+            self.param.arm_entry = eip 
+            self.param.arm_svc = True
             
         if self.param.arm_entry is not None and self.param.arm_ret is not None and self.param.arm_ret2 is not None:
             SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
