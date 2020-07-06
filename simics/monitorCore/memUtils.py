@@ -259,7 +259,7 @@ class memUtils():
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
         except:
-            self.lgr.error('readWord32 could not read content of %s' % str(paddr))
+            self.lgr.error('readWord32 could not read content of %x' % paddr)
             value = None
         return value
 
@@ -410,7 +410,7 @@ class memUtils():
             try:
                 ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
             except:
-                self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped?' % ct_addr)
+                self.lgr.debug('getCurrentTask ct_addr 0x%x not mapped?' % ct_addr)
                 return None
             self.lgr.debug('getCurrentTask ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
             return ct
@@ -428,18 +428,21 @@ class memUtils():
         if sup_sp == 0:
             return None
         ts = sup_sp & ~(param.thread_size - 1)
-        #self.lgr.debug('getCurrentTaskARM ts 0x%x' % ts)
+        self.lgr.debug('getCurrentTaskARM ts 0x%x' % ts)
         if ts == 0:
             return None
         if ts < param.kernel_base:
             ts += param.kernel_base
+            self.lgr.debug('getCurrentTaskARM ts adjusted by base now 0x%x' % ts)
         ct_addr = self.kernel_v2p(param, cpu, ts) + 12
         try:
             ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
         except:
-            self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped?' % ct_addr)
+            self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped? kernel_base 0x%x ram_base 0x%x' % (ct_addr, param.kernel_base, param.ram_base))
+
+     
             return None
-        #self.lgr.debug('getCurrentTaskARM ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
+        self.lgr.debug('getCurrentTaskARM ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
         return ct
 
 
