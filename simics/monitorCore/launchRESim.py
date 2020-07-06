@@ -255,17 +255,13 @@ class LaunchRESim():
                 if name.startswith('$'):
                     cmd = "%s=%s" % (name, value)
                     run_command(cmd)
-                    #params=params+(' %s' % cmd[1:])
+                    if name.startswith('$host_name'):
+                        cmd = "$system=%s" % ( value)
             script = self.config.get(section,'SIMICS_SCRIPT')
-            if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM']=='arm':
+            if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
                 params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
-                '''
-                params = params+' root_disk_image=%s' % self.comp_dict[section]['$root_disk_image']
-                params = params+' root_disk_size=%s' % self.comp_dict[section]['$root_disk_size']
-                params = params+' user_disk_image=%s' % self.comp_dict[section]['$user_disk_image']
-                params = params+' user_disk_size=%s' % self.comp_dict[section]['$user_disk_size']
-                '''
+                
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         cmd = '%s=%s' % (name[1:], name)
@@ -280,10 +276,10 @@ class LaunchRESim():
                 cmd='run-command-file "./targets/%s"' % (script)
             else:
                 cmd='run-command-file "./targets/%s" %s' % (script, params)
-            #print('cmd is %s' % cmd)
+            print('cmd is %s' % cmd)
             run_command(cmd)
-            self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
-            linkSwitches(section, self.comp_dict[section], self.link_dict[section])
+            #self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
+            #linkSwitches(section, self.comp_dict[section], self.link_dict[section])
 
     def go(self):
         global cgc, gkp
