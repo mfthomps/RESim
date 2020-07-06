@@ -22,7 +22,7 @@ class Coverage():
         else:
             self.lgr.debug('Coverage, no blocks at %s' % block_file)
 
-    def stopCover(self):
+    def stopCover(self, keep_hits=False):
         self.lgr.debug('coverage, stopCover')
         for bp in self.bp_list:
             try:
@@ -33,8 +33,9 @@ class Coverage():
         if self.bb_hap is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.bb_hap)
             self.bb_hap = None
-            self.funs_hit = []
-            self.blocks_hit = []
+            if not keep_hits:
+                self.funs_hit = []
+                self.blocks_hit = []
 
     def cover(self):
         if self.blocks is None:
