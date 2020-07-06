@@ -235,27 +235,31 @@ class Msghdr():
     def getIovec(self):
         retval = []
         iov_size = 2*self.mem_utils.WORD_SIZE
-        iov_addr = self.msg_iov
-        limit = max(10, self.msg_iovlen)
-        for i in range(limit):
-            base = self.mem_utils.readPtr(self.cpu, iov_addr)
-            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
-            retval.append(Iovec(base, length)) 
-            iov_addr = iov_addr+iov_size
+        if self.msg_iov is not None:
+            iov_addr = self.msg_iov
+            limit = max(10, self.msg_iovlen)
+            for i in range(limit):
+                base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                retval.append(Iovec(base, length)) 
+                iov_addr = iov_addr+iov_size
         return retval
 
     def getString(self):
-        retval = 'msg_name 0x%x  msg_namelen: %d  msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
-             self.msg_namelen, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
-        iov_size = 2*self.mem_utils.WORD_SIZE
-        iov_addr = self.msg_iov
-        iov_string = ''
-        #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
-        limit = max(10, self.msg_iovlen)
-        for i in range(limit):
-            base = self.mem_utils.readPtr(self.cpu, iov_addr)
-            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
-            iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
-            iov_addr = iov_addr+iov_size
-        retval = retval + iov_string    
+        if self.msg_name is None:
+            retval = 'msg_name not initialized'
+        else:
+            retval = 'msg_name 0x%x  msg_namelen: %d  msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
+                 self.msg_namelen, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
+            iov_size = 2*self.mem_utils.WORD_SIZE
+            iov_addr = self.msg_iov
+            iov_string = ''
+            #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
+            limit = max(10, self.msg_iovlen)
+            for i in range(limit):
+                base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
+                iov_addr = iov_addr+iov_size
+            retval = retval + iov_string    
         return retval
