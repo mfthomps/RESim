@@ -47,7 +47,7 @@ and replace both User fields with your assigned login ID.:
 
 \begin{verbatim}
 Host cgc-gw
-   IdentityFile        ~/.ssh/id_mfthomps_gfe
+   IdentityFile        ~/.ssh/id_rsa
    User                mfthomps
    ServerAliveInterval 1
    ServerAliveCountMax 60
@@ -57,7 +57,7 @@ Host cgc-gw
 Host bladet9
   HostName             bladet9
   User                 mike
-  IdentityFile         ~/.ssh/id_mfthomps_gfe
+  IdentityFile         ~/.ssh/id_rsa
   ProxyCommand         ssh -q cgc-gw nc 10.20.200.159 22
 \end{verbatim}
 
@@ -66,7 +66,7 @@ your ssh id file):
 
 \begin{verbatim}
    eval `ssh-agent`
-   ssh-add ~/.ssh/id_mfthomps_gfe
+   ssh-add ~/.ssh/id_rsa
 \end{verbatim}
 
 \item You should now be able to ssh to the RESim server, e.g., 
