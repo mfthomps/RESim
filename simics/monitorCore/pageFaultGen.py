@@ -404,11 +404,11 @@ class PageFaultGen():
             self.faulting_cycles.append(cpu.cycles)
         self.exception_eip = eip
         if cpu.architecture == 'arm':
-            reg_num = cpu.iface.int_register.get_number("combined_data_far")
-            dfar = cpu.iface.int_register.read(reg_num)
-            reg_num = cpu.iface.int_register.get_number("instruction_far")
-            ifar = cpu.iface.int_register.read(reg_num)
-            cpu, comm, pid = self.task_utils.curProc() 
+            #reg_num = cpu.iface.int_register.get_number("combined_data_far")
+            #dfar = cpu.iface.int_register.read(reg_num)
+            #reg_num = cpu.iface.int_register.get_number("instruction_far")
+            #ifar = cpu.iface.int_register.read(reg_num)
+            #cpu, comm, pid = self.task_utils.curProc() 
             name = cpu.iface.exception.get_name(exception_number)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             #self.lgr.debug('pageExceptionHap %s  (%d)  pid:%d (%s)  eip: 0x%x %s ifar: 0x%x dfar: 0x%x' % (name, 
