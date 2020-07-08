@@ -622,7 +622,7 @@ class Syscall():
                         ftype = self.traceProcs.getFileType(pid)
                         if ftype is None:
                             full_path = self.targetFS.getFull(prog_string, self.lgr)
-                            if os.path.isfile(full_path):
+                            if full_path is not None and os.path.isfile(full_path):
                                 ftype = magic.from_file(full_path)
                                 if ftype is None:
                                     self.lgr.error('checkExecve failed to find file type for %s pid %d' % (prog_string, pid))
