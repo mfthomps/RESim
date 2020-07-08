@@ -1,0 +1,122 @@
+decl {
+    group "System"
+
+    param auto_login : bool = TRUE
+    ! Automatically login root to prompt.
+
+    group "Runtime"
+
+    param kernel_image : file("*")
+    ! Kernel image.
+
+    param initrd_image : file("*")
+    ! Initial ramdisk image.
+
+    param cortex_hack : bool = FALSE
+    ! Dependent on create_simicsfs. Mount simicsfs after booting.
+
+    group "Networking"
+
+    param ip_address : string = "10.10.0.50"
+    ! The board IP address.
+
+    params from "%simics%/targets/common/ethernet-setup.include"
+        except eth_connector
+        default create_network = FALSE
+        default connect_real_network = "no"
+
+    group "Components"
+
+    param system : string
+    ! The default system component.
+
+    param console : string
+    ! The default console component.
+}
+
+###
+
+#remap
+$phys_mem = ($system.phys_mem)
+$phys_mem.write 0x1000000C 0x4
+
+###
+### To emulate the bootloader: setup TAG list, load kernel,
+### and prepare the registers (r0, r1 and r2).
+###
+
+###### ** ATAGs moved after kernel load???  Otherwise were zeros
+
+#
+$cpu = ($system.soc.cpu)
+$cpu.write-reg r0 0
+$cpu.write-reg r1 275
+$cpu.write-reg r2 0x100
+
+if ($cortex_hack) {
+    @SIM_create_object('set-memory', 'dummy', [])
+    $system.phys_mem.add-map device = dummy base = 0xffffffff40000000 length = 0x24
+}
+
+#
+# Load kernel and intird.
+#
+echo "kernel image is "+$kernel_image
+$cpu.load-binary -pa offset = -0xc0000000 filename = $kernel_image
+#$cpu.load-binary -pa offset = 0x00000000 filename = $kernel_image
+$phys_mem.load-file offset = 0x7000000 filename = $initrd_image
+
+# load uboot
+
+#$phys_mem.load-file offset = 0x00007fc0 filename = $kernel_image
+$phys_mem.load-file offset = 0x100 filename = /home/mike/SEED/high/long/integratorcp.dtb
+#$phys_mem.load-file offset = 0x01000000 filename = $kernel_image
+
+#ATAG_CORE
+$phys_mem.write 0x100 0x5          4
+$phys_mem.write 0x104 0x54410001   4
+$phys_mem.write 0x108 0x0          4
+$phys_mem.write 0x10c 0x0          4
+$phys_mem.write 0x110 0x0          4
+
+#ATAG_MEM
+$phys_mem.write 0x114 0x4          4
+$phys_mem.write 0x118 0x54410002   4
+$phys_mem.write 0x11c 0x8000000    4
+#$phys_mem.write 0x11c 0x10000000   4
+$phys_mem.write 0x120 0x0          4
+
+#ATAG_RAMDISK
+$phys_mem.write 0x124 0x5          4
+$phys_mem.write 0x128 0x54410004   4
+$phys_mem.write 0x12c 0x0          4
+$phys_mem.write 0x130 0x8000       4
+$phys_mem.write 0x134 0x4000000    4
+
+#ATAG_INITRD2
+$phys_mem.write 0x138 0x4          4
+$phys_mem.write 0x13c 0x54420005   4
+$phys_mem.write 0x140 0x7000000    4
+$phys_mem.write 0x144 0x800000     4
+
+#ATAG_NONE
+$phys_mem.write 0x148 0x0          4
+$phys_mem.write 0x148 0x0          4
+$phys_mem.write 0x14c 0x54410009   4
+
+# enable the uart
+pselect $cpu
+set 0x16000030 769
+
+###
+### End boot setup.
+###
+
+$cpu.set-pc 0x8000
+
+
+if $create_network == TRUE {
+    $eth_connector = $system + ".connector_eth"
+    run-command-file "%simics%/targets/common/ethernet-setup.include"
+}
+

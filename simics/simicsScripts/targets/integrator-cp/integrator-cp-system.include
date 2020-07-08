@@ -1,0 +1,93 @@
+decl {
+    ! Setup a Integrator-CP system.
+
+    group "System"
+
+    param freq_mhz : int = 1000
+    ! The processor clock frequency, in MHz.
+
+    param system_freq_mhz : int = 1000
+    ! The system clock frequency, in MHz.
+
+    param memory_megs : int = 128
+    ! The amount of RAM memory, in MiB.
+
+    param flash_megs : int = 64
+    ! The amount of flash memory, in MiB.
+
+    param cpu_type : string = "arm926ej-s"
+    ! The CPU type.
+
+    group "Networking"
+
+    param mac_address : string = "00:1E:A0:01:00:00"
+    ! The MAC address for the target.
+
+    group "Console"
+
+    params from "%simics%/targets/common/console-system.include"
+        except con_connector
+        default con_name = "text_console0"
+        default con_fg_color = "green"
+        default con_bg_color = "black"
+        result console : string
+
+    param board_name : string
+
+    group "Components"
+
+    result system : string
+}
+
+###
+
+load-module integrator-cp-comp
+load-module std-comp
+load-module memory-comp
+load-module os-awareness
+
+#
+# DDR SDRAM
+#
+
+if ($memory_megs < 16 or $memory_megs > 256) {
+    echo "Unsupported memory size: "  + $memory_megs
+    echo
+    python "SIM_command_has_problem()"
+}
+
+$dimm = (create-ddr-memory-module-comp ranks = 1 rank_density = $memory_megs)
+
+#
+# Integrator-CP baseboard
+#
+$system = (create-integrator-cp-baseboard-comp cpu_class = $cpu_type
+                                               system_frequency = $system_freq_mhz
+                                               cpu_frequency    = $freq_mhz
+                                               flash_megs = $flash_megs
+                                               mac_address = $mac_address
+                                               name = $board_name
+                                               memory_megs = $memory_megs )
+connect $system.dimm_slot $dimm.mem_bus
+
+#
+# Console
+#
+
+$con_connector = $system.ser[0]
+run-command-file "%simics%/targets/common/console-system.include"
+
+#load-module usb-comp
+#$usb_disk_image = "/eems_images/ubuntu_img/highlander-fixed/vdr.img"
+#$usb_disk = (create-usb-disk-comp $system.usb_disk file = $usb_disk_image)
+#load-module pcmcia-flash-comp
+#load-module mmc-card-comp
+#load-module mmc-card-comp
+#$mmc_card = (create-micron-mtfc4ggqdi-emmc-card file = "/eems_images/ubuntu_img/highlander-fixed/vdr.img")
+#connect $system.mmc_card[0] $mmc_card.mmc_controller
+#$flash_disk_image = "/eems_images/ubuntu_img/highlander-fixed/vdr.img"
+#$flash_disk = (create-pcmcia-flash-disk-comp $system.flash_disk file = $flash_disk_image)
+#$usb0 = ($system.usb_disk.get-connection usb_host)
+
+
+#create-os-awareness $system.software

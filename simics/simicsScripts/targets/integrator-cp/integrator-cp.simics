@@ -1,0 +1,33 @@
+decl {
+    param default_system_info : string
+    param host_name : string
+    params from "integrator-cp-linux-common.include"
+        default cpu_type = "arm926ej-s"
+        result system : string
+    param mac_address_0 : string
+    param mac_address_1 : string
+    param mac_address_2 : string
+    result eth0 : string
+    result eth1 : string
+    result eth2 : string
+    result switch0_con : string
+    result switch1_con : string
+    result switch2_con : string
+}
+
+###
+add-directory "%script%"
+
+run-command-file "integrator-cp-linux-common.include"
+
+$system->system_info = $default_system_info
+
+$system.mac->mac_address = $mac_address_0
+
+$eth0 = $system.eth
+$eth1 = "None"
+$eth2 = "None"
+
+$switch0_con = (switch0.get-free-connector)
+$switch1_con = (switch1.get-free-connector)
+$switch2_con = (switch2.get-free-connector)

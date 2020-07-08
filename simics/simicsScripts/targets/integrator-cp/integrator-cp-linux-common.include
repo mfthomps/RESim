@@ -1,0 +1,15 @@
+decl {
+    params from "integrator-cp-system.include"
+        result system : string
+
+    params from "integrator-cp-linux-setup.include" except system, console
+    #    default initrd_image = "%simics%/targets/integrator-cp/images/base.cramfs"
+}
+
+###
+
+run-command-file "integrator-cp-system.include"
+
+instantiate-components
+
+run-command-file "integrator-cp-linux-setup.include"
