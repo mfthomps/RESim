@@ -376,14 +376,24 @@ class GenContextMgr():
         if pid not in self.pid_cache and comm == self.debugging_comm:
            group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
-           self.lgr.debug('contextManager pid not in cache, group leader 0x%x  leader pid %d' % (group_leader, leader_pid))
+           add_it = False
            if leader_pid in self.pid_cache:
+               add_it = True
+           elif pid == leader_pid:
+               parent = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_real_parent)
+               if parent in self.watch_rec_list:
+                   add_it = True
+               else:
+                   self.lgr.debug('contextManager pid:%d (%s) not in cache, nor is parent in watch_rec_list 0x%x' % (pid, comm, parent))
+           if add_it:
                ''' TBD, we have no reason to believe this clone is created by the group leader? Using parent or real_parent is no help'''
                self.lgr.debug('contextManager adding clone %d (%s) leader is %d' % (pid, comm, leader_pid))
                self.addTask(pid, new_addr)
                self.top.addProc(pid, leader_pid, comm, clone=True)
                self.watchExit(new_addr, pid)
                self.top.recordStackClone(pid, leader_pid)
+           else:
+               self.lgr.debug('contextManager pid:%d (%s) not in cache, group leader 0x%x  leader pid %d' % (pid, comm, group_leader, leader_pid))
         elif pid in self.pid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
@@ -613,7 +623,7 @@ class GenContextMgr():
             self.pid_cache.append(pid)
         group_leader = self.task_utils.getGroupLeaderPid(pid)
         if group_leader != self.group_leader:
-            self.lgr.debug('contextManager watchTasks set group leader to %d' % group_leader)
+            self.lgr.debug('contextManager watchTasks x set group leader to %d' % group_leader)
             self.group_leader = group_leader
         if set_debug_pid:
             self.setDebugPid()

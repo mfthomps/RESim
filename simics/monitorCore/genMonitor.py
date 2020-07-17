@@ -420,9 +420,9 @@ class GenMonitor():
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.param[cell_name], self.lgr)
-            self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[self.target], self.mem_utils[self.target], 
-                  self.task_utils[self.target], 
-                  self.context_manager[self.target], self.lgr)
+            self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
+                  self.task_utils[cell_name], 
+                  self.context_manager[cell_name], self.lgr)
             self.traceFiles[cell_name] = traceFiles.TraceFiles(self.traceProcs[cell_name], self.lgr)
             self.sharedSyscall[cell_name] = sharedSyscall.SharedSyscall(self, cpu, cell, cell_name, self.param[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -482,31 +482,31 @@ class GenMonitor():
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 ''' run until we get something sane '''
-                self.lgr.debug('doInit cell %s get current task from mem_utils' % cell_name)
+                #self.lgr.debug('doInit cell %s get current task from mem_utils' % cell_name)
                 cur_task_rec = self.mem_utils[cell_name].getCurrentTask(self.param[cell_name], cpu)
                 if cur_task_rec is None or cur_task_rec == 0:
                     #print('Current task not yet defined, continue')
-                    self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
+                    #self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
                     done = False
                 else:
                     pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if pid is None:
-                        self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid None ' % (cell_name, cur_task_rec))
+                        #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid None ' % (cell_name, cur_task_rec))
                         done = False
                         continue
-                    self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
+                    #self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
 
                     phys = self.mem_utils[cell_name].v2p(cpu, self.param[cell_name].current_task)
                     tu_cur_task_rec = self.mem_utils[cell_name].readPhysPtr(cpu, phys)
                     if tu_cur_task_rec is None:
-                        self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d but None from task_utils ' % (cell_name, cur_task_rec, pid))
+                        #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d but None from task_utils ' % (cell_name, cur_task_rec, pid))
                         done = False
                         continue
-                    self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
-                           cur_task_rec, pid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
+                    #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
+                    #       cur_task_rec, pid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
                     if tu_cur_task_rec != 0:
                         if cur_task_rec != tu_cur_task_rec:
-                            self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
+                            #self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
                             pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                             tu_pid = self.mem_utils[cell_name].readWord32(cpu, tu_cur_task_rec + self.param[cell_name].ts_pid)
                             self.lgr.debug('pid %s  tu_pid %s' % (str(pid), str(tu_pid)))
@@ -530,10 +530,10 @@ class GenMonitor():
                                 self.runToDmod(dmod, cell_name=cell_name)
                                 print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
                     else:
-                        self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
+                        #self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
             if not done:
-                self.lgr.debug('continue %d cycles' % run_cycles)
+                #self.lgr.debug('continue %d cycles' % run_cycles)
                 SIM_continue(run_cycles)
        
 
@@ -547,7 +547,8 @@ class GenMonitor():
             plist[tasks[t].pid] = t 
         for pid in sorted(plist):
             t = plist[pid]
-            print('pid: %d taks_rec: 0x%x  comm: %s children 0x%x 0x%x' % (tasks[t].pid, t, tasks[t].comm, tasks[t].children[0], tasks[t].children[1]))
+            print('pid: %d taks_rec: 0x%x  comm: %s children 0x%x 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].children[0], tasks[t].children[1], tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -754,7 +755,7 @@ class GenMonitor():
             the .text section per the elf header in the file that was execed.'''
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
-        self.lgr.debug('debug set exit_group break')
+        self.lgr.debug('execToText debug set exit_group break')
         self.debugExitHap()
                        
         if self.targetFS[self.target] is not None:
@@ -1876,8 +1877,15 @@ class GenMonitor():
             flist = [f1]
 
         else:
-            self.call_traces[self.target]['open'] = self.traceSyscall(callname='open', soMap=self.soMap)
-            pass
+            #self.call_traces[self.target]['open'] = self.traceSyscall(callname='open', soMap=self.soMap)
+            call_list = ['open', 'mmap']
+            if self.mem_utils[self.target].WORD_SIZE == 4 or self.is_compat32: 
+                call_list.append('mmap2')
+            cell = self.cell_config.cell_context[self.target]
+            self.call_traces[self.target]['open']  = syscall.Syscall(None, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
+                           self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, None, call_list=call_list,
+                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.is_compat32)
+            self.lgr.debug('debug watching open syscall and mmap')
 
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
 
@@ -2460,10 +2468,11 @@ class GenMonitor():
         pid = self.task_utils[self.target].getCurrentThreadLeaderPid()
         print pid        
 
-    def getGroupPids(self, leader):
-        plist = self.task_utils[self.target].getGroupPids(leader)
+    def getGroupPids(self, in_pid):
+        leader_pid = self.task_utils[self.target].getGroupLeaderPid(in_pid)
+        plist = self.task_utils[self.target].getGroupPids(leader_pid)
         if plist is None:
-            print('Could not find leader %d' % leader)
+            print('Could not find leader %d' % leader_pid)
             return
         for pid in plist:
             print pid
@@ -2654,7 +2663,18 @@ class GenMonitor():
         print('list head next 0x%x  list head prev 0x%x' % (lh.next, lh.prev))
         '''
         
-
+    def mftx(self, pid, parent):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        tr_parent = self.task_utils[self.target].getRecAddrForPid(parent)
+        tr  = self.task_utils[self.target].getRecAddrForPid(pid)
+        print('tr_parent 0x%x   tr: 0x%x' % (tr_parent, tr))
+        for i in range(800):
+            addr = tr+(i*4)
+            val = self.mem_utils[self.target].readPtr(cpu, addr)
+            print('val at %d is 0x%x' % ((i*4), val))
+            if val == tr_parent:
+                print('got at %d' % (i*4))
+ 
     def mft2(self, pid):
         ts_next = self.param[self.target].ts_next
         ts_prev = self.param[self.target].ts_prev

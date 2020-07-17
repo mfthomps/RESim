@@ -25,6 +25,8 @@
 '''
    Generates a RESim parameter file.  Intended to be invoked by launchKparam.py
    See that script for details.
+   Offsets and layouts derived from task_struct defined in sched.h
+
 '''
 from simics import *
 import memUtils
@@ -293,18 +295,24 @@ class GetKernelParams():
 
     def isThisSwapper(self, task):
         real_parent_offset = 0
+        maybe=[]
         for i in range(800):
             test_task = self.mem_utils.readPtr(self.cpu, task + real_parent_offset)
             test_task1 = self.mem_utils.readPtr(self.cpu, task + real_parent_offset+self.mem_utils.WORD_SIZE)
             if test_task == task and test_task1 == task:
                 self.lgr.debug('isThisSwapper found match 0x%x ' % test_task)
-                return real_parent_offset
+                maybe.append(real_parent_offset)
+                #return real_parent_offset
+                real_parent_offset += self.mem_utils.WORD_SIZE
             else:
                 if test_task is not None and test_task1 is not None:
                     self.lgr.debug('task was 0x%x test_task 0x%x test_task1 0x%x' % (task, test_task, test_task1))
                 else:
                     self.lgr.debug('test task was None')
                 real_parent_offset += self.mem_utils.WORD_SIZE
+        if len(maybe)>0:
+            self.lgr.debug('last match for real parent 0x%x from count %d' % (maybe[-1], len(maybe)))
+            return maybe[-1]
         return None
 
     def getOff(self, words):

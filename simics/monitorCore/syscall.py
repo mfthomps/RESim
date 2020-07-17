@@ -338,6 +338,7 @@ class Syscall():
             for call in self.call_list:
                 # TBD fix for compat 32
                 callnum = self.task_utils.syscallNumber(call, compat32)
+                self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
                 if callnum is not None and callnum < 0:
                     self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
@@ -347,7 +348,7 @@ class Syscall():
                 syscall_info = SyscallInfo(self.cpu, None, callnum, entry, self.trace, self.call_params)
                 syscall_info.compat32 = compat32
                 if not background:
-                    #self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
+                    self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r' % (callnum, call, entry, compat32))
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     proc_break1 = None
                     break_list.append(proc_break)
@@ -369,7 +370,7 @@ class Syscall():
         return frame
 
     def stopTrace(self, immediate=False):
-        #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -380,7 +381,7 @@ class Syscall():
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
-            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
+            self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
 
@@ -848,8 +849,9 @@ class Syscall():
                     #SIM_break_simulation('recvfrom param5 0x%x' % src_addr)
             if src_addr is not None and src_addr != 0:
                 source_ss = net.SockStruct(self.cpu, src_addr, self.mem_utils, fd=-1)
-                exit_info.fname_addr = src_addr
-                exit_info.count = src_addr_len
+                if source_ss.sa_family is not None:
+                    exit_info.fname_addr = src_addr
+                    exit_info.count = src_addr_len
                 ida_msg = '%s - %s pid:%d FD: %d len: %d' % (callname, socket_callname, pid, ss.fd, ss.length)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
@@ -1317,7 +1319,7 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        #self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('name %s' % (memory.ini_ptr.name))
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, pid = self.task_utils.curProc() 
@@ -1361,8 +1363,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
-            pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
+        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')

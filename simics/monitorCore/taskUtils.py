@@ -379,13 +379,16 @@ class TaskUtils():
         for ts in ts_list:
             if ts_list[ts].pid == pid:
                 group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
-                retval = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                if group_leader != ts:
+                    retval = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                else:
+                    retval = self.getCommLeaderPid(ts)
                 break
         return retval
 
     def getGroupPids(self, leader_pid):
         retval = []
-        self.lgr.debug('getGroupPids for %d' % leader_pid)
+        #self.lgr.debug('getGroupPids for %d' % leader_pid)
         ts_list = self.getTaskStructs()
         leader_rec = None
         for ts in ts_list:
@@ -395,25 +398,37 @@ class TaskUtils():
         if leader_rec is None:
             self.lgr.debug('taskUtils getGroupPids did not find record for leader pid %d' % leader_pid)
             return None 
+        #self.lgr.debug('getGroupPids leader_rec 0x%x' % leader_rec)
         for ts in ts_list:
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
-            if group_leader == leader_rec:
-                pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
-                ''' skip if exiting as recorded by syscall '''
-                if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                    retval.append(ts_list[ts].pid)
+            if group_leader != ts:
+                if group_leader == leader_rec:
+                    pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                    ''' skip if exiting as recorded by syscall '''
+                    if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                        retval.append(ts_list[ts].pid)
+            else:
+                ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
+                comm_leader_pid = self.getCommLeaderPid(ts)
+                ts_pid = ts_list[ts].pid
+                #self.lgr.debug('getGroupPids comm leader_pid %d  ts_pid %d' % (comm_leader_pid, ts_pid))
+                if comm_leader_pid == leader_pid and ts_pid not in retval:
+                    if ts_pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                        #self.lgr.debug('getGroupPids added %d' % ts_pid)
+                        retval.append(ts_pid)
+          
         return retval
 
     def getPidsForComm(self, comm_in):
         comm = os.path.basename(comm_in).strip()
         retval = []
-        self.lgr.debug('getPidsForComm %s' % comm_in)
+        #self.lgr.debug('getPidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>self.COMM_SIZE and len(ts_list[ts].comm) == self.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
-                self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
+                #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
                 if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
                     retval.append(ts_list[ts].pid)
@@ -518,15 +533,43 @@ class TaskUtils():
 
     def getCurrentThreadParent(self):
         cur_addr = self.getCurTaskRec()
-        group_leader = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_real_parent)
-        pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
-        return pid
-                
+        parent = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_real_parent)
+        pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
+        comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, self.COMM_SIZE)
+        return pid, comm
+               
+    def getCommLeaderPid(self, cur_rec): 
+        ''' return pid of oldest ancestor having same comm as cur_rec, which may be self'''
+        comm = self.mem_utils.readString(self.cpu, cur_rec + self.param.ts_comm, 16)
+        leader_pid = self.mem_utils.readWord32(self.cpu, cur_rec + self.param.ts_pid)
+        parent = None
+        prev_parent = None
+        #self.lgr.debug('getCommLeaderPid 0x%x pid:%d (%s)' % (cur_rec, leader_pid, comm))
+        while(True):
+            parent = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_real_parent)
+            #self.lgr.debug('getCommLeaderPid parent 0x%x' % parent)
+            if parent == cur_rec:
+                break
+            else:
+                leader_comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, 16)
+                if leader_comm != comm:
+                    break
+                leader_pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
+                #self.lgr.debug('getCommLeaderPid parent pid %d comm %s' % (leader_pid, leader_comm))
+            cur_rec = parent
+        #self.lgr.debug('getCommLeaderPid returning %d' % leader_pid)
+        return leader_pid
+
     def getCurrentThreadLeaderPid(self):
-        cur_addr = self.getCurTaskRec()
-        group_leader = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_group_leader)
-        pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
-        return pid
+        ''' NOT really.  Our notion of leader includes parent of procs that were cloned.  Modern linux does not use
+            group_leader if distinct processes '''
+        cur_rec = self.getCurTaskRec()
+        group_leader = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_group_leader)
+        leader_pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+        self.lgr.debug('getCurrentThreadLeaderPid cur_rec 0x%x  group_leader 0x%x' % (cur_rec, group_leader))
+        if group_leader == cur_rec:
+            leader_pid = self.getCommLeaderPid(cur_rec)
+        return leader_pid
 
     def getMemUtils(self):
         return self.mem_utils

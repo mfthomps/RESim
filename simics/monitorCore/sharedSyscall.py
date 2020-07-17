@@ -300,6 +300,7 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
+                    self.lgr.debug('recv call setRange retval_addr 0x%x len %d' % (exit_info.retval_addr, exit_info.sock_struct.length))
                     self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, msg=trace_msg, 
                                max_len=exit_info.sock_struct.length)
                     if exit_info.fname_addr is not None:
