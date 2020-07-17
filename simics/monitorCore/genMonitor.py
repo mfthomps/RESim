@@ -2438,7 +2438,7 @@ class GenMonitor():
         SIM_run_command('c')
 
     def showNets(self):
-        net_commands = self.netInfo.getCommands()
+        net_commands = self.netInfo[self.target].getCommands()
         if len(net_commands) > 0:
            print('Network definition commands:')
         for c in net_commands:
