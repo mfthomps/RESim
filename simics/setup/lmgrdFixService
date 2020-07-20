@@ -1,0 +1,39 @@
+#! /bin/sh
+# /etc/init.d/lmgrdFixService
+### BEGIN INIT INFO
+# Provides:          lmgrdFixService
+# Required-Start:    $local_fs $network
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Get the simics lmgrd pos running
+# Description:       see short
+### END INIT INFO
+
+# Start lmmgrdFixService
+umask 000
+case "$1" in
+  start)
+    exec >> /tmp/lmgrdFix 2>&1
+    echo "Starting lmgrdFix"
+    su - mike sh -c /usr/bin/lmgrdFix
+    ;;
+  restart)
+    exec >> /tmp/lmgrdFix 2>&1
+    echo 'restarting lmgrdFix'
+    su - mike sh -c /usr/bin/lmgrdFix
+    ;;
+  force-reload)
+    echo "not supported"
+    ;;
+  stop)
+    echo "not supported"
+    ;;
+  *)
+    echo "Usage: /etc/init.d/lmgrdFixService {start}"
+    exit 1
+    ;;
+esac
+
+exit 0
+
