@@ -267,6 +267,8 @@ class LaunchRESim():
                         value = self.comp_dict[section][name]
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
+                        if self.SIMICS_VER.startswith('4'):
+                           run_command('$'+cmd)
     
             if self.SIMICS_VER.startswith('4'):
                 cmd='run-command-file "./targets/%s"' % (script)
