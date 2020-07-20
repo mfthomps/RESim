@@ -69,20 +69,15 @@ decl {
     result switch1_con : string
     result switch2_con : string
 }
+$kernel_image = "%simics%/targets/qsp-arm/images/uImage"
 #echo "def sys in is "+$default_system_info
-#run-command-file "%simics%/targets/qsp-arm/qsp-system.include"
 run-command-file "%script%/qsp-system.include"
-#run-command-file "%simics%/targets/qsp-arm/qsp-linux-system.include"
 run-command-file "%script%/qsp-linux-system.include" 
 
 instantiate-components
-#run-command-file "%simics%/targets/common/linux-setup.include"
 echo "default_system_info is "+$default_system_info
 run-command-file "%script%/linux-setup.include" 
-#run-command-file "%simics%/targets/qsp-arm/qsp-network.include"
-#run-command-file "%simics%/targets/common/osa-setup.include"
 
-echo "there"
 #
 # set real time clock to allow linux to boot
 #

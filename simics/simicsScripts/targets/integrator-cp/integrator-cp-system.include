@@ -77,9 +77,9 @@ connect $system.dimm_slot $dimm.mem_bus
 $con_connector = $system.ser[0]
 run-command-file "%simics%/targets/common/console-system.include"
 
-#load-module usb-comp
-#$usb_disk_image = "/eems_images/ubuntu_img/highlander-fixed/vdr.img"
-#$usb_disk = (create-usb-disk-comp $system.usb_disk file = $usb_disk_image)
+load-module usb-comp
+$usb_disk_image = "/eems_images/ubuntu_img/highlander-fixed/vdr.img"
+$usb_disk = (create-usb-disk-comp $system.usb_disk file = $usb_disk_image)
 #load-module pcmcia-flash-comp
 #load-module mmc-card-comp
 #load-module mmc-card-comp

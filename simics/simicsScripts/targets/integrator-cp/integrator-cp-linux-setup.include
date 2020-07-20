@@ -63,14 +63,7 @@ if ($cortex_hack) {
 #
 echo "kernel image is "+$kernel_image
 $cpu.load-binary -pa offset = -0xc0000000 filename = $kernel_image
-#$cpu.load-binary -pa offset = 0x00000000 filename = $kernel_image
 $phys_mem.load-file offset = 0x7000000 filename = $initrd_image
-
-# load uboot
-
-#$phys_mem.load-file offset = 0x00007fc0 filename = $kernel_image
-$phys_mem.load-file offset = 0x100 filename = /home/mike/SEED/high/long/integratorcp.dtb
-#$phys_mem.load-file offset = 0x01000000 filename = $kernel_image
 
 #ATAG_CORE
 $phys_mem.write 0x100 0x5          4
@@ -103,6 +96,8 @@ $phys_mem.write 0x144 0x800000     4
 $phys_mem.write 0x148 0x0          4
 $phys_mem.write 0x148 0x0          4
 $phys_mem.write 0x14c 0x54410009   4
+
+#$phys_mem.load-file offset = 0x100 filename = /home/mike/SEED/high/long/integratorcp.dtb
 
 # enable the uart
 pselect $cpu

@@ -10,9 +10,9 @@ decl {
     result eth0 : string
     result eth1 : string
     result eth2 : string
-    result switch0_con : string
-    result switch1_con : string
-    result switch2_con : string
+#    result switch0_con : string
+#    result switch1_con : string
+#    result switch2_con : string
 }
 
 ###
@@ -28,6 +28,6 @@ $eth0 = $system.eth
 $eth1 = "None"
 $eth2 = "None"
 
-$switch0_con = (switch0.get-free-connector)
-$switch1_con = (switch1.get-free-connector)
-$switch2_con = (switch2.get-free-connector)
+#$switch0_con = (switch0.get-free-connector)
+#$switch1_con = (switch1.get-free-connector)
+#$switch2_con = (switch2.get-free-connector)
