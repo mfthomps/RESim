@@ -59,7 +59,7 @@ if [ ! -f "$myLicenses/$myFile" ]; then
     exit
 fi    
 echo "Kill & recreate the lmgrd unstable garbage license manager"
-PROC=$(ps aux | grep '[l]mgrd' | grep -v tail | awk '{print $2}')
+PROC=$(ps aux | grep '[l]mgrd' | grep -v Fix| grep -v tail | awk '{print $2}')
 if [ $? -eq 0 ]; then
     echo lmgrd proc to kill is $PROC
     if [ ! -z "$PROC" ]; then
