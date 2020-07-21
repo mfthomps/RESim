@@ -1,0 +1,11 @@
+add-directory "%script%"
+$cpu_class="core-i7-single"
+$iso_image="/mnt/ubuntu_img/ubuntu-16.04.5-server-i386.iso"
+if not defined rtc_time           {$rtc_time           = "2020-03-03 14:00:00 UTC"}
+$use_bcm_nic = "NO"
+$mac_address       = "00:19:A1:E1:1C:9E"
+$mac_address_2   = "00:19:A0:E1:1C:9E"
+$mac_address_3 = "00:19:A0:E1:1C:9F"
+run-command-file "%simics%/targets/x86-x58-ich10/viper-dvdboot.simics"
+
+
