@@ -122,8 +122,8 @@ class bookmarkView(simplecustviewer_t):
         #print('did create')
         retval = []
         self.ClearLines()
-        #self.Refresh()
-        #print('did refresh of clear')
+        self.Refresh()
+        print('did clear and refresh')
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         if type(simicsString) is int or type(simicsString) is long:
@@ -141,7 +141,7 @@ class bookmarkView(simplecustviewer_t):
                 #print("added %s" % entry)
                 retval.append(entry)
         self.Refresh()
-        #self.Show()
+        self.Show()
         return retval
 
     def OnDblClick(self, shift):
