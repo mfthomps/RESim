@@ -30,14 +30,11 @@ import idc
 import idautils
 import bpUtils
 import gdbProt
-import bookmarkView
-import stackTrace
-import dataWatch
-import writeWatch
 #import okTextForm
 import waitDialog
 import functionSig
-import reHooks
+#import reHooks
+#import dbgHooks
 import regFu
 import menuMod
 idaapi.require("idaSIM")
@@ -46,6 +43,7 @@ idaapi.require("dataWatch")
 idaapi.require("writeWatch")
 idaapi.require("bookmarkView")
 idaapi.require("reHooks")
+idaapi.require("dbgHooks")
 idaapi.require("menuMod")
 from idaapi import Choose
 '''
@@ -477,6 +475,9 @@ if __name__ == "__main__":
     reHooks.register(isim)
     re_hooks = reHooks.Hooks()
     re_hooks.hook()
+
+    dbg_hooks = dbgHooks.DBGHooks(isim)
+    dbg_hooks.hook()
     
     form=idaversion.find_widget("IDA View-EIP")
     idaversion.activate_widget(form, True)
@@ -511,5 +512,5 @@ if __name__ == "__main__":
         #goToOrigin()
         pass
     idaversion.batch(0)
-
+    isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)

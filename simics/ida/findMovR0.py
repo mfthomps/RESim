@@ -24,7 +24,7 @@ for ea in idautils.Functions():
         if instruct.lower().startswith('mov'):
             #print('0x%x is mov %s' % (ins_addr, instruct))
             parts = instruct.lower().split()
-            if parts[1].startswith('r') and parts[2].startswith('r9'):
+            if parts[1].startswith('r') and parts[2].startswith('sp'):
                 for nxt in range(ins_addr+4, ins_addr+36, 4):
                     next_instruct = idc.generate_disasm_line(nxt, 0)
                     if next_instruct.lower().startswith('pop') and 'pc' in next_instruct.lower():

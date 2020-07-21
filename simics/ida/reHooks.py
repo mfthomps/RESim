@@ -311,23 +311,24 @@ class StringMemoryHandler(idaapi.action_handler_t):
         def activate(self, ctx):
             if regFu.isHighlightedEffective():
                 addr = regFu.getOffset()
-                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
-                print('effective addr 0x%x value %s' % (addr, simicsString))
-                value = simicsString
             else:
                 highlighted = idaversion.getHighlight()
                 addr = getHex(highlighted)
                 if addr is None:
                     print('ModMemoryHandler unable to parse hex from %s' % highlighted)
                     return
-                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.getMemoryValue(0x%x)");' % addr) 
-                print('addr 0x%x value %s' % (addr, simicsString))
-                value = simicsString
 
             sas = setAddrString.SetAddrString()
             sas.Compile()
             sas.iAddr.value = addr 
-            sas.iStr1.value = value 
+            val = ''
+            for i in range(8):
+                c = idaversion.get_wide_byte(addr+i)
+                if c >= 0x20 and c <= 0x7e:
+                    val = val+chr(c)
+                else:
+                    val = val+'.'
+            sas.iStr1.value = val
             ok = sas.Execute()
             if ok != 1:
                 return

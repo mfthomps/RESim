@@ -1,4 +1,5 @@
 import idaapi
+import idaversion
 if idaapi.IDA_SDK_VERSION <= 699:
     from idaapi import Form
 else:

@@ -1,6 +1,6 @@
 import idaapi
-import idc
 import idaversion
+import ida_dbg
 def disableAllBpts(exempt):
     qty = idaversion.get_bpt_qty()
     disabledSet = []
@@ -10,23 +10,23 @@ def disableAllBpts(exempt):
 	if bptStat > 0:
 	    if exempt is None or exempt != bptEA:
 	        disabledSet.append(bptEA)
-	        idc.EnableBpt(bptEA, False)
+	        ida_dbg.enable_bpt(bptEA, False)
     return disabledSet
 
 def enableBpts(disabledSet):
     for ea in disabledSet:
-	idc.EnableBpt(ea, True)
+	ida_dbg.enable_bpt(ea, True)
 
 def setAndDisable(addr):
-    bptEnabled = idc.CheckBpt(addr)
+    bptEnabled = ida_dbg.check_bpt(addr)
     if bptEnabled < 0:
 	# no breakpoint, add one
 	#print 'setAndDisable no bpt at %x, add one' % addr
-	idc.AddBpt(addr)
+	ida_dbg.add_bpt(addr)
     elif bptEnabled == 0:
 	# breakpoint, but not enabled
 	#print 'found bpt at %x, enable it' % addr
-        idc.EnableBpt(addr, True)
+         ida_dbg.enable_bpt(addr, True)
     else:
 	#print 'breakpoint exists, use it'
 	pass
@@ -38,10 +38,10 @@ def reEnable(addr, bptEnabled, disabledSet):
     enableBpts(disabledSet)
     #print 'back from enable'
     if bptEnabled < 0:
-        idc.EnableBpt(addr, False)
-        success = idc.DelBpt(addr)
+        ida_dbg.enable_bpt(addr, False)
+        success = iad_dbg.del_bpt(addr)
         #print 'reEnable delete bpt at %x success: %d' % (addr, success)
     elif bptEnabled == 0:
         #print 'reEnable reenabling bkpt at %x' % addr
-	idc.EnableBpt(addr, False)
+	iad_dbg.enable_bpt(addr, False)
 

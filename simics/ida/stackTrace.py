@@ -9,6 +9,7 @@ import json
 import os
 import reHooks
 import idaversion
+import ida_kernwin
 class StackTrace(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -56,7 +57,7 @@ class StackTrace(simplecustviewer_t):
         #self.Show()
 
     def updateStackTrace(self):
-        #print "in updateStackTrace"
+        print "in updateStackTrace"
         #self.Close()
         #self.Create()
         #print('did create')

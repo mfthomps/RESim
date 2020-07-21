@@ -8,12 +8,13 @@ else:
     import ida_kernwin
     import ida_nalt
     import idc
+    import ida_bytes
 
 def refresh_debugger_memory():
     if idaapi.IDA_SDK_VERSION <= 699:
         return idc.RefreshDebuggerMemory()
     else:
-        return ida_dbg.refresh_debugger_memory
+        return ida_dbg.refresh_debugger_memory()
    
 def get_bpt_qty(): 
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -130,7 +131,7 @@ def refresh_choosers():
     if idaapi.IDA_SDK_VERSION <= 699:
         idc.RefreshLists()
     else: 
-        ida_kernwin.choosers()
+        ida_kernwin.refresh_choosers()
 
 def get_input_file_path():
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -308,6 +309,13 @@ def get_wide_dword(addr):
         retval = idc.Word(addr)
     else:
         retval = idc.get_wide_dword(addr)
+    return retval
+
+def get_wide_byte(addr):
+    if idaapi.IDA_SDK_VERSION <= 699:
+        retval = idc.Bytes(addr)
+    else:
+        retval = idc.get_wide_byte(addr)
     return retval
 
 def get_bpt_ea(i):

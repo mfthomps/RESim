@@ -148,7 +148,8 @@ class IdaSIM():
         #print 'doRevFinish'
         #doRevCommand('uncall-function')
         cur_addr = idaversion.get_reg_value(self.PC)
-        f = idc.GetFunctionAttr(cur_addr, idc.FUNCATTR_START)
+        #f = idc.GetFunctionAttr(cur_addr, idc.FUNCATTR_START)
+        f = idc.get_func_attr(cur_addr, idc.FUNCATTR_START)
         if f != idaapi.BADADDR: 
             print('doRevFinish got function start at 0x%x, go there, and further back 1' % f) 
             self.doRevToAddr(f, extra_back=1)
@@ -294,19 +295,11 @@ class IdaSIM():
            
     def wroteToRegister(self): 
         highlighted = idaversion.getHighlight()
-        '''
+
         if highlighted is None  or highlighted not in self.reg_list:
            print('%s not in reg list' % highlighted)
-           c=idaapi.Choose([], "Run backward until selected register modified", 1)
-           c.width=50
-           c.list = self.reg_list
-           chose = c.choose()
-           if chose == 0:
-               print('user canceled')
-               return
-           else:
-               highlighted = self.reg_list[chose-1]
-        '''
+           highlighted = idaversion.ask_str('Wrote to register:', 'Which register?')
+
         print 'Looking for a write to %s...' % highlighted
         command = "@cgc.revToModReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
@@ -322,19 +315,10 @@ class IdaSIM():
         
     def trackRegister(self): 
         highlighted = idaversion.getHighlight()
-        if highlighted is None  or not self.isReg(highlighted):
+        if highlighted is None  or not self.isReg(highlighted) or highlighted not in self.reg_list:
            print('%s not in reg list' % highlighted)
            print('%s' % str(self.reg_list))
-           return
-           c=idaapi.Choose([], "back track to source of selected register", 1)
-           c.width=50
-           c.list = self.reg_list
-           chose = c.choose()
-           if chose == 0:
-               print('user canceled')
-               return
-           else:
-               highlighted = self.reg_list[chose-1]
+           highlighted = idaversion.ask_str('Track register:', 'Which register?')
         print 'backtrack to source of to %s...' % highlighted
         command = "@cgc.revTaintReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
@@ -681,6 +665,8 @@ class IdaSIM():
         if cur_addr > self.kernel_base:
             print('run to user space')
             self.runToUserSpace()
+        else:
+            self.resynch()
         
     
     def exitIda(self):
