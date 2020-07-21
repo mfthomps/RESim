@@ -67,7 +67,7 @@ extended to support alternate architectures, e.g., 64-bit ARM, supported by Simi
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 
 
-\section{Work Flow}
+\section{Workflow}
 Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
 processors and interface devices, e.g., network cards, disks and system consoles.  RESim currently includes the following platforms: 
 \begin{itemize}
@@ -81,9 +81,10 @@ Other platforms can be modeled via Simics, the detailes of which are beyond the 
 Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
 
 RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task 
-records and addresses of selected kernel symbols.  A directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
+records and addresses of selected kernel symbols.  The CREATE\_RESIM\_PARAMS directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
 and extract the desired parameters.  This allows RESim to analyze disparate Linux kernels without a priori 
 knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
+See section \ref{getting-started}.
 
 Once the kernel parameters have been extracted, the RESim configuration file is modified to reference the parameter file, and the simulation is restarted. The user is
 presented with a command line interface console.  This console manages the simulation via a combination of RESim and Simics commands, including commands to:
@@ -97,6 +98,7 @@ presented with a command line interface console.  This console manages the simul
 \item Set and run to breakpoints, either in the future or in the past.
 \item Target RESim to focus on a specific process thread group, e.g., for dynamic analysis using IDA Pro.
 \end{itemize}
+\noindent See section \ref{commands} for details of RESim commands.
 
 When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
 
@@ -112,6 +114,41 @@ RESim extends IDA Pro debugger functions and the analyst accesses these function
 \item Set and jump to bookmarks
 \end{itemize}
 
+\subsection{Find interesting processes}
+A typical strategy with RESim is to initially perform a full system trace on a system as a means of identifying programs of interest, e.g., which can then be
+further analyzed using the interactive IDA Pro client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
+system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
+event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
+IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
+run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
+see network ports being listened to. Use the {\tt showProcTrace} command to view a report on all processes and their IO usage.  Either exit RESim or use {\tt flushTrace} to make sure the trace log is complete. 
+Use the {/tt genRpt.sh} script from {\tt RESim/postscripts} to parse the system call trace file (see its README).  You may wish to first copy the trace files to a more permanent location.
+The resulting reports may aid you in finding processes of interest, and identifying the programs that they execute.  These can be opened in tools such as IDA Pro or Ghidra to help you understand
+their operation.
+
+\subsection{Analysis of input processing}
+Imagine you've identified a program that consumes UDP traffic from a specific port.  Assuming you know very little about the protocol used on this port, you could craft an arbitrary UDP packet
+on your host system with the intention of sending it to the simulation.   You would then restart the simulation and create a port forwarding map from the real network (i.e., your host) and the simulation.
+Do this using the {\tt connect-real-network} command, an example of which is in the {\tt map50001.simics} script in {\tt RESIM/simics/workspace}.  Then issue the {\tt debugProc('progname')} command to cause RESim to run until the
+target program is loaded by the kernel, at which time the GDB debug server would start.   Next, use {\tt runToBind} to run until the port is bound to and display the file descriptor used for the port.  The
+{\tt trackIO} command would then be used to record the movement of data read from that file descriptor.  While {\tt trackIO} is waiting to see such data, send the UDP packet to the simulation, e.g., 
+
+\begin{verbatim}
+    cat mypacket > /dev/udp/localhost/50001
+\end{verbatim}
+\noindent When RESim sees no more activity directly related to the consumption of data from that descriptor, it will stop the simulation.  
+
+Now would be a good time to attach the IDA Pro debugger to the server as described in \ref{ida}, and load the RESim IDA plugin (rev.py).  Note that at this point, the simulated system is stopped at some
+arbitrary execution point in some arbitrary process.  So do not expect IDA to reflect useful state information when it attaches to server.  Find the \textit{Data Watch} window in IDA and right click to refresh the data in that window.
+You should then see a list of event related to the consumption of data read from the file descriptor.  Double clicking any of those entries will move the simulation to the point in time of the event.  (Note events whose IP reflect kernel 
+space must be followed by a {\tt step over} to take you back into user space following the system call.)  
+
+Use IDA to observe branching resulting from input data values.  Identify a value within the input data to change such that a different path is taken.  Then move the simulation to the initial reading of that data, and show the data in
+IDA's hex view.  Then right click on an addres and use {\tt modify memory} to alter memory content.  Then issue the {\tt retrack} command and RESim will replace the previous data watch events with those generated by the new data.
+When RESim stops the simulation, refresh the Data Watch window and observe the changes.
+
+See \ref{example-workflows} for more detailed examples of RESim workflows.
+
 \section{Development and Availability}
 In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
@@ -120,6 +157,7 @@ All of the RESim code is available on github at \url{https://github.com/mfthomps
 
 
 \section{RESim commands}
+\label{commands}
 The following RESim commands are issued at the Simics command prompt, naming the commands as methods of the {\tt cgc} python module,
 e.g., "{\tt @cgc.tasks()}".
 
@@ -138,7 +176,7 @@ Tracing continues until the stopTrace command is issued.  Also see \ref{postproc
 
 \item {\tt showProcTrace} – Generate a process family summary of all processes that executed since the traceProcess (or traceAll) command.
 
-\item {\tt showNets} – Display network configuration commands collected from process tracing and the use of toProc.
+\item {\tt showNets} – Display network configuration commands (e.g., {\tt ifconfig} collected from process tracing and the use of toProc.
 
 \item {\tt showBinders} – Display programs that use bind and accept socket calls – intended for use during process tracing to identify processes that listen on externally accessible sockets.
 
@@ -147,6 +185,8 @@ Tracing continues until the stopTrace command is issued.  Also see \ref{postproc
 \item {\tt traceFile(logname)} – Copy all writes that occur to the given filename.  Intended for use with log files.  Output is in /tmp/[basename(logname)]
 
 \item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log  
+
+\item {\tt flushTrace} - Flush trace output to the trace log files.
 
 \item {\tt debugProc(process name)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
 
@@ -412,6 +452,7 @@ It also assumes you have IDA Pro.
 \end{verbatim}
 \end{itemize}
 \subsection{Getting started}
+\label{getting-started}
 Steps to define and run a RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
 computer upon which Simics is installed with a x86-x58-ich10 platform.
 \begin{enumerate}
@@ -451,6 +492,7 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 {\tt @gkp.compat32()}.  This will modify the kernel parameters in the .param file to include those needed to monitor 32-bit applications.
 
 \subsection{IDA Pro}
+\label{ida}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
 {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
 
@@ -598,6 +640,7 @@ indirectly).  Use of the {\tt background=True} option with the {\tt runToDmod} c
 system calls associated with the Dmod, even while you focus on the behavior of X. 
 
 \section{Example workflows}
+\ref{example-workflows}
 \subsubsection{Watch consumption of a UDP packet}
 Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
 Start the monitor and map the desired port to a real ethernet device.
@@ -858,9 +901,10 @@ gsettings set com.canonical.desktop.interface scrollbar-mode normal
 \noindent to avoid the exception.
 
 \section{Performance tricks}
-Use disable-reverse-execution whenever you do not really need reversing, e.g., while moving forward to a known connect or accept.
+Use disable-reverse-execution whenever you do not really need reversing, e.g., while moving forward to a known connect or accept
+within a program being debugged.
 
-Instead of tracing all from a boot, consider running ahead until the systemd-logind is created.
+Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
 
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
