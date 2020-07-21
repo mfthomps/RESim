@@ -583,3 +583,11 @@ class memUtils():
                 return
             address += 4
 
+    def getCallNum(self, cpu):
+        if not self.param.arm_svc:
+            callnum = self.getRegValue(cpu, 'syscall_num')
+        else:
+            lr = self.getRegValue(cpu, 'lr')
+            val = self.readWord(cpu, lr-4)
+            callnum = val & 0xfff
+        return callnum

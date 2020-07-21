@@ -1,5 +1,6 @@
 from simics import *
 import pageUtils
+import taskUtils
 import stopFunction
 import hapCleaner
 import decode
@@ -13,7 +14,7 @@ import os
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
-    def __init__(self, top, cpu, page_size, context_manager, mem_utils, task_utils, param, lgr):
+    def __init__(self, top, cpu, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.start = []
         self.length = []
@@ -28,6 +29,7 @@ class DataWatch():
         self.page_size = page_size
         self.show_cmp = False
         self.break_simulation = True
+        self.rev_to_call = rev_to_call
         self.param = param
         self.return_break = None
         self.return_hap = None
@@ -158,7 +160,9 @@ class DataWatch():
         self.context_manager.genDeleteHap(self.return_hap)
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x' % (eax, addr))
-        self.watchMarks.kernel(addr, eax)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        frame = self.rev_to_call.getRecentCycleFrame(pid)
+        self.watchMarks.kernel(addr, eax, frame)
         self.watch()
 
     def kernelReturn(self, addr):

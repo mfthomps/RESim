@@ -67,10 +67,12 @@ class WatchMarks():
             self.loop_count += 1
 
     class KernelMark():
-        def __init__(self, addr, count):
+        def __init__(self, addr, count, callnum, fd):
             self.addr = addr
             self.count = count
-            self.msg = 'Kernel read %d bytes from 0x%x' % (count, addr)
+            self.callnum = callnum
+            self.fd = fd
+            self.msg = 'Kernel read %d bytes from 0x%x call_num: %d FD: %d' % (count, addr, callnum, fd)
         def getMsg(self):
             return self.msg
 
@@ -184,9 +186,11 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, sm))
         self.lgr.debug('watchMarks memset 0x%x %s' % (ip, sm.getMsg()))
 
-    def kernel(self, addr, count):
+    def kernel(self, addr, count, frame):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        km = self.KernelMark(addr, count)
+        callnum = self.mem_utils.getCallNum(self.cpu)
+        fd = frame['param1']
+        km = self.KernelMark(addr, count, callnum, fd)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, km))
         self.lgr.debug('watchMarks kernel 0x%x %s' % (ip, km.getMsg()))
 

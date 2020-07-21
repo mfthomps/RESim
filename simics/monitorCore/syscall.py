@@ -1334,14 +1334,7 @@ class Syscall():
             else:
                 self.linger_cycles.append(cpu.cycles)
 
-        if not self.param.arm_svc:
-            callnum = self.mem_utils.getRegValue(cpu, 'syscall_num')
-        else:
-            lr = self.mem_utils.getRegValue(self.cpu, 'lr')
-            val = self.mem_utils.readWord(self.cpu, lr-4)
-            callnum = val & 0xfff
-            self.lgr.debug('syscallHap svc_call lr 0x%x val 0x%x callnum  is %d' % (lr, val, callnum))
-
+        callnum = self.mem_utils.getCallNum(cpu)
         if syscall_info.callnum is None:
            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
            syscall_instance = self.top.getSyscall(self.cell_name, callname) 

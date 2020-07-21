@@ -56,7 +56,7 @@ class RegisterModType():
 
 
 class reverseToCall():
-    def __init__(self, top, param, task_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir):
+    def __init__(self, top, param, task_utils, mem_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir, compat32):
             #print('call getLogger')
             self.lgr = resim_utils.getLogger(name, logdir)
             self.context_manager = context_manager 
@@ -65,11 +65,13 @@ class reverseToCall():
             self.cpu = None
             self.pid = None
             self.cell_name = None
+            self.compat32 = compat32
             #self.lgr = lgr
             self.page_size = page_size
             self.lgr.debug('reverseToCall, in init')
             self.param = param
             self.task_utils = task_utils
+            self.mem_utils = mem_utils
             self.decode = None
             ''' hackish for sharing this with genMonitor and cgcMonitor '''
             self.x_pages = None
@@ -1142,8 +1144,14 @@ class reverseToCall():
             start = limit
         self.lgr.debug('setBreakRange done')
 
+    class EntryRec():
+        def __init__(self, cycles, frame):
+            self.cycles = cycles
+            self.frame = frame
+
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
+        self.lgr.debug('sysenterHap')
         reversing = False
         if reversing:
             return
@@ -1152,14 +1160,13 @@ class reverseToCall():
             if True or (cur_cpu == self.cpu and pid == self.pid):
                 cycles = self.cpu.cycles
                 if pid not in self.sysenter_cycles:
-                    self.sysenter_cycles[pid] = []
+                    self.sysenter_cycles[pid] = {}
                 if cycles not in self.sysenter_cycles[pid]:
-                    #eip = self.top.getEIP(self.cpu)
-                    #reg_num = self.cpu.iface.int_register.get_number('eax')
-                    #eax = self.cpu.iface.int_register.read(reg_num)
-                    #self.lgr.debug('sysenterHap call %d at 0x%x, add cycle 0x%x' % (eax, eip, cycles))
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
-                    self.sysenter_cycles[pid].append(cycles)
+                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
+                    frame['syscall_num'] = self.mem_utils.getRegValue(self.cpu, 'syscall_num') & 0xfff
+
+                    self.sysenter_cycles[pid][cycles] = frame 
             
 
     def setIdaFuns(self, ida_funs):
@@ -1170,4 +1177,24 @@ class reverseToCall():
         retval = None
         if pid in self.sysenter_cycles:
             retval = self.sysenter_cycles[pid]
+        return retval
+
+    def getRecentCycleFrame(self, pid):
+        retval = None
+        cur_cycles = self.cpu.cycles
+        self.lgr.debug('getRecentCycleFrame pid %d' % pid)
+        if pid in self.sysenter_cycles:
+            got_it = None
+            for cycles in sorted(self.sysenter_cycles[pid]):
+                if cycles > cur_cycles:
+                    self.lgr.debug('getRecentCycleFrame found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                    got_it = prev_cycles
+                    break
+                else:
+                    prev_cycles = cycles
+
+            if got_it is not None:
+                retval = self.sysenter_cycles[pid][got_it] 
+            else:
+                retval = self.sysenter_cycles[pid][cycles] 
         return retval

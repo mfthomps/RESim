@@ -106,7 +106,6 @@ class GenMonitor():
         self.mode_hap = None
         self.hack_list = []
         self.traceOpen = {}
-        self.sysenter_cycles = {}
         self.traceMgr = {}
         self.soMap = {}
         self.page_faults = {}
@@ -411,15 +410,15 @@ class GenMonitor():
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
             self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                    self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
-            self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, self.param[cell_name], self.task_utils[cell_name], 
-                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir)
+            self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
+                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32)
             self.pfamily[cell_name] = pFamily.Pfamily(cell, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.param[cell_name], self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
