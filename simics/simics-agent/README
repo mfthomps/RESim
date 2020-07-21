@@ -1,0 +1,78 @@
+Compiling the Simics Agent
+--------------------------
+
+Unless you want to compile the Simics Agent with the default system compiler,
+you need to specify the PREFIX environment variable. It should be set to the
+path and file prefix of your target compiler.
+
+Build:
+
+  make
+
+Currently, the Simics Agent does not provide complete dependency checking for
+its files, thus it may be necessary to clean the old object files before
+recompiling:
+
+  make clean all
+
+Remember that the agent is using Magic Instructions. You may have to update
+the agent.c:trigger_agent function for your particular target system.
+
+The Simics Agent options
+------------------------
+
+The agent takes several optional command-line options. Use --help to list them:
+
+$ ./simics-agent --help
+USAGE: ./simics-agent [OPTIONS] [<agent name>]
+OPTIONS:
+  -d, --debug [false]
+	Print debug information
+  -h, --help [true]
+	Print this help information
+  --id=b6cde764dc5add0e
+	Override the agent magic id
+  --name=<string>
+	Set the Simics agent name
+  --poll=10000
+	Set the poll interval [milliseconds]
+  -q, --quiet [verbosity=1]
+	Make the agent more quiet
+  -v, --verbose [verbosity=1]
+	Make the agent more verbose
+  --upload
+        File to upload to host
+  --download
+        File to download from host
+  --to
+        Destination for file transfer
+  -f, --overwrite
+        Overwrite option for file transfer
+  -x, --executable
+        Executable option for file transfer
+
+
+The agent name will be present among the available Simics agents which the
+Agent Manager can list. The agent name can be used to differentiate separate
+instances of the Simics agent, on the same or on different systems. Unless
+specified on the command-line the hostname of the current target system will
+be used. If the hostname is not set, a built-in default value is used.
+
+When running the Simics agent to initiate file transfers, either the
+--upload or --download option should be specified. Using --to is
+optional and if specified directs the destination for the
+transfer. The agent exits when the transfer is complete or if an error
+occurs.
+
+Debugging the Simics Agent
+--------------------------
+
+The Simics Agent takes an optional debug flag:
+
+  ./simics-agent --debug
+
+It can also be useful to turn on more log messages from either the agent
+manager or your agent handle, in the Simics CLI:
+
+  agent_manager.log-level 4
+  matic0.log-level 4
