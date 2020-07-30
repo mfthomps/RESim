@@ -9,6 +9,7 @@ import elfText
 import memUtils
 import watchMarks
 import backStop
+import net
 from stackTrace import mem_funs
 import os
 class DataWatch():
@@ -161,7 +162,7 @@ class DataWatch():
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x' % (eax, addr))
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-        frame = self.rev_to_call.getRecentCycleFrame(pid)
+        frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
         self.watchMarks.kernel(addr, eax, frame)
         self.watch()
 
@@ -613,3 +614,63 @@ class DataWatch():
 
     def setRetrack(self, value):
         self.retrack = value
+        self.use_back_stop = True
+
+    def trackIO(self, fd, callback, compat32):
+        self.lgr.debug('DataWatch trackIO for fd %d' % fd)
+        ''' first make sure we are not in the kernel on this FD '''
+        read_calls = ['read', 'recv', 'recvfrom']
+        plist = {}
+        pid_list = self.context_manager.getThreadPids()
+        tasks = self.task_utils.getTaskStructs()
+        plist = {}
+        for t in tasks:
+            if tasks[t].pid in pid_list:
+                plist[tasks[t].pid] = t 
+        in_kernel = False
+        frame = None
+        cycles = None
+        for pid in plist:
+            t = plist[pid]
+            if tasks[t].state > 0:
+                frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
+                if frame is not None:
+                    call = self.task_utils.syscallName(frame['syscall_num'], compat32)
+                    if call in read_calls and frame['param1'] == fd:
+                        print('pid %d in kernel on %s of fd %d' % (pid, call, fd))
+                        in_kernel = True
+                        break
+                    elif call == 'select' or call == '_newselect':
+                        select_info = frame['select']
+                        self.lgr.debug('DataWatch trackIO check select for %d' % fd)
+                        if select_info.hasFD(fd):
+                            print('pid %d in kernel on select including %d' % (pid, fd))
+                            in_kernel = True
+                            break
+                    elif call == 'socketcall' and 'ss' in frame:
+                        socket_callnum = frame['param1']
+                        socket_callname = net.callname[socket_callnum].lower()
+                        ss = frame['ss']
+                        if ss.fd == fd:
+                            print('pid %d in kernel on %s of fd %d' % (pid, socket_callname, fd)) 
+                            in_kernel = True
+                            break
+       
+        if in_kernel:
+            self.lgr.debug('DataWatch trackIO in kernel, do skip')
+            self.top.removeDebugBreaks()
+            cmd = 'skip-to cycle = %d ' % (cycles)
+            SIM_run_command(cmd)
+            cmd = 'disable-reverse-execution'
+            SIM_run_command(cmd)
+            cmd = 'enable-reverse-execution'
+            SIM_run_command(cmd)
+            print('skipped back to 0x%x' % cycles)
+            self.lgr.debug('DataWatch trackIO skipped to 0x%x' % self.cpu.cycles)
+            self.top.restoreDebugBreaks(was_watching=True)
+        
+
+        self.lgr.debug('DataWatch trackIO call watch')
+        self.watch(break_simulation=False)
+        ''' what to do when backstop is reached (N cycles with no activity '''
+        self.setCallback(callback)

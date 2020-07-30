@@ -34,6 +34,8 @@ import memUtils
 import pageUtils
 import resim_utils
 import armCond
+import net
+import syscall
 import time
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
@@ -1144,10 +1146,6 @@ class reverseToCall():
             start = limit
         self.lgr.debug('setBreakRange done')
 
-    class EntryRec():
-        def __init__(self, cycles, frame):
-            self.cycles = cycles
-            self.frame = frame
 
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
@@ -1164,7 +1162,23 @@ class reverseToCall():
                 if cycles not in self.sysenter_cycles[pid]:
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
-                    frame['syscall_num'] = self.mem_utils.getRegValue(self.cpu, 'syscall_num') & 0xfff
+                    call_num = self.mem_utils.getCallNum(self.cpu)
+                    frame['syscall_num'] = call_num
+                    
+                    frame['pc'] = self.top.getEIP(self.cpu)
+                    callname = self.task_utils.syscallName(call_num, self.compat32)
+                    if callname == 'select' or callname == '_newselect':        
+                        select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
+                             self.cpu, self.mem_utils, self.lgr)
+                        frame['select'] = select_info
+                    elif callname == 'socketcall':        
+                        ''' must be 32-bit get params from struct '''
+                        socket_callnum = frame['param1']
+                        self.lgr.debug('sysenterHap socket_callnum is %d' % socket_callnum)
+                        socket_callname = net.callname[socket_callnum].lower()
+                        if socket_callname != 'socket' and socket_callname != 'setsockopt':
+                            ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
+                            frame['ss'] = ss
 
                     self.sysenter_cycles[pid][cycles] = frame 
             
@@ -1174,13 +1188,15 @@ class reverseToCall():
 
 
     def getEnterCycles(self, pid):
-        retval = None
+        retval = []
         if pid in self.sysenter_cycles:
-            retval = self.sysenter_cycles[pid]
+            for cycle in sorted(self.sysenter_cycles[pid]):
+                retval.append(cycle)
         return retval
 
     def getRecentCycleFrame(self, pid):
         retval = None
+        ret_cycles = None
         cur_cycles = self.cpu.cycles
         self.lgr.debug('getRecentCycleFrame pid %d' % pid)
         if pid in self.sysenter_cycles:
@@ -1195,6 +1211,8 @@ class reverseToCall():
 
             if got_it is not None:
                 retval = self.sysenter_cycles[pid][got_it] 
+                ret_cycles = got_it
             else:
                 retval = self.sysenter_cycles[pid][cycles] 
-        return retval
+                ret_cycles = cycles
+        return retval, ret_cycles

@@ -121,8 +121,8 @@ class SelectInfo():
                 read_low, read_high = self.readit(self.readfds)
                 if read_low is not None:
                     the_set = read_low | (read_high << 32) 
-                    self.lgr.debug('the read set 0x%x' % the_set)
                     if memUtils.testBit(the_set, fd):
+                        self.lgr.debug('SeletInfo found %d in the read set 0x%x' % (fd, the_set))
                         retval = True
             if self.writefds is not None:
                 write_low, write_high = self.readit(self.writefds)
@@ -130,6 +130,7 @@ class SelectInfo():
                     the_set = write_low | (write_high << 32) 
                     self.lgr.debug('the write set 0x%x' % the_set)
                     if memUtils.testBit(the_set, fd):
+                        self.lgr.debug('SeletInfo found %d in the write set 0x%x' % (fd, the_set))
                         retval = True
         return retval 
 
@@ -986,7 +987,7 @@ class Syscall():
 
         return ida_msg
 
-    def syscallParse(self, callnum, callname, frame, cpu, pid, comm, syscall_info):
+    def syscallParse(self, callnum, callname, frame, cpu, pid, comm, syscall_info, quiet=False):
         exit_info = ExitInfo(self, cpu, pid, callnum, syscall_info.compat32)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
@@ -994,7 +995,7 @@ class Syscall():
         if callname == 'open' or callname == 'openat':        
             self.lgr.debug('syscallParse, yes is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
-            if exit_info.fname is None:
+            if exit_info.fname is None and not quiet:
                 if exit_info.fname_addr is None:
                     self.lgr.debug('exit_info.fname_addr is none')
                     return
@@ -1028,7 +1029,7 @@ class Syscall():
 
         if callname == 'mkdir':        
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
-            if exit_info.fname is None:
+            if exit_info.fname is None and not quiet:
                 ''' filename not yet present in ram, do the two step '''
                 ''' TBD think we are triggering off kernel's own read of the fname, then again someitme it seems corrupted...'''
                 ''' Do not use context manager on superstition that filename could be read in some other task context.'''
@@ -1263,7 +1264,7 @@ class Syscall():
         else:
             ida_msg = '%s %s   pid:%d' % (callname, taskUtils.stringFromFrame(frame), pid)
             self.context_manager.setIdaMessage(ida_msg)
-        if ida_msg is not None:
+        if ida_msg is not None and not quiet:
             self.lgr.debug(ida_msg.strip()) 
             ''' trace syscall exit unless call_params narrowed a search failed to find a match '''
             if ida_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
@@ -1313,6 +1314,70 @@ class Syscall():
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
 
+    def getExitAddrs(self, break_eip, syscall_info, frame = None):
+        exit_eip1 = None
+        exit_eip2 = None
+        exit_eip3 = None
+ 
+        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
+            ''' caller frame will be in regs'''
+            if frame is None:
+                frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                frame_string = taskUtils.stringFromFrame(frame)
+            exit_eip1 = self.param.sysexit
+            ''' catch interrupt returns such as wait4 '''
+            exit_eip2 = self.param.iretd
+            try:
+                exit_eip3 = self.param.sysret64
+                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
+            except AttributeError:
+                exit_eip3 = None
+                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
+            
+        elif break_eip == self.param.sys_entry:
+            if frame is None:
+                frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
+            ''' fix up regs based on eip and esp found on stack '''
+            reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
+            esp = self.cpu.iface.int_register.read(reg_num)
+            frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
+            frame['esp'] = self.mem_utils.readPtr(self.cpu, esp+12)
+            frame_string = taskUtils.stringFromFrame(frame)
+            #self.lgr.debug('sys_entry frame %s' % frame_string)
+            exit_eip1 = self.param.iretd
+        elif break_eip == self.param.arm_entry:
+            #self.lgr.debug('sys_entry frame %s' % frame_string)
+            exit_eip1 = self.param.arm_ret
+            exit_eip2 = self.param.arm_ret2
+            if frame is None:
+                frame = self.task_utils.frameFromRegs(self.cpu)
+                frame_string = taskUtils.stringFromFrame(frame)
+                #SIM_break_simulation(frame_string)
+        elif break_eip == syscall_info.calculated:
+            ''' Note EIP in stack frame is unknown '''
+            #frame['eax'] = syscall_info.callnum
+            if self.cpu.architecture == 'arm':
+                if frame is None:
+                    frame = self.task_utils.frameFromRegs(self.cpu)
+                exit_eip1 = self.param.arm_ret
+                exit_eip2 = self.param.arm_ret2
+                exit_eip2 = None
+                #exit_eip3 = self.param.sysret64
+            elif self.mem_utils.WORD_SIZE == 8:
+                if frame is None:
+                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                exit_eip1 = self.param.sysexit
+                exit_eip2 = self.param.iretd
+                exit_eip3 = self.param.sysret64
+            else:
+                if frame is None:
+                    frame = self.task_utils.frameFromStackSyscall()
+                exit_eip1 = self.param.sysexit
+                exit_eip2 = self.param.iretd
+            #self.lgr.debug('syscallHap calculated')
+            #frame_string = taskUtils.stringFromFrame(frame)
+            #self.lgr.debug('frame string %s' % frame_string)
+        return frame, exit_eip1, exit_eip2, exit_eip3
         
     def syscallHap(self, syscall_info, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
@@ -1385,65 +1450,9 @@ class Syscall():
             return
 
         #self.lgr.debug('syscallhap for %s at 0x%x' % (pid, break_eip))
-        frame = None
-        exit_eip1 = None
-        exit_eip2 = None
-        exit_eip3 = None
- 
-        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
-            ''' caller frame will be in regs'''
-            frame = self.task_utils.frameFromRegs(cpu, compat32=syscall_info.compat32)
-            frame_string = taskUtils.stringFromFrame(frame)
-            exit_eip1 = self.param.sysexit
-            ''' catch interrupt returns such as wait4 '''
-            exit_eip2 = self.param.iretd
-            try:
-                exit_eip3 = self.param.sysret64
-                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
-            except AttributeError:
-                exit_eip3 = None
-                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
             
-        elif break_eip == self.param.sys_entry:
-            frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
-            ''' fix up regs based on eip and esp found on stack '''
-            reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
-            esp = self.cpu.iface.int_register.read(reg_num)
-            frame['eip'] = self.mem_utils.readPtr(cpu, esp)
-            frame['esp'] = self.mem_utils.readPtr(cpu, esp+12)
-            frame_string = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('sys_entry frame %s' % frame_string)
-            exit_eip1 = self.param.iretd
-        elif break_eip == self.param.arm_entry:
-            #self.lgr.debug('sys_entry frame %s' % frame_string)
-            exit_eip1 = self.param.arm_ret
-            exit_eip2 = self.param.arm_ret2
-            frame = self.task_utils.frameFromRegs(cpu)
-            frame_string = taskUtils.stringFromFrame(frame)
-            #SIM_break_simulation(frame_string)
-        elif break_eip == syscall_info.calculated:
-            ''' Note EIP in stack frame is unknown '''
-            #frame['eax'] = syscall_info.callnum
-            if self.cpu.architecture == 'arm':
-                frame = self.task_utils.frameFromRegs(cpu)
-                exit_eip1 = self.param.arm_ret
-                exit_eip2 = self.param.arm_ret2
-                exit_eip2 = None
-                #exit_eip3 = self.param.sysret64
-            elif self.mem_utils.WORD_SIZE == 8:
-                frame = self.task_utils.frameFromRegs(cpu, compat32=syscall_info.compat32)
-                exit_eip1 = self.param.sysexit
-                exit_eip2 = self.param.iretd
-                exit_eip3 = self.param.sysret64
-            else:
-                frame = self.task_utils.frameFromStackSyscall()
-                exit_eip1 = self.param.sysexit
-                exit_eip2 = self.param.iretd
-            #self.lgr.debug('syscallHap calculated')
-            #frame_string = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('frame string %s' % frame_string)
-            
-        else:
+        frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(break_eip, syscall_info)
+        if frame is None:
             value = memory.logical_address
             ''' TBD Simics broken???? occurs due to a mov dword ptr fs:[0xc149b454],ebx '''
             self.lgr.debug('syscallHap pid:%d unexpected break_ip 0x%x memory says 0x%x len of haps is %d' % (pid, break_eip, value, len(self.proc_hap)))
@@ -1665,4 +1674,13 @@ class Syscall():
                 ''' debugging some process, and we are background.  thus we are in a different context than the process being debugged. '''
                 retval = True
         return retval
-            
+           
+    def setExits(self, frames):
+        for pid in frames:
+            pc = frames[pid]['pc']
+            callnum = frames[pid]['syscall_num']
+            syscall_info = SyscallInfo(self.cpu, None, callnum, pc, self.trace, self.call_params)
+            frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[pid])
+            exit_info = ExitInfo(self, self.cpu, pid, callnum, syscall_info.compat32)
+            self.lgr.debug('setExits for pid %d call %d' % (pid, callnum))
+            self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.traceProcs, self.name)

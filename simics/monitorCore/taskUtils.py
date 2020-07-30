@@ -566,7 +566,7 @@ class TaskUtils():
         cur_rec = self.getCurTaskRec()
         group_leader = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_group_leader)
         leader_pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
-        self.lgr.debug('getCurrentThreadLeaderPid cur_rec 0x%x  group_leader 0x%x' % (cur_rec, group_leader))
+        #self.lgr.debug('getCurrentThreadLeaderPid cur_rec 0x%x  group_leader 0x%x' % (cur_rec, group_leader))
         if group_leader == cur_rec:
             leader_pid = self.getCommLeaderPid(cur_rec)
         return leader_pid

@@ -708,7 +708,7 @@ class GenContextMgr():
             self.demise_cache.remove(pid)
 
     def taskRecHap(self, pid, third, forth, memory):
-        self.lgr.debug('taskRecHap pid %d' % pid)
+        #self.lgr.debug('taskRecHap pid %d' % pid)
         if pid not in self.task_rec_hap or pid in self.demise_cache:
             return
         dumb, comm, cur_pid  = self.task_utils.curProc()

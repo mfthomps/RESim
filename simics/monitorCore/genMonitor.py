@@ -152,6 +152,7 @@ class GenMonitor():
 
         self.relocate_funs = {}
         self.coverage = None
+        self.real_script = None
 
     def genInit(self, comp_dict):
         '''
@@ -199,6 +200,9 @@ class GenMonitor():
                     self.param[cell_name].arm_ret2 = None
                 if not hasattr(self.param[cell_name], 'arm_svc'):
                     self.param[cell_name].arm_svc = False
+
+                ''' always true? TBD '''
+                self.param[cell_name].ts_state = 0
 
                 self.lgr.debug(self.param[cell_name].getParamString())
             else:
@@ -535,7 +539,41 @@ class GenMonitor():
                 #self.lgr.debug('continue %d cycles' % run_cycles)
                 SIM_continue(run_cycles)
        
+    def getDbgFrames(self):
+        retval = {}
+        plist = {}
+        pid_list = self.context_manager[self.target].getThreadPids()
+        tasks = self.task_utils[self.target].getTaskStructs()
+        self.lgr.debug('getDbgFrames')
+        plist = {}
+        for t in tasks:
+            if tasks[t].pid in pid_list:
+                plist[tasks[t].pid] = t 
+        for pid in sorted(plist):
+            t = plist[pid]
+            if tasks[t].state > 0:
+                frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+                retval[pid] = frame
+        return retval 
 
+    def tasksDBG(self):
+        plist = {}
+        pid_list = self.context_manager[self.target].getThreadPids()
+        tasks = self.task_utils[self.target].getTaskStructs()
+        self.lgr.debug('tasksDBG')
+        print('Status of debugging threads')
+        plist = {}
+        for t in tasks:
+            if tasks[t].pid in pid_list:
+                plist[tasks[t].pid] = t 
+        for pid in sorted(plist):
+            t = plist[pid]
+            if tasks[t].state > 0:
+                frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+                print('pid: %d syscall %s param1: %d addr: 0x%x' % (pid, call, frame['param1'], tasks[t].addr))
+            else:
+                print('pid: %d in user space?' % pid)
 
     def tasks(self):
         self.lgr.debug('tasks')
@@ -546,8 +584,8 @@ class GenMonitor():
             plist[tasks[t].pid] = t 
         for pid in sorted(plist):
             t = plist[pid]
-            print('pid: %d taks_rec: 0x%x  comm: %s children 0x%x 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].children[0], tasks[t].children[1], tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
+            print('pid: %d taks_rec: 0x%x  comm: %s state: %d children 0x%x 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].state, tasks[t].children[0], tasks[t].children[1], tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -2060,7 +2098,19 @@ class GenMonitor():
                                calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
-        # TBD provide function to override
+        ''' find processes that are in the kernel on IO calls '''
+        '''
+        frames = self.getDbgFrames()
+        for pid in list(frames):
+            call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
+            self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
+            if call not in calls:
+               del frames[pid]
+        if len(frames) > 0:
+            self.lgr.debug('runToIO, call to setExits')
+            the_syscall.setExits(frames) 
+        '''
+        
         SIM_run_command('c')
 
 
@@ -2542,10 +2592,9 @@ class GenMonitor():
         SIM_run_command('c')
 
     def trackIO(self, fd):
-        self.lgr.debug('trackIO FD: %d' % fd)
-        self.dataWatch[self.target].watch(break_simulation=False)
-        ''' what to do when backstop is reached (N cycles with no activity '''
-        self.dataWatch[self.target].setCallback(self.stopTrackIO)
+        self.dataWatch[self.target].trackIO(fd, self.stopTrackIO, self.is_compat32)
+        self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        self.realScript()
         self.runToIO(fd, linger=True, break_simulation=False)
 
     def stopTrackIO(self):
@@ -2896,6 +2945,7 @@ class GenMonitor():
         cycle_list = self.rev_to_call[self.target].getEnterCycles(pid)
         if cycle_list is None:
             print('No cycles for pid %d' % pid)
+            return
         else:
             ''' find latest cycle that preceeds current cycle '''
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -2907,15 +2957,32 @@ class GenMonitor():
             if prev_cycle is None:
                 print('No cycle found for pid %d that is earlier than current cycle 0x%x' % (pid, cpu.cycles))  
             else:
+                self.removeDebugBreaks()
                 SIM_run_command('pselect %s' % cpu.name)
                 previous = prev_cycle-1
-                cmd='skip-to cycle=%d' % previous
+                cmd='skip-to cycle=0x%x' % previous
                 self.lgr.debug('precall cmd: %s' % cmd)
                 SIM_run_command(cmd)
+                self.restoreDebugBreaks(was_watching=True)
+                self.lgr.debug('precall skipped to 0x%x' % cpu.cycles)
+                if cpu.cycles != previous:
+                    self.lgr.error('Cycle not as expected, wanted 0x%x got 0x%x' % (previous, cpu.cycles))
 
     def taskSwitches(self):
         cpu = self.cell_config.cpuFromCell(self.target)
         ts = taskSwitches.TaskSwitches(cpu, self.mem_utils[self.target], self.task_utils[self.target], self.param[self.target], self.lgr)
+
+    def setReal(self, script):
+        if not os.path.isfile(script):
+            print('Could not find %s' % script)
+            return
+        self.real_script = script
+    def realScript(self):
+        if self.real_script is not None:
+            cmd = ('run-command-file %s' % self.real_script)
+            SIM_run_command(cmd)
+        else:
+            self.lgr.debug('real script, no script to run')
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
