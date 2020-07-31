@@ -119,11 +119,13 @@ A typical strategy with RESim is to initially perform a full system trace on a s
 further analyzed using the interactive IDA Pro client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
 system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
 event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
-IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
+IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
+and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directiv.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
 run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
-see network ports being listened to. Use the {\tt showProcTrace} command to view a report on all processes and their IO usage.  Either exit RESim or use {\tt flushTrace} to make sure the trace log is complete. 
+see network ports being listened to. Use the {\tt showProcTrace} command to view a report on all processes and their IO usage (this command is required for postscript processing to work).  
+Either exit RESim or use {\tt flushTrace} to make sure the trace log is complete. 
 Use the {/tt genRpt.sh} script from {\tt RESim/postscripts} to parse the system call trace file (see its README).  You may wish to first copy the trace files to a more permanent location.
-The resulting reports may aid you in finding processes of interest, and identifying the programs that they execute.  These can be opened in tools such as IDA Pro or Ghidra to help you understand
+The resulting post-processing reports may aid you in finding processes of interest, and identifying the programs that they execute.  These can be opened in tools such as IDA Pro or Ghidra to help you understand
 their operation.
 
 \subsection{Analysis of input processing}
@@ -224,9 +226,9 @@ the nth recv call.
 
 \item {\tt uncall} – Reverse execution until the call instruction that entered the current function.
 
-\item {\tt precall([pid]} - Reverse until prior to system call for given or current PID.  Useful when process is waiting for input within the kernel
-and you want to track IO.  RESim needs to catch the call to the IO operation, and cannot do that if the call has already been made.  Note however that
-this, like all reversing calls, assumes you have recorded time into which you can reverse.
+\item {\tt precall([pid]} - Reverse until prior to system call for given or current PID.  
+Note that this, like all reversing calls, assumes you have recorded time into which you can reverse\footnote{This command previoulsy was manually combined
+with trackIO in cases where the read was waiting in the kernel.  That logic has now been combined into trackIO.}
 
 \item {\tt revToWrite(address)} – Reverse execution until a write operation to the given address within the debugged process.
 
@@ -248,9 +250,11 @@ this, like all reversing calls, assumes you have recorded time into which you ca
 Note however, that data watches are based on the len field given in the read or recv, and thus data references are not necessarily to data actually read (e.g., a read of ten bytes
 that returns one byte would break on a reference to the fifth byte in the buffer.)
 
-\item {\tt trackIO(FD)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated list of data watch bookmarks that indicate execution
-points of relevant IO and references to received data.  This list of bookmarks is displayed in the IDA client {\tt data watch} window (right click and refresh).
-The trackIO function will break simulation after 50K cycles with no data references.
+\item {\tt trackIO(FD)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
+points of relevant IO and references to received data.  This list of bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
+The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
+FD, RESim will back up to prior to the system call before proceeding.  This insures the very next received data is tracked. Data watches persist after the
+call, e.g., to support {\tt retrack} described below.  Each use of trackIO will reset all data watches.
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -270,7 +274,7 @@ write watch bookmarks generated by {\tt trackFunctionWrite}.
 
 \item {\tt injectIO(iofile, FD)} -- Assumes execution is following a recv/read syscall.  
 The content of the given {\tt iofile} is written into the read buffer, and the register reflecting the count is modified to reflect
-the size of the file.  The {\tt trackIO} function is then invoked for the given FD.  Intended use is to rapidly observe execution paths for variations in
+the size of the file.  The {\tt retrack} function is then invoked.  Intended use is to rapidly observe execution paths for variations in
 input data.   *** TBD *** Limit count based on what was previously read -- i.e., do not mod r1.  We do not know length passed in in to call  -- unless
 recorded in the Watch Mark?
 
@@ -346,6 +350,8 @@ user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
 \item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
+\item{\tt INITIAL\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
+doing so after enabling reverse execution (which should be avoided due to Simics foibles).
 \end{itemize}
 
 \subsection{Target sections}
@@ -670,13 +676,7 @@ To track multiple packets, simply send them one after another before the backsto
 FD is encountered (so no reason to hurry your network traffic).  The backstop is cleared whenever it is hit. 
 
 Note that in many situations, by the time the backstop is hit, the thread has invoked a syscall.  If it is a blocking recv, then the next {\tt trackIO} 
-command will fail to detect the receive -- though references to already defined data buffers will be added to the Watch Marks.  To ensure that you record
-the read, skip to the last Watch Mark (e.g., use {\tt goToDataMark(-1)} prior to issuing the next {\tt trackIO} command.
-
-Much of the above presupposes you begin your data tracking before the receiving thread invokes the kernel to read data.  That is often not the case, e.g., the thread
-is in the kernel on a blocking recv waiting for data.  RESim will not catch those receives in a {\tt trackIO} or {\tt runToIO} command.
-The easiest solution (at the moment) is to send a stub packet after issuing the {\tt runToIO} command.  Then send the stub a second time, and it will be processed
-by the {\tt runToIO} fuction, leaving the thread in the state of recently returning from the kernel read of the second stub.
+command will back up until prior to that system call so that it can properly record and track the call.
 
 \section{Implementation strategy}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
@@ -1011,19 +1011,21 @@ This mechanism is also central to catching access violations.  The mechanism wor
 how does it behave if we jump backward to an arbitrary time, e.g., prior to the demise of a now dead process?  A new ContextManager function
 will reset all process state to that currently observed.  TBD, also modify tracers to ignore events that occur prior to end of recording?
 
-\subsection{Tracking IO while in a blocking read}
-You want to track IO on FD 4.  However, if the process is currently blocked on a read (or recv or whatever) of FD 4, the syscall will not
-be seen.  The call will return without being caught by a syscall exit hap.  We could start going backwards until prior to the syscall -- but
-how do we even know we are in a read syscall, and not a select or such?  One crude strategy may be to reverse until one of our threads is
-exiting the kernel?  But that assumes we have runway behind.
-
-For now, it is up to the user to work around this. For example, use {\tt runToIO(4)}, send a packet, and then use {\tt trackIO(4)} and send
-the desired packet.
 
 \subsection{Defining new targets}
 System names are defined by assigning {\tt "name = whatever"} within the ...system.include file's line that creates the component, typically the board.
 Simics parameters are typically ONLY added to the script file in which they are used, and then sucked in by the calling scripts using params from.
 Systems scripts error reporting is sparse and tedious.   Copy the needed Simics scripts from their distribution directory into simics/simicsScripts/targets,
 and change the simics env variable to scripts where needed -- or remove preface and use relative file if local. 
+
+\subsection{Real networks: WARNING}
+Simics supports traffic between the simulation and a real network using {\tt connect-real-network} commands and related commands using a \textit{service node}.
+This can be useful to quickly generate new packets and send them to the target, but without needing to interact with a driver component.
+Note however that Simics has limitations on the use of real networks when reverse execution is enabled.  Some of these limitations can lead to silent corruption
+of the simulation.  Others to crashes.  An obvious limitation is that you cannot replay periods in which real network traffic was received (though Simics supports a different IO replay feature).
+
+Most problems related to real network can be avoided by connecting the real network prior to enabling reverse execution, e.g., via a debugProc command.
+Use the {\tt INIT\_SCRIPT} ENV directive in the init file to specify a simics script to load at the start of each session.
+
 \end{document}
 
