@@ -234,6 +234,11 @@ class GenMonitor():
                 if os.path.isfile(net_file):
                     self.netInfo[cell_name].loadfile(net_file)
 
+        init_script = os.getenv('INIT_SCRIPT')
+        if init_script is not None:
+            cmd = 'run-command-file %s' % init_script
+            SIM_run_command(cmd)
+
     def getTopComponentName(self, cpu):
          if cpu is not None:
              names = cpu.name.split('.')
@@ -2592,9 +2597,11 @@ class GenMonitor():
         SIM_run_command('c')
 
     def trackIO(self, fd):
+        self.stopTrackIO()
+        self.clearWatches()
+        self.lgr.debug('trackIO stopped track and cleared watchs')
         self.dataWatch[self.target].trackIO(fd, self.stopTrackIO, self.is_compat32)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
-        self.realScript()
         self.runToIO(fd, linger=True, break_simulation=False)
 
     def stopTrackIO(self):
@@ -2777,7 +2784,7 @@ class GenMonitor():
     def addProc(self, pid, leader_pid, comm, clone=False):    
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
 
-    def injectIO(self, dfile, fd):
+    def injectIO(self, dfile):
         ''' Go to the given watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2817,15 +2824,12 @@ class GenMonitor():
         ''' writeRegValue clears bookmarks, but we want to clear current cycle marks as well '''
         prev_cycle = cpu.cycles - 1
         self.dataWatch[self.target].clearWatches(prev_cycle)
-        if fd >= 0:
-            self.lgr.debug('injectIO from file %s %d. Length register %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
-            print('injectIO from file %s %d. Length register %s set to 0x%x' % (dfile, fd, lenreg, len(byte_string))) 
-            msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
-            self.dataWatch[self.target].setRange(addr, len(byte_string), msg)
-            print('tracking IO to %d' % fd)
-            self.trackIO(fd)    
-        else:
-            self.lgr.debug('injectIO from file %s to. %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
+        self.dataWatch[self.target].setRange(addr, len(byte_string), msg)
+        print('retracking IO') 
+        self.retrack()    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -2972,6 +2976,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         ts = taskSwitches.TaskSwitches(cpu, self.mem_utils[self.target], self.task_utils[self.target], self.param[self.target], self.lgr)
 
+    ''' not yet used, maybe never '''
     def setReal(self, script):
         if not os.path.isfile(script):
             print('Could not find %s' % script)
