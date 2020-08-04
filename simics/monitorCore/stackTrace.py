@@ -292,7 +292,7 @@ class StackTrace():
                             ''' should we add ida function analysys? '''
                             if not self.ida_funs.isFun(call_to):
                                 fname, start, end = self.soMap.getSOInfo(call_to)
-                                #self.lgr.debug('so check of %s' % fname)
+                                self.lgr.debug('so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
                                     full_path = self.targetFS.getFull(fname, self.lgr)
                                     self.ida_funs.add(full_path, start)
@@ -431,7 +431,7 @@ class StackTrace():
                         retval = self.MemStuff(ret_addr, fun)
                         break
                     else:
-                        self.lgr.debug('no soap, fun is <%s>' % fun)
+                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
         return retval
 
 
