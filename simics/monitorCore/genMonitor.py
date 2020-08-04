@@ -1362,6 +1362,7 @@ class GenMonitor():
         self.context_manager[self.target].showIdaMessage()
 
     def resynch(self):
+        ''' poor name? If not in user space of one of the thread group, go there '''
         debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid() 
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('resynch to pid: %d' % debug_pid)
@@ -1389,6 +1390,7 @@ class GenMonitor():
 
     def stopWatchPageFaults(self, pid=None):
         self.page_faults[self.target].stopWatchPageFaults(pid)
+        self.page_faults[self.target].stopPageFaults()
 
     def catchCorruptions(self):
         self.watchPageFaults()
@@ -2988,6 +2990,10 @@ class GenMonitor():
             SIM_run_command(cmd)
         else:
             self.lgr.debug('real script, no script to run')
+
+    def mftx(self, ip):
+        fun = self.ida_funs.getFun(ip)
+        print('fun for 0x%x is 0x%x' % (ip, fun))
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

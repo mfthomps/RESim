@@ -421,7 +421,8 @@ class reverseToCall():
                 got_it = None
                 page_cycles = self.sysenter_cycles[pid]
                 if self.page_faults is not None:
-                    self.lgr.debug('tryBackOne NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                    pass
+                    #self.lgr.debug('tryBackOne NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
                     #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
                 for cycles in sorted(page_cycles):
                     if cycles > cur_cycles:
@@ -482,6 +483,7 @@ class reverseToCall():
 
     def jumpOverKernel(self, pid):
         ''' returns True if skip works and reg unchanged, False if changed or None if left in kernel'''
+        ''' We were stepping backwards and entered the kernel.  '''
         retval = False
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
@@ -495,8 +497,9 @@ class reverseToCall():
             got_it = None
             page_cycles = self.sysenter_cycles[pid]
             if self.page_faults is not None:
-                self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                #self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                pass
             for cycles in sorted(page_cycles):
                 if cycles > cur_cycles:
                     self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
@@ -533,24 +536,42 @@ class reverseToCall():
         else:
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''
-            if self.cpu.architecture == 'arm' and (instruct[1].startswith('bx lr')):
-                eip = self.top.getReg('lr', self.cpu)
-                self.lgr.debug('jumpOverKernel got lr value 0x%x' % eip)
+            rev_to = None
+            if self.cpu.architecture == 'arm' and (instruct[1].startswith('bx lr') or (instruct[1].startswith('mov') and instruct[1].endswith('lr'))): 
+                rev_to = self.top.getReg('lr', self.cpu)
+                self.lgr.debug('jumpOverKernel ARM got lr value 0x%x' % rev_to)
+         
             else:
                 forward = self.cpu.cycles+1
-                skip_ok = skipToTest(forward)
+                skip_ok = self.skipToTest(forward)
                 if not skip_ok:
                     return None
                 eip = self.top.getEIP(self.cpu)
                 dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
                 self.lgr.debug('skipped to 0x%x got 0x%x eip 0x%x pid is %d' % (forward, self.cpu.cycles, eip, pid))
-            self.lgr.error('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], eip-4))
-            cell = self.top.getCell()
-            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, eip-4, 1, 0)
-            self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
-            self.lgr.debug('break set at 0x%x now do rev' % (eip-4))
-            SIM_run_alone(SIM_run_command, 'rev')
-            retval = None
+                rev_to = eip
+            self.lgr.debug('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], rev_to))
+            page_faults = self.page_faults.getFaultingCycles(pid)
+            if rev_to in page_faults:
+                skip_to = page_faults[rev_to] - 1
+                skip_ok = self.skipToTest(skip_to)
+                self.lgr.debug('jumpOverKernel found page fault for 0x%x, skip back to 0x%x' % (eip, skip_to))
+                if not skip_ok:
+                    return None
+                rval = self.top.getReg(self.reg, self.cpu) 
+                if rval == self.reg_val:
+                    retval = True
+                else:
+                    retval = False
+                    self.lgr.debug('jumpOverKernel pagefault register changed -- assume kernel did it, return to user space')
+            else:
+                cell = self.top.getCell()
+                self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
+                self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
+                self.lgr.debug('jumpOverKernel, NOT syscall or page fault, try runnning backwards to eip-4, ug.  break %d set at 0x%x now do rev' % (self.uncall_break, rev_to-4))
+                self.context_manager.showHaps()
+                SIM_run_alone(SIM_run_command, 'rev')
+                retval = None
         return retval
 
     def kernInterruptHap(self, my_args, one, exception, error_string):
@@ -558,8 +579,8 @@ class reverseToCall():
             return
         eip = self.top.getEIP(self.cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-        self.lgr.debug('kernInterruptHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
-              pid, self.pid, self.reg, self.reg_val))
+        self.lgr.debug('kernInterruptHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x cycle: 0x%x' % (eip, self.uncall_break, 
+              pid, self.pid, self.reg, self.reg_val, self.cpu.cycles))
         if pid == self.pid:
             SIM_delete_breakpoint(self.uncall_break)
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)

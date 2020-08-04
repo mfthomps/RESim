@@ -43,7 +43,7 @@ class PageFaultGen():
         self.fault_hap = None
         self.exception_eip = None
         self.debugging_pid = None
-        self.faulting_cycles = []
+        self.faulting_cycles = {}
         self.fault_hap1 = None
         self.fault_hap2 = None
         self.fault_hap_return = None
@@ -175,7 +175,7 @@ class PageFaultGen():
         if pid not in self.faulted_pages:
             self.faulted_pages[pid] = []
         if cr2 in self.faulted_pages[pid]:
-            self.lgr.debug('pageFaultHapAlone, addr 0x%x already handled for pid%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
+            self.lgr.debug('pageFaultHapAlone, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
         #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
@@ -296,20 +296,20 @@ class PageFaultGen():
 
     def stopWatchPageFaults(self, pid = None):
         if self.fault_hap is not None:
-            #self.lgr.debug('stopWatchPageFaults delete fault_hap')
+            self.lgr.debug('stopWatchPageFaults delete fault_hap')
             self.context_manager.genDeleteHap(self.fault_hap)
             self.fault_hap = None
         if self.fault_hap1 is not None:
-            #self.lgr.debug('stopWatchPageFaults delete fault_hap1')
+            self.lgr.debug('stopWatchPageFaults delete fault_hap1')
             SIM_hap_delete_callback_id("Core_Exception", self.fault_hap1)
             self.fault_hap1 = None
         if self.fault_hap2 is not None:
-            #self.lgr.debug('stopWatchPageFaults delete fault_hap2')
+            self.lgr.debug('stopWatchPageFaults delete fault_hap2')
             SIM_hap_delete_callback_id("Core_Exception", self.fault_hap2)
             self.fault_hap2 = None
         if pid is not None:
             if pid in self.exit_hap: 
-                #self.lgr.debug('stopWatchPageFaults delete exit_hap')
+                self.lgr.debug('stopWatchPageFaults delete exit_hap')
                 self.context_manager.genDeleteHap(self.exit_hap[pid])
                 self.context_manager.genDeleteHap(self.exit_hap2[pid])
                 del self.exit_break[pid]
@@ -388,11 +388,11 @@ class PageFaultGen():
 
     def stopPageFaults(self):
         if self.exception_hap is not None:
-            #self.lgr.debug('stopPageFaults delete excption_hap')
+            self.lgr.debug('stopPageFaults delete excption_hap')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap)
             self.exception_hap = None
         if self.exception_hap2 is not None:
-            #self.lgr.debug('stopPageFaults delete excption_hap2')
+            self.lgr.debug('stopPageFaults delete excption_hap2')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap2)
             self.exception_hap2 = None
 
@@ -401,16 +401,20 @@ class PageFaultGen():
             return
         eip = self.mem_utils.getRegValue(cpu, 'eip')
         if self.debugging_pid is not None:
-            self.faulting_cycles.append(cpu.cycles)
+            cpu, comm, pid = self.task_utils.curProc() 
+            if pid not in self.faulting_cycles:
+                self.faulting_cycles[pid] = {} 
+            self.faulting_cycles[pid][eip] = cpu.cycles
         self.exception_eip = eip
         if cpu.architecture == 'arm':
             #reg_num = cpu.iface.int_register.get_number("combined_data_far")
             #dfar = cpu.iface.int_register.read(reg_num)
             #reg_num = cpu.iface.int_register.get_number("instruction_far")
             #ifar = cpu.iface.int_register.read(reg_num)
-            #cpu, comm, pid = self.task_utils.curProc() 
+            cpu, comm, pid = self.task_utils.curProc() 
             name = cpu.iface.exception.get_name(exception_number)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('pageExceptionHap pid:%d eip: 0x%x faulting cycles 0x%x' % (pid, eip, self.cpu.cycles))
             #self.lgr.debug('pageExceptionHap %s  (%d)  pid:%d (%s)  eip: 0x%x %s ifar: 0x%x dfar: 0x%x' % (name, 
             #  exception_number, pid, comm, eip, instruct[1], ifar, dfar))
             #if eip == 0xc013fea8:
@@ -419,8 +423,8 @@ class PageFaultGen():
             cpu, comm, pid = self.task_utils.curProc() 
             #self.lgr.debug('pageExceptionHap pid:%d (%s) eip 0x%x' % (pid, comm, eip))
 
-    def getFaultingCycles(self):
-        return self.faulting_cycles 
+    def getFaultingCycles(self, pid):
+        return self.faulting_cycles[pid] 
 
     def handleExit(self, pid):
         ''' Assumed called while debugging a pid group.  Search all pids for most recent reference, assuming a 
