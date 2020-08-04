@@ -6,13 +6,14 @@ class IDAFuns():
         self.funs = {}
         self.lgr = lgr
         self.did_paths = []
-        #self.lgr.debug('IDAFuns for path %s' % path)
+        self.lgr.debug('IDAFuns for path %s' % path)
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
                 for sfun in jfuns:
                     fun = int(sfun)
                     self.funs[fun] = jfuns[sfun]
+                self.did_paths.append(path[:-5])
 
     def getFunPath(self, path):
         fun_path = path+'.funs'
@@ -75,9 +76,9 @@ class IDAFuns():
 
     def getFun(self, ip):
         for fun in self.funs:
+            #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
                 return fun
-            #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
         return None
 
         
