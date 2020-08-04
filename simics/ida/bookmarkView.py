@@ -73,12 +73,6 @@ class bookmarkView(simplecustviewer_t):
         idaapi.attach_action_to_popup(form, None, 'add_bookmark:action')
         self.Show()
 
-    def runToUserSpace(self):
-        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.runToUserSpace()");') 
-        eip = gdbProt.getEIPWhenStopped()
-        print('runtoUserSpace, stopped at eip 0x%x, then stepwait.' % eip)
-        #gdbProt.stepWait()
-
     def goToBookmarkRefresh(self, mark):
         if mark != 'origin' and mark != '<None>':
             simicsString = gdbProt.goToBookmark(mark)

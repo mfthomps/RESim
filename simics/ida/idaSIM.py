@@ -8,6 +8,7 @@ import bpUtils
 import gdbProt
 import origAnalysis
 import regFu
+import ida_kernwin
 no_rev = 'reverse execution disabled'
 class IdaSIM():
     def __init__(self, stack_trace, bookmark_view, data_watch, write_watch, kernel_base, reg_list):
@@ -82,6 +83,13 @@ class IdaSIM():
         except:
             print('failed to get regs from %s' % simicsString)
             return
+        v = ida_kernwin.get_current_viewer()
+        r = ida_kernwin.get_view_renderer_type(v)
+        dotoggle = False
+        ''' work around ida bug "nrect(26)" error '''
+        if r == ida_kernwin.TCCRT_GRAPH:
+            dotoggle = True
+            ida_kernwin.process_ui_action("ToggleRenderer")
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
@@ -90,6 +98,8 @@ class IdaSIM():
                 r = 'PSR'
             #print('set %s to 0x%x' % (r, regs[reg]))
             idaversion.set_reg_value(regs[reg], r)
+        if dotoggle:
+            ida_kernwin.process_ui_action("ToggleRenderer")
         idaversion.refresh_debugger_memory()
 
 
@@ -432,9 +442,11 @@ class IdaSIM():
         #reEnable(curAddr, bptEnabled, disabledSet)
     
     def runToUserSpace(self):
-        self.bookmark_view.runToUserSpace()
-        time.sleep(1)
-        self.signalClient()
+        #self.bookmark_view.runToUserSpace()
+        #time.sleep(3)
+        print('runToUser do resynch')
+        self.resynch()
+        #self.signalClient()
     
     def runToSyscall(self):
             value = idaversion.ask_long(0, "Syscall number?")
@@ -652,6 +664,7 @@ class IdaSIM():
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
         if cur_addr > self.kernel_base:
+            print('doStepInto run to user space')
             self.runToUserSpace()
     
     def doStepOver(self):
@@ -663,10 +676,11 @@ class IdaSIM():
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
-            print('run to user space')
+            print('doStepOver in kernel run to user space')
             self.runToUserSpace()
         else:
-            self.resynch()
+            print('doStepOver signal client')
+            self.signalClient()
         
     
     def exitIda(self):
@@ -679,7 +693,9 @@ class IdaSIM():
     def resynch(self):
         print('resynch to server')
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.resynch()");')
+        time.sleep(1)
         eip = gdbProt.getEIPWhenStopped()
+        print('resynch got eip 0x%x now sig client' % eip)
         self.signalClient()
     
     def runToText(self):
@@ -778,13 +794,19 @@ class IdaSIM():
         idaversion.rebase_program(start_hex, 0) 
 
     def trackIO(self):
-
         result = idaversion.ask_str(self.recent_fd, 'FD ?', hist=2)
         if result is None:
             return
         self.recent_fd = result
         fd = int(result)
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.trackIO(%d)");' % fd)
+        time.sleep(1)
+        eip = gdbProt.getEIPWhenStopped()
+        self.signalClient()
+        self.updateDataWatch()
+
+    def retrack(self):
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.retrack()");')
         time.sleep(1)
         eip = gdbProt.getEIPWhenStopped()
         self.signalClient()

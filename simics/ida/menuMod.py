@@ -270,6 +270,16 @@ class TrackIOHandler(idaapi.action_handler_t):
         return 1
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+class RetrackHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.retrack()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class RunToAcceptHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -411,6 +421,11 @@ def register(isim):
         'Track IO', 
         TrackIOHandler(isim))
 
+    retrack_action = idaapi.action_desc_t(
+        'retrack:action',
+        'Retrack', 
+        RetrackHandler(isim))
+
     run_to_accept_action = idaapi.action_desc_t(
         'run_to_accept:action',
         'Run to accept', 
@@ -449,6 +464,7 @@ def register(isim):
     idaapi.register_action(rev_to_text_action)
     idaapi.register_action(continue_forward_action)
     idaapi.register_action(track_io_action)
+    idaapi.register_action(retrack_action)
     idaapi.register_action(run_to_accept_action)
 
 
@@ -492,6 +508,10 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'track_io:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'retrack:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
