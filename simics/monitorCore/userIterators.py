@@ -17,8 +17,8 @@ class UserIterators():
         if fun not in self.iterators and fun is not None:
             self.iterators.append(fun) 
             with open(self.path, 'w') as fh:
-                for fun in self.iterators:
-                    fh.write('0x%x\n' % fun)
+                for f in self.iterators:
+                    fh.write('0x%x\n' % f)
 
     def isIterator(self, fun, lgr):
         #lgr.debug('isIterator 0x%x in %s' % (fun, str(self.iterators)))
