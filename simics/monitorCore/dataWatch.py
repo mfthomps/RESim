@@ -537,9 +537,12 @@ class DataWatch():
             SIM_run_command('pselect %s' % self.cpu.name)
             SIM_run_command('skip-to cycle=%d' % cycle)
             retval = cycle
+            if cycle != self.cpu.cycles:
+                self.lgr.error('dataWatch goToMark got wrong cycle, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
+                retval = None
         else:
            self.lgr.error('No data mark with index %d' % index)
-        return cycle
+        return retval
 
     def clearWatchMarks(self): 
         self.watchMarks.clearWatchMarks()
@@ -575,9 +578,11 @@ class DataWatch():
                 
 
     def setIdaFuns(self, ida_funs):
+        self.lgr.debug('DataWatch setIdaFuns')
         self.ida_funs = ida_funs
 
     def setRelocatables(self, relocatables):
+        self.lgr.debug('DataWatch setRelocatables')
         self.relocatables = relocatables
 
     def setCallback(self, callback):
@@ -589,6 +594,7 @@ class DataWatch():
 
     def tagIterator(self, index):
         ''' Call from IDA Client to collapse a range of data references into the given watch mark index ''' 
+        self.lgr.debug('DataWatch tagIterator')
         if self.ida_funs is not None:
             watch_mark = self.watchMarks.getMarkFromIndex(index)
             if watch_mark is not None:
@@ -596,8 +602,8 @@ class DataWatch():
                 if fun is None:
                     self.lgr.error('DataWatch tagIterator failed to get function for 0x%x' % ip)
                 else:
+                    self.lgr.debug('DataWatch add iterator for function 0x%x from watch_mark IP of 0x%x' % (fun, watch_mark.ip))
                     self.user_iterators.add(fun)
-                    self.lgr.debug('DataWatch added iterator for function 0x%x' % fun)
             else:
                 self.lgr.error('failed to get watch mark for index %d' % index)
 
@@ -660,10 +666,6 @@ class DataWatch():
             self.lgr.debug('DataWatch trackIO in kernel, do skip')
             self.top.removeDebugBreaks()
             cmd = 'skip-to cycle = %d ' % (cycles)
-            SIM_run_command(cmd)
-            cmd = 'disable-reverse-execution'
-            SIM_run_command(cmd)
-            cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
             print('skipped back to 0x%x' % cycles)
             self.lgr.debug('DataWatch trackIO skipped to 0x%x' % self.cpu.cycles)
