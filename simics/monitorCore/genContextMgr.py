@@ -183,6 +183,7 @@ class GenContextMgr():
         return None
 
     def showHaps(self):
+        self.lgr.debug('contextManager showHaps')
         for hap in self.haps:
             hap.show()
 
