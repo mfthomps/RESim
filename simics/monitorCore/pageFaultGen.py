@@ -414,7 +414,7 @@ class PageFaultGen():
             cpu, comm, pid = self.task_utils.curProc() 
             name = cpu.iface.exception.get_name(exception_number)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('pageExceptionHap pid:%d eip: 0x%x faulting cycles 0x%x' % (pid, eip, self.cpu.cycles))
+            #self.lgr.debug('pageExceptionHap pid:%d eip: 0x%x faulting cycles 0x%x' % (pid, eip, self.cpu.cycles))
             #self.lgr.debug('pageExceptionHap %s  (%d)  pid:%d (%s)  eip: 0x%x %s ifar: 0x%x dfar: 0x%x' % (name, 
             #  exception_number, pid, comm, eip, instruct[1], ifar, dfar))
             #if eip == 0xc013fea8:
