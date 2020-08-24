@@ -83,13 +83,6 @@ class IdaSIM():
         except:
             print('failed to get regs from %s' % simicsString)
             return
-        v = ida_kernwin.get_current_viewer()
-        r = ida_kernwin.get_view_renderer_type(v)
-        dotoggle = False
-        ''' work around ida bug "nrect(26)" error '''
-        if r == ida_kernwin.TCCRT_GRAPH:
-            dotoggle = True
-            ida_kernwin.process_ui_action("ToggleRenderer")
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
@@ -98,8 +91,6 @@ class IdaSIM():
                 r = 'PSR'
             #print('set %s to 0x%x' % (r, regs[reg]))
             idaversion.set_reg_value(regs[reg], r)
-        if dotoggle:
-            ida_kernwin.process_ui_action("ToggleRenderer")
         idaversion.refresh_debugger_memory()
 
 
@@ -445,7 +436,16 @@ class IdaSIM():
         #self.bookmark_view.runToUserSpace()
         #time.sleep(3)
         print('runToUser do resynch')
+        v = ida_kernwin.get_current_viewer()
+        r = ida_kernwin.get_view_renderer_type(v)
+        dotoggle = False
+        ''' work around ida bug "nrect(26)" error '''
+        if r == ida_kernwin.TCCRT_GRAPH:
+            dotoggle = True
+            ida_kernwin.process_ui_action("ToggleRenderer")
         self.resynch()
+        if dotoggle:
+            ida_kernwin.process_ui_action("ToggleRenderer")
         #self.signalClient()
     
     def runToSyscall(self):
