@@ -367,11 +367,17 @@ class TaskUtils():
         return tasks
 
     def getExitPid(self):
-        return self.exit_pid
+        ''' if we are at or past the point of exit, return the most recently exitied pid. 
+            TBD, more robust, multiple PIDs? '''
+        if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
+            return self.exit_pid
+        else:
+            return None
 
     def setExitPid(self, pid):
         self.exit_pid = pid
         self.exit_cycles = self.cpu.cycles
+        self.lgr.debug('taskUtils setExitPid pid:%d cycles 0x%x' % (pid, self.exit_cycles))
 
     def getGroupLeaderPid(self, pid):
         retval = None
@@ -825,9 +831,11 @@ class TaskUtils():
 
     def socketCallName(self, callname, compat32):
         if self.cpu.architecture != 'arm' and (self.mem_utils.WORD_SIZE != 8 or compat32):
-            return 'socketcall'
+            return ['socketcall']
+        elif callname == 'accept':
+            return ['accept', 'accept4']
         else:
-            return callname
+            return [callname]
 
     def syscallName(self, callnum, compat32):
         if not compat32:
