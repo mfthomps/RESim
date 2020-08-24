@@ -1,7 +1,7 @@
 from simics import *
 import json
 import os
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy']
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy']
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None):
@@ -386,9 +386,10 @@ class StackTrace():
         return len(self.frames)
 
     class MemStuff():
-        def __init__(self, ret_addr, fun):
+        def __init__(self, ret_addr, fun, called_from_ip):
             self.ret_addr = ret_addr
             self.fun = fun
+            self.called_from_ip = called_from_ip
 
     def memsomething(self):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
@@ -428,7 +429,8 @@ class StackTrace():
                         else:
                             self.lgr.error('memsomething sp is zero and no ret_addr?')
                             ret_addr = None
-                        retval = self.MemStuff(ret_addr, fun)
+                        self.lgr.debug('stackTrack memsomething frame.ip is 0x%x' % frame.ip)
+                        retval = self.MemStuff(ret_addr, fun, frame.ip)
                         break
                     else:
                         self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
