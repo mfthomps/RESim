@@ -94,6 +94,14 @@ class SOMap():
         else: 
             return False
 
+    def swapPid(self, old, new):
+        ''' intended for when original process exits following a fork '''
+        self.text_start[new] = self.text_start[old]
+        self.text_end[new] = self.text_end[old]
+        self.text_prog[new] = self.text_prog[old]
+        self.so_addr_map[new] = self.so_addr_map[old]
+        self.so_file_map[new] = self.so_file_map[old]
+
     def addText(self, start, size, prog, pid):
         self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
         self.text_start[pid] = start
@@ -119,6 +127,9 @@ class SOMap():
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
       
     def setIdaFuns(self, ida_funs):
+        if ida_funs is None:
+            self.lgr.warning('IDA funs is none, no SOMap')
+            return
         self.ida_funs = ida_funs
         for pid in self.so_file_map:
             sort_map = {}
@@ -136,27 +147,36 @@ class SOMap():
         pid = self.getThreadPid(pid_in, quiet=True)
         if pid is None:
             pid = pid_in
-        if pid not in self.so_addr_map:
-            self.so_addr_map[pid] = {}
-            self.so_file_map[pid] = {}
+        if pid in self.so_addr_map and fpath in self.so_addr_map[pid]:
+            ''' multiple mmap calls for one so file.  assume continguous and adjust
+                address to lowest '''
+            if self.so_addr_map[pid][fpath].address > addr:
+                self.so_addr_map[pid][fpath].address = addr
+                # TBD?
+                #if self.ida_funs is not None:
+                #    self.ida_funs.adjust(full_path, addr))
+        else:
+            if pid not in self.so_addr_map:
+                self.so_addr_map[pid] = {}
+                self.so_file_map[pid] = {}
 
-        full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
-        text_seg = elfText.getText(full_path, self.lgr)
-        if text_seg is None:
-            self.lgr.debug('SOMap addSO, no file at %s' % full_path)
-            return
+            full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
+            text_seg = elfText.getText(full_path, self.lgr)
+            if text_seg is None:
+                self.lgr.debug('SOMap addSO, no file at %s' % full_path)
+                return
        
-        text_seg.locate = addr
-        #text_seg.size = count
+            text_seg.locate = addr
+            #text_seg.size = count
 
-        self.so_addr_map[pid][fpath] = text_seg
-        self.so_file_map[pid][text_seg] = fpath
-        self.lgr.debug('soMap addSO pid:%d, full: %s size: 0x%x given count: 0x%x, locate: 0x%x addr: 0x%x off 0x%x  len so_map %d' % (pid, 
-               full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
+            self.so_addr_map[pid][fpath] = text_seg
+            self.so_file_map[pid][text_seg] = fpath
+            self.lgr.debug('soMap addSO pid:%d, full: %s size: 0x%x given count: 0x%x, locate: 0x%x addr: 0x%x off 0x%x  len so_map %d' % (pid, 
+                   full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
 
-        start = text_seg.locate
-        if self.ida_funs is not None:
-            self.ida_funs.add(full_path, start)
+            start = text_seg.locate
+            if self.ida_funs is not None:
+                self.ida_funs.add(full_path, start)
 
     def showSO(self, pid=None):
         if pid is None:
