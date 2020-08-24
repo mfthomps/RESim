@@ -19,8 +19,11 @@ def getMn(instruct):
 
 def getOperands(instruct):
     mn, rest = instruct.split(' ',1)
-    op1, op2 = rest.split(',', 1)
-    return op2.strip(), op1.strip()
+    if ',' in rest:
+        op1, op2 = rest.split(',', 1)
+        return op2.strip(), op1.strip()
+    else:
+        return None, rest.strip()
 
 def isIndirect(reg):
     return False    
@@ -60,14 +63,23 @@ def getValue(cpu, item, lgr=None):
                 value = int(item[1:])
             except:
                 return None
-    elif lgr is not None:
-        lgr.debug('getValue failed to get value of <%s>' % item)
+    else:
+        try:
+            value = int(item, 16)
+        except:
+            try:
+                value = int(item)
+            except:
+                if lgr is not None:
+                    lgr.debug('getValue failed to get value of <%s>' % item)
     return value 
         
 
 def getAddressFromOperand(cpu, op, lgr):
     retval = None
     express = None
+    if op.endswith(']!'):
+        op = op[:-1]
     if op[0] == '[' and op[-1] == ']':
         express = op[1:-1]
     elif op[0] == '[' and op[-2:-1] == ']!':
@@ -179,5 +191,7 @@ def isCall(cpu, instruct):
     if instruct.startswith('bls'):
        return (not C) or Z
     elif instruct.startswith('bl'):
+       return True
+    elif instruct.startswith('ldr pc'):
        return True
     return False
