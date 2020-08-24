@@ -852,7 +852,7 @@ class GenMonitor():
         plist = self.task_utils[self.target].getPidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitPid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
-            print('%s is running.  Will continue until some instance of it is scheduled' % proc)
+            print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
             self.toRunningProc(proc, plist, flist)
@@ -1962,6 +1962,7 @@ class GenMonitor():
         return False
 
     def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, ignore_running=False, name=None):
+        ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
             return
@@ -1969,14 +1970,14 @@ class GenMonitor():
             cell_name = self.target
         cell = self.cell_config.cell_context[cell_name]
         ''' qualify call with name, e.g, for multiple dmod on reads '''
-        call_name = call
+        call_name = call[0]
         if name is not None:
-            call_name = '%s-%s' % (call, name)
+            call_name = '%s-%s' % (call[0], name)
         self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
         self.call_traces[cell_name][call_name] = syscall.Syscall(self, cell_name, cell, self.param[cell_name], self.mem_utils[cell_name], 
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
-                               call_list=[call], call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, 
+                               call_list=call, call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, 
                                background=background, name=name)
                                #compat32=self.is_compat32, background=background)
         if run:
@@ -1987,7 +1988,7 @@ class GenMonitor():
         self.lgr.debug('runToClone to %s' % str(nth))
         call_params = syscall.CallParams('clone', None, break_simulation=True)        
         call_params.nth = nth
-        self.runTo('clone', call_params)
+        self.runTo(['clone'], call_params)
 
     def runToConnect(self, addr, nth=None):
         #addr = '192.168.31.52:20480'
@@ -2022,13 +2023,13 @@ class GenMonitor():
             run = False
         operation = mod.getOperation()
         self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
-        self.runTo(operation, call_params, cell_name=cell_name, run=run, background=background, name=dfile)
+        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name=dfile)
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
 
     def runToWrite(self, substring):
         call_params = syscall.CallParams('write', substring, break_simulation=True)        
         cell = self.cell_config.cell_context[self.target]
-        self.runTo('write', call_params)
+        self.runTo(['write'], call_params)
         self.lgr.debug('runToWrite to %s' % substring)
 
     def runToOpen(self, substring):
@@ -2040,7 +2041,7 @@ class GenMonitor():
         print('warning, SO tracking has stopped')
         call_params = syscall.CallParams('open', substring, break_simulation=True)        
         self.lgr.debug('runToOpen to %s' % substring)
-        self.runTo('open', call_params)
+        self.runTo(['open'], call_params)
 
     def runToSend(self, substring):
         call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
@@ -2994,7 +2995,10 @@ class GenMonitor():
     def mftx(self, ip):
         fun = self.ida_funs.getFun(ip)
         print('fun for 0x%x is 0x%x' % (ip, fun))
-    
+   
+    def swapSOPid(self, old, new):
+        self.soMap[self.target].swapPid(old, new)
+ 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
