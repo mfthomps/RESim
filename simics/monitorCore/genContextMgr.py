@@ -494,9 +494,16 @@ class GenContextMgr():
                 self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
                 #self.debugging_comm = None
                 #self.debugging_cell = None
-                self.cpu.current_context = self.default_context
-                self.stopWatchTasks()
-                retval = True
+                pids = self.task_utils.getPidsForComm(self.debugging_comm) 
+                if len(pids) == 0:
+                    self.cpu.current_context = self.default_context
+                    self.stopWatchTasks()
+                    retval = True
+                else:
+                    self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
+                    self.debugging_pid = pids[0]
+                    ''' replace SOMap pid with new one from fork '''
+                    self.top.swapSOPid(pid, pids[0])
             elif pid == self.debugging_pid:
                 self.debugging_pid = self.pid_cache[0]
                 self.lgr.debug('rmTask debugging_pid now %d' % self.debugging_pid)
@@ -655,6 +662,13 @@ class GenContextMgr():
 
     def killGroup(self, lead_pid, exit_syscall):
         if lead_pid == self.group_leader:
+            pids = self.task_utils.getPidsForComm(self.debugging_comm) 
+            add_task = None
+            for p in pids:
+                if p not in self.pid_cache:
+                    self.lgr.debug('killGroup found pid %d not in cache, was it a fork?' % p)
+                    add_task =p
+                    break
             self.lgr.debug('contextManager killGroup %d is leader, pid_cache is %s' % (lead_pid, str(self.pid_cache)))
             cache_copy = list(self.pid_cache)
             for pid in cache_copy:
@@ -666,18 +680,19 @@ class GenContextMgr():
                 if self.pageFaultGen is not None:
                     self.pageFaultGen.handleExit(pid)
             self.clearExitBreaks()
+            if add_task is not None:
+                self.addTask(add_task)
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
         else:
             self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
-        
 
     def deadParrot(self, pid):
         ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
-        self.lgr.debug('contextManager resetAlone pid:%d rec no longer found' % (pid))
         exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
         if exit_syscall is not None and not self.watching_page_faults:
             ida_msg = 'pid:%d exit via kill?' % pid
+            self.lgr.debug('contextManager resetAlone pid:%d rec no longer found call killGroup' % (pid))
             self.killGroup(pid, exit_syscall)
             #exit_syscall.handleExit(pid, ida_msg, killed=True)
         else:
@@ -685,6 +700,7 @@ class GenContextMgr():
             if self.pageFaultGen is not None:
                 self.pageFaultGen.handleExit(pid)
             self.clearExitBreaks()
+            self.lgr.debug('contextManager resetAlone pid:%d rec no longer found removed task' % (pid))
 
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
@@ -701,9 +717,10 @@ class GenContextMgr():
                 self.task_rec_hap[pid] = None
                 self.watchExit(rec=dead_rec, pid = pid)
             else:
-                self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d EXCEPT new list_addr is None' % (dead_rec, pid))
+                self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d EXCEPT new list_addr is None call deadParrot' % (dead_rec, pid))
                 self.deadParrot(pid)
         else: 
+            self.lgr.debug('contextMgr resetAlone pid %d no record for pid, call deadParrot' % (pid))
             self.deadParrot(pid)
         if pid in self.demise_cache:
             self.demise_cache.remove(pid)
