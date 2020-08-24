@@ -5,6 +5,7 @@ from idaapi import simplecustviewer_t
 import gdbProt
 import json
 import os
+import time
 import reHooks
 class DataWatch(simplecustviewer_t):
     def __init__(self):
