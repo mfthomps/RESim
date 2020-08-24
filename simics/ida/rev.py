@@ -512,5 +512,5 @@ if __name__ == "__main__":
         #goToOrigin()
         pass
     idaversion.batch(0)
-    isim.resynch()
+    #isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)
