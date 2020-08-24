@@ -817,7 +817,7 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
 
-        elif socket_callname == 'accept':
+        elif socket_callname == 'accept' or socket_callname == 'accept4':
             phys = self.mem_utils.v2p(self.cpu, ss.addr)
             ida_msg = '%s - %s pid:%d FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, pid, ss.fd, ss.addr, ss.length, phys)
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
@@ -1236,8 +1236,14 @@ class Syscall():
         elif callname == 'mmap' or callname == 'mmap2':        
             exit_info.count = frame['param2']
             if self.mem_utils.WORD_SIZE == 4: 
-                fd = frame['param3']
-                ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d' % (callname, pid, fd, frame['param1'], frame['param2'])
+                arg_addr = frame['param1']
+                addr = self.mem_utils.readPtr(self.cpu, arg_addr)
+                length = self.mem_utils.readPtr(self.cpu, arg_addr+4)
+                prot = self.mem_utils.readPtr(self.cpu, arg_addr+8)
+                flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
+                fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
+                offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
+                ida_msg = '%s pid:%d FD: buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (pid, fd, arg_addr, length, prot, flags, offset)
             else:
                 fd = frame['param5']
                 ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
