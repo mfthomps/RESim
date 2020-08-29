@@ -237,7 +237,7 @@ class DataWatch():
         if self.ida_funs is not None:
             #self.top.stopThreadTrack()
             #self.top.stopWatchPageFaults()
-            self.top.removeDebugBreaks()
+            self.top.removeDebugBreaks(keep_coverage=True)
             ''' Step backwards until we reach a call.  Assumes we start near the beginning of a mem function '''
             ip = self.top.getEIP(self.cpu)
             fun = self.ida_funs.getFun(ip)
