@@ -337,28 +337,32 @@ class SOMap():
             retval = elfText.Text(self.text_start[pid], 0, size)
         elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
+                self.lgr.debug('getSOAddr fpath %s' % fpath)
                 base = os.path.basename(fpath)
+                other_base = None
+                full = os.path.join(self.targetFS.getRootPrefix(), fpath[1:])
+                if os.path.islink(full):
+                    other_base =  os.readlink(full)
                 in_base = os.path.basename(in_fname)
-                self.lgr.debug('compare %s to %s' % (base, in_base))
-                if base == in_base:
-                    if retval is not None:
-                        self.lgr.debug('SOMap getSOAddr multiple so files with fname %s' % in_fname)
-                        break
-                    else:
-                        retval = self.so_addr_map[pid][fpath]
-                        break
+                self.lgr.debug('compare <%s> or <%s> to <%s>' % (base, other_base, in_base))
+                if base == in_base or other_base == in_base:
+                    retval = self.so_addr_map[pid][fpath]
+                    self.lgr.debug('compare found match fpath %s retval is 0x%x' % (fpath, retval.address))
+                    break
             if retval is None:
                 for fpath in self.so_addr_map[pid]:
+                    self.lgr.debug('getSOAddr fpath2 %s' % fpath)
                     base = os.path.basename(fpath)
+                    other_base = None
+                    full = os.path.join(self.targetFS.getRootPrefix(), fpath[1:])
+                    if os.path.islink(full):
+                        other_base =  os.readlink(full)
                     in_base = os.path.basename(in_fname)
-                    self.lgr.debug('compare %s to %s' % (base, in_base))
-                    if in_base.startswith(base):
-                        if retval is not None:
-                            self.lgr.debug('SOMap getSOAddr multiple so files with fname %s' % in_fname)
-                            break
-                        else:
-                            retval = self.so_addr_map[pid][fpath]
-                            break
+                    self.lgr.debug('compare %s or %s to %s' % (base, other_base, in_base))
+                    if in_base.startswith(base) or (other_base is not None and in_base.startswith(other_base)):
+                        retval = self.so_addr_map[pid][fpath]
+                        self.lgr.debug('compare found startswith match')
+                        break
 
             if retval is None:
                 self.lgr.debug('SOMap getSOAddr could not find so map for %d <%s>' % (pid, in_fname))
