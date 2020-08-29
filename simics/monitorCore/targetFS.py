@@ -9,6 +9,9 @@ class TargetFS():
             if name in files:
                 return os.path.join(root, name)
         return None
+
+    def getRootPrefix(self):
+        return self.root_prefix
  
     def getFull(self, path, lgr=None):
         retval = None
