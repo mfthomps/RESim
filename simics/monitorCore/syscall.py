@@ -1243,7 +1243,7 @@ class Syscall():
                 flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
-                ida_msg = '%s pid:%d FD: buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (pid, fd, arg_addr, length, prot, flags, offset)
+                ida_msg = '%s pid:%d FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, pid, fd, arg_addr, length, prot, flags, offset)
             else:
                 fd = frame['param5']
                 ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
