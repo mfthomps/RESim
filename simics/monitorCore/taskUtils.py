@@ -447,6 +447,12 @@ class TaskUtils():
             retval[ts_list[ts].pid] = ts_list[ts].comm
         return retval
 
+    def getPidParent(self, pid):
+        rec = self.getRecAddrForPid(pid)
+        parent = self.mem_utils.readPtr(self.cpu, rec + self.param.ts_real_parent)
+        pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
+        return pid 
+ 
     def getRecAddrForPid(self, pid):
         #self.lgr.debug('getRecAddrForPid %d' % pid)
         ts_list = self.getTaskStructs()
