@@ -176,6 +176,9 @@ class GenMonitor():
                         cmd = '%s = %s' % (self.net_links[target][link].name, self.net_links[target][link].obj)
                         self.lgr.debug('genInit link cmd is %s' % cmd)
                         SIM_run_command(cmd)
+            stack_base_file = os.path.join('./', self.run_from_snap, 'stack_base.pickle')
+            if os.path.isfile(stack_base_file):
+                self.stack_base = pickle.load( open(stack_base_file, 'rb') )
 
         for cell_name in comp_dict:
             if 'RESIM_PARAM' in comp_dict[cell_name]:
@@ -680,7 +683,7 @@ class GenMonitor():
                              text_segment.address, text_segment.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
-                    self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.lgr)
+                    self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.lgr)
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
         else:
@@ -880,11 +883,26 @@ class GenMonitor():
         self.stack_base[self.target][pid] = esp
         self.lgr.debug('setStackBase pid:%d to 0x%x eip is 0x%x' % (pid, esp, eip))
 
+    def modeChangeForStack(self, want_pid, one, old, new):
+        if self.mode_hap is None:
+            return
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.lgr.debug('modeChangeForStack pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
+        SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+        self.mode_hap = None
+        
+        if new != Sim_CPU_Mode_Supervisor:
+            self.setStackBase()
+
     def recordStackBase(self, pid, sp):
         self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
         self.stack_base[self.target][pid] = sp
 
     def recordStackClone(self, pid, parent):
+        self.lgr.debug('recordStackClone pid: %d parent: %d' % (pid, parent))
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeForStack, pid)
+        '''
         if self.target not in self.track_threads:
             self.lgr.error('recordStackClone without track_threads loaded')
             return
@@ -894,6 +912,7 @@ class GenMonitor():
             self.lgr.debug('recordStackClone pid: %d 0x%x parent: %d' % (pid, sp, parent))
         else:
             self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
+        '''
         
     def debugProc(self, proc):
         if type(proc) is not str:
@@ -1679,7 +1698,7 @@ class GenMonitor():
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_execution_enabled = False
-        self.removeDebugBreaks(keep_watching=True)
+        self.removeDebugBreaks(keep_watching=True, keep_coverage=False)
         self.sharedSyscall[self.target].setDebugging(False)
 
     def stopDebug(self):
@@ -1688,7 +1707,7 @@ class GenMonitor():
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_execution_enabled = False
-        self.removeDebugBreaks(keep_watching=False)
+        self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         self.sharedSyscall[self.target].setDebugging(False)
         self.stopTrace()
 
@@ -1822,7 +1841,7 @@ class GenMonitor():
         self.rev_to_call[self.target].noWatchSysenter()
 
  
-    def removeDebugBreaks(self, keep_watching=False):
+    def removeDebugBreaks(self, keep_watching=False, keep_coverage=True):
         self.lgr.debug('genMon removeDebugBreaks')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.stopWatchPageFaults(pid)
@@ -1838,7 +1857,7 @@ class GenMonitor():
             self.ropCop[self.target].clearHap()
         self.context_manager[self.target].clearExitBreaks()
         self.debug_breaks_set = False
-        if self.coverage is not None:
+        if self.coverage is not None and not keep_coverage:
             self.coverage.stopCover(keep_hits=True)
 
     def revToText(self):
@@ -2129,21 +2148,25 @@ class GenMonitor():
         return retval
 
     def getSOFromFile(self, fname):
-        text_seg  = self.soMap[self.target].getSOAddr(fname) 
+        retval = ''
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        self.lgr.debug('getSOFromFile pid:%d fname %s' % (pid, fname))
+        text_seg  = self.soMap[self.target].getSOAddr(fname, pid=pid) 
         if text_seg is None:
             self.lgr.error('getSO no map for %s' % fname)
-            return
+            return retval
         if text_seg.address is not None:
             if text_seg.locate is not None:
                 start = text_seg.locate+text_seg.offset
                 end = start + text_seg.size
             else:
                 start = text_seg.address
-                end = text_seg.address + text_seg_size
+                end = text_seg.address + text_seg.size
             retval = ('%s:0x%x-0x%x' % (fname, start, end))
             print(retval)
         else:
             print('None')
+        return retval
 
     def getSO(self, eip):
         fname = self.getSOFile(eip)
@@ -2253,7 +2276,7 @@ class GenMonitor():
                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2270,7 +2293,8 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr, max_frames=max_frames)
+                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
+                self.user_iterators, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
         return st
 
     def getStackTrace(self):
@@ -2344,6 +2368,11 @@ class GenMonitor():
 
     def showDataWatch(self):
         self.dataWatch[self.target].showWatch()
+
+    def addDataWatch(self, start, length):
+        self.lgr.debug('genMonitory watchData 0x%x count %d' % (start, length))
+        msg = "User range 0x%x count %d" % (start, length)
+        self.dataWatch[self.target].setRange(start, length, msg) 
 
     def watchData(self, start=None, length=None, show_cmp=False):
         self.lgr.debug('genMonitor watchData')
@@ -2468,7 +2497,7 @@ class GenMonitor():
         SIM_run_command(cmd)
         for cell_name in self.cell_config.cell_context:
             if cell_name in self.netInfo:
-           
+                ''' netInfo stands in for all cell_name-based dictionaries ''' 
                 net_file = os.path.join('./', name, cell_name, 'net_list.pickle')
                 try:
                     os.mkdir(os.path.dirname(net_file))
@@ -2480,9 +2509,12 @@ class GenMonitor():
                 self.task_utils[cell_name].pickleit(name)
                 self.soMap[cell_name].pickleit(name)
                 self.traceProcs[cell_name].pickleit(name)
-
+                
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
+        
+        stack_base_file = os.path.join('./', name, 'stack_base.pickle')
+        pickle.dump( self.stack_base, open( stack_base_file, "wb" ) )
 
     def showCycle(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2593,10 +2625,15 @@ class GenMonitor():
         print fname 
 
     def retrack(self):
+        ''' Use existing data watches to track IO.  Clears later watch marks '''
         self.lgr.debug('retrack')
+        cpu = self.cell_config.cpuFromCell(self.target)
+        prev_cycle = cpu.cycles - 1
+        self.dataWatch[self.target].clearWatches(prev_cycle)
         self.dataWatch[self.target].watch(break_simulation=False)
         self.dataWatch[self.target].setCallback(self.stopTrackIO)
         self.dataWatch[self.target].setRetrack(True)
+        self.coverage.doCoverage()
         SIM_run_command('c')
 
     def trackIO(self, fd):
@@ -2605,6 +2642,7 @@ class GenMonitor():
         self.lgr.debug('trackIO stopped track and cleared watchs')
         self.dataWatch[self.target].trackIO(fd, self.stopTrackIO, self.is_compat32)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        self.coverage.doCoverage()
         self.runToIO(fd, linger=True, break_simulation=False)
 
     def stopTrackIO(self):
@@ -2652,6 +2690,15 @@ class GenMonitor():
 
     def goToWriteMark(self, index):
         cycle = self.trackFunction[self.target].goToMark(index)
+        if cycle is not None:
+            self.context_manager[self.target].watchTasks(set_debug_pid=True)
+        return cycle
+
+    def goToBasicBlock(self, addr):
+        self.lgr.debug('goToBasicBlock 0x%x' % addr)
+        self.removeDebugBreaks()
+        cycle = self.coverage.goToBasicBlock(addr)
+        self.restoreDebugBreaks(was_watching=True)
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
         return cycle
@@ -2824,9 +2871,6 @@ class GenMonitor():
         self.writeRegValue(lenreg, len(byte_string))
         if lenreg2 is not None:
             self.writeRegValue(lenreg2, len(byte_string))
-        ''' writeRegValue clears bookmarks, but we want to clear current cycle marks as well '''
-        prev_cycle = cpu.cycles - 1
-        self.dataWatch[self.target].clearWatches(prev_cycle)
         self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
@@ -2899,8 +2943,28 @@ class GenMonitor():
     def watchROP(self):
         self.ropCop[self.target].watchROP()
 
-    def mapCoverage(self):
-        self.coverage.cover()
+    def enableCoverage(self, fname=None):
+        ''' Enable code coverage '''
+        ''' Intended for use with trackIO '''
+        if self.coverage is not None:
+            if fname is not None:
+                full_path = self.targetFS[self.target].getFull(fname)
+            else:
+                full_path = None
+            self.coverage.enableCoverage(fname=full_path)
+        else:
+            self.lgr.error('enableCoverage, no coverage defined')
+
+    def mapCoverage(self, fname=None):
+        ''' Enable code coverage and do mapping '''
+        ''' Not intended for use with trackIO, use enableCoverage for that '''
+        if fname is not None:
+            full_path = self.targetFS[self.target].getFull(fname)
+        else:
+            full_path = None
+        self.lgr.debug('mapCoverage file (None means use prog name): %s' % full_path)
+        self.coverage.enableCoverage(fname=full_path)
+        self.coverage.doCoverage()
 
     def showCoverage(self):
         self.coverage.showCoverage()
@@ -2909,6 +2973,7 @@ class GenMonitor():
         self.lgr.debug('stopCoverage')
         if self.coverage is not None:
             self.coverage.stopCover()
+
     def runToStack(self):
         ''' 3 pages for now? '''
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2998,6 +3063,16 @@ class GenMonitor():
    
     def swapSOPid(self, old, new):
         self.soMap[self.target].swapPid(old, new)
+
+    def getCoverageFile(self):
+        if self.coverage is not None:
+            return self.coverage.getCoverageFile()
+        else:
+            return None
+
+    def startDataSessions(self):
+        if self.coverage is not None:
+            SIM_run_alone(self.coverage.startDataSessions, None)
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
