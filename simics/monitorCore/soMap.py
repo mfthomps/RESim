@@ -259,13 +259,13 @@ class SOMap():
     def getSOPid(self, pid):
         retval = pid
         if pid not in self.so_file_map:
-            ppid = self.task_utils.getCurrentThreadLeaderPid()
+            ppid = self.task_utils.getGroupLeaderPid(pid)
             #self.lgr.debug('SOMap getSOPid getCurrnetTaskLeader got %s for current pid %d' % (ppid, pid))
             if ppid != pid:
                 #self.lgr.debug('SOMap getSOPid use group leader')
                 retval = ppid
             else:
-                ppid, dumb = self.task_utils.getCurrentThreadParent()
+                ppid, dumb = self.task_utils.getPidParent(pid)
                 if ppid != pid:
                     #self.lgr.debug('SOMap getSOPid use parent %d' % ppid)
                     retval = ppid
@@ -325,14 +325,16 @@ class SOMap():
             self.lgr.debug('getSOInfo no so map for %d' % pid)
         return retval
 
-    def getSOAddr(self, in_fname):
+    def getSOAddr(self, in_fname, pid=None):
         retval = None
-        cpu, comm, pid = self.task_utils.curProc() 
+        if pid is None:
+            cpu, comm, pid = self.task_utils.curProc() 
         pid = self.getSOPid(pid)
         if pid is None:
             return None
         self.lgr.debug('getSOAddr look for addr for pid %d in_fname %s' % (pid, in_fname))
-        if in_fname == self.text_prog[pid]:
+        ''' TBD fix this? '''
+        if pid in self.text_prog and (in_fname.endswith(self.text_prog[pid]) or self.text_prog[pid].endswith(in_fname)):
             size = self.text_end[pid] - self.text_start[pid]
             retval = elfText.Text(self.text_start[pid], 0, size)
         elif pid in self.so_file_map:
@@ -370,7 +372,8 @@ class SOMap():
                 
         else:
             self.lgr.debug('SOMap getSOAddr no so map for %d %s' % (pid, in_fname))
-            self.lgr.debug('text_prog is <%s>' % self.text_prog[pid])
+            if pid in self.text_prog:
+                self.lgr.debug('text_prog is <%s>' % self.text_prog[pid])
         return retval
     
 
