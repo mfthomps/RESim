@@ -61,6 +61,7 @@ class DataWatch():
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x back_stop: %r' % (start, length, back_stop))
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
+            self.lgr.debug('DataWatch, backstop set, start data session')
 
         end = start+length
         overlap = False
@@ -401,6 +402,9 @@ class DataWatch():
                 
     def readHap(self, index, third, forth, memory):
         ''' watched data has been read (or written) '''
+        if self.prev_cycle is None:
+            ''' first data read, start data session if doing coverage '''
+            self.top.startDataSessions()
         if self.cpu.cycles == self.prev_cycle:
             return
         if len(self.read_hap) == 0:
@@ -441,7 +445,8 @@ class DataWatch():
             if not self.break_simulation:
                 ''' prevent stack trace from triggering haps '''
                 self.stopWatch()
-            st = self.top.getStackTraceQuiet(max_frames=3)
+            self.lgr.debug('dataWatch get stack trace to look for memsomething')
+            st = self.top.getStackTraceQuiet(max_frames=3, max_bytes=100)
             if st is None:
                 self.lgr.debug('stack trace is None, wrong pid?')
                 return
@@ -566,6 +571,7 @@ class DataWatch():
     def clearWatches(self, cycle=None):
         if cycle is None:
             self.lgr.debug('DataWatch clear Watches, no cycle given')
+            self.prev_cycle = None
         else:
             self.lgr.debug('DataWatch clear Watches cycle 0x%x' % cycle)
         self.stopWatch()
@@ -635,8 +641,10 @@ class DataWatch():
         self.use_back_stop = False
 
     def setRetrack(self, value):
+        self.lgr.debug('DataWatch setRetrack %r' % value)
         self.retrack = value
-        self.use_back_stop = True
+        if value:
+            self.use_back_stop = True
 
     def trackIO(self, fd, callback, compat32):
         self.lgr.debug('DataWatch trackIO for fd %d' % fd)
