@@ -18,7 +18,7 @@ class StackTrace():
             else:
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ' % (self.ip, self.fname, self.instruct, self.sp)
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, user_iterators, lgr, max_frames=None):
+    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, relocate_funs, user_iterators, lgr, max_frames=None, max_bytes=None):
         if pid == 0:
             lgr.error('stackTrace asked to trace pid 0?')
             return
@@ -32,8 +32,11 @@ class StackTrace():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.stack_base = stack_base
+        #self.stack_base = None
         self.ida_funs = ida_funs
         self.max_frames = max_frames
+        ''' limit how far down the stack we look for calls '''
+        self.max_bytes = max_bytes 
         self.relocate_funs = relocate_funs
         self.user_iterators = user_iterators
         if cpu.architecture == 'arm':
@@ -249,7 +252,7 @@ class StackTrace():
         #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
-        #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+        self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
@@ -262,7 +265,11 @@ class StackTrace():
             if self.mem_utils.WORD_SIZE == 8:
                 val = val & 0x0000ffffffffffff
             skip_this = False
-                
+            if val == 0:
+                count += 1
+                ptr = ptr + self.mem_utils.WORD_SIZE
+                continue
+            #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
             if self.soMap.isCode(val):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
@@ -281,7 +288,7 @@ class StackTrace():
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
                     call_to_s = instruct.split()[1]
                     call_to = None
-                    #self.lgr.debug('stackTrace check call to %s' % call_to_s)
+                    self.lgr.debug('stackTrace check call to %s' % call_to_s)
                     try:
                         call_to = int(call_to_s, 16)
                     except:
@@ -365,10 +372,12 @@ class StackTrace():
             count += 1
             ptr = ptr + self.mem_utils.WORD_SIZE
             if self.stack_base is not None and ptr > self.stack_base:
-                #self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
+                self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
-            if self.max_frames is not None and len(self.frames)>= self.max_frames:
+            elif self.max_frames is not None and len(self.frames)>= self.max_frames:
                 #self.lgr.debug('stackFrames got max frames, done')
+                done = True
+            elif self.max_bytes is not None and count > self.max_bytes:
                 done = True
 
 
