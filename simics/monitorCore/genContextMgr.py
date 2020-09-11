@@ -383,7 +383,10 @@ class GenContextMgr():
            elif pid == leader_pid:
                parent = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_real_parent)
                if parent in self.watch_rec_list:
+                   parent_pid = self.mem_utils.readWord32(cpu, parent + self.param.ts_pid)
+                   self.lgr.debug('contextManager new clone %d is its own leader, but parent %d is in cache.  Call the parent the leader.' % (pid, parent_pid))
                    add_it = True
+                   leader_pid = parent_pid
                else:
                    self.lgr.debug('contextManager pid:%d (%s) not in cache, nor is parent in watch_rec_list 0x%x' % (pid, comm, parent))
            if add_it:
