@@ -49,7 +49,7 @@ class TrackThreads():
         self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
         self.trackSO()
-        self.trackClone()
+        #self.trackClone()
         if self.open_syscall is None:
             self.lgr.error('trackThreads startTrack, open_syscall is none')
 
@@ -196,6 +196,9 @@ class TrackThreads():
         self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 
     def cloneHap(self, dumb, third, forth, memory):
+        ''' TBD remove not used '''
+        if self.clone_hap is None:
+            return
         cpu, comm, pid = self.task_utils.curProc() 
         if cpu.architecture == 'arm':
             frame = self.task_utils.frameFromRegs(cpu)
@@ -216,8 +219,7 @@ class TrackThreads():
             return None
 
     def trackClone(self):
-        if self.clone_hap is None:
-            return
+        ''' TBD not used '''
         callnum = self.task_utils.syscallNumber('clone', self.compat32)
         entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
         self.lgr.debug('trackClone entry 0x%x' % entry)
@@ -226,4 +228,4 @@ class TrackThreads():
 
     def stopTrackClone(self):
         if self.clone_hap is not None:
-            self.context_manager.genDelete(self.clone_hap) 
+            self.context_manager.genDeleteHap(self.clone_hap) 
