@@ -39,36 +39,35 @@ class BranchNotTaken(simplecustviewer_t):
 
     def updateList(self, branches):
         print "in updateList"
-        #self.Close()
-        #self.Create()
-        #print('did create')
+        if branches is None:
+            print('Branch Not Taken list is None')
+            return
         retval = []
         self.ClearLines()
         for b in branches:
-            cline = '0x%x' % b
+            f = idc.get_func_name(b)
+            cline = 'to 0x%x from 0x%x %s' % (b, branches[b], f)
             self.AddLine(cline)
 
         return None
 
-    '''
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
         line = idaapi.tag_remove(line)
         print('line is %s' % line)
         parts = line.split()
-        index = None
+        branch_from  = None
         try:
-            index = int(parts[0])
+            branch_from  = int(parts[3], 16)
         except:
-            print('no index found in %s' % line)
+            print('branch from not found in %s' % line)
             return
-        command = '@cgc.goToDataMark(%d)' % index
+        command = '@cgc.goToBasicBlock(0x%x)' % branch_from
         print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         eip = gdbProt.getEIPWhenStopped()
         self.isim.signalClient()
         return True
-    '''
 
     def OnKeydown(self, vkey, shift):
         if vkey == 27:

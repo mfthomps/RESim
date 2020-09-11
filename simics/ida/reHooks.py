@@ -211,6 +211,34 @@ class DataWatchHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+class AddDataWatchHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            self.isim = isim
+            idaapi.action_handler_t.__init__(self)
+            self.last_data_watch_count = 32
+        def activate(self, ctx):
+            highlighted = idaversion.getHighlight()
+            addr = getHex(highlighted)
+            count = self.last_data_watch_count
+
+            gac = getAddrCount.GetAddrCount()
+            gac.Compile()
+            gac.iAddr.value = addr 
+            gac.iRawHex.value = count
+            ok = gac.Execute()
+            if ok != 1:
+                return
+            count = gac.iRawHex.value
+            addr = gac.iAddr.value
+
+            self.last_data_watch_count = count
+            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.addDataWatch(0x%x, %d)");' % (addr, count)) 
+            print('add watch of %d bytes from 0x%x' % (count, addr))
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
 
 class RevCursorHandler(idaapi.action_handler_t):
         def __init__(self, isim):
@@ -408,6 +436,11 @@ def register(isim):
        'data watch',
        DataWatchHandler(isim)
        )
+    add_data_watch_action_desc = idaapi.action_desc_t(
+       'addDataWatch:action',
+       'add data watch',
+       AddDataWatchHandler(isim)
+       )
     rev_addr_action_desc = idaapi.action_desc_t(
        'revData:action',
        'reverse track data',
@@ -433,6 +466,7 @@ def register(isim):
     idaapi.register_action(rev_cursor_action_desc)
     idaapi.register_action(mod_reg_action_desc)
     idaapi.register_action(data_watch_action_desc)
+    idaapi.register_action(add_data_watch_action_desc)
     idaapi.register_action(rev_addr_action_desc)
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
@@ -471,6 +505,7 @@ class Hooks(UI_Hooks):
                         if addr is not None or regFu.isHighlightedEffective():
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
+                            idaapi.attach_action_to_popup(form, popup, "addDataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "stringMemory:action", 'RESim/')

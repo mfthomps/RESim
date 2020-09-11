@@ -6,7 +6,6 @@ import gdbProt
 import json
 import os
 import time
-import reHooks
 class DataWatch(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -85,7 +84,7 @@ class DataWatch(simplecustviewer_t):
             instruct = idc.GetDisasm(entry['ip'])
             uline = '%3d 0x%08x %s' % (index, entry['ip'], entry['msg'])
             line = uline.encode('ascii', 'replace')
-            print('do %s' % line)
+            #print('do %s' % line)
             if 'return from' in line:
                 cline = idaapi.COLSTR(str(line), idaapi.SCOLOR_DREF)
             elif 'closed FD' in line:

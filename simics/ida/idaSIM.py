@@ -11,9 +11,10 @@ import regFu
 import ida_kernwin
 no_rev = 'reverse execution disabled'
 class IdaSIM():
-    def __init__(self, stack_trace, bookmark_view, data_watch, write_watch, kernel_base, reg_list):
+    def __init__(self, stack_trace, bookmark_view, data_watch, branch_not_taken, write_watch, kernel_base, reg_list):
         self.stack_trace = stack_trace
         self.data_watch = data_watch
+        self.branch_not_taken = branch_not_taken
         self.write_watch = write_watch
         self.bookmark_view = bookmark_view
         self.just_debug = False
@@ -515,7 +516,7 @@ class IdaSIM():
         else:
             print('must have been top, uncall')
             self.doRevFinish()
-    
+   
     def watchData(self):
         command = "@cgc.watchData()" 
         print('called %s' % command)
@@ -632,6 +633,9 @@ class IdaSIM():
 
     def updateDataWatch(self):
         data_watch_results = self.data_watch.updateDataWatch()
+
+    def updateBNT(self, branches):
+        self.branch_not_taken.updateList(branches)
     
     def updateWriteWatch(self):
         write_watch_results = self.write_watch.updateWriteWatch()

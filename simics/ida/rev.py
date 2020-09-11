@@ -40,11 +40,13 @@ import menuMod
 idaapi.require("idaSIM")
 idaapi.require("stackTrace")
 idaapi.require("dataWatch")
+idaapi.require("branchNotTaken")
 idaapi.require("writeWatch")
 idaapi.require("bookmarkView")
 idaapi.require("reHooks")
 idaapi.require("dbgHooks")
 idaapi.require("menuMod")
+idaapi.require("colorBlocks")
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -441,6 +443,7 @@ if __name__ == "__main__":
     bookmark_view = bookmarkView.bookmarkView()
     stack_trace = stackTrace.StackTrace()
     data_watch = dataWatch.DataWatch()
+    branch_not_taken = branchNotTaken.BranchNotTaken()
     write_watch = writeWatch.WriteWatch()
     #print('back from init bookmarkView')
     keymap_done = False
@@ -452,7 +455,7 @@ if __name__ == "__main__":
     idaversion.activate_widget(form, True)
     #print('now create bookmark_view')
     print('RESim Ida Client Version 1.2')
-    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, write_watch, kernel_base, reg_list)
+    isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, branch_not_taken, write_watch, kernel_base, reg_list)
     bookmark_view.Create(isim)
     bookmark_view.register()
     bookmark_list = bookmark_view.updateBookmarkView()
@@ -468,6 +471,9 @@ if __name__ == "__main__":
 
     data_watch.Create(isim)
     data_watch.register()
+
+    branch_not_taken.Create(isim)
+    branch_not_taken.register()
    
     write_watch.Create(isim)
     write_watch.register()
