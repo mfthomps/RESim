@@ -881,7 +881,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         self.stack_base[self.target][pid] = esp
-        self.lgr.debug('setStackBase pid:%d to 0x%x eip is 0x%x' % (pid, esp, eip))
+        self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
 
     def modeChangeForStack(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -2160,7 +2160,8 @@ class GenMonitor():
                 start = text_seg.locate+text_seg.offset
                 end = start + text_seg.size
             else:
-                start = text_seg.address
+                # TBD fix this, assume text segment, no offset (fix for relocatable mains)
+                start = 0
                 end = text_seg.address + text_seg.size
             retval = ('%s:0x%x-0x%x' % (fname, start, end))
             print(retval)
@@ -2514,7 +2515,7 @@ class GenMonitor():
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
         
         stack_base_file = os.path.join('./', name, 'stack_base.pickle')
-        pickle.dump( self.stack_base, open( stack_base_file, "wb" ) )
+        pickle.dump( self.stack_base, open(stack_base_file, "wb" ) )
 
     def showCycle(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
