@@ -77,7 +77,8 @@ class Coverage():
         self.stopCover()
         resim_context = self.context_manager.getResimContext()
         for fun in self.blocks:
-            for bb in self.blocks[fun]['blocks']:
+            for block_entry in self.blocks[fun]['blocks']:
+                bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
                 #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
                 bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
@@ -137,17 +138,22 @@ class Coverage():
             ''' Find the function that contains the bb '''
             ''' self.blocks is not relocated '''
             bb_org = bb - self.offset
+            got_it = False
             for ofun in self.blocks:
-                if bb_org in self.blocks[ofun]['blocks']:
-                   ''' bb is in ofun '''
-                   ofun_val = int(ofun)
-                   ofun_rel = ofun_val + self.offset 
-                   ofun_str = str(ofun_rel)
-                   if ofun_str not in hit_blocks:
-                       self.lgr.debug('saveCoverage fun %s (0x%x) not in hit_blocks add it' % (ofun_str, ofun_rel))
-                       hit_blocks[ofun_str] = []
-                   hit_blocks[ofun_str].append(bb)       
-                   break
+                for entry in self.blocks[ofun]['blocks']:
+                    if entry['start_ea'] == bb_org:
+                        ''' bb is in ofun '''
+                        ofun_val = int(ofun)
+                        ofun_rel = ofun_val + self.offset 
+                        ofun_str = str(ofun_rel)
+                        if ofun_str not in hit_blocks:
+                            self.lgr.debug('saveCoverage fun %s (0x%x) not in hit_blocks add it' % (ofun_str, ofun_rel))
+                            hit_blocks[ofun_str] = []
+                        hit_blocks[ofun_str].append(bb)       
+                        got_it = True
+                        break
+                if got_it:
+                    break
         s = json.dumps(hit_blocks)
         if fname is None:
             save_name = '%s.hits' % self.full_path
@@ -228,7 +234,7 @@ class Coverage():
         ''' all hits until now are IO setup, prior to any data session except we assume
             the very last hit is the bb that first referenced data '''
         self.lgr.debug('coverage startDataSessions')
-        if self.latest_hits is not None:
+        if self.latest_hit is not None:
             first_data_cycle = self.blocks_hit[self.latest_hit]
             del self.blocks_hit[self.latest_hit]
             self.saveCoverage(fname = 'pre')
