@@ -32,7 +32,6 @@ class StackTrace():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.stack_base = stack_base
-        #self.stack_base = None
         self.ida_funs = ida_funs
         self.max_frames = max_frames
         ''' limit how far down the stack we look for calls '''
@@ -83,7 +82,7 @@ class StackTrace():
                         except:
                             retval = eip
                             continue
-                        if self.soMap.isCode(dst):
+                        if self.soMap.isCode(dst, self.pid):
                             retval = eip
                         else:
                             #self.lgr.debug('stackTrace dst not code 0x%x' % dst)
@@ -270,7 +269,7 @@ class StackTrace():
                 ptr = ptr + self.mem_utils.WORD_SIZE
                 continue
             #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
-            if self.soMap.isCode(val):
+            if self.soMap.isCode(val, self.pid):
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                    #self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
