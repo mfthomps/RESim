@@ -18,7 +18,13 @@ for fun in fun_json:
         blocks[fun_addr]['blocks'] = []
         for block in fc:
             #print 'block start is %x' % block.start_ea
-            blocks[fun_addr]['blocks'].append(block.start_ea)
+            block_entry = {}
+            block_entry['start_ea'] = block.start_ea
+            block_entry['end_ea'] = block.end_ea
+            block_entry['succs'] = []
+            for s in block.succs():
+                block_entry['succs'].append(s.start_ea)
+            blocks[fun_addr]['blocks'].append(block_entry)
     else:
         print('NO function found for name %s 0x%x' % (fun_json[fun]['name'], fun_addr))
 s = json.dumps(blocks, indent=4)
