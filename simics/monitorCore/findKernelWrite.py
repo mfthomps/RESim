@@ -184,6 +184,7 @@ class findKernelWrite():
         cmd = 'skip-to cycle=%d' % cycles
         SIM_run_command(cmd)
         eip = self.top.getEIP(self.cpu)
+        ida_message = 'skipAlone?'
         if self.memory_transaction is None:
            value = None
         else:
@@ -210,7 +211,7 @@ class findKernelWrite():
                     ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
                     bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
                 else:
-                    ida_message = 'Kernel wrote to address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
+                    ida_message = 'Kernel wrote to user space address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
                     bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
                 self.lgr.debug('set ida msg to %s' % ida_message)
@@ -301,17 +302,20 @@ class findKernelWrite():
             self.found_kernel_write = True
             ''' Simics has no way to get recent memory transaction, so, go back one and set a hap on the break so we can get the memop '''
             ''' We were going to run forward anyway to get to user space ,so manage it on the fly '''
-            cmd =  'skip-to cycle=%d' % (self.cpu.cycles-1)
-            SIM_run_command(cmd)
+            back_one = self.cpu.cycles - 1
+            if not self.rev_to_call.skipToTest(back_one):
+                return
+            #cmd =  'skip-to cycle=%d' % (self.cpu.cycles-1)
+            #SIM_run_command(cmd)
             self.forward_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.hitForwardCallback, None, self.kernel_write_break)
 
-            self.lgr.debug('thinkWeWrote, forward_hap is %d  set breaks on exit to user' % (self.forward_hap))
+            self.lgr.debug('thinkWeWrote, forward_hap is %d  on write to 0x%x. Set breaks on exit to user' % (self.forward_hap, self.kernel_write_break))
             if self.cpu.architecture == 'arm':
                 self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
                                                         Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
                 self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                                            None, self.kernel_exit_break1, 'findKernelWrite armexit')
-                self.cleanup()
+                #self.cleanup()
             else:
                 if self.param.sysexit is not None:
                     self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
@@ -485,7 +489,7 @@ class findKernelWrite():
     def cleanup(self, rm_break = False):
         self.found_kernel_write = False
         if self.kernel_write_break is not None:
-            self.lgr.debug('deleting hap and breakpoint %d' % self.kernel_write_break)
+            self.lgr.debug('findKernelWrite cleanup deleting hap and breakpoint %d' % self.kernel_write_break)
             SIM_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None
         if self.stop_write_hap is not None:
