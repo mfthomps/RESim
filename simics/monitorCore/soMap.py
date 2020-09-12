@@ -26,6 +26,8 @@ class SOMap():
         self.ida_funs = None
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        self.cheesy_pid = 0
+        self.cheesy_mapped = 0
 
     def loadPickle(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -58,10 +60,9 @@ class SOMap():
         pickle.dump( so_pickle, fd)
         self.lgr.debug('SOMap pickleit to %s ' % (somap_file))
 
-    def isCode(self, address):
+    def isCode(self, address, pid):
         ''' is the given address within the text segment or those of SO libraries? '''
         #self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.text_start, self.text_end))
-        cpu, comm, pid = self.task_utils.curProc() 
         pid = self.getSOPid(pid)
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
@@ -259,6 +260,8 @@ class SOMap():
     def getSOPid(self, pid):
         retval = pid
         if pid not in self.so_file_map:
+            if pid == self.cheesy_pid:
+                return self.cheesy_mapped
             ppid = self.task_utils.getGroupLeaderPid(pid)
             #self.lgr.debug('SOMap getSOPid getCurrnetTaskLeader got %s for current pid %d' % (ppid, pid))
             if ppid != pid:
@@ -272,6 +275,8 @@ class SOMap():
                 else:
                     #self.lgr.debug('getSOPid no so map after get parent for %d' % pid)
                     retval = None
+            self.cheesy_pid = pid
+            self.cheesy_mapped = retval
         return retval
 
     def getSOFile(self, addr_in):
