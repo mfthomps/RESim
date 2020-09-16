@@ -259,14 +259,14 @@ class DataWatch():
                 if pc == mem_something.called_from_ip:
                     self.lgr.debug('walked back to ip recorded by mem_something 0x%x' % (mem_something.called_from_ip))
                     done = True
+                ''' 
                 elif self.decode.isCall(self.cpu, instruct[1]):
-                    ''' TBD Remove below, should never be reached '''
                     op1, op0 = self.decode.getOperands(instruct[1])
                     self.lgr.debug('walkAlone op1: %s  op0: %s' % (op1, op0))
                     if op0 == 'pc':
                         dest = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                     else:
-                        dest = self.decode.getValue(self.cpu, op0, self.lgr)
+                        dest = self.decode.getValue(op0, self.cpu, self.lgr)
                     if dest is not None:
                         if dest == fun:
                             done = True
@@ -281,6 +281,7 @@ class DataWatch():
                             self.lgr.debug('walkAlone is call to 0x%x, but not to function containing PC 0x%x' % (dest, pc))
                     else:
                         self.lgr.debug('wakAlone could not get call destination from %s' % instruct[1])
+                ''' 
                 if not done:
                     bound += 1
                     if bound > 50:
