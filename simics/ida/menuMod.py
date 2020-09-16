@@ -162,6 +162,16 @@ class TrackRegisterHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class SatisfyConditionHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.satisfyCondition()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class RunToUserSpaceHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -381,6 +391,12 @@ def register(isim):
         TrackRegisterHandler(isim),
         'Ctrl+Shift+r')
 
+    satisfy_condition_action = idaapi.action_desc_t(
+        'satsify_condition:action',
+        '^ satisfy condition', 
+        SatisfyConditionHandler(isim),
+        'Ctrl+Shift+c')
+
     run_to_user_action = idaapi.action_desc_t(
         'run_to_user:action',
         'Run to user space', 
@@ -470,6 +486,7 @@ def register(isim):
     idaapi.register_action(track_address_action)
     idaapi.register_action(wrote_register_action)
     idaapi.register_action(track_register_action)
+    idaapi.register_action(satisfy_condition_action)
     idaapi.register_action(run_to_user_action)
     idaapi.register_action(run_to_syscall_action)
     idaapi.register_action(resynch_action)
@@ -574,6 +591,10 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'track_register:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/',
+        'satisfy_condition:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',

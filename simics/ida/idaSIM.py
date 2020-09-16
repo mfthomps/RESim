@@ -336,6 +336,23 @@ class IdaSIM():
         self.showSimicsMessage()
         bookmark_list = self.bookmark_view.updateBookmarkView()
         return eip
+
+    def satisfyCondition(self): 
+        cursor = idaversion.get_screen_ea()
+        print('Satisfy condition at instruction 0x%x' % cursor)
+        command = "@cgc.satisfyCondition('0x%x')" % condition
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('satisfyCondition got simicsString %s' % simicsString)
+        eip = None
+        if self.checkNoRev(simicsString):
+            eip = gdbProt.getEIPWhenStopped()
+            self.signalClient()
+        else:
+            return
+        curAddr = idaversion.get_reg_value(self.PC)
+        self.showSimicsMessage()
+        bookmark_list = self.bookmark_view.updateBookmarkView()
+        return eip
      
     def chooseBookmark(self): 
         c=idaapi.Choose([], "select a bookmark", 1, deflt=self.recent_bookmark)

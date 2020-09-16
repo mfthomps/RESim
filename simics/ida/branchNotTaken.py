@@ -54,7 +54,7 @@ class BranchNotTaken(simplecustviewer_t):
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
         line = idaapi.tag_remove(line)
-        print('line is %s' % line)
+        #print('line is %s' % line)
         parts = line.split()
         branch_from  = None
         try:
@@ -63,7 +63,7 @@ class BranchNotTaken(simplecustviewer_t):
             print('branch from not found in %s' % line)
             return
         command = '@cgc.goToBasicBlock(0x%x)' % branch_from
-        print('cmd is %s' % command)
+        #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         eip = gdbProt.getEIPWhenStopped()
         self.isim.signalClient()

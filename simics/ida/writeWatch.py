@@ -77,7 +77,7 @@ class WriteWatch(simplecustviewer_t):
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
         line = idaapi.tag_remove(line)
-        print('line is %s' % line)
+        #print('line is %s' % line)
         parts = line.split()
         index = None
         try:
@@ -86,7 +86,7 @@ class WriteWatch(simplecustviewer_t):
             print('no index found in %s' % line)
             return
         command = '@cgc.goToWriteMark(%d)' % index
-        print('cmd is %s' % command)
+        #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         eip = gdbProt.getEIPWhenStopped()
         self.isim.signalClient()

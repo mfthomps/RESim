@@ -1,4 +1,5 @@
 import json
+from collections import OrderedDict 
 import os
 import idaapi
 import ida_graph
@@ -11,11 +12,17 @@ new_hit_color = 0x00ff00
 old_hit_color = 0x00ffcc 
 not_hit_color = 0x00ffff
 pre_hit_color = 0xccff00
-def getBB(graph, bb):
+def getBB(graph, bb_addr):
     for block in graph:
-        if block.start_ea <= bb and block.end_ea >= bb:
-            return block.id
+        if block.start_ea <= bb_addr and block.end_ea >= bb_addr:
+            return block
     return None
+def getBBId(graph, bb):
+    bb = getBB(graph, bb)
+    if bb is not None:
+        return bb.id
+    else:
+        return None
    
 
 def doColor(latest_hits_file, all_hits_file, pre_hits_file):
@@ -32,21 +39,26 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     ''' New hits '''
     p.bg_color =  new_hit_color
     num_new = 0
-    edges = {}
+    edges = OrderedDict()
     for fun in latest_hits_json:
         fun_addr = int(fun)
         f = idaapi.get_func(fun_addr)
         #print('fun addr 0x%x' % fun_addr)
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         ''' get edges leaving all hit blocks '''
-        for block in graph:
-            if block.start_ea in latest_hits_json[fun]:
+        ''' edges[branch_to] = branch_from '''
+        ''' retain order of hits in list of branches not taken '''
+        for bb_addr in latest_hits_json[fun]:
+            ''' get the BB and check its branch-to's '''
+            block = getBB(graph, bb_addr)
+            if block is not None:
                 for s in block.succs():
-                    if s.start_ea not in edges:
+                    if s.start_ea not in latest_hits_json[fun] and s.start_ea not in edges:
+                        ''' branch from block was not hit ''' 
                         edges[s.start_ea] = block.start_ea
-
+                                          
         for bb in latest_hits_json[fun]:
-            bb_id = getBB(graph, bb)
+            bb_id = getBBId(graph, bb)
             if bb_id is not None:
                 if bb != fun_addr:
                     bb_id += 1
@@ -60,12 +72,11 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
                     ''' also hit in earlier data session '''
                     p.bg_color =  old_hit_color
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                    print('old hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                    #print('old hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
                 else:
                     print('impossible')
                     exit(1)
-                if bb in edges:
-                    del edges[bb]
+
     print('Data run generated %d new hits' % num_new)
     print('Unhit edges')
 
@@ -80,13 +91,13 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
             continue
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         for bb in all_hits_json[fun]:
-            bb_id = getBB(graph, bb)
+            bb_id = getBBId(graph, bb)
             if bb_id is not None:
                 if bb != fun_addr:
                     bb_id += 1
                 if fun not in latest_hits_json or bb not in latest_hits_json[fun]:
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                    print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                    #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
 
     ''' Hit prior to start of any data session, i.e., IO setup '''
     p.bg_color =  pre_hit_color
@@ -96,7 +107,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         #print('fun addr 0x%x' % fun_addr)
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         for bb in pre_hits_json[fun]:
-            bb_id = getBB(graph, bb)
+            bb_id = getBBId(graph, bb)
             if bb_id is not None:
                 if bb != fun_addr:
                     bb_id += 1

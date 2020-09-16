@@ -44,8 +44,9 @@ for fun in fun_json:
     #print('fun addr 0x%x' % fun_addr)
     #print('fun is %s' % str(f))
     if f is None:
-        print('no function found for 0x%x' % fun_addr)
+        #print('no function found for 0x%x' % fun_addr)
         continue
+    print('doing function found for 0x%x' % fun_addr)
     graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
     for bb in graph:
         ida_graph.set_node_info(fun_addr, bb.id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
