@@ -1063,7 +1063,7 @@ class GenMonitor():
         phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
         proc_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
-        self.lgr.debug('toRunningProc  want pids %s set break at 0x%x' % (str(want_pid_list), phys_current_task))
+        self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x' % (str(want_pid_list), proc_break, phys_current_task))
         self.proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, proc_break)
         
         hap_clean = hapCleaner.HapCleaner(cpu)
@@ -1402,12 +1402,14 @@ class GenMonitor():
         self.pfamily.traceExecve(comm)
 
     def watchPageFaults(self, pid=None):
+        self.lgr.debug('watchPageFaults')
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
+        self.lgr.debug('stopWatchPageFaults')
         self.page_faults[self.target].stopWatchPageFaults(pid)
         self.page_faults[self.target].stopPageFaults()
 
@@ -1442,7 +1444,7 @@ class GenMonitor():
         pid = self.getBookmarkPid()
         return self.bookmarks.getFirstCycle()
 
-    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1):
+    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None):
         '''
         Runs backwards until a write to the given address is found.
         '''
@@ -1452,7 +1454,7 @@ class GenMonitor():
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite for 0x%x num bytes %d' % (addr, num_bytes))
             cell = self.cell_config.cell_context[self.target]
             self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, num_bytes) 
+                self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, num_bytes, satisfy_value=satisfy_value) 
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -1496,7 +1498,24 @@ class GenMonitor():
             bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
             self.bookmarks.setDebugBookmark(bm)
             self.context_manager[self.target].setIdaMessage('')
-            self.rev_to_call[self.target].doRevToModReg(reg, True)
+            self.rev_to_call[self.target].doRevToModReg(reg, taint=True)
+        else:
+            print('reverse execution disabled')
+            self.skipAndMail()
+
+    def satisfyCondition(self, pc):
+        ''' Assess a simple condition, modify input data to satisfy it '''
+        if self.reverseEnabled():
+            self.removeDebugBreaks()
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
+            eip = self.getEIP(cpu)
+            instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+            self.lgr.debug('satisfyCondition pc 0x%x' % pc)
+            track_num = self.bookmarks.setTrackNum()
+            bm='backtrack START:%d 0x%x inst:"%s" satsify condition' % (track_num, eip, instruct[1])
+            self.bookmarks.setDebugBookmark(bm)
+            self.context_manager[self.target].setIdaMessage('')
+            self.rev_to_call[self.target].satisfyCondition(pc)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -1836,6 +1855,7 @@ class GenMonitor():
             self.debugExitHap()
             self.context_manager[self.target].setExitBreaks()
             self.debug_breaks_set = True
+            self.watchPageFaults()
 
     def noWatchSysEnter(self):
         self.rev_to_call[self.target].noWatchSysenter()
@@ -2353,6 +2373,15 @@ class GenMonitor():
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
         self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
+        self.clearBookmarks()
+
+    def writeByte(self, address, value):
+        ''' NOTE: wipes out bookmarks! '''
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.mem_utils[self.target].writeByte(cpu, address, value)
+        #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+        #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
+        self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
         self.clearBookmarks()
 
     def writeString(self, address, string):
