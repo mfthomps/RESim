@@ -43,7 +43,7 @@ def getRegValue(cpu, reg):
     reg_value = cpu.iface.int_register.read(reg_num)
     return reg_value
 
-def getValue(cpu, item, lgr=None):
+def getValue(item, cpu, lgr=None):
     value = None
     if lgr is not None:
         lgr.debug('getValue for <%s>' % item)
@@ -91,7 +91,7 @@ def getAddressFromOperand(cpu, op, lgr):
         value = 0
         parts = express.split(',')
         for p in parts:
-            v = getValue(cpu, p.strip(), lgr=lgr) 
+            v = getValue(p.strip(), cpu, lgr=lgr) 
             if v is not None:
                 value += v
             else:
