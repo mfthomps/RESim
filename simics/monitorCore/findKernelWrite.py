@@ -35,7 +35,8 @@ import time
     If the memory is written by user space, stop there.
 '''
 class findKernelWrite():
-    def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1):
+    def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, 
+                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -62,7 +63,9 @@ class findKernelWrite():
         self.stop_exit_hap = None
         self.forward_hap = None
         self.cell = cell
+        self.satisfy_value = satisfy_value
         self.memory_transaction = None
+        self.rev_write_hap = None
         if cpu.architecture == 'arm':
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
@@ -103,15 +106,37 @@ class findKernelWrite():
 
         #### Make a stop hap.  Note you cannot reliably create a breakpoint hap for running backwards,
         #### because it gets hit an undefined number of times.
-        SIM_run_alone(self.addStopHapForWriteAlone, my_args)
+        #SIM_run_alone(self.addStopHapForWriteAlone, my_args)
+        self.lgr.debug('added rev_write_hap')
+        self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
+
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite)' % (self.kernel_write_break))
-        #SIM_run_alone(SIM_run_command, 'reverse')
+        SIM_run_alone(SIM_run_command, 'reverse')
 
-    def addStopHapForWriteAlone(self, my_args):
+    def vt_handler(self, logical_address):
+        offset = 0
+        if logical_address != self.addr:
+            offset = self.addr - logical_address
+        self.lgr.debug('vt_handler, logical_address is 0x%x offset: %d cycle: 0x%x' % (logical_address, offset, self.cpu.cycles))
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.rev_write_hap)
+        self.rev_write_hap = None 
+        SIM_run_alone(self.addStopHapForWriteAlone, offset)
+        SIM_break_simulation('vt_handler')
+
+    def revWriteCallback(self, cpu, third, forth, memory):
+        if self.rev_write_hap is None:
+            return
+        location = memory.logical_address
+        phys = memory.physical_address
+        self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x' % (location, phys, memory.size, self.cpu.cycles))
+        VT_in_time_order(self.vt_handler, location)
+
+    def addStopHapForWriteAlone(self, offset):
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.stopToCheckWriteCallback, my_args)
-        SIM_run_command('reverse')
+		    self.stopToCheckWriteCallback, offset)
+        #SIM_run_command('reverse')
+        self.lgr.debug('addStopHapForWriteAlone')
 
 
     def writeCallback(self, cpu, third, forth, memory):
@@ -127,9 +152,9 @@ class findKernelWrite():
         self.lgr.debug('writeCallback location 0x%x phys 0x%x len %d  type %s' % (location, physical, length, type_name))
 
         self.lgr.debug('writeCallback')
-        SIM_run_alone(self.thinkWeWrote, None)
+        SIM_run_alone(self.thinkWeWrote, 0)
 
-    def stopToCheckWriteCallback(self, my_args, one, exception, error_string):
+    def stopToCheckWriteCallback(self, offset, one, exception, error_string):
         self.lgr.debug('stopToCheckWriteCallback, params %s %s %s' % (one, exception, error_string))
         eip = self.top.getEIP(self.cpu)
         if self.forward is not None and eip == self.forward_eip:
@@ -142,7 +167,7 @@ class findKernelWrite():
                 self.forward_break = None
             return
          
-        SIM_run_alone(self.thinkWeWrote, None)
+        SIM_run_alone(self.thinkWeWrote, offset)
 
     def checkWriteValue(self, eip):
         retval = True
@@ -190,6 +215,8 @@ class findKernelWrite():
         else:
             value = self.mem_utils.readMemory(self.cpu, self.addr, self.memory_transaction.size)
         #value = self.mem_utils.readWord32(self.cpu, self.addr)
+        do_satisfy = False
+        data_watch = None
         if value is None:
             ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
             bm = "eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
@@ -214,13 +241,24 @@ class findKernelWrite():
                     ida_message = 'Kernel wrote to user space address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
                     bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
-                self.lgr.debug('set ida msg to %s' % ida_message)
-        if bm is not None:
-            self.bookmarks.setBacktrackBookmark(bm)
-        self.context_manager.setIdaMessage(ida_message)
-        SIM_run_alone(self.cleanup, False)
-        self.top.skipAndMail()
-
+                if self.satisfy_value is not None:
+                    self.lgr.debug(ida_message)
+                    do_satisfy = True
+        if not do_satisfy:                 
+        
+            if bm is not None:
+                self.bookmarks.setBacktrackBookmark(bm)
+            self.lgr.debug('set ida msg to %s' % ida_message)
+            self.context_manager.setIdaMessage(ida_message)
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+        else:
+            self.lgr.debug('findKernelWrite satisfy condition set addr 0x%x to 0x%x' % (self.addr, self.satisfy_value))
+            SIM_run_alone(self.cleanup, False)
+            self.top.restoreDebugBreaks()
+            self.top.writeByte(self.addr, self.satisfy_value)
+            #self.top.retrack()
+               
     def stopExit(self, cycles, one, exception, error_string):
         ''' stopped after hitting exit after write by kernel to desired address '''
         if self.stop_exit_hap is None:
@@ -264,7 +302,7 @@ class findKernelWrite():
     ''' We stopped, presumably because target address was written.  If in the kernel, set break on return
         address and continue to user space.
     '''
-    def thinkWeWrote(self, dumb):
+    def thinkWeWrote(self, offset):
         #if self.stop_write_hap is None:
         #    return
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -375,7 +413,7 @@ class findKernelWrite():
                 self.top.skipAndMail(cycles=2)
             else:
                 self.lgr.debug('thinkWeWrote, call backOneAlone')
-                SIM_run_alone(self.backOneAlone, None)
+                SIM_run_alone(self.backOneAlone, offset)
             #self.top.skipAndMail()
             #previous = SIM_cycle_count(my_args.cpu) - 1
             #SIM_run_alone(SIM_run_command, 'skip-to cycle=%d' % previous)
@@ -385,7 +423,7 @@ class findKernelWrite():
             
             self.context_manager.setExitBreaks()
 
-    def backOneAlone(self, dum):
+    def backOneAlone(self, offset):
         current = SIM_cycle_count(self.cpu)
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -422,7 +460,7 @@ class findKernelWrite():
                 self.lgr.error('failed to get op0 address from %s' % instruct[1])
                 return
             offset = self.addr - actual_addr
-            self.lgr.debug('stopToCheckWriteCallback cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
+            self.lgr.debug('backOneAlone cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
                  op0, op1, actual_addr, self.addr, offset))
             if self.decode.isIndirect(op1):
                 reg_num = self.cpu.iface.int_register.get_number(op1)
@@ -479,14 +517,14 @@ class findKernelWrite():
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
             if reg is not None:
                 self.lgr.debug('backOneAlone is str... reg %s, find mod', reg)
-                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes)
+                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes, offset=offset)
 
         else:
             self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
 
-    def cleanup(self, rm_break = False):
+    def cleanup(self, dumb = False):
         self.found_kernel_write = False
         if self.kernel_write_break is not None:
             self.lgr.debug('findKernelWrite cleanup deleting hap and breakpoint %d' % self.kernel_write_break)
