@@ -523,6 +523,12 @@ class memUtils():
         #SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
         SIM_write_phys_memory(cpu, phys, value, self.WORD_SIZE)
 
+    def writeByte(self, cpu, address, value):
+        #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
+        phys = self.v2p(cpu, address)
+        #SIM_write_phys_memory(cpu, phys_block.address, value, self.WORD_SIZE)
+        SIM_write_phys_memory(cpu, phys, value, 1)
+
     def writeWord32(self, cpu, address, value):
         phys = self.v2p(cpu, address)
         SIM_write_phys_memory(cpu, phys, value, 4)
