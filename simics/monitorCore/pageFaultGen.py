@@ -145,6 +145,8 @@ class PageFaultGen():
             SIM_run_alone(self.hapAlone, prec)
 
     def pageFaultHap(self, compat32, third, forth, memory):
+        if self.fault_hap is None:
+            return
         #cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultHap pid:%d third: %s  forth: %s' % (pid, str(third), str(forth)))
         SIM_run_alone(self.pageFaultHapAlone, compat32)
@@ -243,7 +245,7 @@ class PageFaultGen():
     def watchPageFaults(self, pid=None, compat32=False):
         self.debugging_pid = pid
         if self.cpu.architecture == 'arm':
-            #self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
+            self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
             ''' note page_fault is prefect abort '''
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             proc_break2 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
@@ -252,7 +254,7 @@ class PageFaultGen():
             #self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
             #         self.faultCallback, self.cpu, 0, 13) 
         else:
-            #self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
+            self.lgr.debug('watchPageFaults not arm set break at 0x%x' % self.param.page_fault)
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             ''' TBD catch illegal instruction '''
@@ -349,6 +351,7 @@ class PageFaultGen():
     def skipAlone(self, prec):
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
+        self.lgr.debug('pageFaultGen skipAlone')
         if self.debugging_pid is not None:
             target_cycles = prec.cycles - 1
             self.lgr.debug('skipAlone skip to 0x%x' % target_cycles)
