@@ -503,10 +503,15 @@ class GenContextMgr():
                     self.stopWatchTasks()
                     retval = True
                 else:
-                    self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
-                    self.debugging_pid = pids[0]
-                    ''' replace SOMap pid with new one from fork '''
-                    self.top.swapSOPid(pid, pids[0])
+                    if self.top.swapSOPid(pid, pids[0]):
+                        self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
+                        ''' replace SOMap pid with new one from fork '''
+                        self.debugging_pid = pids[0]
+                    else:
+                        ''' TBD poor hueristic for deciding it was not a fork '''
+                        self.cpu.current_context = self.default_context
+                        self.stopWatchTasks()
+                        retval = True
             elif pid == self.debugging_pid:
                 self.debugging_pid = self.pid_cache[0]
                 self.lgr.debug('rmTask debugging_pid now %d' % self.debugging_pid)
@@ -687,15 +692,19 @@ class GenContextMgr():
                 self.addTask(add_task)
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
+            if self.pageFaultGen is not None:
+                self.pageFaultGen.handleExit(lead_pid)
         else:
             self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
+            if self.pageFaultGen is not None:
+                self.pageFaultGen.handleExit(lead_pid)
 
     def deadParrot(self, pid):
         ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
         exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
         if exit_syscall is not None and not self.watching_page_faults:
             ida_msg = 'pid:%d exit via kill?' % pid
-            self.lgr.debug('contextManager resetAlone pid:%d rec no longer found call killGroup' % (pid))
+            self.lgr.debug('contextManager deadParrot pid:%d rec no longer found call killGroup' % (pid))
             self.killGroup(pid, exit_syscall)
             #exit_syscall.handleExit(pid, ida_msg, killed=True)
         else:
@@ -771,12 +780,15 @@ class GenContextMgr():
             return
         cell = self.default_context
         #cell = self.resim_context
-        self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
-        #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
-        #self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
-        #     list_addr, pid, str(cell)))
-        #self.task_rec_hap[pid] = self.genHapIndex("Core_Breakpoint_Memop", self.taskRecHap, pid, bp)
-        self.task_rec_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
+        if pid not in self.task_rec_bp:
+            self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
+            #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
+            self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
+                 list_addr, pid, str(cell)))
+            #self.task_rec_hap[pid] = self.genHapIndex("Core_Breakpoint_Memop", self.taskRecHap, pid, bp)
+            self.task_rec_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
+        else:
+            self.lgr.debug('contextManager watchExit, already watching for pid %d' % pid)
 
     def setExitBreaks(self):
         #self.lgr.debug('contextManager setExitBreaks')
