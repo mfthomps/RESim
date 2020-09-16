@@ -103,6 +103,7 @@ class reverseToCall():
             self.save_cycle = None
             self.save_reg_mod = None
             self.ida_funs = None
+            self.satisfy_value = None
 
     def getStartCycles(self):
         return self.start_cycles
@@ -755,7 +756,7 @@ class reverseToCall():
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
                         #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
                         if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg):
-                            self.lgr.debug('cycleRegisterMod at %x, we are done' % eip)
+                            self.lgr.debug('cycleRegisterMod at %x, we are done, type is unknown' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
@@ -767,6 +768,7 @@ class reverseToCall():
                                     self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('mov') and self.decode.isReg(op1):
+                                self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
                             elif mn.startswith('add') or mn.startswith('sub'):
                                 parts = op1.split(',') 
@@ -775,15 +777,18 @@ class reverseToCall():
                                    if self.decode.isReg(rn):
                                        op2 = parts[1].strip()
                                        if not self.decode.isReg(op2):
+                                           self.lgr.debug('cycleRegisterMod type is reg op2 not reb')
                                            retval = RegisterModType(rn, RegisterModType.REG)
                                        else: 
                                            op2_val = self.top.getReg(op2, self.cpu) 
                                            if op2_val == self.reg_val:
                                                retval = RegisterModType(op2, RegisterModType.REG)
+                                               self.lgr.debug('cycleRegisterMod type is reg')
                                            else:
                                                rn_val = self.top.getReg(rn, self.cpu) 
                                                if rn_val == self.reg_val:
                                                    retval = RegisterModType(rn, RegisterModType.REG)
+                                                   self.lgr.debug('cycleRegisterMod type is reg')
                                 
                     elif self.cpu.architecture == 'arm': 
                         if ']!' in instruct[1]:
@@ -791,6 +796,7 @@ class reverseToCall():
                             ''' for now just look for [myreg, xxx]! '''
                             if self.decode.armWriteBack(instruct[1], self.reg):
                                 done = True
+                                self.lgr.debug('cycleRegisterMod armWriteBack, set type to unknown')
                                 retval = RegisterModType(None, RegisterModType.UNKNOWN)
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
@@ -884,14 +890,15 @@ class reverseToCall():
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('followTaintArm %s' % instruct[1])
+        self.lgr.debug('followTaintArm reg_mod_type: %s' % str(reg_mod_type))
         if reg_mod_type is not None:
             if reg_mod_type.mod_type == RegisterModType.ADDR:
-                address = reg_mod_type.value
+                address = reg_mod_type.value + self.offset
                 value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.cleanup(self.cpu)
-                self.top.stopAtKernelWrite(address, self)
+                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.doRevToModReg(reg_mod_type.value, taint=True)
@@ -932,7 +939,7 @@ class reverseToCall():
             esp = self.top.getReg('esp', self.cpu) 
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
             self.cleanup(self.cpu)
-            self.top.stopAtKernelWrite(esp, self)
+            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value)
 
         elif self.decode.isReg(op1) and not self.decode.isIndirect(op1):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
@@ -956,21 +963,15 @@ class reverseToCall():
                 else:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
-                protected_memory = ''
-                if self.top.isProtectedMemory(newvalue):
-                    protected_memory = ' protected'
                 self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
-                    self.bookmarks.setBacktrackBookmark('taint branch %s eip:0x%x inst:%s' % (protected_memory, eip, instruct[1]))
-                    self.lgr.debug('BT bookmark: taint branch %s eip:0x%x inst %s' % (protected_memory, eip, instruct[1]))
+                    self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
+                    self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
                 else:
-                    self.bookmarks.setBacktrackBookmark('%s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
-                    self.lgr.debug('BT bookmark: backtrack %s eip:0x%x inst:"%s"' % (protected_memory, eip, instruct[1]))
+                    self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                    self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.cleanup(self.cpu)
-                if len(protected_memory) == 0:
-                    self.top.stopAtKernelWrite(newvalue, self)
-                else:
-                    self.top.skipAndMail()
+                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
@@ -1237,3 +1238,14 @@ class reverseToCall():
                 retval = self.sysenter_cycles[pid][cycles] 
                 ret_cycles = cycles
         return retval, ret_cycles
+
+    def satisfyCondition(self, pc):
+        instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
+        mn = self.decode.getMn(instruct[1])
+        op1, op0 = self.decode.getOperands(instruct[1])
+        self.lgr.debug('satisfyCondition mn is %s op0: %s op1: %s' % (mn, op0, op1))
+        val = self.decode.getValue(op1, self.cpu, self.lgr)
+        if self.decode.isReg(op0) and mn == 'cmp':
+            self.lgr.debug('satisfyCondition, val is 0x%x' % val) 
+            self.satisfy_value = val
+            self.doRevToModReg(op0, taint=True)
