@@ -97,11 +97,18 @@ class SOMap():
 
     def swapPid(self, old, new):
         ''' intended for when original process exits following a fork '''
-        self.text_start[new] = self.text_start[old]
-        self.text_end[new] = self.text_end[old]
-        self.text_prog[new] = self.text_prog[old]
-        self.so_addr_map[new] = self.so_addr_map[old]
-        self.so_file_map[new] = self.so_file_map[old]
+        ''' TBD, half-assed logic for deciding if procs were all really deleted '''
+        retval = True
+        if new in self.text_start:
+            self.text_start[new] = self.text_start[old]
+            self.text_end[new] = self.text_end[old]
+            self.text_prog[new] = self.text_prog[old]
+            self.so_addr_map[new] = self.so_addr_map[old]
+            self.so_file_map[new] = self.so_file_map[old]
+        else:
+            self.lgr.debug('soMap swappid pid %d not in text_start' % old)
+            retval = False
+        return retval
 
     def addText(self, start, size, prog, pid):
         self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
