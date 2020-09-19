@@ -282,4 +282,6 @@ class Coverage():
             SIM_run_command(cmd)
             #self.lgr.debug('coverage skipped to 0x%x' % self.cpu.cycles)
             retval = self.cpu.cycles
+        else:
+            self.lgr.debug('coverage goToBasicBlock 0x%x not in blocks_hit' % addr)
         return retval 
