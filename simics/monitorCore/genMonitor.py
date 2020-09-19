@@ -2357,6 +2357,7 @@ class GenMonitor():
         self.stopTrackIO()
         self.dataWatch[self.target].clearWatches(cpu.cycles)
         self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
+        self.rev_to_call[self.target].resetStartCycles()
         return True
 
     def writeRegValue(self, reg, value):
@@ -2731,6 +2732,8 @@ class GenMonitor():
         self.restoreDebugBreaks(was_watching=True)
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
+        else:
+            print('addres 0x%x not in blocks hit' % addr)
         return cycle
        
     def mft4(self, pid): 

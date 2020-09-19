@@ -108,6 +108,9 @@ class reverseToCall():
     def getStartCycles(self):
         return self.start_cycles
 
+    def resetStartCycles(self):
+        self.start_cycles = self.cpu.cycles
+
     def noWatchSysenter(self):
         if self.enter_break1 is not None:
             self.lgr.debug('noWatchSystenter, remove sysenter breaks and hap')
@@ -1240,6 +1243,7 @@ class reverseToCall():
         return retval, ret_cycles
 
     def satisfyCondition(self, pc):
+        ''' See the findKernelWrite skipAlone function for memory mod and retrack call '''
         instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
         mn = self.decode.getMn(instruct[1])
         op1, op0 = self.decode.getOperands(instruct[1])
