@@ -179,13 +179,17 @@ class DataWatch():
             self.watch()
        
     class MemSomething():
-        def __init__(self, fun, ret_ip, src, dest, count, called_from_ip): 
+        def __init__(self, fun, ret_ip, src, dest, count, called_from_ip, op_type, length, start): 
             self.fun = fun
             self.ret_ip = ret_ip
             self.src = src
             self.dest = dest
             self.count = count
             self.called_from_ip = called_from_ip
+            ''' used for finishReadHap '''
+            self.op_type = op_type
+            self.length = length
+            self.start = start
       
     def returnHap(self, mem_something, third, forth, memory):
         if self.return_hap is None:
@@ -235,6 +239,7 @@ class DataWatch():
         self.watch()
 
     def walkAlone(self, mem_something):        
+        begin_cycle = self.cpu.cycles
         if self.ida_funs is not None:
             #self.top.stopThreadTrack()
             #self.top.stopWatchPageFaults()
@@ -285,7 +290,14 @@ class DataWatch():
                 if not done:
                     bound += 1
                     if bound > 50:
-                        print('call not found all all that')
+                        cmd = 'skip-to cycle = %d ' % begin_cycle
+                        SIM_run_command(cmd)
+                        eip = self.top.getEIP(self.cpu)
+                        self.lgr.debug('walk back to ip failed, maybe ghost frame, returned to 0x%x and finish the read hap' % eip)
+                        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+                        self.watch()
+                        self.finishReadHap(mem_something.op_type, eip, mem_something.src, mem_something.length, mem_something.start, pid)
+                        SIM_run_command('c')
                         return
             
             self.top.restoreDebugBreaks()
@@ -400,7 +412,38 @@ class DataWatch():
                 self.lgr.debug('getStartLength replaced buffer start %x with %x' % (hap_start, ret_start))
                 break
         return ret_start, ret_length
-                
+    
+    
+    def finishReadHap(self, op_type, eip, addr, length, start, pid):
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        offset = addr - start
+        cpl = memUtils.getCPL(self.cpu)
+        if op_type == Sim_Trans_Load:
+            self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
+                    offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
+            msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
+                        offset, length, start, eip))
+            self.context_manager.setIdaMessage(msg)
+            self.watchMarks.dataRead(addr, start, length, self.getCmp())
+            if self.break_simulation:
+                SIM_break_simulation('DataWatch read data')
+
+            if cpl == 0:
+                if not self.break_simulation:
+                    self.stopWatch()
+                SIM_run_alone(self.kernelReturn, addr)
+
+        elif cpl > 0:
+            self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
+            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
+            if self.break_simulation:
+                ''' TBD when to treat buffer as unused?  does it matter?'''
+                self.start[index] = 0
+                SIM_break_simulation('DataWatch written data')
+        elif self.retrack:
+            self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here.' % (addr, offset, length, start, pid, eip))
+            self.stopWatch()
+
     def readHap(self, index, third, forth, memory):
         ''' watched data has been read (or written) '''
         if self.prev_cycle is None:
@@ -436,7 +479,6 @@ class DataWatch():
             SIM_run_alone(self.setStopHap, None)
 
         start, length = self.getStartLength(index, addr) 
-        offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         #start, end = self.context_manager.getText()
@@ -458,37 +500,13 @@ class DataWatch():
             if mem_stuff is not None:
                 self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
                 ''' src is the referenced memory address by default ''' 
-                mem_something = self.MemSomething(mem_stuff.fun, mem_stuff.ret_addr, addr, None, None, mem_stuff.called_from_ip)
+                mem_something = self.MemSomething(mem_stuff.fun, mem_stuff.ret_addr, addr, None, None, mem_stuff.called_from_ip, op_type, length, start)
                 SIM_run_alone(self.handleMemStuff, mem_something)
+                return
             else:
                 self.lgr.debug('DataWatch readHap not memsomething, reset the watch')
                 self.watch()
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        if op_type == Sim_Trans_Load:
-            self.lgr.debug('Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
-                    offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
-            msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
-                        offset, length, start, eip))
-            self.context_manager.setIdaMessage(msg)
-            self.watchMarks.dataRead(addr, start, length, self.getCmp())
-            if self.break_simulation:
-                SIM_break_simulation('DataWatch read data')
-
-            if cpl == 0:
-                if not self.break_simulation:
-                    self.stopWatch()
-                SIM_run_alone(self.kernelReturn, addr)
-
-        elif cpl > 0:
-            self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
-            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
-            if self.break_simulation:
-                ''' TBD when to treat buffer as unused?  does it matter?'''
-                self.start[index] = 0
-                SIM_break_simulation('DataWatch written data')
-        elif self.retrack:
-            self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here.' % (addr, offset, length, start, pid, eip))
-            self.stopWatch()
+        self.finishReadHap(op_type, eip, addr, length, start, pid)
  
        
     def showWatch(self):
