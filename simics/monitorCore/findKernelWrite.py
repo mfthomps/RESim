@@ -257,7 +257,7 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             self.top.restoreDebugBreaks()
             self.top.writeByte(self.addr, self.satisfy_value)
-            #self.top.retrack()
+            self.top.retrack()
                
     def stopExit(self, cycles, one, exception, error_string):
         ''' stopped after hitting exit after write by kernel to desired address '''
