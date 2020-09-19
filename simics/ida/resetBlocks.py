@@ -5,7 +5,7 @@ import ida_gdl
 import idaversion
 def getBB(graph, bb):
     for block in graph:
-        if block.start_ea <= bb and block.end_ea >= bb:
+        if block.start_ea <= bb and block.end_ea > bb:
             return block.id
     return None
 

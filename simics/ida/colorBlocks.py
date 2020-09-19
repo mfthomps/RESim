@@ -14,7 +14,7 @@ not_hit_color = 0x00ffff
 pre_hit_color = 0xccff00
 def getBB(graph, bb_addr):
     for block in graph:
-        if block.start_ea <= bb_addr and block.end_ea >= bb_addr:
+        if block.start_ea <= bb_addr and block.end_ea > bb_addr:
             return block
     return None
 def getBBId(graph, bb):
@@ -53,20 +53,20 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
             block = getBB(graph, bb_addr)
             if block is not None:
                 for s in block.succs():
-                    if s.start_ea not in latest_hits_json[fun] and s.start_ea not in edges:
+                    if s.start_ea not in latest_hits_json[fun] and not (fun in pre_hits_json and s.start_ea in pre_hits_json[fun]) and s.start_ea not in edges:
+                        #print('added edges[0%x] block 0x%x block.end_ea 0x%x bb_addr was 0x%x ' % (s.start_ea, block.start_ea, block.end_ea, bb_addr))
                         ''' branch from block was not hit ''' 
                         edges[s.start_ea] = block.start_ea
                                           
         for bb in latest_hits_json[fun]:
-            bb_id = getBBId(graph, bb)
-            if bb_id is not None:
-                if bb != fun_addr:
-                    bb_id += 1
+            block = getBB(graph, bb)
+            if block is not None:
+                bb_id = block.id
                 if fun not in all_hits_json or bb not in all_hits_json[fun]:
                     ''' first time bb has been hit in any data session '''
                     p.bg_color =  new_hit_color
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                    print('new hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                    print('new hit fun 0x%x bb: 0x%x bb_id: %d block.start_ea 0x%x end 0x%x' % (fun_addr, bb, bb_id, block.start_ea, block.end_ea))
                     num_new += 1
                 elif bb in all_hits_json[fun]:
                     ''' also hit in earlier data session '''
@@ -93,8 +93,6 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         for bb in all_hits_json[fun]:
             bb_id = getBBId(graph, bb)
             if bb_id is not None:
-                if bb != fun_addr:
-                    bb_id += 1
                 if fun not in latest_hits_json or bb not in latest_hits_json[fun]:
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
                     #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
@@ -109,8 +107,6 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         for bb in pre_hits_json[fun]:
             bb_id = getBBId(graph, bb)
             if bb_id is not None:
-                if bb != fun_addr:
-                    bb_id += 1
                 if (fun not in latest_hits_json or bb not in latest_hits_json[fun]) and (fun not in all_hits_json or bb not in all_hits_json[fun]):
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
                     #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))

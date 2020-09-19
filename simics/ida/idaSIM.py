@@ -340,7 +340,7 @@ class IdaSIM():
     def satisfyCondition(self): 
         cursor = idaversion.get_screen_ea()
         print('Satisfy condition at instruction 0x%x' % cursor)
-        command = "@cgc.satisfyCondition('0x%x')" % condition
+        command = "@cgc.satisfyCondition(0x%x)" % cursor
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         print('satisfyCondition got simicsString %s' % simicsString)
         eip = None

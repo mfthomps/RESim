@@ -392,7 +392,7 @@ def register(isim):
         'Ctrl+Shift+r')
 
     satisfy_condition_action = idaapi.action_desc_t(
-        'satsify_condition:action',
+        'satisfy_condition:action',
         '^ satisfy condition', 
         SatisfyConditionHandler(isim),
         'Ctrl+Shift+c')
@@ -549,51 +549,51 @@ def attach():
         'retrack:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'run_to_io:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'run_to_bind:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'run_to_accept:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'run_to_connect:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'run_to_text:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/runTo/',
         'rev_to_text:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'do_wrote_to_sp:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'do_wrote_to_address:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'track_address:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'wrote_register:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'track_register:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
+        'Debugger/ReSIM/backtrack/',
         'satisfy_condition:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
