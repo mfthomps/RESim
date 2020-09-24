@@ -92,7 +92,8 @@ class Coverage():
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
-        self.lgr.debug('bbHap, len bb_hap %d' % len(self.bb_hap))
+        addr = memory.logical_address
+        self.lgr.debug('bbHap, len bb_hap %d address: 0x%x' % (len(self.bb_hap), addr))
         if self.context_manager.watchingThis() and len(self.bb_hap) > 0:
             addr = memory.logical_address
             if addr not in self.blocks_hit:
