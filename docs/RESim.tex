@@ -443,9 +443,10 @@ The {\tt eth1} cli name is assigned to the motherboard ethernet slot. the eth0, 
 \subsection{Driver component}
 Each simulation can have an optional driver component -- designated by assigning the string {\tt driver} to the corresponding
 section header.  This component will be created first, and other components will not be created until the driver has
-caused a file named {\tt driver-ready.flag} is created within the workspace directory.  Use the Simics Agent to 
+caused a file named {\tt driver-ready.flag} to be created within the workspace directory.  Use the Simics Agent to 
 create that file from the driver computer.  This requires you copy the Simics agent onto the target and get it to run
-upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.
+upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.  See section
+\ref{driver} for information on updating driver platforms.
 
 \section{Running the simulation}
 RESim sessions are started from the Simics workspace using the \$RESIM/simics/monitorCore/launchRESim.py program,
@@ -454,7 +455,7 @@ set in a bash script, an example of which is in
 \begin{verbatim}
 $RESIM/simics/workspace/monitor.sh
 \end{verbatim}
-\noindent Modify that script to name the path to your RESim repo.
+\noindent Modify that script to name the path to your RESim repo. (The {\tt montitor5.sh} version works with Simics 5.)
 
 \subsection{Installation}
 RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8 and 5.0 are supported.
@@ -934,13 +935,16 @@ route add default gw 10.10.0.1
 echo nameserver 10.10.0.1 > /etc/resolv.conf
 \end{verbatim}
 
+\subsection{Driver platforms}
+\label{driver}
 If building a new driver, use the DRIVER\_WAIT directive in the ini file to prevent RESim from waiting for the driver to finish 
 (the driver\_ready.flag) -- at least until you finish configuring a driver.
 
-\section{Driver platforms}
 The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.ini} example has the Simics Agent pre-installed.  The
 {\tt driver-script.sh} in that directory can be copied and modified within your workspace.  The driver will download that shell script and execute
 it when booting.  Your target will not boot until that script finishes (and creates the driver-ready.flag file).
+
+The username and password for that driver are mike/password.  Use {\tt enable-real-time-mode} to avoid login timeouts and network timeouts.
 
 To update the driver, e.g., with new packages, use the driver.ini configuration.  Then use mapdriver.simics to connect to the real network.
 You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and the do\_merge.sh to
@@ -952,6 +956,13 @@ these only happen one file at a time, so use tar.
 Add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
 driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
 and execute the driver-script.sh from the workspace.
+
+\subsubsection{Notes on driver}
+Wind River is not very good at networking, as a result, the real-network connect used to update the driver can often stall/hang.
+Be prepared to kill apt-gets and retry multiple times.  It will eventually work.
+
+The Python world uses SSL certificates in a manner that leads to breakage.  If pip fils on SSL validation, use the -v option
+to find which new python.org server is causing the problem, and use the --trusted-host dog.pythonwhatever.org option on pip.
 
 \section{Simics user notes}
 This section includes ad-hoc suggestions for users with little Simics experience.
