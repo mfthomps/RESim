@@ -46,7 +46,6 @@ class findKernelWrite():
         self.context_manager = context_manager
         self.dataWatch = dataWatch
         self.cpu = cpu
-        self.start_cycle = cpu.cycles
         self.found_kernel_write = False
         self.rev_to_call = rev_to_call
         self.addr = addr
@@ -66,6 +65,26 @@ class findKernelWrite():
         self.satisfy_value = satisfy_value
         self.memory_transaction = None
         self.rev_write_hap = None
+
+        ''' handle case where address is in the initial data watch buffer, but only if that is
+            not a true kernel write '''
+        range_index = self.dataWatch.findRangeIndex(addr)
+        if range_index == 0:
+            ''' Is initial data watch buffer.'''
+            self.lgr.debug('findKernelWrite, addr 0x%x in initial dataWatch range')
+            cycle = self.watchMarks.getCycle(0)
+            if rev_to_call is None:
+                self.lgr.debug('findKernelWrite, rev_to_call is None')
+            else:
+                self.rev_to_call.skipToTest(cycle)
+    
+                if satisfy_value is not None:
+                    self.top.restoreDebugBreaks()
+                    self.top.writeByte(addr, satisfy_value)
+                    self.top.retrack()
+                else:
+                    self.top.skipAndMail()
+                return
         if cpu.architecture == 'arm':
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
@@ -127,10 +146,18 @@ class findKernelWrite():
     def revWriteCallback(self, cpu, third, forth, memory):
         if self.rev_write_hap is None:
             return
-        location = memory.logical_address
-        phys = memory.physical_address
-        self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x' % (location, phys, memory.size, self.cpu.cycles))
-        VT_in_time_order(self.vt_handler, location)
+        orig_cycle = self.bookmarks.getFirstCycle()
+        if self.cpu.cycles == orig_cycle:
+            ida_message = 'revWriteCallback reversed to earliest bookmark'
+            self.lgr.debug(ida_message)
+            self.context_manager.setIdaMessage(ida_message)
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+        else:
+            location = memory.logical_address
+            phys = memory.physical_address
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x' % (location, phys, memory.size, self.cpu.cycles))
+            VT_in_time_order(self.vt_handler, location)
 
     def addStopHapForWriteAlone(self, offset):
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 

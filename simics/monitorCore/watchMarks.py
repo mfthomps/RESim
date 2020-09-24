@@ -46,7 +46,10 @@ class WatchMarks():
     class DataMark():
         def __init__(self, addr, start, length, cmp_ins):
             self.addr = addr
-            self.offset = addr - start
+            if addr is not None:
+                self.offset = addr - start
+            else:
+                self.offset = None
             self.start = start
             self.length = length
             self.cmp_ins = cmp_ins
@@ -54,7 +57,9 @@ class WatchMarks():
             self.loop_count = 0
 
         def getMsg(self):
-            if self.end_addr is None:
+            if self.addr is None:
+                mark_msg = 'Memory mod, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
+            elif self.end_addr is None:
                 mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
                 length = self.end_addr- self.addr + 1
@@ -123,7 +128,13 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
         self.recordIP(ip)
-   
+  
+    def memoryMod(self, start, length):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        dm = self.DataMark(None, start, length, None)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
+        self.lgr.debug('watchMarks memoryMod 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+ 
     def dataRead(self, addr, start, length, cmp_ins): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         ''' TBD generalize for loops that make multiple refs? '''

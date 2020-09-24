@@ -1244,12 +1244,20 @@ class reverseToCall():
 
     def satisfyCondition(self, pc):
         ''' See the findKernelWrite skipAlone function for memory mod and retrack call '''
+        retval = True
         instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
         mn = self.decode.getMn(instruct[1])
         op1, op0 = self.decode.getOperands(instruct[1])
-        self.lgr.debug('satisfyCondition mn is %s op0: %s op1: %s' % (mn, op0, op1))
         val = self.decode.getValue(op1, self.cpu, self.lgr)
-        if self.decode.isReg(op0) and mn == 'cmp':
+        self.lgr.debug('satisfyCondition mn is %s op0: %s op1: %s' % (mn, op0, op1))
+        if self.decode.isReg(op0) and mn == 'cmp' and val is not None:
             self.lgr.debug('satisfyCondition, val is 0x%x' % val) 
             self.satisfy_value = val
             self.doRevToModReg(op0, taint=True)
+        else:
+            if val is None:
+                self.lgr.error('Cannot get val from %s' % op1)
+            else:
+                self.lgr.error('Cannot yet handle condition %s' % instruct[1])
+            retval = False
+        return retval 

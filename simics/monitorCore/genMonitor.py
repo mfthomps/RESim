@@ -1511,11 +1511,13 @@ class GenMonitor():
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
             self.lgr.debug('satisfyCondition pc 0x%x' % pc)
+            # TBD, backtrack bookmarks only for debugging, they are meaningless after the retrack
             track_num = self.bookmarks.setTrackNum()
             bm='backtrack START:%d 0x%x inst:"%s" satsify condition' % (track_num, eip, instruct[1])
             self.bookmarks.setDebugBookmark(bm)
             self.context_manager[self.target].setIdaMessage('')
-            self.rev_to_call[self.target].satisfyCondition(pc)
+            if not self.rev_to_call[self.target].satisfyCondition(pc):
+                self.restoreDebugBreaks(was_watching=True)
         else:
             print('reverse execution disabled')
             self.skipAndMail()

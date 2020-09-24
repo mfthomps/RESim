@@ -432,8 +432,8 @@ class DataWatch():
                 if not self.break_simulation:
                     self.stopWatch()
                 SIM_run_alone(self.kernelReturn, addr)
-
         elif cpl > 0:
+            ''' is a write to a data watch buffer '''
             self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
             if self.break_simulation:
@@ -442,7 +442,7 @@ class DataWatch():
                 SIM_break_simulation('DataWatch written data')
         elif self.retrack:
             self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here.' % (addr, offset, length, start, pid, eip))
-            self.stopWatch()
+            #self.stopWatch()
 
     def readHap(self, index, third, forth, memory):
         ''' watched data has been read (or written) '''
@@ -567,6 +567,15 @@ class DataWatch():
                     return self.start[index]
         return None
 
+    def findRangeIndex(self, addr):
+        for index in range(len(self.start)):
+            if self.start[index] != 0:
+                end = self.start[index] + self.length[index]
+                self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
+                if addr >= self.start[index] and addr <= end:
+                    return index
+        return None
+
     def getWatchMarks(self):
         return self.watchMarks.getWatchMarks()
 
@@ -616,6 +625,7 @@ class DataWatch():
                 del self.length[index+1:]
                 del self.cycle[index+1:]
                 self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x' % (index, index, self.start[index]))
+                self.watchMarks.memoryMod(self.start[index], self.length[index])
                 
 
     def setIdaFuns(self, ida_funs):
