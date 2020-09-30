@@ -83,6 +83,9 @@ Configure IDA for remote use:
 \item Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
 IDA Python plugins)
 
+\item Copy the {\tt simics/ida/cfg/*.xml} files into your ~/idaxx/cfg directory after first
+backing up the originals.
+
 \item On the computer upon which you'll run IDA, create a ssh tunnel for use by the GDB port:
 \begin{verbatim}
  ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null bladet9
