@@ -275,7 +275,7 @@ class SOMap():
                 #self.lgr.debug('SOMap getSOPid use group leader')
                 retval = ppid
             else:
-                ppid, dumb = self.task_utils.getPidParent(pid)
+                ppid = self.task_utils.getPidParent(pid)
                 if ppid != pid:
                     #self.lgr.debug('SOMap getSOPid use parent %d' % ppid)
                     retval = ppid
