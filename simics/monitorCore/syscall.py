@@ -1235,7 +1235,7 @@ class Syscall():
  
         elif callname == 'mmap' or callname == 'mmap2':        
             exit_info.count = frame['param2']
-            if self.mem_utils.WORD_SIZE == 4: 
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
                 length = self.mem_utils.readPtr(self.cpu, arg_addr+4)
@@ -1243,13 +1243,15 @@ class Syscall():
                 flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
+                if fd is not None:
+                    self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
                 if pid is None:
                     self.lgr.error('PID is NONE?')
                     SIM_break_simulation('eh?, over?')
                 elif length is None:
                     ida_msg = '%s pid:%d len is NONE' % (callname, pid)
                 elif fd is None:
-                    ida_msg = '%s pid:%d FD: NOTE' % (callname, pid)
+                    ida_msg = '%s pid:%d FD: NONE' % (callname, pid)
                 else:
                     ida_msg = '%s pid:%d FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, pid, fd, arg_addr, length, prot, flags, offset)
             else:
