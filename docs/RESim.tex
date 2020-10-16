@@ -665,19 +665,6 @@ know that at some point in the coming system execution, some other process Y wil
 indirectly).  Use of the {\tt background=True} option with the {\tt runToDmod} command will cause RESim to monitor all
 system calls associated with the Dmod, even while you focus on the behavior of X. 
 
-\section{Example workflows}
-\ref{example-workflows}
-\subsubsection{Watch consumption of a UDP packet}
-Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
-Start the monitor and map the desired port to a real ethernet device.
-Debug the desired process/pid, e.g., {\tt @cgc.debugPidGroup(875)}.  Track the IO, e.g., {\tt @cgc.trackIO(14)},
-then cat the packet, e.g.,
-\begin{verbatim}
-    cat mypacket > /dev/udp/127.0.0.1/60005
-\end{verbatim}
-
-Start IDA with the desired program.  Attached to the process and run the rev.py plugin.  Then go to the ``data watch'' window and
-refresh.  That will list all instances of references to the content of the UDP packet. 
 
 \section{Tracking data}
 RESim provides several functions for tracking data consumed by processes.  A {\tt Data Watch} data structure tracks input buffers into which
@@ -697,6 +684,83 @@ FD is encountered (so no reason to hurry your network traffic).  The backstop is
 
 Note that in many situations, by the time the backstop is hit, the thread has invoked a syscall.  If it is a blocking recv, then the next {\tt trackIO} 
 command will back up until prior to that system call so that it can properly record and track the call.
+
+Once a trackIO is performed and you've reviewed input data references, you can repeat the tracking step with modified data:
+\begin{itemize}
+\item Skip the simulation to the point at which the original data was read, e.g., following the recv syscall.  So this by double clicking
+on that Watch Mark, or use the goToDataMark function in RESim.
+\item Use modifyMemory to change data in memory.  Note this will reset the reverse execution bookmarks, preventing you from skipping to
+any earlier point.
+\item Use the retrack function.
+\item You may repeat this as many times as needed, however instead of skipping to a Watch Mark, you can simply skip to the {\tt origin}
+bookmark since that is now the point at which you previously modified memry.
+\end{itemize}
+
+\section{Example workflows}
+\ref{example-workflows}
+\subsection{Watch consumption of a UDP packet}
+Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
+Start the monitor and map the desired port to a real ethernet device.
+Debug the desired process/pid, e.g., {\tt @cgc.debugPidGroup(875)}.  Track the IO, e.g., {\tt @cgc.trackIO(14)},
+then cat the packet, e.g.,
+\begin{verbatim}
+    cat mypacket > /dev/udp/127.0.0.1/60005
+\end{verbatim}
+
+Start IDA with the desired program.  Attached to the process and run the rev.py plugin.  Then go to the ``data watch'' window and
+refresh.  That will list all instances of references to the content of the UDP packet. 
+
+\subsection{Reverse engineer a service}
+This example assumes you want to understand how a program consumes
+data on a specific TCP port.
+
+\begin{itemize}
+\item Run the monitor on a configuration having the target and a driver.
+
+\item Use traceAll to generate a system call trace.
+
+\item Use the postscripts/genRpt.sh to generate trace reports,
+and look at the resulting network information noting the
+program that binds to a port of interest.
+
+\item Create a simple python client script and use
+script-driver.sh to copy that to the driver and
+run it in the background when the driver boots.
+This client should connect to the target port
+and perhaps send a string and read the response.
+Use a connect loop so the program does not die if the
+first connections fail due to the target not yet being ready.
+
+\item Restart RESim and debugProc the target program.
+
+\item Use runToBind and observe the FD (either in the log
+or using idaMessage)
+
+\item Use runToAccept, which will not return until the client
+connects to the service.  Observe the resulting FD.
+
+\item Use trackIO to note where input is processed.  The stack
+may reflect a call to clib from some other library.  Note
+you may be in a thread that started in that library.  Use
+showSOMap to determine the address at which
+the library is loaded.
+
+\item Open the program or the library file in IDA and use the dumpFuns.py script to
+generate a function map for the library using is initial base
+addresses.
+
+\item If a library was loaded, use edit/segments/rebase to rebase the program from the load address
+observed via showSOMap.
+
+\item Attach IDA's debugger to the service and work through the dataWatch list of Watch Marks.
+
+\item Modify data to alter execution paths using either modifyMemory followed by {\tt retrack}, or the injectIO function (the latter
+is only available as a RESim command.)
+
+\item Use the mapCoverage function to inventory which basic blocks are hit, and to inventory "branches not taken."
+
+\end{itemize}
+
 
 \section{Implementation strategy}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
@@ -863,10 +927,6 @@ do not cause the corresponding modules to be loaded -- rather, they load kernel 
 device that is not modeled.  Use of the Dmod function described in \ref{dmod} can cause the kernel
 to load the desired module, without having to modify the disk image.  
 TBD: Explore model building, e.g., to simulate an fpga accessed via a PCI bus device.
-
-\section{Examples of I/O Tracking}
-These examples assume you have run a full process trace or a {\tt trace\_all} and have run the postScripts
-per section \ref{postprocessing}.  
 
 \subsection{What FD is this?}
 You have created a input stimulus and would like to understand the resulting behavior of a specific process
