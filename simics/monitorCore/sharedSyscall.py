@@ -302,7 +302,7 @@ class SharedSyscall():
                     ''' in case we want to break on a read of this data.  NOTE: length is the given length '''
                     self.lgr.debug('recv call setRange retval_addr 0x%x len %d' % (exit_info.retval_addr, exit_info.sock_struct.length))
                     self.dataWatch.setRange(exit_info.retval_addr, exit_info.sock_struct.length, msg=trace_msg, 
-                               max_len=exit_info.sock_struct.length)
+                               max_len=exit_info.sock_struct.length, recv_addr=exit_info.retval_addr)
                     if exit_info.fname_addr is not None:
                         count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                         msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)

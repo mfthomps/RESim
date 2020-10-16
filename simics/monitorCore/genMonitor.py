@@ -145,7 +145,6 @@ class GenMonitor():
 
         self.bookmarks = None
 
-        self.genInit(comp_dict)
         self.reg_list = None
 
         self.is_compat32 = False
@@ -153,6 +152,9 @@ class GenMonitor():
         self.relocate_funs = {}
         self.coverage = None
         self.real_script = None
+
+
+        self.genInit(comp_dict)
 
     def genInit(self, comp_dict):
         '''
@@ -2392,7 +2394,7 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('writeString 0x%x %s' % (address, string))
         self.mem_utils[self.target].writeString(cpu, address, string)
-        self.lgr.debug('writeWord, disable reverse execution to clear bookmarks, then set origin')
+        self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
         self.clearBookmarks()
 
     def stopDataWatch(self):
@@ -2657,16 +2659,20 @@ class GenMonitor():
         fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print fname 
 
-    def retrack(self):
+    def retrack(self, clear=True):
         ''' Use existing data watches to track IO.  Clears later watch marks '''
         self.lgr.debug('retrack')
-        cpu = self.cell_config.cpuFromCell(self.target)
-        prev_cycle = cpu.cycles - 1
-        self.dataWatch[self.target].clearWatches(prev_cycle)
+        if clear:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            prev_cycle = cpu.cycles - 1
+            self.dataWatch[self.target].clearWatches(prev_cycle)
         self.dataWatch[self.target].watch(break_simulation=False)
         self.dataWatch[self.target].setCallback(self.stopTrackIO)
+        self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(True)
-        self.coverage.doCoverage()
+        if self.coverage is not None:
+            self.coverage.doCoverage()
+        self.context_manager[self.target].watchTasks()
         SIM_run_command('c')
 
     def trackIO(self, fd):
@@ -2675,7 +2681,8 @@ class GenMonitor():
         self.lgr.debug('trackIO stopped track and cleared watchs')
         self.dataWatch[self.target].trackIO(fd, self.stopTrackIO, self.is_compat32)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
-        self.coverage.doCoverage()
+        if self.coverage is not None:
+            self.coverage.doCoverage()
         self.runToIO(fd, linger=True, break_simulation=False)
 
     def stopTrackIO(self):
@@ -2883,9 +2890,16 @@ class GenMonitor():
         byte_string = None
         with open(dfile) as fh:
             byte_string = fh.read()
+        self.dataWatch[self.target].goToRecvMark()
+
         cpu = self.cell_config.cpuFromCell(self.target)
+
         lenreg = None
         lenreg2 = None
+        addr = self.dataWatch[self.target].firstBufferAddress()
+        if addr is None:
+            self.lgr.error('injectIO, no firstBufferAddress found')
+            return
         if cpu.architecture == 'arm':
             addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
             ''' Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
@@ -2893,15 +2907,17 @@ class GenMonitor():
             lenreg = 'r0'
             lenreg2 = 'r7'
         else:
-            print('injectIO not implemented for x86 yet')
-            return
+            lenreg = 'eax'
+        self.dataWatch[self.target].clearWatchMarks()
+        self.dataWatch[self.target].clearWatches()
         prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
+        self.lgr.debug('injectIO cleare watch marks prev_len is %s' % prev_len)
         if len(byte_string) > prev_len:
            
             a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
             if a.lower() != 'y':
                 return
-        self.lgr.debug('Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
+        self.lgr.debug('injectIO Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
         self.writeRegValue(lenreg, len(byte_string))
         if lenreg2 is not None:
@@ -2909,9 +2925,9 @@ class GenMonitor():
         self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
-        self.dataWatch[self.target].setRange(addr, len(byte_string), msg)
+        self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr)
         print('retracking IO') 
-        self.retrack()    
+        self.retrack(clear=False)    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''

@@ -13,9 +13,10 @@ class WatchMarks():
             i += 1
         
     class CallMark():
-        def __init__(self, msg, max_len):
+        def __init__(self, msg, max_len, recv_addr):
             self.msg = msg
             self.max_len = max_len
+            self.recv_addr = recv_addr
         def getMsg(self):
             return self.msg
 
@@ -122,11 +123,18 @@ class WatchMarks():
         if len(self.prev_ip) > 4:
             self.prev_ip.pop(0)
 
-    def markCall(self, msg, max_len):
+    def markCall(self, msg, max_len, recv_addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.CallMark(msg, max_len)
-        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
-        self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
+        cm = self.CallMark(msg, max_len, recv_addr)
+        ''' HACK to account for recv recorded while  about to leave kernel '''
+        cycles = self.cpu.cycles
+        if recv_addr is not None:
+            cycles=cycles+1
+        self.mark_list.append(self.WatchMark(cycles, ip, cm))
+        if recv_addr is None:
+            self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
+        else:
+            self.lgr.debug('watchMarks markCall 0x%x %s recv_addr: 0x%x' % (ip, msg, recv_addr))
         self.recordIP(ip)
   
     def memoryMod(self, start, length):
@@ -229,3 +237,32 @@ class WatchMarks():
         del self.mark_list[:] 
         self.prev_ip = []
 
+    def firstBufferAddress(self):
+        retval = None
+        for mark in self.mark_list:
+           self.lgr.debug('check mark type %s' % type(mark.mark))
+           if isinstance(mark.mark, self.CallMark) and mark.mark.recv_addr is not None:
+               self.lgr.debug('watchMarks firstBufferAddress is CallMark addr 0x%x' % mark.mark.recv_addr)
+               retval = mark.mark.recv_addr
+               break
+           elif isinstance(mark.mark, self.DataMark):
+               self.lgr.debug('watchMarks firstBufferAddress is DataMark addr 0x%x' % mark.mark.start)
+               retval = mark.mark.start
+               break 
+
+        return retval
+
+    def firstBufferIndex(self):
+        retval = None
+        index = 0
+        for mark in self.mark_list:
+           if isinstance(mark.mark, self.CallMark) and mark.mark.recv_addr is not None:
+               self.lgr.debug('watchMarks firstBufferIndex is CallMark addr 0x%x' % mark.mark.recv_addr)
+               retval = index
+               break
+           elif isinstance(mark.mark, self.DataMark):
+               self.lgr.debug('watchMarks firstBufferIndex is DataMark addr 0x%x' % mark.mark.start)
+               retval = index
+               break 
+           index += 1
+        return retval

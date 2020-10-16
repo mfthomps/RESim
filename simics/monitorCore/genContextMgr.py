@@ -616,6 +616,11 @@ class GenContextMgr():
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
         self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
 
+    def restoreWatchTasks(self):
+        self.watching_tasks = True
+        if self.debugging_pid is not None:
+            self.cpu.current_context = self.resim_context
+
     def watchTasks(self, set_debug_pid = False):
         if self.task_break is not None:
             #self.lgr.debug('watchTasks called, but already watching')

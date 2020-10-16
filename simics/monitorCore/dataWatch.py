@@ -57,7 +57,7 @@ class DataWatch():
         else:
             self.decode = decode
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x back_stop: %r' % (start, length, back_stop))
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
@@ -91,7 +91,7 @@ class DataWatch():
             self.cycle.append(self.cpu.cycles)
         if msg is not None:
             fixed = unicode(msg, errors='replace')
-            self.watchMarks.markCall(fixed, max_len)
+            self.watchMarks.markCall(fixed, max_len, recv_addr)
 
     def close(self, fd):
         ''' called when FD is closed and we might be doing a trackIO '''
@@ -436,6 +436,7 @@ class DataWatch():
             ''' is a write to a data watch buffer '''
             self.lgr.debug('Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
+            self.watchMarks.memoryMod(start, length)
             if self.break_simulation:
                 ''' TBD when to treat buffer as unused?  does it matter?'''
                 self.start[index] = 0
@@ -589,6 +590,9 @@ class DataWatch():
             if cycle != self.cpu.cycles:
                 self.lgr.error('dataWatch goToMark got wrong cycle, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
                 retval = None
+            else:
+                self.lgr.debug('dataWatch goToMark cycle now 0x%x' % cycle)
+            self.context_manager.restoreWatchTasks()
         else:
            self.lgr.error('No data mark with index %d' % index)
         return retval
@@ -729,3 +733,11 @@ class DataWatch():
         self.watch(break_simulation=False)
         ''' what to do when backstop is reached (N cycles with no activity '''
         self.setCallback(callback)
+
+    def firstBufferAddress(self):
+        return self.watchMarks.firstBufferAddress()
+
+    def goToRecvMark(self):
+        index = self.watchMarks.firstBufferIndex()
+        self.lgr.debug('dataWatch goToRecvMark, index %d' % index)
+        self.goToMark(index)
