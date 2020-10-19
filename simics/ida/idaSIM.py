@@ -712,11 +712,14 @@ class IdaSIM():
         idaapi.qexit(0)
     
     def resynch(self):
+        '''
         print('resynch to server')
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.resynch()");')
         time.sleep(1)
         eip = gdbProt.getEIPWhenStopped()
         print('resynch got eip 0x%x now sig client' % eip)
+        '''
+        print('Not calling monitor -- simply doing a register refresh.')
         self.signalClient()
     
     def runToText(self):
