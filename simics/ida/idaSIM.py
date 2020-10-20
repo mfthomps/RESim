@@ -461,10 +461,14 @@ class IdaSIM():
         if r == ida_kernwin.TCCRT_GRAPH:
             dotoggle = True
             ida_kernwin.process_ui_action("ToggleRenderer")
-        self.resynch()
+        print('resynch to server')
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.resynch()");')
+        time.sleep(1)
+        eip = gdbProt.getEIPWhenStopped()
+        print('resynch got eip 0x%x now sig client' % eip)
         if dotoggle:
             ida_kernwin.process_ui_action("ToggleRenderer")
-        #self.signalClient()
+        self.signalClient()
     
     def runToSyscall(self):
             value = idaversion.ask_long(0, "Syscall number?")
