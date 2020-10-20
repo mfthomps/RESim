@@ -1,7 +1,7 @@
 from simics import *
 import json
 import os
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy']
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy', 'strchr']
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None):
@@ -293,7 +293,7 @@ class StackTrace():
                     except:
                         pass 
                     if call_to is not None:
-                        #self.lgr.debug('call_to 0x%x ' % call_to)
+                        self.lgr.debug('call_to 0x%x ' % call_to)
                         if call_to not in so_checked:
                             ''' should we add ida function analysys? '''
                             if not self.ida_funs.isFun(call_to):
@@ -312,24 +312,24 @@ class StackTrace():
                                     #self.lgr.debug('direct branch 0x%x %s' % (fun_hex, fun))
                                     if not (self.ida_funs.isFun(fun_hex) and self.ida_funs.inFun(prev_ip, fun_hex)):
                                         skip_this = True
-                                        #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+                                        self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                     else:
                                         ''' record the direct branch, e.g., B fuFun '''
                                         frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                         self.frames.append(frame)
                                 else:
                                     skip_this = True
-                                    #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
+                                    self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                         else:
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
                                 skip_this = True
-                                #self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
+                                self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
                             elif call_to in self.relocate_funs:
-                                #self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
+                                self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
                                 skip_this = True
                             else:
-                                #self.lgr.debug('stackTrace 0x%x is not a function?' % call_to)
+                                self.lgr.debug('stackTrace 0x%x is not a function?' % call_to)
                                 pass
  
                 if call_ip is not None and not skip_this:
@@ -406,10 +406,12 @@ class StackTrace():
             if len(self.frames) < i+1:
                 break
             frame = self.frames[i]
-            self.lgr.debug('StackFram memsomething frame instruct is %s' % frame.instruct)
+            self.lgr.debug('StackTrace memsomething frame instruct is %s' % frame.instruct)
             if frame.instruct is not None:
                 if frame.fun_name is not None:
                     fun = frame.fun_name
+                    if fun.startswith('_') or fun.startswith('.'):
+                        fun = fun[1:]
                     if '@' in frame.fun_name:
                         fun = frame.fun_name.split('@')[0]
                         try:
@@ -424,6 +426,7 @@ class StackTrace():
                         except ValueError:
                             pass
 
+                    self.lgr.debug('StackTrace memsomething fun is %s' % fun)
                     if fun in mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
                         if fun in mem_funs:
                             self.lgr.debug('fun in mem_funs %s' % fun)

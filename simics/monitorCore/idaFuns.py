@@ -44,7 +44,7 @@ class IDAFuns():
                     self.funs[fun]['name'] = newfuns[f]['name']
                     #self.lgr.debug('idaFun add %s was %s %x %x   now %x %x %x' % (newfuns[f]['name'], f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
         else:
-            #self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
+            self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
             pass
 
  

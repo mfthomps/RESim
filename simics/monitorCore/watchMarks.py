@@ -96,6 +96,18 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class StrChrMark():
+        def __init__(self, ours, the_chr, count):
+            self.the_chr = the_chr
+            self.ours = ours    
+            self.count = count    
+            if self.the_chr > 20:
+                self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (ours, self.the_chr, chr(self.the_chr))
+            else:
+                self.msg = 'strchr in string at 0x%x find 0x%x' % (ours, self.the_chr)
+        def getMsg(self):
+            return self.msg
+
     class IteratorMark():
         def __init__(self, fun, addr, buf_start): 
             self.fun = fun
@@ -226,6 +238,13 @@ class WatchMarks():
         self.removeRedundantDataMark(ours)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks compare 0x%x %s' % (ip, cm.getMsg()))
+
+    def strchr(self, ours, the_chr, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        cm = self.StrChrMark(ours, the_chr, count)
+        self.removeRedundantDataMark(ours)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
+        self.lgr.debug('watchMarks strchr 0x%x %s' % (ip, cm.getMsg()))
 
     def iterator(self, fun, src, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')

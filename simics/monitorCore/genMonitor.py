@@ -2876,6 +2876,46 @@ class GenMonitor():
     def addProc(self, pid, leader_pid, comm, clone=False):    
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
 
+    def traceInject(self, dfile):
+        if not os.path.isfile(dfile):
+            print('File not found at %s\n\n' % dfile)
+            return
+        ''' Add memUtil function to put byte array into memory '''
+        byte_string = None
+        with open(dfile) as fh:
+            byte_string = fh.read()
+        self.dataWatch[self.target].goToRecvMark()
+        lenreg = None
+        lenreg2 = None
+        addr = self.dataWatch[self.target].firstBufferAddress()
+        if addr is None:
+            self.lgr.error('traceInject, no firstBufferAddress found')
+            return
+        cpu = self.cell_config.cpuFromCell(self.target)
+        if cpu.architecture == 'arm':
+            addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
+            ''' Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
+                the invoker sees it.  So, we'll set both for alternate libc implementations? '''
+            lenreg = 'r0'
+            lenreg2 = 'r7'
+        else:
+            lenreg = 'eax'
+        prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
+        self.lgr.debug('traceInject prev_len is %s' % prev_len)
+        if len(byte_string) > prev_len:
+           
+            a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
+            if a.lower() != 'y':
+                return
+        self.lgr.debug('traceInject Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
+        self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
+        self.writeRegValue(lenreg, len(byte_string))
+        if lenreg2 is not None:
+            self.writeRegValue(lenreg2, len(byte_string))
+        self.lgr.debug('traceInject from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        self.traceAll()
+        SIM_run_command('c')
+        
     def injectIO(self, dfile):
         ''' Go to the given watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
@@ -3003,6 +3043,7 @@ class GenMonitor():
             else:
                 full_path = None
             self.coverage.enableCoverage(fname=full_path)
+            self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
@@ -3010,12 +3051,11 @@ class GenMonitor():
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
-            full_path = self.targetFS[self.target].getFull(fname)
+            full_path = self.targetFS[self.target].getFull(fname, self.lgr)
         else:
             full_path = None
         self.lgr.debug('mapCoverage file (None means use prog name): %s' % full_path)
         self.coverage.enableCoverage(fname=full_path)
-        self.coverage.doCoverage()
 
     def showCoverage(self):
         self.coverage.showCoverage()

@@ -117,6 +117,7 @@ class memUtils():
             self.regs['syscall_num'] = self.regs['eax']
             self.regs['syscall_ret'] = self.regs['eax']
             self.regs['pc'] = self.regs['eip']
+            self.regs['sp'] = self.regs['esp']
         elif arch == 'arm':
             for i in range(13):
                 r = 'R%d' % i

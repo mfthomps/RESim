@@ -44,6 +44,9 @@ class DataWatch():
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
+        self.call_break = None
+        self.call_hap = None
+        self.maybe_hap = None
         if back_stop_string is None:
             self.back_stop_cycles = 5000000
         else:
@@ -170,6 +173,10 @@ class DataWatch():
         self.watch()
 
     def kernelReturn(self, addr):
+        cell = self.top.getCell()
+        proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
+        self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, addr, proc_break, 'memcpy_return_hap')
+        '''
         if self.cpu.architecture == 'arm':
             cell = self.top.getCell()
             proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
@@ -177,6 +184,7 @@ class DataWatch():
         else:
             self.lgr.debug('Only ARM kernel return handled for now') 
             self.watch()
+        '''
        
     class MemSomething():
         def __init__(self, fun, ret_ip, src, dest, count, called_from_ip, op_type, length, start): 
@@ -192,11 +200,16 @@ class DataWatch():
             self.start = start
       
     def returnHap(self, mem_something, third, forth, memory):
+        ''' should be at return from a memsomething '''
         if self.return_hap is None:
             return
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('returnHap should be at return from memsomething, eip 0x%x' % eip)
         self.context_manager.genDeleteHap(self.return_hap)
         self.return_hap = None
-        if mem_something.fun == 'memcpy' or mem_something.fun == 'mempcpy' or mem_something.fun == 'j_memcpy':
+        self.top.restoreDebugBreaks(was_watching=True)
+        if mem_something.fun == 'memcpy' or mem_something.fun == 'mempcpy' or \
+           mem_something.fun == 'j_memcpy' or mem_something.fun == 'memmove':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dest: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.dest, mem_something.count))
             self.setRange(mem_something.dest, mem_something.count, None) 
@@ -212,8 +225,13 @@ class DataWatch():
         elif mem_something.fun == 'strcmp':
             buf_start = self.findRange(mem_something.dest)
             self.watchMarks.compare(mem_something.dest, mem_something.src, mem_something.count, buf_start)
-            self.lgr.debug('dataWatch returnHap, return from %s strcmp: 0x%x  to: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
-                   mem_something.dest, mem_something.count))
+            self.lgr.debug('dataWatch returnHap, return from %s strcmp: 0x%x  to: 0x%x count %d ' % (mem_something.fun, 
+                   mem_something.src, mem_something.dest, mem_something.count))
+        elif mem_something.fun == 'strchr':
+            buf_start = self.findRange(mem_something.dest)
+            self.watchMarks.strchr(mem_something.dest, mem_something.the_chr, mem_something.count)
+            self.lgr.debug('dataWatch returnHap, return from %s strchr 0x%x  to: 0x%x count %d ' % (mem_something.fun, 
+                   mem_something.src, mem_something.the_chr, mem_something.count))
         elif mem_something.fun == 'strcpy':
             self.lgr.debug('dataWatch returnHap, strcpy return from %s src: 0x%x dest: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.dest, mem_something.count))
@@ -238,108 +256,126 @@ class DataWatch():
         #return
         self.watch()
 
-    def walkAlone(self, mem_something):        
-        begin_cycle = self.cpu.cycles
-        if self.ida_funs is not None:
-            #self.top.stopThreadTrack()
-            #self.top.stopWatchPageFaults()
-            self.top.removeDebugBreaks(keep_coverage=True)
-            ''' Step backwards until we reach a call.  Assumes we start near the beginning of a mem function '''
-            ip = self.top.getEIP(self.cpu)
-            fun = self.ida_funs.getFun(ip)
-            if fun is not None:
-                self.lgr.debug('walkAlone, ip 0x%x, fun is %s' % (ip, fun))
-            else:
-                self.lgr.debug('walkAlone, ip 0x%x NO FUN')
-            done = False
-            bound = 0
-            self.lgr.debug('walkAlone back to 0x%x' % (mem_something.called_from_ip))
-            while not done:
-                back_one = self.cpu.cycles-1
-                cmd = 'skip-to cycle = %d ' % back_one
-                SIM_run_command(cmd)
-                pc = self.mem_utils.getRegValue(self.cpu, 'pc')
-                instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
-                self.lgr.debug('skipped to 0x%x, landed at 0x%x  pc: 0x%x instruct %s' % (back_one, self.cpu.cycles, pc, instruct[1]))
-                if pc == mem_something.called_from_ip:
-                    self.lgr.debug('walked back to ip recorded by mem_something 0x%x' % (mem_something.called_from_ip))
-                    done = True
-                ''' 
-                elif self.decode.isCall(self.cpu, instruct[1]):
-                    op1, op0 = self.decode.getOperands(instruct[1])
-                    self.lgr.debug('walkAlone op1: %s  op0: %s' % (op1, op0))
-                    if op0 == 'pc':
-                        dest = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-                    else:
-                        dest = self.decode.getValue(op0, self.cpu, self.lgr)
-                    if dest is not None:
-                        if dest == fun:
-                            done = True
-                            self.lgr.debug('walkAlone found call to 0x%x' % fun)
-                        elif dest in self.relocatables:
-                            done = True
-                            self.lgr.debug('walkAlone found relocatable call to %s' % self.relocatables[dest])
-                        elif self.user_iterators.isIterator(dest, self.lgr):
-                            done = True
-                            self.lgr.debug('walkAlone found call to iterator 0x%x' % dest)
-                        else: 
-                            self.lgr.debug('walkAlone is call to 0x%x, but not to function containing PC 0x%x' % (dest, pc))
-                    else:
-                        self.lgr.debug('wakAlone could not get call destination from %s' % instruct[1])
-                ''' 
-                if not done:
-                    bound += 1
-                    if bound > 50:
-                        cmd = 'skip-to cycle = %d ' % begin_cycle
-                        SIM_run_command(cmd)
-                        eip = self.top.getEIP(self.cpu)
-                        self.lgr.debug('walk back to ip failed, maybe ghost frame, returned to 0x%x and finish the read hap' % eip)
-                        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-                        self.watch()
-                        self.finishReadHap(mem_something.op_type, eip, mem_something.src, mem_something.length, mem_something.start, pid)
-                        SIM_run_command('c')
-                        return
-            
-            self.top.restoreDebugBreaks()
-            #self.top.startThreadTrack()
-            #self.top.watchPageFaults()
-            self.lgr.debug('walkAlone, got call %s' % instruct[1])
+
+    def getMemParams(self, mem_something):
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             if mem_something.fun == 'memcpy' or mem_something.fun == 'memmove' or mem_something.fun == 'mempcpy' or mem_something.fun == 'j_memcpy': 
-                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
-                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
-                self.lgr.debug('dest 0x%x  src 0x%x count 0x%x' % (mem_something.dest, mem_something.src, mem_something.count))
+                if self.cpu.architecture == 'arm':
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
+                else:
+                    mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
+                self.lgr.debug('getMemParams dest 0x%x  src 0x%x count 0x%x' % (mem_something.dest, mem_something.src, 
+                    mem_something.count))
             elif mem_something.fun == 'memset':
-                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                 mem_something.src = None
+                if self.cpu.architecture == 'arm':
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                else:
+                    mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
             elif mem_something.fun == 'memcmp':
-                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
-                mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
-                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r1')
+                if self.cpu.architecture == 'arm':
+                    mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r1')
+                else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.dst = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+                    mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
+            elif mem_something.fun == 'strcpy':
+                mem_something.count = self.getStrLen(mem_something.src)        
+                if self.cpu.architecture == 'arm':
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    ''' TBD this fails on buffer overlap, but that leads to crash anyway? '''
+                    self.lgr.debug('getMemParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
+                else:
+                    mem_something.dst = self.mem_utils.readPtr(self.cpu, sp)
+            elif mem_something.fun == 'strcmp':
+                if self.cpu.architecture == 'arm':
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
+                    self.lgr.debug('getMemParams strcmp, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
+                else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.dst = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+                mem_something.count = self.getStrLen(mem_something.src)        
+            elif mem_something.fun == 'strchr':
+                if self.cpu.architecture == 'arm':
+                    mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.the_chr = self.mem_utils.getRegValue(self.cpu, 'r1')
+                    self.lgr.debug('getMemParams strchr, src: 0x%x chr: %s count(maybe): %d' % (mem_something.src, mem_something.the_chr, mem_something.count))
+                else:
+                    mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.the_chr = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+                ''' TBD fix to reflect strnchr? '''
+                mem_something.count=1
+
+
             cell = self.top.getCell()
             proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memcpy_return_hap')
-            self.lgr.debug('walkAlone set hap on ret_ip at 0x%x Now run!' % mem_something.ret_ip)
+            self.lgr.debug('getMemParams set hap on ret_ip at 0x%x Now run!' % mem_something.ret_ip)
             SIM_run_command('c')
-        else:
-            self.lgr.debug('walkAlone, no ida functions')
-
 
     def runToReturnAlone(self, mem_something):
         cell = self.top.getCell()
         proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memsomething_return_hap')
 
+    def hitCallStopHap(self, mem_something, one, exception, error_string):
+        if self.call_hap is not None:
+            self.lgr.debug('hitCallStopHap will delete hap %s' % str(self.call_hap))
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_hap)
+            SIM_delete_breakpoint(self.call_break)
+            self.stop_hap = None
+        else:
+            return
+        eip = self.top.getEIP(self.cpu)
+        if eip != mem_something.called_from_ip:
+            self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x' % (mem_something.called_from_ip, eip))
+            cmd = 'skip-to cycle = %d ' % self.save_cycle
+            SIM_run_command(cmd)
+            if self.cpu.cycles != self.save_cycle:
+                self.lgr.error('hitCallStopHap unable to skip to save cycle 0x%x, got 0x%x' % (self.save_cycle, self.cpu.cycles))
+                return
+            eip = self.top.getEIP(self.cpu)
+            dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+            self.watch()
+            self.finishReadHap(mem_something.op_type, eip, mem_something.src, mem_something.length, mem_something.start, pid)
+            self.lgr.debug('hitCallStopHap would run forward')
+            #SIM_run_command('c')
+        else:
+            self.lgr.debug('call getMemParams at eip 0x%x' % eip)
+            SIM_run_alone(self.getMemParams, mem_something)
+       
+    def revAlone(self, dumb):
+        ''' TBD why need to stop coverage?  should not hit any of those bp going backwards? '''
+        #self.top.removeDebugBreaks(keep_coverage=False)
+        self.top.removeDebugBreaks()
+        self.lgr.debug('revAlone now rev')
+        SIM_run_command('rev')  
+
     def memstuffStopHap(self, mem_something, one, exception, error_string):
+        ''' We had been in a memsomething and have stopped.  Set a break on the address 
+            of the call to the function and another stop hap and reverse. '''
         if self.stop_hap is not None:
             self.lgr.debug('memstuffStopHap stopHap will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
-        if self.cpu.architecture == 'arm':
-            self.lgr.debug('memstuffStopHap, walk back to a call at ip 0x%x' % mem_something.called_from_ip)
-            SIM_run_alone(self.walkAlone, mem_something)
         else:
-            self.lgr.debug('Only ARM memcpy handled for now') 
-            self.watch()
+            return
+        self.lgr.debug('memstuffStopHap, reverse to call at ip 0x%x' % mem_something.called_from_ip)
+        #SIM_run_alone(self.walkAlone, mem_something)
+        phys_block = self.cpu.iface.processor_info.logical_to_physical(mem_something.called_from_ip, Sim_Access_Read)
+        pcell = self.cpu.physical_memory
+        self.call_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+        self.call_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.hitCallStopHap, mem_something)
+        self.save_cycle = self.cpu.cycles
+        self.lgr.debug('break %d set on IP of call 0x%x (phys 0x%x) and stop hap %d set, now reverse' % (self.call_break, 
+           mem_something.called_from_ip, phys_block.address, self.call_hap))
+        SIM_run_alone(self.revAlone, None)
 
     def getStrLen(self, src):
         addr = src
@@ -361,33 +397,15 @@ class DataWatch():
         set a break on the return; and continue.  We'll assume not too many instructions between us and the call, so manually walk er back.
         '''
         self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (mem_something.ret_ip, mem_something.fun, mem_something.called_from_ip))
-        if self.cpu.architecture == 'arm':
-            if mem_something.fun == 'strcpy':
-                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
-                ''' TBD this fails on buffer overlap, but that leads to crash anyway? '''
-                mem_something.count = self.getStrLen(mem_something.src)        
-                self.lgr.debug('handleMemStuff strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
-                SIM_run_alone(self.runToReturnAlone, mem_something)
-            elif mem_something.fun == 'strcmp':
-                # the buffer string
-                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
-                mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
-                mem_something.count = self.getStrLen(mem_something.src)        
-                self.lgr.debug('handleMemStuff strcmp, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
-                SIM_run_alone(self.runToReturnAlone, mem_something)
-            elif mem_something.fun not in mem_funs: 
-                ''' assume it is a user iterator '''
-                self.lgr.debug('handleMemStuff assume iterator, src: 0x%x ' % (mem_something.src))
-                SIM_run_alone(self.runToReturnAlone, mem_something)
-            else: 
-                ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
-                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.memstuffStopHap, mem_something)
-                SIM_break_simulation('handle memstuff')
-            
-        else:
-            self.lgr.debug('Only ARM memcpy handled for now') 
-            self.watch()
+        if mem_something.fun not in mem_funs: 
+            ''' assume it is a user iterator '''
+            self.lgr.debug('handleMemStuff assume iterator, src: 0x%x ' % (mem_something.src))
+            SIM_run_alone(self.runToReturnAlone, mem_something)
+        else: 
+            ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
+            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.memstuffStopHap, mem_something)
+            SIM_break_simulation('handle memstuff')
 
     def isMemSomething(self, eip):
         ''' TBD not used '''
@@ -739,5 +757,8 @@ class DataWatch():
 
     def goToRecvMark(self):
         index = self.watchMarks.firstBufferIndex()
-        self.lgr.debug('dataWatch goToRecvMark, index %d' % index)
-        self.goToMark(index)
+        if index is not None:
+            self.lgr.debug('dataWatch goToRecvMark, index %d' % index)
+            self.goToMark(index)
+        else:
+            self.lgr.error('No first buffer index')
