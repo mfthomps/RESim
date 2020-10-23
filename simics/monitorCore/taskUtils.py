@@ -494,7 +494,7 @@ class TaskUtils():
                 return
 
             if task.next == swapper_addr:
-               self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
+               #self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
                return None
 
             #self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
