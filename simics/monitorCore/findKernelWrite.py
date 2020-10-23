@@ -72,11 +72,10 @@ class findKernelWrite():
         if range_index == 0:
             ''' Is initial data watch buffer.'''
             self.lgr.debug('findKernelWrite, addr 0x%x in initial dataWatch range')
-            cycle = self.watchMarks.getCycle(0)
             if rev_to_call is None:
                 self.lgr.debug('findKernelWrite, rev_to_call is None')
             else:
-                self.rev_to_call.skipToTest(cycle)
+                self.dataWatch.goToMark(0)
     
                 if satisfy_value is not None:
                     self.top.restoreDebugBreaks()
