@@ -211,7 +211,7 @@ class DataWatch():
         if self.return_hap is None:
             return
         if self.cpu.cycles < self.cycles_was:
-            self.lgr.debug('dataWatch suspect a ghost frame, returned from assumed memsomething, but cycles less than when we read the data')
+            self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething, but cycles less than when we read the data')
             SIM_run_alone(self.startUndoAlone, mem_something)
             return
         eip = self.top.getEIP(self.cpu)
@@ -256,6 +256,19 @@ class DataWatch():
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (mem_something.dest, mem_something.count))
             buf_start = self.findRange(mem_something.dest)
             self.watchMarks.memset(mem_something.dest, mem_something.count, buf_start)
+        elif mem_something.fun == 'strdup':
+            if self.cpu.architecture == 'arm':
+                self.lgr.error('datawatch strdup not yet for arm')
+                return
+            
+            mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
+            self.lgr.debug('dataWatch returnHap, strdup return from %s src: 0x%x dest: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
+                   mem_something.dest, mem_something.count))
+            self.setRange(mem_something.dest, mem_something.count, None) 
+            buf_start = self.findRange(mem_something.src)
+            if buf_start is None:
+                self.lgr.error('dataWatch buf_start for 0x%x is none?' % (mem_something.src))
+            self.watchMarks.copy(mem_something.src, mem_something.dest, mem_something.count, buf_start)
         elif mem_something.fun not in mem_funs:
             ''' assume iterator '''
             self.lgr.debug('dataWatch returnHap, return from iterator %s src: 0x%x ' % (mem_something.fun, mem_something.src))
@@ -294,6 +307,8 @@ class DataWatch():
                     mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                     mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
+            elif mem_something.fun == 'strdup':
+                mem_something.count = self.getStrLen(mem_something.src)        
             elif mem_something.fun == 'strcpy':
                 mem_something.count = self.getStrLen(mem_something.src)        
                 if self.cpu.architecture == 'arm':
@@ -342,11 +357,9 @@ class DataWatch():
             SIM_run_alone(self.undoAlone, mem_something)
 
     def undoAlone(self, mem_something):
-            self.lgr.debug('hitCallStopHap skip back to 0x%x' % self.save_cycle)
-            cmd = 'skip-to cycle = %d ' % self.save_cycle
-            SIM_run_command(cmd)
-            if self.cpu.cycles != self.save_cycle:
-                self.lgr.error('hitCallStopHap unable to skip to save cycle 0x%x, got 0x%x' % (self.save_cycle, self.cpu.cycles))
+            self.lgr.debug('undoAlone skip back to 0x%x' % self.save_cycle)
+            if not self.skipToTest(self.save_cycle):
+                self.lgr.error('undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (self.save_cycle, self.cpu.cycles))
                 return
             else:
                 self.lgr.debug('skip done')
@@ -354,7 +367,7 @@ class DataWatch():
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             self.watch()
             self.finishReadHap(mem_something.op_type, eip, mem_something.src, mem_something.length, mem_something.start, pid)
-            self.lgr.debug('hitCallStopHap would run forward')
+            self.lgr.debug('undoAlone would run forward')
             SIM_run_command('c')
 
     def hitCallStopHap(self, mem_something, one, exception, error_string):
@@ -401,9 +414,10 @@ class DataWatch():
         self.call_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
         self.call_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.hitCallStopHap, mem_something)
-        self.save_cycle = self.cpu.cycles
-        self.lgr.debug('break %d set on IP of call 0x%x (phys 0x%x) and stop hap %d set, now reverse' % (self.call_break, 
-           mem_something.called_from_ip, phys_block.address, self.call_hap))
+        ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
+        self.save_cycle = self.cpu.cycles - 1
+        self.lgr.debug('memStuffStopHap break %d set on IP of call 0x%x (phys 0x%x) and stop hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
+           mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
         SIM_run_alone(self.revAlone, None)
 
     def getStrLen(self, src):
@@ -801,3 +815,22 @@ class DataWatch():
 
     def nextWatchMark(self):
         return self.watchMarks.nextWatchMark()
+
+    def skipToTest(self, cycle):
+        while SIM_simics_is_running():
+            self.lgr.error('skipToTest but simics running')
+            time.sleep(1)
+        retval = True
+        SIM_run_command('pselect %s' % self.cpu.name)
+        cmd = 'skip-to cycle = %d ' % cycle
+        SIM_run_command(cmd)
+        now = self.cpu.cycles
+        if now != cycle:
+            self.lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
+            time.sleep(1)
+            SIM_run_command(cmd)
+            now = self.cpu.cycles
+            if now != cycle:
+                self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
+                retval = False
+        return retval
