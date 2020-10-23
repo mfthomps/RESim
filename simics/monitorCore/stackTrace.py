@@ -251,7 +251,7 @@ class StackTrace():
         #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
-        self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+        #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
@@ -406,7 +406,7 @@ class StackTrace():
             if len(self.frames) < i+1:
                 break
             frame = self.frames[i]
-            self.lgr.debug('StackTrace memsomething frame instruct is %s' % frame.instruct)
+            #self.lgr.debug('StackTrace memsomething frame instruct is %s' % frame.instruct)
             if frame.instruct is not None:
                 if frame.fun_name is not None:
                     fun = frame.fun_name
@@ -418,7 +418,7 @@ class StackTrace():
                             fun_hex = int(fun, 16) 
                             if self.ida_funs is not None:
                                 fun_name = self.ida_funs.getName(fun_hex)
-                                self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                                #self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
                                 if fun_name is not None:
                                     fun = fun_name
                             else:
@@ -426,7 +426,7 @@ class StackTrace():
                         except ValueError:
                             pass
 
-                    self.lgr.debug('StackTrace memsomething fun is %s' % fun)
+                    #self.lgr.debug('StackTrace memsomething fun is %s' % fun)
                     if fun in mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
                         if fun in mem_funs:
                             self.lgr.debug('fun in mem_funs %s' % fun)
@@ -444,7 +444,8 @@ class StackTrace():
                         retval = self.MemStuff(ret_addr, fun, frame.ip)
                         break
                     else:
-                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                        #self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                        pass
         return retval
 
 
