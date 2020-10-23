@@ -5,6 +5,7 @@ class WatchMarks():
         self.cpu = cpu
         self.lgr = lgr
         self.prev_ip = []
+        self.recent_buf_address = None
 
     def showMarks(self):
         i = 0
@@ -123,9 +124,9 @@ class WatchMarks():
             self.cycle = cycle
             self.ip = ip
             self.mark = msg
-        def getJson(self):
+        def getJson(self, origin):
             retval = {}
-            retval['cycle'] = self.cycle
+            retval['cycle'] = self.cycle - origin
             retval['ip'] = self.ip
             retval['msg'] = self.mark.getMsg()
             return retval
@@ -182,10 +183,10 @@ class WatchMarks():
         else:
             return None
 
-    def getWatchMarks(self):
+    def getWatchMarks(self, origin=0):
         retval = []
         for mark in self.mark_list:
-            retval.append(mark.getJson())
+            retval.append(mark.getJson(origin))
         return retval        
 
     def getCycle(self, index):
@@ -268,7 +269,12 @@ class WatchMarks():
                self.lgr.debug('watchMarks firstBufferAddress is DataMark addr 0x%x' % mark.mark.start)
                retval = mark.mark.start
                break 
-
+        if retval is not None:
+            self.recent_buf_address = retval
+            self.lgr.debug('watchMarks firstBuffer address 0x%x' % retval)
+        else:
+            self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
+            retval = self.recent_buf_address
         return retval
 
     def firstBufferIndex(self):
@@ -285,3 +291,18 @@ class WatchMarks():
                break 
            index += 1
         return retval
+
+    def nextWatchMark(self):
+        retval = None
+        cur_cycle = self.cpu.cycles
+        index = 0
+        for mark in self.mark_list:
+            if mark.cycle > cur_cycle:
+                retval = index
+                break
+            index += 1
+        return retval
+
+    def undoMark(self):
+        self.mark_list.pop()
+

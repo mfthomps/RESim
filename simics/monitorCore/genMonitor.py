@@ -1443,7 +1443,7 @@ class GenMonitor():
         print('start_cycle:%x' % self.bookmarks.getFirstCycle())
 
     def getFirstCycle(self):
-        pid = self.getBookmarkPid()
+        #pid = self.getBookmarkPid()
         return self.bookmarks.getFirstCycle()
 
     def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None):
@@ -2702,6 +2702,7 @@ class GenMonitor():
         self.dataWatch[self.target].showWatchMarks()
 
     def getWatchMarks(self):
+        self.lgr.debug('getWatchMarks')
         watch_marks = self.dataWatch[self.target].getWatchMarks()
         try:
             jmarks = json.dumps(watch_marks)
@@ -2709,6 +2710,7 @@ class GenMonitor():
         except Exception as e:
             self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
+        self.lgr.debug('getWatchMarks done')
 
     def getWriteMarks(self):
         self.lgr.debug('genMonitor getWritemarks')
@@ -2877,6 +2879,7 @@ class GenMonitor():
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
 
     def traceInject(self, dfile):
+        self.lgr.debug('traceInject %s' % dfile)
         if not os.path.isfile(dfile):
             print('File not found at %s\n\n' % dfile)
             return
@@ -3164,6 +3167,13 @@ class GenMonitor():
     def startDataSessions(self):
         if self.coverage is not None:
             SIM_run_alone(self.coverage.startDataSessions, None)
+
+    def nextWatchMark(self):
+        n = self.dataWatch[self.target].nextWatchMark()
+        if n is not None:
+            print(n)
+        else:
+            print('No watch marks after current cycle')
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
