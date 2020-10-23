@@ -1,7 +1,7 @@
 from simics import *
 import json
 import os
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy', 'strchr']
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy', 'strchr', 'strdup']
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None):
@@ -411,7 +411,13 @@ class StackTrace():
                 if frame.fun_name is not None:
                     fun = frame.fun_name
                     if fun.startswith('_') or fun.startswith('.'):
-                        fun = fun[1:]
+                        if fun.startswith('__'):
+                            if fun.startswith('___'):
+                                fun = fun[3:]
+                            else:
+                                fun = fun[2:]
+                        else:
+                            fun = fun[1:]
                     if '@' in frame.fun_name:
                         fun = frame.fun_name.split('@')[0]
                         try:
