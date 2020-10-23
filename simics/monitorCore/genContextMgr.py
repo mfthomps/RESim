@@ -524,10 +524,10 @@ class GenContextMgr():
             rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.watch_rec_list:
             if rec is None:
-                self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
+                #self.lgr.debug('genContextManager, addTask got rec of None for pid %d, pending' % pid)
                 self.pending_watch_pids.append(pid)
             else:
-                self.lgr.debug('genContextManager, addTask pid %d add rec 0x%x' % (pid, rec))
+                #self.lgr.debug('genContextManager, addTask pid %d add rec 0x%x' % (pid, rec))
                 self.watch_rec_list[rec] = pid
                 self.watchExit(rec=rec, pid=pid)
             if pid not in self.pid_cache:
@@ -781,7 +781,7 @@ class GenContextMgr():
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? '''
-            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            #self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return
         cell = self.default_context
         #cell = self.resim_context
