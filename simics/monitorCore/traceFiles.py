@@ -27,6 +27,8 @@ class TraceFiles():
             return
         self.open_files[fd] = self.FileWatch(None, outfile)
         self.open_files[fd].fd = fd
+        with open(outfile, 'w') as fh:
+                fh.write('start of RESim copy of FD %d\n' % fd) 
         self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
         
 
