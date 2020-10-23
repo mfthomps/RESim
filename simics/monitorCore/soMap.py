@@ -125,11 +125,14 @@ class SOMap():
         self.text_start[pid] = None
         self.text_end[pid] = None
 
-    def setContext(self, pid_in):
-        pid = self.getThreadPid(pid_in, quiet=True)
+    def setContext(self, pid_list):
+        pid = None
+        for in_pid in pid_list:
+            if in_pid in self.so_file_map:
+                pid = in_pid
         if pid is None:
-            pid = pid_in
-        if pid in self.text_start:
+            self.lgr.error('soMap setContext found for any input pids %s' % (str(pid_list)))
+        elif pid in self.text_start:
             self.context_manager.recordText(self.text_start[pid], self.text_end[pid])
         else:
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
