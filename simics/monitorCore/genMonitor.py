@@ -972,7 +972,7 @@ class GenMonitor():
 
     def debugPidList(self, pid_list, debug_function):
         #self.stopTrace()
-        self.soMap[self.target].setContext(pid_list[0])
+        self.soMap[self.target].setContext(pid_list)
         self.lgr.debug('debugPidList cell %s' % self.target)
         f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
@@ -2919,7 +2919,7 @@ class GenMonitor():
         self.traceAll()
         SIM_run_command('c')
         
-    def injectIO(self, dfile):
+    def injectIO(self, dfile, stay=False):
         ''' Go to the given watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2968,9 +2968,10 @@ class GenMonitor():
         self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
-        self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr)
-        print('retracking IO') 
-        self.retrack(clear=False)    
+        if not stay:
+            self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr)
+            print('retracking IO') 
+            self.retrack(clear=False)    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
