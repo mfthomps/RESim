@@ -70,7 +70,7 @@ class Coverage():
         else:
             self.lgr.debug('cover no address in so_entry for %s' % self.full_path)
             return
-        self.lgr.debug('cover offset 0x%x' % self.offset)
+        #self.lgr.debug('cover offset 0x%x' % self.offset)
         if self.blocks is None:
             self.lgr.error('No basic blocks defined')
             return
@@ -83,8 +83,8 @@ class Coverage():
                 #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
                 bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
                 self.bp_list.append(bp)                 
-                self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
-                   int(fun), bb, self.offset, bp))
+                #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
+                #   int(fun), bb, self.offset, bp))
         self.lgr.debug('generated %d breaks, now set bb_hap first bp: %d  last: %d' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1]))
         self.block_total = len(self.bp_list)
         #self.bb_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
@@ -95,9 +95,9 @@ class Coverage():
         ''' HAP when a bb is hit '''
         addr = memory.logical_address
         if addr == 0:
-            self.lgr.debug('bbHap, wtf, address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
+            self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
-        self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
+        #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
         if self.context_manager.watchingThis() and len(self.bb_hap) > 0:
             addr = memory.logical_address
             if addr not in self.blocks_hit:
@@ -106,9 +106,9 @@ class Coverage():
                 addr_str = '%d' % (addr - self.offset)
                 if addr_str in self.blocks:
                     self.funs_hit.append(addr)
-                    self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
-                self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
-                       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
+                    #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
+                #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
+                #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
@@ -152,7 +152,7 @@ class Coverage():
                         ofun_rel = ofun_val + self.offset 
                         ofun_str = str(ofun_rel)
                         if ofun_str not in hit_blocks:
-                            self.lgr.debug('saveCoverage fun %s (0x%x) not in hit_blocks add it' % (ofun_str, ofun_rel))
+                            #self.lgr.debug('saveCoverage fun %s (0x%x) not in hit_blocks add it' % (ofun_str, ofun_rel))
                             hit_blocks[ofun_str] = []
                         hit_blocks[ofun_str].append(bb)       
                         got_it = True
@@ -177,13 +177,13 @@ class Coverage():
         for bb in self.blocks_hit:
             breakpoint = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
             if prev_break is not None and breakpoint != (prev_break+1):
-                self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
+                #self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
                 hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
                 tmp_list = []
                 self.bb_hap.append(hap)
 
             tmp_list.append(breakpoint)
-            self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
+            #self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
             ''' so it will be deleted '''
             self.bp_list.append(bb)
             prev_break = breakpoint    
