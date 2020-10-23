@@ -42,6 +42,10 @@ class DataWatch(simplecustviewer_t):
         iterator_name = "tag_iterator"
         idaapi.register_action(idaapi.action_desc_t(iterator_name, "Tag function as iterator", self.datawatch_handler(self.tagIterator)))
         idaapi.attach_action_to_popup(form, None, iterator_name)
+
+        watch_name = "next_watch_mark"
+        idaapi.register_action(idaapi.action_desc_t(watch_name, "Next watch mark", self.datawatch_handler(self.nextWatchMark)))
+        idaapi.attach_action_to_popup(form, None, watch_name)
         #self.Show()
 
     def tagIterator(self):
@@ -60,6 +64,16 @@ class DataWatch(simplecustviewer_t):
                 time.sleep(1)
                 self.updateDataWatch()
 
+    def nextWatchMark(self):
+        command = '@cgc.nextWatchMark()'
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        try:
+            index = int(simicsString)
+        except:
+            print('%s' % simicsString)
+            return
+        self.Jump(index)
+
     def updateDataWatch(self):
         print "in updateDataWatch"
         #self.Close()
@@ -68,7 +82,7 @@ class DataWatch(simplecustviewer_t):
         retval = []
         self.ClearLines()
         #self.Refresh()
-        #print('did refresh of clear')
+        print('did refresh of clear')
         command = '@cgc.getWatchMarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         if type(simicsString) is int:
@@ -82,7 +96,7 @@ class DataWatch(simplecustviewer_t):
         index = 0
         for entry in data_json:
             instruct = idc.GetDisasm(entry['ip'])
-            uline = '%3d 0x%08x %s' % (index, entry['ip'], entry['msg'])
+            uline = '%3d 0x%08x 0x%08x %s' % (index, entry['ip'], entry['cycle'], entry['msg'])
             line = uline.encode('ascii', 'replace')
             #print('do %s' % line)
             if 'return from' in line:
@@ -96,6 +110,15 @@ class DataWatch(simplecustviewer_t):
             self.AddLine(cline)
             index += 1
         self.Refresh()
+        command = '@cgc.nextWatchMark()'
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        try:
+            index = int(simicsString)
+        except:
+            print('%s' % simicsString)
+            return
+        self.Jump(index)
+            
         #self.Show()
         return retval
 
