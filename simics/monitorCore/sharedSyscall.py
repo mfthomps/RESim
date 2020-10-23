@@ -265,6 +265,9 @@ class SharedSyscall():
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
                 if byte_array is not None:
                     s = ''.join(map(chr,byte_array))
+                    if self.traceFiles is not None:
+                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                        self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
                 trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d from 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, 
