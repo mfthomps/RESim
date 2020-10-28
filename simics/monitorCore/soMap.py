@@ -196,7 +196,7 @@ class SOMap():
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
             print('no so map for %d' % pid)
-        print('SO Map for pid: %d' % pid)
+        print('SO Map for threads led by group leader pid: %d' % pid)
         if pid in self.so_file_map:
             if pid in self.text_start:
                 print('0x%x - 0x%x   %s' % (self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
