@@ -232,7 +232,7 @@ class GenContextMgr():
 
     def genDeleteHap(self, hap_handle, immediate=False):
         if hap_handle is None:
-            self.lgr.error('genDelteHap called with handle of none')
+            self.lgr.warning('genDelteHap called with handle of none')
             return
         #self.lgr.debug('genDeleteHap hap_handle %d' % hap_handle)
         hap_copy = list(self.haps)
@@ -248,7 +248,7 @@ class GenContextMgr():
                         self.breakpoints.remove(bp)
                         #self.lgr.debug('removing bp %d from hap_handle %d  break_num %s' % (bp.handle, hap_handle, str(bp.break_num)))
                     else:
-                        self.lgr.error('genDeleteHap bp not in list, handle %d ' % (bp.handle))
+                        self.lgr.warning('genDeleteHap bp not in list, handle %d ' % (bp.handle))
                 #self.lgr.debug('genDeleteHap removing hap %d from list' % hap.handle)
                 self.haps.remove(hap)
                 return
