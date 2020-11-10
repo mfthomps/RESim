@@ -296,8 +296,10 @@ class DataWatch():
                 mem_something.src = None
                 if self.cpu.architecture == 'arm':
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
                 else:
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
             elif mem_something.fun == 'memcmp':
                 if self.cpu.architecture == 'arm':
                     mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
@@ -713,6 +715,9 @@ class DataWatch():
 
     def showWatchMarks(self):
         self.watchMarks.showMarks()
+
+    def saveWatchMarks(self, fpath):
+        self.watchMarks.saveMarks(fpath)
 
     def tagIterator(self, index):
         ''' Call from IDA Client to collapse a range of data references into the given watch mark index ''' 

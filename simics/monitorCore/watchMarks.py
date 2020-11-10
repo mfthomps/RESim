@@ -7,6 +7,14 @@ class WatchMarks():
         self.prev_ip = []
         self.recent_buf_address = None
 
+    def saveMarks(self, fpath):
+        with open(fpath, 'w') as fh:
+            i = 0
+            for mark in self.mark_list:
+                the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
+                fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
+                i += 1
+
     def showMarks(self):
         i = 0
         for mark in self.mark_list:
