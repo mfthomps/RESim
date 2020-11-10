@@ -391,11 +391,11 @@ class PageFaultGen():
 
     def stopPageFaults(self):
         if self.exception_hap is not None:
-            self.lgr.debug('stopPageFaults delete excption_hap')
+            #self.lgr.debug('stopPageFaults delete excption_hap')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap)
             self.exception_hap = None
         if self.exception_hap2 is not None:
-            self.lgr.debug('stopPageFaults delete excption_hap2')
+            #self.lgr.debug('stopPageFaults delete excption_hap2')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap2)
             self.exception_hap2 = None
 
