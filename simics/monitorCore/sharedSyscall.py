@@ -604,6 +604,7 @@ class SharedSyscall():
                     trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, s))
                     if self.traceFiles is not None:
                         #self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
+                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
                         self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
