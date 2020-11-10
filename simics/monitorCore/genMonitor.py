@@ -1056,10 +1056,12 @@ class GenMonitor():
                     #self.debug()
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
+                    ''' TBD FIXME '''
                     self.lgr.debug('toRunningProc already at pid %d, done' % pid)
                     f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
                     self.toUser([f1, f2])
+                    #self.debugGroup()
                     return
         prec = Prec(cpu, proc, want_pid_list)
         phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
@@ -2700,6 +2702,9 @@ class GenMonitor():
 
     def showWatchMarks(self):
         self.dataWatch[self.target].showWatchMarks()
+
+    def saveWatchMarks(self, fpath):
+        self.dataWatch[self.target].saveWatchMarks(fpath)
 
     def getWatchMarks(self):
         self.lgr.debug('getWatchMarks')
