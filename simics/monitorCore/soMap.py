@@ -42,6 +42,7 @@ class SOMap():
             self.text_prog = so_pickle['text_prog']
             ''' backward compatibility '''
             if self.text_start is None:
+                self.lgr.debug('soMap loadPickle text_start is none')
                 self.text_start = {}
                 self.text_end = {}
                 self.text_prog = {}
@@ -110,14 +111,21 @@ class SOMap():
             retval = False
         return retval
 
-    def addText(self, start, size, prog, pid):
-        self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
-        self.text_start[pid] = start
-        self.text_end[pid] = start+size
-        self.text_prog[pid] = prog
-        if pid not in self.so_addr_map:
-            self.so_addr_map[pid] = {}
-            self.so_file_map[pid] = {}
+    def addText(self, start, size, prog, pid_in):
+        ''' First check that SO not already loaded from a snapshot '''
+        pid = self.getThreadPid(pid_in, quiet=True)
+        if pid is None:
+            pid = pid_in
+        if pid in self.text_start:
+            self.lgr.debug('soMap addText pid %d already in map len of so_addr_map %d' % (pid, len(self.so_file_map)))
+        else:
+            self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
+            self.text_start[pid] = start
+            self.text_end[pid] = start+size
+            self.text_prog[pid] = prog
+            if pid not in self.so_addr_map:
+                self.so_addr_map[pid] = {}
+                self.so_file_map[pid] = {}
 
     def noText(self, prog, pid):
         self.lgr.debug('soMap noText, prog %s pid:%d' % (prog, pid))
