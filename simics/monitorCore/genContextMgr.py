@@ -494,24 +494,27 @@ class GenContextMgr():
                 del self.task_rec_bp[pid]
                 del self.task_rec_hap[pid]
             if len(self.watch_rec_list) == 0:
-                self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
-                #self.debugging_comm = None
-                #self.debugging_cell = None
-                pids = self.task_utils.getPidsForComm(self.debugging_comm) 
-                if len(pids) == 0:
-                    self.cpu.current_context = self.default_context
-                    self.stopWatchTasks()
-                    retval = True
+                if self.debugging_comm is None:
+                    self.lgr.warning('contextManager rmTask debugging_comm is None')
                 else:
-                    if self.top.swapSOPid(pid, pids[0]):
-                        self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
-                        ''' replace SOMap pid with new one from fork '''
-                        self.debugging_pid = pids[0]
-                    else:
-                        ''' TBD poor hueristic for deciding it was not a fork '''
+                    self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
+                    #self.debugging_comm = None
+                    #self.debugging_cell = None
+                    pids = self.task_utils.getPidsForComm(self.debugging_comm) 
+                    if len(pids) == 0:
                         self.cpu.current_context = self.default_context
                         self.stopWatchTasks()
                         retval = True
+                    else:
+                        if self.top.swapSOPid(pid, pids[0]):
+                            self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
+                            ''' replace SOMap pid with new one from fork '''
+                            self.debugging_pid = pids[0]
+                        else:
+                            ''' TBD poor hueristic for deciding it was not a fork '''
+                            self.cpu.current_context = self.default_context
+                            self.stopWatchTasks()
+                            retval = True
             elif pid == self.debugging_pid:
                 self.debugging_pid = self.pid_cache[0]
                 self.lgr.debug('rmTask debugging_pid now %d' % self.debugging_pid)
