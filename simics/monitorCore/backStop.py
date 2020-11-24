@@ -76,8 +76,11 @@ class BackStop():
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
         self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
 
-    def setFutureCycle(self, cycles):
-        SIM_run_alone(self.setFutureCycleAlone, cycles)
+    def setFutureCycle(self, cycles, now=False):
+        if not now:
+            SIM_run_alone(self.setFutureCycleAlone, cycles)
+        else:
+            self.setFutureCycleAlone(cycles)
 
 if __name__ == "__main__":
     bs = backStop()
