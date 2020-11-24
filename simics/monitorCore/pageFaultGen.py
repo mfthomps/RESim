@@ -156,9 +156,9 @@ class PageFaultGen():
         #if cpu != hap_cpu:
         #    self.lgr.debug('pageFaultHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
         #    return
-        use_cell = self.cell
-        if self.debugging_pid is not None:
-            use_cell = self.context_manager.getRESimContext()
+        #use_cell = self.cell
+        #if self.debugging_pid is not None:
+        #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
         eip = self.exception_eip
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
