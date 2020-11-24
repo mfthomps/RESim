@@ -517,7 +517,7 @@ class TaskUtils():
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
                     if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
                         thread_group_addr = task_addr + self.param.ts_thread_group_list_head
-                        #self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
+                        self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
                         return thread_group_addr
                     stack.append((task.thread_group.next, False))
     
@@ -525,7 +525,9 @@ class TaskUtils():
                 task.in_main_list = True
                 if task.next:
                     if (task.next) == task_rec_addr:
-                        return (task_addr + self.param.ts_next)
+                        retval = task_addr + self.param.ts_next
+                        #self.lgr.debug('getTaskListPtr x true return 0x%x  pid:%d (%s)' % (retval, task.pid, task.comm))
+                        return retval
                     stack.append((task.next, True))
             elif x is False:
                 pass
@@ -536,6 +538,15 @@ class TaskUtils():
                         stack.append((s, x))
     
         return None
+
+    def getPidCommFromNext(self, next_addr):
+        pid = None
+        comm = None
+        if next_addr is not None:
+            rec = next_addr - self.param.ts_next
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
+        return pid, comm
 
     def currentProcessInfo(self, cpu=None):
         cur_addr = self.getCurTaskRec()
@@ -793,6 +804,8 @@ class TaskUtils():
             retval['param4'] = SIM_read_phys_memory(cpu, phys_addr+3*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
             retval['param5'] = SIM_read_phys_memory(cpu, phys_addr+4*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
             retval['param6'] = SIM_read_phys_memory(cpu, phys_addr+5*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['pc'] = SIM_read_phys_memory(cpu, phys_addr+22*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            retval['sp'] = SIM_read_phys_memory(cpu, phys_addr+25*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
             return retval
     def getFrameXX(self, v_addr, cpu):
             phys_addr = self.mem_utils.v2p(cpu, v_addr)
@@ -827,12 +840,25 @@ class TaskUtils():
         if cpu.architecture == 'arm':
             for p in memUtils.param_map['arm']:
                 frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['arm'][p])
-        elif self.mem_utils.WORD_SIZE == 8 and not compat32:
-            for p in memUtils.param_map['x86_64']:
-                frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_64'][p])
+            cpl = memUtils.getCPL(cpu)
+            if cpl == 0:
+                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp_usr')
+                frame['pc'] = self.mem_utils.getRegValue(cpu, 'lr')
+                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr_usr')
+            else:
+                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
+                frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
+                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr')
         else:
-            for p in memUtils.param_map['x86_32']:
-                frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_32'][p])
+            frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
+            frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
+            if self.mem_utils.WORD_SIZE == 8 and not compat32:
+                for p in memUtils.param_map['x86_64']:
+                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_64'][p])
+            else:
+                for p in memUtils.param_map['x86_32']:
+                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_32'][p])
+        
         return frame
 
     def socketCallName(self, callname, compat32):
