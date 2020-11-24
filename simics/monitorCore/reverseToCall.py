@@ -24,10 +24,11 @@
 '''
 
 from simics import *
+import taskUtils
 import procInfo
 import traceback
 import sys
-import logging
+import os
 import decode
 import decodeArm
 import memUtils
@@ -37,6 +38,7 @@ import armCond
 import net
 import syscall
 import time
+import pickle
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -58,7 +60,8 @@ class RegisterModType():
 
 
 class reverseToCall():
-    def __init__(self, top, param, task_utils, mem_utils, page_size, context_manager, name, is_monitor_running, bookmarks, logdir, compat32):
+    def __init__(self, top, param, task_utils, mem_utils, page_size, context_manager, name, 
+                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap):
             #print('call getLogger')
             self.lgr = resim_utils.getLogger(name, logdir)
             self.context_manager = context_manager 
@@ -90,6 +93,7 @@ class reverseToCall():
             self.previous_eip = None
             self.step_into = None
             self.sysenter_cycles = {}
+            self.recent_cycle = {}
             self.jump_stop_hap = None
             self.sysenter_hap = None
             self.enter_break1 = None
@@ -104,6 +108,8 @@ class reverseToCall():
             self.save_reg_mod = None
             self.ida_funs = None
             self.satisfy_value = None
+            if run_from_snap is not None:
+                self.loadPickle(run_from_snap)
 
     def getStartCycles(self):
         return self.start_cycles
@@ -904,6 +910,7 @@ class reverseToCall():
                 self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
+                self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.doRevToModReg(reg_mod_type.value, taint=True)
                  
 
@@ -1174,7 +1181,7 @@ class reverseToCall():
 
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
-        self.lgr.debug('sysenterHap')
+        #self.lgr.debug('sysenterHap')
         reversing = False
         if reversing:
             return
@@ -1189,8 +1196,9 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    
-                    frame['pc'] = self.top.getEIP(self.cpu)
+                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x' % (frame['pc'], frame['sp'], frame['param3']))
+                    self.lgr.debug(taskUtils.stringFromFrame(frame))
+                    #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
                     if callname == 'select' or callname == '_newselect':        
                         select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
@@ -1206,11 +1214,15 @@ class reverseToCall():
                             frame['ss'] = ss
 
                     self.sysenter_cycles[pid][cycles] = frame 
-            
+                    if pid in self.recent_cycle:
+                        recent_cycle, recent_frame = self.recent_cycle[pid]
+                        if cycles > recent_cycle:
+                            self.recent_cycle[pid] = [cycles, frame]
+                    else:
+                        self.recent_cycle[pid] = [cycles, frame]
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
-
 
     def getEnterCycles(self, pid):
         retval = []
@@ -1224,6 +1236,9 @@ class reverseToCall():
         ret_cycles = None
         cur_cycles = self.cpu.cycles
         self.lgr.debug('getRecentCycleFrame pid %d' % pid)
+        if pid in self.recent_cycle:
+            ret_cycles, retval = self.recent_cycle[pid]
+        '''
         if pid in self.sysenter_cycles:
             got_it = None
             for cycles in sorted(self.sysenter_cycles[pid]):
@@ -1240,6 +1255,7 @@ class reverseToCall():
             else:
                 retval = self.sysenter_cycles[pid][cycles] 
                 ret_cycles = cycles
+        '''
         return retval, ret_cycles
 
     def satisfyCondition(self, pc):
@@ -1261,3 +1277,18 @@ class reverseToCall():
                 self.lgr.error('Cannot yet handle condition %s' % instruct[1])
             retval = False
         return retval 
+
+    def loadPickle(self, name):
+        rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
+        if os.path.isfile(rev_call_file):
+            self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
+            rev_call_pickle = pickle.load( open(rev_call_file, 'rb') ) 
+            self.recent_cycle = rev_call_pickle['recent_cycle']
+
+    def pickleit(self, name):
+        rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
+        rev_call_pickle = {}
+        rev_call_pickle['recent_cycle'] = self.recent_cycle
+        fd = open( rev_call_file, "wb") 
+        pickle.dump( rev_call_pickle, fd)
+        self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
