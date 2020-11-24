@@ -6,6 +6,7 @@ class WatchMarks():
         self.lgr = lgr
         self.prev_ip = []
         self.recent_buf_address = None
+        self.recent_buf_max_len = None
 
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
@@ -22,10 +23,11 @@ class WatchMarks():
             i += 1
         
     class CallMark():
-        def __init__(self, msg, max_len, recv_addr):
+        def __init__(self, msg, max_len, recv_addr, length):
             self.msg = msg
             self.max_len = max_len
             self.recv_addr = recv_addr
+            self.len = length
         def getMsg(self):
             return self.msg
 
@@ -54,7 +56,7 @@ class WatchMarks():
             return self.msg
 
     class DataMark():
-        def __init__(self, addr, start, length, cmp_ins):
+        def __init__(self, addr, start, length, cmp_ins, modify=False):
             self.addr = addr
             if addr is not None:
                 self.offset = addr - start
@@ -65,10 +67,13 @@ class WatchMarks():
             self.cmp_ins = cmp_ins
             self.end_addr = None
             self.loop_count = 0
+            self.modify = modify
 
         def getMsg(self):
-            if self.addr is None:
-                mark_msg = 'Memory mod, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
+            if self.modify:
+                mark_msg = 'Memory mod, addr: 0x%x original buffer %d bytes starting at 0x%x' % (self.addr, self.length, self.start)
+            elif self.addr is None:
+                mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
             elif self.end_addr is None:
                 mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
@@ -117,6 +122,19 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class ScanMark():
+        def __init__(self, src, dest, count):
+            self.src = src    
+            self.dest = dest    
+            self.count = count    
+            if dest is None:
+                self.msg = 'sscanf failed to parse from 0x%x' % src
+            else:
+                self.msg = 'sscanf src 0x%x to 0x%x' % (src, dest)
+
+        def getMsg(self):
+            return self.msg
+
     class IteratorMark():
         def __init__(self, fun, addr, buf_start): 
             self.fun = fun
@@ -144,9 +162,9 @@ class WatchMarks():
         if len(self.prev_ip) > 4:
             self.prev_ip.pop(0)
 
-    def markCall(self, msg, max_len, recv_addr=None):
+    def markCall(self, msg, max_len, recv_addr=None, length=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.CallMark(msg, max_len, recv_addr)
+        cm = self.CallMark(msg, max_len, recv_addr, length)
         ''' HACK to account for recv recorded while  about to leave kernel '''
         cycles = self.cpu.cycles
         if recv_addr is not None:
@@ -158,9 +176,9 @@ class WatchMarks():
             self.lgr.debug('watchMarks markCall 0x%x %s recv_addr: 0x%x' % (ip, msg, recv_addr))
         self.recordIP(ip)
   
-    def memoryMod(self, start, length):
+    def memoryMod(self, start, length, addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        dm = self.DataMark(None, start, length, None)
+        dm = self.DataMark(addr, start, length, None)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
         self.lgr.debug('watchMarks memoryMod 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
@@ -255,6 +273,12 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks strchr 0x%x %s' % (ip, cm.getMsg()))
 
+    def sscanf(self, src, dest, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        sm = self.ScanMark(src, dest, count)        
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, sm))
+        self.lgr.debug('watchMarks sscanf 0x%x %s' % (ip, sm.getMsg()))
+
     def iterator(self, fun, src, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         im = self.IteratorMark(fun, src, buf_start)
@@ -266,12 +290,14 @@ class WatchMarks():
         self.prev_ip = []
 
     def firstBufferAddress(self):
-        retval = None
+        retval = None, None
+        max_len = None
         for mark in self.mark_list:
            self.lgr.debug('check mark type %s' % type(mark.mark))
            if isinstance(mark.mark, self.CallMark) and mark.mark.recv_addr is not None:
                self.lgr.debug('watchMarks firstBufferAddress is CallMark addr 0x%x' % mark.mark.recv_addr)
                retval = mark.mark.recv_addr
+               max_len = mark.mark.max_len
                break
            elif isinstance(mark.mark, self.DataMark):
                self.lgr.debug('watchMarks firstBufferAddress is DataMark addr 0x%x' % mark.mark.start)
@@ -279,11 +305,13 @@ class WatchMarks():
                break 
         if retval is not None:
             self.recent_buf_address = retval
+            self.recent_buf_max_len = max_len
             self.lgr.debug('watchMarks firstBuffer address 0x%x' % retval)
         else:
             self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
             retval = self.recent_buf_address
-        return retval
+            length = self.recent_buf_max_len
+        return retval, max_len
 
     def firstBufferIndex(self):
         retval = None
