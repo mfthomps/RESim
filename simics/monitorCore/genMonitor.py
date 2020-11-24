@@ -71,6 +71,7 @@ import pageUtils
 import ropCop
 import coverage
 import taskSwitches
+import traceMalloc
 
 import json
 import pickle
@@ -152,7 +153,7 @@ class GenMonitor():
         self.relocate_funs = {}
         self.coverage = None
         self.real_script = None
-
+        self.trace_malloc = None
 
         self.genInit(comp_dict)
 
@@ -425,7 +426,7 @@ class GenMonitor():
             self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                    self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
-                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32)
+                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap)
             self.pfamily[cell_name] = pFamily.Pfamily(cell, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
@@ -581,7 +582,7 @@ class GenMonitor():
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
-                print('pid: %d syscall %s param1: %d addr: 0x%x' % (pid, call, frame['param1'], tasks[t].addr))
+                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x' % (pid, call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc']))
             else:
                 print('pid: %d in user space?' % pid)
 
@@ -1862,6 +1863,8 @@ class GenMonitor():
             self.context_manager[self.target].setExitBreaks()
             self.debug_breaks_set = True
             self.watchPageFaults()
+            if self.trace_malloc is not None:
+                self.trace_malloc.setBreaks()
 
     def noWatchSysEnter(self):
         self.rev_to_call[self.target].noWatchSysenter()
@@ -1885,6 +1888,8 @@ class GenMonitor():
         self.debug_breaks_set = False
         if self.coverage is not None and not keep_coverage:
             self.coverage.stopCover(keep_hits=True)
+        if self.trace_malloc is not None:
+            self.trace_malloc.stopTrace()
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -2293,14 +2298,24 @@ class GenMonitor():
             self.connectors = self.call_traces[self.target]['socketcall'].getConnectors()
             self.connectors.dumpJson('/tmp/connector.json')
 
-    def stackTrace(self, verbose=False):
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
+    def stackTrace(self, verbose=False, in_pid=None):
+        cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
+        if in_pid is not None:
+            pid = in_pid
+        else:
+            pid = cur_pid
         if pid not in self.stack_base[self.target]:
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
+        if pid == cur_pid:
+            reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        else:
+            reg_frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+       
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr)
+                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
+                 self.relocate_funs, self.user_iterators, reg_frame, self.lgr)
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
@@ -2319,9 +2334,10 @@ class GenMonitor():
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
+        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
-                self.user_iterators, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
+                self.user_iterators, reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
         return st
 
     def getStackTrace(self):
@@ -2340,8 +2356,10 @@ class GenMonitor():
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
+        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, self.user_iterators, self.lgr)
+                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
+                  self.relocate_funs, self.user_iterators, reg_frame, self.lgr)
         j = st.getJson() 
         self.lgr.debug(j)
         #print j
@@ -2546,6 +2564,7 @@ class GenMonitor():
                 self.task_utils[cell_name].pickleit(name)
                 self.soMap[cell_name].pickleit(name)
                 self.traceProcs[cell_name].pickleit(name)
+                self.rev_to_call[cell_name].pickleit(name)
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
@@ -2925,7 +2944,7 @@ class GenMonitor():
         SIM_run_command('c')
         
     def injectIO(self, dfile, stay=False):
-        ''' Go to the given watch mark (or the origin if the watch mark does not exist),
+        ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
             to match the length of the  dfile.  Finally, run trackIO on the given file descriptor.
@@ -2940,29 +2959,26 @@ class GenMonitor():
             byte_string = fh.read()
         self.dataWatch[self.target].goToRecvMark()
 
-        cpu = self.cell_config.cpuFromCell(self.target)
-
         lenreg = None
         lenreg2 = None
-        addr = self.dataWatch[self.target].firstBufferAddress()
-        if addr is None:
-            self.lgr.error('injectIO, no firstBufferAddress found')
-            return
+        cpu = self.cell_config.cpuFromCell(self.target)
         if cpu.architecture == 'arm':
-            addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
-            ''' Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
+            ''' length register, seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
             lenreg2 = 'r7'
         else:
             lenreg = 'eax'
+        addr, max_len = self.dataWatch[self.target].firstBufferAddress()
+        if addr is None:
+            self.lgr.error('injectIO, no firstBufferAddress found')
+            return
         self.dataWatch[self.target].clearWatchMarks()
         self.dataWatch[self.target].clearWatches()
-        prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
-        self.lgr.debug('injectIO cleare watch marks prev_len is %s' % prev_len)
-        if len(byte_string) > prev_len:
+        self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
+        if len(byte_string) > max_len:
            
-            a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
+            a = raw_input('Warning: your injection is %d bytes; length of original read was %d bytes.  Continue?' % (len(byte_string), max_len))
             if a.lower() != 'y':
                 return
         self.lgr.debug('injectIO Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
@@ -2974,7 +2990,7 @@ class GenMonitor():
         print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
         if not stay:
-            self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr)
+            self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
             print('retracking IO') 
             self.retrack(clear=False)    
     
@@ -3180,6 +3196,19 @@ class GenMonitor():
             print(n)
         else:
             print('No watch marks after current cycle')
+
+    def showContext(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        print('context: %s' % (str(cpu.current_context)))
+
+    def traceMalloc(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        cell = self.cell_config.cell_context[self.target]
+        self.trace_malloc = traceMalloc.TraceMalloc(self.ida_funs, self.context_manager[self.target], 
+               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.lgr)
+
+    def showMalloc(self):
+        self.trace_malloc.showList()
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
