@@ -189,7 +189,7 @@ e.g., "{\tt @cgc.tasks()}".
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
 Tracing continues until the stopTrace command is issued.  Also see \ref{postprocessing}
 
-\item {\tt runTo} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
+\item {\tt toProc} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
 
 \item {\tt writeConfig} – Uses the Simics write-configuration command to save the simulation state for later loading with read-configuration.  This wrapper also saves process naming information, shared object maps and network configuration commands for reference subsequent to use of the read-configuration function.
 
@@ -360,6 +360,9 @@ reverse track function is used to determine the source of the register content, 
 comparison and then uses {\tt retrack} to run forward and track the new execution flow.
 
 \item {\tt idaMessage} -- display the most recent message made available to IDA.  For example, after a runToBind, this will display the FD that was bound to.
+
+\item {\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of Watch Marks. Uuse {\tt showMalloc} to 
+then list by pid, block address and size.
 
 \end{itemize}
 
@@ -988,7 +991,7 @@ or thread family.  Otherwise, the default context is used.  The context of each 
 such that breakpoints are only hit when in the corresponding context.  For example, assume we are debugging PID 95
 (for simplicity, assume no threads).
 Whenever PID 95 is schedule, the processor context is set to resim.  The context is returned to the default whenever
-PID 95 is not scheduled.  System call breakpoints set during debugging, e.g., vi runToWrite, will be associated
+PID 95 is not scheduled.  System call breakpoints set during debugging, e.g., runToWrite, will be associated
 with the resim context.  These breakpoints will only be hit when the processor is in the resim context. 
 Breakpoints may be set in the default context while debugging, e.g., handle a background Dmod (see \ref{background_dmod}.  Those
 breakpoints will not be caught when processor is in the resim context.
@@ -1210,6 +1213,9 @@ cycle.  Note this is only available for the very first coverage hit of each basi
 Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
 which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
 
+\subsection{Real networks and UDP}
+Using {\tt cat foo > /dev/udp/localhost/60060} is fine for a single packet.  However multiple packets seem to get lost unless brief sleeps are
+added between the cat commands.
 
 
 \end{document}
