@@ -1192,7 +1192,8 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.stopTrackIO()
         pid = self.getBookmarkPid()
-        self.lgr.debug('goToOrigin for pid %d' % pid)
+        if pid is not None:
+            self.lgr.debug('goToOrigin for pid %d' % pid)
         msg = self.bookmarks.goToOrigin()
         self.context_manager[self.target].setIdaMessage(msg)
         self.restoreDebugBreaks(was_watching=True)
@@ -2685,8 +2686,12 @@ class GenMonitor():
         self.lgr.debug('retrack')
         if clear:
             cpu = self.cell_config.cpuFromCell(self.target)
-            prev_cycle = cpu.cycles - 1
-            self.dataWatch[self.target].clearWatches(prev_cycle)
+            origin = self.bookmarks.getFirstCycle()
+            if origin == cpu.cycles:
+                self.dataWatch[self.target].clearWatches(-1)
+            else:
+                prev_cycle = cpu.cycles - 1
+                self.dataWatch[self.target].clearWatches(prev_cycle)
         self.dataWatch[self.target].watch(break_simulation=False)
         self.dataWatch[self.target].setCallback(self.stopTrackIO)
         self.dataWatch[self.target].rmBackStop()
@@ -3205,7 +3210,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
         self.trace_malloc = traceMalloc.TraceMalloc(self.ida_funs, self.context_manager[self.target], 
-               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.lgr)
+               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr)
 
     def showMalloc(self):
         self.trace_malloc.showList()
