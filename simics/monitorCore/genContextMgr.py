@@ -215,7 +215,7 @@ class GenContextMgr():
         handle = self.nextBreakHandle()
         if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
             cell = self.resim_context
-            #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
+            self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
         #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
@@ -364,8 +364,8 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s' % (prev_pid, prev_comm, pid, 
-        #    comm, new_addr, len(self.watch_rec_list), self.debugging_comm))
+        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s' % (prev_pid, 
+        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), self.debugging_comm, cpu.current_context))
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -560,6 +560,10 @@ class GenContextMgr():
             return True
         else:
             return False
+
+    def restoreDefaultContext(self):
+        self.cpu.current_context = self.default_context
+        self.lgr.debug('contextManager restoreDefaultContext')
 
     def restoreDebugContext(self):
         self.cpu.current_context = self.resim_context
