@@ -2,7 +2,7 @@ from simics import *
 import json
 import os
 import memUtils
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncpy', 'mempcpy', 'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf']
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'mempcpy', 'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen']
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None):
@@ -192,6 +192,9 @@ class StackTrace():
             self.lgr.debug("isCallToMe call_instr 0x%x  eip 0x%x" % (call_instr, eip))
             if self.ida_funs is not None:
                 cur_fun = self.ida_funs.getFun(eip)
+                if cur_fun is not None:
+                    fun_name = self.ida_funs.getName(cur_fun)
+                    self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.ida_funs.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
                     self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
@@ -204,7 +207,7 @@ class StackTrace():
                         return retval 
                     if instruct[1].startswith(self.callmn):
                         fun_hex, fun = self.getFunName(instruct[1])
-                        self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s' % (fun_hex, fun))
+                        self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
                         if fun_hex == cur_fun:
                             if fun is not None:
                                 new_instruct = '%s   %s' % (self.callmn, fun)
@@ -313,6 +316,11 @@ class StackTrace():
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
         self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+        cur_fun = self.ida_funs.getFun(eip)
+        cur_fun_name = None
+        if prev_ip == eip and cur_fun is not None:
+            cur_fun_name = self.ida_funs.getName(cur_fun)
+            self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
         while not done and (count < 9000): 
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
@@ -401,6 +409,18 @@ class StackTrace():
                     if instruct.startswith(self.callmn):
                         fun_hex, fun = self.getFunName(instruct)
                         if fun is not None:
+                            if cur_fun_name is not None:
+                                if not fun.startswith(cur_fun_name):
+                                    self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
+                                    ''' don't count this against max frames '''
+                                    count += 1
+                                    ptr = ptr + self.mem_utils.WORD_SIZE
+                                    ''' TBD broken hueristic, e.g., sscanf calls strlen. hack for now... '''
+                                    cur_fun_name = None
+                                    continue
+                                else:
+                                    ''' first frame matches expected function '''
+                                    cur_fun_name = None
                             instruct = '%s   %s' % (self.callmn, fun)
                         if fun_hex is not None:
                             self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct))
@@ -436,9 +456,10 @@ class StackTrace():
                 self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
             elif self.max_frames is not None and len(self.frames)>= self.max_frames:
-                #self.lgr.debug('stackFrames got max frames, done')
+                self.lgr.debug('stackFrames got max frames, done')
                 done = True
             elif self.max_bytes is not None and count > self.max_bytes:
+                self.lgr.debug('stackFrames got max bytes, done')
                 done = True
 
 
