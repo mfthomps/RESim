@@ -320,7 +320,7 @@ class Syscall():
                         break_list.append(proc_break1)
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break1, 'syscall'))
                 else:
-                    #self.lgr.debug('SysCall no call list, no breaks set.  parms: %s' % self.param.getParamString())
+                    self.lgr.debug('SysCall no call list, no breaks set.  parms: %s' % self.param.getParamString())
                 if self.param.compat_32_entry is not None and self.param.compat_32_entry != 0:
                     ''' support 32 bit compatability '''
                     newcall_info = copy.copy(syscall_info)
