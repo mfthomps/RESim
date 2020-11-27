@@ -236,10 +236,10 @@ class DataWatch():
             self.watchMarks.compare(mem_something.dest, mem_something.src, mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.dest, mem_something.count))
-        elif mem_something.fun == 'strcmp':
+        elif mem_something.fun == 'strcmp' or mem_something.fun == 'strncmp':
             buf_start = self.findRange(mem_something.dest)
             self.watchMarks.compare(mem_something.dest, mem_something.src, mem_something.count, buf_start)
-            self.lgr.debug('dataWatch returnHap, return from %s strcmp: 0x%x  to: 0x%x count %d ' % (mem_something.fun, 
+            self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (mem_something.fun, 
                    mem_something.src, mem_something.dest, mem_something.count))
         elif mem_something.fun == 'strchr':
             buf_start = self.findRange(mem_something.dest)
@@ -283,6 +283,10 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch returnHap sscanf returned error')
                 self.watchMarks.sscanf(mem_something.src, None, None)
+        elif mem_something.fun == 'strlen':
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
+                   mem_something.count))
+            self.watchMarks.strlen(mem_something.src, mem_something.count)
       
 
         elif mem_something.fun not in mem_funs:
@@ -336,15 +340,26 @@ class DataWatch():
                     self.lgr.debug('getMemParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
                 else:
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
-            elif mem_something.fun == 'strcmp':
+            elif mem_something.fun == 'strcmp' or mem_something.fun == 'strncmp':
                 if self.cpu.architecture == 'arm':
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
-                    self.lgr.debug('getMemParams strcmp, src: 0x%x dest: 0x%x count(maybe): %s' % (mem_something.src, mem_something.dest, str(mem_something.count)))
+                    if mem_something.fun == 'strncmp':
+                        limit = self.mem_utils.getRegValue(self.cpu, 'r2')
+                        mem_something.count = min(limit, self.getStrLen(mem_something.src))
+                    else:
+                        mem_something.count = self.getStrLen(mem_something.src)        
+
+                    self.lgr.debug('getMemParams %s, src: 0x%x dest: 0x%x count: %d' % (mem_something.fun, mem_something.src, 
+                         mem_something.dest, mem_something.count))
                 else:
                     mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
-                mem_something.count = self.getStrLen(mem_something.src)        
+                    if mem_something.fun == 'strncmp':
+                        limit = self.mem_utils.readPtr(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
+                        mem_something.count = min(limit, self.getStrLen(mem_something.src))
+                    else:
+                        mem_something.count = self.getStrLen(mem_something.src)        
             elif mem_something.fun == 'strchr':
                 if self.cpu.architecture == 'arm':
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
@@ -377,12 +392,21 @@ class DataWatch():
                     mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
                 ''' TBD fix this '''
                 mem_something.count = 1
+            elif mem_something.fun == 'strlen':
+                if self.cpu.architecture == 'arm':
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+                else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+                mem_something.count = self.getStrLen(mem_something.src)        
                  
-                
             cell = self.top.getCell()
+            ''' Assume we have disabled debugging in context manager while fussing with parameters. Thus breakpoints
+                are set on the default context.  Make sure we are in the default context. '''
+            self.context_manager.restoreDefaultContext()
             proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memcpy_return_hap')
-            self.lgr.debug('getMemParams set hap on ret_ip at 0x%x Now run!' % mem_something.ret_ip)
+            self.lgr.debug('getMemParams set hap on ret_ip at 0x%x context %s Now run!' % (mem_something.ret_ip, 
+                 str(self.cpu.current_context)))
             SIM_run_command('c')
 
     def runToReturnAlone(self, mem_something):
@@ -408,7 +432,8 @@ class DataWatch():
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             self.watch(i_am_alone=True)
             self.finishReadHap(mem_something.op_type, eip, mem_something.src, mem_something.length, mem_something.start, pid)
-            self.lgr.debug('undoAlone would run forward')
+            self.lgr.debug('undoAlone would run forward, first restore debug context')
+            self.context_manager.restoreDebugContext()
             SIM_run_command('c')
 
     def hitCallStopHap(self, mem_something, one, exception, error_string):
@@ -562,7 +587,7 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         addr = memory.logical_address
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x' % (pid, index, addr, eip))
+        self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x' % (pid, index, addr, eip, self.cpu.cycles))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -614,6 +639,8 @@ class DataWatch():
                 #self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
                 self.read_hap.append(None)
                 continue
+            ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_pid is not set while
+                fussing with memsomething parameters? '''
             break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
@@ -712,6 +739,13 @@ class DataWatch():
             del self.cycle[:]
             self.other_starts = []
             self.other_lengths = []
+        elif cycle == -1:
+            ''' at origin, assume not first retrack, keep first entry '''
+            del self.start[1:]
+            del self.length[1:]
+            del self.cycle[1:]
+            self.lgr.debug('clearWatches, left only first entry, start is 0x%x' % (self.start[0]))
+            self.watchMarks.memoryMod(self.start[0], self.length[0])
         else:
             found = None
             ''' self.cycle is a list of cycles corresponding to each watch mark entry
@@ -853,6 +887,11 @@ class DataWatch():
     def nextWatchMark(self):
         return self.watchMarks.nextWatchMark()
 
+    def recordMalloc(self, addr, size):
+        self.watchMarks.malloc(addr, size)
+    def recordFree(self, addr):
+        self.watchMarks.free(addr)
+
     def skipToTest(self, cycle):
         while SIM_simics_is_running():
             self.lgr.error('skipToTest but simics running')
@@ -871,7 +910,11 @@ class DataWatch():
                 self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
                 retval = False
             else:
-                self.context_manager.restoreDebugContext() 
+                # do you really want debug context at this point?
+                #self.context_manager.restoreDebugContext() 
+                pass
         else:
-            self.context_manager.restoreDebugContext() 
+            # do you really want debug context at this point?
+            #self.context_manager.restoreDebugContext() 
+            pass
         return retval

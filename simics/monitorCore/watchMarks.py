@@ -135,12 +135,36 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class LenMark():
+        def __init__(self, src, count):
+            self.src = src    
+            self.count = count    
+            self.msg = 'strlen src 0x%x len %d' % (src, count)
+
+        def getMsg(self):
+            return self.msg
+
     class IteratorMark():
         def __init__(self, fun, addr, buf_start): 
             self.fun = fun
             self.addr = addr
             offset = addr - buf_start
             self.msg = 'iterator %s %x (%d bytes into buffer at 0x%x)' % (fun, addr, offset, buf_start)
+        def getMsg(self):
+            return self.msg
+
+    class MallocMark():
+        def __init__(self, addr, size):
+            self.addr = addr
+            self.size = size
+            self.msg = 'malloc addr: 0x%x size: %d' % (addr, size)
+        def getMsg(self):
+            return self.msg
+
+    class FreeMark():
+        def __init__(self, addr):
+            self.addr = addr
+            self.msg = 'free addr: 0x%x' % (addr)
         def getMsg(self):
             return self.msg
 
@@ -279,11 +303,30 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, sm))
         self.lgr.debug('watchMarks sscanf 0x%x %s' % (ip, sm.getMsg()))
 
+
+    def strlen(self, src, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        lm = self.LenMark(src, dest, count)        
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, lm))
+        self.lgr.debug('watchMarks strlen 0x%x %s' % (ip, lm.getMsg()))
+
+
     def iterator(self, fun, src, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         im = self.IteratorMark(fun, src, buf_start)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, im))        
         self.lgr.debug('watchMarks iterator 0x%x %s' % (ip, im.getMsg()))
+
+    def malloc(self, addr, size):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        mm = self.MallocMark(addr, size)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, mm))        
+        self.lgr.debug('watchMarks malloc 0x%x %s' % (ip, mm.getMsg()))
+    def free(self, addr):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        fm = self.FreeMark(addr)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
+        self.lgr.debug('watchMarks free 0x%x %s' % (ip, fm.getMsg()))
 
     def clearWatchMarks(self): 
         del self.mark_list[:] 
