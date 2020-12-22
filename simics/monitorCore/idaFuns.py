@@ -81,4 +81,11 @@ class IDAFuns():
                 return fun
         return None
 
+    def showFuns(self, search=None):
+        for fun in self.funs:
+            if search is not None:
+                if search in self.funs[fun]['name']:
+                    print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
+            else:
+                print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
         
