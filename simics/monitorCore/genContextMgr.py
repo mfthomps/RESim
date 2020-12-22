@@ -215,7 +215,7 @@ class GenContextMgr():
         handle = self.nextBreakHandle()
         if self.debugging_pid is not None and addr_type == Sim_Break_Linear:
             cell = self.resim_context
-            self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
+            #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
         #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
