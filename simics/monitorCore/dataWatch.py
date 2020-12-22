@@ -10,8 +10,9 @@ import memUtils
 import watchMarks
 import backStop
 import net
-from stackTrace import mem_funs
 import os
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'xmlStrcmp', 'strncpy', 'mempcpy', 
+            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'xmlGetProp', 'inet_addr', 'FreeXMLDoc']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -61,6 +62,7 @@ class DataWatch():
             self.decode = decodeArm
         else:
             self.decode = decode
+        self.malloc_dict = {}
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None):
         self.lgr.debug('DataWatch set range start 0x%x length 0x%x back_stop: %r' % (start, length, back_stop))
@@ -160,6 +162,7 @@ class DataWatch():
         del self.read_hap[:]
         if break_simulation is not None: 
             self.break_simulation = break_simulation
+            self.lgr.debug('DataWatch stopWatch break_simulation %r' % break_simulation)
         if self.return_hap is not None:
             self.context_manager.genDeleteHap(self.return_hap)
             self.return_hap = None
@@ -191,11 +194,12 @@ class DataWatch():
         '''
        
     class MemSomething():
-        def __init__(self, fun, ret_ip, src, dest, count, called_from_ip, op_type, length, start): 
+        def __init__(self, fun, ret_ip, src, dest, count, called_from_ip, op_type, length, start, run=False): 
             self.fun = fun
             self.ret_ip = ret_ip
             self.src = src
             self.dest = dest
+            self.the_string = None
             self.count = count
             self.called_from_ip = called_from_ip
             ''' used for finishReadHap '''
@@ -203,6 +207,8 @@ class DataWatch():
             self.length = length
             self.start = start
             self.dest_list = []
+            ''' used for file tracking, e.g., if xmlParse '''
+            self.run = run
      
     def startUndoAlone(self, mem_something):
         self.undo_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.undoHap, mem_something)
@@ -233,12 +239,12 @@ class DataWatch():
             self.watchMarks.copy(mem_something.src, mem_something.dest, mem_something.count, buf_start)
         elif mem_something.fun == 'memcmp':
             buf_start = self.findRange(mem_something.dest)
-            self.watchMarks.compare(mem_something.dest, mem_something.src, mem_something.count, buf_start)
+            self.watchMarks.compare(mem_something.fun, mem_something.dest, mem_something.src, mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.dest, mem_something.count))
-        elif mem_something.fun == 'strcmp' or mem_something.fun == 'strncmp':
+        elif mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
             buf_start = self.findRange(mem_something.dest)
-            self.watchMarks.compare(mem_something.dest, mem_something.src, mem_something.count, buf_start)
+            self.watchMarks.compare(mem_something.fun, mem_something.dest, mem_something.src, mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (mem_something.fun, 
                    mem_something.src, mem_something.dest, mem_something.count))
         elif mem_something.fun == 'strchr':
@@ -287,7 +293,40 @@ class DataWatch():
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.count))
             self.watchMarks.strlen(mem_something.src, mem_something.count)
-      
+        elif mem_something.fun == 'xmlGetProp':
+            self.lgr.debug('dataWatch returnHap, return from %s string: %s count %d ' % (mem_something.fun, mem_something.the_string, 
+                   mem_something.count))
+            if self.cpu.architecture == 'arm':
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else:
+                mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
+            
+            self.watchMarks.xmlGetProp(mem_something.src, mem_something.count, mem_something.the_string, mem_something.dest)
+        elif mem_something.fun == 'inet_addr':
+            self.lgr.debug('dataWatch returnHap, return from %s IP: %s count %d ' % (mem_something.fun, mem_something.the_string, 
+                   mem_something.count))
+            self.watchMarks.inet_addr(mem_something.src, mem_something.count, mem_something.the_string)
+        elif mem_something.fun == 'FreeXMLDoc':
+            self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
+            self.watchMarks.freeXMLDoc()
+        elif mem_something.fun == 'xmlParseFile': 
+            self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
+            if self.cpu.architecture == 'arm':
+                xml_doc = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else:
+                xml_doc = self.mem_utils.readPtr(self.cpu, sp)
+
+            self.top.stopTraceMalloc()
+            self.me_trace_malloc = False
+            self.mergeMalloc()
+            tot_size = 0
+            self.lgr.debug('xmlParse Malloc:')
+            for addr in sorted(self.malloc_dict):
+                self.lgr.debug('0x%x   0x%x' % (addr, self.malloc_dict[addr]))
+                tot_size = tot_size + self.malloc_dict[addr]
+                self.setRange(addr, self.malloc_dict[addr], None) 
+            self.watchMarks.xmlParseFile(xml_doc, tot_size)
+           
 
         elif mem_something.fun not in mem_funs:
             ''' assume iterator '''
@@ -307,9 +346,11 @@ class DataWatch():
             if mem_something.fun == 'memcpy' or mem_something.fun == 'memmove' or mem_something.fun == 'mempcpy' or mem_something.fun == 'j_memcpy': 
                 if self.cpu.architecture == 'arm':
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
                     mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
                 else:
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                     mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
                 self.lgr.debug('getMemParams dest 0x%x  src 0x%x count 0x%x' % (mem_something.dest, mem_something.src, 
                     mem_something.count))
@@ -340,7 +381,7 @@ class DataWatch():
                     self.lgr.debug('getMemParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
                 else:
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
-            elif mem_something.fun == 'strcmp' or mem_something.fun == 'strncmp':
+            elif mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
                 if self.cpu.architecture == 'arm':
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
@@ -396,8 +437,25 @@ class DataWatch():
                 if self.cpu.architecture == 'arm':
                     mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
                 else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                mem_something.count = self.getStrLen(mem_something.src)        
+            elif mem_something.fun == 'xmlGetProp':
+                if self.cpu.architecture == 'arm':
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
+                else:
                     mem_something.src = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                 mem_something.count = self.getStrLen(mem_something.src)        
+                mem_something.the_string = self.mem_utils.readString(self.cpu, mem_something.src, mem_something.count)
+            elif mem_something.fun == 'inet_addr':
+                if self.cpu.architecture == 'arm':
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+                else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                mem_something.count = self.getStrLen(mem_something.src)        
+                mem_something.the_string = self.mem_utils.readString(self.cpu, mem_something.src, mem_something.count)
+
+            elif mem_something.fun == 'FreeXMLDoc':
+                mem_something.count = 0
                  
             cell = self.top.getCell()
             ''' Assume we have disabled debugging in context manager while fussing with parameters. Thus breakpoints
@@ -413,6 +471,8 @@ class DataWatch():
         cell = self.top.getCell()
         proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memsomething_return_hap')
+        if mem_something.run:
+            SIM_run_command('c')
 
     def undoHap(self, mem_something, one, exception, error_string):
         
@@ -531,7 +591,7 @@ class DataWatch():
         return ret_start, ret_length
     
     
-    def finishReadHap(self, op_type, eip, addr, length, start, pid):
+    def finishReadHap(self, op_type, eip, addr, length, start, pid, index=None):
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
@@ -553,7 +613,14 @@ class DataWatch():
             ''' is a write to a data watch buffer '''
             self.lgr.debug('finishReadHap Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
-            self.watchMarks.memoryMod(start, length, addr=addr)
+            
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            if addr > sp and index is not None:
+                self.lgr.debug('finishReadHap remove watch for index %d' % index)
+                ''' Assume reused stack buffer, remove it from watch '''
+                self.start[index] = 0
+            else:
+                self.watchMarks.memoryMod(start, length, addr=addr)
             if self.break_simulation:
                 ''' TBD when to treat buffer as unused?  does it matter?'''
                 self.start[index] = 0
@@ -582,7 +649,7 @@ class DataWatch():
         if index >= len(self.read_hap):
             self.lgr.error('dataWatch readHap pid:%d invalid index %d, only %d read haps' % (pid, index, len(self.read_hap)))
             return
-        if self.read_hap[index] is None:
+        if self.read_hap[index] is None or self.read_hap[index] == 0:
             return
         op_type = SIM_get_mem_op_type(memory)
         addr = memory.logical_address
@@ -608,7 +675,7 @@ class DataWatch():
                 self.stopWatch()
             self.lgr.debug('dataWatch get stack trace to look for memsomething')
             #st = self.top.getStackTraceQuiet(max_frames=3, max_bytes=100)
-            st = self.top.getStackTraceQuiet(max_frames=6, max_bytes=100)
+            st = self.top.getStackTraceQuiet(max_frames=6, max_bytes=100, mem_funs=mem_funs)
             if st is None:
                 self.lgr.debug('stack trace is None, wrong pid?')
                 return
@@ -624,7 +691,7 @@ class DataWatch():
             else:
                 self.lgr.debug('DataWatch readHap not memsomething, reset the watch')
                 self.watch()
-        self.finishReadHap(op_type, eip, addr, length, start, pid)
+        self.finishReadHap(op_type, eip, addr, length, start, pid, index=index)
  
        
     def showWatch(self):
@@ -817,6 +884,43 @@ class DataWatch():
         if value:
             self.use_back_stop = True
 
+    def fileStopHap(self):
+        self.lgr.debug('fileStopHap')
+        #if not self.skipToTest(self.cpu.cycles+1):
+        #        self.lgr.error('fileStopHap unable to skip to next cycle got 0x%x' % (self.cpu.cycles))
+        #        return
+        st = self.top.getStackTraceQuiet(max_frames=16, max_bytes=100, mem_funs=['xmlParseFile'])
+        if st is None:
+            self.lgr.debug('stack trace is None, wrong pid?')
+            return
+        ''' look for memcpy'ish... TBD generalize '''
+        mem_stuff = st.memsomething()
+        if mem_stuff is not None:
+            self.lgr.debug('mem_stuff function %s, ret_ip is 0x%x' % (mem_stuff.fun, mem_stuff.ret_addr))
+            mem_something = self.MemSomething(mem_stuff.fun, mem_stuff.ret_addr, None, None, None, 
+                mem_stuff.called_from_ip, None, None, None, run=True)
+            self.break_simulation=False
+            self.me_trace_malloc = True
+            self.top.traceMalloc()
+            SIM_run_alone(self.runToReturnAlone, mem_something)
+        else:
+            self.lgr.debug('Failed to get memsomething from stack frames')
+
+    def setFileStopHap(self, dumb):
+        f1 = stopFunction.StopFunction(self.fileStopHap, [], nest=False)
+        flist = [f1]
+        hap_clean = hapCleaner.HapCleaner(self.cpu)
+        stop_action = hapCleaner.StopAction(hap_clean, None, flist)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        self.lgr.debug('setFileStopHap set actions %s' % str(stop_action.flist))
+
+    def trackFile(self, callback, compat32):
+        self.lgr.debug('DataWatch trackFile call watch')
+        self.setFileStopHap(None)
+        ''' what to do when backstop is reached (N cycles with no activity '''
+        self.setCallback(callback)
+
     def trackIO(self, fd, callback, compat32):
         self.lgr.debug('DataWatch trackIO for fd %d' % fd)
         ''' first make sure we are not in the kernel on this FD '''
@@ -888,9 +992,19 @@ class DataWatch():
         return self.watchMarks.nextWatchMark()
 
     def recordMalloc(self, addr, size):
-        self.watchMarks.malloc(addr, size)
+        if self.me_trace_malloc:
+            self.malloc_dict[addr] = size
+        else:
+            self.watchMarks.malloc(addr, size)
+
     def recordFree(self, addr):
-        self.watchMarks.free(addr)
+        if self.me_trace_malloc:
+            if addr not in self.malloc_dict:
+                self.lgr.debug('Freed value not in malloc db: 0x%x' % addr)
+            else:
+                del self.malloc_dict[addr]
+        else:
+            self.watchMarks.free(addr)
 
     def skipToTest(self, cycle):
         while SIM_simics_is_running():
@@ -918,3 +1032,27 @@ class DataWatch():
             #self.context_manager.restoreDebugContext() 
             pass
         return retval
+
+    def mergeMalloc(self):
+        did_something = True
+        remove_items = {}
+        key_list = list(sorted(self.malloc_dict))
+        while did_something:
+            did_something = False
+            for addr in sorted(self.malloc_dict):
+                try:
+                    next_key = key_list[key_list.index(addr)+1]
+                except (ValueError, IndexError):
+                    continue
+                end = addr + self.malloc_dict[addr] + 24
+                if next_key < end:
+                    #self.lgr.debug('mergeMalloc addr 0x%x end 0x%x  next_addr 0x%x' % (addr, end, next_key))
+                    if addr in remove_items: 
+                        parent_addr = remove_items[addr]
+                        self.malloc_dict[parent_addr] = self.malloc_dict[parent_addr]+self.malloc_dict[next_key] 
+                        remove_items[next_key] = remove_items[addr]
+                    else:
+                        self.malloc_dict[addr] = self.malloc_dict[addr]+self.malloc_dict[next_key] 
+                        remove_items[next_key] = addr
+        for remove in remove_items:
+            del self.malloc_dict[remove]

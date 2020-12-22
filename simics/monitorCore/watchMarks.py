@@ -97,16 +97,17 @@ class WatchMarks():
             return self.msg
 
     class CompareMark():
-        def __init__(self, ours, theirs, count, the_str, buf_start):
+        def __init__(self, fun, ours, theirs, count, the_str, buf_start):
             self.the_str = the_str
+            self.fun = fun
             self.ours = ours    
             self.theirs = theirs    
             self.count = count    
             if buf_start is not None:
                 offset = ours - buf_start
-                self.msg = 'memcmp 0x%x (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (ours, offset, buf_start, self.the_str, theirs, count)
+                self.msg = '%s 0x%x (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, offset, buf_start, self.the_str, theirs, count)
             else:
-                self.msg = 'memcmp 0x%x (unknown buffer) to %s (at 0x%x, %d bytes)' % (ours, self.the_str, theirs, count)
+                self.msg = '%s 0x%x (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, self.the_str, theirs, count)
         def getMsg(self):
             return self.msg
 
@@ -131,6 +132,24 @@ class WatchMarks():
                 self.msg = 'sscanf failed to parse from 0x%x' % src
             else:
                 self.msg = 'sscanf src 0x%x to 0x%x' % (src, dest)
+
+        def getMsg(self):
+            return self.msg
+
+    class XMLPropMark():
+        def __init__(self, src, count, the_str, result):
+            self.src = src    
+            self.count = count    
+            self.msg = 'xmlProp %s src 0x%x len %d. Prop: %s' % (the_str, src, count, result)
+
+        def getMsg(self):
+            return self.msg
+
+    class InetAddrMark():
+        def __init__(self, src, count, the_str):
+            self.src = src    
+            self.count = count    
+            self.msg = 'InetAddr %s src 0x%x len %d' % (the_str, src, count)
 
         def getMsg(self):
             return self.msg
@@ -168,6 +187,21 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class FreeXMLMark():
+        def __init__(self):
+            self.msg = 'FreeXMLDoc'
+        def getMsg(self):
+            return self.msg
+
+    class XMLParseFileMark():
+        def __init__(self, addr, size):
+            self.addr = addr
+            self.size = size
+            self.msg = 'xmlParseFile addr: 0x%x size: %d' % (addr, size)
+        def getMsg(self):
+            return self.msg
+
+
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
         def __init__(self, cycle, ip, msg):
@@ -202,7 +236,7 @@ class WatchMarks():
   
     def memoryMod(self, start, length, addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        dm = self.DataMark(addr, start, length, None)
+        dm = self.DataMark(addr, start, length, None, modify=True)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
         self.lgr.debug('watchMarks memoryMod 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
@@ -276,7 +310,7 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, km))
         self.lgr.debug('watchMarks kernel 0x%x %s' % (ip, km.getMsg()))
 
-    def compare(self, ours, theirs, count, buf_start):
+    def compare(self, fun, ours, theirs, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if count > 0:
             the_str = self.mem_utils.readString(self.cpu, theirs, count)
@@ -285,10 +319,10 @@ class WatchMarks():
                 the_str = the_str.decode('ascii', 'replace')
         else:
             the_str = ''
-        cm = self.CompareMark(ours, theirs, count, the_str, buf_start) 
+        cm = self.CompareMark(fun, ours, theirs, count, the_str, buf_start) 
         self.removeRedundantDataMark(ours)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
-        self.lgr.debug('watchMarks compare 0x%x %s' % (ip, cm.getMsg()))
+        self.lgr.debug('watchMarks compare (%s) 0x%x %s' % (fun, ip, cm.getMsg()))
 
     def strchr(self, ours, the_chr, count):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -306,10 +340,24 @@ class WatchMarks():
 
     def strlen(self, src, count):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        lm = self.LenMark(src, dest, count)        
+        lm = self.LenMark(src, count)        
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, lm))
         self.lgr.debug('watchMarks strlen 0x%x %s' % (ip, lm.getMsg()))
 
+    def xmlGetProp(self, src, count, the_string, dest):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        result = 'Not found'
+        if dest != 0:
+            result = self.mem_utils.readString(self.cpu, dest, 20)
+        xm = self.XMLPropMark(src, count, the_string, result)        
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, xm))
+        self.lgr.debug('watchMarks xmlGetProp 0x%x %s' % (ip, xm.getMsg()))
+
+    def inet_addr(self, src, count, the_string):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        xm = self.InetAddrMark(src, count, the_string)        
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, xm))
+        self.lgr.debug('watchMarks inet_addr 0x%x %s' % (ip, xm.getMsg()))
 
     def iterator(self, fun, src, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -328,6 +376,17 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
         self.lgr.debug('watchMarks free 0x%x %s' % (ip, fm.getMsg()))
 
+    def freeXMLDoc(self):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        fm = self.FreeXMLMark()
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
+
+    def xmlParseFile(self, dest, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        fm = self.XMLParseFileMark(dest, count)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
+      
+
     def clearWatchMarks(self): 
         del self.mark_list[:] 
         self.prev_ip = []
@@ -345,6 +404,7 @@ class WatchMarks():
            elif isinstance(mark.mark, self.DataMark):
                self.lgr.debug('watchMarks firstBufferAddress is DataMark addr 0x%x' % mark.mark.start)
                retval = mark.mark.start
+               max_len = self.recent_buf_max_len
                break 
         if retval is not None:
             self.recent_buf_address = retval
@@ -353,7 +413,7 @@ class WatchMarks():
         else:
             self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
             retval = self.recent_buf_address
-            length = self.recent_buf_max_len
+            max_len = self.recent_buf_max_len
         return retval, max_len
 
     def firstBufferIndex(self):
