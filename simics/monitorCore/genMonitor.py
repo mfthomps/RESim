@@ -1030,6 +1030,7 @@ class GenMonitor():
         self.run2Kernel(cpu)
 
     def toProcPid(self, pid):
+        self.lgr.debug('toProcPid %d' % pid)
         self.toRunningProc(None, [pid], None)
 
     def inFlist(self, fun_list, the_list):
@@ -2090,7 +2091,7 @@ class GenMonitor():
             ''' do not hook mmap calls to track SO maps '''
             self.sharedSyscall[self.target].trackSO(False)
         print('warning, SO tracking has stopped')
-        call_params = syscall.CallParams('open', substring, break_simulation=True)        
+        call_params = syscall.CallParams('open', substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
         self.runTo(['open'], call_params)
 
@@ -2319,7 +2320,7 @@ class GenMonitor():
                  self.relocate_funs, self.user_iterators, reg_frame, self.lgr)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, mem_funs=[]):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2338,7 +2339,7 @@ class GenMonitor():
         reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
-                self.user_iterators, reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
+                self.user_iterators, reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes, mem_funs=mem_funs)
         return st
 
     def getStackTrace(self):
@@ -2576,7 +2577,7 @@ class GenMonitor():
     def showCycle(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         cycles = self.bookmarks.getCurrentCycle(cpu)
-        print ('cpu cycles since _start: 0x%x' % cycles)
+        print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
         
     def continueForward(self):
         self.lgr.debug('continueForward')
@@ -2982,7 +2983,6 @@ class GenMonitor():
         self.dataWatch[self.target].clearWatches()
         self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
         if len(byte_string) > max_len:
-           
             a = raw_input('Warning: your injection is %d bytes; length of original read was %d bytes.  Continue?' % (len(byte_string), max_len))
             if a.lower() != 'y':
                 return
@@ -3214,6 +3214,20 @@ class GenMonitor():
 
     def showMalloc(self):
         self.trace_malloc.showList()
+
+    def stopTraceMalloc(self):
+        self.trace_malloc.stopTrace()
+        self.trace_malloc = None
+
+    def trackFile(self, substring):
+        self.stopTrackIO()
+        self.clearWatches()
+        self.lgr.debug('trackFile stopped track and cleared watchs')
+        self.dataWatch[self.target].trackFile(self.stopTrackIO, self.is_compat32)
+        self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        if self.coverage is not None:
+            self.coverage.doCoverage()
+        self.runToOpen(substring)    
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
