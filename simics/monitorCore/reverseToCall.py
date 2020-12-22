@@ -108,8 +108,7 @@ class reverseToCall():
             self.save_reg_mod = None
             self.ida_funs = None
             self.satisfy_value = None
-            if run_from_snap is not None:
-                self.loadPickle(run_from_snap)
+            self.run_from_snap = run_from_snap
 
     def getStartCycles(self):
         return self.start_cycles
@@ -168,6 +167,8 @@ class reverseToCall():
             self.cell_name = self.top.getTopComponentName(cpu)
             self.x_pages = x_pages
             self.page_faults = page_faults
+            if self.run_from_snap is not None:
+                self.loadPickle(self.run_from_snap)
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
             if (hasattr(self.param, 'sysenter') and self.param.sysenter is not None) or \
@@ -1279,6 +1280,7 @@ class reverseToCall():
         return retval 
 
     def loadPickle(self, name):
+        self.lgr.debug('reverseToCall load pickle for %s' % name)
         rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
         if os.path.isfile(rev_call_file):
             self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
