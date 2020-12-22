@@ -1235,7 +1235,8 @@ class Syscall():
  
         elif callname == 'mmap' or callname == 'mmap2':        
             exit_info.count = frame['param2']
-            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0:
+                #self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
                 length = self.mem_utils.readPtr(self.cpu, arg_addr+4)
