@@ -416,6 +416,8 @@ class StackTrace():
                         fun_hex, fun = self.getFunName(instruct)
                         if fun is not None:
                             if cur_fun_name is not None:
+                                if fun.startswith('.'):
+                                    fun = fun[1:]
                                 if not fun.startswith(cur_fun_name):
                                     self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
                                     ''' don't count this against max frames '''
@@ -493,6 +495,7 @@ class StackTrace():
 
     def memsomething(self):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
+        mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.']
         retval = None
         for i in range(1,self.max_frames+1):
             if len(self.frames) < i+1:
@@ -502,14 +505,6 @@ class StackTrace():
             if frame.instruct is not None:
                 if frame.fun_name is not None:
                     fun = frame.fun_name
-                    if fun.startswith('_') or fun.startswith('.'):
-                        if fun.startswith('__'):
-                            if fun.startswith('___'):
-                                fun = fun[3:]
-                            else:
-                                fun = fun[2:]
-                        else:
-                            fun = fun[1:]
                     if '@' in frame.fun_name:
                         fun = frame.fun_name.split('@')[0]
                         try:
@@ -523,9 +518,12 @@ class StackTrace():
                                 self.lgr.debug('No ida_funs')
                         except ValueError:
                             pass
+                    for pre in mem_prefixes:
+                        if fun.startswith(pre):
+                            fun = fun[len(pre):]
+                            self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
                     if fun.startswith('v'):
                         fun = fun[1:]
-
                     self.lgr.debug('StackTrace memsomething fun is %s' % fun)
                     if fun in self.mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
                         if fun in self.mem_funs:
