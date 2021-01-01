@@ -471,6 +471,11 @@ class DataWatch():
 
             elif mem_something.fun == 'FreeXMLDoc':
                 mem_something.count = 0
+
+            elif mem_something.fun == 'xmlParseFile' or mem_something.fun == 'xml_parse':
+                self.me_trace_malloc = True
+                self.top.traceMalloc()
+                self.lgr.debug('getMemParams xml parse')
                  
             cell = self.top.getCell()
             ''' Assume we have disabled debugging in context manager while fussing with parameters. Thus breakpoints
@@ -515,7 +520,7 @@ class DataWatch():
         ''' we are at the call to a memsomething, get the parameters '''
         if self.call_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
-            self.lgr.debug('hitCallStopHap will delete hap %s cycle_dif 0x%x' % (str(self.call_hap), cycle_dif))
+            #self.lgr.debug('hitCallStopHap will delete hap %s cycle_dif 0x%x' % (str(self.call_hap), cycle_dif))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_hap)
             SIM_delete_breakpoint(self.call_break)
             self.stop_hap = None
@@ -530,7 +535,7 @@ class DataWatch():
                 self.lgr.debug('hitCallStopHap stopped too far back cycle_dif 0x%x, assume a ghost frame' % cycle_dif)
             SIM_run_alone(self.undoAlone, mem_something)
         else:
-            self.lgr.debug('call getMemParams at eip 0x%x' % eip)
+            self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (mem_something.fun, eip))
             SIM_run_alone(self.getMemParams, mem_something)
        
     def revAlone(self, dumb):
