@@ -12,7 +12,8 @@ import backStop
 import net
 import os
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'xmlStrcmp', 'strncpy', 'mempcpy', 
-            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'xmlGetProp', 'inet_addr', 'FreeXMLDoc']
+            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 
+            'xmlParseFile', 'xml_parse', 'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -309,11 +310,12 @@ class DataWatch():
         elif mem_something.fun == 'FreeXMLDoc':
             self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
             self.watchMarks.freeXMLDoc()
-        elif mem_something.fun == 'xmlParseFile': 
+        elif mem_something.fun == 'xmlParseFile' or mem_something.fun == 'xml_parse':
             self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
             if self.cpu.architecture == 'arm':
                 xml_doc = self.mem_utils.getRegValue(self.cpu, 'r0')
             else:
+                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
                 xml_doc = self.mem_utils.readPtr(self.cpu, sp)
 
             self.top.stopTraceMalloc()
@@ -326,6 +328,14 @@ class DataWatch():
                 tot_size = tot_size + self.malloc_dict[addr]
                 self.setRange(addr, self.malloc_dict[addr], None) 
             self.watchMarks.xmlParseFile(xml_doc, tot_size)
+        elif mem_something.fun == 'GetToken':
+            if self.cpu.architecture == 'arm':
+                self.lgr.error('dataWatch GetToken not yet for arm')
+            else:
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
+                mem_something.the_string = self.mem_utils.readString(self.cpu, mem_something.dest, 40)
+            self.lgr.debug('dataWatch returnHap, return from %s token: %s' % (mem_something.fun, mem_something.the_string))
+            self.watchMarks.getToken(mem_something.src, mem_something.dest, mem_something.the_string)
            
 
         elif mem_something.fun not in mem_funs:
@@ -453,6 +463,11 @@ class DataWatch():
                     mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
                 mem_something.count = self.getStrLen(mem_something.src)        
                 mem_something.the_string = self.mem_utils.readString(self.cpu, mem_something.src, mem_something.count)
+            elif mem_something.fun == 'GetToken':
+                if self.cpu.architecture == 'arm':
+                    mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+                else:
+                    mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
 
             elif mem_something.fun == 'FreeXMLDoc':
                 mem_something.count = 0
@@ -507,7 +522,8 @@ class DataWatch():
         else:
             return
         eip = self.top.getEIP(self.cpu)
-        if eip != mem_something.called_from_ip or cycle_dif > 50000:
+        ''' TBD dynamically adjust cycle_dif limit?  make exceptions for some calls, e.g., xmlparse? '''
+        if eip != mem_something.called_from_ip or cycle_dif > 300000:
             if eip != mem_something.called_from_ip:
                 self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x' % (mem_something.called_from_ip, eip))
             else:

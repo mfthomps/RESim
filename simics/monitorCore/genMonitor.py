@@ -3216,7 +3216,8 @@ class GenMonitor():
         self.trace_malloc.showList()
 
     def stopTraceMalloc(self):
-        self.trace_malloc.stopTrace()
+        if self.trace_malloc is not None:
+            self.trace_malloc.stopTrace()
         self.trace_malloc = None
 
     def trackFile(self, substring):

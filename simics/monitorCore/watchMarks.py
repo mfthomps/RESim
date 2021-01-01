@@ -201,6 +201,12 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class GetTokenMark():
+        def __init__(self, src, dest, the_string):
+            self.addr = src
+            self.msg = 'GetToken addr: 0x%x token: %s' % (src, the_string)
+        def getMsg(self):
+            return self.msg
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
@@ -386,6 +392,10 @@ class WatchMarks():
         fm = self.XMLParseFileMark(dest, count)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
       
+    def getToken(self, src, dest, the_string):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        fm = self.GetTokenMark(src, dest, the_string)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
 
     def clearWatchMarks(self): 
         del self.mark_list[:] 
