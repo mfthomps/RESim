@@ -517,7 +517,7 @@ class TaskUtils():
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
                     if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
                         thread_group_addr = task_addr + self.param.ts_thread_group_list_head
-                        self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
+                        #self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
                         return thread_group_addr
                     stack.append((task.thread_group.next, False))
     

@@ -542,7 +542,8 @@ class GenContextMgr():
             if pid not in self.pid_cache:
                 self.pid_cache.append(pid)
         else:
-            self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
+            #self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
+            pass
 
     def watchingThis(self):
         ctask = self.task_utils.getCurTaskRec()
@@ -646,7 +647,7 @@ class GenContextMgr():
         ctask = self.task_utils.getCurTaskRec()
         pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
         if pid == 1:
-            self.lgr.debug('contextManager watchTasks, pid is 1, ignore')
+            #self.lgr.debug('contextManager watchTasks, pid is 1, ignore')
             return
         if self.task_break is None:
             self.setTaskHap()
@@ -662,7 +663,7 @@ class GenContextMgr():
             self.pid_cache.append(pid)
         group_leader = self.task_utils.getGroupLeaderPid(pid)
         if group_leader != self.group_leader:
-            self.lgr.debug('contextManager watchTasks x set group leader to %d' % group_leader)
+            #self.lgr.debug('contextManager watchTasks x set group leader to %d' % group_leader)
             self.group_leader = group_leader
         if set_debug_pid:
             self.setDebugPid()
@@ -794,28 +795,29 @@ class GenContextMgr():
             pid = cur_pid
             rec = self.task_utils.getCurTaskRec() 
         if rec is None:
-            self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
+            #self.lgr.error('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
             return
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? '''
-            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            #self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return
         cell = self.default_context
         #cell = self.resim_context
         if pid not in self.task_rec_bp:
             self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
-            self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
-                 list_addr, pid, str(cell)))
+            #self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
+            #     list_addr, pid, str(cell)))
             #self.task_rec_hap[pid] = self.genHapIndex("Core_Breakpoint_Memop", self.taskRecHap, pid, bp)
             self.task_rec_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
             self.task_rec_watch[pid] = list_addr
             watch_pid, watch_comm = self.task_utils.getPidCommFromNext(list_addr)
-            self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d' % (watch_pid, watch_comm, pid))
+            #self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d' % (watch_pid, watch_comm, pid))
         else:
-            self.lgr.debug('contextManager watchExit, already watching for pid %d' % pid)
+            #self.lgr.debug('contextManager watchExit, already watching for pid %d' % pid)
+            pass
 
     def auditExitBreaks(self):
         for pid in self.task_rec_watch:
@@ -837,18 +839,18 @@ class GenContextMgr():
                     self.lgr.debug('contextManager auditExitBreaks changed in record watch for death of %d, was watching %d, now %d' % (pid, watch_pid, prev_pid))
         
     def setExitBreaks(self):
-        self.lgr.debug('contextManager setExitBreaks')
+        #self.lgr.debug('contextManager setExitBreaks')
         for pid in self.task_rec_bp:
             rec = self.task_utils.getRecAddrForPid(pid)
             self.watchExit(rec, pid)
 
     def clearExitBreaks(self):
-        self.lgr.debug('contextManager clearExitBreaks')
+        #self.lgr.debug('contextManager clearExitBreaks')
         for pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
                 self.task_rec_bp[pid] = None
-                self.lgr.debug('contextManager clearExitBreaks pid:%d' % pid)
+                #self.lgr.debug('contextManager clearExitBreaks pid:%d' % pid)
         for pid in self.task_rec_hap:
             if self.task_rec_hap[pid] is not None:
                 SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])

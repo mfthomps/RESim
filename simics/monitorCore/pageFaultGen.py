@@ -298,20 +298,20 @@ class PageFaultGen():
 
     def stopWatchPageFaults(self, pid = None):
         if self.fault_hap is not None:
-            self.lgr.debug('stopWatchPageFaults delete fault_hap')
+            #self.lgr.debug('stopWatchPageFaults delete fault_hap')
             self.context_manager.genDeleteHap(self.fault_hap)
             self.fault_hap = None
         if self.fault_hap1 is not None:
-            self.lgr.debug('stopWatchPageFaults delete fault_hap1')
+            #self.lgr.debug('stopWatchPageFaults delete fault_hap1')
             SIM_hap_delete_callback_id("Core_Exception", self.fault_hap1)
             self.fault_hap1 = None
         if self.fault_hap2 is not None:
-            self.lgr.debug('stopWatchPageFaults delete fault_hap2')
+            #self.lgr.debug('stopWatchPageFaults delete fault_hap2')
             SIM_hap_delete_callback_id("Core_Exception", self.fault_hap2)
             self.fault_hap2 = None
         if pid is not None:
             if pid in self.exit_hap: 
-                self.lgr.debug('stopWatchPageFaults delete exit_hap')
+                #self.lgr.debug('stopWatchPageFaults delete exit_hap')
                 self.context_manager.genDeleteHap(self.exit_hap[pid])
                 self.context_manager.genDeleteHap(self.exit_hap2[pid])
                 del self.exit_break[pid]

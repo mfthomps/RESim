@@ -1409,14 +1409,14 @@ class GenMonitor():
         self.pfamily.traceExecve(comm)
 
     def watchPageFaults(self, pid=None):
-        self.lgr.debug('watchPageFaults')
+        #self.lgr.debug('watchPageFaults')
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
-        self.lgr.debug('stopWatchPageFaults')
+        #self.lgr.debug('stopWatchPageFaults')
         self.page_faults[self.target].stopWatchPageFaults(pid)
         self.page_faults[self.target].stopPageFaults()
 
@@ -1424,7 +1424,7 @@ class GenMonitor():
         self.watchPageFaults()
 
     def traceOpenSyscall(self):
-        self.lgr.debug('about to call traceOpen')
+        #self.lgr.debug('about to call traceOpen')
         self.traceOpen.traceOpenSyscall()
 
     def getCell(self):
@@ -1848,7 +1848,7 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
-            self.lgr.debug('restoreDebugBreaks')
+            #self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 

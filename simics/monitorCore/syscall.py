@@ -190,7 +190,7 @@ class Syscall():
         self.debugging_exit = debugging_exit
         if pid is not None or debugging_exit:
             self.debugging = True
-            self.lgr.debug('Syscall is debugging cell %s' % cell_name)
+            #self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
         self.cell = cell
         self.cell_name = cell_name
