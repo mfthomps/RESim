@@ -83,7 +83,10 @@ class GenHap():
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
-            #self.lgr.debug('bp.cell is %s' % str(bp.cell))
+            #self.lgr.debug('bp.cell is %s addr %s' % (str(bp.cell), str(bp.addr)))
+            if bp.addr is None:
+                self.lgr.error('contextManager, set bp.addr is none')
+                return
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             if bp.prefix is not None:
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
