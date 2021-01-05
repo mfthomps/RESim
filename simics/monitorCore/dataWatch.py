@@ -11,9 +11,11 @@ import watchMarks
 import backStop
 import net
 import os
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'xmlStrcmp', 'strncpy', 'mempcpy', 
-            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 
-            'xmlParseFile', 'xml_parse', 'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken']
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'mempcpy', 
+            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'xmlStrcmp',
+            'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse']
+#no_stop_funs = ['xml_element_free', 'xml_element_name']
+no_stop_funs = ['xml_element_free']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -220,11 +222,11 @@ class DataWatch():
         ''' should be at return from a memsomething.  see  getMemParams for gathering of parameters'''
         if self.return_hap is None:
             return
+        eip = self.top.getEIP(self.cpu)
         if self.cpu.cycles < self.cycles_was:
-            self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething, but cycles less than when we read the data')
+            self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles less than when we read the data' % eip)
             SIM_run_alone(self.startUndoAlone, mem_something)
             return
-        eip = self.top.getEIP(self.cpu)
         self.lgr.debug('returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
         self.context_manager.genDeleteHap(self.return_hap)
         self.return_hap = None
@@ -268,10 +270,9 @@ class DataWatch():
             self.watchMarks.memset(mem_something.dest, mem_something.count, buf_start)
         elif mem_something.fun == 'strdup':
             if self.cpu.architecture == 'arm':
-                self.lgr.error('datawatch strdup not yet for arm')
-                return
-            
-            mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else: 
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
             self.lgr.debug('dataWatch returnHap, strdup return from %s src: 0x%x dest: 0x%x count %d ' % (mem_something.fun, mem_something.src, 
                    mem_something.dest, mem_something.count))
             self.setRange(mem_something.dest, mem_something.count, None) 
@@ -320,13 +321,13 @@ class DataWatch():
 
             self.top.stopTraceMalloc()
             self.me_trace_malloc = False
-            self.mergeMalloc()
+            malloc_ranges = self.mergeMalloc()
             tot_size = 0
             self.lgr.debug('xmlParse Malloc:')
-            for addr in sorted(self.malloc_dict):
-                self.lgr.debug('0x%x   0x%x' % (addr, self.malloc_dict[addr]))
-                tot_size = tot_size + self.malloc_dict[addr]
-                self.setRange(addr, self.malloc_dict[addr], None) 
+            for addr in sorted(malloc_ranges):
+                self.lgr.debug('0x%x   0x%x' % (addr, malloc_ranges[addr]))
+                tot_size = tot_size + malloc_ranges[addr]
+                self.setRange(addr, malloc_ranges[addr], None) 
             self.watchMarks.xmlParseFile(xml_doc, tot_size)
         elif mem_something.fun == 'GetToken':
             if self.cpu.architecture == 'arm':
@@ -336,14 +337,26 @@ class DataWatch():
                 mem_something.the_string = self.mem_utils.readString(self.cpu, mem_something.dest, 40)
             self.lgr.debug('dataWatch returnHap, return from %s token: %s' % (mem_something.fun, mem_something.the_string))
             self.watchMarks.getToken(mem_something.src, mem_something.dest, mem_something.the_string)
-           
-
+        elif mem_something.fun == 'xml_element_name':
+            self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
+            if self.cpu.architecture == 'arm':
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else: 
+                mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
+            self.watchMarks.strPtr(mem_something.dest, mem_something.fun)
+        elif mem_something.fun == 'xml_element_children_size':
+            self.lgr.debug('dataWatch returnHap, return from %s' % (mem_something.fun))
+            if self.cpu.architecture == 'arm':
+                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else: 
+                mem_something.count = self.mem_utils.getRegValue(self.cpu, 'eax')
+            self.watchMarks.returnInt(mem_something.count, mem_something.fun)
         elif mem_something.fun not in mem_funs:
             ''' assume iterator '''
             self.lgr.debug('dataWatch returnHap, return from iterator %s src: 0x%x ' % (mem_something.fun, mem_something.src))
             buf_start = self.findRange(mem_something.src)
             self.watchMarks.iterator(mem_something.fun, mem_something.src, buf_start)
-        else:
+        elif mem_something.fun not in no_stop_funs:
             self.lgr.error('dataWatch returnHap no handler for %s' % mem_something.fun)
         #SIM_break_simulation('return hap')
         #return
@@ -491,6 +504,7 @@ class DataWatch():
         cell = self.top.getCell()
         proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memsomething_return_hap')
+        self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d' % proc_break)
         if mem_something.run:
             SIM_run_command('c')
 
@@ -535,8 +549,13 @@ class DataWatch():
                 self.lgr.debug('hitCallStopHap stopped too far back cycle_dif 0x%x, assume a ghost frame' % cycle_dif)
             SIM_run_alone(self.undoAlone, mem_something)
         else:
-            self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (mem_something.fun, eip))
-            SIM_run_alone(self.getMemParams, mem_something)
+            latest_cycle = self.watchMarks.latestCycle()
+            if latest_cycle > self.cpu.cycles:
+                self.lgr.debug('hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, assume a ghost frame' % (self.cpu.cycles, latest_cycle))
+                SIM_run_alone(self.undoAlone, mem_something)
+            else:
+                self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (mem_something.fun, eip))
+                SIM_run_alone(self.getMemParams, mem_something)
        
     def revAlone(self, dumb):
         ''' TBD why need to stop coverage?  should not hit any of those bp going backwards? '''
@@ -588,9 +607,9 @@ class DataWatch():
         set a break on the return; and continue.  We'll assume not too many instructions between us and the call, so manually walk er back.
         '''
         self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (mem_something.ret_ip, mem_something.fun, mem_something.called_from_ip))
-        if mem_something.fun not in mem_funs: 
+        if mem_something.fun not in mem_funs or mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
-            self.lgr.debug('handleMemStuff assume iterator, src: 0x%x ' % (mem_something.src))
+            self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x ' % (mem_something.src))
             SIM_run_alone(self.runToReturnAlone, mem_something)
         else: 
             ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
@@ -695,14 +714,14 @@ class DataWatch():
                 ''' prevent stack trace from triggering haps '''
                 self.stopWatch()
             self.lgr.debug('dataWatch get stack trace to look for memsomething')
-            #st = self.top.getStackTraceQuiet(max_frames=3, max_bytes=100)
-            st = self.top.getStackTraceQuiet(max_frames=6, max_bytes=100, mem_funs=mem_funs)
+            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
                 self.lgr.debug('stack trace is None, wrong pid?')
                 return
             #self.lgr.debug('%s' % st.getJson()) 
             ''' look for memcpy'ish... TBD generalize '''
-            mem_stuff = st.memsomething()
+            frames = st.getFrames(20)
+            mem_stuff = self.memsomething(frames, mem_funs)
             if mem_stuff is not None:
                 self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
                 ''' src is the referenced memory address by default ''' 
@@ -910,12 +929,14 @@ class DataWatch():
         #if not self.skipToTest(self.cpu.cycles+1):
         #        self.lgr.error('fileStopHap unable to skip to next cycle got 0x%x' % (self.cpu.cycles))
         #        return
-        st = self.top.getStackTraceQuiet(max_frames=16, max_bytes=100, mem_funs=['xmlParseFile'])
+        st = self.top.getStackTraceQuiet(max_frames=16, max_bytes=100)
+        my_mem_funs = ['xmlParseFile']
         if st is None:
             self.lgr.debug('stack trace is None, wrong pid?')
             return
         ''' look for memcpy'ish... TBD generalize '''
-        mem_stuff = st.memsomething()
+        frames = st.getFrames(20)
+        mem_stuff = self.memsomething(frames, my_mem_funs)
         if mem_stuff is not None:
             self.lgr.debug('mem_stuff function %s, ret_ip is 0x%x' % (mem_stuff.fun, mem_stuff.ret_addr))
             mem_something = self.MemSomething(mem_stuff.fun, mem_stuff.ret_addr, None, None, None, 
@@ -1054,26 +1075,135 @@ class DataWatch():
             pass
         return retval
 
-    def mergeMalloc(self):
+    def mergeMallocXX(self):
         did_something = True
         remove_items = {}
         key_list = list(sorted(self.malloc_dict))
         while did_something:
             did_something = False
+            ''' each mallo'd address, sorted '''
             for addr in sorted(self.malloc_dict):
+                ''' get next address to see if it should be merged with htis one '''
                 try:
                     next_key = key_list[key_list.index(addr)+1]
                 except (ValueError, IndexError):
                     continue
+                ''' end is last address in current addr, plus malloc structure fu '''
                 end = addr + self.malloc_dict[addr] + 24
                 if next_key < end:
-                    #self.lgr.debug('mergeMalloc addr 0x%x end 0x%x  next_addr 0x%x' % (addr, end, next_key))
+                    self.lgr.debug('mergeMalloc addr 0x%x end 0x%x  next_addr 0x%x' % (addr, end, next_key))
                     if addr in remove_items: 
+                        ''' this address already merged, extend size of parent by this size '''
                         parent_addr = remove_items[addr]
                         self.malloc_dict[parent_addr] = self.malloc_dict[parent_addr]+self.malloc_dict[next_key] 
                         remove_items[next_key] = remove_items[addr]
                     else:
                         self.malloc_dict[addr] = self.malloc_dict[addr]+self.malloc_dict[next_key] 
                         remove_items[next_key] = addr
+                else:
+                    self.lgr.debug('Next addr 0x%x not less than end of current 0x%x' % (next_key, end))
         for remove in remove_items:
             del self.malloc_dict[remove]
+
+
+
+    def mergeMalloc(self):
+        retval = {}
+        did_something = True
+        key_list = list(sorted(self.malloc_dict))
+        last_addr = None
+        ''' each malloc'd address, sorted '''
+        for addr in sorted(self.malloc_dict):
+            end = last_addr
+            if last_addr is not None: 
+                end = last_addr+retval[last_addr]+32
+                if addr < end:
+                    ''' adjacent to previous malloc ''' 
+                    size = (addr - last_addr) + self.malloc_dict[addr]
+                    retval[last_addr] = size
+                    new_end = last_addr + size
+                    self.lgr.debug('mergeMalloc, adjacent, extend range now 0x%x to 0x%x' % (last_addr, new_end))
+                else:
+                    if last_addr is not None:
+                        new_end = addr + self.malloc_dict[addr]
+                        self.lgr.debug('mergeMalloc new addr 0x%x not less than 0x%x.  Add range 0x%x to 0x%x' % (addr, end, addr, new_end))
+                    ''' either first, or not adjacent '''
+                    retval[addr] = self.malloc_dict[addr]
+                    last_addr = addr
+            else:
+                retval[addr] = self.malloc_dict[addr]
+                last_addr = addr
+                
+        return retval 
+
+    class MemStuff():
+        def __init__(self, ret_addr, fun, called_from_ip):
+            self.ret_addr = ret_addr
+            self.fun = fun
+            self.called_from_ip = called_from_ip
+
+    def funPrecidence(self, fun):
+        fun_precidence = mem_funs.index(fun)
+        if fun_precidence < mem_funs.index('LOWEST'):
+            fun_precidence = 0 
+        return fun_precidence
+    
+    def memsomething(self, frames, local_mem_funs):
+        ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
+        mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.']
+        retval = None
+        max_precidence = -1
+        max_index = len(frames)-1
+        self.lgr.debug('memsomething max_index %d' % (max_index))
+        for i in range(max_index, -1, -1):
+            frame = frames[i]
+            self.lgr.debug('dataWatch memsomething frame instruct is %s' % frame.instruct)
+            if frame.instruct is not None:
+                if frame.fun_name is not None:
+                    fun = frame.fun_name
+                    if '@' in frame.fun_name:
+                        fun = frame.fun_name.split('@')[0]
+                        try:
+                            fun_hex = int(fun, 16) 
+                            if self.ida_funs is not None:
+                                fun_name = self.ida_funs.getName(fun_hex)
+                                self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                                if fun_name is not None:
+                                    fun = fun_name
+                            else:
+                                self.lgr.debug('No ida_funs')
+                        except ValueError:
+                            pass
+                    for pre in mem_prefixes:
+                        if fun.startswith(pre):
+                            fun = fun[len(pre):]
+                            self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
+                    if fun.startswith('v'):
+                        fun = fun[1:]
+                    self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                    if fun in local_mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
+                        if fun in local_mem_funs:
+                            self.lgr.debug('fun in local_mem_funs %s' % fun)
+                            fun_precidence = self.funPrecidence(fun)
+                        if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
+                            self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
+                            fun_precidence = 999
+                        self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
+                        if fun_precidence < max_precidence:
+                            self.lgr.debug('Stackframe memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
+                            continue
+                        max_precidence = fun_precidence
+                        if frame.sp > 0:
+                            ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
+                        elif frame.ret_addr is not None:
+                            ret_addr = frame.ret_addr
+                        else:
+                            self.lgr.error('memsomething sp is zero and no ret_addr?')
+                            ret_addr = None
+                        self.lgr.debug('dataWatch memsomething frame.ip is 0x%x' % frame.ip)
+                        retval = self.MemStuff(ret_addr, fun, frame.ip)
+                        
+                    else:
+                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                        pass
+        return retval

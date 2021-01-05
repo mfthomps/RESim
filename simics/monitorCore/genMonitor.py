@@ -2317,10 +2317,10 @@ class GenMonitor():
        
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
-                 self.relocate_funs, self.user_iterators, reg_frame, self.lgr)
+                 self.relocate_funs, reg_frame, self.lgr)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, mem_funs=[]):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2339,7 +2339,7 @@ class GenMonitor():
         reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
-                self.user_iterators, reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes, mem_funs=mem_funs)
+                reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
         return st
 
     def getStackTrace(self):
@@ -2361,7 +2361,7 @@ class GenMonitor():
         reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                   self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
-                  self.relocate_funs, self.user_iterators, reg_frame, self.lgr)
+                  self.relocate_funs, reg_frame, self.lgr)
         j = st.getJson() 
         self.lgr.debug(j)
         #print j

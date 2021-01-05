@@ -19,7 +19,7 @@ class StackTrace():
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ' % (self.ip, self.fname, self.instruct, self.sp)
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, 
-                 relocate_funs, user_iterators, reg_frame, lgr, max_frames=None, max_bytes=None, mem_funs=[]):
+                 relocate_funs, reg_frame, lgr, max_frames=None, max_bytes=None):
         if pid == 0:
             lgr.error('stackTrace asked to trace pid 0?')
             return
@@ -39,8 +39,6 @@ class StackTrace():
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
         self.relocate_funs = relocate_funs
-        self.user_iterators = user_iterators
-        self.mem_funs = mem_funs
         if cpu.architecture == 'arm':
             self.callmn = 'bl'
             self.jmpmn = 'bx'
@@ -467,10 +465,10 @@ class StackTrace():
                 self.lgr.debug('stackTrace ptr 0x%x > stack_base 0x%x' % (ptr, self.stack_base)) 
                 done = True
             elif self.max_frames is not None and len(self.frames)>= self.max_frames:
-                self.lgr.debug('stackFrames got max frames, done')
+                self.lgr.debug('stackFrames got max frames, done max is %d, got %d' % (self.max_frames, len(self.frames)))
                 done = True
             elif self.max_bytes is not None and count > self.max_bytes:
-                self.lgr.debug('stackFrames got max bytes, done')
+                self.lgr.debug('stackFrames got max bytes %d, done' % self.max_bytes)
                 done = True
 
 
@@ -486,64 +484,4 @@ class StackTrace():
 
     def countFrames(self):
         return len(self.frames)
-
-    class MemStuff():
-        def __init__(self, ret_addr, fun, called_from_ip):
-            self.ret_addr = ret_addr
-            self.fun = fun
-            self.called_from_ip = called_from_ip
-
-    def memsomething(self):
-        ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
-        mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.']
-        retval = None
-        for i in range(1,self.max_frames+1):
-            if len(self.frames) < i+1:
-                break
-            frame = self.frames[i]
-            self.lgr.debug('StackTrace memsomething frame instruct is %s' % frame.instruct)
-            if frame.instruct is not None:
-                if frame.fun_name is not None:
-                    fun = frame.fun_name
-                    if '@' in frame.fun_name:
-                        fun = frame.fun_name.split('@')[0]
-                        try:
-                            fun_hex = int(fun, 16) 
-                            if self.ida_funs is not None:
-                                fun_name = self.ida_funs.getName(fun_hex)
-                                self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
-                                if fun_name is not None:
-                                    fun = fun_name
-                            else:
-                                self.lgr.debug('No ida_funs')
-                        except ValueError:
-                            pass
-                    for pre in mem_prefixes:
-                        if fun.startswith(pre):
-                            fun = fun[len(pre):]
-                            self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
-                    if fun.startswith('v'):
-                        fun = fun[1:]
-                    self.lgr.debug('StackTrace memsomething fun is %s' % fun)
-                    if fun in self.mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
-                        if fun in self.mem_funs:
-                            self.lgr.debug('fun in mem_funs %s' % fun)
-                        if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
-                            self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
-                        self.lgr.debug('StackFrame memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
-                        if frame.sp > 0:
-                            ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
-                        elif frame.ret_addr is not None:
-                            ret_addr = frame.ret_addr
-                        else:
-                            self.lgr.error('memsomething sp is zero and no ret_addr?')
-                            ret_addr = None
-                        self.lgr.debug('stackTrack memsomething frame.ip is 0x%x' % frame.ip)
-                        retval = self.MemStuff(ret_addr, fun, frame.ip)
-                        break
-                    else:
-                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
-                        pass
-        return retval
-
 

@@ -208,6 +208,18 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class StrPtr():
+        def __init__(self, fun, the_string):
+            self.msg = '%s string: %s' % (fun, the_string)
+        def getMsg(self):
+            return self.msg
+
+    class ReturnInt():
+        def __init__(self, fun, value):
+            self.msg = '%s value: %s' % (fun, value)
+        def getMsg(self):
+            return self.msg
+
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
         def __init__(self, cycle, ip, msg):
@@ -252,7 +264,7 @@ class WatchMarks():
         if ip not in self.prev_ip:
             dm = self.DataMark(addr, start, length, cmp_ins)
             self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, dm))
-            self.lgr.debug('watchMarks dataRead 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+            self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         else:
             if len(self.prev_ip) > 0:
@@ -397,6 +409,17 @@ class WatchMarks():
         fm = self.GetTokenMark(src, dest, the_string)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
 
+    def strPtr(self, dest, fun):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        the_string = self.mem_utils.readString(self.cpu, dest, 40)
+        fm = self.StrPtr(fun, the_string)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
+
+    def returnInt(self, count, fun):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        fm = self.ReturnInt(fun, count)
+        self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, fm))        
+
     def clearWatchMarks(self): 
         del self.mark_list[:] 
         self.prev_ip = []
@@ -455,3 +478,6 @@ class WatchMarks():
     def undoMark(self):
         self.mark_list.pop()
 
+    def latestCycle(self):
+        latest_mark = self.mark_list[-1]
+        return latest_mark.cycle
