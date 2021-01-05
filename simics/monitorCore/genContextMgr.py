@@ -683,7 +683,7 @@ class GenContextMgr():
             self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
-        self.default_context = self.cpu.current_context
+        #self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
         self.lgr.debug('setDebugPid %d, (%s) resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
