@@ -306,6 +306,21 @@ class StackTrace():
        
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
+
+        if instruct.startswith(self.callmn):
+            parts = instruct.split()
+            try:
+                faddr = int(parts[1], 16)
+                #print('faddr 0x%x' % faddr)
+                fun_name = None
+                if self.ida_funs is not None:
+                    fun_name = self.ida_funs.getName(faddr)
+                if fun_name is not None:
+                    instruct = '%s %s' % (self.callmn, fun_name)
+            except ValueError:
+                pass
+
+
         self.lgr.debug('StackTrace doTrace begin cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp)
