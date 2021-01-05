@@ -76,7 +76,8 @@ class StackTrace(simplecustviewer_t):
             print('could not get json from %s' % simicsString)
             return
         for entry in st_json:
-            instruct = idc.GetDisasm(entry['ip'])
+            #instruct = idc.GetDisasm(entry['ip'])
+            instruct = entry['instruct']
             #print('instruct is %s' % str(instruct))
             #line = '0x%x %-20s %s' % (entry['ip'], entry['fname'], entry['instruct'])
             fun = idaversion.get_func_name(entry['ip'])
