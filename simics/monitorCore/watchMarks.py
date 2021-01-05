@@ -1,3 +1,4 @@
+from simics import Sim_Trans_Load
 class WatchMarks():
     def __init__(self, mem_utils, cpu, lgr):
         self.mark_list = []
@@ -32,16 +33,21 @@ class WatchMarks():
             return self.msg
 
     class CopyMark():
-        def __init__(self, src, dest, length, buf_start):
+        def __init__(self, src, dest, length, buf_start, op_type):
             self.src = src
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
-            if buf_start is not None:
-                offset = src - buf_start
-                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+            self.op_type = op_type
+            if op_type == Sim_Trans_Load:
+                if buf_start is not None:
+                    offset = src - buf_start
+                    self.msg = 'Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                else:
+                    self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
             else:
-                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
+                offset = src - buf_start
+                self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
         def getMsg(self):
             return self.msg
 
@@ -97,17 +103,18 @@ class WatchMarks():
             return self.msg
 
     class CompareMark():
-        def __init__(self, fun, ours, theirs, count, the_str, buf_start):
-            self.the_str = the_str
+        def __init__(self, fun, ours, theirs, count, src_str, dest_str, buf_start):
+            self.src_str = src_str
+            self.dst_str = dst_str
             self.fun = fun
             self.ours = ours    
             self.theirs = theirs    
             self.count = count    
             if buf_start is not None:
                 offset = ours - buf_start
-                self.msg = '%s 0x%x (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, offset, buf_start, self.the_str, theirs, count)
+                self.msg = '%s 0x%x %s (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dst_str, theirs, count)
             else:
-                self.msg = '%s 0x%x (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, self.the_str, theirs, count)
+                self.msg = '%s 0x%x %s (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, dst_str, theirs, count)
         def getMsg(self):
             return self.msg
 
@@ -306,11 +313,11 @@ class WatchMarks():
                     ''' a copy record for the same data read previously recorded, remove the redundant data read '''
                     del self.mark_list[-1]
 
-    def copy(self, src, dest, length, buf_start):
+    def copy(self, src, dest, length, buf_start, op_type):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.CopyMark(src, dest, length, buf_start)
+        cm = self.CopyMark(src, dest, length, buf_start, op_type)
         self.lgr.debug('watchMarks copy 0x%x %s' % (ip, cm.getMsg()))
-        self.removeRedundantDataMark(dest)
+        #self.removeRedundantDataMark(dest)
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         
 
@@ -328,17 +335,19 @@ class WatchMarks():
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, km))
         self.lgr.debug('watchMarks kernel 0x%x %s' % (ip, km.getMsg()))
 
-    def compare(self, fun, ours, theirs, count, buf_start):
+    def compare(self, fun, dest, src, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if count > 0:
-            the_str = self.mem_utils.readString(self.cpu, theirs, count)
-       
-            if the_str is not None:
-                the_str = the_str.decode('ascii', 'replace')
+            dst_str = self.mem_utils.readString(self.cpu, dest, count)
+            if dst_str is not None:
+                dst_str = dst_str.decode('ascii', 'replace')
+            src_str = self.mem_utils.readString(self.cpu, src, count)
+            if src_str is not None:
+                src_str = src_str.decode('ascii', 'replace')
         else:
-            the_str = ''
-        cm = self.CompareMark(fun, ours, theirs, count, the_str, buf_start) 
-        self.removeRedundantDataMark(ours)
+            dst_str = ''
+            src_str = ''
+        cm = self.CompareMark(fun, dest, src, count, src_str, dst_str, buf_start) 
         self.mark_list.append(self.WatchMark(self.cpu.cycles, ip, cm))
         self.lgr.debug('watchMarks compare (%s) 0x%x %s' % (fun, ip, cm.getMsg()))
 
