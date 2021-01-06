@@ -105,16 +105,16 @@ class WatchMarks():
     class CompareMark():
         def __init__(self, fun, ours, theirs, count, src_str, dest_str, buf_start):
             self.src_str = src_str
-            self.dst_str = dst_str
+            self.dst_str = dest_str
             self.fun = fun
             self.ours = ours    
             self.theirs = theirs    
             self.count = count    
             if buf_start is not None:
                 offset = ours - buf_start
-                self.msg = '%s 0x%x %s (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dst_str, theirs, count)
+                self.msg = '%s 0x%x %s (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dest_str, theirs, count)
             else:
-                self.msg = '%s 0x%x %s (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, dst_str, theirs, count)
+                self.msg = '%s 0x%x %s (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, dest_str, theirs, count)
         def getMsg(self):
             return self.msg
 
