@@ -80,10 +80,12 @@ class StackTrace(simplecustviewer_t):
             instruct = entry['instruct']
             #print('instruct is %s' % str(instruct))
             #line = '0x%x %-20s %s' % (entry['ip'], entry['fname'], entry['instruct'])
-            fun = idaversion.get_func_name(entry['ip'])
+            #fun = idaversion.get_func_name(entry['ip'])
+            fun = entry['fun_of_ip']
             so = str(entry['fname'])
             fname = os.path.basename(so) 
-            line = '0x%08x %-15s %-10s %s' % (entry['ip'], fname, fun, str(instruct))
+            #line = '0x%08x %-15s %-10s %s' % (entry['ip'], fname, fun, str(instruct))
+            line = '0x%08x %-40.40s  %-30.30s  %s' % (entry['ip'], instruct, fun, fname)
             #print("added %s" % line)
             retval.append(str(line))
             self.AddLine(str(line))

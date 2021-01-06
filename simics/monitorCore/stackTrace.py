@@ -12,6 +12,7 @@ class StackTrace():
             self.ret_addr = ret_addr
             self.fun_addr = fun_addr
             self.fun_name = fun_name
+            self.fun_of_ip = None
         def dumpString(self):
             if self.ret_addr is not None:
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, self.ret_addr)
@@ -101,6 +102,7 @@ class StackTrace():
             item['ip'] = frame.ip
             item['fname'] = frame.fname
             item['instruct'] = frame.instruct
+            item['fun_of_ip'] = frame.fun_of_ip
             retval.append(item)
         return json.dumps(retval)
 
@@ -223,7 +225,7 @@ class StackTrace():
                                     self.lgr.debug('fun_hex is 0x%x' % fun_hex)
                                     new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
                             frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
-                            self.frames.append(frame)
+                            self.addFrame(frame)
                             self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
                             retval = lr
                         elif fun_hex is not None:
@@ -233,7 +235,7 @@ class StackTrace():
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
                                 frame = self.FrameEntry(call_instr, call_fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
-                                self.frames.append(frame)
+                                self.addFrame(frame)
                                 self.lgr.debug('isCallToMe got adding frame %s' % frame.dumpString())
                                 retval = lr
         return retval
@@ -282,15 +284,10 @@ class StackTrace():
             self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
         else:
             self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
-        #fname = self.soMap.getSOFile(eip)
-        #print('0x%08x  %-s' % (eip, fname))
-        #frame = self.FrameEntry(eip, fname, '', esp)
-        #self.frames.append(frame)
         done  = False
         count = 0
         #ptr = ebp
         ptr = esp
-        #ptr = esp + self.mem_utils.WORD_SIZE
         been_in_main = False
         prev_ip = None
         so_checked = []
@@ -306,7 +303,7 @@ class StackTrace():
        
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
         fname = self.soMap.getSOFile(eip)
-
+        prev_fname = fname
         if instruct.startswith(self.callmn):
             parts = instruct.split()
             try:
@@ -324,10 +321,10 @@ class StackTrace():
         self.lgr.debug('StackTrace doTrace begin cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp)
-            self.frames.append(frame)
+            self.addFrame(frame)
         else:
             frame = self.FrameEntry(eip, fname, instruct, esp)
-            self.frames.append(frame)
+            self.addFrame(frame)
         #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
@@ -340,6 +337,7 @@ class StackTrace():
             cur_fun_name = self.ida_funs.getName(cur_fun)
             self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
         while not done and (count < 9000): 
+            ''' ptr iterates through stack addresses.  val is the value at that address '''
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
                 self.lgr.debug('stackTrace, failed to read from 0x%x' % ptr)
@@ -404,7 +402,12 @@ class StackTrace():
                                         ''' record the direct branch, e.g., B fuFun '''
                                         frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                         self.lgr.debug('stackTrace direct branch fname: %s frame %s' % (fname, frame.dumpString()))
-                                        self.frames.append(frame)
+                                        self.addFrame(frame)
+                                elif self.cpu.architecture != 'arm':
+                                    bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+                                    if (bp + self.mem_utils.WORD_SIZE) != ptr:
+                                        skip_this = True
+                                        self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, and bp is 0x%x and  ptr is 0x%x skip it' % (prev_ip, call_to, bp, ptr))
                                 else:
                                     skip_this = True
                                     self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
@@ -432,13 +435,24 @@ class StackTrace():
                                 if fun.startswith('.'):
                                     fun = fun[1:]
                                 if not fun.startswith(cur_fun_name):
-                                    self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
-                                    ''' don't count this against max frames '''
-                                    count += 1
-                                    ptr = ptr + self.mem_utils.WORD_SIZE
-                                    ''' TBD broken hueristic, e.g., sscanf calls strlen. hack for now... '''
-                                    cur_fun_name = None
-                                    continue
+                                    if self.cpu.architecture != 'arm':
+                                        bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+                                        if (bp + self.mem_utils.WORD_SIZE) != ptr:
+                                            self.lgr.debug('StackTrace candidate %s does not match%sand bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
+                                            count += 1
+                                            ptr = ptr + self.mem_utils.WORD_SIZE
+                                            cur_fun_name = None
+                                            continue
+                                        else:
+                                            cur_fun_name = None
+                                    else:
+                                        self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
+                                        ''' don't count this against max frames '''
+                                        count += 1
+                                        ptr = ptr + self.mem_utils.WORD_SIZE
+                                        ''' TBD broken hueristic, e.g., sscanf calls strlen. hack for now... '''
+                                        cur_fun_name = None
+                                        continue
                                 else:
                                     ''' first frame matches expected function '''
                                     cur_fun_name = None
@@ -452,21 +466,28 @@ class StackTrace():
                         if fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
                             frame = self.FrameEntry(call_ip, 'unknown', instruct, ptr, fun_addr=fun_hex, fun_name=fun)
-                            self.frames.append(frame)
+                            self.addFrame(frame)
                             #self.lgr.debug('stackTrace fname none frame %s' % frame.dumpString())
                         else:
-                            frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
-                            self.frames.append(frame)
+                            ''' ad-hoc detect clib ghost frames, assume clib does not call other libraries.  exceptions?  TBD '''
+                            if fname.startswith('clib'):
+                                if not prev_fname.startswith('clib') and not prev_fname.startswith('libpthread'):
+                                    self.lgr.debug('stackTrace found call from clib to 0x%x, assume a ghost frame')
+                                    skip_this = True        
+                            if not skip_this:
+                                frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
+                                self.addFrame(frame)
                             #self.lgr.debug('stackTrace fname %s frame %s' % (fname, frame.dumpString()))
-
-                        prev_ip = call_ip
-                        if self.soMap.isMainText(call_ip):
-                            been_in_main = True
-                            #self.lgr.debug('stackTrace been in main')
+                        if not skip_this:
+                            prev_fname = fname
+                            prev_ip = call_ip
+                            if self.soMap.isMainText(call_ip):
+                                been_in_main = True
+                                #self.lgr.debug('stackTrace been in main')
                     else:
                         #self.lgr.debug('doTrace not a call? %s' % instruct)
                         frame = self.FrameEntry(call_ip, fname, instruct, ptr, None, None)
-                        self.frames.append(frame)
+                        self.addFrame(frame)
                         self.lgr.debug('stackTrace not a call? %s fname %s, frame %s' % (instruct, fname, frame.dumpString()))
                 else:
                     #self.lgr.debug('nothing from followCall')
@@ -500,3 +521,9 @@ class StackTrace():
     def countFrames(self):
         return len(self.frames)
 
+    def addFrame(self, frame):
+        fun_addr = self.ida_funs.getFun(frame.ip)
+        fun_of_ip = self.ida_funs.getName(fun_addr)
+        frame.fun_of_ip = fun_of_ip
+        self.frames.append(frame)
+        
