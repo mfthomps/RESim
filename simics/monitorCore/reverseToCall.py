@@ -1290,8 +1290,12 @@ class reverseToCall():
 
     def pickleit(self, name):
         rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
-        rev_call_pickle = {}
-        rev_call_pickle['recent_cycle'] = self.recent_cycle
+        #rev_call_pickle = {}
+        #rev_call_pickle['recent_cycle'] = self.recent_cycle
         #pickle.dump( rev_call_pickle, open( rev_call_file, "wb")) 
-        pickle.dump( self.recent_cycle, open( rev_call_file, "wb")) 
         self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
+        self.lgr.debug('dump %s' % dir(self.recent_cycle))
+        try:
+            pickle.dump( self.recent_cycle, open( rev_call_file, "wb") ) 
+        except TypeError:
+            self.lgr.error('trouble dumping pickle of recent_cycle')
