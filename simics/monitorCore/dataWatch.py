@@ -19,7 +19,7 @@ no_stop_funs = ['xml_element_free']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
-    def __init__(self, top, cpu, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, lgr):
+    def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.start = []
         self.length = []
@@ -27,6 +27,7 @@ class DataWatch():
         self.read_hap = []
         self.top = top
         self.cpu = cpu
+        self.cell_name = cell_name
         self.context_manager = context_manager
         self.mem_utils = mem_utils
         self.task_utils = task_utils
@@ -46,7 +47,7 @@ class DataWatch():
         self.other_lengths = [] 
         self.retrack = False
         self.back_stop = backStop.BackStop(self.cpu, self.lgr)
-        self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, lgr)
+        self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, cell_name, run_from_snap, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
         self.call_break = None
         self.call_hap = None
@@ -1011,9 +1012,9 @@ class DataWatch():
                         in_kernel = True
                         break
                     elif call == 'select' or call == '_newselect':
-                        select_info = frame['select']
+                        select_list = frame['select']
                         self.lgr.debug('DataWatch trackIO check select for %d' % fd)
-                        if select_info.hasFD(fd):
+                        if fd in select_list:
                             print('pid %d in kernel on select including %d' % (pid, fd))
                             in_kernel = True
                             break
@@ -1233,3 +1234,6 @@ class DataWatch():
                         self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
                         pass
         return retval
+
+    def pickleit(self, name):
+        self.watchMarks.pickleit(name)

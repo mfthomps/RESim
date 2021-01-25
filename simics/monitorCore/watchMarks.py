@@ -1,13 +1,18 @@
 from simics import Sim_Trans_Load
+import pickle
+import os
 class WatchMarks():
-    def __init__(self, mem_utils, cpu, lgr):
+    def __init__(self, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
         self.mem_utils = mem_utils
         self.cpu = cpu
+        self.cell_name = cell_name
         self.lgr = lgr
         self.prev_ip = []
         self.recent_buf_address = None
         self.recent_buf_max_len = None
+        if run_from_snap is not None:
+            self.loadPickle(run_from_snap)
 
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
@@ -257,6 +262,9 @@ class WatchMarks():
             self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
         else:
             self.lgr.debug('watchMarks markCall 0x%x %s recv_addr: 0x%x' % (ip, msg, recv_addr))
+            if self.recent_buf_address is None:
+                self.recent_buf_address = recv_addr
+                self.recent_buf_max_len = max_len
         self.recordIP(ip)
   
     def memoryMod(self, start, length, addr=None):
@@ -434,7 +442,9 @@ class WatchMarks():
         self.prev_ip = []
 
     def firstBufferAddress(self):
-        retval = None, None
+        ''' address of first buffer '''
+        retval = None
+        ''' maximum length per initial read '''
         max_len = None
         for mark in self.mark_list:
            self.lgr.debug('check mark type %s' % type(mark.mark))
@@ -452,10 +462,12 @@ class WatchMarks():
             self.recent_buf_address = retval
             self.recent_buf_max_len = max_len
             self.lgr.debug('watchMarks firstBuffer address 0x%x' % retval)
-        else:
+        elif self.recent_buf_address is not None:
             self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
             retval = self.recent_buf_address
             max_len = self.recent_buf_max_len
+        else:
+            self.lgr.error('watchMarks, no recent_buf_address was recorded')
         return retval, max_len
 
     def firstBufferIndex(self):
@@ -490,3 +502,18 @@ class WatchMarks():
     def latestCycle(self):
         latest_mark = self.mark_list[-1]
         return latest_mark.cycle
+
+    def loadPickle(self, name):
+        mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
+        if os.path.isfile(mark_file):
+            pickDict = pickle.load( open(mark_file, 'rb') ) 
+            self.recent_buf_address = pickDict['recent_buf_address'] 
+            self.recent_buf_max_len = pickDict['recent_buf_max_len'] 
+
+    def pickleit(self, name):
+        mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
+        pickDict = {}
+        pickDict['recent_buf_address'] = self.recent_buf_address
+        pickDict['recent_buf_max_len'] = self.recent_buf_max_len
+        self.lgr.debug('watchMarks pickleit to %s recent_buf_addres: %s' % (mark_file, str(self.recent_buf_address)))
+        pickle.dump( pickDict, open( mark_file, "wb") ) 

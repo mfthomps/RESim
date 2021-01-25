@@ -1204,7 +1204,7 @@ class reverseToCall():
                     if callname == 'select' or callname == '_newselect':        
                         select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                              self.cpu, self.mem_utils, self.lgr)
-                        frame['select'] = select_info
+                        frame['select'] = select_info.getFDList()
                     elif callname == 'socketcall':        
                         ''' must be 32-bit get params from struct '''
                         socket_callnum = frame['param1']
@@ -1294,8 +1294,10 @@ class reverseToCall():
         #rev_call_pickle['recent_cycle'] = self.recent_cycle
         #pickle.dump( rev_call_pickle, open( rev_call_file, "wb")) 
         self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
-        self.lgr.debug('dump %s' % dir(self.recent_cycle))
+        for pid in self.recent_cycle:
+            r, f = self.recent_cycle[pid]
+            self.lgr.debug('pid %d cycle 0x%x f %s' % (pid, r, str(f)))
         try:
             pickle.dump( self.recent_cycle, open( rev_call_file, "wb") ) 
-        except TypeError:
-            self.lgr.error('trouble dumping pickle of recent_cycle')
+        except TypeError as ex:
+            self.lgr.error('trouble dumping pickle of recent_cycle %s' % ex)

@@ -432,8 +432,8 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
-            self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.lgr)
+            self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -2567,6 +2567,7 @@ class GenMonitor():
                 self.soMap[cell_name].pickleit(name)
                 self.traceProcs[cell_name].pickleit(name)
                 self.rev_to_call[cell_name].pickleit(name)
+                self.dataWatch[cell_name].pickleit(name)
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
@@ -2927,10 +2928,10 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         if cpu.architecture == 'arm':
             addr = self.mem_utils[self.target].getRegValue(cpu, 'r1')
-            ''' Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
+            ''' **SEEMS WRONG, what was observed? **Nope, it seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
-            lenreg2 = 'r7'
+            #lenreg2 = 'r7'
         else:
             lenreg = 'eax'
         prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
@@ -2969,10 +2970,10 @@ class GenMonitor():
         lenreg2 = None
         cpu = self.cell_config.cpuFromCell(self.target)
         if cpu.architecture == 'arm':
-            ''' length register, seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
+            ''' **SEEMS WRONG, what was observed? **length register, seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
-            lenreg2 = 'r7'
+            #lenreg2 = 'r7'
         else:
             lenreg = 'eax'
         addr, max_len = self.dataWatch[self.target].firstBufferAddress()

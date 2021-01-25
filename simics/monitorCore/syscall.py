@@ -134,6 +134,13 @@ class SelectInfo():
                         retval = True
         return retval 
 
+    def getFDList(self):
+        retval = []
+        for i in range(0, self.nfds):
+            if self.hasFD(i):
+                retval.append(i)
+        return retval
+
 class ExitInfo():
     def __init__(self, syscall_instance, cpu, pid, callnum, compat32):
         self.cpu = cpu
@@ -371,7 +378,7 @@ class Syscall():
         return frame
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
