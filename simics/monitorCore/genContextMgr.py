@@ -191,8 +191,8 @@ class GenContextMgr():
         for hap in self.haps:
             hap.show()
 
-    def getRESimContext(self):
-        return self.debugging_cell
+    #def getRESimContext(self):
+    #    return self.debugging_cell
 
     def recordText(self, start, end):
         self.lgr.debug('contextMgr recordText 0x%x 0x%x' % (start, end))
@@ -881,4 +881,5 @@ class GenContextMgr():
 
     def callMe(self, pageFaultGen):
         self.pageFaultGen = pageFaultGen
+
 
