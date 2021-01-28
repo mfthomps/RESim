@@ -177,7 +177,7 @@ class PageFaultGen():
         if pid not in self.faulted_pages:
             self.faulted_pages[pid] = []
         if cr2 in self.faulted_pages[pid]:
-            self.lgr.debug('pageFaultHapAlone, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
+            #self.lgr.debug('pageFaultHapAlone, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
         #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
