@@ -1,10 +1,9 @@
 import os
 import json
+import random
+import backStop
 from simics import *
 '''
-TODO:  Must delete all breakpoints and recreate!  Otherwise not contiguous?
-Or just keep adding HAPS and assign increments to each.
-
 Manage code coverage tracking, maintaining two hits files per coverage unit (i.e., per full_path)
 '''
 class Coverage():
@@ -25,6 +24,14 @@ class Coverage():
         self.did_cover = False
         self.enabled = False
         self.latest_hit = None
+        self.backstop = None
+        self.backstop_cycles = None
+        self.afl = None
+        self.trace_bits = None
+        self.prev_loc = None
+        self.map_size = None
+        self.afl_map = {}
+      
 
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -52,10 +59,11 @@ class Coverage():
             self.blocks_hit = {}
 
     def cover(self):
+        self.lgr.debug('coverage: cover')
         self.offset = 0
         block_file = self.full_path+'.blocks'
         if not os.path.isfile(block_file):
-            self.lgr.error('No blocks file at %s' % block_file)
+            self.lgr.error('coverage: No blocks file at %s' % block_file)
             return
         self.loadBlocks(block_file)         
         so_entry = self.so_map.getSOAddr(self.full_path)
@@ -68,24 +76,27 @@ class Coverage():
             #else:
             #    self.offset = so_entry.address
         else:
-            self.lgr.debug('cover no address in so_entry for %s' % self.full_path)
+            self.lgr.debug('coverage: cover no address in so_entry for %s' % self.full_path)
             return
         #self.lgr.debug('cover offset 0x%x' % self.offset)
         if self.blocks is None:
-            self.lgr.error('No basic blocks defined')
+            self.lgr.error('Coverge: No basic blocks defined')
             return
         self.stopCover()
-        resim_context = self.context_manager.getResimContext()
+        resim_context = self.context_manager.getRESimContext()
         for fun in self.blocks:
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
-                bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
+                if self.afl:
+                    bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+                    self.afl_map[bb_rel] = random.randrange(0, self.map_size)
+                else:
+                    bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
                 self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
-        self.lgr.debug('generated %d breaks, now set bb_hap first bp: %d  last: %d' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1]))
+        self.lgr.debug('coverage generated %d breaks, now set bb_hap first bp: %d  last: %d' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1]))
         self.block_total = len(self.bp_list)
         #self.bb_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
         hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1])
@@ -100,15 +111,28 @@ class Coverage():
         #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
         if self.context_manager.watchingThis() and len(self.bb_hap) > 0:
             addr = memory.logical_address
-            if addr not in self.blocks_hit:
-                self.blocks_hit[addr] = self.cpu.cycles
-                self.latest_hit = addr
-                addr_str = '%d' % (addr - self.offset)
-                if addr_str in self.blocks:
-                    self.funs_hit.append(addr)
-                    #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
-                #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
-                #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
+            if not self.afl:
+                if addr not in self.blocks_hit:
+                    self.blocks_hit[addr] = self.cpu.cycles
+                    self.latest_hit = addr
+                    addr_str = '%d' % (addr - self.offset)
+                    if addr_str in self.blocks:
+                        self.funs_hit.append(addr)
+                        #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
+                    #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
+                    #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
+                    self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            else:
+                cur_loc = self.afl_map[addr]
+                index = cur_loc ^ self.prev_loc
+                #self.lgr.debug('coverage bpHap cur_loc %d, index %d' % (cur_loc, index))
+                #self.lgr.debug('coverage bpHap addr 0x%x, offset 0x%x' % (addr, self.offset))
+                self.trace_bits[index] = min(255, self.trace_bits[index]+1)
+                self.prev_loc = cur_loc >> 1
+                self.backstop.setFutureCycleAlone(self.backstop_cycles)
+        
+    def getTraceBits(self): 
+        return self.trace_bits
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
@@ -171,7 +195,7 @@ class Coverage():
 
     def restoreBreaks(self):
         ''' Restore the hits found in self.blocks_hit '''
-        resim_context = self.context_manager.getResimContext()
+        resim_context = self.context_manager.getRESimContext()
         tmp_list = []
         prev_break = None
         for bb in self.blocks_hit:
@@ -236,10 +260,14 @@ class Coverage():
             self.cover()
             self.did_cover = True
         else:
-            self.restoreBreaks()
-        self.mergeCover()
+            if not self.afl:
+                self.restoreBreaks()
+        if not self.afl:
+            self.mergeCover()
         self.funs_hit = []
         self.blocks_hit = {}
+        self.lgr.debug('coverage doCoverage set backstop')
+        self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
     def startDataSessions(self, dumb):
         if not self.enabled:
@@ -259,11 +287,20 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, fname=None):
+    def enableCoverage(self, fname=None, backstop=None, backstop_cycles=None, afl=False):
         self.enabled = True
         if fname is not None:
             self.full_path = fname
         self.lgr.debug('cover enableCoverage fname is %s' % self.full_path)
+        self.backstop = backstop
+        self.backstop_cycles = backstop_cycles
+        self.afl = afl
+        if afl:
+            map_size_pow2 = 16
+            self.map_size = 1 << map_size_pow2
+            self.trace_bits = bytearray(self.map_size)
+            self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
+            self.prev_loc = 0
 
     def disableCoverage(self):
         self.enabled = False
@@ -298,3 +335,6 @@ class Coverage():
         else:
             self.lgr.debug('coverage goToBasicBlock 0x%x not in blocks_hit' % addr)
         return retval 
+
+    def getBlocksHit(self):
+        return self.blocks_hit

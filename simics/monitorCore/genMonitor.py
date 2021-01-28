@@ -72,6 +72,8 @@ import ropCop
 import coverage
 import taskSwitches
 import traceMalloc
+import fuzz
+import afl
 
 import json
 import pickle
@@ -1189,9 +1191,10 @@ class GenMonitor():
             pid = self.task_utils[self.target].getExitPid()
         return pid
 
-    def goToOrigin(self):
+    def goToOrigin(self, trackingIO=True):
         self.removeDebugBreaks()
-        self.stopTrackIO()
+        if trackingIO:
+            self.stopTrackIO()
         pid = self.getBookmarkPid()
         if pid is not None:
             self.lgr.debug('goToOrigin for pid %d' % pid)
@@ -2950,7 +2953,7 @@ class GenMonitor():
         self.traceAll()
         SIM_run_command('c')
         
-    def injectIO(self, dfile, stay=False):
+    def injectIO(self, dfile, stay=False, afl=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2964,7 +2967,10 @@ class GenMonitor():
         byte_string = None
         with open(dfile) as fh:
             byte_string = fh.read()
-        self.dataWatch[self.target].goToRecvMark()
+        if afl:
+            self.goToOrigin(trackingIO=False)
+        else:
+            self.dataWatch[self.target].goToRecvMark()
 
         lenreg = None
         lenreg2 = None
@@ -3230,6 +3236,16 @@ class GenMonitor():
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.runToOpen(substring)    
+
+    def fuzz(self, path):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        fuzz_it = fuzz.Fuzz(self, cpu, path, self.coverage, self.lgr)
+        fuzz_it.trim()
+
+    def afl(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        fuzz_it = afl.AFL(self, cpu, self.coverage, self.lgr)
+        fuzz_it.go()
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
