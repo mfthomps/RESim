@@ -30,6 +30,7 @@ Manage cycle events to limit how far a session can run without some intervening 
 '''
 class BackStop():
     def cycle_handler(self, obj, cycles):
+        ''' callback for hitting backstop cycle '''
         if self.back_stop_cycle is None:
             return
         self.lgr.debug("backStop, cycle_handler ")
@@ -74,7 +75,7 @@ class BackStop():
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = self.cpu.cycles + cycles
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
-        self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
+        #self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
 
     def setFutureCycle(self, cycles, now=False):
         if not now:
