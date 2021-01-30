@@ -31,6 +31,7 @@ class Coverage():
         self.prev_loc = None
         self.map_size = None
         self.afl_map = {}
+        self.did_exit = 0
       
 
     def loadBlocks(self, block_file):
@@ -84,23 +85,36 @@ class Coverage():
             return
         self.stopCover()
         resim_context = self.context_manager.getRESimContext()
+        default_context = self.context_manager.getDefaultContext()
         for fun in self.blocks:
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
                 if self.afl:
-                    bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+                    bp = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
                     self.afl_map[bb_rel] = random.randrange(0, self.map_size)
                 else:
                     bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
                 self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
-        self.lgr.debug('coverage generated %d breaks, now set bb_hap first bp: %d  last: %d' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1]))
+        self.lgr.debug('coverage generated %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
+              self.cpu.current_context))
         self.block_total = len(self.bp_list)
         #self.bb_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
         hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1])
         self.bb_hap.append(hap)
+
+        if self.afl:
+            self.context_manager.watchGroupExits()
+            self.context_manager.setExitCallback(self.recordExit)
+
+    def recordExit(self):
+        self.did_exit = 1
+        self.lgr.debug('coverage record exit of program under test')
+
+    def getStatus(self):
+        return self.did_exit
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
@@ -109,7 +123,7 @@ class Coverage():
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
         #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
-        if self.context_manager.watchingThis() and len(self.bb_hap) > 0:
+        if (self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             addr = memory.logical_address
             if not self.afl:
                 if addr not in self.blocks_hit:
@@ -255,7 +269,7 @@ class Coverage():
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
-        self.lgr.debug('coverage doCoverage')    
+        #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
             self.cover()
             self.did_cover = True
@@ -266,8 +280,13 @@ class Coverage():
             self.mergeCover()
         self.funs_hit = []
         self.blocks_hit = {}
-        self.lgr.debug('coverage doCoverage set backstop')
+        #self.lgr.debug('coverage doCoverage set backstop')
         self.backstop.setFutureCycleAlone(self.backstop_cycles)
+        if self.afl:
+            self.trace_bits = bytearray(self.map_size)
+            #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
+            self.prev_loc = 0
+            self.did_exit = 0
 
     def startDataSessions(self, dumb):
         if not self.enabled:
@@ -298,9 +317,6 @@ class Coverage():
         if afl:
             map_size_pow2 = 16
             self.map_size = 1 << map_size_pow2
-            self.trace_bits = bytearray(self.map_size)
-            self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
-            self.prev_loc = 0
 
     def disableCoverage(self):
         self.enabled = False
@@ -326,10 +342,10 @@ class Coverage():
     def goToBasicBlock(self, addr):
         retval = None
         if addr in self.blocks_hit:
-            SIM_run_command('pselect %s' % self.cpu.name)
+            dumb=SIM_run_command('pselect %s' % self.cpu.name)
             cmd = 'skip-to cycle = %d ' % self.blocks_hit[addr]
             self.lgr.debug('coverage goToBasicBlock cmd: %s' % cmd)
-            SIM_run_command(cmd)
+            dumb=SIM_run_command(cmd)
             #self.lgr.debug('coverage skipped to 0x%x' % self.cpu.cycles)
             retval = self.cpu.cycles
         else:

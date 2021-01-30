@@ -19,7 +19,7 @@ no_stop_funs = ['xml_element_free']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
-    def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, back_stop, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.start = []
         self.length = []
@@ -46,7 +46,7 @@ class DataWatch():
         self.other_starts = [] # buffer starts that were skipped because they were subranges.
         self.other_lengths = [] 
         self.retrack = False
-        self.back_stop = backStop.BackStop(self.cpu, self.lgr)
+        self.back_stop = back_stop
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, cell_name, run_from_snap, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
         self.call_break = None
@@ -154,7 +154,7 @@ class DataWatch():
             
                
     def stopWatch(self, break_simulation=None): 
-        self.lgr.debug('dataWatch stopWatch')
+        #self.lgr.debug('dataWatch stopWatch')
         for index in range(len(self.start)):
             if self.start[index] == 0:
                 continue
@@ -499,10 +499,12 @@ class DataWatch():
                 self.lgr.debug('getMemParams xml parse')
                  
             cell = self.top.getCell()
-            ''' Assume we have disabled debugging in context manager while fussing with parameters. Thus breakpoints
-                are set on the default context.  Make sure we are in the default context. '''
-            self.context_manager.restoreDefaultContext()
-            proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
+            ''' Assume we have disabled debugging in context manager while fussing with parameters. '''
+            self.top.restoreDebugBreaks(was_watching=True)
+
+            #self.context_manager.restoreDefaultContext()
+            resim_context = self.context_manager.getRESimContext()
+            proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, mem_something.ret_ip, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, mem_something, proc_break, 'memcpy_return_hap')
             self.lgr.debug('getMemParams set hap on ret_ip at 0x%x context %s Now run!' % (mem_something.ret_ip, 
                  str(self.cpu.current_context)))
@@ -858,7 +860,7 @@ class DataWatch():
 
     def clearWatches(self, cycle=None):
         if cycle is None:
-            self.lgr.debug('DataWatch clear Watches, no cycle given')
+            #self.lgr.debug('DataWatch clear Watches, no cycle given')
             self.prev_cycle = None
         else:
             self.lgr.debug('DataWatch clear Watches cycle 0x%x' % cycle)

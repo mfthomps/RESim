@@ -7,7 +7,7 @@ import sys
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
-    def __init__(self, top, cpu, coverage, lgr):
+    def __init__(self, top, cpu, coverage, backstop, lgr):
         ''' *** FIX THIS ***'''
         self.pad_to_size = 1448
         self.pad_char = chr(0)
@@ -16,41 +16,59 @@ class AFL():
         self.top = top
         self.coverage = coverage
         self.path = '/home/mike/SEED/afl/target_input.io'
-        self.backstop = backStop.BackStop(self.cpu, self.lgr)
+        self.backstop = backstop
         self.stop_hap = None
         self.backstop.setCallback(self.whenDone)
-        self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=500000, afl=True)
+        ''' careful changing this, may hit backstop before crashed process killed '''
+        self.backstop_cycles = 500000
+        #self.backstop_cycles = 100000
+        self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
         self.server_address = ('localhost', 8765)
         self.iteration = 0
+        self.start_cycle = cpu.cycles
         self.synchAFL()
 
     def stopHap(self, stop_action, one, exception, error_string):
         if self.stop_hap is not None:
             self.stop_hap = None
-            self.lgr.debug('fuzz stopHap')
+            #self.lgr.debug('afl stopHap')
             trace_bits = self.coverage.getTraceBits()
             bit_file = open('/home/mike/SEED/afl/bitfile', 'w')
             bit_file.write(trace_bits)
             bit_file.close()
 
-            self.lgr.debug('afl stopHap created resim_done file')
-            self.sendMsg('resim_done with iteration %d' % self.iteration)
+            #self.lgr.debug('afl stopHap bitfile')
+            status = self.coverage.getStatus()
+            self.sendMsg('resim_done iteration: %d status: %d' % (self.iteration, status))
             self.iteration += 1 
+            count = 0
+            for b in trace_bits:
+                if b > 0:
+                    count += 1
+            self.lgr.debug('alf stopHap counted %d different trace hits' % count)
             SIM_run_alone(self.go, None)
 
     def go(self, dumb=None):
         ''' wait for AFL to indicate it is ready, then process the file '''
-        self.lgr.debug('afl go iteration %d' % self.iteration)
+        #self.lgr.debug('afl go iteration %d' % self.iteration)
         msg = self.getMsg()
-        self.lgr.debug('afl from afl: %s' % msg)
-        if msg.startswith('afl_ready'):
+        #self.lgr.debug('afl from afl: %s' % msg)
+        if msg is not None and msg.startswith('afl_ready'):
             if self.stop_hap is None:
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
             self.run()
         else:
-            self.lgr.error('Unexpected message from afl: %' % msg)
+            self.lgr.error('Unexpected message from afl: %s' % msg)
+            return
+        parts = msg.split()
+        timeout = int(parts[2])
+        new_cycles = timeout * 1000
+        #if new_cycles != self.backstop_cycles:
+        #    self.lgr.debug('afl go backstop_cycles changed from %d to %d' % (self.backstop_cycles, new_cycles))
+        #    self.backstop_cycles = new_cycles
+          
 
     def run(self):
         self.coverage.doCoverage()
@@ -62,12 +80,14 @@ class AFL():
             fh.seek(0, 2)
             fh.write(pad_string)  
             fh.close()
-        self.top.injectIO(self.path, stay=True)
-        self.lgr.debug('fuzz, did coverage, now run')
+        self.top.injectIO(self.path, stay=True, afl=True, cycle=self.start_cycle)
+        self.backstop.setFutureCycleAlone(self.backstop_cycles)
+        #self.lgr.debug('afl, did coverage, now run context: %s' % self.cpu.current_context)
         SIM_run_command('c') 
 
     def whenDone(self):
-        self.lgr.debug('afl whenDone callback')
+        #self.lgr.debug('afl whenDone callback')
+        pass
 
     def synchAFL(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -91,7 +111,9 @@ class AFL():
         msg = "" 
         while amount_received < amount_expected:
             data = self.sock.recv(RESIM_MSG_SIZE)
+            if data is None or len(data) == 0:
+                self.sock.close()
+                return None
             amount_received += len(data)
-            print >>sys.stderr, 'received "%s"' % data
             msg = msg+data
         return msg

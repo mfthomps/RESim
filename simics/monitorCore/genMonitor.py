@@ -72,6 +72,7 @@ import ropCop
 import coverage
 import taskSwitches
 import traceMalloc
+import backStop
 import fuzz
 import afl
 
@@ -121,6 +122,7 @@ class GenMonitor():
         self.traceFiles = {}
         self.sharedSyscall = {}
         self.ropCop = {}
+        self.back_stop = {}
 
 
 
@@ -434,8 +436,9 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+            self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.back_stop[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -970,7 +973,8 @@ class GenMonitor():
             self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
             return
         self.lgr.debug('debugPidGroup cell %s pid %d found leader %d' % (self.target, pid, leader_pid))
-        pid_list = self.task_utils[self.target].getGroupPids(leader_pid)
+        pid_dict = self.task_utils[self.target].getGroupPids(leader_pid)
+        pid_list = list(pid_dict.keys())
         self.debugPidList(pid_list, self.debugGroup)
 
     def debugPidList(self, pid_list, debug_function):
@@ -1191,17 +1195,18 @@ class GenMonitor():
             pid = self.task_utils[self.target].getExitPid()
         return pid
 
-    def goToOrigin(self, trackingIO=True):
-        self.removeDebugBreaks()
-        if trackingIO:
+    def goToOrigin(self, debugging=True):
+        if debugging:
+            self.removeDebugBreaks()
             self.stopTrackIO()
         pid = self.getBookmarkPid()
         if pid is not None:
-            self.lgr.debug('goToOrigin for pid %d' % pid)
+            self.lgr.debug('goToOrigin was in pid %d' % pid)
         msg = self.bookmarks.goToOrigin()
-        self.context_manager[self.target].setIdaMessage(msg)
-        self.restoreDebugBreaks(was_watching=True)
-        self.context_manager[self.target].watchTasks()
+        if debugging:
+            self.context_manager[self.target].setIdaMessage(msg)
+            self.restoreDebugBreaks(was_watching=True)
+            self.context_manager[self.target].watchTasks()
 
     def goToDebugBookmark(self, mark):
         self.lgr.debug('goToDebugBookmark %s' % mark)
@@ -2383,6 +2388,7 @@ class GenMonitor():
         self.bookmarks.clearMarks()
         self.dataWatch[self.target].clearWatchMarks()
         cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.lgr.debug('genMonitor clearBookmarks')
         self.stopTrackIO()
         self.dataWatch[self.target].clearWatches(cpu.cycles)
         self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
@@ -2953,7 +2959,7 @@ class GenMonitor():
         self.traceAll()
         SIM_run_command('c')
         
-    def injectIO(self, dfile, stay=False, afl=False):
+    def injectIO(self, dfile, stay=False, afl=False, cycle=None):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2965,16 +2971,18 @@ class GenMonitor():
             return
         ''' Add memUtil function to put byte array into memory '''
         byte_string = None
+        cpu = self.cell_config.cpuFromCell(self.target)
         with open(dfile) as fh:
             byte_string = fh.read()
         if afl:
-            self.goToOrigin(trackingIO=False)
+            SIM_run_command('pselect %s' % cpu.name)
+            cmd='skip-to cycle=0x%x' % cycle
+            SIM_run_command(cmd)
         else:
             self.dataWatch[self.target].goToRecvMark()
 
         lenreg = None
         lenreg2 = None
-        cpu = self.cell_config.cpuFromCell(self.target)
         if cpu.architecture == 'arm':
             ''' **SEEMS WRONG, what was observed? **length register, seems to acutally be R7, at least that is what libc uses and reports (as R0 by the time
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
@@ -2988,23 +2996,29 @@ class GenMonitor():
             return
         self.dataWatch[self.target].clearWatchMarks()
         self.dataWatch[self.target].clearWatches()
-        self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
-        if len(byte_string) > max_len:
+        #self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
+        if len(byte_string) > max_len and not afl:
             a = raw_input('Warning: your injection is %d bytes; length of original read was %d bytes.  Continue?' % (len(byte_string), max_len))
             if a.lower() != 'y':
                 return
-        self.lgr.debug('injectIO Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
+        #self.lgr.debug('injectIO Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
-        self.writeRegValue(lenreg, len(byte_string))
-        if lenreg2 is not None:
-            self.writeRegValue(lenreg2, len(byte_string))
-        self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
-        print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
-        msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
-        if not stay:
-            self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
-            print('retracking IO') 
-            self.retrack(clear=False)    
+        #self.writeRegValue(lenreg, len(byte_string))
+        reg_num = cpu.iface.int_register.get_number(lenreg)
+        cpu.iface.int_register.write(reg_num, len(byte_string))
+        #if lenreg2 is not None:
+        #    self.writeRegValue(lenreg2, len(byte_string))
+        
+        if not afl: 
+           ''' reset bookmarks **otherwise memory changes are lost** '''
+           self.clearBookmarks()
+           self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+           print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+           msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
+           if not stay:
+               self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
+               print('retracking IO') 
+               self.retrack(clear=False)    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -3239,12 +3253,13 @@ class GenMonitor():
 
     def fuzz(self, path):
         cpu = self.cell_config.cpuFromCell(self.target)
-        fuzz_it = fuzz.Fuzz(self, cpu, path, self.coverage, self.lgr)
+        fuzz_it = fuzz.Fuzz(self, cpu, path, self.coverage, self.back_stop[self.target], self.lgr)
         fuzz_it.trim()
 
     def afl(self):
         cpu = self.cell_config.cpuFromCell(self.target)
-        fuzz_it = afl.AFL(self, cpu, self.coverage, self.lgr)
+        self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        fuzz_it = afl.AFL(self, cpu, self.coverage, self.back_stop[self.target], self.lgr)
         fuzz_it.go()
  
 if __name__=="__main__":        

@@ -1,16 +1,15 @@
-import backStop
 import os
 import shutil
 from simics import *
 class Fuzz():
-    def __init__(self, top, cpu, path, coverage, lgr):
+    def __init__(self, top, cpu, path, coverage, backstop, lgr):
         self.cpu = cpu
         self.lgr = lgr
         self.top = top
         self.coverage = coverage
         self.path = None
         self.orig_path = path
-        self.backstop = backStop.BackStop(self.cpu, self.lgr)
+        self.backstop = backstop
         self.stop_hap = None
         #self.backstop.setCallback(self.whenDone)
         self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=500000)
@@ -26,6 +25,7 @@ class Fuzz():
         self.count = 0
         ''' iterate until delta below this '''
         self.threshold = None
+        self.lgr.debug('Fuzz init')
         
 
     def stopHap(self, stop_action, one, exception, error_string):
@@ -43,10 +43,14 @@ class Fuzz():
         self.threshold = (self.orig_size / 20)
         self.pad_char = chr(0)
         self.pad_to_size = self.orig_size
-        self.lgr.debug('fuzz trim threshold is %d' % (self.threshold))
+        self.lgr.debug('fuzz trim orig_size %d delta %d threshold is %d' % (self.orig_size, self.delta, self.threshold))
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         self.run()
+
+    def rmHap(self):
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.stop_hap = None
       
     def grow(self):
         shutil.copyfile(self.orig_path, self.path)
@@ -82,6 +86,8 @@ class Fuzz():
             self.pad_char = chr(0)
             self.pad_to_size = self.current_size
             self.trim()
+        else:
+            self.rmHap()
 
     def trimTest(self, dumb):
         hit = len(self.coverage.getBlocksHit())
@@ -104,10 +110,14 @@ class Fuzz():
         if hits == self.orig_hits:
             ''' keep shrinking '''
             self.previous_size = self.current_size
-            self.current_size = self.current_size - self.delta
-            if self.delta > self.threshold:
-                ''' go smaller next time if still unchanged '''
-                self.delta = self.delta/2
+            if self.current_size > self.delta:
+                self.current_size = self.current_size - self.delta
+                if self.delta > self.threshold:
+                    ''' go smaller next time if still unchanged '''
+                    self.delta = self.delta/2
+            else:
+                self.lgr.error('fuzz trimBack current size would go negative %d' % self.current_size)
+                return
             self.fileTrim()
             self.lgr.debug('fuzz trim shrink to %d delta %d' % (self.current_size, self.delta)) 
             self.run()
@@ -120,7 +130,7 @@ class Fuzz():
                 self.lgr.debug('fuzz trim did shrink, changed hits to %d, so grow' % (hits))
                 self.grow()
             else:
-                ''' must be done, restore to previous '''
+                ''' must be done, restore to previous, and do not pad, will feed to AFL '''
                 self.current_size = self.previous_size
                 shutil.copyfile(self.orig_path, self.path)
                 self.fileTrim(nopad=True)
