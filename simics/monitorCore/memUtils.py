@@ -559,7 +559,7 @@ class memUtils():
         return retval
 
     def writeString(self, cpu, address, string):
-        #self.lgr.debug('writeString 0x%x %s' % (address, string))
+        #self.lgr.debug('writeString len %d adress: 0x%x %s' % (len(string), address, string))
 
         lcount = len(string)/4
         carry = len(string) % 4
@@ -585,6 +585,7 @@ class memUtils():
             #SIM_write_phys_memory(cpu, phys_block.address, value, count)
             try:
                 SIM_write_phys_memory(cpu, phys, value, count)
+                #self.lgr.debug('writeString wrote %d bytes' % count)
             except TypeError:
                 self.lgr.error('writeString failed writing to phys 0x%x (vert 0x%x), value %s' % (phys, address, value))
                 return

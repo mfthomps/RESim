@@ -998,9 +998,9 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, pid, callnum, syscall_info.compat32)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse pid:%d callname <%s>' % (pid, callname))
+        #self.lgr.debug('syscallParse pid:%d callname <%s>' % (pid, callname))
         if callname == 'open' or callname == 'openat':        
-            self.lgr.debug('syscallParse, yes is %s' % callname)
+            #self.lgr.debug('syscallParse, yes is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None and not quiet:
                 if exit_info.fname_addr is None:
@@ -1252,7 +1252,8 @@ class Syscall():
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
                 if fd is not None:
-                    self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
+                    #self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
+                    pass
                 if pid is None:
                     self.lgr.error('PID is NONE?')
                     SIM_break_simulation('eh?, over?')
@@ -1397,7 +1398,7 @@ class Syscall():
                     frame = self.task_utils.frameFromStackSyscall()
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
-            self.lgr.debug('syscallHap calculated')
+            #self.lgr.debug('syscallHap calculated')
             frame_string = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('frame string %s' % frame_string)
         return frame, exit_eip1, exit_eip2, exit_eip3

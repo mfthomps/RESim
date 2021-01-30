@@ -106,7 +106,7 @@ class SharedSyscall():
 
         if exit_eip1 is not None: 
             if len(self.exit_pids[exit_eip1]) == 0:
-                self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
+                #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
                 exit_break = self.context_manager.genBreakpoint(self.cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
@@ -386,7 +386,7 @@ class SharedSyscall():
         else:
             did_exit = self.handleExit(None, pid, comm)
         if did_exit:
-            self.lgr.debug('exitHap remove exitHap for %d' % pid)
+            #self.lgr.debug('exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
 
     def fcntl(self, pid, eax, exit_info):
@@ -749,7 +749,7 @@ class SharedSyscall():
                 SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
     
         if trace_msg is not None and len(trace_msg.strip())>0:
-            self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
+            #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
         return True
 
