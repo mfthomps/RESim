@@ -393,7 +393,7 @@ class TaskUtils():
         return retval
 
     def getGroupPids(self, leader_pid):
-        retval = []
+        retval = {}
         #self.lgr.debug('getGroupPids for %d' % leader_pid)
         ts_list = self.getTaskStructs()
         leader_rec = None
@@ -412,7 +412,8 @@ class TaskUtils():
                     pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
                     ''' skip if exiting as recorded by syscall '''
                     if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                        retval.append(ts_list[ts].pid)
+                        #retval.append(ts_list[ts].pid)
+                        retval[pid] = ts
             else:
                 ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
                 comm_leader_pid = self.getCommLeaderPid(ts)
@@ -421,7 +422,8 @@ class TaskUtils():
                 if comm_leader_pid == leader_pid and ts_pid not in retval:
                     if ts_pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
                         #self.lgr.debug('getGroupPids added %d' % ts_pid)
-                        retval.append(ts_pid)
+                        #retval.append(ts_pid)
+                        retval[ts_pid] = ts
           
         return retval
 
