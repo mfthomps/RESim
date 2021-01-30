@@ -51,8 +51,11 @@ class WatchMarks():
                 else:
                     self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
             else:
-                offset = src - buf_start
-                self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                if buf_start is not None:
+                    offset = src - buf_start
+                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                else:
+                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. Buffer unknown!)' % (length, src, dest, )
         def getMsg(self):
             return self.msg
 
@@ -463,7 +466,7 @@ class WatchMarks():
             self.recent_buf_max_len = max_len
             self.lgr.debug('watchMarks firstBuffer address 0x%x' % retval)
         elif self.recent_buf_address is not None:
-            self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
+            #self.lgr.debug('watchMarks firstBufferAddress, no marks, using recent 0x%x' % self.recent_buf_address)
             retval = self.recent_buf_address
             max_len = self.recent_buf_max_len
         else:
