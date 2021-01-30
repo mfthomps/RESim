@@ -137,13 +137,20 @@ it as a Simics workspace:
 \section{Workspaces}
 The steps above are intended to allow you to run tests using the CADET01 service. 
 For each new project, create and initialize a new workspace.  Simply create a directory
-with an informative name, cd to it and run this command:
-\begin{verbatim}
-    /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
-\end{verbatim}
+with an informative name, cd to it and run the workspace or project setup command as described above.
 
 Then copy the monitor.sh from {\tt git/RESim/simics/workspace} to your workspace.
 
+\section{Simics 5 procedures}
+This section addresses bladet10 which has both Simics 4.8 and Simics 5.
+When creating a new workspace, initialize it with:
+\begin{verbatim}
+/mnt/re_images/simics5/latest/bin/project-setup
+\end{verbatim}
+\noindent Copy the {\tt git/RESim/simics/workspace/monitor5-blade.sh} to your workspace and use it (rename to taste) when starting RESim.
+
+Two scripts in /usr/bin are used to control the license server.  Use simics5-license.sh and simics4-license.sh to set the server for the
+version of Simics that you wish to run.  Those scripts need only be run when changing versions.
 
 \section{System Setup} 
 \label{section-system}
