@@ -41,7 +41,6 @@ class GenHap():
         self.hap_type = hap_type
         self.callback = callback
         ''' used with afl '''
-        self.exit_callback = None  
         self.parameter = parameter
         self.breakpoint_list = breakpoint_list
         self.lgr = lgr
@@ -147,6 +146,7 @@ class GenContextMgr():
         self.watch_only_this = False
         ''' used with afl '''
         self.callback = None
+        self.exit_callback = None  
 
         ''' experiment with tracking task switches among watched pids '''
         self.task_switch = {}

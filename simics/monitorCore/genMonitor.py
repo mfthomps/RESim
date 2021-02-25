@@ -2958,8 +2958,9 @@ class GenMonitor():
         self.lgr.debug('traceInject from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         self.traceAll()
         SIM_run_command('c')
-        
-    def injectIO(self, dfile, stay=False, afl=False, cycle=None):
+       
+
+    def injectIO(self, dfile, stay=False, afl=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2975,9 +2976,10 @@ class GenMonitor():
         with open(dfile) as fh:
             byte_string = fh.read()
         if afl:
-            SIM_run_command('pselect %s' % cpu.name)
-            cmd='skip-to cycle=0x%x' % cycle
-            SIM_run_command(cmd)
+            #SIM_run_command('pselect %s' % cpu.name)
+            #cmd='skip-to cycle=0x%x' % cycle
+            #cli.quiet_run_command(cmd)
+            pass
         else:
             self.dataWatch[self.target].goToRecvMark()
 
@@ -3259,8 +3261,8 @@ class GenMonitor():
     def afl(self):
         cpu = self.cell_config.cpuFromCell(self.target)
         self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-        fuzz_it = afl.AFL(self, cpu, self.coverage, self.back_stop[self.target], self.lgr)
-        fuzz_it.go()
+        fuzz_it = afl.AFL(self, cpu, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], self.lgr)
+        fuzz_it.goN()
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

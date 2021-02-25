@@ -32,6 +32,7 @@ class Coverage():
         self.map_size = None
         self.afl_map = {}
         self.did_exit = 0
+        random.seed(12345)
       
 
     def loadBlocks(self, block_file):
