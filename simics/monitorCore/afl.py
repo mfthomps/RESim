@@ -24,7 +24,8 @@ class AFL():
         self.stop_hap = None
         self.backstop.setCallback(self.whenDone)
         ''' careful changing this, may hit backstop before crashed process killed '''
-        self.backstop_cycles =  500000
+        #self.backstop_cycles =  500000
+        self.backstop_cycles =   5000000
         #self.backstop_cycles = 100000
         self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -36,26 +37,37 @@ class AFL():
         cli.quiet_run_command('save-snapshot name = origin')
         self.synchAFL()
 
+    def rmHap(self):
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+
     def stopHap(self, stop_action, one, exception, error_string):
         if self.stop_hap is not None:
-            self.stop_hap = None
+            #self.stop_hap = None
             #self.lgr.debug('afl stopHap')
             trace_bits = self.coverage.getTraceBits()
            
 
+            '''
             bit_file = open('/home/mike/SEED/afl/bitfile', 'w')
             bit_file.write(trace_bits)
             bit_file.close()
-
+            '''
            
 
             #self.lgr.debug('afl stopHap bitfile')
             status = self.coverage.getStatus()
             self.sendMsg('resim_done iteration: %d status: %d' % (self.iteration, status))
-
-            #self.sock.sendall(trace_bits)
+            try: 
+                self.sock.sendall(trace_bits)
+            except:
+                self.lgr.debug('AFL went away while we were sending trace_bits')
+                self.rmHap()
+                return
 
             self.iteration += 1 
+            '''
             count = 0
             b=0
             for b in trace_bits:
@@ -64,6 +76,7 @@ class AFL():
                 count += 1
             #self.lgr.debug('afl stopHap counted %d different trace hits' % count)
             self.lgr.debug('afl iteration %d stopHap first hit at %d value %d' % (self.iteration, count, b))
+            '''
             SIM_run_alone(self.goN, None)
 
     def go(self, dumb=None):
@@ -89,6 +102,7 @@ class AFL():
         in_data = self.getMsg()
         if in_data is None:
             self.lgr.error('Got None from afl')
+            self.rmHap()
             return
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
@@ -108,8 +122,8 @@ class AFL():
         if addr is None:
             self.lgr.error('AFL, no firstBufferAddress found')
             return
-        self.dataWatch.clearWatchMarks()
-        self.dataWatch.clearWatches()
+        #self.dataWatch.clearWatchMarks()
+        #self.dataWatch.clearWatches()
         #self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
         #self.lgr.debug('injectIO Addr: 0x%x byte_string is %s' % (addr, str(byte_string)))
         
@@ -129,6 +143,7 @@ class AFL():
         SIM_run_command('c') 
 
     def run(self):
+        ''' NOT USED '''
         self.coverage.doCoverage()
         current_size = os.path.getsize(self.path)
         pad_count = self.pad_to_size - current_size
@@ -152,6 +167,8 @@ class AFL():
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = ('localhost', 8765)
         self.sock.connect(server_address)
+        self.coverage.doCoverage()
+        num_blocks = self.coverage.getNumBlocks()
         self.sendMsg('hi from resim')
         reply = self.getMsg()
         self.lgr.debug('afl synchAFL reply from afl: %s' % reply)
@@ -184,6 +201,7 @@ class AFL():
         try:
             self.sock.sendall(combine)
         except:
+            self.rmHap()
             print('AFL went away');
         #self.lgr.debug('sent to AFL len %d: %s' % (msg_size, msg))
 
@@ -202,6 +220,7 @@ class AFL():
             data = self.sock.recv(expected)
             if data is None or len(data) == 0:
                 self.sock.close()
+                self.rmHap()
                 return None
             #self.lgr.debug('got from afl: %s' % data)
             amount_received += len(data)
