@@ -539,7 +539,7 @@ class memUtils():
         carry = len(bstring) % 4
         if carry != 0:
             lcount += 1
-        print lcount
+        
         sindex = 0
         for i in range(lcount):
             eindex = min(sindex+4, len(bstring))
@@ -565,7 +565,7 @@ class memUtils():
         carry = len(string) % 4
         if carry != 0:
             lcount += 1
-        print lcount
+        
         sindex = 0
         for i in range(lcount):
             eindex = min(sindex+4, len(string))
