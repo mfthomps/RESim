@@ -33,6 +33,8 @@ class Coverage():
         self.afl_map = {}
         self.did_exit = 0
         random.seed(12345)
+        self.hit_count = 0
+        self.afl_del_breaks = []
       
 
     def loadBlocks(self, block_file):
@@ -110,6 +112,9 @@ class Coverage():
             self.context_manager.watchGroupExits()
             self.context_manager.setExitCallback(self.recordExit)
 
+    def getNumBlocks(self):
+        return len(self.bp_list)
+
     def recordExit(self):
         self.did_exit = 1
         self.lgr.debug('coverage record exit of program under test')
@@ -138,16 +143,30 @@ class Coverage():
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
                     self.backstop.setFutureCycleAlone(self.backstop_cycles)
             else:
+                ''' AFL mode '''
                 cur_loc = self.afl_map[addr]
                 index = cur_loc ^ self.prev_loc
-                #self.lgr.debug('coverage bpHap cur_loc %d, index %d' % (cur_loc, index))
-                #self.lgr.debug('coverage bpHap addr 0x%x, offset 0x%x' % (addr, self.offset))
-                self.trace_bits[index] = min(255, self.trace_bits[index]+1)
+                #self.lgr.debug('coverage bbHap cur_loc %d, index %d' % (cur_loc, index))
+                #self.lgr.debug('coverage bbHap addr 0x%x, offset 0x%x' % (addr, self.offset))
+                if self.trace_bits[index] == 0:
+                    self.hit_count += 1
+                if self.trace_bits[index] == 255:
+                    self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
+                    if addr not in self.afl_del_breaks:
+                        SIM_delete_breakpoint(break_num)
+                        self.afl_del_breaks.append(addr)
+                else:
+                    self.trace_bits[index] =  self.trace_bits[index]+1
+                #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
                 self.prev_loc = cur_loc >> 1
                 self.backstop.setFutureCycleAlone(self.backstop_cycles)
         
     def getTraceBits(self): 
+        #self.lgr.debug('hit count is %d' % self.hit_count)
         return self.trace_bits
+
+    def getHitCount(self):
+        return self.hit_count;
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
@@ -208,6 +227,24 @@ class Coverage():
             fh.flush()
         self.lgr.debug('coverage saveCoverage to %s' % save_name)
 
+
+    def restoreAFLBreaks(self):
+        resim_context = self.context_manager.getRESimContext()
+        bp_start = 0
+        default_context = self.context_manager.getDefaultContext()
+        for bb in self.afl_del_breaks:
+            breakpoint = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, 0)
+            if bp_start == 0:
+                bp_start = breakpoint
+        if len(self.afl_del_breaks) > 0:
+            hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bp_start, breakpoint)
+            self.bb_hap.append(hap)
+            if len(self.bb_hap) > 100:
+                self.lgr.debug('more than 100 haps')
+            self.lgr.debug('coverage restoreAFLBreaks restored %d breaks' % len(self.afl_del_breaks))
+            self.afl_del_breaks = []
+
+            
     def restoreBreaks(self):
         ''' Restore the hits found in self.blocks_hit '''
         resim_context = self.context_manager.getRESimContext()
@@ -277,6 +314,8 @@ class Coverage():
         else:
             if not self.afl:
                 self.restoreBreaks()
+            else:
+                self.restoreAFLBreaks()
         if not self.afl:
             self.mergeCover()
         self.funs_hit = []
@@ -288,6 +327,7 @@ class Coverage():
             #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
             self.prev_loc = 0
             self.did_exit = 0
+            self.hit_count = 0
 
     def startDataSessions(self, dumb):
         if not self.enabled:
