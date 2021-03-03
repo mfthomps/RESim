@@ -572,6 +572,12 @@ class GenMonitor():
                 retval[pid] = frame
         return retval 
 
+    def getRecentEnterCycle(self):
+        ''' return most recent cycle in which the kernel was entered for this PID '''
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+        return frame, cycles
+
     def tasksDBG(self):
         plist = {}
         pid_list = self.context_manager[self.target].getThreadPids()
@@ -691,7 +697,7 @@ class GenMonitor():
                              text_segment.address, text_segment.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
-                    self.coverage = coverage.Coverage(full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.lgr)
+                    self.coverage = coverage.Coverage(self, full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.lgr)
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
         else:
@@ -1440,6 +1446,10 @@ class GenMonitor():
 
     def getCPU(self):
         return self.cell_config.cpuFromCell(self.target)
+
+    def getPID(self):
+        cpu, comm, this_pid = self.task_utils[self.target].curProc() 
+        return this_pid
  
     def skipBackToUser(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2142,7 +2152,7 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params)
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
         call_params.nth = count
         cell = self.cell_config.cell_context[self.target]
@@ -2160,10 +2170,15 @@ class GenMonitor():
             calls.append('lseek')
             calls.remove('send')
             calls.remove('recv')
+        skip_and_mail = True
+        if flist_in is not None:
+            ''' Given callback functions, use those instead of skip_and_mail '''
+            skip_and_mail = False
 
         the_syscall = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger)
+                               calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               skip_and_mail=skip_and_mail)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         ''' find processes that are in the kernel on IO calls '''
@@ -2575,7 +2590,7 @@ class GenMonitor():
                 self.task_utils[cell_name].pickleit(name)
                 self.soMap[cell_name].pickleit(name)
                 self.traceProcs[cell_name].pickleit(name)
-                self.rev_to_call[cell_name].pickleit(name)
+                self.rev_to_call[cell_name].pickleit(name, cell_name)
                 self.dataWatch[cell_name].pickleit(name)
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
@@ -2960,7 +2975,7 @@ class GenMonitor():
         SIM_run_command('c')
        
 
-    def injectIO(self, dfile, stay=False, afl=False):
+    def injectIO(self, dfile, stay=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2975,13 +2990,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         with open(dfile) as fh:
             byte_string = fh.read()
-        if afl:
-            #SIM_run_command('pselect %s' % cpu.name)
-            #cmd='skip-to cycle=0x%x' % cycle
-            #cli.quiet_run_command(cmd)
-            pass
-        else:
-            self.dataWatch[self.target].goToRecvMark()
+        self.dataWatch[self.target].goToRecvMark()
 
         lenreg = None
         lenreg2 = None
@@ -2999,7 +3008,7 @@ class GenMonitor():
         self.dataWatch[self.target].clearWatchMarks()
         self.dataWatch[self.target].clearWatches()
         #self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
-        if len(byte_string) > max_len and not afl:
+        if len(byte_string) > max_len:
             a = raw_input('Warning: your injection is %d bytes; length of original read was %d bytes.  Continue?' % (len(byte_string), max_len))
             if a.lower() != 'y':
                 return
@@ -3011,16 +3020,15 @@ class GenMonitor():
         #if lenreg2 is not None:
         #    self.writeRegValue(lenreg2, len(byte_string))
         
-        if not afl: 
-           ''' reset bookmarks **otherwise memory changes are lost** '''
-           self.clearBookmarks()
-           self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
-           print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
-           msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
-           if not stay:
-               self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
-               print('retracking IO') 
-               self.retrack(clear=False)    
+        ''' reset bookmarks **otherwise memory changes are lost** '''
+        self.clearBookmarks()
+        self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
+        if not stay:
+            self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
+            print('retracking IO') 
+            self.retrack(clear=False)    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -3095,7 +3103,8 @@ class GenMonitor():
                 full_path = self.targetFS[self.target].getFull(fname)
             else:
                 full_path = None
-            self.coverage.enableCoverage(fname=full_path)
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            self.coverage.enableCoverage(pid, fname=full_path)
             self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
@@ -3258,11 +3267,22 @@ class GenMonitor():
         fuzz_it = fuzz.Fuzz(self, cpu, path, self.coverage, self.back_stop[self.target], self.lgr)
         fuzz_it.trim()
 
-    def afl(self):
+    def afl(self,n=1, sor=False):
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-        fuzz_it = afl.AFL(self, cpu, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], self.lgr)
-        fuzz_it.goN()
+        cell_name = self.getTopComponentName(cpu)
+        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
+            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor)
+        fuzz_it.goN(None)
+
+    def aflFD(self, fd, snap_name):
+        ''' fd -- will runToIOish on that FD
+            snap_name -- will writeConfig to that snapshot '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        cell_name = self.getTopComponentName(cpu)
+        print('fd is %d' % fd)
+        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], snap_name, self.lgr, fd=fd)
+
+    
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -1280,7 +1280,7 @@ class reverseToCall():
         return retval 
 
     def loadPickle(self, name):
-        self.lgr.debug('reverseToCall load pickle for %s' % name)
+        self.lgr.debug('reverseToCall load pickle for %s  cell_name %s' % (name, self.cell_name))
         rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
         if os.path.isfile(rev_call_file):
             self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
@@ -1288,8 +1288,8 @@ class reverseToCall():
             self.recent_cycle = pickle.load( open(rev_call_file, 'rb') ) 
             #self.recent_cycle = rev_call_pickle['recent_cycle']
 
-    def pickleit(self, name):
-        rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
+    def pickleit(self, name, cell_name):
+        rev_call_file = os.path.join('./', name, cell_name, 'revCall.pickle')
         #rev_call_pickle = {}
         #rev_call_pickle['recent_cycle'] = self.recent_cycle
         #pickle.dump( rev_call_pickle, open( rev_call_file, "wb")) 
