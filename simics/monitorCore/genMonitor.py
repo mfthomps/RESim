@@ -593,7 +593,8 @@ class GenMonitor():
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
-                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x' % (pid, call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc']))
+                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
+                     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
             else:
                 print('pid: %d in user space?' % pid)
 
@@ -2132,6 +2133,12 @@ class GenMonitor():
         self.lgr.debug('runToReceive to %s' % substring)
         self.runTo(call, call_params)
 
+    def runToRead(self, substring):
+        call = self.task_utils[self.target].socketCallName('read', self.is_compat32)
+        call_params = syscall.CallParams('read', substring, break_simulation=True)        
+        self.lgr.debug('runToRead to %s' % substring)
+        self.runTo(call, call_params)
+
     def runToAccept(self, fd):
         call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         call_params = syscall.CallParams('accept', fd, break_simulation=True)        
@@ -2975,12 +2982,13 @@ class GenMonitor():
         SIM_run_command('c')
        
 
-    def injectIO(self, dfile, stay=False):
+    def injectIO(self, dfile, stay=False, keep_size=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
             to match the length of the  dfile.  Finally, run trackIO on the given file descriptor.
             Assumes we are stopped.  
+            If "stay", then just inject and don't run.
         '''
         if not os.path.isfile(dfile):
             print('File not found at %s\n\n' % dfile)
@@ -3016,14 +3024,19 @@ class GenMonitor():
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
         #self.writeRegValue(lenreg, len(byte_string))
         reg_num = cpu.iface.int_register.get_number(lenreg)
-        cpu.iface.int_register.write(reg_num, len(byte_string))
+        if not keep_size:
+            cpu.iface.int_register.write(reg_num, len(byte_string))
+            self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+            print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
+        else:
+            length = cpu.iface.int_register.read(reg_num)
+            self.lgr.debug('injectiO from file %s, retaining original length of %d' % (dfile, length))
+            print('injectiO from file %s, retaining original length of %d' % (dfile, length))
         #if lenreg2 is not None:
         #    self.writeRegValue(lenreg2, len(byte_string))
         
         ''' reset bookmarks **otherwise memory changes are lost** '''
         self.clearBookmarks()
-        self.lgr.debug('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
-        print('injectIO from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
         if not stay:
             self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
@@ -3272,7 +3285,7 @@ class GenMonitor():
         cell_name = self.getTopComponentName(cpu)
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor)
-        fuzz_it.goN(None)
+        fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name):
         ''' fd -- will runToIOish on that FD

@@ -7,10 +7,11 @@ from simics import *
 Manage code coverage tracking, maintaining two hits files per coverage unit (i.e., per full_path)
 '''
 class Coverage():
-    def __init__(self, full_path, context_manager, cell, so_map, cpu, lgr):
+    def __init__(self, top, full_path, context_manager, cell, so_map, cpu, lgr):
         self.lgr = lgr
         self.cell = cell
         self.cpu = cpu
+        self.top = top
         self.so_map = so_map
         self.context_manager = context_manager
         self.bp_list = []
@@ -32,9 +33,10 @@ class Coverage():
         self.map_size = None
         self.afl_map = {}
         self.did_exit = 0
-        random.seed(12345)
         self.hit_count = 0
         self.afl_del_breaks = []
+        self.pid = None
+        random.seed(12345)
       
 
     def loadBlocks(self, block_file):
@@ -118,19 +120,27 @@ class Coverage():
     def recordExit(self):
         self.did_exit = 1
         self.lgr.debug('coverage record exit of program under test')
+        SIM_break_simulation('did exit')
+        self.lgr.debug('coverage record exit of did break')
 
     def getStatus(self):
         return self.did_exit
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
+        '''
+        pid = self.top.getPID()
+        if pid != self.pid:
+            self.lgr.debug('converage bbHap, not my pid, got %d I am %d' % (pid, self.pid))
+        '''
         addr = memory.logical_address
         if addr == 0:
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
+        if addr in self.afl_del_breaks:
+            return
         #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
         if (self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
-            addr = memory.logical_address
             if not self.afl:
                 if addr not in self.blocks_hit:
                     self.blocks_hit[addr] = self.cpu.cycles
@@ -141,7 +151,8 @@ class Coverage():
                         #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
                     #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
-                    self.backstop.setFutureCycleAlone(self.backstop_cycles)
+                    if self.backstop_cycles > 0:
+                        self.backstop.setFutureCycleAlone(self.backstop_cycles)
             else:
                 ''' AFL mode '''
                 cur_loc = self.afl_map[addr]
@@ -151,15 +162,18 @@ class Coverage():
                 if self.trace_bits[index] == 0:
                     self.hit_count += 1
                 if self.trace_bits[index] == 255:
-                    self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
-                    if addr not in self.afl_del_breaks:
-                        SIM_delete_breakpoint(break_num)
-                        self.afl_del_breaks.append(addr)
+                    self.afl_del_breaks.append(addr)
+                    if False:
+                        self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
+                        if addr not in self.afl_del_breaks:
+                            SIM_delete_breakpoint(break_num)
+                            self.afl_del_breaks.append(addr)
                 else:
                     self.trace_bits[index] =  self.trace_bits[index]+1
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
                 self.prev_loc = cur_loc >> 1
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
+                if self.backstop_cycles > 0:
+                    self.backstop.setFutureCycleAlone(self.backstop_cycles)
         
     def getTraceBits(self): 
         #self.lgr.debug('hit count is %d' % self.hit_count)
@@ -229,6 +243,11 @@ class Coverage():
 
 
     def restoreAFLBreaks(self):
+        self.afl_del_breaks = []
+        return 
+
+
+        '''
         resim_context = self.context_manager.getRESimContext()
         bp_start = 0
         default_context = self.context_manager.getDefaultContext()
@@ -243,6 +262,7 @@ class Coverage():
                 self.lgr.debug('more than 100 haps')
             self.lgr.debug('coverage restoreAFLBreaks restored %d breaks' % len(self.afl_del_breaks))
             self.afl_del_breaks = []
+        '''
 
             
     def restoreBreaks(self):
@@ -321,7 +341,8 @@ class Coverage():
         self.funs_hit = []
         self.blocks_hit = {}
         #self.lgr.debug('coverage doCoverage set backstop')
-        self.backstop.setFutureCycleAlone(self.backstop_cycles)
+        if self.backstop_cycles > 0:
+            self.backstop.setFutureCycleAlone(self.backstop_cycles)
         if self.afl:
             self.trace_bits = bytearray(self.map_size)
             #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
@@ -347,8 +368,9 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, fname=None, backstop=None, backstop_cycles=None, afl=False):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False):
         self.enabled = True
+        self.pid = pid
         if fname is not None:
             self.full_path = fname
         self.lgr.debug('cover enableCoverage fname is %s' % self.full_path)

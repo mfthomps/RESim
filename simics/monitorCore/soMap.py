@@ -357,7 +357,10 @@ class SOMap():
             return None
         self.lgr.debug('getSOAddr look for addr for pid %d in_fname %s' % (pid, in_fname))
         ''' TBD fix this? '''
-        if pid in self.text_prog and (in_fname.endswith(self.text_prog[pid]) or self.text_prog[pid].endswith(in_fname)):
+        #if pid in self.text_prog:
+        #    self.lgr.debug('getSOAddr YES pid %d is in text_prog as %s' % (pid, self.text_prog[pid]))
+        #if pid in self.text_prog and (in_fname.endswith(self.text_prog[pid]) or self.text_prog[pid].endswith(in_fname)):
+        if pid in self.text_prog and (os.path.basename(in_fname) == os.path.basename(self.text_prog[pid])):
             size = self.text_end[pid] - self.text_start[pid]
             retval = elfText.Text(self.text_start[pid], 0, size)
         elif pid in self.so_file_map:

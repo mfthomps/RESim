@@ -415,7 +415,7 @@ class GenContextMgr():
             ''' Not currently watching processes, but new process should be watched '''
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
-                self.lgr.debug('resim_context')
+                #self.lgr.debug('resim_context')
             #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
@@ -743,6 +743,8 @@ class GenContextMgr():
                 self.pageFaultGen.handleExit(pid)
             self.clearExitBreaks()
             self.lgr.debug('contextManager deadParrot pid:%d rec no longer found removed task' % (pid))
+        if self.exit_callback is not None:
+            self.exit_callback()
 
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
@@ -776,9 +778,12 @@ class GenContextMgr():
         self.lgr.debug('contextManager taskRecHap demise of pid:%d by the hand of cur_pid %d?' % (pid, cur_pid))
         dead_rec = self.task_utils.getRecAddrForPid(pid)
         if dead_rec is not None:
-            self.lgr.debug('contextManager taskRecHap got record 0x%x for %d, call resetAlone' % (dead_rec, pid))
-            self.demise_cache.append(pid)
-            SIM_run_alone(self.resetAlone, pid)
+            if pid != cur_pid:
+                self.lgr.debug('contextManager taskRecHap got record 0x%x for %d, call resetAlone' % (dead_rec, pid))
+                self.demise_cache.append(pid)
+                SIM_run_alone(self.resetAlone, pid)
+            else:
+                self.lgr.debug('Pid %d messing with its own task rec?  Let it go.')
 
         else: 
             value = SIM_get_mem_op_value_le(memory)

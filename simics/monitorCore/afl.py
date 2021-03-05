@@ -11,7 +11,7 @@ import stopFunction
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
-    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, packet_count=1):
+    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, packet_count=1, stop_on_read=False):
         ''' *** FIX THIS ***'''
         self.pad_to_size = 1448
         #self.pad_to_size = 1333
@@ -22,6 +22,7 @@ class AFL():
         self.top = top
         self.mem_utils = mem_utils
         self.fd = fd
+        self.stop_on_read = stop_on_read
         self.dataWatch = dataWatch
         self.coverage = coverage
         self.packet_count = packet_count
@@ -38,12 +39,16 @@ class AFL():
         self.backstop.setCallback(self.whenDone)
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
-        self.backstop_cycles =   100000
-        #self.backstop_cycles = 100000
+        if stop_on_read:
+            self.backstop_cycles = 0
+        else:
+            self.backstop_cycles =   100000
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
         self.server_address = ('localhost', 8765)
-        self.iteration = 0
+        self.iteration = 1
+        self.pid = self.top.getPID()
+
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -54,11 +59,10 @@ class AFL():
         else:
             self.loadPickle(snap_name)
             self.finishInit()
-        self.pid = self.top.getPID()
      
     def finishInit(self): 
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-        self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=True)
+        self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=True)
         cli.quiet_run_command('disable-reverse-execution')
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
@@ -69,23 +73,18 @@ class AFL():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-    def stopHap(self, stop_on_read, one, exception, error_string):
+    def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             #self.stop_hap = None
             #self.lgr.debug('afl stopHap')
             trace_bits = self.coverage.getTraceBits()
            
-
-            '''
-            bit_file = open('/home/mike/SEED/afl/bitfile', 'w')
-            bit_file.write(trace_bits)
-            bit_file.close()
-            '''
-           
-
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
-    
+            if status != 0:
+                self.lgr.debug('afl stopHap status not zero %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
+                with open('/tmp/icrashed', 'w') as fh:
+                    fh.write(self.in_data)
             self.sendMsg('resim_done iteration: %d status: %d' % (self.iteration, status))
             try: 
                 self.sock.sendall(trace_bits)
@@ -93,24 +92,15 @@ class AFL():
                 self.lgr.debug('AFL went away while we were sending trace_bits')
                 self.rmStopHap()
                 return
-
-     
+            if status != 0:
+                self.lgr.debug('afl stopHap status back from sendall trace_bites')
             self.iteration += 1 
-            '''
-            count = 0
-            b=0
-            for b in trace_bits:
-                if b > 0:
-                    break
-                count += 1
-            #self.lgr.debug('afl stopHap counted %d different trace hits' % count)
-            self.lgr.debug('afl iteration %d stopHap first hit at %d value %d' % (self.iteration, count, b))
-            '''
-            SIM_run_alone(self.goN, stop_on_read)
+            SIM_run_alone(self.goN, status)
 
 
-    def goN(self, stop_on_read=False):
-        #self.lgr.debug('afl goN')
+    def goN(self, status):
+        if status != 0:
+            self.lgr.debug('afl goN after crash. Call getMsg')
         self.current_packet = 1
         ''' get all data from afl '''
       
@@ -123,6 +113,8 @@ class AFL():
         
         cli.quiet_run_command('restore-snapshot name=origin')
 
+        if status != 0:
+            self.lgr.debug('afl goN after crash. restored snapshot after getting %d bytes from afl' % len(self.in_data))
        
         current_length = len(self.in_data)
         self.afl_packet_count = self.packet_count
@@ -145,26 +137,29 @@ class AFL():
                 b = bytearray(pad_count)
                 self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
                 tot_length += pad_count
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            if self.backstop_cycles > 0:
+                self.backstop.setFutureCycleAlone(self.backstop_cycles)
         else:
             first_data = self.in_data[0:self.pad_to_size]
             self.mem_utils.writeString(self.cpu, self.addr, first_data) 
         
 
-        if (self.afl_packet_count > 1 or stop_on_read) and self.call_hap is None:
+        if (self.afl_packet_count > 1 or self.stop_on_read) and self.call_hap is None:
             cell = self.top.getCell()
             self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, stop_on_read, self.call_break)
+            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
             #self.lgr.debug('afl go set call break at 0x%x and hap, cycle is 0x%x' % (self.call_ip, self.cpu.cycles))
          
         self.cpu.iface.int_register.write(self.len_reg_num, tot_length)
         self.coverage.doCoverage()
         #self.lgr.debug('afl, did coverage, cycle: 0x%x' % self.cpu.cycles)
         if self.stop_hap is None:
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  stop_on_read)
+            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+        if status != 0:
+            self.lgr.debug('afl goN after call continue')
         cli.quiet_run_command('c') 
 
-    def callHap(self, stop_on_read, third, break_num, memory):
+    def callHap(self, dumb, third, break_num, memory):
         if self.call_hap is None:
             return
         this_pid = self.top.getPID()
@@ -172,7 +167,7 @@ class AFL():
             self.lgr.debug('afl callHap wrong pid got %d wanted %d' % (this_pid, self.pid))
             return
         #self.lgr.debug('afl callHap cycles 0x%x' % self.cpu.cycles)
-        if stop_on_read:
+        if self.stop_on_read:
             #self.lgr.debug('afl callHap stop on read')
             SIM_break_simulation('stop on read')
             return
@@ -197,7 +192,8 @@ class AFL():
         self.current_packet += 1
         if self.current_packet >= self.afl_packet_count:
             SIM_run_alone(self.delCallHap, None)
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            if self.backstop_cycles > 0:
+                self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
     def delCallHap(self, dumb):
         SIM_delete_breakpoint(self.call_break)
@@ -219,27 +215,6 @@ class AFL():
         reply = self.getMsg()
         self.lgr.debug('afl synchAFL reply from afl: %s' % reply)
 
-    def sendMsgx(self, msg):
-        if len(msg) > RESIM_MSG_SIZE:
-            self.lgr.error("afl sendMsg message too long %s" % msg)
-            return
-        pad = RESIM_MSG_SIZE - len(msg)
-        msg = msg + pad*chr(0)
-        self.sock.sendall(msg)
-
-    def getMsgx(self):
-        amount_received = 0
-        amount_expected = RESIM_MSG_SIZE
-        msg = "" 
-        while amount_received < amount_expected:
-            data = self.sock.recv(RESIM_MSG_SIZE)
-            if data is None or len(data) == 0:
-                self.sock.close()
-                return None
-            amount_received += len(data)
-            msg = msg+data
-        return msg
-   
     def sendMsg(self, msg):
         msg_size = len(msg)
         ms = struct.pack("i", msg_size) 
@@ -249,6 +224,7 @@ class AFL():
         except:
             self.rmStopHap()
             print('AFL went away');
+            self.lgr.debug('AFL went away while in sendMsg');
         #self.lgr.debug('sent to AFL len %d: %s' % (msg_size, msg))
 
     def getMsg(self):
@@ -267,6 +243,7 @@ class AFL():
             if data is None or len(data) == 0:
                 self.sock.close()
                 self.rmStopHap()
+                self.lgr.debug("got nothing from afl")
                 return None
             #self.lgr.debug('got from afl: %s' % data)
             amount_received += len(data)
