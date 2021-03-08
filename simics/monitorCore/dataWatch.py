@@ -267,7 +267,7 @@ class DataWatch():
             buf_start = self.findRange(mem_something.src)
             if buf_start is None:
                 self.lgr.error('dataWatch buf_start for 0x%x is none in strcpy?' % (mem_something.src))
-            self.watchMarks.copy(mem_something.src, mem_something.dest, mem_something.count, buf_start)
+            self.watchMarks.copy(mem_something.src, mem_something.dest, mem_something.count, buf_start, mem_something.op_type)
         elif mem_something.fun == 'memset':
             self.setRange(0, 0, None) 
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (mem_something.dest, mem_something.count))
@@ -405,12 +405,17 @@ class DataWatch():
             elif mem_something.fun == 'strdup':
                 mem_something.count = self.getStrLen(mem_something.src)        
             elif mem_something.fun == 'strcpy':
-                mem_something.count = self.getStrLen(mem_something.src)        
                 if self.cpu.architecture == 'arm':
+                    if mem_something.src is None:
+                        mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
+                    mem_something.count = self.getStrLen(mem_something.src)        
                     mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     ''' TBD this fails on buffer overlap, but that leads to crash anyway? '''
                     self.lgr.debug('getMemParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (mem_something.src, mem_something.dest, mem_something.count))
                 else:
+                    if mem_something.src is None:
+                        mem_something.dest = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+                    mem_something.count = self.getStrLen(mem_something.src)        
                     mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
             elif mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
                 if self.cpu.architecture == 'arm':
