@@ -56,6 +56,15 @@ class StopAction():
     def addFun(self, fun):
         self.flist.append(fun)
 
+    def rmFun(self, in_fun):
+        got_one = None
+        for fun in self.flist:
+            if fun.getFun() == in_fun:
+               got_one = fun
+               break
+        if got_one is not None:
+            self.flist.remove(fun) 
+
     def listFuns(self):
         retval = ''
         for f in self.flist:

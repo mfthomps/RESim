@@ -126,6 +126,8 @@ class RopCop():
         bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
         dumb, comm, cur_pid  = self.task_utils.curProc()
         self.lgr.debug('ropCop stopHap %s pid:%d' % (bm, cur_pid))
+        self.top.removeDebugBreaks()
+        self.top.stopDataWatch()
         self.bookmarks.setDebugBookmark(bm)
         self.top.skipAndMail()
 

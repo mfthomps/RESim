@@ -379,6 +379,10 @@ class TaskUtils():
         self.exit_cycles = self.cpu.cycles
         self.lgr.debug('taskUtils setExitPid pid:%d cycles 0x%x' % (pid, self.exit_cycles))
 
+    def clearExitPid(self):
+        self.exit_pid = 0
+        self.exit_cycles = 0
+
     def getGroupLeaderPid(self, pid):
         retval = None
         ts_list = self.getTaskStructs()

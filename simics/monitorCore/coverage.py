@@ -28,9 +28,9 @@ class Coverage():
         self.backstop = None
         self.backstop_cycles = None
         self.afl = None
-        self.trace_bits = None
         self.prev_loc = None
         self.map_size = None
+        self.trace_bits = None
         self.afl_map = {}
         self.did_exit = 0
         self.hit_count = 0
@@ -64,7 +64,7 @@ class Coverage():
             self.funs_hit = []
             self.blocks_hit = {}
 
-    def cover(self):
+    def cover(self, force_default_context=False):
         self.lgr.debug('coverage: cover')
         self.offset = 0
         block_file = self.full_path+'.blocks'
@@ -95,11 +95,13 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                if self.afl:
+                if self.afl or force_default_context:
                     bp = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
-                    self.afl_map[bb_rel] = random.randrange(0, self.map_size)
                 else:
                     bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
+                if self.afl:
+                    rand = random.randrange(0, self.map_size)
+                    self.afl_map[bb_rel] = rand
                 self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
@@ -123,6 +125,9 @@ class Coverage():
         SIM_break_simulation('did exit')
         self.lgr.debug('coverage record exit of did break')
 
+    def watchExits(self):
+        self.context_manager.watchGroupExits()
+
     def getStatus(self):
         return self.did_exit
 
@@ -138,6 +143,7 @@ class Coverage():
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
         if addr in self.afl_del_breaks:
+            ''' already 255 hits '''
             return
         #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
         if (self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
@@ -243,6 +249,7 @@ class Coverage():
 
 
     def restoreAFLBreaks(self):
+        ''' leave unused code as cautionary tale re: pom '''
         self.afl_del_breaks = []
         return 
 
@@ -322,29 +329,29 @@ class Coverage():
         print('Previous data run hit %d new BBs' % new_hits)
  
 
-    def doCoverage(self):
+    def doCoverage(self, force_default_context=False):
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
-            self.cover()
+            self.cover(force_default_context=force_default_context)
             self.did_cover = True
         else:
             if not self.afl:
                 self.restoreBreaks()
-            else:
-                self.restoreAFLBreaks()
+
         if not self.afl:
             self.mergeCover()
-        self.funs_hit = []
-        self.blocks_hit = {}
+            self.funs_hit = []
+            self.blocks_hit = {}
         #self.lgr.debug('coverage doCoverage set backstop')
         if self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
+
         if self.afl:
-            self.trace_bits = bytearray(self.map_size)
+            self.trace_bits.__init__(self.map_size)
             #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
             self.prev_loc = 0
             self.did_exit = 0
@@ -380,6 +387,7 @@ class Coverage():
         if afl:
             map_size_pow2 = 16
             self.map_size = 1 << map_size_pow2
+            self.trace_bits = bytearray(self.map_size)
 
     def disableCoverage(self):
         self.enabled = False

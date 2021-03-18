@@ -564,7 +564,11 @@ class reverseToCall():
             self.lgr.debug('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], rev_to))
             page_faults = self.page_faults.getFaultingCycles(pid)
             if rev_to in page_faults:
-                skip_to = page_faults[rev_to] - 1
+                skip_to = self.getClosestFault(page_faults[rev_to])
+                if skip_to is None:
+                    self.lgr.debug('jumpOverKernel did not find page fault prior to current cycle')
+                    return None
+                #skip_to = page_faults[rev_to] - 1
                 skip_ok = self.skipToTest(skip_to)
                 self.lgr.debug('jumpOverKernel found page fault for 0x%x, skip back to 0x%x' % (eip, skip_to))
                 if not skip_ok:
@@ -585,6 +589,18 @@ class reverseToCall():
                 retval = None
         return retval
 
+    def getClosestFault(self, fault_list):
+        best = None
+        now = self.cpu.cycles
+        for cycle in fault_list:
+            if cycle < now:
+                if best is None:
+                    best = cycle 
+                else:
+                    if (now-cycle) < (best-cycle):
+                        best = cycle
+        return best
+        
     def kernInterruptHap(self, my_args, one, exception, error_string):
         if self.uncall_break is None:
             return
@@ -618,7 +634,8 @@ class reverseToCall():
         self.taint = taint
         self.value = value
         self.num_bytes = num_bytes
-        self.lgr.debug('\ndoRevToModReg cycle 0x%x for register %s offset is %d taint: %r' % (self.cpu.cycles, reg, offset, taint))
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r' % (eip, self.cpu.cycles, reg, offset, taint))
         self.reg = reg
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         self.pid = pid
@@ -629,9 +646,9 @@ class reverseToCall():
             self.lgr.error('doRevToModReg got bad regnum %d for reg <%s>' % (self.reg_num, reg))
             return
         self.prev_reg_val = self.reg_val
-        eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('doRevToModReg starting at %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
+        self.lgr.debug('doRevToModReg starting at PC %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         done = False
+        self.save_reg_mod = RegisterModType(reg, RegisterModType.REG)
         while not done:
             reg_mod_type = self.cycleRegisterMod()
             if reg_mod_type is None:
@@ -724,7 +741,8 @@ class reverseToCall():
         retval = None
         done = False
         cur_val = self.cpu.iface.int_register.read(self.reg_num)
-        self.lgr.debug('cycleRegisterMod start for %s value 0x%x cur_val 0x%x' % (self.reg, self.reg_val, cur_val))
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('cycleRegisterMod start eip: 0x%x for %s value 0x%x cur_val 0x%x' % (eip, self.reg, self.reg_val, cur_val))
         while not done:
             #current = SIM_cycle_count(self.cpu)
             current = self.cpu.cycles
@@ -811,9 +829,13 @@ class reverseToCall():
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
                             rval = self.task_utils.getMemUtils().readPtr(self.cpu, addr)
-                            self.lgr.debug('cycleRegisterMod at %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x prev 0x%x' % (eip, addr, 
+                            self.lgr.debug('cycleRegisterMod at eip %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x prev 0x%x' % (eip, addr, 
                                     rval, self.reg_val, self.prev_reg_val))
-                            if abs(rval - self.prev_reg_val) > 64:
+                            if addr is not None and self.reg == 'pc':
+                                self.lgr.debug('cycleRegisterMod, modification of PC register, set as addr type for 0x%x' % addr)
+                                retval = RegisterModType(addr, RegisterModType.ADDR)
+                                done=True
+                            elif abs(rval - self.prev_reg_val) > 64:
                                 self.lgr.error('cycleRegisterMod wrong value (diff > 64)')
                                 done = True
                                 retval = RegisterModType(None, RegisterModType.BAIL)
@@ -831,15 +853,36 @@ class reverseToCall():
                                     retval = RegisterModType(None, RegisterModType.BAIL)
                                     self.lgr.debug('cycleRegisterMod set break number %d stop hap, now rev to 0x%x' % (self.uncall_break, pre_call))
                                     self.save_cycle = self.cpu.cycles
+                                    self.save_reg_mod = RegisterModType(addr, RegisterModType.ADDR)
                                     SIM_run_alone(SIM_run_command,'rev')
                                 else:
                                     self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr 0x%x' % (eip, addr))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             else:
                                 self.lgr.debug('cycleRegisterMod at %x, ldm instruction got None for addr' % eip)
-                     
+                    
+        if retval is not None and (retval.mod_type == RegisterModType.REG or retval.mod_type == RegisterModType.ADDR):
+            self.lgr.debug('cycleRegisterMod set save_reg_mod to %s' % str(retval.mod_type))
+            self.save_reg_mod = retval
         self.lgr.debug('cycleRegisterMod return') 
         return retval
+
+    def resumeAlone(self, dumb):
+                skip_ok = self.skipToTest(self.save_cycle)
+                if not skip_ok:
+                    return
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('resumeAlone skipped back to saved cycle 0x%x.  PC now 0x%x' % (self.save_cycle, eip))
+                
+                if not self.taint:
+                    self.lgr.debug('resumeAlone call cleanup')
+                    self.cleanup(self.cpu)
+                else:
+                    self.lgr.debug('resumeAlone follow taint')
+                    if self.cpu.architecture == 'arm':
+                        self.followTaintArm(self.save_reg_mod)
+                    else:
+                        self.followTaint(self.save_reg_mod)
 
     def uncallHap(self, my_args, one, exception, error_string):
         if self.uncall_break is None:
@@ -857,17 +900,8 @@ class reverseToCall():
                 self.lgr.debug('uncallHap reg %s still 0x%x, now cycle back through instructions, but run alone' % (self.reg, val))
                 SIM_run_alone(self.cycleAlone, pid)
             else: 
-                self.lgr.debug('uncallHap got val 0x%x, does not match 0x%x return to previous cycle?' % (val, self.reg_val))
-                skip_ok = self.skipToTest(self.save_cycle)
-                if not skip_ok:
-                    return
-                if not self.taint:
-                    self.cleanup(self.cpu)
-                else:
-                    if self.cpu.architecture == 'arm':
-                        self.followTaintArm(self.save_reg_mod)
-                    else:
-                        self.followTaint(self.save_reg_mod)
+                self.lgr.debug('uncallHap got val 0x%x, does not match 0x%x return to previous cycle 0x%x' % (val, self.reg_val, self.save_cycle))
+                SIM_run_alone(self.resumeAlone, None)
                 
         else:
             self.lgr.debug('uncallHap, wrong pid, rev')
@@ -1231,6 +1265,9 @@ class reverseToCall():
             for cycle in sorted(self.sysenter_cycles[pid]):
                 retval.append(cycle)
         return retval
+
+    def clearEnterCycles(self):
+        self.sysenter_cycles.clear()
 
     def getRecentCycleFrame(self, pid):
         retval = None

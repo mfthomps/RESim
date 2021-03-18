@@ -1,5 +1,6 @@
 from simics import *
 import armCond
+import re
 modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 def modifiesOp0(mn):
@@ -195,3 +196,8 @@ def isCall(cpu, instruct):
     elif instruct.startswith('ldr pc'):
        return True
     return False
+
+def inBracket(op):
+    res = re.find(r'\[.*?\]', op) 
+    return res
+

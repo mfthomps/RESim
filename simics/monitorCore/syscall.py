@@ -1307,7 +1307,10 @@ class Syscall():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('syscall stopHap cycle: 0x%x eip: 0x%x exception %s error %s' % (self.stop_action.hap_clean.cpu.cycles, eip, str(exception), str(error_string)))
+            if self.stop_action is not None:
+                self.lgr.debug('syscall stopHap cycle: 0x%x eip: 0x%x exception %s error %s' % (self.stop_action.hap_clean.cpu.cycles, eip, str(exception), str(error_string)))
+            else:
+                self.lgr.debug('syscall stopHap, no stop_action') 
             if not self.linger:
                 break_list = self.stop_action.getBreaks()
                 if eip not in break_list and eip != self.stop_action.getExitAddr():
@@ -1596,6 +1599,9 @@ class Syscall():
     def handleExit(self, pid, ida_msg, killed=False, retain_so=False):
             if self.traceProcs is not None:
                 self.traceProcs.exit(pid)
+            if killed:
+                self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
+                self.stop_action.rmFun(self.top.skipAndMail)
             self.lgr.debug(ida_msg)
             if self.traceMgr is not None:
                 self.traceMgr.write(ida_msg+'\n')
@@ -1610,9 +1616,9 @@ class Syscall():
             if last_one and self.debugging:
                 if self.debugging_exit:
                     ''' exit before we got to text section '''
-                    self.lgr.debug(' exit of %d before we got to text section ' % pid)
+                    self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
                     SIM_run_alone(self.top.undoDebug, None)
-                self.lgr.debug('exit or exit_group pid:%d' % pid)
+                self.lgr.debug('syscall handleExit exit or exit_group pid:%d' % pid)
                 self.sharedSyscall.stopTrace()
                 ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
                 self.task_utils.setExitPid(pid)

@@ -189,15 +189,15 @@ class StackTrace():
             lr = self.reg_frame['lr']
             ''' TBD also for 64-bit? '''
             call_instr = lr-4
-            self.lgr.debug("isCallToMe call_instr 0x%x  eip 0x%x" % (call_instr, eip))
+            #self.lgr.debug("isCallToMe call_instr 0x%x  eip 0x%x" % (call_instr, eip))
             if self.ida_funs is not None:
                 cur_fun = self.ida_funs.getFun(eip)
                 if cur_fun is not None:
                     fun_name = self.ida_funs.getName(cur_fun)
-                    self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
+                    #self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.ida_funs.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
-                    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                    #self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
                     pass
                 if cur_fun != ret_to:
                     try:
@@ -208,35 +208,37 @@ class StackTrace():
                     if instruct[1].startswith(self.callmn):
                         fun_hex, fun = self.getFunName(instruct[1])
                         if fun_hex is None:
-                            self.lgr.debug('stackTrace fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
+                            #self.lgr.debug('stackTrace fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
+                            pass
                         elif cur_fun is not None:
-                            self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
+                            #self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
+                            pass
                         if fun_hex is not None and fun_hex == cur_fun:
                             if fun is not None:
                                 new_instruct = '%s   %s' % (self.callmn, fun)
-                                self.lgr.debug('fun not none %s' % fun)
+                                #self.lgr.debug('fun not none %s' % fun)
                             else:
                                 self.lgr.debug('fun is None')
                                 if fun_hex in self.relocate_funs:
                                     fun = self.relocate_funs[fun_hex]
                                     new_instruct = '%s   0x%x' % (self.callmn, fun)
-                                    self.lgr.debug('fun relocate %s' % fun)
+                                    #self.lgr.debug('fun relocate %s' % fun)
                                 else:
-                                    self.lgr.debug('fun_hex is 0x%x' % fun_hex)
+                                    #self.lgr.debug('fun_hex is 0x%x' % fun_hex)
                                     new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
                             frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
                             self.addFrame(frame)
-                            self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
+                            #self.lgr.debug('isCallToMe adding frame %s' % frame.dumpString())
                             retval = lr
                         elif fun_hex is not None:
                             ''' LR does not suggest call to current function. Is current a different library then LR? '''
-                            self.lgr.debug('try got')
+                            #self.lgr.debug('try got')
                             if self.tryGot(lr, eip, fun_hex):
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
                                 frame = self.FrameEntry(call_instr, call_fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun)
                                 self.addFrame(frame)
-                                self.lgr.debug('isCallToMe got adding frame %s' % frame.dumpString())
+                                #self.lgr.debug('isCallToMe got adding frame %s' % frame.dumpString())
                                 retval = lr
         return retval
 

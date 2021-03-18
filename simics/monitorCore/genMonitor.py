@@ -75,6 +75,8 @@ import traceMalloc
 import backStop
 import fuzz
 import afl
+import playAFL
+import reportCrash
 
 import json
 import pickle
@@ -158,6 +160,9 @@ class GenMonitor():
         self.coverage = None
         self.real_script = None
         self.trace_malloc = None
+
+        ''' What to call when a command completes from skipAndMail (if anything '''
+        self.command_callback = None
 
         self.genInit(comp_dict)
 
@@ -607,8 +612,8 @@ class GenMonitor():
             plist[tasks[t].pid] = t 
         for pid in sorted(plist):
             t = plist[pid]
-            print('pid: %d taks_rec: 0x%x  comm: %s state: %d children 0x%x 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].state, tasks[t].children[0], tasks[t].children[1], tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
+            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -704,6 +709,10 @@ class GenMonitor():
         else:
             ''' already debugging as current process '''
             pass
+        self.task_utils[self.target].clearExitPid()
+        ''' Otherwise not cleared when pageFaultGen is stopped/started '''
+        self.page_faults[self.target].clearFaultingCycles()
+        self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
 
 
@@ -1195,6 +1204,8 @@ class GenMonitor():
         self.restoreDebugBreaks()
         if self.coverage is not None:
             self.coverage.saveCoverage()
+        if self.command_callback is not None:
+            SIM_run_alone(self.command_callback, None)
 
     def getBookmarkPid(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -1226,8 +1237,8 @@ class GenMonitor():
             #for call in self.call_traces[self.target]:
             #    self.lgr.debug('remaining trace %s' % call)
             return
-        mark = mark.replace('|','"')
-        pid = self.getBookmarkPid()
+        if type(mark) != int:
+            mark = mark.replace('|','"')
         msg = self.bookmarks.goToDebugBookmark(mark)
         self.context_manager[self.target].setIdaMessage(msg)
         self.restoreDebugBreaks(was_watching=True)
@@ -1424,14 +1435,14 @@ class GenMonitor():
         self.pfamily.traceExecve(comm)
 
     def watchPageFaults(self, pid=None):
-        #self.lgr.debug('watchPageFaults')
+        self.lgr.debug('genMonitor watchPageFaults')
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
-        #self.lgr.debug('stopWatchPageFaults')
+        self.lgr.debug('genMonitor stopWatchPageFaults')
         self.page_faults[self.target].stopWatchPageFaults(pid)
         self.page_faults[self.target].stopPageFaults()
 
@@ -1837,6 +1848,7 @@ class GenMonitor():
             self.skipAndMail()
 
     def debugExitHap(self, flist=None): 
+        ''' intended to stop simultion if the threads we are debugging all exit '''
         cell = self.cell_config.cell_context[self.target]
         somap = None
         if self.target in self.soMap:
@@ -1849,6 +1861,14 @@ class GenMonitor():
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
                        call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32)
         self.lgr.debug('debugExitHap compat32: %r syscall is %s' % (self.is_compat32, str(self.exit_group_syscall[self.target])))
+
+    def rmDebugExitHap(self):
+        ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
+            the contextManager and we do not want this rudundant stopage. '''
+        if self.target in self.exit_group_syscall:
+            self.lgr.debug('rmDebugExit')
+            self.exit_group_syscall[self.target].stopTrace()
+            del self.exit_group_syscall[self.target]
        
     def noReverse(self):
         self.noWatchSysEnter()
@@ -2714,7 +2734,9 @@ class GenMonitor():
         fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print fname 
 
-    def retrack(self, clear=True):
+    def retrack(self, clear=True, callback=None):
+        if callback is None:
+            callback = self.stopTrackIO
         ''' Use existing data watches to track IO.  Clears later watch marks '''
         self.lgr.debug('retrack')
         if clear:
@@ -2726,13 +2748,18 @@ class GenMonitor():
                 prev_cycle = cpu.cycles - 1
                 self.dataWatch[self.target].clearWatches(prev_cycle)
         self.dataWatch[self.target].watch(break_simulation=False)
-        self.dataWatch[self.target].setCallback(self.stopTrackIO)
+        self.dataWatch[self.target].setCallback(callback)
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(True)
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.context_manager[self.target].watchTasks()
-        SIM_run_command('c')
+        try:
+            SIM_run_command('c')
+        except SimExc_General as e:
+            print('ERROR... try continue?')
+            self.lgr.error('ERROR in retrack  try continue? %s' % str(e))
+            SIM_run_command('c')
 
     def trackIO(self, fd):
         self.stopTrackIO()
@@ -2982,7 +3009,7 @@ class GenMonitor():
         SIM_run_command('c')
        
 
-    def injectIO(self, dfile, stay=False, keep_size=False):
+    def injectIO(self, dfile, stay=False, keep_size=False, callback=None):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -2990,6 +3017,8 @@ class GenMonitor():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        if callback is None:
+            callback = self.stopTrackIO
         if not os.path.isfile(dfile):
             print('File not found at %s\n\n' % dfile)
             return
@@ -2998,7 +3027,14 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         with open(dfile) as fh:
             byte_string = fh.read()
-        self.dataWatch[self.target].goToRecvMark()
+
+        ''' Got to origin/recv location unless not yet debugging '''
+        ''' Note obscure use of bookmarks to determine if we've are just starting. '''
+        
+        if self.bookmarks is not None:
+            self.dataWatch[self.target].goToRecvMark()
+        else:
+            self.lgr.debug('injectIO debug_pid is None, first run?')
 
         lenreg = None
         lenreg2 = None
@@ -3013,6 +3049,7 @@ class GenMonitor():
         if addr is None:
             self.lgr.error('injectIO, no firstBufferAddress found')
             return
+        self.lgr.debug('injectIO Now clear watches')
         self.dataWatch[self.target].clearWatchMarks()
         self.dataWatch[self.target].clearWatches()
         #self.lgr.debug('injectIO clear watch marks this len is %d, max_len is %s' % (len(byte_string), max_len))
@@ -3034,14 +3071,15 @@ class GenMonitor():
             print('injectiO from file %s, retaining original length of %d' % (dfile, length))
         #if lenreg2 is not None:
         #    self.writeRegValue(lenreg2, len(byte_string))
-        
-        ''' reset bookmarks **otherwise memory changes are lost** '''
-        self.clearBookmarks()
+        dcpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.stopDebug()
+        self.debugPidGroup(pid) 
         msg = 'Inject IO from %s to 0x%x (%d bytes)' % (dfile, addr, len(byte_string))
         if not stay:
             self.dataWatch[self.target].setRange(addr, len(byte_string), msg, back_stop=False, recv_addr=addr, max_len = max_len)
+            self.watchROP()
             print('retracking IO') 
-            self.retrack(clear=False)    
+            self.retrack(clear=False, callback=callback)    
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -3295,7 +3333,29 @@ class GenMonitor():
         print('fd is %d' % fd)
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], snap_name, self.lgr, fd=fd)
 
-    
+    def hasBookmarks(self):
+        return self.bookmarks is not None
+
+    def playAFL(self, target):
+        ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        play = playAFL.PlayAFL(self, cpu, self.back_stop[self.target], self.coverage, 
+              self.mem_utils[self.target], self.dataWatch[self.target], target, self.lgr)
+        play.go()
+
+    def crashReport(self, fname):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        rc = reportCrash.ReportCrash(self, cpu, self.dataWatch[self.target], self.mem_utils[self.target], fname, self.lgr)
+        rc.go()
+
+    def getSEGVAddr(self):
+        return self.bookmarks.getSEGVAddr()
+
+    def getROPAddr(self):
+        return self.bookmarks.getROPAddr()
+   
+    def setCommandCallback(self, callback):
+        self.command_callback = callback 
  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

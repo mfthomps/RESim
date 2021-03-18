@@ -132,7 +132,14 @@ class memUtils():
             self.regs['esp'] = 'sp'
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
-            
+        
+    def isReg(self, reg):
+        if reg.upper() in self.regs:
+            return True
+        else:
+            self.lgr.debug('reg not in %s' % self.regs)
+            return False    
+
     def v2p(self, cpu, v):
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
@@ -599,3 +606,9 @@ class memUtils():
             val = self.readWord(cpu, lr-4)
             callnum = val & 0xfff
         return callnum
+
+    def isKernel(self, v):
+        if v >= self.param.kernel_base:
+            return True
+        else:
+            return False

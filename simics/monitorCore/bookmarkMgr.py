@@ -213,6 +213,15 @@ class bookmarkMgr():
         return self.__bookmarks
 
     def goToDebugBookmark(self, mark):
+        if type(mark) == int:
+            self.lgr.debug('goToDebugBookmark skip to debug bookmark: %d' % mark)
+            marks = self.getSorted()
+            i = 0
+            for the_mark in marks:
+                i += 1
+                if i == mark:
+                    self.goToDebugBookmark(the_mark)
+                    return 
         self.lgr.debug('goToDebugBookmark skip to debug bookmark: %s' % mark)
         if mark not in self.__bookmarks:
             self.lgr.error('goToDebugBookmark could not find cycle for mark %s' % mark)
@@ -314,3 +323,22 @@ class bookmarkMgr():
                 self.lgr.debug('bookmarkMgr mapOrigin now: %s' % mark)
                 break 
 
+    def getROPAddr(self):
+        retval = None
+        for mark in self.__bookmarks:
+            if mark.strip().startswith('ROP'):
+                sp_str = mark.strip().split()[2]
+                sp_addr_str = sp_str.split(':')[1]
+                retval = int(sp_addr_str, 16)
+                break
+        return retval 
+
+    def getSEGVAddr(self):
+        retval = None
+        for mark in self.__bookmarks:
+            if mark.strip().startswith('SEGV'):
+                addr_str =  mark.strip().split()[3]
+                self.lgr.debug('bookmarks getSEGVAddr addr got %s' % addr_str)
+                retval =  int(addr_str, 16)
+                break
+        return retval 
