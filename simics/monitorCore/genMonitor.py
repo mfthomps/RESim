@@ -703,6 +703,7 @@ class GenMonitor():
                              text_segment.address, text_segment.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
+                    self.lgr.debug('create coverage module')
                     self.coverage = coverage.Coverage(self, full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.lgr)
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
@@ -3321,15 +3322,19 @@ class GenMonitor():
     def afl(self,n=1, sor=False):
         cpu = self.cell_config.cpuFromCell(self.target)
         cell_name = self.getTopComponentName(cpu)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.debugPidGroup(pid)
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor)
         fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name):
         ''' fd -- will runToIOish on that FD
-            snap_name -- will writeConfig to that snapshot '''
+            snap_name -- will writeConfig to that snapshot.  Use that snapshot for fuzz and afl commands. '''
         cpu = self.cell_config.cpuFromCell(self.target)
         cell_name = self.getTopComponentName(cpu)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.debugPidGroup(pid)
         print('fd is %d' % fd)
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], snap_name, self.lgr, fd=fd)
 
@@ -3339,6 +3344,8 @@ class GenMonitor():
     def playAFL(self, target):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu = self.cell_config.cpuFromCell(self.target)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.debugPidGroup(pid)
         play = playAFL.PlayAFL(self, cpu, self.back_stop[self.target], self.coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.lgr)
         play.go()

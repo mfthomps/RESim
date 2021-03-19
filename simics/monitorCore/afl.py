@@ -12,9 +12,19 @@ from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, packet_count=1, stop_on_read=False):
-        ''' *** FIX THIS ***'''
-        self.pad_to_size = 1448
-        #self.pad_to_size = 1333
+        pad_env = os.getenv('AFL_PAD') 
+        if pad_env is not None:
+            try:
+                self.pad_to_size = int(pad_env)
+            except:
+                self.lgr.error('Bad AFL_PAD value %s' % pad_env)
+                return
+        else: 
+            self.pad_to_size = 0
+        self.url_header = os.getenv('AFL_URL_HEADER')
+        if packet_count > 0 and not (self.url_header is not None or self.pad_to_size > 0):
+            self.lgr.error('Multi-packet requested but no pad or URL header has been given in env variables')
+            return
         self.pad_char = chr(0)
         self.cpu = cpu
         self.cell_name = cell_name
@@ -25,6 +35,7 @@ class AFL():
         self.stop_on_read = stop_on_read
         self.dataWatch = dataWatch
         self.coverage = coverage
+        # For multi-packet UDP.  afl_packet_count may be adjusted less than given packet count.
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 1
@@ -35,6 +46,8 @@ class AFL():
         self.call_break = None
         self.call_hap = None
         self.in_data = None
+        self.orig_in_data = None
+        self.orig_data_length = 0
         self.backstop.setCallback(self.whenDone)
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
@@ -47,7 +60,7 @@ class AFL():
         self.server_address = ('localhost', 8765)
         self.iteration = 1
         self.pid = self.top.getPID()
-
+        self.total_hits = 0
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -59,6 +72,7 @@ class AFL():
             self.lgr.debug('AFL init from snap %s' % snap_name)
             self.loadPickle(snap_name)
             self.finishInit()
+        self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
      
     def finishInit(self): 
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
@@ -80,17 +94,21 @@ class AFL():
             #self.stop_hap = None
             #self.lgr.debug('afl stopHapx')
             trace_bits = self.coverage.getTraceBits()
-           
+            self.total_hits += self.coverage.getHitCount() 
+            if self.iteration % 100 == 0:
+                avg = self.total_hits/100
+                self.lgr.debug('afl average hits in last 100 iterations is %d' % avg)
+                self.total_hits = 0
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
             if status != 0:
                 self.lgr.debug('afl stopHap status not zero %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
                 with open('/tmp/icrashed', 'w') as fh:
-                    fh.write(self.in_data)
+                    fh.write(self.orig_in_data)
                 self.lgr.debug('afl stopHap cpu context is %s' % self.cpu.current_context)
 
             ''' Send the status message '''
-            self.sendMsg('resim_done iteration: %d status: %d size: %d' % (self.iteration, status, len(self.in_data)))
+            self.sendMsg('resim_done iteration: %d status: %d size: %d' % (self.iteration, status, self.orig_data_length))
             try: 
                 self.sock.sendall(trace_bits)
             except:
@@ -120,6 +138,8 @@ class AFL():
             if self.in_data is None:
                 self.lgr.error('Got None from afl')
                 return
+        self.orig_data_length = len(self.in_data)
+        self.orig_in_data = self.in_data
         
         cli.quiet_run_command('restore-snapshot name=origin')
 
@@ -129,9 +149,10 @@ class AFL():
        
         current_length = len(self.in_data)
         self.afl_packet_count = self.packet_count
-        if self.packet_count > 1 and current_length < (self.pad_to_size*(self.packet_count-1)):
-            #self.lgr.debug('afl packet count of %d and size of %d, but only %d bytes from AFL.  Cannot do it.' % (self.packet_count, self.pad_to_size, current_length))
+        if self.url_header is None and self.packet_count > 1 and current_length < (self.pad_to_size*(self.packet_count-1)):
+            self.lgr.debug('afl packet count of %d and size of %d, but only %d bytes from AFL.  Cannot do it.' % (self.packet_count, self.pad_to_size, current_length))
             self.afl_packet_count = (current_length / self.pad_to_size) + 1
+            self.lgr.debug('afl packet count now %d' % self.afl_packet_count)
        
 
         self.addr, max_len = self.dataWatch.firstBufferAddress()
@@ -139,32 +160,6 @@ class AFL():
             self.lgr.error('AFL, no firstBufferAddress found')
             return
 
-        tot_length = current_length
-        pad_count = 0
-        if self.afl_packet_count == 1:  
-            ''' Data from AFL is trimmed.  Pad it to satisfy the application '''
-            pad_count = self.pad_to_size - current_length
-            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
-            if pad_count > 0:
-                b = bytearray(pad_count)
-                self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
-                tot_length += pad_count
-            if self.backstop_cycles > 0:
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
-        else:
-            first_data = self.in_data[0:self.pad_to_size]
-            self.mem_utils.writeString(self.cpu, self.addr, first_data) 
-        
-
-        if self.call_hap is None and (self.afl_packet_count > 1 or self.stop_on_read):
-            ''' Break on the next recv call, either to multi-UDP fu, or to declare we are done (stop_on_read) '''
-            cell = self.top.getCell()
-            self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
-            #self.lgr.debug('afl go set call break at 0x%x and hap, cycle is 0x%x' % (self.call_ip, self.cpu.cycles))
-
-        ''' Tell the application how much data it read ''' 
-        self.cpu.iface.int_register.write(self.len_reg_num, tot_length)
 
         ''' clear the bit_trace '''
         self.coverage.doCoverage()
@@ -175,47 +170,91 @@ class AFL():
         if status != 0:
             self.lgr.debug('afl goN call continue, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
             self.coverage.watchExits()
+
+        self.writeData()
            
         cli.quiet_run_command('c') 
 
+    def writeData(self):
+        ''' NOTE this adjusts self.in_data after the write to prep for next packet '''
+        current_length = len(self.in_data)
+        tot_length = current_length
+        pad_count = 0
+        if self.afl_packet_count == 1 or self.current_packet >= self.afl_packet_count:  
+            ''' Data from AFL is trimmed.  Pad it to satisfy the application if needed '''
+            pad_count = self.pad_to_size - current_length
+            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+            #self.lgr.debug('afl wrote last packet %d %d bytes  %s' % (self.current_packet, len(self.in_data), self.in_data[:50]))
+            if pad_count > 0:
+                b = bytearray(pad_count)
+                self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
+                tot_length += pad_count
+            if self.backstop_cycles > 0:
+                self.backstop.setFutureCycleAlone(self.backstop_cycles)
+        elif self.pad_to_size > 0 and self.url_header is None:
+            first_data = self.in_data[0:self.pad_to_size]
+            self.mem_utils.writeString(self.cpu, self.addr, first_data) 
+            self.in_data = self.in_data[self.pad_to_size:]
+            tot_length = self.pad_to_size
+        else:
+            index = self.in_data[5:].find(self.url_header)
+            if index > 0:
+                first_data = self.in_data[:(index+5)]
+                self.mem_utils.writeString(self.cpu, self.addr, first_data) 
+                self.in_data = self.in_data[len(first_data):]
+                # TBD add handling of padding with url header                
+                tot_length = len(first_data)
+                #self.lgr.debug('afl wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
+                #self.lgr.debug('afl next packet would start with %s' % self.in_data[:50])
+            else:
+                self.lgr.debug('afl 2nd URL header %s not found, write nulls and cut packet count' % self.url_header)
+                #self.lgr.debug(self.in_data[:500])
+                b = bytearray(100)
+                self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
+                self.afl_packet_count = 1
+                tot_length = 100
+
+        if self.call_hap is None and (self.afl_packet_count > self.current_packet or self.stop_on_read):
+            ''' Break on the next recv call, either to multi-UDP fu, or to declare we are done (stop_on_read) '''
+            cell = self.top.getCell()
+            self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
+            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
+            #self.lgr.debug('afl writeData set call break at 0x%x and hap, cycle is 0x%x' % (self.call_ip, self.cpu.cycles))
+
+        ''' Tell the application how much data it read ''' 
+        self.cpu.iface.int_register.write(self.len_reg_num, tot_length)
+        self.current_packet += 1
+
     def callHap(self, dumb, third, break_num, memory):
         if self.call_hap is None:
+            return
+        if self.current_packet > self.afl_packet_count:
+            #self.lgr.debug('afl callHap current packet %d above count %d' % (self.current_packet, self.afl_packet_count))
             return
         this_pid = self.top.getPID()
         if this_pid != self.pid:
             self.lgr.debug('afl callHap wrong pid got %d wanted %d' % (this_pid, self.pid))
             return
-        #self.lgr.debug('afl callHap cycles 0x%x' % self.cpu.cycles)
+        #self.lgr.debug('afl callHap packet %d cycles 0x%x' % (self.current_packet, self.cpu.cycles))
         if self.stop_on_read:
             #self.lgr.debug('afl callHap stop on read')
             SIM_break_simulation('stop on read')
             return
-        offset = self.current_packet * self.pad_to_size 
-        if offset > len(self.in_data):
-            self.lgr.error('afl callHap computed offset is %d, but data from afl is only %d bytes' % (offset, len(self.in_data)))
+        if len(self.in_data) == 0:
+            self.lgr.error('afl callHap current packet %d no data left' % (self.current_packet))
             SIM_break_simulation('broken offset')
-            SIM_run_alone(self.dellCalHap, None)
-            return
-        if (offset+self.pad_to_size) > len(self.in_data):
-            this_data = self.in_data[offset:]
-        else:
-            this_data = self.in_data[offset:offset+self.pad_to_size]
-        self.mem_utils.writeString(self.cpu, self.addr, this_data) 
-        pad_count = self.pad_to_size - len(this_data)
-        if pad_count > 0:
-            b = bytearray(pad_count)
-            self.mem_utils.writeString(self.cpu, self.addr+len(this_data), b) 
-        self.cpu.iface.int_register.write(self.len_reg_num, self.pad_to_size)
-        self.mem_utils.setRegValue(self.cpu, 'pc', self.return_ip) 
-        #self.lgr.debug('afl callHap set ip to 0x%x' % self.return_ip) 
-        self.current_packet += 1
-        if self.current_packet >= self.afl_packet_count:
             SIM_run_alone(self.delCallHap, None)
+            return
+
+        self.writeData()
+        if self.current_packet >= self.afl_packet_count:
+            # set backstop if needed, we are on the last (or only) packet.
+            #SIM_run_alone(self.delCallHap, None)
             if self.backstop_cycles > 0:
                 self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
     def delCallHap(self, dumb):
-        self.lgr.debug('afl delCallHap')
+        #self.lgr.debug('afl delCallHap')
         SIM_delete_breakpoint(self.call_break)
         SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
         self.call_hap = None
