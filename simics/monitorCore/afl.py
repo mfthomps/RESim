@@ -8,6 +8,7 @@ import pickle
 import struct
 import cli
 import stopFunction
+import imp 
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
@@ -25,6 +26,19 @@ class AFL():
         if packet_count > 0 and not (self.url_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or URL header has been given in env variables')
             return
+        self.filter_module = None
+        self.packet_filter = os.getenv('AFL_PACKET_FILTER')
+        if self.packet_filter is not None:
+            file_path = './%s.py' % self.packet_filter
+            abs_path = os.path.abspath(file_path)
+            self.filter_module = imp.load_source(self.packet_filter, abs_path)
+            '''
+            module_name = self.packet_filter
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            filter_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(flter_module)
+            '''
+
         self.pad_char = chr(0)
         self.cpu = cpu
         self.cell_name = cell_name
@@ -61,6 +75,8 @@ class AFL():
         self.iteration = 1
         self.pid = self.top.getPID()
         self.total_hits = 0
+        self.bad_trick = False
+        self.empty_trace_bits = None
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -93,7 +109,12 @@ class AFL():
         if self.stop_hap is not None:
             #self.stop_hap = None
             #self.lgr.debug('afl stopHapx')
-            trace_bits = self.coverage.getTraceBits()
+            if self.bad_trick and self.empty_trace_bits is not None:
+                trace_bits = self.empty_trace_bits
+            else:
+                trace_bits = self.coverage.getTraceBits()
+                if self.empty_trace_bits is None:
+                    self.empty_trace_bits = trace_bits
             self.total_hits += self.coverage.getHitCount() 
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
@@ -116,7 +137,7 @@ class AFL():
                 self.rmStopHap()
                 return
             if status != 0:
-                self.lgr.debug('afl stopHap status back from sendall trace_bites')
+                self.lgr.debug('afl stopHap status back from sendall trace_bits')
             self.iteration += 1 
             self.in_data = self.getMsg()
             if self.in_data is None:
@@ -131,7 +152,7 @@ class AFL():
             self.lgr.debug('afl goN after crash. Call getMsg')
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 1
-
+        self.bad_trick = False
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
             self.in_data = self.getMsg()
@@ -176,11 +197,20 @@ class AFL():
         cli.quiet_run_command('c') 
 
     def writeData(self):
+        ''' Write next chunk of data received from AFL into the receive buffer '''
         ''' NOTE this adjusts self.in_data after the write to prep for next packet '''
         current_length = len(self.in_data)
         tot_length = current_length
         pad_count = 0
-        if self.afl_packet_count == 1 or self.current_packet >= self.afl_packet_count:  
+        if self.packet_filter is not None and not self.filter_module.filter(self.in_data):
+            #self.lgr.debug('afl packet number %d filter blocks it, write nulls' % self.current_packet)
+            #self.lgr.debug(self.in_data[:500])
+            b = bytearray(100)
+            self.mem_utils.writeString(self.cpu, self.addr, b) 
+            self.afl_packet_count = 1
+            tot_length = 100
+            self.bad_trick = True
+        elif self.afl_packet_count == 1 or self.current_packet >= self.afl_packet_count:  
             ''' Data from AFL is trimmed.  Pad it to satisfy the application if needed '''
             pad_count = self.pad_to_size - current_length
             self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
@@ -207,10 +237,10 @@ class AFL():
                 #self.lgr.debug('afl wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
                 #self.lgr.debug('afl next packet would start with %s' % self.in_data[:50])
             else:
-                self.lgr.debug('afl 2nd URL header %s not found, write nulls and cut packet count' % self.url_header)
+                #self.lgr.debug('afl 2nd URL header %s not found, write nulls and cut packet count' % self.url_header)
                 #self.lgr.debug(self.in_data[:500])
                 b = bytearray(100)
-                self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
+                self.mem_utils.writeString(self.cpu, self.addr, b) 
                 self.afl_packet_count = 1
                 tot_length = 100
 
