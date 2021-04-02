@@ -22,9 +22,9 @@ class AFL():
                 return
         else: 
             self.pad_to_size = 0
-        self.url_header = os.getenv('AFL_URL_HEADER')
-        if packet_count > 0 and not (self.url_header is not None or self.pad_to_size > 0):
-            self.lgr.error('Multi-packet requested but no pad or URL header has been given in env variables')
+        self.udp_header = os.getenv('AFL_UDP_HEADER')
+        if packet_count > 0 and not (self.udp_header is not None or self.pad_to_size > 0):
+            self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return
         self.filter_module = None
         self.packet_filter = os.getenv('AFL_PACKET_FILTER')
@@ -52,7 +52,7 @@ class AFL():
         # For multi-packet UDP.  afl_packet_count may be adjusted less than given packet count.
         self.packet_count = packet_count
         self.afl_packet_count = None
-        self.current_packet = 1
+        self.current_packet = 0
         self.backstop = backstop
         self.stop_hap = None
         self.return_ip = None
@@ -82,6 +82,7 @@ class AFL():
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
+        self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         if fd is not None:
             self.prepInject(snap_name)
         else:
@@ -103,12 +104,10 @@ class AFL():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-    def stopHap(self, dumb, one, exception, error_string):
-        ''' Entered when the backstop is hit, or the recv call is hit if stop_on_read '''
-        #self.lgr.debug('afl stopHap')
-        if self.stop_hap is not None:
-            #self.stop_hap = None
-            #self.lgr.debug('afl stopHapx')
+    def goAlone(self, dumb):
+        SIM_run_command('c') 
+   
+    def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
             else:
@@ -146,12 +145,36 @@ class AFL():
                 return
             SIM_run_alone(self.goN, status)
 
+    def stopHap(self, dumb, one, exception, error_string):
+        ''' Entered when the backstop is hit, or the recv call is hit if stop_on_read '''
+        ''' Also if coverage record exit is hit '''
+        #self.lgr.debug('afl stopHap')
+        if self.stop_hap is None:
+            return
+        if self.current_packet < self.afl_packet_count:
+            eip = self.top.getEIP()  
+            if eip != self.call_ip:
+                self.lgr.debug('afl stopHap thought we would be at recv call, not?  Perhaps program exited.  Do finishUp')
+                self.finishUp()
+                return
+            self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
+            self.writeData()
+            if self.bad_trick:
+                #self.lgr.debug('afl stopHap saw filter fail, bail')
+                self.finishUp()
+            else:
+                #self.lgr.debug('afl stopHap set PC to 0x%x and wrote data, now continue' % self.return_ip)
+                SIM_run_alone(self.goAlone, None)
+        else:
+            #self.stop_hap = None
+            #self.lgr.debug('afl stopHapx')
+            self.finishUp()
 
     def goN(self, status):
         if status != 0:
             self.lgr.debug('afl goN after crash. Call getMsg')
         ''' Only applies to multi-packet UDP fu '''
-        self.current_packet = 1
+        self.current_packet = 0
         self.bad_trick = False
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
@@ -170,7 +193,7 @@ class AFL():
        
         current_length = len(self.in_data)
         self.afl_packet_count = self.packet_count
-        if self.url_header is None and self.packet_count > 1 and current_length < (self.pad_to_size*(self.packet_count-1)):
+        if self.udp_header is None and self.packet_count > 1 and current_length < (self.pad_to_size*(self.packet_count-1)):
             self.lgr.debug('afl packet count of %d and size of %d, but only %d bytes from AFL.  Cannot do it.' % (self.packet_count, self.pad_to_size, current_length))
             self.afl_packet_count = (current_length / self.pad_to_size) + 1
             self.lgr.debug('afl packet count now %d' % self.afl_packet_count)
@@ -202,6 +225,7 @@ class AFL():
         current_length = len(self.in_data)
         tot_length = current_length
         pad_count = 0
+        self.current_packet = self.current_packet+1
         if self.packet_filter is not None and not self.filter_module.filter(self.in_data):
             #self.lgr.debug('afl packet number %d filter blocks it, write nulls' % self.current_packet)
             #self.lgr.debug(self.in_data[:500])
@@ -221,23 +245,23 @@ class AFL():
                 tot_length += pad_count
             if self.backstop_cycles > 0:
                 self.backstop.setFutureCycleAlone(self.backstop_cycles)
-        elif self.pad_to_size > 0 and self.url_header is None:
+        elif self.pad_to_size > 0 and self.udp_header is None:
             first_data = self.in_data[0:self.pad_to_size]
             self.mem_utils.writeString(self.cpu, self.addr, first_data) 
             self.in_data = self.in_data[self.pad_to_size:]
             tot_length = self.pad_to_size
         else:
-            index = self.in_data[5:].find(self.url_header)
+            index = self.in_data[5:].find(self.udp_header)
             if index > 0:
                 first_data = self.in_data[:(index+5)]
                 self.mem_utils.writeString(self.cpu, self.addr, first_data) 
                 self.in_data = self.in_data[len(first_data):]
-                # TBD add handling of padding with url header                
+                # TBD add handling of padding with udp header                
                 tot_length = len(first_data)
                 #self.lgr.debug('afl wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
                 #self.lgr.debug('afl next packet would start with %s' % self.in_data[:50])
             else:
-                #self.lgr.debug('afl 2nd URL header %s not found, write nulls and cut packet count' % self.url_header)
+                #self.lgr.debug('afl 2nd UDP header %s not found, write nulls and cut packet count' % self.udp_header)
                 #self.lgr.debug(self.in_data[:500])
                 b = bytearray(100)
                 self.mem_utils.writeString(self.cpu, self.addr, b) 
@@ -253,18 +277,20 @@ class AFL():
 
         ''' Tell the application how much data it read ''' 
         self.cpu.iface.int_register.write(self.len_reg_num, tot_length)
-        self.current_packet += 1
 
     def callHap(self, dumb, third, break_num, memory):
+        ''' Hit a call to recv '''
         if self.call_hap is None:
             return
         if self.current_packet > self.afl_packet_count:
             #self.lgr.debug('afl callHap current packet %d above count %d' % (self.current_packet, self.afl_packet_count))
             return
+        '''
         this_pid = self.top.getPID()
         if this_pid != self.pid:
             self.lgr.debug('afl callHap wrong pid got %d wanted %d' % (this_pid, self.pid))
             return
+        '''
         #self.lgr.debug('afl callHap packet %d cycles 0x%x' % (self.current_packet, self.cpu.cycles))
         if self.stop_on_read:
             #self.lgr.debug('afl callHap stop on read')
