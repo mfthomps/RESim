@@ -86,7 +86,9 @@ class WatchMarks():
             self.modify = modify
 
         def getMsg(self):
-            if self.modify:
+            if self.addr is None or self.start is None:
+                mark_msg = 'Error getting mark message'
+            elif self.modify:
                 mark_msg = 'Memory mod, addr: 0x%x original buffer %d bytes starting at 0x%x' % (self.addr, self.length, self.start)
             elif self.addr is None:
                 mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
