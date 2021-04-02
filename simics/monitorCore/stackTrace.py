@@ -21,9 +21,6 @@ class StackTrace():
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, ida_funs, targetFS, 
                  relocate_funs, reg_frame, lgr, max_frames=None, max_bytes=None):
-        if pid == 0:
-            lgr.error('stackTrace asked to trace pid 0?')
-            return
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -47,6 +44,9 @@ class StackTrace():
             self.callmn = 'call'
             self.jmpmn = 'jmp'
 
+        if pid == 0:
+            lgr.error('stackTrace asked to trace pid 0?')
+            return
         self.doTrace()
 
     def isArmCall(self, instruct):
