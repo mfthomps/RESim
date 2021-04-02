@@ -40,10 +40,14 @@ class bookmarkMgr():
         self.context_mgr = context_mgr
         self.lgr = lgr
         self.track_num = 0
+        self.ida_funs = None
 
     def setTrackNum(self):
         self.track_num += 1
         return self.track_num
+
+    def setIdaFuns(self, ida_funs):
+        self.ida_funs = ida_funs
 
     def clearMarks(self):
         self.lgr.debug('bookmarkMgr, clearMarks')
@@ -79,6 +83,10 @@ class bookmarkMgr():
             steps = steps
         #SIM_run_command('set-bookmark %s' % mark)
         #if not mark.startswith('protected_memory') and not mark.startswith('_start+1'):
+     
+        if eip is None: 
+            eip = self.top.getEIP(cpu)
+
         if not mark.startswith('origin'):
             start_cycle = self.getCycle('origin')
             if start_cycle is None:
@@ -88,6 +96,10 @@ class bookmarkMgr():
             if mark.startswith('protected_memory:') and self.hasBookmarkDelta(delta):
                 self.lgr.debug('setDebugBookmark protected memory, return')
                 return
+            if self.ida_funs is not None:
+                fun = self.ida_funs.getFunName(eip)
+                if fun is not None:
+                    mark = mark +" %s " % fun
             mark = mark+" cycle:%x" % delta
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
@@ -102,8 +114,6 @@ class bookmarkMgr():
                 self.lgr.debug('setDebugBookmark %s already exists, do nothing' % mark)
                 return
          
-        if eip is None: 
-            eip = self.top.getEIP(cpu)
         self.__bookmarks[mark] = self.top.cycleRecord(current, steps, eip)
         self.__mark_msg[mark] = msg
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -327,9 +337,8 @@ class bookmarkMgr():
         retval = None
         for mark in self.__bookmarks:
             if mark.strip().startswith('ROP'):
-                sp_str = mark.strip().split()[2]
-                sp_addr_str = sp_str.split(':')[1]
-                retval = int(sp_addr_str, 16)
+                pc_str = mark.strip().split()[6]
+                retval = int(pc_str, 16)
                 break
         return retval 
 
