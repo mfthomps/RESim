@@ -939,6 +939,11 @@ class reverseToCall():
             if reg_mod_type.mod_type == RegisterModType.ADDR:
                 address = reg_mod_type.value + self.offset
                 value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
+                if value is None:
+                    self.lgr.debug('followTaintArm value None read from 0x%x' % address)
+                    self.cleanup(self.cpu)
+                    return
+                 
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.cleanup(self.cpu)
