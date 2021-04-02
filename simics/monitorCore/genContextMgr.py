@@ -74,7 +74,7 @@ class GenHap():
                     SIM_run_alone(SIM_run_command, command)
                     #self.lgr.debug('contextManager prefix cmd: %s' % command)
 
-                self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
+                #self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d' % (self.handle, bp.break_num))
             bs = self.breakpoint_list[0]
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
@@ -298,8 +298,8 @@ class GenContextMgr():
     def setAllBreak(self):
         for bp in self.breakpoints:
             bp.set()
-        if self.pageFaultGen is not None:
-            self.pageFaultGen.recordPageFaults()
+        #if self.pageFaultGen is not None:
+        #    self.pageFaultGen.recordPageFaults()
 
     def setAllHap(self, only_maze_breaks=False):
         for hap in self.haps:
@@ -379,8 +379,8 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s' % (prev_pid, 
-            prev_comm, pid, comm, new_addr, len(self.watch_rec_list), self.debugging_comm, cpu.current_context))
+        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s' % (prev_pid, 
+        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), self.debugging_comm, cpu.current_context))
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -669,7 +669,7 @@ class GenContextMgr():
             self.setTaskHap()
         self.watching_tasks = True
         self.watchExit()
-        self.pageFaultGen.recordPageFaults()
+        #self.pageFaultGen.recordPageFaults()
         if ctask in self.watch_rec_list:
             self.lgr.debug('watchTasks, current task already being watched')
             return
@@ -701,7 +701,7 @@ class GenContextMgr():
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('setDebugPid %d, (%s) resim_context' % (cur_pid, comm))
+        self.lgr.debug('setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         self.debugging_comm = comm
         self.debugging_cell = self.top.getCell()
@@ -710,6 +710,7 @@ class GenContextMgr():
 
     def killGroup(self, lead_pid, exit_syscall):
         self.top.rmDebugExitHap()
+        self.lgr.debug('contextManager killGroup lead %d' % lead_pid)
         if lead_pid == self.group_leader:
             pids = self.task_utils.getPidsForComm(self.debugging_comm) 
             add_task = None
@@ -727,24 +728,27 @@ class GenContextMgr():
                 #if pid in self.demise_cache:
                 #    self.demise_cache.remove(pid)
                 if self.pageFaultGen is not None:
-                    if self.pageFaultGen.handleExit(pid):
+                    if self.pageFaultGen.handleExit(pid, lead_pid):
                         print('SEGV on pid %d?' % pid)
-                        self.lgr.debug('genContextManager SEGV on pid %d?' % pid)
+                        self.lgr.debug('genContextManager SEGV on pid %d -- stop trace of exit_syscall' % pid)
+                        exit_syscall.stopTrace() 
+                        break
             self.clearExitBreaks()
             if add_task is not None:
                 self.addTask(add_task)
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
             if self.pageFaultGen is not None:
-                self.pageFaultGen.handleExit(lead_pid)
+                self.pageFaultGen.handleExit(lead_pid, self.group_leader)
         else:
             self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
             if self.pageFaultGen is not None:
-                self.pageFaultGen.handleExit(lead_pid)
+                self.pageFaultGen.handleExit(lead_pid, lead_pid)
 
 
     def deadParrot(self, pid):
         ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
+        self.lgr.debug('contextManager deadParror pid %d' % pid)
         exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
         if exit_syscall is not None and not self.watching_page_faults:
             ida_msg = 'pid:%d exit via kill?' % pid
@@ -754,7 +758,8 @@ class GenContextMgr():
         else:
             self.rmTask(pid)
             if self.pageFaultGen is not None:
-                self.pageFaultGen.handleExit(pid)
+                group_leader = self.task_utils.getGroupLeaderPid(pid)
+                self.pageFaultGen.handleExit(pid, group_leader)
             self.clearExitBreaks()
             self.lgr.debug('contextManager deadParrot pid:%d rec no longer found removed task' % (pid))
         if self.exit_callback is not None:
