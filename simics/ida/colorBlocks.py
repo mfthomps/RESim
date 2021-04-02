@@ -32,9 +32,12 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     with open(all_hits_file) as funs_fh:
         all_hits_json = json.load(funs_fh)
     print('loaded blocks from %s, got %d functions' % (all_hits_file, len(all_hits_json)))
-    with open(pre_hits_file) as funs_fh:
-        pre_hits_json = json.load(funs_fh)
-    print('loaded blocks from %s, got %d functions' % (pre_hits_file, len(pre_hits_json)))
+    if os.path.isfile(pre_hits_file):
+        with open(pre_hits_file) as funs_fh:
+            pre_hits_json = json.load(funs_fh)
+        print('loaded blocks from %s, got %d functions' % (pre_hits_file, len(pre_hits_json)))
+    else:
+        pre_hits_json = {}
     p = idaapi.node_info_t()
     ''' New hits '''
     p.bg_color =  new_hit_color
