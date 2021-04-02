@@ -6,24 +6,35 @@ import glob
 import re
 import decode
 import decodeArm
+import pageUtils
 
 class ReportCrash():
-    def __init__(self, top, cpu, dataWatch, mem_utils, target, lgr):
+    def __init__(self, top, cpu, pid, dataWatch, mem_utils, target, num_packets, one_done, report_index, lgr):
         self.top = top
         self.cpu = cpu
+        self.pid = pid
         self.lgr = lgr
+        self.report_index = report_index
+        self.one_done = one_done
         self.dataWatch = dataWatch
         self.mem_utils = mem_utils
         self.flist = []
         self.target = target
+        self.num_packets = num_packets
+        self.index = 0
         if os.path.isfile(target):
             self.flist.append(target)
         else:
             afl_output = os.getenv('AFL_OUTPUT')
             if afl_output is None:
                 afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-            afl_dir = os.path.join(afl_output, target,'crashes*')
-            gmask = '%s/*' % afl_dir
+            afl_dir = os.path.join(afl_output, target)
+            if not os.path.isdir(afl_dir):
+               print('No afl directory found at %s' % afl_dir)
+               return
+            crashes_dir = os.path.join(afl_dir, 'crashes*')
+            gmask = '%s/*' % crashes_dir
+            self.lgr.debug("ReportCrash gmask: %s" % gmask)
             glist = glob.glob(gmask)
             for g in glist:
                 if os.path.basename(g).startswith('id:'):
@@ -33,7 +44,6 @@ class ReportCrash():
             os.makedirs(self.report_dir)
         except:
             pass
-        self.index = 0
         self.crash_report = None
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
@@ -41,20 +51,37 @@ class ReportCrash():
             self.decode = decode
         #self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
         #self.crash_report = open('/tmp/crash_report.txt', 'w')
+        self.addr, self.max_len = self.dataWatch.firstBufferAddress()
+        if self.addr is None:
+            self.lgr.error('injectIO, no firstBufferAddress found')
+            return
+        self.bytes_was = self.mem_utils.readBytes(self.cpu, self.addr, self.max_len)
+        cksum = sum(self.bytes_was)
+        self.lgr.debug('reportCrash cksum of data was 0x%x' % cksum)
 
     def go(self):
         if self.index < len(self.flist):
-            report_file = 'crash_report_%05d' % self.index
+            if self.report_index is None:
+                report_file = 'crash_report_%05d' % self.index
+            else:
+                report_file = 'crash_report_%05d' % self.report_index
             self.crash_report = open(os.path.join(self.report_dir, report_file), 'w')
       
             SIM_run_alone(self.goAlone, None)
+        else:
+            self.lgr.debug('index %d exceeds number of crashes in flist %d' % (self.index, len(self.flist)))
+            if self.one_done:
+                self.top.quit()
 
     def goAlone(self, dumb):
         self.dataWatch.clearWatchMarks()
         self.top.setCommandCallback(self.doneForward)
         self.crash_report.write("Crash report for %s\n" % self.flist[self.index])
-        self.lgr.debug('reportCrash goAlone start for file %s' % self.flist[self.index])
-        self.top.injectIO(self.flist[self.index], keep_size = True)
+        self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
+        ''' TBD why keep size? '''
+        #self.top.injectIO(self.flist[self.index], keep_size = True)
+      
+        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, pid=self.pid, cpu=self.cpu, bytes_was=self.bytes_was)
 
     def doneBackward(self, dumb):
         self.crash_report.write("\n\nBacktrace:\n")
@@ -105,15 +132,20 @@ class ReportCrash():
         is_rop = False
         if bad_addr is not None:
             self.crash_report.write("SEGV on access to address: 0x%x\n" % bad_addr)
-            SIM_run_command('pselect %s' % self.cpu.name)
-            SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
+            self.lgr.debug("SEGV on access to address: 0x%x\n" % bad_addr)
+            #SIM_run_command('pselect %s' % self.cpu.name)
+            #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
             self.reportStack()
-            SIM_run_command('pselect %s' % self.cpu.name)
-            SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
+            #SIM_run_command('pselect %s' % self.cpu.name)
+            #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
+            if instruct[1].startswith('ldm') and 'pc' in instruct[1]:
+                SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
+                eip = self.top.getEIP()
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         else:
             bad_addr = self.top.getROPAddr()
             if bad_addr is not None:
-                self.crash_report.write("ROP on stack addr: 0x%x\n" % bad_addr)
+                self.crash_report.write("ROP would return to addr: 0x%x\n" % bad_addr)
                 is_rop = True
             else:
                 self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
@@ -122,13 +154,13 @@ class ReportCrash():
         self.lgr.debug('reportCrash doneForward eip: 0x%x instruction %s' %(eip, instruct[1]))
         if is_rop:
             self.top.setCommandCallback(self.doneBackward)
-            self.lgr.debug('reportCrash stack return address')
+            self.lgr.debug('reportCrash would return to address 0x%x' % bad_addr)
             SIM_run_command('pselect %s' % self.cpu.name)
-            SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
+            #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
             self.reportStack()
             SIM_run_command('pselect %s' % self.cpu.name)
             SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
-            self.top.revTaintAddr(bad_addr)
+            self.top.revTaintReg('pc')
        
         elif 'illegal' in instruct[1] or 'whole in' in instruct[1]:
             ''' looks like corrupt PC '''
@@ -167,7 +199,10 @@ class ReportCrash():
                         self.lgr.debug('reportCrash: Is strcpy, src > dest')
                 else:
                     self.lgr.debug('reportCrash, not a strcpy not handled.') 
-
+            elif bad_addr % pageUtils.PAGE_SIZE == 0:
+                self.lgr.debug('reportCrash thinks it is a page boundary')
+                self.crash_report.write('\nPage boundary.\n')
+                self.doneBackward(None)
             else:
                 self.lgr.debug('reportCrash not a copy mark, look for bad reference.')
                 self.tryCorruptRef(instruct)
