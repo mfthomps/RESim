@@ -81,6 +81,13 @@ class IDAFuns():
                 return fun
         return None
 
+    def getFunName(self, ip):
+        retval = None
+        fun = self.getFun(ip)
+        if fun is not None:
+            retval = self.getName(fun)
+        return retval
+
     def showFuns(self, search=None):
         for fun in self.funs:
             if search is not None:
