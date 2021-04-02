@@ -251,7 +251,7 @@ class memUtils():
                         retval = retval+first_read
                 else: 
                     retval = retval+readPhysBytes(cpu, ps, count)
-                    self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+                    #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
             self.lgr.debug('readBytes got %d' % len(retval))
             start = start+count
             remain = remain - count
