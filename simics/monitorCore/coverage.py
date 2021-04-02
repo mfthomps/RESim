@@ -121,9 +121,8 @@ class Coverage():
 
     def recordExit(self):
         self.did_exit = 1
-        self.lgr.debug('coverage record exit of program under test')
+        self.lgr.debug('coverage recordExit of program under test')
         SIM_break_simulation('did exit')
-        self.lgr.debug('coverage record exit of did break')
 
     def watchExits(self):
         self.context_manager.watchGroupExits()
@@ -159,6 +158,9 @@ class Coverage():
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
                     if self.backstop_cycles > 0:
                         self.backstop.setFutureCycleAlone(self.backstop_cycles)
+                else:
+                    #self.lgr.debug('addr already in blocks_hit')
+                    pass
             else:
                 ''' AFL mode '''
                 cur_loc = self.afl_map[addr]
@@ -186,7 +188,10 @@ class Coverage():
         return self.trace_bits
 
     def getHitCount(self):
-        return self.hit_count;
+        if self.afl:
+            return self.hit_count;
+        else:
+            return len(self.blocks_hit)
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
@@ -329,7 +334,7 @@ class Coverage():
         print('Previous data run hit %d new BBs' % new_hits)
  
 
-    def doCoverage(self, force_default_context=False):
+    def doCoverage(self, force_default_context=False, no_merge=False):
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
@@ -343,7 +348,8 @@ class Coverage():
                 self.restoreBreaks()
 
         if not self.afl:
-            self.mergeCover()
+            if not no_merge:
+                self.mergeCover()
             self.funs_hit = []
             self.blocks_hit = {}
         #self.lgr.debug('coverage doCoverage set backstop')
@@ -390,6 +396,7 @@ class Coverage():
             self.trace_bits = bytearray(self.map_size)
 
     def disableCoverage(self):
+        self.lgr.debug('coverage disableCoverage')
         self.enabled = False
 
     def difCoverage(self, fname):
