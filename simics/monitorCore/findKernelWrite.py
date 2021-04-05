@@ -420,6 +420,7 @@ class findKernelWrite():
             self.top.skipAndMail()
             return
         if cpl == 0:
+            self.lgr.debug('why am I here?')
             if self.found_kernel_write:
                 self.lgr.debug('thinkWeWrote stopToCheckWriteCallback found second write?  but we deleted the breakpoint!!!! ignore this and reverse')
                 #SIM_run_alone(SIM_run_command, 'reverse')
@@ -433,6 +434,12 @@ class findKernelWrite():
                 return
             #cmd =  'skip-to cycle=%d' % (self.cpu.cycles-1)
             #SIM_run_command(cmd)
+            # don't believe it, but we begin executing here during a retrack, somthing that has no calls to findKernelWrite
+            # so this next bit is voodooooo
+            if self.kernel_write_break is None:
+                self.lgr.error('voodoo in findKernel write, just return')
+                SIM_run_command('c')
+                return 
             self.forward_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.hitForwardCallback, None, self.kernel_write_break)
 
             self.lgr.debug('thinkWeWrote, forward_hap is %d  on write to 0x%x. Set breaks on exit to user' % (self.forward_hap, self.kernel_write_break))
