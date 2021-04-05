@@ -402,7 +402,7 @@ class WatchMarks():
         else:
             dst_str = ''
             src_str = ''
-        cm = self.CompareMark(fun, dest, src, count, src_str, dst_str, buf_start) 
+        cm = self.CompareMark(fun, dest, src, count, dst_str, src_str, buf_start) 
         self.addWatchMark(ip, cm)
         self.lgr.debug('watchMarks compare (%s) 0x%x %s' % (fun, ip, cm.getMsg()))
 
