@@ -30,15 +30,21 @@ class InjectIO():
         self.call_ip = None
         self.call_hap = None
         self.call_break = None
+        self.addr = None
+        self.max_len = None
         self.loadPickle(snap_name)
+        if self.addr is None: 
+            self.addr, self.max_len = self.dataWatch.firstBufferAddress()
+            if self.addr is None:
+                self.lgr.error('injectIO, no firstBufferAddress found')
+                return
+
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
-        self.addr = None
-        self.max_len = None
         self.pad_to_size = 0
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         self.bytes_was = bytes_was
@@ -51,6 +57,8 @@ class InjectIO():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        if self.addr is None:
+            return
         if self.callback is None:
             self.callback = self.top.stopTrackIO
         if not os.path.isfile(self.dfile):
@@ -80,10 +88,6 @@ class InjectIO():
             #lenreg2 = 'r7'
         else:
             lenreg = 'eax'
-        self.addr, self.max_len = self.dataWatch.firstBufferAddress()
-        if self.addr is None:
-            self.lgr.error('injectIO, no firstBufferAddress found')
-            return
         if self.bytes_was is not None:
             self.mem_utils.writeString(self.cpu, self.addr, self.bytes_was) 
 
@@ -208,4 +212,7 @@ class InjectIO():
             #print('start %s' % str(so_pickle['text_start']))
             self.call_ip = so_pickle['call_ip']
             self.return_ip = so_pickle['return_ip']
+            if 'addr' in so_pickle:
+                self.addr = so_pickle['addr']
+                self.max_len = so_pickle['size']
 
