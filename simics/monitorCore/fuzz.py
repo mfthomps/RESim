@@ -1,18 +1,22 @@
 import os
+import pickle
 import shutil
 from simics import *
 class Fuzz():
-    def __init__(self, top, cpu, path, coverage, backstop, lgr):
+    def __init__(self, top, cpu, cell_name, path, coverage, backstop, mem_utils, snap_name, lgr):
         self.cpu = cpu
+        self.cell_name = cell_name
         self.lgr = lgr
         self.top = top
         self.coverage = coverage
         self.path = None
         self.orig_path = path
         self.backstop = backstop
+        self.mem_utils = mem_utils
         self.stop_hap = None
         #self.backstop.setCallback(self.whenDone)
-        self.coverage.enableCoverage(backstop=self.backstop, backstop_cycles=500000)
+        pid = top.getPID()
+        self.coverage.enableCoverage(pid, backstop=self.backstop, backstop_cycles=500000)
         self.shrinking = True
         self.orig_hits = None
         ''' number of bytes to subtract from file if number of hits is not changed '''
@@ -23,8 +27,14 @@ class Fuzz():
         self.pad_to_size = None
         self.pad_char = None
         self.count = 0
+        self.loadPickle(snap_name)
         ''' iterate until delta below this '''
         self.threshold = None
+        if self.cpu.architecture == 'arm':
+            lenreg = 'r0'
+        else:
+            lenreg = 'eax'
+        self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.lgr.debug('Fuzz init')
         
 
@@ -103,7 +113,7 @@ class Fuzz():
             self.orig_hits = hits
             self.current_size = os.path.getsize(self.path)
             self.previous_size = self.current_size
-            self.lgr.debug('fuzz trimBack orig hits %d, size %d' % (self.orig_hits, self.current_size))
+            self.lgr.debug('fuzz trimBack first run, orig hits %d, size %d' % (self.orig_hits, self.current_size))
         else:
             self.lgr.debug('fuzz trimBack found %d hits' % hits)
            
@@ -136,14 +146,34 @@ class Fuzz():
                 self.fileTrim(nopad=True)
                 self.lgr.debug('fuzz threshold hit with reduced hits.  Restore size to %d' % self.current_size)
                 self.checkPad()
-            
+        
+    def writeData(self):    
+        with open(self.path) as fh:
+            in_data = fh.read()
+        self.mem_utils.writeString(self.cpu, self.addr, in_data) 
+        self.cpu.iface.int_register.write(self.len_reg_num, len(in_data))
+        self.lgr.debug('fuzz writeData wrote %d bytes to 0x%x' % (len(in_data), self.addr))
 
     def run(self):
-        self.coverage.doCoverage()
-        self.top.injectIO(self.path, stay=True)
+        self.coverage.doCoverage(no_merge=True)
+        #self.top.injectIO(self.path, stay=True)
+        self.top.goToOrigin()
+        self.writeData()
         self.lgr.debug('fuzz, did coverage, now run')
         SIM_run_command('c') 
 
     def whenDone(self):
         hit = len(self.coverage.getBlocksHit())
         print('fuzz says no more blocks being hit after %d hits' % hit)
+
+    def loadPickle(self, name):
+        afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
+        if os.path.isfile(afl_file):
+            self.lgr.debug('afl pickle from %s' % afl_file)
+            so_pickle = pickle.load( open(afl_file, 'rb') ) 
+            #print('start %s' % str(so_pickle['text_start']))
+            self.call_ip = so_pickle['call_ip']
+            self.return_ip = so_pickle['return_ip']
+            if 'addr' in so_pickle:
+                self.addr = so_pickle['addr']
+                self.max_len = so_pickle['size']
