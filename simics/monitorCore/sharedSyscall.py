@@ -22,6 +22,7 @@ class SharedSyscall():
         self.context_manager = context_manager
         self.traceProcs = traceProcs
         self.exit_info = {}
+        self.matching_exit_info = None
         self.exit_pids = {}
         self.trace_procs = []
         self.exit_hap = {}
@@ -458,7 +459,7 @@ class SharedSyscall():
                 self.lgr.debug('exitHap ret_addr 0x%x  kbase 0x%x ' % (ret_addr, self.param.kernel_base))
 
         if eip == exit_info.syscall_entry:
-            self.lgr.error('exitHap entered from syscall breakpoint.  wtf?, over.')
+            self.lgr.error('exitHap entered from syscall breakpoint.  eh?.')
             return False
 
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -737,6 +738,7 @@ class SharedSyscall():
         if exit_info.call_params is not None and exit_info.call_params.break_simulation:
             '''  Use syscall module that got us here to handle stop actions '''
             self.lgr.debug('exitHap found matching call parameter %s' % str(exit_info.call_params.match_param))
+            self.matching_exit_info = exit_info
             self.context_manager.setIdaMessage(trace_msg)
             #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
@@ -755,4 +757,6 @@ class SharedSyscall():
 
     def startAllWrite(self):
         self.all_write = True
-        
+       
+    def getMatchingExitInfo(self):
+        return self.matching_exit_info 
