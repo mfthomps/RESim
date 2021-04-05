@@ -179,6 +179,7 @@ class GenMonitor():
             abs_path = os.path.abspath(('./%s' % one_done_script))
             self.one_done_module = imp.load_source(one_done_script, abs_path)
 
+        self.injectIOInstance = None
         self.genInit(comp_dict)
 
     def genInit(self, comp_dict):
@@ -416,9 +417,6 @@ class GenMonitor():
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
-            # TBD wtf?
-            #status = self.is_monitor_running.isRunning()
-            #if not status:
             SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
@@ -1231,7 +1229,7 @@ class GenMonitor():
         if self.coverage is not None:
             self.coverage.saveCoverage()
         if self.command_callback is not None:
-            #self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
+            self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
             SIM_run_alone(self.command_callback, None)
         else:
             self.restoreDebugBreaks()
@@ -1962,6 +1960,8 @@ class GenMonitor():
             self.coverage.stopCover(keep_hits=True)
         if self.trace_malloc is not None:
             self.trace_malloc.stopTrace()
+        if self.injectIOInstance is not None:
+            self.injectIOInstance.delCallHap(None)
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -2227,6 +2227,45 @@ class GenMonitor():
             calls.remove('_newselect')
             calls.append('lseek')
             calls.remove('send')
+            calls.remove('recv')
+        skip_and_mail = True
+        if flist_in is not None:
+            ''' Given callback functions, use those instead of skip_and_mail '''
+            skip_and_mail = False
+
+        the_syscall = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
+                               self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
+                               calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               skip_and_mail=skip_and_mail)
+        for call in calls:
+            self.call_traces[self.target][call] = the_syscall
+        ''' find processes that are in the kernel on IO calls '''
+        '''
+        frames = self.getDbgFrames()
+        for pid in list(frames):
+            call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
+            self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
+            if call not in calls:
+               del frames[pid]
+        if len(frames) > 0:
+            self.lgr.debug('runToIO, call to setExits')
+            the_syscall.setExits(frames) 
+        '''
+        
+        SIM_run_command('c')
+
+    def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
+        call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
+        call_params.nth = count
+        cell = self.cell_config.cell_context[self.target]
+        self.lgr.debug('runToInput on FD %d' % fd)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        calls = ['read', 'socketcall']
+        if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
+            calls.remove('socketcall')
+            for scall in net.readcalls:
+                calls.append(scall.lower())
+        if self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('recv')
         skip_and_mail = True
         if flist_in is not None:
@@ -3054,10 +3093,10 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
-        inject = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
+        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, bytes_was=bytes_was)
-        inject.go()
+        self.injectIOInstance.go()
     
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -3297,7 +3336,8 @@ class GenMonitor():
 
     def fuzz(self, path):
         cpu = self.cell_config.cpuFromCell(self.target)
-        fuzz_it = fuzz.Fuzz(self, cpu, path, self.coverage, self.back_stop[self.target], self.lgr)
+        cell_name = self.getTopComponentName(cpu)
+        fuzz_it = fuzz.Fuzz(self, cpu, cell_name, path, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.run_from_snap, self.lgr)
         fuzz_it.trim()
 
     def afl(self,n=1, sor=False):
@@ -3388,6 +3428,9 @@ class GenMonitor():
 
     def quit(self):
         SIM_run_command('q')
+
+    def getMatchingExitInfo(self):
+        return self.sharedSyscall[self.target].getMatchingExitInfo()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
