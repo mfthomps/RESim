@@ -14,6 +14,7 @@ RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, packet_count=1, stop_on_read=False):
         pad_env = os.getenv('AFL_PAD') 
+        self.lgr = lgr
         if pad_env is not None:
             try:
                 self.pad_to_size = int(pad_env)
@@ -42,7 +43,6 @@ class AFL():
         self.pad_char = chr(0)
         self.cpu = cpu
         self.cell_name = cell_name
-        self.lgr = lgr
         self.top = top
         self.mem_utils = mem_utils
         self.fd = fd
@@ -83,6 +83,8 @@ class AFL():
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
+        self.addr = None
+        self.max_len = None
         if fd is not None:
             self.prepInject(snap_name)
         else:
@@ -199,10 +201,11 @@ class AFL():
             self.lgr.debug('afl packet count now %d' % self.afl_packet_count)
        
 
-        self.addr, max_len = self.dataWatch.firstBufferAddress()
         if self.addr is None:
-            self.lgr.error('AFL, no firstBufferAddress found')
-            return
+           self.addr, max_len = self.dataWatch.firstBufferAddress()
+           if self.addr is None:
+               self.lgr.error('AFL, no firstBufferAddress found')
+               return
 
 
         ''' clear the bit_trace '''
@@ -377,6 +380,7 @@ class AFL():
         self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (snap_name, self.return_ip, pid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
+        exit_info = self.top.getMatchingExitInfo()
         previous = cycle - 1
         SIM_run_command('skip-to cycle=%d' % previous)
         self.call_ip = self.top.getEIP(self.cpu)
@@ -384,7 +388,7 @@ class AFL():
         self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
         ''' skip back to return so the snapshot is ready to inject input '''
         SIM_run_command('skip-to cycle=%d' % ret_cycle)
-        self.pickleit(snap_name)
+        self.pickleit(snap_name, exit_info)
         #self.finishInit()
 
     def instrumentIO(self, snap_name):
@@ -392,17 +396,23 @@ class AFL():
         SIM_run_alone(self.instrumentAlone, snap_name)
 
     def prepInject(self, snap_name):
-        ''' Use runToIO to find location of desired input call.  Set callback to instrument the call and return '''
+        ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('afl prepInject snap %s' % snap_name)
         f1 = stopFunction.StopFunction(self.instrumentIO, [snap_name], nest=False)
         flist = [f1]
-        self.top.runToIO(self.fd, flist_in=flist)
+        self.top.runToInput(self.fd, flist_in=flist)
 
-    def pickleit(self, name):
+    def pickleit(self, name, exit_info):
         self.top.writeConfig(name)
         pickDict = {}
         pickDict['call_ip'] = self.call_ip
         pickDict['return_ip'] = self.return_ip
+        pickDict['addr'] = exit_info.retval_addr
+        if exit_info.sock_struct is not None:
+            pickDict['size'] = exit_info.sock_struct.length
+        else:
+            pickDict['size'] = exit_info.count
+        self.lgr.debug('afl pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
 
@@ -414,3 +424,6 @@ class AFL():
             #print('start %s' % str(so_pickle['text_start']))
             self.call_ip = so_pickle['call_ip']
             self.return_ip = so_pickle['return_ip']
+            if 'addr' in so_pickle:
+                self.addr = so_pickle['addr']
+                self.max_len = so_pickle['size']
