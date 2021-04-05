@@ -6,12 +6,13 @@ import hapCleaner
 Watch page faults for indications of a SEGV exception
 '''
 class Prec():
-    def __init__(self, cpu, comm, pid=None, cr2=None, eip=None):
+    def __init__(self, cpu, comm, pid=None, cr2=None, eip=None, name=None):
         self.cpu = cpu
         self.comm = comm
         self.pid = pid
         self.cr2 = cr2
         self.eip = eip
+        self.name = name
         self.cycles = cpu.cycles
 
 class PageFaultGen():
@@ -248,20 +249,23 @@ class PageFaultGen():
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         if cpu.architecture == 'arm':
-            reg_num = cpu.iface.int_register.get_number("combined_data_far")
-            dfar = cpu.iface.int_register.read(reg_num)
-            reg_num = cpu.iface.int_register.get_number("instruction_far")
-            ifar = cpu.iface.int_register.read(reg_num)
-            self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s ifar: 0x%x  dfar: 0x%x cycle: 0x%x' % (name, 
-                exception_number, pid, comm, eip, instruct[1], ifar, dfar, cpu.cycles))
-            if exception_number == 4 or exception_number == 1:
+            #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
+            #    exception_number, pid, comm, eip, instruct[1], cpu.cycles))
+            if exception_number == 4 or exception_number == 1 or exception_number == 5:
                 if exception_number == 4:
-                    prec = Prec(self.cpu, comm, pid, ifar, eip)
+                    # instruction_far fails on older arm, just use eip.
+                    #reg_num = cpu.iface.int_register.get_number("instruction_far")
+                    #ifar = cpu.iface.int_register.read(reg_num)
+                    prec = Prec(self.cpu, comm, pid, eip, eip, name=name)
+                elif exception_number == 5:
+                    prec = Prec(self.cpu, comm, pid, eip, eip, name=name)
                 else:
-                    prec = Prec(self.cpu, comm, pid, dfar, eip)
+                    reg_num = cpu.iface.int_register.get_number("combined_data_far")
+                    dfar = cpu.iface.int_register.read(reg_num)
+                    prec = Prec(self.cpu, comm, pid, dfar, eip, name=name)
                 if pid not in self.pending_faults:
                     self.pending_faults[pid] = prec
-                    self.lgr.debug('faultCallback add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+                    #self.lgr.debug('faultCallback add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
                     if self.mode_hap is None:
                         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             
