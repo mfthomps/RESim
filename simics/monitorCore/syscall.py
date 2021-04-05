@@ -114,23 +114,23 @@ class SelectInfo():
 
     def hasFD(self, fd):
         retval = False
-        self.lgr.debug('SelectInfo hasFD test newfds %d against %d' % (fd, self.nfds))
+        #self.lgr.debug('SelectInfo hasFD test newfds %d against %d' % (fd, self.nfds))
         if fd < self.nfds:
-            self.lgr.debug('SelectInfo hasFD under newfds %d' % fd)
+            #self.lgr.debug('SelectInfo hasFD under newfds %d' % fd)
             if self.readfds is not None:
                 read_low, read_high = self.readit(self.readfds)
                 if read_low is not None:
                     the_set = read_low | (read_high << 32) 
                     if memUtils.testBit(the_set, fd):
-                        self.lgr.debug('SeletInfo found %d in the read set 0x%x' % (fd, the_set))
+                        #self.lgr.debug('SeletInfo found %d in the read set 0x%x' % (fd, the_set))
                         retval = True
             if self.writefds is not None:
                 write_low, write_high = self.readit(self.writefds)
                 if write_low is not None:
                     the_set = write_low | (write_high << 32) 
-                    self.lgr.debug('the write set 0x%x' % the_set)
+                    #self.lgr.debug('the write set 0x%x' % the_set)
                     if memUtils.testBit(the_set, fd):
-                        self.lgr.debug('SeletInfo found %d in the write set 0x%x' % (fd, the_set))
+                        #self.lgr.debug('SeletInfo found %d in the write set 0x%x' % (fd, the_set))
                         retval = True
         return retval 
 
