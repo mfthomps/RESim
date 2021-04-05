@@ -280,10 +280,14 @@ class Coverage():
     def restoreBreaks(self):
         ''' Restore the hits found in self.blocks_hit '''
         resim_context = self.context_manager.getRESimContext()
+        default_context = self.context_manager.getDefaultContext()
         tmp_list = []
         prev_break = None
         for bb in self.blocks_hit:
-            breakpoint = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
+            if self.afl:
+                breakpoint = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
+            else:
+                breakpoint = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
             if prev_break is not None and breakpoint != (prev_break+1):
                 #self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
                 hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
