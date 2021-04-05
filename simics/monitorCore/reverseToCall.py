@@ -1236,7 +1236,7 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x' % (frame['pc'], frame['sp'], frame['param3']))
+                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
                     self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
@@ -1275,6 +1275,7 @@ class reverseToCall():
         self.sysenter_cycles.clear()
 
     def getRecentCycleFrame(self, pid):
+        ''' NOTE these frames do not reflect socket call decoding '''
         retval = None
         ret_cycles = None
         cur_cycles = self.cpu.cycles
