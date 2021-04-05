@@ -711,6 +711,8 @@ class DataWatch():
             #self.stopWatch()
 
     def readHap(self, index, an_object, breakpoint, memory):
+        if self.return_hap is not None:
+            return
         addr = memory.logical_address
         eip = self.top.getEIP(self.cpu)
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
@@ -764,7 +766,7 @@ class DataWatch():
             #    ''' prevent stack trace from triggering haps '''
             #    self.stopWatch()
             mem_stuff = None
-            '''
+       
             self.lgr.debug('dataWatch get stack trace to look for memsomething')
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
@@ -774,7 +776,7 @@ class DataWatch():
             # look for memcpy'ish... TBD generalize 
             frames = st.getFrames(20)
             mem_stuff = self.memsomething(frames, mem_funs)
-            '''
+        
             if mem_stuff is not None:
                 self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
                 ''' referenced memory address is src/dest depending on op_type''' 
@@ -1252,8 +1254,9 @@ class DataWatch():
                         if fun in local_mem_funs:
                             self.lgr.debug('fun in local_mem_funs %s' % fun)
                             fun_precidence = self.funPrecidence(fun)
-                            if fun_precidence == 0 and i > 2:
-                                ''' a strcpy or some such more than 2 frames down, don't buy it '''
+                            if fun_precidence == 0 and i > 3:
+                                ''' a strcpy or some such more than 3 frames down, don't buy it '''
+                                self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                                 continue
                         if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
                             self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
