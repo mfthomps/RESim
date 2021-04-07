@@ -41,6 +41,8 @@ class DataWatch():
         self.return_break = None
         self.return_hap = None
         self.prev_cycle = None
+        ''' for guessing if stack buffer is being re-used '''
+        self.prev_read_cycle = None
         self.ida_funs = None
         self.relocatables = None
         self.user_iterators = None
@@ -123,7 +125,8 @@ class DataWatch():
         if break_simulation is not None:
             self.break_simulation = break_simulation         
         if len(self.start) > 0:
-            self.setBreakRange(i_am_alone)
+            if len(self.read_hap)==0:
+                self.setBreakRange(i_am_alone)
             return True
         return False
 
@@ -155,10 +158,14 @@ class DataWatch():
             else:
                 eip = eip + instruct[0]
         return retval
-            
+           
+    def deleteReturnHap(self, dumb): 
+        if self.return_hap is not None:
+            self.context_manager.genDeleteHap(self.return_hap)
+            self.return_hap = None
                
     def stopWatch(self, break_simulation=None): 
-        #self.lgr.debug('dataWatch stopWatch')
+        self.lgr.debug('dataWatch stopWatch')
         for index in range(len(self.start)):
             if self.start[index] == 0:
                 continue
@@ -171,9 +178,7 @@ class DataWatch():
         if break_simulation is not None: 
             self.break_simulation = break_simulation
             self.lgr.debug('DataWatch stopWatch break_simulation %r' % break_simulation)
-        if self.return_hap is not None:
-            self.context_manager.genDeleteHap(self.return_hap)
-            self.return_hap = None
+        self.deleteReturnHap(None)
       
         if self.back_stop is not None:
             self.back_stop.clearCycle()
@@ -182,10 +187,14 @@ class DataWatch():
     def kernelReturnHap(self, addr, third, forth, memory):
         self.context_manager.genDeleteHap(self.return_hap)
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-        self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x' % (eax, addr))
+        self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x context: %s' % (eax, addr, str(self.cpu.current_context)))
+        self.top.showHaps()
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
         self.watchMarks.kernel(addr, eax, frame)
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
+        SIM_run_alone(self.deleteReturnHap, None)
         self.watch()
 
     def kernelReturn(self, addr):
@@ -228,6 +237,7 @@ class DataWatch():
         ''' should be at return from a memsomething.  see  getMemParams for gathering of parameters'''
         if self.return_hap is None:
             return
+        SIM_run_alone(self.deleteReturnHap, None)
         eip = self.top.getEIP(self.cpu)
         if self.cpu.cycles < self.cycles_was:
             self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles less than when we read the data' % eip)
@@ -668,38 +678,45 @@ class DataWatch():
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
         if op_type == Sim_Trans_Load:
-            #self.lgr.debug('finishReadHap Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
-            #        offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
-            msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
-                        offset, length, start, eip))
-            self.context_manager.setIdaMessage(msg)
-            if instruct[1].startswith('repe cmpsb'):
-                esi = self.mem_utils.getRegValue(self.cpu, 'esi')
-                edi = self.mem_utils.getRegValue(self.cpu, 'edi')
-                count = self.mem_utils.getRegValue(self.cpu, 'ecx')
-                buf_start = self.findRange(edi)
-                self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
-            else: 
-                self.watchMarks.dataRead(addr, start, length, self.getCmp())
-            if self.break_simulation:
-                SIM_break_simulation('DataWatch read data')
-
             if cpl == 0:
-                if not self.break_simulation:
-                    self.stopWatch()
+                #if not self.break_simulation:
+                #    self.stopWatch()
+                self.lgr.debug('dataWatch finishReadHap, read in kernel, set kernelReturn hap')
+                self.return_hap = 'eh'
                 SIM_run_alone(self.kernelReturn, addr)
+            else:
+                #self.lgr.debug('finishReadHap Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
+                #        offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
+                self.prev_read_cycle = self.cpu.cycles
+                msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
+                            offset, length, start, eip))
+                self.context_manager.setIdaMessage(msg)
+                if instruct[1].startswith('repe cmpsb'):
+                    esi = self.mem_utils.getRegValue(self.cpu, 'esi')
+                    edi = self.mem_utils.getRegValue(self.cpu, 'edi')
+                    count = self.mem_utils.getRegValue(self.cpu, 'ecx')
+                    buf_start = self.findRange(edi)
+                    self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
+                else: 
+                    self.watchMarks.dataRead(addr, start, length, self.getCmp())
+                if self.break_simulation:
+                    SIM_break_simulation('DataWatch read data')
+
+
         elif cpl > 0:
             ''' is a write to a data watch buffer '''
            # self.lgr.debug('finishReadHap Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
             
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-            if addr > sp and index is not None:
-                self.lgr.debug('finishReadHap remove watch for index %d' % index)
+            if addr > sp and index is not None and (self.cpu.cycles - self.prev_read_cycle)<100:
                 self.hack_reuse[index] = self.hack_reuse[index]+1
                 if self.hack_reuse[index] > self.length[index]/3:
                     ''' Assume reused stack buffer, remove it from watch '''
+                    self.lgr.debug('dataWatch finishReadHap remove watch for index %d' % index)
                     self.start[index] = 0
+                else:
+                    self.watchMarks.memoryMod(start, length, addr=addr)
             else:
                 self.watchMarks.memoryMod(start, length, addr=addr)
             if self.break_simulation:
@@ -716,7 +733,7 @@ class DataWatch():
         addr = memory.logical_address
         eip = self.top.getEIP(self.cpu)
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
-        #self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d cycle: 0x%x' % (eip, addr, index, breakpoint, self.cpu.cycles))
+        self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d cycle: 0x%x' % (eip, addr, index, breakpoint, self.cpu.cycles))
         #if addr == 0xb5f70686:
         #    SIM_break_simulation('wet')
         #return
@@ -814,8 +831,8 @@ class DataWatch():
             break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
-            #self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d' % (eip, break_num, self.start[index], end, 
-            #    self.length[index], index, len(self.read_hap)))
+            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d' % (eip, break_num, self.start[index], end, 
+                self.length[index], index, len(self.read_hap)))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
             
 
