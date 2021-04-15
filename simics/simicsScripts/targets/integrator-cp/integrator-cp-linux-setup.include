@@ -97,7 +97,6 @@ $phys_mem.write 0x148 0x0          4
 $phys_mem.write 0x148 0x0          4
 $phys_mem.write 0x14c 0x54410009   4
 
-#$phys_mem.load-file offset = 0x100 filename = /home/mike/SEED/high/long/integratorcp.dtb
 
 # enable the uart
 pselect $cpu
