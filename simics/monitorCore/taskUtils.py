@@ -89,7 +89,7 @@ class TaskUtils():
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
-            exec_addrs_file = os.path.join('./', RUN_FROM_SNAP, 'exec_addrs.pickle')
+            exec_addrs_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
                 self.exec_addrs = pickle.load( open(exec_addrs_file, 'rb') ) 
         if self.phys_current_task is None:
@@ -754,7 +754,14 @@ class TaskUtils():
         if pid in self.exec_addrs:
             return self.exec_addrs[pid].prog_name, self.exec_addrs[pid].arg_list
         else: 
+            self.lgr.debug('taskUtils getProgName pid %d not in exec_addrs' % pid)
             return None, None
+
+    def swapExecPid(self, old, new):
+        self.exec_addrs[new] = self.exec_addrs[old]
+        self.exec_addrs[new].pid = new
+        del self.exec_addrs[old]
+        self.lgr.debug('taskUtils, set exec pid from %d to %d  TBD deep copy/delete' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32):
         if self.cpu.architecture == 'arm':

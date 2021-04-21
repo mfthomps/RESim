@@ -52,10 +52,13 @@ class GenHap():
     def show(self):
         if self.handle is not None and self.hap_num is not None:
             print('hap_handle: %d  num: %d name: %s' % (self.handle, self.hap_num, self.name))
+            self.lgr.debug('hap_handle: %d  num: %d name: %s' % (self.handle, self.hap_num, self.name))
             for bp in self.breakpoint_list:
                 bp.show()
 
-    def hapAlone(self, (bs, be)):
+    #def hapAlone(self, (bs, be)):
+    def hapAlone(self, breaks):
+        bs, be = breaks
         #self.lgr.debug('GenHap alone set hap_handle %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
         #          self.name, str(bs.break_num), str(be.break_num), 
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
@@ -79,9 +82,9 @@ class GenHap():
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
             if immediate:
-                #self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                #           self.name, str(bs.break_num), str(be.break_num), 
-                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+                self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                           self.name, str(bs.break_num), str(be.break_num), 
+                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
                 self.hap_num = SIM_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
                 #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
@@ -100,7 +103,7 @@ class GenHap():
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
             #self.lgr.debug('GenHap set hap_handle %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), 
-            #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+            #               self.name, str(bp.break_num), bp.addr, str(bp.handle)))
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -261,7 +264,7 @@ class GenContextMgr():
                 #self.lgr.debug('num breaks in hap %d is %d' % (hap_handle, len(hap.breakpoint_list)))
                 for bp in hap.breakpoint_list:
                     if bp in self.breakpoints:
-                        #self.lgr.debug('removing bp %d from hap_handle %d  break_num %s' % (bp.handle, hap_handle, str(bp.break_num)))
+                        #self.lgr.debug('genDeleteHap removing bp %d from hap_handle %d  break_num %s' % (bp.handle, hap_handle, str(bp.break_num)))
                         self.breakpoints.remove(bp)
                     else:
                         self.lgr.warning('genDeleteHap bp not in list, handle %d ' % (bp.handle))
@@ -281,7 +284,7 @@ class GenContextMgr():
         #self.lgr.error('genHapIndex failed to find break %d' % breakpoint)
 
     def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None):
-        #self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
+        self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
         bp_start = None
         bp_list = []
         for bp in self.breakpoints:
@@ -290,7 +293,7 @@ class GenContextMgr():
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
                 hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=False)
-                #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
+                self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
@@ -306,13 +309,11 @@ class GenContextMgr():
             if (not only_maze_breaks and hap.name != 'exitMaze') or (only_maze_breaks and hap.name == 'exitMaze'):
                 hap.set()
 
-    def clearAllBreak(self):
+    def clearAllBreak(self, dumb):
         ''' Called to clear breaks within the resim context '''
         for bp in self.breakpoints:
             #if bp.cell == self.resim_context:
             bp.clear()
-        if self.pageFaultGen is not None:
-            self.pageFaultGen.stopPageFaults()
         
     def clearAllHap(self, keep_maze_breaks=False):
         #self.lgr.debug('clearAllHap start')
@@ -321,6 +322,8 @@ class GenContextMgr():
             if not keep_maze_breaks or hap.name != 'exitMaze':
                 hap.clear()
         #self.lgr.debug('clearAllHap finish')
+        if self.pageFaultGen is not None:
+            self.pageFaultGen.stopPageFaults()
 
     def getThreadRecs(self):
         return self.watch_rec_list.keys()
@@ -379,8 +382,8 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s' % (prev_pid, 
-        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), self.debugging_comm, cpu.current_context))
+        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s' % (prev_pid, 
+            prev_comm, pid, comm, new_addr, len(self.watch_rec_list), self.debugging_comm, cpu.current_context))
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -452,7 +455,8 @@ class GenContextMgr():
                 #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 #self.auditExitBreaks()
-                self.clearAllBreak()
+                #self.clearAllBreak()
+                SIM_run_alone(self.clearAllBreak, None)
                 #if pid not in self.task_switch:
                 #    self.task_switch[pid] = []
                 #self.task_switch[pid].append(self.cpu.cycles)
@@ -515,20 +519,26 @@ class GenContextMgr():
             if len(self.watch_rec_list) == 0:
                 if self.debugging_comm is None:
                     self.lgr.warning('contextManager rmTask debugging_comm is None')
+               
+                if len(self.pending_watch_pids) > 0:
+                    self.debugging_pid = self.pending_watch_pids[0]
+                    self.lgr.debug('contextManager rmTask, list empty but found pending watch pid %d, make it the debug pid' % self.debugging_pid)
                 else:
-                    self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
                     #self.debugging_comm = None
                     #self.debugging_cell = None
                     pids = self.task_utils.getPidsForComm(self.debugging_comm) 
-                    if len(pids) == 0:
+                    if len(pids) == 0 or (len(pids)==1 and pids[0]==pid):
+                        self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
                         self.cpu.current_context = self.default_context
                         self.stopWatchTasks()
                         retval = True
                     else:
-                        if self.top.swapSOPid(pid, pids[0]):
-                            self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d' % (self.debugging_comm, pids[0]))
+                        self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d pids was %s' % (self.debugging_comm, pids[-1], str(pids)))
+                        if self.top.swapSOPid(pid, pids[-1]):
                             ''' replace SOMap pid with new one from fork '''
-                            self.debugging_pid = pids[0]
+                            self.lgr.debug('Adding task %d and setting debugging pid' % pids[-1])
+                            self.addTask(pids[-1])
+                            self.debugging_pid = pids[-1]
                         else:
                             ''' TBD poor hueristic for deciding it was not a fork '''
                             self.cpu.current_context = self.default_context
@@ -610,7 +620,7 @@ class GenContextMgr():
         
         for pid in self.task_rec_bp:    
             if self.task_rec_bp[pid] is not None:
-                self.lgr.debug('stopWatchTasks delete bp %d' % self.task_rec_bp[pid])
+                #self.lgr.debug('stopWatchTasks delete bp %d' % self.task_rec_bp[pid])
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
                 SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
         self.task_rec_bp = {}
@@ -701,7 +711,7 @@ class GenContextMgr():
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
+        self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         self.debugging_comm = comm
         self.debugging_cell = self.top.getCell()
@@ -716,26 +726,29 @@ class GenContextMgr():
             add_task = None
             for p in pids:
                 if p not in self.pid_cache:
-                    self.lgr.debug('killGroup found pid %d not in cache, was it a fork?' % p)
+                    self.lgr.debug('killGroup found pid %d not in cache, was it a fork?  IGNORING killgroup' % p)
                     add_task =p
                     break
-            self.lgr.debug('contextManager killGroup %d is leader, pid_cache is %s' % (lead_pid, str(self.pid_cache)))
-            cache_copy = list(self.pid_cache)
-            for pid in cache_copy:
-                ida_msg = 'killed %d member of group led by %d' % (pid, lead_pid) 
-                exit_syscall.handleExit(pid, ida_msg, killed=True, retain_so=True)
-                #self.rmTask(pid, killed=True)
-                #if pid in self.demise_cache:
-                #    self.demise_cache.remove(pid)
-                if self.pageFaultGen is not None:
-                    if self.pageFaultGen.handleExit(pid, lead_pid):
-                        print('SEGV on pid %d?' % pid)
-                        self.lgr.debug('genContextManager SEGV on pid %d -- stop trace of exit_syscall' % pid)
-                        exit_syscall.stopTrace() 
-                        break
-            self.clearExitBreaks()
             if add_task is not None:
+                self.lgr.debug('contextManager killGroup add_task is not None, swap pids')
+                self.top.swapSOPid(self.debugging_pid, p)
                 self.addTask(add_task)
+            else:
+                self.lgr.debug('contextManager killGroup %d is leader, pid_cache is %s' % (lead_pid, str(self.pid_cache)))
+                cache_copy = list(self.pid_cache)
+                for pid in cache_copy:
+                    ida_msg = 'killed %d member of group led by %d' % (pid, lead_pid) 
+                    exit_syscall.handleExit(pid, ida_msg, killed=True, retain_so=True)
+                    #self.rmTask(pid, killed=True)
+                    #if pid in self.demise_cache:
+                    #    self.demise_cache.remove(pid)
+                    if self.pageFaultGen is not None:
+                        if self.pageFaultGen.handleExit(pid, lead_pid):
+                            print('SEGV on pid %d?' % pid)
+                            self.lgr.debug('genContextManager SEGV on pid %d -- stop trace of exit_syscall' % pid)
+                            exit_syscall.stopTrace() 
+                            break
+                self.clearExitBreaks()
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
             if self.pageFaultGen is not None:
@@ -920,7 +933,7 @@ class GenContextMgr():
         return self.debugging_pid, self.cpu
 
     def showIdaMessage(self):
-        print 'genMonitor says: %s' % self.ida_message
+        print('genMonitor says: %s' % self.ida_message)
         self.lgr.debug('genMonitor says: %s' % self.ida_message)
 
     def setIdaMessage(self, message):

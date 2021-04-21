@@ -31,7 +31,7 @@ class WatchMarks():
         
     class CallMark():
         def __init__(self, msg, max_len, recv_addr, length):
-            self.msg = msg
+            self.msg = '%s addr: 0x%x  length: %d' % (msg, recv_addr, length)
             self.max_len = max_len
             self.recv_addr = recv_addr
             self.len = length
@@ -66,8 +66,12 @@ class WatchMarks():
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
-            offset = dest - buf_start
-            self.msg = 'memset %d bytes starting 0x%x (offset %d into buffer at 0x%x)' % (length, dest, offset, buf_start)
+            if buf_start is not None:
+                offset = dest - buf_start
+                self.msg = 'memset %d bytes starting 0x%x (offset %d into buffer at 0x%x)' % (length, dest, offset, buf_start)
+            else:
+                offset = 0
+                self.lgr.debug('memset %d bytes starting 0x%x **Not a known buffer' % length, dest)
         def getMsg(self):
             return self.msg
 
@@ -111,6 +115,16 @@ class WatchMarks():
             self.callnum = callnum
             self.fd = fd
             self.msg = 'Kernel read %d bytes from 0x%x call_num: %d FD: %d' % (count, addr, callnum, fd)
+        def getMsg(self):
+            return self.msg
+
+    class KernelModMark():
+        def __init__(self, addr, count, callnum, fd):
+            self.addr = addr
+            self.count = count
+            self.callnum = callnum
+            self.fd = fd
+            self.msg = 'Kernel overwrote %d bytes from 0x%x call_num: %d FD: %d' % (count, addr, callnum, fd)
         def getMsg(self):
             return self.msg
 
@@ -178,6 +192,26 @@ class WatchMarks():
             self.src = src    
             self.count = count    
             self.msg = 'strlen src 0x%x len %d' % (src, count)
+
+        def getMsg(self):
+            return self.msg
+
+    class SprintfMark():
+        def __init__(self, fun, src, dest, count):
+            self.fun = fun    
+            self.src = src    
+            self.dest = dest    
+            self.count = count    
+            self.msg = '%s src: 0x%x dest 0x%x len %d' % (fun, src, dest, count)
+
+        def getMsg(self):
+            return self.msg
+
+    class FprintfMark():
+        def __init__(self, fun, src):
+            self.fun = fun    
+            self.src = src    
+            self.msg = '%s src 0x%x' % (fun, src)
 
         def getMsg(self):
             return self.msg
@@ -390,6 +424,14 @@ class WatchMarks():
         self.addWatchMark(ip, km)
         self.lgr.debug('watchMarks kernel 0x%x %s' % (ip, km.getMsg()))
 
+    def kernelMod(self, addr, count, frame):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        callnum = self.mem_utils.getCallNum(self.cpu)
+        fd = frame['param1']
+        km = self.KernelModMark(addr, count, callnum, fd)
+        self.addWatchMark(ip, km)
+        self.lgr.debug('watchMarks kernelMod 0x%x %s' % (ip, km.getMsg()))
+
     def compare(self, fun, dest, src, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if count > 0:
@@ -425,6 +467,18 @@ class WatchMarks():
         lm = self.LenMark(src, count)        
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks strlen 0x%x %s' % (ip, lm.getMsg()))
+
+    def sprintf(self, fun, src, dest, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        lm = self.SprintfMark(fun, src, dest, count)        
+        self.addWatchMark(ip, lm)
+        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
+
+    def fprintf(self, fun, src):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        lm = self.FprintfMark(fun, src)
+        self.addWatchMark(ip, lm)
+        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
 
     def xmlGetProp(self, src, count, the_string, dest):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')

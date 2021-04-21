@@ -51,6 +51,7 @@ class ReportCrash():
             self.decode = decode
         #self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
         #self.crash_report = open('/tmp/crash_report.txt', 'w')
+        '''
         self.addr, self.max_len = self.dataWatch.firstBufferAddress()
         if self.addr is None:
             self.lgr.error('injectIO, no firstBufferAddress found')
@@ -58,6 +59,8 @@ class ReportCrash():
         self.bytes_was = self.mem_utils.readBytes(self.cpu, self.addr, self.max_len)
         cksum = sum(self.bytes_was)
         self.lgr.debug('reportCrash cksum of data was 0x%x' % cksum)
+        '''
+        self.bytes_was = None
 
     def go(self):
         if self.index < len(self.flist):
@@ -148,9 +151,15 @@ class ReportCrash():
                 self.crash_report.write("ROP would return to addr: 0x%x\n" % bad_addr)
                 is_rop = True
             else:
-                self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
-                self.top.setCommandCallback(None)
-                return            
+                bad_addr = self.top.getFaultAddr()
+                if bad_addr is not None:
+                    self.crash_report.write("Unhandled fault on access to address: 0x%x\n" % bad_addr)
+                    self.lgr.debug("Unhandled fault on access to address: 0x%x\n" % bad_addr)
+                    self.reportStack()
+                else:
+                    self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
+                    self.top.setCommandCallback(None)
+                    return            
         self.lgr.debug('reportCrash doneForward eip: 0x%x instruction %s' %(eip, instruct[1]))
         if is_rop:
             self.top.setCommandCallback(self.doneBackward)
@@ -198,13 +207,19 @@ class ReportCrash():
                     else:
                         self.lgr.debug('reportCrash: Is strcpy, src > dest')
                 else:
-                    self.lgr.debug('reportCrash, not a strcpy not handled.') 
+                    if bad_addr % pageUtils.PAGE_SIZE == 0:
+                        self.lgr.debug('reportCrash thinks it is a page boundary')
+                        self.crash_report.write('\nPage boundary.\n')
+                        self.doneBackward(None)
+                    else:
+                        self.lgr.debug('reportCrash, not a strcpy not handled.') 
             elif bad_addr % pageUtils.PAGE_SIZE == 0:
                 self.lgr.debug('reportCrash thinks it is a page boundary')
                 self.crash_report.write('\nPage boundary.\n')
                 self.doneBackward(None)
             else:
                 self.lgr.debug('reportCrash not a copy mark, look for bad reference.')
+                self.top.setCommandCallback(self.doneBackward)
                 self.tryCorruptRef(instruct)
            
         #SIM_run_alone(self.goAlone, None)

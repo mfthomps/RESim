@@ -105,7 +105,11 @@ class Coverage():
                 self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
-        self.lgr.debug('coverage generated %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
+        if self.afl or force_default_context:
+            self.lgr.debug('coverage generated default context %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
+              self.cpu.current_context))
+        else:
+            self.lgr.debug('coverage generated %d RESim context breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         self.block_total = len(self.bp_list)
         #self.bb_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
@@ -132,11 +136,13 @@ class Coverage():
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
-        '''
+        ''' 
+        NOTE!  reading simulated memory may slow down fuzzing by a factor of 2!
         pid = self.top.getPID()
         if pid != self.pid:
             self.lgr.debug('converage bbHap, not my pid, got %d I am %d' % (pid, self.pid))
-        '''
+        ''' 
+       
         addr = memory.logical_address
         if addr == 0:
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
@@ -171,8 +177,8 @@ class Coverage():
                     self.hit_count += 1
                 if self.trace_bits[index] == 255:
                     self.afl_del_breaks.append(addr)
-                    if False:
-                        self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
+                    if True:
+                        #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
                         if addr not in self.afl_del_breaks:
                             SIM_delete_breakpoint(break_num)
                             self.afl_del_breaks.append(addr)

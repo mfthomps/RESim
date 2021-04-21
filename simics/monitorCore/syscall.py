@@ -141,6 +141,40 @@ class SelectInfo():
                 retval.append(i)
         return retval
 
+class PollInfo():
+    class FDS():
+        def __init__(self, fd, events, revents):
+            self.fd = fd
+            self.events = events
+            self.revents = revents
+    def __init__(self, fds_addr, nfds, timeout, mem_utils, cpu, lgr):
+        self.nfds = nfds
+        self.fds_addr = fds_addr
+        self.timeout = timeout
+        self.mem_utils = mem_utils
+        self.cpu = cpu
+        self.lgr = lgr
+        self.fds_list = []
+        cur_addr = fds_addr
+        for i in range (nfds):
+            fd = self.mem_utils.readWord32(cpu, cur_addr)
+            cur_addr += 4
+            events = self.mem_utils.readWord32(cpu, cur_addr)
+            cur_addr += 2
+            revents = self.mem_utils.readWord32(cpu, cur_addr)
+            cur_addr += 2
+            self.fds_list.append(self.FDS(fd, events, revents))
+
+    def hasFD(self, fd):
+        for fds in self.fds_list:
+            if fds.fd == fd:
+                return True
+        return False
+
+    def getString(self):
+        fd_list = ', '.join(map(lambda x: str(x.fd), self.fds_list))
+        return 'poll, %d FDs: %s Timeout: %d' % (self.nfds, fd_list, self.timeout) 
+
 class ExitInfo():
     def __init__(self, syscall_instance, cpu, pid, callnum, compat32):
         self.cpu = cpu
@@ -158,6 +192,7 @@ class ExitInfo():
         self.socket_callname = None
         self.sock_struct = None
         self.select_info = None
+        self.poll_info = None
         self.compat32 = compat32
         ''' narrow search to information about the call '''
         self.call_params = None
@@ -432,8 +467,9 @@ class Syscall():
             try:
                 fname.decode('ascii')
             except:
-                SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
-                return None, None, None, None, None
+                self.lgr.warning('non-ascii fname at 0x%x %s' % (fname_addr, fname))
+                #SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
+                #return None, None, None, None, None
         cpu, comm, pid = self.task_utils.curProc() 
         if callname == 'openat':
             ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  pid:%d' % (callname, flags, 
@@ -446,7 +482,9 @@ class Syscall():
         #    SIM_break_simulation('fname zip')
         return fname, fname_addr, flags, mode, ida_msg
 
-    def fnamePhysAlone(self, (pid, fname_addr, exit_info)):
+    #def fnamePhysAlone(self, (pid, fname_addr, exit_info)):
+    def fnamePhysAlone(self, pinfo):
+        pid, fname_addr, exit_info = pinfo 
         self.finish_break[pid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, fname_addr, 1, 0)
         self.finish_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[pid])
 
@@ -624,9 +662,10 @@ class Syscall():
                     base = prog_string
                 else:
                     base = os.path.basename(prog_string)
-                #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
+                self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
                 if base.startswith(cp.match_param):
                     ''' is program file we are looking for.  do we care if it is a binary? '''
+                    self.lgr.debug('matches base')
                     wrong_type = False
                     if self.traceProcs is not None:
                         ftype = self.traceProcs.getFileType(pid)
@@ -715,11 +754,12 @@ class Syscall():
             socket_callname = net.callname[socket_callnum].lower()
             exit_info.socket_callname = socket_callname
             if socket_callname != 'socket' and socket_callname != 'setsockopt':
+                self.lgr.debug('syscall socketParse get SockStruct from param2: 0x%x' % frame['param2'])
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
         else:
             ''' callname is the socket function '''
             socket_callname = callname
-            #self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
+            self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
@@ -827,7 +867,11 @@ class Syscall():
 
         elif socket_callname == 'accept' or socket_callname == 'accept4':
             phys = self.mem_utils.v2p(self.cpu, ss.addr)
-            ida_msg = '%s - %s pid:%d FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, pid, ss.fd, ss.addr, ss.length, phys)
+            if ss.addr is not None and ss.addr != 0:
+                ida_msg = '%s - %s pid:%d FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, pid, ss.fd, ss.addr, ss.length, phys)
+            else:
+                ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
+             
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             for call_param in syscall_info.call_params:
                 if call_param.subcall == 'accept' and (call_param.match_param < 0 or call_param.match_param == ss.fd):
@@ -1284,6 +1328,16 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
 
+        elif callname == 'poll' or callname == 'ppoll':
+            exit_info.poll_info = PollInfo(frame['param1'], frame['param2'], frame['param3'], self.mem_utils, cpu, self.lgr)
+
+            ida_msg = '%s pid:%d %s\n' % (callname, pid, exit_info.poll_info.getString())
+            for call_param in syscall_info.call_params:
+                if type(call_param.match_param) is int and exit_info.poll_info.hasFD(call_param.match_param):
+                    self.lgr.debug('call param found %d' % (call_param.match_param))
+                    exit_info.call_params = call_param
+                    break
+
         elif callname == 'socketcall' or callname.upper() in net.callname:
             ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
 
@@ -1607,7 +1661,7 @@ class Syscall():
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
             if self.soMap is not None:
-                if not retain_so:
+                if not retain_so and not self.context_manager.amWatching(pid):
                     self.soMap.handleExit(pid, killed)
             else:
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
@@ -1664,7 +1718,8 @@ class Syscall():
                 SIM_break_simulation('timer loop?')
    
  
-    def modeChanged(self, (the_fun, arg), one, old, new):
+    def modeChanged(self, fun_arg, one, old, new):
+        the_fun, arg = fun_arg
         if self.mode_hap is None:
             return
         self.lgr.debug('syscall modeChanged old %d new %d' % (old, new))

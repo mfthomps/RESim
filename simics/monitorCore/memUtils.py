@@ -25,6 +25,7 @@
 
 import pageUtils
 import json
+import sys
 import struct
 from simics import *
 MACHINE_WORD_SIZE = 8
@@ -306,7 +307,7 @@ class memUtils():
             reg_values[reg] = reg_value
         
         s = json.dumps(reg_values)
-        print s
+        print(s)
     
     def readPhysPtr(self, cpu, addr):
         if addr is None:
@@ -507,8 +508,8 @@ class memUtils():
             except ValueError:
             #except:
                 #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
-                print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1)
-                print 'bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read)
+                print('trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
+                print('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 return retval, retbytes
             holder = ''
@@ -568,7 +569,7 @@ class memUtils():
     def writeString(self, cpu, address, string):
         #self.lgr.debug('writeString len %d adress: 0x%x %s' % (len(string), address, string))
 
-        lcount = len(string)/4
+        lcount = int(len(string)/4)
         carry = len(string) % 4
         if carry != 0:
             lcount += 1
@@ -576,10 +577,13 @@ class memUtils():
         sindex = 0
         for i in range(lcount):
             eindex = min(sindex+4, len(string))
-            sub = string[sindex:eindex] 
+            if sys.version_info[0] > 2:
+                sub = string[sindex:eindex].encode('utf-8','ignore') 
+            else:
+                sub = string[sindex:eindex]
             count = len(sub)
             #sub = sub.zfill(4)
-            sub = sub.ljust(4, '0')
+            sub = sub.ljust(4, b'0')
             #print('sub is %s' % sub)
             #value = int(sub.encode('hex'), 16)
             value = struct.unpack("<L", sub)[0]

@@ -6,13 +6,14 @@ import hapCleaner
 Watch page faults for indications of a SEGV exception
 '''
 class Prec():
-    def __init__(self, cpu, comm, pid=None, cr2=None, eip=None, name=None):
+    def __init__(self, cpu, comm, pid=None, cr2=None, eip=None, name=None, fsr=None):
         self.cpu = cpu
         self.comm = comm
         self.pid = pid
         self.cr2 = cr2
         self.eip = eip
         self.name = name
+        self.fsr = fsr
         self.cycles = cpu.cycles
 
 class PageFaultGen():
@@ -166,7 +167,7 @@ class PageFaultGen():
         prec = Prec(self.cpu, comm, pid, cr2, eip)
         if pid not in self.pending_faults:
             self.pending_faults[pid] = prec
-            self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+            #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
             if self.mode_hap is None:
                 self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
         hack_rec = (compat32, page_info, prec)
@@ -230,7 +231,8 @@ class PageFaultGen():
             #self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
             #         self.faultCallback, self.cpu, 0, 13) 
             self.fault_hap1 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
-                     self.faultCallback, self.cpu, 0, 13) 
+                     self.faultCallback, self.cpu, 0, max_intr) 
+            self.lgr.debug('pageFaultGen watching Core_Exception faults')
         else:
             #self.lgr.debug('watchPageFaults not arm set break at 0x%x' % self.param.page_fault)
             proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
@@ -262,10 +264,12 @@ class PageFaultGen():
                 else:
                     reg_num = cpu.iface.int_register.get_number("combined_data_far")
                     dfar = cpu.iface.int_register.read(reg_num)
-                    prec = Prec(self.cpu, comm, pid, dfar, eip, name=name)
+                    reg_num = cpu.iface.int_register.get_number("combined_data_fsr")
+                    fsr = cpu.iface.int_register.read(reg_num)
+                    prec = Prec(self.cpu, comm, pid, dfar, eip, name=name, fsr=fsr)
                 if pid not in self.pending_faults:
                     self.pending_faults[pid] = prec
-                    #self.lgr.debug('faultCallback add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+                    #self.lgr.debug('faultCallback add pending fault for %d addr 0x%x  fsr: %s eip: 0x%x cycle 0x%x' % (pid, prec.cr2, str(prec.fsr), eip, prec.cycles))
                     if self.mode_hap is None:
                         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             
@@ -294,7 +298,7 @@ class PageFaultGen():
             self.context_manager.genDeleteHap(self.fault_hap)
             self.fault_hap = None
         if self.fault_hap1 is not None:
-            #self.lgr.debug('stopWatchPageFaults delete fault_hap1')
+            self.lgr.debug('stopWatchPageFaults delete fault_hap1')
             SIM_hap_delete_callback_id("Core_Exception", self.fault_hap1)
             self.fault_hap1 = None
         if self.fault_hap2 is not None:
@@ -363,8 +367,11 @@ class PageFaultGen():
                 target_cycles = self.cpu.cycles - 1
                 SIM_run_command('skip-to cycle = 0x%x' % target_cycles)
                 self.lgr.debug('pageFaultGen skipAlone landed in kernel, backed up one') 
-                
-            self.top.setDebugBookmark('SEGV access to 0x%x' % prec.cr2)
+    
+            if prec.fsr is not None and prec.fsr == 2:            
+                self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
+            else:
+                self.top.setDebugBookmark('SEGV access to 0x%x' % prec.cr2)
             self.context_manager.resetWatchTasks()
         self.stopWatchPageFaults()
         self.top.skipAndMail()

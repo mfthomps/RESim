@@ -1,9 +1,10 @@
 import os
 import pickle
 import shutil
+import writeData
 from simics import *
 class Fuzz():
-    def __init__(self, top, cpu, cell_name, path, coverage, backstop, mem_utils, snap_name, lgr):
+    def __init__(self, top, cpu, cell_name, path, coverage, backstop, mem_utils, snap_name, lgr, packet_count, fname):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -11,12 +12,19 @@ class Fuzz():
         self.coverage = coverage
         self.path = None
         self.orig_path = path
+        self.packet_count = packet_count
         self.backstop = backstop
         self.mem_utils = mem_utils
         self.stop_hap = None
         #self.backstop.setCallback(self.whenDone)
         pid = top.getPID()
-        self.coverage.enableCoverage(pid, backstop=self.backstop, backstop_cycles=500000)
+        if os.getenv('BACK_STOP_CYCLES') is not None:
+            self.backstop_cycles =   int(os.getenv('BACK_STOP_CYCLES'))
+            self.lgr.debug('fuzz BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+        else:
+            self.lgr.warning('no BACK_STOP_CYCLES defined, using default of 100000')
+            self.backstop_cycles =   100000
+        self.coverage.enableCoverage(pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, fname=fname)
         self.shrinking = True
         self.orig_hits = None
         ''' number of bytes to subtract from file if number of hits is not changed '''
@@ -27,6 +35,10 @@ class Fuzz():
         self.pad_to_size = None
         self.pad_char = None
         self.count = 0
+        self.addr = None
+        self.max_len = None
+        self.call_ip = None
+        self.return_ip = None
         self.loadPickle(snap_name)
         ''' iterate until delta below this '''
         self.threshold = None
@@ -36,7 +48,8 @@ class Fuzz():
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.lgr.debug('Fuzz init')
-        
+
+        self.write_data = None
 
     def stopHap(self, stop_action, one, exception, error_string):
         self.lgr.debug('fuzz stopHap')
@@ -110,6 +123,9 @@ class Fuzz():
         ''' called when a trim finishes, or initial run finished ''' 
         hits = len(self.coverage.getBlocksHit())
         if self.orig_hits is None:
+            if hits == 0:
+                self.lgr.error('No basic blocks hit with original data')
+                return
             self.orig_hits = hits
             self.current_size = os.path.getsize(self.path)
             self.previous_size = self.current_size
@@ -150,15 +166,23 @@ class Fuzz():
     def writeData(self):    
         with open(self.path) as fh:
             in_data = fh.read()
-        self.mem_utils.writeString(self.cpu, self.addr, in_data) 
-        self.cpu.iface.int_register.write(self.len_reg_num, len(in_data))
-        self.lgr.debug('fuzz writeData wrote %d bytes to 0x%x' % (len(in_data), self.addr))
+        self.write_data = writeData.WriteData(self.top, self.cpu, in_data, self.packet_count, self.addr,  
+                 self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=None, 
+                 pad_to_size=None, filter=None, backstop_cycles=self.backstop_cycles)
+        num_bytes = self.write_data.write()
+        #self.mem_utils.writeString(self.cpu, self.addr, in_data) 
+        #self.cpu.iface.int_register.write(self.len_reg_num, len(in_data))
+        self.lgr.debug('fuzz writeData wrote %d bytes to 0x%x' % (num_bytes, self.addr))
+
 
     def run(self):
         self.coverage.doCoverage(no_merge=True)
         #self.top.injectIO(self.path, stay=True)
         self.top.goToOrigin()
         self.writeData()
+        if self.backstop_cycles > 0:
+            self.lgr.debug('fuzz setting backstop')
+            self.backstop.setFutureCycleAlone(self.backstop_cycles)
         self.lgr.debug('fuzz, did coverage, now run')
         SIM_run_command('c') 
 
@@ -169,7 +193,6 @@ class Fuzz():
     def loadPickle(self, name):
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         if os.path.isfile(afl_file):
-            self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
             self.call_ip = so_pickle['call_ip']
@@ -177,3 +200,4 @@ class Fuzz():
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 self.max_len = so_pickle['size']
+            self.lgr.debug('afl pickle from %s addr: 0x%x max_len: %d' % (afl_file, self.addr, self.max_len))

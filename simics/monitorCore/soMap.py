@@ -100,7 +100,7 @@ class SOMap():
         ''' intended for when original process exits following a fork '''
         ''' TBD, half-assed logic for deciding if procs were all really deleted '''
         retval = True
-        if new in self.text_start:
+        if old in self.text_start:
             self.text_start[new] = self.text_start[old]
             self.text_end[new] = self.text_end[old]
             self.text_prog[new] = self.text_prog[old]

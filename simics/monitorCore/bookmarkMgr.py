@@ -217,7 +217,7 @@ class bookmarkMgr():
             i += 1
             print('%d : %s' % (i, mark))
         self.lgr.debug('listBookmarks done')
-        print "<end of bookmarks>"
+        print("<end of bookmarks>")
 
     def getBookmarks(self):
         return self.__bookmarks
@@ -348,6 +348,16 @@ class bookmarkMgr():
             if mark.strip().startswith('SEGV'):
                 addr_str =  mark.strip().split()[3]
                 self.lgr.debug('bookmarks getSEGVAddr addr got %s' % addr_str)
+                retval =  int(addr_str, 16)
+                break
+        return retval 
+
+    def getFaultAddr(self):
+        retval = None
+        for mark in self.__bookmarks:
+            if mark.strip().startswith('Unhandled fault'):
+                addr_str =  mark.strip().split()[7]
+                self.lgr.debug('bookmarks Unhandled fault addr got %s' % addr_str)
                 retval =  int(addr_str, 16)
                 break
         return retval 

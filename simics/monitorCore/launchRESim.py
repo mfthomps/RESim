@@ -1,5 +1,8 @@
 import os
-import ConfigParser
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 RESIM_REPO = os.getenv('RESIM')
 CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
 if CORE not in sys.path:
@@ -44,7 +47,7 @@ class LinkObject():
         self.name = name
         cmd = '%s' % name
         self.obj = SIM_run_command(cmd)
-        #print('self.name is %s self.obj is %s' % (self.name, self.obj))
+        print('self.name is %s self.obj is %s' % (self.name, self.obj))
 
 def doEthLink(target, eth):
     name = '$%s_%s' % (target, eth)
@@ -56,10 +59,13 @@ def doEthLink(target, eth):
         return None
     return link_object
     
-def doSwitch(target, switch):
-    return None
+def doSwitch(target, switch, device):
+    ''' TBD test on Simics 4 '''
+    #return None
     name = '$%s_%s' % (target, switch)
-    cmd = '%s = $%s_con' % (name, switch)
+    #cmd = '%s = $%s_con' % (name, switch)
+    cmd = '%s = %s' % (name, device)
+    #print('doswitch cmd %s' % cmd)
     run_command(cmd)
     link_object = LinkObject(name)
     return link_object
@@ -82,15 +88,26 @@ def assignLinkNames(target, comp_dict):
             obj = doEthLink(target, link.eth)
             if obj is not None: 
                 link_names[link.eth] = obj
-    for link in links:
-        if link.mac not in comp_dict:
-            continue
-        obj = doSwitch(target, link.sw)
-        if obj is not None: 
-            link_names[link.sw] = obj
     return link_names
 
-def doConnect(switch, eth):
+def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
+    class LinkInfo():
+        def __init__(self, index):
+            self.eth = 'eth%d' % index
+            self.sw = 'switch%d' % index
+            self.mac = '$mac_address_%d' % index
+    links = []
+    for i in range(4):
+         links.append(LinkInfo(i))
+    index = 0 
+    for link in links:
+        if link.mac in comp_dict and link.sw in switch_map:
+            obj = doSwitch(target, link.sw, switch_map[link.sw])
+            if obj is not None: 
+                link_names[link.sw] = obj
+    return link_names
+
+def doConnect(switch, eth, switch_map, index):
     print('do connect switch %s eth %s' % (switch, eth))
     cmd = '$%s' % eth
     dog = run_command(cmd)
@@ -101,18 +118,23 @@ def doConnect(switch, eth):
         cmd = '%s.get-free-connector' % switch
     con  = run_command(cmd)
     cmd = 'connect $%s cnt1 = %s' % (eth, con)
-    #print cmd
+    print('doConnect cmd: %s' % cmd)
     run_command(cmd)
+    switch_n = 'switch%d' % index
+    print('adding %s to map as %s' % (switch_n, con))
+    switch_map[switch_n] = con
 
 def linkSwitches(target, comp_dict, link_names):
+    switch_map = {} 
     if comp_dict['ETH0_SWITCH'] != 'NONE' and 'eth0' in link_names:
-        doConnect(comp_dict['ETH0_SWITCH'], 'eth0')
+        doConnect(comp_dict['ETH0_SWITCH'], 'eth0', switch_map, 0)
     if comp_dict['ETH1_SWITCH'] != 'NONE' and 'eth1' in link_names:
-        doConnect(comp_dict['ETH1_SWITCH'], 'eth1')
+        doConnect(comp_dict['ETH1_SWITCH'], 'eth1', switch_map, 1)
     if comp_dict['ETH2_SWITCH'] != 'NONE' and 'eth2' in link_names:
-        doConnect(comp_dict['ETH2_SWITCH'], 'eth2')
+        doConnect(comp_dict['ETH2_SWITCH'], 'eth2', switch_map, 2)
     if comp_dict['ETH3_SWITCH'] != 'NONE' and 'eth3' in link_names:
-        doConnect(comp_dict['ETH3_SWITCH'], 'eth3')
+        doConnect(comp_dict['ETH3_SWITCH'], 'eth3', switch_map, 3)
+    return switch_map
  
    
 def createDict(config, not_a_target): 
@@ -151,6 +173,7 @@ class LaunchRESim():
         SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
         RESIM_INI = os.getenv('RESIM_INI')
         self.config = ConfigParser.ConfigParser()
+        #self.config = ConfigParser.RawConfigParser()
         self.config.optionxform = str
         if not RESIM_INI.endswith('.ini'):
             ini_file = '%s.ini' % RESIM_INI
@@ -214,7 +237,7 @@ class LaunchRESim():
                     count += 1
                     #print count
                 self.link_dict['driver'] = assignLinkNames('driver', self.comp_dict['driver'])
-                linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'])
+                switch_map = linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'])
                 if DRIVER_WAIT:
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
                     return
@@ -276,8 +299,12 @@ class LaunchRESim():
                 cmd='run-command-file "./targets/%s" %s' % (script, params)
             print('cmd is %s' % cmd)
             run_command(cmd)
+            #print('assign eth link names')
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
-            linkSwitches(section, self.comp_dict[section], self.link_dict[section])
+            #print('link the switches')
+            switch_map = linkSwitches(section, self.comp_dict[section], self.link_dict[section])
+            #print('assign switch link names')
+            addSwitchLinkNames(section, self.comp_dict[section], self.link_dict[section], switch_map)
 
     def go(self):
         global cgc, gkp

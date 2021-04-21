@@ -141,9 +141,12 @@ class SharedSyscall():
                 #self.lgr.debug('sharedSyscall added exit hap3 %d' % self.exit_hap[exit_eip3])
             self.exit_pids[exit_eip3].append(pid)
 
-        callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
-        if callname == 'execve':
-            self.addPendingExecve(pid)
+        if exit_info is not None:
+            callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+            if callname == 'execve':
+                self.addPendingExecve(pid)
+        else:
+            self.lgr.debug('exit_info was None for name: %s' % name)
 
 
         #self.lgr.debug('sharedSyscall addExitHap return pid %d' % pid)
@@ -235,6 +238,7 @@ class SharedSyscall():
                     trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d sa_family: %s  SA Family not handled addr: 0x%x\n' % (pid, 
                          exit_info.sock_struct.fd, new_fd, ss.famName(), exit_info.sock_struct.addr))
                     #SIM_break_simulation(trace_msg)
+                self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of address data '''
@@ -711,6 +715,8 @@ class SharedSyscall():
 
         elif callname == 'select' or callname == '_newselect':
             trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.select_info.getString(), eax))
+        elif callname == 'poll' or callname == 'ppoll':
+            trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.poll_info.getString(), eax))
         elif callname == 'vfork':
             trace_msg = ('\treturn from vfork in parent %d child pid:%d\n' % (pid, ueax))
             if pid in self.trace_procs:

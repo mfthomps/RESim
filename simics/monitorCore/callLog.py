@@ -383,7 +383,7 @@ class callLog():
                     self.fname = tmp_name
                 i += 1
         if self.fname is None:
-            print 'clean up your call_log directory!'
+            print('clean up your call_log directory!')
             exit(1)
         full_name = self.fname+'-%04d.xml' % (self.part)
         try:

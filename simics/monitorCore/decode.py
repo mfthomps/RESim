@@ -97,7 +97,7 @@ def getInBrackets(cpu, s, lgr):
                 prefix = getSigned(cpu.iface.int_register.read(reg_num))
                 #lgr.debug('cell_name: %s got prefix value of %d' % (cell_name, prefix))
             else:
-                print 'cell_name: %s could not get reg num for %s ' % (cell_name, reg)
+                print('cell_name: %s could not get reg num for %s ' % (cell_name, reg))
                 return None, None
             s = second
         content = s.split('[', 1)[1].split(']')[0]
@@ -232,11 +232,11 @@ def getAddressFromOperand(cpu, operand, lgr):
                       #lgr.debug("adjusting by offset %d" % offset)
                       address = address + offset
                   except:
-                      print 'did not parse offset %s' % prefix
+                      print('did not parse offset %s' % prefix)
                       pass
 
         else:
-            print 'could not get reg number from %s' % bracketed
+            print('could not get reg number from %s' % bracketed)
     else:
         if isIndirect(operand):
             reg_num = cpu.iface.int_register.get_number(operand)
@@ -244,7 +244,7 @@ def getAddressFromOperand(cpu, operand, lgr):
                 address = cpu.iface.int_register.read(reg_num)
                 #lgr.debug('indirect value was %x' % address)
             else:
-                print 'could not get reg number from %s' % operand
+                print('could not get reg number from %s' % operand)
     return address
 
 def getAddressFromOperandXX(cpu, operand, lgr):
@@ -267,11 +267,11 @@ def getAddressFromOperandXX(cpu, operand, lgr):
                       #lgr.debug("adjusting by offset %d" % offset)
                       address = address + offset
                   except:
-                      print 'did not parse offset %s' % prefix
+                      print('did not parse offset %s' % prefix)
                       pass
 
         else:
-            print 'could not get reg number from %s' % bracketed
+            print('could not get reg number from %s' % bracketed)
     else:
         if isIndirect(operand):
             reg_num = cpu.iface.int_register.get_number(operand)
@@ -279,7 +279,7 @@ def getAddressFromOperandXX(cpu, operand, lgr):
                 address = cpu.iface.int_register.read(reg_num)
                 #lgr.debug('indirect value was %x' % address)
             else:
-                print 'could not get reg number from %s' % operand
+                print('could not get reg number from %s' % operand)
     return address
 
 def getUnmapped(cpu, instruct, lgr):

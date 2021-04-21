@@ -60,20 +60,21 @@ class RegisterModType():
 
 
 class reverseToCall():
-    def __init__(self, top, param, task_utils, mem_utils, page_size, context_manager, name, 
+    def __init__(self, top, cell_name, param, task_utils, mem_utils, page_size, context_manager, name, 
                  is_monitor_running, bookmarks, logdir, compat32, run_from_snap):
             #print('call getLogger')
-            self.lgr = resim_utils.getLogger(name, logdir)
+            logname = '%s-%s' % (name, cell_name)
+            self.lgr = resim_utils.getLogger(logname, logdir)
             self.context_manager = context_manager 
             #sys.stderr = open('err.txt', 'w')
             self.top = top 
             self.cpu = None
             self.pid = None
-            self.cell_name = None
+            self.cell_name = cell_name
             self.compat32 = compat32
             #self.lgr = lgr
             self.page_size = page_size
-            self.lgr.debug('reverseToCall, in init')
+            self.lgr.debug('reverseToCall, in init cell %s' % self.cell_name)
             self.param = param
             self.task_utils = task_utils
             self.mem_utils = mem_utils
@@ -164,7 +165,6 @@ class reverseToCall():
     def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
             self.cpu = cpu
             self.start_cycles = self.cpu.cycles & 0xFFFFFFFFFFFFFFFF
-            self.cell_name = self.top.getTopComponentName(cpu)
             self.x_pages = x_pages
             self.page_faults = page_faults
             if self.run_from_snap is not None:
@@ -805,7 +805,7 @@ class reverseToCall():
                                    if self.decode.isReg(rn):
                                        op2 = parts[1].strip()
                                        if not self.decode.isReg(op2):
-                                           self.lgr.debug('cycleRegisterMod type is reg op2 not reb')
+                                           self.lgr.debug('cycleRegisterMod type is reg op2 not reg')
                                            retval = RegisterModType(rn, RegisterModType.REG)
                                        else: 
                                            op2_val = self.top.getReg(op2, self.cpu) 
@@ -817,6 +817,10 @@ class reverseToCall():
                                                if rn_val == self.reg_val:
                                                    retval = RegisterModType(rn, RegisterModType.REG)
                                                    self.lgr.debug('cycleRegisterMod type is reg')
+                                               else:
+                                                   self.lgr.debug('cycleRegisterMod, out of ideas, bail')
+                                                   self.context_manager.setIdaMessage('As far as we can go back.  TBD look for user input on add or sub.')
+                                                   self.top.skipAndMail()
                                 
                     elif self.cpu.architecture == 'arm': 
                         if ']!' in instruct[1]:
@@ -1258,8 +1262,10 @@ class reverseToCall():
                         recent_cycle, recent_frame = self.recent_cycle[pid]
                         if cycles > recent_cycle:
                             self.recent_cycle[pid] = [cycles, frame]
+                            self.lgr.debug('sysenterHap setting most recent cycle')
                     else:
                         self.recent_cycle[pid] = [cycles, frame]
+                        self.lgr.debug('sysenterHap setting first recent cycle')
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
@@ -1322,6 +1328,57 @@ class reverseToCall():
             retval = False
         return retval 
 
+    def preCallFD(self, fd):
+        read_calls = ['read', 'recv', 'recvfrom']
+        plist = {}
+        pid_list = self.context_manager.getThreadPids()
+        tasks = self.task_utils.getTaskStructs()
+        plist = {}
+        for t in tasks:
+            if tasks[t].pid in pid_list:
+                plist[tasks[t].pid] = t 
+        in_kernel = False
+        frame = None
+        cycles = None
+        for pid in plist:
+            t = plist[pid]
+            if tasks[t].state > 0:
+                frame, cycles = self.getRecentCycleFrame(pid)
+                if frame is not None:
+                    call = self.task_utils.syscallName(frame['syscall_num'], self.compat32)
+                    if call in read_calls and frame['param1'] == fd:
+                        print('pid %d in kernel on %s of fd %d' % (pid, call, fd))
+                        in_kernel = True
+                        break
+                    elif call == 'select' or call == '_newselect':
+                        select_list = frame['select']
+                        self.lgr.debug('DataWatch trackIO check select for %d' % fd)
+                        if fd in select_list:
+                            print('pid %d in kernel on select including %d' % (pid, fd))
+                            in_kernel = True
+                            break
+                    elif call == 'socketcall' and 'ss' in frame:
+                        socket_callnum = frame['param1']
+                        socket_callname = net.callname[socket_callnum].lower()
+                        ss = frame['ss']
+                        if ss.fd == fd:
+                            print('pid %d in kernel on %s of fd %d' % (pid, socket_callname, fd)) 
+                            in_kernel = True
+                            break
+       
+        if in_kernel:
+            self.lgr.debug('DataWatch trackIO in kernel, do skip to cycle 0x%x' % cycles)
+            self.top.removeDebugBreaks()
+            if not self.skipToTest(cycles-1):
+            #cmd = 'skip-to cycle = %d ' % (cycles)
+            #SIM_run_command(cmd)
+            #print('skipped back to 0x%x' % cycles)
+                dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('DataWatch trackIO skip back from kernel failed going to 0x%x, pid:%d eip:0x%x' % (self.cpu.cycles, pid, eip))
+                return False
+
+            self.top.restoreDebugBreaks(was_watching=True)
     def loadPickle(self, name):
         self.lgr.debug('reverseToCall load pickle for %s  cell_name %s' % (name, self.cell_name))
         rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')

@@ -436,7 +436,7 @@ class StackTrace():
                             if cur_fun_name is not None:
                                 if fun.startswith('.'):
                                     fun = fun[1:]
-                                if not fun.startswith(cur_fun_name):
+                                if not fun.startswith(cur_fun_name) or cur_fun_name.startswith(fun):
                                     if self.cpu.architecture != 'arm':
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                         if (bp + self.mem_utils.WORD_SIZE) != ptr:

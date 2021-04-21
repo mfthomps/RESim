@@ -106,7 +106,7 @@ class errRepo():
 
 
     def stop_callback(self, dum, one, two, three):
-        print 'in stop_hap'
+        print('in stop_hap')
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         SIM_run_alone(self.runAlone, None)
     

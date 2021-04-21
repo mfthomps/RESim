@@ -517,6 +517,12 @@ class findKernelWrite():
                     self.bookmarks.setBacktrackBookmark(bm)
                     self.context_manager.setIdaMessage(ida_message)
                     value = self.mem_utils.readWord32(self.cpu, copy_addr)
+                    if value is None:
+                        self.lgr.debug('findKernelWrite could not read from 0x%x, bail' % copy_addr)
+                        SIM_run_alone(self.cleanup, False)
+                        ida_message = "Content of 0x%x referenced in a memory copy from failed read at 0x%x" % (self.addr, copy_addr)
+                        self.top.skipAndMail()
+                       
                     self.lgr.debug('findKernelWrite, found mem copy, now look for address 0x%x, value is 0x%x' % (copy_addr, value))
                     SIM_run_alone(self.cleanup, False)
                     self.top.stopAtKernelWrite(copy_addr, self.rev_to_call)

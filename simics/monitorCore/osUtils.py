@@ -93,7 +93,7 @@ class execStrings():
 def loadParameters(filename):
     p_file = simics.SIM_lookup_file(filename)
     if p_file is None:
-        print 'Unable to open settings file (%s)' % filename
+        print('Unable to open settings file (%s)' % filename)
         return
     s = open(p_file, 'r').read()
     settings = eval(s)
