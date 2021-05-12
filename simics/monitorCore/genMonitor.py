@@ -107,6 +107,8 @@ class GenMonitor():
         self.task_utils = {}
         self.context_manager = {}
         #self.proc_list = {}
+        self.cur_task_hap = None
+        self.cur_task_break = None
         self.proc_hap = None
         self.stop_proc_hap = None
         self.proc_break = None
@@ -325,7 +327,8 @@ class GenMonitor():
         SIM_break_simulation('mode changed, break simulation')
         
     def stopHap(self, stop_action, one, exception, error_string):
-        SIM_run_alone(self.stopHapAlone, stop_action)
+        if self.stop_hap is not None:
+            SIM_run_alone(self.stopHapAlone, stop_action)
 
     def stopHapAlone(self, stop_action):
         if stop_action is None or stop_action.hap_clean is None:
@@ -346,7 +349,7 @@ class GenMonitor():
                     self.lgr.debug('genMonitor stopHap delete GenContext hap %s' % str(hc.hap))
                     self.context_manager[self.target].genDeleteHap(hc.hap)
                 else:
-                    #self.lgr.debug('stopHap will delete hap %s' % str(hc.hap))
+                    self.lgr.debug('stopHap will delete hap %s' % str(hc.hap))
                     SIM_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
@@ -407,6 +410,7 @@ class GenMonitor():
             debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
             if debug_pid is not None:
                 if debug_pid != pid:
+                    self.lgr.debug('debug_pid %d  pid %d' % (debug_pid, pid))
                     ''' debugging, but not this pid.  likely a clone '''
                     if not self.context_manager[self.target].amWatching(pid):
                         ''' stick with original debug pid '''
@@ -661,12 +665,14 @@ class GenMonitor():
                 cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, port)
             self.lgr.debug('cmd: %s' % cmd)
             SIM_run_command(cmd)
-            cmd = 'enable-reverse-execution'
-            SIM_run_command(cmd)
-            self.rev_execution_enabled = True
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
-            self.setDebugBookmark('origin', cpu)
-            self.bookmarks.setOrigin(cpu)
+            if not self.rev_execution_enabled:
+                ''' only exception is AFL coverage on target that differs from consumer of injected data '''
+                cmd = 'enable-reverse-execution'
+                SIM_run_command(cmd)
+                self.rev_execution_enabled = True
+                self.setDebugBookmark('origin', cpu)
+                self.bookmarks.setOrigin(cpu)
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugPid()
@@ -697,6 +703,7 @@ class GenMonitor():
             self.sharedSyscall[self.target].setDebugging(True)
  
             prog_name = self.traceProcs[self.target].getProg(pid)
+            self.lgr.debug('genMonitor debug pid %d progname is %s' % (pid, prog_name))
             if prog_name is None or prog_name == 'unknown':
                 prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
                 self.lgr.debug('genMonitor debug pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
@@ -731,6 +738,7 @@ class GenMonitor():
                     self.lgr.error('Failed to get full path for %s' % prog_name)
         else:
             ''' already debugging as current process '''
+            self.lgr.debug('genMonitor debug, already debugging')
             pass
         self.task_utils[self.target].clearExitPid()
         ''' Otherwise not cleared when pageFaultGen is stopped/started '''
@@ -893,10 +901,13 @@ class GenMonitor():
             flist = [f1]
             self.toExecve(proc, flist=flist)
 
-    def cleanToProcHaps(self):
+    def cleanToProcHaps(self, dumb):
         self.lgr.debug('cleantoProcHaps')
-        SIM_delete_breakpoint(self.proc_break)
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.proc_hap)
+        if self.cur_task_break is not None:
+            SIM_delete_breakpoint(self.cur_task_break)
+        if self.cur_task_hap is not None:
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
+            self.cur_task_hap = None
 
     def toProc(self, proc):
         plist = self.task_utils[self.target].getPidsForComm(proc)
@@ -961,7 +972,7 @@ class GenMonitor():
             self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
         '''
         
-    def debugProc(self, proc):
+    def debugProc(self, proc, final_fun=None, pre_fun=None):
         if type(proc) is not str:
             print('Need a proc name as a string')
             return
@@ -977,6 +988,12 @@ class GenMonitor():
             f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
             f3 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3]
+            if final_fun is not None:
+                f4 = stopFunction.StopFunction(final_fun, [], nest=False)
+                flist.append(f4)
+            if pre_fun is not None:
+                fp = stopFunction.StopFunction(pre_fun, [], nest=False)
+                flist.insert(0, fp)
             self.toRunningProc(proc, plist, flist)
         else:
             self.lgr.debug('debugProc no process %s found, run until execve' % proc)
@@ -1006,7 +1023,7 @@ class GenMonitor():
     def debugPid(self, pid):
         self.debugPidList([pid], self.debug)
 
-    def debugPidGroup(self, pid):
+    def debugPidGroup(self, pid, final_fun=None):
         leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
         if leader_pid is None:
             self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
@@ -1014,9 +1031,9 @@ class GenMonitor():
         self.lgr.debug('debugPidGroup cell %s pid %d found leader %d' % (self.target, pid, leader_pid))
         pid_dict = self.task_utils[self.target].getGroupPids(leader_pid)
         pid_list = list(pid_dict.keys())
-        self.debugPidList(pid_list, self.debugGroup)
+        self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun)
 
-    def debugPidList(self, pid_list, debug_function):
+    def debugPidList(self, pid_list, debug_function, final_fun=None):
         #self.stopTrace()
         self.soMap[self.target].setContext(pid_list)
         self.lgr.debug('debugPidList cell %s' % self.target)
@@ -1024,6 +1041,9 @@ class GenMonitor():
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
         f3 = stopFunction.StopFunction(debug_function, [], nest=False)
         flist = [f1, f2, f3]
+        if final_fun is not None:
+            f4 = stopFunction.StopFunction(final_fun, [], nest=False)
+            flist.append(f4)
         debug_group = False
         if debug_function == self.debugGroup:
             debug_group = True
@@ -1038,7 +1058,7 @@ class GenMonitor():
 
     def runToProc(self, prec, third, forth, memory):
         ''' callback when current_task is updated.  new value is in memory parameter '''
-        if self.proc_hap is None:
+        if self.cur_task_hap is None:
             return
         cpu = prec.cpu
         cur_task_rec = SIM_get_mem_op_value_le(memory)
@@ -1048,6 +1068,7 @@ class GenMonitor():
             comm = self.mem_utils[self.target].readString(cpu, cur_task_rec + self.param[self.target].ts_comm, 16)
             if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
                 self.lgr.debug('got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
+                SIM_run_alone(self.cleanToProcHaps, None)
                 SIM_break_simulation('found %s' % prec.proc)
             else:
                 #self.proc_list[self.target][pid] = comm
@@ -1110,16 +1131,19 @@ class GenMonitor():
                     self.toUser([f1, f2])
                     #self.debugGroup()
                     return
+        ''' Set breakpoint on current_task to watch task switches '''
         prec = Prec(cpu, proc, want_pid_list)
         phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
-        proc_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
+        self.cur_task_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
-        self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x' % (str(want_pid_list), proc_break, phys_current_task))
-        self.proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, proc_break)
+        self.cur_task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.cur_task_break)
+        self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x hap %d' % (str(want_pid_list), self.cur_task_break, phys_current_task,
+            self.cur_task_hap))
         
         hap_clean = hapCleaner.HapCleaner(cpu)
-        hap_clean.add("Core_Breakpoint_Memop", self.proc_hap)
-        stop_action = hapCleaner.StopAction(hap_clean, [proc_break], flist)
+        #hap_clean.add("Core_Breakpoint_Memop", self.cur_task_hap)
+        #stop_action = hapCleaner.StopAction(hap_clean, [self.cur_task_break], flist)
+        stop_action = hapCleaner.StopAction(hap_clean, [], flist)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
 
@@ -1946,7 +1970,7 @@ class GenMonitor():
         self.rev_to_call[self.target].noWatchSysenter()
 
  
-    def removeDebugBreaks(self, keep_watching=False, keep_coverage=True):
+    def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
         self.lgr.debug('genMon removeDebugBreaks')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.stopWatchPageFaults(pid)
@@ -1954,9 +1978,9 @@ class GenMonitor():
             self.context_manager[self.target].stopWatchTasks()
         self.rev_to_call[self.target].noWatchSysenter()
         if self.target in self.track_threads:
-            self.track_threads[self.target].stopTrack()
+            self.track_threads[self.target].stopTrack(immediate=immediate)
         if self.target in self.exit_group_syscall:
-            self.exit_group_syscall[self.target].stopTrace()
+            self.exit_group_syscall[self.target].stopTrace(immediate=immediate)
             del self.exit_group_syscall[self.target]
         if self.target in self.ropCop:
             self.ropCop[self.target].clearHap()
@@ -2072,13 +2096,18 @@ class GenMonitor():
         SIM_run_alone(SIM_run_command, 'continue')
 
     def undoDebug(self, dumb):
+        self.lgr.debug('undoDebug')
+        if self.cur_task_hap is not None:
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
+            SIM_delete_breakpoint(self.cur_task_break)
+            self.cur_task_hap = None
         if self.proc_hap is not None:
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
             self.proc_hap = None
-            if self.stop_hap is not None:
-                SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-                self.stop_hap = None
-            self.lgr.debug('undoDebug done')
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+        self.lgr.debug('undoDebug done')
             
 
     def remainingCallTraces(self):
@@ -2199,7 +2228,7 @@ class GenMonitor():
     def runToAccept(self, fd):
         call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         call_params = syscall.CallParams('accept', fd, break_simulation=True)        
-        self.lgr.debug('runToAccept on FD: %d' % fd)
+        self.lgr.debug('runToAccept on FD: %d call is: %s' % (fd, str(call)))
         self.runTo(call, call_params, linger=True)
         
     def runToBind(self, addr):
@@ -2261,8 +2290,10 @@ class GenMonitor():
         SIM_run_command('c')
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
-        call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
-        call_params.nth = count
+        call_params1 = syscall.CallParams('read', fd, break_simulation=break_simulation)        
+        call_params1.nth = count
+        call_params2 = syscall.CallParams('recv', fd, break_simulation=break_simulation)        
+        call_params2.nth = count
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2280,7 +2311,7 @@ class GenMonitor():
 
         the_syscall = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               calls, call_params=[call_params1,call_params2], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
                                skip_and_mail=skip_and_mail)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
@@ -2500,7 +2531,11 @@ class GenMonitor():
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
-        self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
+        self.rev_execution_enabled = True
+        if self.bookmarks is not None:
+            self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
+        else:
+            self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
     def clearBookmarks(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2821,7 +2856,7 @@ class GenMonitor():
         fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print(fname) 
 
-    def retrack(self, clear=True, callback=None):
+    def retrack(self, clear=True, callback=None, use_backstop=True):
         if callback is None:
             callback = self.stopTrackIO
         ''' Use existing data watches to track IO.  Clears later watch marks '''
@@ -2837,7 +2872,7 @@ class GenMonitor():
         self.dataWatch[self.target].watch(break_simulation=False)
         self.dataWatch[self.target].setCallback(callback)
         self.dataWatch[self.target].rmBackStop()
-        self.dataWatch[self.target].setRetrack(True)
+        self.dataWatch[self.target].setRetrack(True, use_backstop)
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.context_manager[self.target].watchTasks()
@@ -3098,14 +3133,17 @@ class GenMonitor():
         SIM_run_command('c')
        
 
-    def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, pid=None, cpu=None, bytes_was=None, sor=False, cover=False):
+    def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, bytes_was=None, 
+            sor=False, cover=False, packet_size=None, target=None, targetFD=None):
+        this_cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu is None:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            cpu = this_cpu
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
-                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, bytes_was=bytes_was, stop_on_read=sor, coverage=cover)
+                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, bytes_was=bytes_was, stop_on_read=sor, coverage=cover,
+                  packet_size=packet_size, target=target, targetFD=targetFD)
         self.injectIOInstance.go()
     
     def tagIterator(self, index):    
@@ -3305,6 +3343,9 @@ class GenMonitor():
         else:
             return None
 
+    def getCoverage(self):
+        return self.coverage
+
     def startDataSessions(self):
         if self.coverage is not None:
             SIM_run_alone(self.coverage.startDataSessions, None)
@@ -3358,19 +3399,26 @@ class GenMonitor():
         fuzz_it = fuzz.Fuzz(self, cpu, cell_name, path, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.run_from_snap, self.lgr, n, full_path)
         fuzz_it.trim()
 
-    def afl(self,n=1, sor=False, fname=None):
+    def aflTCP(self, sor=False, fname=None, linear=False):
+        self.afl(n=-1, sor=sor, fname=fname)
+
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
-        self.debugPidGroup(pid)
+        if target is None:
+            self.debugPidGroup(pid)
         full_path = None
-        if fname is not None:
+        if fname is not None and target is None:
             full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
             if full_path is None:
                 self.lgr.error('unable to get full path from %s' % fname)
                 return
+        else: 
+            full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
-            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path)
-        fuzz_it.goN(0)
+            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, linear=linear, target=target)
+        if target is None:
+            fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name):
         ''' fd -- will runToIOish on that FD
@@ -3410,11 +3458,12 @@ class GenMonitor():
     def playBreak(self, n=1):
         self.aflPlay.playBreak(n)
 
-    def crashReport(self, fname, n=1, one_done=False, report_index=None):
+    def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None):
         ''' generate crash reports for all crashes in a given AFL target diretory -- or a given specific file '''
         self.lgr.debug('crashReport %s' % fname)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        rc = reportCrash.ReportCrash(self, cpu, pid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr)
+        rc = reportCrash.ReportCrash(self, cpu, pid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
+              target=target, targetFD=targetFD)
         rc.go()
 
     def getSEGVAddr(self):
@@ -3463,6 +3512,10 @@ class GenMonitor():
     def getRESimContext(self):
         return self.context_manager[self.target].getRESimContext()
 
+    def restoreRESimContext(self):
+        self.context_manager[self.target].restoreWatchTasks()
+        self.context_manager[self.target].watchTasks()
+
     def preCallFD(self, fd):
         self.rev_to_call[self.target].preCallFD(fd)
 
@@ -3475,6 +3528,34 @@ class GenMonitor():
         SIM_run_command(cmd)
         ''' Establish a new origin since the above has messed up reverse execution state '''
         self.resetOrigin()
+
+    def addJumper(self, from_bb, to_bb):
+        ''' Add a jumper for use in code coverage and AFL, e.g., to skip a CRC '''
+        jname = self.full_path+'.jumpers'
+        if os.path.isfile(jname):
+            with open(jname) as fh:
+                jumpers = json.load(fh)
+        else:
+            jumpers = {}
+        if from_bb in jumpers:
+            print('from_bb 0x%x already in jumpers for %s' % (from_bb, jname))
+            return
+        else:
+            jumpers[from_bb] = to_bb
+        with open(jname, 'w') as fh:
+            fh.write(json.dumps(jumpers))
+        print('add 0x%x => 0x%x to %s' % (from_bb, to_bb, jname))
+    
+    def getFullPath(self):
+        return self.full_path
+
+    def frameFromRegs(self, cpu):
+        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        return reg_frame
+
+    def getPidsForComm(self, comm):
+        plist = self.task_utils[self.target].getPidsForComm(comm)
+        return plist
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
