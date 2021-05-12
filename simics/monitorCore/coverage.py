@@ -36,9 +36,17 @@ class Coverage():
         self.hit_count = 0
         self.afl_del_breaks = []
         self.pid = None
+        self.linear = False
+        self.physical = False
+        self.addr_map = {}
+        if self.cpu.architecture == 'arm':
+            pcreg = 'pc'
+        else:
+            pcreg = 'eip'
+        self.pc_reg = self.cpu.iface.int_register.get_number(pcreg)
+        self.jumpers = None
         random.seed(12345)
-      
-
+     
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
             with open(block_file) as fh:
@@ -64,9 +72,10 @@ class Coverage():
             self.funs_hit = []
             self.blocks_hit = {}
 
-    def cover(self, force_default_context=False):
+    def cover(self, force_default_context=False, physical=False):
         self.lgr.debug('coverage: cover')
         self.offset = 0
+        self.physical = physical
         block_file = self.full_path+'.blocks'
         if not os.path.isfile(block_file):
             self.lgr.error('coverage: No blocks file at %s' % block_file)
@@ -95,25 +104,46 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                if self.afl or force_default_context:
+                #if bb_rel != 0x80f511e:
+                #    continue
+                if self.afl or physical:
+                    if not self.linear:
+                        phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
+                        cell = self.cpu.physical_memory
+                        bp = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                        self.addr_map[bp] = bb_rel
+                    else:
+                        bp = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+                    #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+                elif force_default_context:
                     bp = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
                 else:
+                    #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
+                    #cell = self.cpu.physical_memory
+                    #bp = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                     bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
                 if self.afl:
                     rand = random.randrange(0, self.map_size)
-                    self.afl_map[bb_rel] = rand
+                    #self.afl_map[bb_rel] = rand
+                    if self.linear:
+                        self.afl_map[bb_rel] = rand
+                    else:
+                        self.afl_map[phys_block.address] = rand
                 self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
         if self.afl or force_default_context:
-            self.lgr.debug('coverage generated default context %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
+            self.lgr.debug('coverage generated ?? context %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         else:
             self.lgr.debug('coverage generated %d RESim context breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         self.block_total = len(self.bp_list)
-        #self.bb_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
-        hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1])
+        if self.afl:
+            #hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
+            hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1])
+        else:
+            hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1])
         self.bb_hap.append(hap)
 
         if self.afl:
@@ -128,8 +158,8 @@ class Coverage():
         self.lgr.debug('coverage recordExit of program under test')
         SIM_break_simulation('did exit')
 
-    def watchExits(self):
-        self.context_manager.watchGroupExits()
+    def watchExits(self, pid=None):
+        self.context_manager.watchGroupExits(pid=pid)
 
     def getStatus(self):
         return self.did_exit
@@ -142,23 +172,31 @@ class Coverage():
         if pid != self.pid:
             self.lgr.debug('converage bbHap, not my pid, got %d I am %d' % (pid, self.pid))
         ''' 
-       
-        addr = memory.logical_address
+        if self.physical or (self.afl and not self.linear):    
+            addr = memory.physical_address
+        else:
+            addr = memory.logical_address
         if addr == 0:
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
         if addr in self.afl_del_breaks:
-            ''' already 255 hits '''
+            ''' already 255 hits, see if a jumper will alter the PC'''
+            if self.backstop_cycles > 0:
+                self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            if self.jumpers is not None and addr in self.jumpers:
+                self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[addr])
             return
-        #self.lgr.debug('bbHap, len bb_hap %d break_num %d address: 0x%x' % (len(self.bb_hap), break_num, addr))
-        if (self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
+        if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             if not self.afl:
-                if addr not in self.blocks_hit:
-                    self.blocks_hit[addr] = self.cpu.cycles
-                    self.latest_hit = addr
-                    addr_str = '%d' % (addr - self.offset)
+                this_addr = addr
+                if self.physical:
+                    this_addr = self.addr_map[break_num]
+                if this_addr not in self.blocks_hit:
+                    self.blocks_hit[this_addr] = self.cpu.cycles
+                    self.latest_hit = this_addr
+                    addr_str = '%d' % (this_addr - self.offset)
                     if addr_str in self.blocks:
-                        self.funs_hit.append(addr)
+                        self.funs_hit.append(this_addr)
                         #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
                     #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
@@ -169,14 +207,30 @@ class Coverage():
                     pass
             else:
                 ''' AFL mode '''
+                if addr not in self.afl_map:
+                    self.lgr.debug('broke at wrong addr 0x%x' % addr)
+                    pid = self.top.getPID()
+                    if pid != self.pid:
+                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d context: %s' % (pid, self.pid, str(self.cpu.current_context)))
+                    #SIM_break_simulation('broken')
+                    return
+                prejump_addr = None
+                if self.jumpers is not None and addr in self.jumpers:
+                    phys_block = self.cpu.iface.processor_info.logical_to_physical(self.jumpers[addr], Sim_Access_Execute)
+                    self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[addr])
+                    #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
+                    prejump_addr = addr
+                    addr = phys_block.address
                 cur_loc = self.afl_map[addr]
                 index = cur_loc ^ self.prev_loc
                 #self.lgr.debug('coverage bbHap cur_loc %d, index %d' % (cur_loc, index))
-                #self.lgr.debug('coverage bbHap addr 0x%x, offset 0x%x' % (addr, self.offset))
+                #self.lgr.debug('coverage bbHap addr 0x%x, offset 0x%x linear: 0x%x cycle: 0x%x' % (addr, self.offset, self.addr_map[break_num], self.cpu.cycles))
                 if self.trace_bits[index] == 0:
                     self.hit_count += 1
                 if self.trace_bits[index] == 255:
                     self.afl_del_breaks.append(addr)
+                    if prejump_addr is not None: 
+                        self.afl_del_breaks.append(prejump_addr)
                     if True:
                         #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
                         if addr not in self.afl_del_breaks:
@@ -344,14 +398,14 @@ class Coverage():
         print('Previous data run hit %d new BBs' % new_hits)
  
 
-    def doCoverage(self, force_default_context=False, no_merge=False):
+    def doCoverage(self, force_default_context=False, no_merge=False, physical=False):
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
-            self.cover(force_default_context=force_default_context)
+            self.cover(force_default_context=force_default_context, physical=physical)
             self.did_cover = True
         else:
             if not self.afl:
@@ -372,6 +426,7 @@ class Coverage():
             self.prev_loc = 0
             self.did_exit = 0
             self.hit_count = 0
+            self.afl_del_breaks = []
 
     def startDataSessions(self, dumb):
         if not self.enabled:
@@ -391,7 +446,7 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, jumpers=None):
         self.enabled = True
         self.pid = pid
         if fname is not None:
@@ -399,6 +454,10 @@ class Coverage():
         self.lgr.debug('cover enableCoverage fname is %s' % self.full_path)
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
+        # dynamically alter control flow, e.g., to avoid CRC checks
+        self.jumpers = jumpers
+        # force use of linear breakpoints vice physical memory
+        self.linear = linear
         self.afl = afl
         if afl:
             map_size_pow2 = 16
