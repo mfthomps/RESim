@@ -6,6 +6,7 @@ import socket
 import sys
 import pickle
 import struct
+import json
 import cli
 import stopFunction
 import writeData
@@ -13,7 +14,8 @@ import imp
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
-    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, packet_count=1, stop_on_read=False, fname=None):
+    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, 
+                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
         if pad_env is not None:
@@ -65,6 +67,7 @@ class AFL():
         self.orig_in_data = None
         self.orig_data_length = 0
         self.write_data = None
+        self.target = target
         self.backstop.setCallback(self.whenDone)
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
@@ -94,18 +97,69 @@ class AFL():
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.addr = None
         self.max_len = None
+        self.jumpers = None
+        full_path = None
+        if target is None:
+            if fname is not None:
+                full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
+                if full_path is None:
+                    self.lgr.error('unable to get full path from %s' % fname)
+                    return
+                self.loadJumpers(full_path)
+            else:
+                self.loadJumpers(self.top.getFullPath())
         if fd is not None:
             self.prepInject(snap_name)
         else:
             self.lgr.debug('AFL init from snap %s' % snap_name)
             self.loadPickle(snap_name)
-            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=True, fname=fname)
-            cli.quiet_run_command('disable-reverse-execution')
-            cli.quiet_run_command('enable-unsupported-feature internals')
-            cli.quiet_run_command('save-snapshot name = origin')
-            self.synchAFL()
+            if target is None:
+                self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+                self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+                    afl=True, fname=fname, linear=linear, jumpers=self.jumpers)
+                cli.quiet_run_command('disable-reverse-execution')
+                cli.quiet_run_command('enable-unsupported-feature internals')
+                cli.quiet_run_command('save-snapshot name = origin')
+                self.coverage.doCoverage()
+                self.synchAFL()
+                self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
+                self.fault_hap = None
+                # hack around Simics model bug
+                #self.fixFaults()
+            else:
+                self.lgr.debug('afl use target %s, call debug' % target)
+                ''' need a bookmark to get back to here after setting up debug process '''
+                self.top.resetOrigin()
+       
+                self.top.debugProc(target, self.aflInitCallback)
+
+    def aflInitCallback(self):
+        self.lgr.debug('afl aflInitCallback')
+        ''' Now in target process'''
+        self.coverage = self.top.getCoverage()
+        self.pid = self.top.getPID()
+        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+            afl=True, jumpers=self.jumpers)
+        self.coverage.doCoverage()
+        cmd = 'skip-to bookmark = bookmark0'
+        cli.quiet_run_command(cmd)
+        cli.quiet_run_command('disable-reverse-execution')
+        cli.quiet_run_command('enable-unsupported-feature internals')
+        cli.quiet_run_command('save-snapshot name = origin')
+        self.synchAFL()
         self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
+        self.fault_hap = None
+        self.goN(0) 
+
+    def loadJumpers(self, fname):
+        jfile = fname+'.jumpers'
+        if os.path.isfile(jfile):
+            jumpers = json.load(open(jfile))
+            self.jumpers = {}
+            for from_bb in jumpers:
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(int(from_bb), Sim_Access_Execute)
+                self.jumpers[phys_block.address] = jumpers[from_bb]
 
     def rmStopHap(self):
         if self.stop_hap is not None:
@@ -159,6 +213,10 @@ class AFL():
         #self.lgr.debug('afl stopHap')
         if self.stop_hap is None:
             return
+        if self.target is not None:
+            plist = self.top.getPidsForComm(self.target)
+            if self.pid not in plist:
+                self.lgr.error('afl stopHap Pid %d went away' % self.pid)
         if self.current_packet < self.afl_packet_count:
             # TBD remove all this
             eip = self.top.getEIP()  
@@ -168,12 +226,13 @@ class AFL():
                 self.finishUp()
                 return
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
-            self.writeData()
+            #self.writeData()
+            self.write_data.write()
             if self.bad_trick:
                 #self.lgr.debug('afl stopHap saw filter fail, bail')
                 self.finishUp()
             else:
-                #self.lgr.debug('afl stopHap set PC to 0x%x and wrote data, now continue' % self.return_ip)
+                self.lgr.debug('afl stopHap set PC to 0x%x and wrote data, now continue' % self.return_ip)
                 SIM_run_alone(self.goAlone, None)
         else:
             #self.stop_hap = None
@@ -196,6 +255,7 @@ class AFL():
         self.orig_in_data = self.in_data
         
         cli.quiet_run_command('restore-snapshot name=origin')
+        #self.top.restoreRESimContext()
 
         #self.lgr.debug('got %d of data from afl iteration %d' % (len(self.in_data), self.iteration))
         if status != 0:
@@ -217,6 +277,7 @@ class AFL():
 
 
         ''' clear the bit_trace '''
+        #self.lgr.debug('afl goN call doCoverage')
         self.coverage.doCoverage()
 
         #self.lgr.debug('afl, did coverage, cycle: 0x%x' % self.cpu.cycles)
@@ -224,7 +285,7 @@ class AFL():
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         if status != 0:
             self.lgr.debug('afl goN call continue, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
-            self.coverage.watchExits()
+            self.coverage.watchExits(pid=self.pid)
 
         #self.writeData()
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
@@ -233,103 +294,6 @@ class AFL():
         self.write_data.write()
            
         cli.quiet_run_command('c') 
-
-    def writeData(self):
-        ''' Write next chunk of data received from AFL into the receive buffer '''
-        ''' NOTE this adjusts self.in_data after the write to prep for next packet '''
-        current_length = len(self.in_data)
-        tot_length = current_length
-        pad_count = 0
-        self.current_packet = self.current_packet+1
-        if self.packet_filter is not None and not self.filter_module.filter(self.in_data):
-            self.lgr.debug('afl packet number %d filter blocks it, write nulls' % self.current_packet)
-            #self.lgr.debug(self.in_data[:500])
-            b = bytearray(100)
-            self.mem_utils.writeString(self.cpu, self.addr, b) 
-            self.afl_packet_count = 1
-            tot_length = 100
-            self.bad_trick = True
-        elif self.afl_packet_count == 1 or self.current_packet >= self.afl_packet_count:  
-            ''' Data from AFL is trimmed.  Pad it to satisfy the application if needed '''
-            pad_count = self.pad_to_size - current_length
-            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
-            #self.lgr.debug('afl wrote last packet %d %d bytes  %s' % (self.current_packet, len(self.in_data), self.in_data[:50]))
-            if pad_count > 0:
-                b = bytearray(pad_count)
-                self.mem_utils.writeString(self.cpu, self.addr+current_length, b) 
-                tot_length += pad_count
-            if self.backstop_cycles > 0:
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
-        elif self.pad_to_size > 0 and self.udp_header is None:
-            first_data = self.in_data[0:self.pad_to_size]
-            self.mem_utils.writeString(self.cpu, self.addr, first_data) 
-            self.in_data = self.in_data[self.pad_to_size:]
-            tot_length = self.pad_to_size
-        else:
-            index = self.in_data[5:].find(self.udp_header)
-            if index > 0:
-                first_data = self.in_data[:(index+5)]
-                self.mem_utils.writeString(self.cpu, self.addr, first_data) 
-                self.in_data = self.in_data[len(first_data):]
-                # TBD add handling of padding with udp header                
-                tot_length = len(first_data)
-                #self.lgr.debug('afl wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
-                #self.lgr.debug('afl next packet would start with %s' % self.in_data[:50])
-            else:
-                #self.lgr.debug('afl 2nd UDP header %s not found, write nulls and cut packet count' % self.udp_header)
-                #self.lgr.debug(self.in_data[:500])
-                b = bytearray(100)
-                self.mem_utils.writeString(self.cpu, self.addr, b) 
-                self.afl_packet_count = 1
-                tot_length = 100
-
-        if False and self.call_hap is None and (self.afl_packet_count > self.current_packet or self.stop_on_read):
-            ''' Break on the next recv call, either to multi-UDP fu, or to declare we are done (stop_on_read) '''
-            cell = self.top.getCell()
-            self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
-            self.lgr.debug('afl writeData set call break at 0x%x and hap, cycle is 0x%x' % (self.call_ip, self.cpu.cycles))
-
-        ''' Tell the application how much data it read ''' 
-        self.cpu.iface.int_register.write(self.len_reg_num, tot_length)
-
-    def callHap(self, dumb, third, break_num, memory):
-        ''' Hit a call to recv '''
-        if self.call_hap is None:
-            return
-        if self.current_packet > self.afl_packet_count:
-            #self.lgr.debug('afl callHap current packet %d above count %d' % (self.current_packet, self.afl_packet_count))
-            return
-        '''
-        this_pid = self.top.getPID()
-        if this_pid != self.pid:
-            self.lgr.debug('afl callHap wrong pid got %d wanted %d' % (this_pid, self.pid))
-            return
-        '''
-        if self.fd is not None:
-            self.lgr.debug('afl callHap packet %d cycles 0x%x' % (self.current_packet, self.cpu.cycles))
-        if self.stop_on_read:
-            #self.lgr.debug('afl callHap stop on read')
-            SIM_break_simulation('stop on read')
-            return
-        if len(self.in_data) == 0:
-            self.lgr.error('afl callHap current packet %d no data left' % (self.current_packet))
-            SIM_break_simulation('broken offset')
-            SIM_run_alone(self.delCallHap, None)
-            return
-
-        self.writeData()
-        if self.current_packet >= self.afl_packet_count:
-            # set backstop if needed, we are on the last (or only) packet.
-            #SIM_run_alone(self.delCallHap, None)
-            if self.backstop_cycles > 0:
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
-
-    def delCallHap(self, dumb):
-        #self.lgr.debug('afl delCallHap')
-        SIM_delete_breakpoint(self.call_break)
-        SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
-        self.call_hap = None
 
     def whenDone(self):
         #self.lgr.debug('afl whenDone callback')
@@ -340,8 +304,6 @@ class AFL():
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = ('localhost', 8765)
         self.sock.connect(server_address)
-        self.coverage.doCoverage()
-        num_blocks = self.coverage.getNumBlocks()
         self.sendMsg('hi from resim')
         reply = self.getMsg()
         self.lgr.debug('afl synchAFL reply from afl: %s' % reply)
@@ -439,3 +401,16 @@ class AFL():
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 self.max_len = so_pickle['size']
+
+    def fixFaults(self):
+        if self.cpu.architecture == 'arm':
+            self.fault_hap = SIM_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
+                 self.faultCallback, self.cpu, 1)
+
+    def faultCallback(self, cpu, one, exception_number):
+        if self.fault_hap is not None:
+            reg_num = cpu.iface.int_register.get_number("combined_data_fsr")
+            fsr = cpu.iface.int_register.read(reg_num)
+            if fsr == 2:
+               cpu.iface.int_register.write(reg_num,1)
+               self.lgr.warning('hacked ARM fsr register from 2 to 1')

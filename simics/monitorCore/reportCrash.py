@@ -9,7 +9,7 @@ import decodeArm
 import pageUtils
 
 class ReportCrash():
-    def __init__(self, top, cpu, pid, dataWatch, mem_utils, target, num_packets, one_done, report_index, lgr):
+    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, target=None, targetFD=None):
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -19,16 +19,18 @@ class ReportCrash():
         self.dataWatch = dataWatch
         self.mem_utils = mem_utils
         self.flist = []
-        self.target = target
+        self.fname = fname
         self.num_packets = num_packets
+        self.target = target
+        self.targetFD = targetFD
         self.index = 0
-        if os.path.isfile(target):
-            self.flist.append(target)
+        if os.path.isfile(fname):
+            self.flist.append(fname)
         else:
             afl_output = os.getenv('AFL_OUTPUT')
             if afl_output is None:
                 afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-            afl_dir = os.path.join(afl_output, target)
+            afl_dir = os.path.join(afl_output, fname)
             if not os.path.isdir(afl_dir):
                print('No afl directory found at %s' % afl_dir)
                return
@@ -83,8 +85,8 @@ class ReportCrash():
         self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
         ''' TBD why keep size? '''
         #self.top.injectIO(self.flist[self.index], keep_size = True)
-      
-        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, pid=self.pid, cpu=self.cpu, bytes_was=self.bytes_was)
+        ''' TBD do we need/want data watches? ''' 
+        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, bytes_was=self.bytes_was, target=self.target, targetFD=self.targetFD)
 
     def doneBackward(self, dumb):
         self.crash_report.write("\n\nBacktrace:\n")
