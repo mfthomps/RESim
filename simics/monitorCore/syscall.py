@@ -453,7 +453,7 @@ class Syscall():
         return
         
     def parseOpen(self, frame, callname):
-        self.lgr.debug('parseOpen for %s' % callname)
+        #self.lgr.debug('parseOpen for %s' % callname)
         if callname == 'openat':
             fname_addr = frame['param2']
             flags = frame['param3']
@@ -874,7 +874,9 @@ class Syscall():
              
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             for call_param in syscall_info.call_params:
+                self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
                 if call_param.subcall == 'accept' and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                    self.lgr.debug('did accept match')
                     exit_info.call_params = call_param
                     break
 
