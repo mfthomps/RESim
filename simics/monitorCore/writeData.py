@@ -1,8 +1,10 @@
 from simics import *
+import taskUtils
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, addr,  
                  max_length, call_ip, return_ip, mem_utils, backstop, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False):
+        ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
         self.cpu = cpu
@@ -41,10 +43,12 @@ class WriteData():
 
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+            pcreg = 'pc'
         else:
             lenreg = 'eax'
+            pcreg = 'eip'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
-        self.pc_reg = self.cpu.iface.int_register.get_number('pc')
+        self.pc_reg = self.cpu.iface.int_register.get_number(pcreg)
 
         # most recent packet we've written
         self.current_packet = 0
@@ -56,18 +60,17 @@ class WriteData():
     def write(self):
         retval = None
         if self.expected_packet_count <= 1 and self.udp_header is None:
-            # TCP.
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
                 self.mem_utils.writeString(self.cpu, self.addr, next_data) 
-                #self.lgr.debug('writeData TCP not last packet, wrote %d bytes packet_num %d' % (len(next_data), self.current_packet))
+                #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
             else:
                 self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 tot_len = len(self.in_data)
-                #self.lgr.debug('writeData TCP last packet, wrote %d bytes packet_num %d' % (tot_len, self.current_packet))
+                #self.lgr.debug('writeData TCP last packet, wrote %d bytes to 0x%x packet_num %d' % (tot_len, self.addr, self.current_packet))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
@@ -96,13 +99,15 @@ class WriteData():
                 self.mem_utils.writeString(self.cpu, self.addr, b) 
                 self.afl_packet_count = 1
                 tot_length = 100
+        else:
+            self.lgr.error('writeData could not handle data parameters.')
 
         self.setCallHap()
         self.current_packet += 1
         return retval
 
     def setCallHap(self):
-        if self.call_hap is None and self.stop_on_read:
+        if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
             ''' NOTE stop on read will miss processing performed by other threads. '''
             #self.lgr.debug('writeData set callHap, cell is %s' % str(self.cell))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
@@ -114,14 +119,17 @@ class WriteData():
             return
         
         if len(self.in_data) == 0:
-            #self.lgr.debug('writeData callHap current packet %d no data left, stopping' % (self.current_packet))
+            self.lgr.debug('writeData callHap current packet %d no data left, stopping' % (self.current_packet))
             SIM_break_simulation('broken offset')
             SIM_run_alone(self.delCallHap, None)
         else:
-            #self.lgr.debug('writeData callHap, skip over kernel receive processing and write more data')
+            frame = self.top.frameFromRegs(self.cpu)
+            frame_s = taskUtils.stringFromFrame(frame)
+            self.lgr.debug('frame: %s' % frame_s)
+            self.lgr.debug('writeData callHap, skip over kernel receive processing and write more data')
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.write()
-            if self.current_packet >= self.packet_count:
+            if self.current_packet >= self.expected_packet_count:
                 # set backstop if needed, we are on the last (or only) packet.
                 #SIM_run_alone(self.delCallHap, None)
                 if self.backstop_cycles > 0:
@@ -129,7 +137,7 @@ class WriteData():
                     self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
     def delCallHap(self, dumb):
-        #self.lgr.debug('afl delCallHap')
+        self.lgr.debug('afl delCallHap')
         if self.call_hap is not None:
             SIM_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
