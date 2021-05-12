@@ -75,7 +75,7 @@ class SharedSyscall():
 
     def rmExitHap(self, pid):
         if pid is not None:
-            self.lgr.debug('rmExitHap for pid %d' % pid)
+            #self.lgr.debug('rmExitHap for pid %d' % pid)
             for eip in self.exit_pids:
                 if pid in self.exit_pids[eip]:
                     self.exit_pids[eip].remove(pid)
@@ -97,7 +97,7 @@ class SharedSyscall():
         if pid not in self.exit_info:
             self.exit_info[pid] = {}
         self.exit_info[pid][name] = exit_info
-        self.lgr.debug('sharedSyscall addExitHap name %s' % name)
+        #self.lgr.debug('sharedSyscall addExitHap name %s' % name)
         if traceProcs is not None:
             self.trace_procs.append(pid)
         self.exit_names[pid] = name
@@ -215,7 +215,7 @@ class SharedSyscall():
             ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils, exit_info.sock_struct.fd)
             trace_msg = ('\t return from getsockname pid:%d %s\n' % (pid, ss.getString()))
 
-        elif socket_callname == "accept":
+        elif socket_callname == "accept" or socket_callname == "accept4":
             new_fd = eax
             if new_fd < 0:
                 trace_msg = ('\terror return from socketcall ACCEPT pid:%d, error: %d\n' % (pid, eax))
@@ -308,6 +308,7 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length was the given length, changed to count'''
+                    # TBD differs from read's use of max_len for range
                     self.lgr.debug('recv call setRange retval_addr 0x%x len %d' % (exit_info.retval_addr, eax))
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, 
                                max_len=exit_info.sock_struct.length, recv_addr=exit_info.retval_addr)
@@ -566,14 +567,15 @@ class SharedSyscall():
                     s = ''.join(map(chr,byte_array))
                 else:
                     s = '<<NOT MAPPED>>'
-                trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x\n\t%s\n' % (pid, comm, exit_info.old_fd, 
-                              eax, exit_info.retval_addr, s))
+                trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x given length: %d \n\t%s\n' % (pid, comm, exit_info.old_fd, 
+                              eax, exit_info.retval_addr, exit_info.count, s))
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None \
                    and type(exit_info.call_params.match_param) is int:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read')
-                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, trace_msg)
+                    # Set range over max length of read to catch coding error reference to previous reads or such
+                    self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, trace_msg, max_len=exit_info.count)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False)
