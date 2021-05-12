@@ -63,7 +63,7 @@ class PageFaultGen():
             del self.exit_hap2[pid]
         self.context_manager.watchPageFaults(False)
         if pid in self.pending_faults:
-            self.lgr.debug('pageFaultGen rmExit remove pending for %d %s' % (pid, str(self.pending_faults[pid])))
+            #self.lgr.debug('pageFaultGen rmExit remove pending for %d %s' % (pid, str(self.pending_faults[pid])))
             del self.pending_faults[pid]
         
     def pdirWriteHap(self, prec, third, forth, memory):
@@ -72,7 +72,7 @@ class PageFaultGen():
         #self.lgr.debug('ppageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
-            self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
+            #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
             SIM_delete_breakpoint(self.pdir_break)
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
@@ -113,12 +113,13 @@ class PageFaultGen():
        
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, prec)
         self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
+        self.top.undoDebug(None)
         SIM_break_simulation('SEGV, task rec for %d (%s) modified mem reference was 0x%x' % (prec.pid, prec.comm, prec.cr2))
  
     def pageFaultHap(self, compat32, third, forth, memory):
         if self.fault_hap is None:
             return
-        self.lgr.debug('pageFaultHap')
+        #self.lgr.debug('pageFaultHap')
         #cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultHap pid:%d third: %s  forth: %s' % (pid, str(third), str(forth)))
         #cpu = SIM_current_processor()
@@ -141,18 +142,18 @@ class PageFaultGen():
                 data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
                 fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                #self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
+                self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
             cr2 = self.cpu.iface.int_register.read(reg_num)
-            self.lgr.debug('cr2 read is 0x%x' % cr2)
+            #self.lgr.debug('cr2 read is 0x%x' % cr2)
         else:
             cr2 = eip
         if pid not in self.faulted_pages:
             self.faulted_pages[pid] = []
         if cr2 in self.faulted_pages[pid]:
-            self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
+            #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
         #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
@@ -266,6 +267,9 @@ class PageFaultGen():
                     dfar = cpu.iface.int_register.read(reg_num)
                     reg_num = cpu.iface.int_register.get_number("combined_data_fsr")
                     fsr = cpu.iface.int_register.read(reg_num)
+                    if fsr == 2:
+                       cpu.iface.int_register.write(reg_num,1)
+                       self.lgr.warning('hacked ARM fsr register from 2 to 1')
                     prec = Prec(self.cpu, comm, pid, dfar, eip, name=name, fsr=fsr)
                 if pid not in self.pending_faults:
                     self.pending_faults[pid] = prec
@@ -276,8 +280,22 @@ class PageFaultGen():
             #if (exception_number == 4 or exception_number == 1)and pid == 875:
             #    SIM_break_simulation('how?')
         else:
-            #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
-            pass
+            reg_num = self.cpu.iface.int_register.get_number("cr2")
+            cr2 = self.cpu.iface.int_register.read(reg_num)
+            #self.lgr.debug('cr2 read is 0x%x' % cr2)
+            if pid not in self.faulted_pages:
+                self.faulted_pages[pid] = []
+            if cr2 in self.faulted_pages[pid]:
+                #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
+                return
+            self.faulted_pages[pid].append(cr2)
+            self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
+            prec = Prec(self.cpu, comm, pid, cr2, eip)
+            if pid not in self.pending_faults:
+                self.pending_faults[pid] = prec
+                #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+                if self.mode_hap is None:
+                    self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
 
     '''
     def faultReturnCallback(self, cpu, one, exception_number):
