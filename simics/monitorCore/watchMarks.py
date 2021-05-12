@@ -31,7 +31,14 @@ class WatchMarks():
         
     class CallMark():
         def __init__(self, msg, max_len, recv_addr, length):
-            self.msg = '%s addr: 0x%x  length: %d' % (msg, recv_addr, length)
+            if recv_addr is not None:
+                if max_len is not None:
+                    self.msg = '%s addr: 0x%x  length: %d max_len: %d' % (msg, recv_addr, length, max_len)
+                else:
+                    self.msg = '%s addr: 0x%x  length: %d' % (msg, recv_addr, length)
+                 
+            else:
+                self.msg = msg
             self.max_len = max_len
             self.recv_addr = recv_addr
             self.len = length
