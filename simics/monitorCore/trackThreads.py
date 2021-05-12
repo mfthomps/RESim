@@ -1,5 +1,6 @@
 from simics import *
 import syscall
+import elfText
 class TrackThreads():
     def __init__(self, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, compat32, lgr):
         self.traceProcs = traceProcs
@@ -53,29 +54,29 @@ class TrackThreads():
         if self.open_syscall is None:
             self.lgr.error('trackThreads startTrack, open_syscall is none')
 
-    def stopSOTrack(self):
+    def stopSOTrack(self, immediate):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
         if self.open_syscall is not None:
             #self.lgr.debug('TrackThreads stopTrack stop open trace')
-            self.open_syscall.stopTrace()
+            self.open_syscall.stopTrace(immediate=immediate)
             self.open_syscall = None
         else:
             self.lgr.debug('TrackThreads stopTrack no open syscall for %s' % self.cell_name)
 
-    def stopTrack(self):
+    def stopTrack(self, immediate=False):
         #self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
-        self.context_manager.genDeleteHap(self.call_hap)
-        self.context_manager.genDeleteHap(self.execve_hap)
+        self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
+        self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
         self.call_hap = None
         self.execve_hap = None
         for pid in self.exit_hap:
-            self.context_manager.genDeleteHap(self.exit_hap[pid])
-        self.stopSOTrack()
+            self.context_manager.genDeleteHap(self.exit_hap[pid], immediate=immediate)
+        self.stopSOTrack(immediate)
         for pid in self.first_mmap_hap:
-            self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
+            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
-        self.stopTrackClone()
+        self.stopTrackClone(immediate)
 
 
     def execveHap(self, dumb, third, forth, memory):
@@ -85,7 +86,8 @@ class TrackThreads():
         
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.pid_list:
-            #self.lgr.debug('TrackThreads  execveHap looked for pid %s, found %d.  Do nothing' % (str(self.pid_list), pid))
+            #self.lgr.debug('TrackThreads  execveHap looked for pid %s, found %d.  Do nothing after parsing and updating proc trace' % (str(self.pid_list), pid))
+            self.parseExecve()
             return
         if len(self.pid_list) == 1:
             self.lgr.debug('TrackThreads execveHap who is execing to what? eh? pid: %d' % pid)
@@ -106,13 +108,24 @@ class TrackThreads():
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
-        self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
+        #self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
         self.traceProcs.setName(pid, prog_string, None)
-
+        self.addSO(prog_string, pid)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
         SIM_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
+
+    def addSO(self, prog_name, pid):
+        full_path = self.targetFS.getFull(prog_name, self.lgr)
+        if full_path is not None:
+            #self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
+
+            text_segment = elfText.getText(full_path, self.lgr)
+            if text_segment is not None:
+                self.soMap.addText(text_segment.address, text_segment.size, prog_name, pid)
+            else:
+                self.lgr.debug('trackThreads addSO, could not get text segment from %s' % full_path)
 
     def parseExecve(self):
         cpu, comm, pid = self.task_utils.curProc() 
@@ -132,6 +145,8 @@ class TrackThreads():
             return
         else:
             self.traceProcs.setName(pid, prog_string, None)
+            self.addSO(prog_string, pid)
+
 
     def firstMmapHap(self, syscall_info, third, forth, memory):
         ''' invoked after mmap call, looking to track SO libraries.  Intended to be called after open of .so. '''
@@ -226,6 +241,6 @@ class TrackThreads():
         proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
         self.clone_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, None, proc_break, 'track-clone')
 
-    def stopTrackClone(self):
+    def stopTrackClone(self, immediate):
         if self.clone_hap is not None:
-            self.context_manager.genDeleteHap(self.clone_hap) 
+            self.context_manager.genDeleteHap(self.clone_hap, immediate) 
