@@ -90,8 +90,8 @@ class bookmarkMgr():
         if not mark.startswith('origin'):
             start_cycle = self.getCycle('origin')
             if start_cycle is None:
-                self.lgr.debug('setDebugBookmark no origin')
-                return
+                self.lgr.debug('setDebugBookmark no origin, if not a crash report with a different target, this may be a problem')
+                start_cycle = 0
             delta = current - start_cycle
             if mark.startswith('protected_memory:') and self.hasBookmarkDelta(delta):
                 self.lgr.debug('setDebugBookmark protected memory, return')
@@ -125,7 +125,7 @@ class bookmarkMgr():
     def getCurrentCycle(self, cpu):
         start_cycle = self.getCycle('origin')
         if start_cycle is None:
-            self.lgr.debug('setDebugBookmark no origin')
+            self.lgr.debug('bookmarks getCurrrentCycle no origin')
             return None
         delta = cpu.cycles - start_cycle
         return delta
