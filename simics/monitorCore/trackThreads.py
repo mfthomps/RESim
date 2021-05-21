@@ -135,7 +135,7 @@ class TrackThreads():
         if prog_string is None:
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(pid, cpu)
-            call_info = syscall.SyscallInfo(cpu, pid, None, None, None, skip_and_mail=False)
+            call_info = syscall.SyscallInfo(cpu, pid, None, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
                 self.lgr.error('trackThreads parseExecve zero prog_addr pid %d' % pid)
