@@ -771,7 +771,7 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
-        self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
+        #self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
         if op_type == Sim_Trans_Load:
             if cpl == 0:
                 #if not self.break_simulation:
@@ -880,7 +880,7 @@ class DataWatch():
             #    self.stopWatch()
             mem_stuff = None
        
-            self.lgr.debug('dataWatch get stack trace to look for memsomething')
+            #self.lgr.debug('dataWatch get stack trace to look for memsomething')
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
                 self.lgr.debug('stack trace is None, wrong pid?')
@@ -1294,7 +1294,7 @@ class DataWatch():
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
-        self.lgr.debug('memsomething max_index %d' % (max_index))
+        #self.lgr.debug('memsomething max_index %d' % (max_index))
         for i in range(max_index, -1, -1):
             frame = frames[i]
             #self.lgr.debug('dataWatch memsomething frame instruct is %s' % frame.instruct)
