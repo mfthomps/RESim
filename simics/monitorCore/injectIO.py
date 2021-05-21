@@ -6,7 +6,7 @@ import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, bytes_was=None, 
-           coverage=False, packet_size=None, target=None, targetFD=None):
+           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -53,12 +53,21 @@ class InjectIO():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.pad_to_size = 0
+        pad_env = os.getenv('AFL_PAD')
+        if pad_env is not None:
+            self.pad_to_size = int(pad_env)
+            self.lgr.debug('injectIO got pad of %d' % self.pad_to_size)
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         self.bytes_was = bytes_was
         self.write_data = None
         ''' process name and FD to track, i.e., if process differs from the one consuming injected data. '''
         self.target = target
         self.targetFD = targetFD
+
+        # No data tracking, just trace all system calls
+        self.trace_all = trace_all
+
+        self.stop_hap = None
 
     def go(self):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
@@ -80,17 +89,8 @@ class InjectIO():
             self.in_data = fh.read()
 
         ''' Got to origin/recv location unless not yet debugging '''
-        ''' Note obscure use of bookmarks to determine if we've are just starting. '''
-        
-        if self.bookmarks is not None:
-            if self.target is not None:
-                ''' Do not have an origin bookmark because replay starts at different process.  Manually skip '''
-                SIM_run_command('pselect %s' % self.cpu.name)
-                SIM_run_command('skip-to bookmark = bookmark0')
-            else:
-                self.dataWatch.goToRecvMark()
-        else:
-            self.lgr.debug('injectIO debug_pid is None, first run?')
+        if self.target is None:
+            self.dataWatch.goToRecvMark()
 
         lenreg = None
         lenreg2 = None
@@ -106,14 +106,14 @@ class InjectIO():
                 references data past the end of what is received. '''
             self.mem_utils.writeString(self.cpu, self.addr, self.bytes_was) 
 
-        if self.target is None:
+        if self.target is None and not self.trace_all:
             ''' Set Debug before write to use RESim context on the callHap '''
             self.top.stopDebug()
             self.top.debugPidGroup(self.pid) 
 
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read)
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, write_callback=self.writeCallback)
         self.bookmarks = self.top.getBookmarksInstance()
 
         #bytes_wrote = self.writeData()
@@ -124,19 +124,25 @@ class InjectIO():
             if self.coverage:
                 self.top.enableCoverage()
             self.lgr.debug('injectIO did write %d bytes to addr 0x%x max_len %d cycle: 0x%x  Now clear watches' % (bytes_wrote, self.addr, self.max_len, self.cpu.cycles))
-            if not self.stay and self.target is None:
-                self.bookmarks.setOrigin(self.cpu)
-                cli.quiet_run_command('disable-reverse-execution')
-                cli.quiet_run_command('enable-reverse-execution')
-                self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
-                self.top.watchROP()
-                print('retracking IO') 
-                self.lgr.debug('retracking IO') 
+            if not self.stay:
+                if not self.trace_all:
+                    self.bookmarks.setOrigin(self.cpu)
+                    cli.quiet_run_command('disable-reverse-execution')
+                    cli.quiet_run_command('enable-reverse-execution')
+                    self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                    if self.addr_addr is not None:
+                        self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+                    self.top.watchROP()
                 self.top.traceAll()
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
-                self.top.retrack(clear=False, callback=self.callback, use_backstop=use_backstop)    
+                if self.trace_all:
+                    cli.quiet_run_command('c')
+                else:
+                    print('retracking IO') 
+                    self.lgr.debug('retracking IO') 
+                    self.top.retrack(clear=False, callback=self.callback, use_backstop=use_backstop)    
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
             self.lgr.debug('injectIO debug to %s' % self.target)
@@ -170,6 +176,29 @@ class InjectIO():
             SIM_run_command('disable-reverse-execution') 
             SIM_run_command('enable-reverse-execution') 
 
+    def resetReverseAlone(self, count):
+        self.lgr.debug('injectIO, handling subsequent packet, must reset watch marks and bookmarks')
+        self.resetOrigin(None)
+        self.dataWatch.clearWatchMarks()
+        self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+        if self.addr_addr is not None:
+            self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.stop_hap = None
+        SIM_run_command('c')
+        
+
+    def stopHap(self, count, one, exception, error_string):
+        if self.stop_hap is None:
+            return
+        self.lgr.debug('injectIO stopHap from writeCalback')
+        SIM_run_alone(self.resetReverseAlone, count)
+        
+    def writeCallback(self, count):
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, count)
+        SIM_break_simulation('writeCallback')
 
     def loadPickle(self, name):
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
@@ -182,4 +211,7 @@ class InjectIO():
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 self.max_len = so_pickle['size']
+            if 'addr_addr' in so_pickle:
+                self.addr_addr = so_pickle['addr_addr']
+                self.addr_size = so_pickle['addr_size']
 
