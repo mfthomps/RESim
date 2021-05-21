@@ -289,7 +289,7 @@ class PageFaultGen():
                 #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
                 return
             self.faulted_pages[pid].append(cr2)
-            self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
+            #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
             prec = Prec(self.cpu, comm, pid, cr2, eip)
             if pid not in self.pending_faults:
                 self.pending_faults[pid] = prec
@@ -391,6 +391,9 @@ class PageFaultGen():
             else:
                 self.top.setDebugBookmark('SEGV access to 0x%x' % prec.cr2)
             self.context_manager.resetWatchTasks()
+        else:
+            print('SEGV with no bookmarks.  Not yet debugging?')
+            self.lgr.debug('SEGV with no bookmarks.  Not yet debugging?')
         self.stopWatchPageFaults()
         self.top.skipAndMail()
 
