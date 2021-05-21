@@ -300,7 +300,10 @@ class bookmarkMgr():
         self.lgr.debug('skipToOrigin skip %x landed at %x, eip: %x %s' % (origin, current, eip, instruct[1]))
 
     def getFirstCycle(self):
-        return self.__bookmarks['origin'].cycles
+        if 'origin' in self.__bookmarks:
+            return self.__bookmarks['origin'].cycles
+        else:
+            return 0
 
     def skipToFirst(self, cpu=None):
         # TBD NOT USED
