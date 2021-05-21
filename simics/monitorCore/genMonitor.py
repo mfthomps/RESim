@@ -731,7 +731,7 @@ class GenMonitor():
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.lgr.debug('create coverage module')
-                    self.coverage = coverage.Coverage(self, full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.lgr)
+                    self.coverage = coverage.Coverage(self, full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
                 else:
@@ -1263,6 +1263,9 @@ class GenMonitor():
             self.restoreDebugBreaks()
 
     def goToOrigin(self, debugging=True):
+        if self.bookmarks is None:
+            self.lgr.debug('genMonitor goToOrigin, no bookmarks do nothing')
+            return
         if debugging:
             self.removeDebugBreaks()
             self.stopTrackIO()
@@ -1299,10 +1302,16 @@ class GenMonitor():
             self.lgr.debug('remaining trace %s' % call)
 
     def listBookmarks(self):
-        self.bookmarks.listBookmarks()
+        if self.bookmarks is not None:
+            self.bookmarks.listBookmarks()
+        else:
+            print('Bookmarks not created')
 
     def getBookmarks(self):
-        return self.bookmarks.getBookmarks()
+        if self.bookmarks is not None:
+            return self.bookmarks.getBookmarks()
+        else:
+            return None
 
     def getBookmarksInstance(self):
         return self.bookmarks
@@ -2294,6 +2303,9 @@ class GenMonitor():
         call_params1.nth = count
         call_params2 = syscall.CallParams('recv', fd, break_simulation=break_simulation)        
         call_params2.nth = count
+        call_params3 = syscall.CallParams('recvfrom', fd, break_simulation=break_simulation)        
+        call_params3.nth = count
+        cell = self.cell_config.cell_context[self.target]
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2311,22 +2323,22 @@ class GenMonitor():
 
         the_syscall = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params1,call_params2], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               calls, call_params=[call_params1,call_params2,call_params3], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
                                skip_and_mail=skip_and_mail)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         ''' find processes that are in the kernel on IO calls '''
-        '''
+      
         frames = self.getDbgFrames()
         for pid in list(frames):
             call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-            self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
+            self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
             if call not in calls:
                del frames[pid]
         if len(frames) > 0:
             self.lgr.debug('runToIO, call to setExits')
             the_syscall.setExits(frames) 
-        '''
+       
         
         SIM_run_command('c')
 
@@ -3134,7 +3146,9 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, bytes_was=None, 
-            sor=False, cover=False, packet_size=None, target=None, targetFD=None):
+            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False):
+        if self.bookmarks is not None:
+            self.goToOrigin()
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu is None:
             cpu = this_cpu
@@ -3143,7 +3157,7 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, bytes_was=bytes_was, stop_on_read=sor, coverage=cover,
-                  packet_size=packet_size, target=target, targetFD=targetFD)
+                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all)
         self.injectIOInstance.go()
     
     def tagIterator(self, index):    
@@ -3402,7 +3416,9 @@ class GenMonitor():
     def aflTCP(self, sor=False, fname=None, linear=False):
         self.afl(n=-1, sor=sor, fname=fname)
 
-    def afl(self,n=1, sor=False, fname=None, linear=False, target=None):
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None):
+        ''' sor is stop on read; target names process other than consumer; dead is a file name into which it
+            generates list of breakpoints to later ignore because they are hit by some other thread over and over'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         if target is None:
@@ -3416,7 +3432,7 @@ class GenMonitor():
         else: 
             full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
-            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, linear=linear, target=target)
+            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, linear=linear, target=target, create_dead_zone=dead)
         if target is None:
             fuzz_it.goN(0)
 
@@ -3467,7 +3483,10 @@ class GenMonitor():
         rc.go()
 
     def getSEGVAddr(self):
-        return self.bookmarks.getSEGVAddr()
+        if self.bookmarks is not None:
+            return self.bookmarks.getSEGVAddr()
+        else:
+            return None
 
     def getROPAddr(self):
         return self.bookmarks.getROPAddr()
@@ -3556,6 +3575,9 @@ class GenMonitor():
     def getPidsForComm(self, comm):
         plist = self.task_utils[self.target].getPidsForComm(comm)
         return plist
+
+    def resetBookmarks(self):
+        self.bookmarks = None
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

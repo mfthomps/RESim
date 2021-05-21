@@ -7,7 +7,7 @@ from simics import *
 Manage code coverage tracking, maintaining two hits files per coverage unit (i.e., per full_path)
 '''
 class Coverage():
-    def __init__(self, top, full_path, context_manager, cell, so_map, cpu, lgr):
+    def __init__(self, top, full_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
         self.lgr = lgr
         self.cell = cell
         self.cpu = cpu
@@ -44,7 +44,13 @@ class Coverage():
         else:
             pcreg = 'eip'
         self.pc_reg = self.cpu.iface.int_register.get_number(pcreg)
+        ''' jump over crc calcs and such '''
         self.jumpers = None
+        ''' manage set of basic block addresses we don't want to cover due to their being used in other threads (performance) '''
+        self.crate_dead_zone = None
+        self.dead_map = []
+        self.dead_weight = 0
+        self.run_from_snap = run_from_snap
         random.seed(12345)
      
     def loadBlocks(self, block_file):
@@ -104,6 +110,9 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
+                if bb_rel in self.dead_map:
+                    self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
+                    continue
                 #if bb_rel != 0x80f511e:
                 #    continue
                 if self.afl or physical:
@@ -172,6 +181,14 @@ class Coverage():
         if pid != self.pid:
             self.lgr.debug('converage bbHap, not my pid, got %d I am %d' % (pid, self.pid))
         ''' 
+        
+        dead_set = False
+        if self.create_dead_zone:
+            pid = self.top.getPID()
+            if pid != self.pid:
+                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  dead_weight %d  num spots %d' % (pid, self.pid, self.dead_weight, len(self.dead_map)))
+                dead_set = True
+        
         if self.physical or (self.afl and not self.linear):    
             addr = memory.physical_address
         else:
@@ -191,6 +208,7 @@ class Coverage():
                 this_addr = addr
                 if self.physical:
                     this_addr = self.addr_map[break_num]
+               
                 if this_addr not in self.blocks_hit:
                     self.blocks_hit[this_addr] = self.cpu.cycles
                     self.latest_hit = this_addr
@@ -214,6 +232,20 @@ class Coverage():
                         self.lgr.debug('converage bbHap, not my pid, got %d I am %d context: %s' % (pid, self.pid, str(self.cpu.current_context)))
                     #SIM_break_simulation('broken')
                     return
+                if dead_set:
+                    this_addr = self.addr_map[break_num]
+                    if this_addr not in self.dead_map:
+                        self.dead_map.append(this_addr)
+                    else:
+                        self.dead_weight = self.dead_weight+1
+                    if self.dead_weight > 70 * len(self.dead_map):
+                        self.lgr.debug('dead weight %d dead spots' % len(self.dead_map)) 
+                        dead_file = '%s.dead' % self.run_from_snap
+                        with open(dead_file, 'w') as fh:
+                            fh.write(json.dumps(self.dead_map))
+                        SIM_run_alone(SIM_run_command, 'q')
+                         
+
                 prejump_addr = None
                 if self.jumpers is not None and addr in self.jumpers:
                     phys_block = self.cpu.iface.processor_info.logical_to_physical(self.jumpers[addr], Sim_Access_Execute)
@@ -446,9 +478,10 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, jumpers=None):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, jumpers=None, create_dead_zone=False):
         self.enabled = True
         self.pid = pid
+        self.create_dead_zone = create_dead_zone
         if fname is not None:
             self.full_path = fname
         self.lgr.debug('cover enableCoverage fname is %s' % self.full_path)
@@ -463,6 +496,11 @@ class Coverage():
             map_size_pow2 = 16
             self.map_size = 1 << map_size_pow2
             self.trace_bits = bytearray(self.map_size)
+        if self.run_from_snap is not None and not self.create_dead_zone:
+            dead_file = '%s.dead' % self.run_from_snap
+            if os.path.isfile(dead_file):
+                with open(dead_file) as fh:
+                    self.dead_map = json.load(fh)
 
     def disableCoverage(self):
         self.lgr.debug('coverage disableCoverage')

@@ -15,7 +15,7 @@ from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, 
-                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None):
+                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
         if pad_env is not None:
@@ -68,6 +68,7 @@ class AFL():
         self.orig_data_length = 0
         self.write_data = None
         self.target = target
+        self.create_dead_zone = create_dead_zone
         self.backstop.setCallback(self.whenDone)
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
@@ -97,6 +98,8 @@ class AFL():
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.addr = None
         self.max_len = None
+        self.addr_addr = None
+        self.addr_size = None
         self.jumpers = None
         full_path = None
         if target is None:
@@ -116,7 +119,7 @@ class AFL():
             if target is None:
                 self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
                 self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-                    afl=True, fname=fname, linear=linear, jumpers=self.jumpers)
+                    afl=True, fname=fname, linear=linear, jumpers=self.jumpers, create_dead_zone=self.create_dead_zone)
                 cli.quiet_run_command('disable-reverse-execution')
                 cli.quiet_run_command('enable-unsupported-feature internals')
                 cli.quiet_run_command('save-snapshot name = origin')
@@ -208,36 +211,12 @@ class AFL():
             SIM_run_alone(self.goN, status)
 
     def stopHap(self, dumb, one, exception, error_string):
-        ''' Entered when the backstop is hit, or the recv call is hit if stop_on_read '''
+        ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
         #self.lgr.debug('afl stopHap')
         if self.stop_hap is None:
             return
-        if self.target is not None:
-            plist = self.top.getPidsForComm(self.target)
-            if self.pid not in plist:
-                self.lgr.error('afl stopHap Pid %d went away' % self.pid)
-        if self.current_packet < self.afl_packet_count:
-            # TBD remove all this
-            eip = self.top.getEIP()  
-            if eip != self.call_ip:
-                # hit backstop?
-                #self.lgr.debug('afl stopHap thought we would be at recv call, not?  Perhaps program exited.  Do finishUp')
-                self.finishUp()
-                return
-            self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
-            #self.writeData()
-            self.write_data.write()
-            if self.bad_trick:
-                #self.lgr.debug('afl stopHap saw filter fail, bail')
-                self.finishUp()
-            else:
-                self.lgr.debug('afl stopHap set PC to 0x%x and wrote data, now continue' % self.return_ip)
-                SIM_run_alone(self.goAlone, None)
-        else:
-            #self.stop_hap = None
-            #self.lgr.debug('afl stopHapx')
-            self.finishUp()
+        self.finishUp()
 
     def goN(self, status):
         if status != 0:
@@ -290,7 +269,7 @@ class AFL():
         #self.writeData()
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, filter=self.packet_filter, backstop_cycles=self.backstop_cycles)
+                 pad_to_size=self.pad_to_size, filter=self.packet_filter, backstop_cycles=self.backstop_cycles, force_default_context=True)
         self.write_data.write()
            
         cli.quiet_run_command('c') 
@@ -387,6 +366,12 @@ class AFL():
         else:
             pickDict['size'] = exit_info.count
         self.lgr.debug('afl pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
+
+        if exit_info.fname_addr is not None:
+            count = self.mem_utils.readWord32(self.cpu, exit_info.count)
+            pickDict['addr_addr'] = exit_info.fname_addr
+            pickDict['addr_size'] = count
+
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
 
@@ -401,6 +386,9 @@ class AFL():
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 self.max_len = so_pickle['size']
+            if 'addr_addr' in so_pickle:
+                self.addr_addr = so_pickle['addr_addr']
+                self.addr_size = so_pickle['addr_size']
 
     def fixFaults(self):
         if self.cpu.architecture == 'arm':
