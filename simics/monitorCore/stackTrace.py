@@ -285,7 +285,8 @@ class StackTrace():
         if self.stack_base is not None:
             self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
         else:
-            self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
+            #self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
+            pass
         done  = False
         count = 0
         #ptr = ebp
@@ -294,7 +295,7 @@ class StackTrace():
         prev_ip = None
         so_checked = []
         if self.soMap.isMainText(eip):
-            self.lgr.debug('stackTrace starting in main text set prev_ip to 0x%x' %eip)
+            #self.lgr.debug('stackTrace starting in main text set prev_ip to 0x%x' %eip)
             been_in_main = True
             prev_ip = eip
         #prev_ip = eip
@@ -320,7 +321,7 @@ class StackTrace():
                 pass
 
 
-        self.lgr.debug('StackTrace doTrace begin cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
+        #self.lgr.debug('StackTrace doTrace begin cur eip 0x%x instruct %s  fname %s' % (eip, instruct, fname))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp)
             self.addFrame(frame)
@@ -330,14 +331,14 @@ class StackTrace():
         #self.lgr.debug('first frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         prev_ip = self.isCallToMe(fname, eip)
-        self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+        #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
         cur_fun = None
         cur_fun_name = None
         if self.ida_funs is not None:
             cur_fun = self.ida_funs.getFun(eip)
         if prev_ip == eip and cur_fun is not None:
             cur_fun_name = self.ida_funs.getName(cur_fun)
-            self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
+            #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''
             val = self.mem_utils.readPtr(self.cpu, ptr)
@@ -399,7 +400,7 @@ class StackTrace():
                                     #self.lgr.debug('direct branch 0x%x %s' % (fun_hex, fun))
                                     if not (self.ida_funs.isFun(fun_hex) and self.ida_funs.inFun(prev_ip, fun_hex)):
                                         skip_this = True
-                                        self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+                                        #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                     else:
                                         ''' record the direct branch, e.g., B fuFun '''
                                         frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
@@ -409,10 +410,10 @@ class StackTrace():
                                     bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                     if (bp + self.mem_utils.WORD_SIZE) != ptr:
                                         skip_this = True
-                                        self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, and bp is 0x%x and  ptr is 0x%x skip it' % (prev_ip, call_to, bp, ptr))
+                                        #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, and bp is 0x%x and  ptr is 0x%x skip it' % (prev_ip, call_to, bp, ptr))
                                 else:
                                     skip_this = True
-                                    self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
+                                    #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                         else:
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
@@ -490,7 +491,7 @@ class StackTrace():
                         #self.lgr.debug('doTrace not a call? %s' % instruct)
                         frame = self.FrameEntry(call_ip, fname, instruct, ptr, None, None)
                         self.addFrame(frame)
-                        self.lgr.debug('stackTrace not a call? %s fname %s, frame %s' % (instruct, fname, frame.dumpString()))
+                        #self.lgr.debug('stackTrace not a call? %s fname %s, frame %s' % (instruct, fname, frame.dumpString()))
                 else:
                     #self.lgr.debug('nothing from followCall')
                     pass
@@ -506,7 +507,7 @@ class StackTrace():
                 self.lgr.debug('stackFrames got max frames, done max is %d, got %d' % (self.max_frames, len(self.frames)))
                 done = True
             elif self.max_bytes is not None and count > self.max_bytes:
-                self.lgr.debug('stackFrames got max bytes %d, done' % self.max_bytes)
+                #self.lgr.debug('stackFrames got max bytes %d, done' % self.max_bytes)
                 done = True
 
 
