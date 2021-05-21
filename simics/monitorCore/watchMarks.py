@@ -405,7 +405,7 @@ class WatchMarks():
             cycles = self.cpu.cycles
         wm = self.WatchMark(cycles, self.call_cycle, ip, msg)
         self.mark_list.append(wm)
-        self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
+        #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
 
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
