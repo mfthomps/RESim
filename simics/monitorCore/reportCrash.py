@@ -65,7 +65,11 @@ class ReportCrash():
         self.bytes_was = None
 
     def go(self):
-        if self.index < len(self.flist):
+         if self.index > 0 and self.target is not None:
+                self.lgr.debug('reportCrash go, skip to bookmark0')
+                SIM_run_command('pselect %s' % self.cpu.name)
+                SIM_run_command('skip-to bookmark = bookmark0')
+         if self.index < len(self.flist):
             if self.report_index is None:
                 report_file = 'crash_report_%05d' % self.index
             else:
@@ -73,7 +77,7 @@ class ReportCrash():
             self.crash_report = open(os.path.join(self.report_dir, report_file), 'w')
       
             SIM_run_alone(self.goAlone, None)
-        else:
+         else:
             self.lgr.debug('index %d exceeds number of crashes in flist %d' % (self.index, len(self.flist)))
             if self.one_done:
                 self.top.quit()
@@ -81,6 +85,9 @@ class ReportCrash():
     def goAlone(self, dumb):
         self.dataWatch.clearWatchMarks()
         self.top.setCommandCallback(self.doneForward)
+        self.top.resetBookmarks()
+        self.top.removeDebugBreaks()
+
         self.crash_report.write("Crash report for %s\n" % self.flist[self.index])
         self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
         ''' TBD why keep size? '''
@@ -147,6 +154,12 @@ class ReportCrash():
                 SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
                 eip = self.top.getEIP()
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        elif self.top.getBookmarksInstance() is None:
+            self.crash_report.write('Crash prior to reaching target process')
+            self.lgr.debug('Crash prior to reaching target process, no bookmarks')
+            self.reportStack()
+            self.doneBackward(None)
+            return
         else:
             bad_addr = self.top.getROPAddr()
             if bad_addr is not None:
