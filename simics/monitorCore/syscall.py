@@ -201,6 +201,8 @@ class ExitInfo():
    
         ''' who to call from sharedSyscall, e.g., to watch mmap for SO maps '''
         self.syscall_instance = syscall_instance
+    def setValue(self, addr):
+        self.retval_addr = addr
 
 ROUTABLE = 1
 AF_INET = 2
@@ -915,7 +917,8 @@ class Syscall():
             else:
                 ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
-                if (call_param.subcall is None or call_param.subcall == 'recv') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
+                #self.lgr.debug('syscall parse socket rec... subcall is %s ss.fd is %s match_param is %s' % (call_param.subcall, str(ss.fd), str(call_param.match_param)))
+                if (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
                         if call_param.count >= call_param.nth:
@@ -1343,6 +1346,8 @@ class Syscall():
         elif callname == 'socketcall' or callname.upper() in net.callname:
             ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
 
+        elif callname == 'wait4':
+            ida_msg = '%s pid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
         else:
             ida_msg = '%s %s   pid:%d' % (callname, taskUtils.stringFromFrame(frame), pid)
             self.context_manager.setIdaMessage(ida_msg)
@@ -1765,10 +1770,19 @@ class Syscall():
            
     def setExits(self, frames):
         for pid in frames:
+            self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
             pc = frames[pid]['pc']
             callnum = frames[pid]['syscall_num']
             syscall_info = SyscallInfo(self.cpu, None, callnum, pc, self.trace, self.call_params)
+            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[pid])
             exit_info = ExitInfo(self, self.cpu, pid, callnum, syscall_info.compat32)
-            self.lgr.debug('setExits for pid %d call %d' % (pid, callnum))
+            ''' TBD why does direct setting of the ret_addr value fail? '''
+            exit_info.setValue(frames[pid]['param2'])
+            exit_info.old_fd = frames[pid]['param1']
+
+            if callname == 'socketcall' or callname.upper() in net.callname:
+                ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
+                self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+            self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
             self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.traceProcs, self.name)
