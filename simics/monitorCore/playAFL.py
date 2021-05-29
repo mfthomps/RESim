@@ -18,6 +18,7 @@ class PlayAFL():
         self.lgr = lgr
         self.findbb = findbb
         self.write_data = None
+        self.orig_buffer = None
         afl_output = os.getenv('AFL_OUTPUT')
         if afl_output is None:
             afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
@@ -37,7 +38,8 @@ class PlayAFL():
         self.target = target
         self.afl_dir = os.path.join(afl_output, target,'queue')
         self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
-        self.index = 0 
+        self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
+        self.index = -1
         self.stop_hap = None
         self.call_hap = None
         self.call_break = None
@@ -78,11 +80,21 @@ class PlayAFL():
 
     def goAlone(self, dumb):
         self.current_packet=1
+        self.index += 1
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
+            if self.coverage is not None:
+                if self.findbb is not None:
+                    self.coverage.clearHits() 
+            if self.orig_buffer is not None:
+                self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
+                self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
-            with open(full) as fh:
-                self.in_data = bytearray(fh.read())
+            with open(full, 'rb') as fh:
+                if sys.version_info[0] == 2:
+                    self.in_data = bytearray(fh.read())
+                else:
+                    self.in_data = fh.read()
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
             if self.addr is None:
@@ -95,17 +107,15 @@ class PlayAFL():
             self.write_data.write()
             self.lgr.debug('playAFL goAlone file %s continue from cycle 0x%x %d cpu context: %s' % (self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
-            self.index += 1
             SIM_run_command('c')
         else:
             if self.coverage is not None:
                 hits = self.coverage.getHitCount()
                 self.lgr.debug('Found %d total hits, save as %s' % (hits, self.target))
                 self.coverage.saveCoverage(fname=self.target)
-            self.delCallHap(None)               
             self.delStopHap(None)               
             if self.findbb is not None:
-                for f in self.bnt_list:
+                for f in sorted(self.bnt_list):
                     print(f)
             print('Played %d sessions' % len(self.afl_list))
 
@@ -122,70 +132,22 @@ class PlayAFL():
         self.lgr.debug('in stopHap')
         if self.stop_hap is not None:
             if self.coverage is not None:
-                self.lgr.debug('playAFL stopHap, got %d hits' % self.coverage.getHitCount())
+                self.lgr.debug('playAFL stopHap index %d, got %d hits' % (self.index, self.coverage.getHitCount()))
                 hits = self.coverage.getHitCount()
                 if hits > self.hit_total:
                     delta = hits - self.hit_total
                     self.hit_total = hits 
                     self.lgr.debug('Found %d new hits' % delta)
+                if self.findbb is not None and self.index < len(self.afl_list):
+                    hit_bbs = self.coverage.getBlocksHit()
+                    if self.findbb in hit_bbs:
+                        self.bnt_list.append(self.afl_list[self.index])
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, None)
 
 
-    def bbHap(self, dumb, third, break_num, memory):
-        ''' Hit basic block we were looking for'''
-        if self.bb_hap is None:
-            return
-        self.lgr.debug('bbHap hit')
-        self.bnt_list.append(self.afl_list[self.index])
-        if self.stop_on_break:
-            SIM_break_simulation('done bbHap')
-
-    def callHap(self, dumb, third, break_num, memory):
-        ''' Hit a call to recv '''
-        if self.call_hap is None:
-            return
-        if self.current_packet > self.afl_packet_count:
-            self.lgr.debug('afl callHap current packet %d above count %d' % (self.current_packet, self.afl_packet_count))
-            return
-        this_pid = self.top.getPID()
-        if this_pid != self.pid:
-            self.lgr.debug('afl callHap wrong pid got %d wanted %d' % (this_pid, self.pid))
-            return
-        self.lgr.debug('afl callHap packet %d cycles 0x%x' % (self.current_packet, self.cpu.cycles))
-        if self.stop_on_read:
-            self.lgr.debug('afl callHap stop on read')
-            SIM_break_simulation('stop on read')
-            return
-        if len(self.in_data) == 0:
-            self.lgr.error('afl callHap current packet %d no data left' % (self.current_packet))
-            SIM_break_simulation('broken offset')
-            SIM_run_alone(self.delCallHap, None)
-            return
-
-        self.write_data.write()
-        if self.current_packet >= self.afl_packet_count:
-            # set backstop if needed, we are on the last (or only) packet.
-            #SIM_run_alone(self.delCallHap, None)
-            if self.backstop_cycles > 0:
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
-
-    def delCallHap(self, dumb):
-        #self.lgr.debug('afl delCallHap')
-        if self.call_hap is not None:
-            SIM_delete_breakpoint(self.call_break)
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
-            self.call_hap = None
-        if self.bb_break is not None:
-            SIM_delete_breakpoint(self.bb_break)
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.bb_hap)
-            self.bb_break = None
-            self.bb_hap = None
-        
-
     def delStopHap(self, dumb):
-        #self.lgr.debug('afl delCallHap')
         SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
 
     def loadPickle(self, name):
@@ -199,3 +161,5 @@ class PlayAFL():
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 self.max_len = so_pickle['size']
+            if 'orig_buffer' in so_pickle:
+                self.orig_buffer = so_pickle['orig_buffer']

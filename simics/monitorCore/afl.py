@@ -100,6 +100,7 @@ class AFL():
         self.max_len = None
         self.addr_addr = None
         self.addr_size = None
+        self.orig_buffer = None
         self.jumpers = None
         full_path = None
         if target is None:
@@ -118,6 +119,9 @@ class AFL():
             self.loadPickle(snap_name)
             if target is None:
                 self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+                if self.orig_buffer is not None:
+                    self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
+                    self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
                 self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                     afl=True, fname=fname, linear=linear, jumpers=self.jumpers, create_dead_zone=self.create_dead_zone)
                 cli.quiet_run_command('disable-reverse-execution')
@@ -168,6 +172,7 @@ class AFL():
         if self.stop_hap is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
+            #self.lgr.debug('afl removed stop hap')
 
     def goAlone(self, dumb):
         SIM_run_command('c') 
@@ -188,7 +193,7 @@ class AFL():
             status = self.coverage.getStatus()
             if status != 0:
                 self.lgr.debug('afl finishUp status not zero %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
-                with open('/tmp/icrashed', 'w') as fh:
+                with open('/tmp/icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
 
@@ -254,13 +259,15 @@ class AFL():
                self.lgr.error('AFL, no firstBufferAddress found')
                return
 
-
+        if self.create_dead_zone:
+            self.lgr.debug('afl goN dead zone iteration %d' % self.iteration)
         ''' clear the bit_trace '''
         #self.lgr.debug('afl goN call doCoverage')
         self.coverage.doCoverage()
 
         #self.lgr.debug('afl, did coverage, cycle: 0x%x' % self.cpu.cycles)
         if self.stop_hap is None:
+            #self.lgr.debug('afl added stop hap')
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         if status != 0:
             self.lgr.debug('afl goN call continue, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
@@ -290,9 +297,10 @@ class AFL():
     def sendMsg(self, msg):
         msg_size = len(msg)
         ms = struct.pack("i", msg_size) 
-        combine=''.join((ms,msg))
+        #self.sock.sendall(ms+bytes(msg, 'utf8'))
         try:
-            self.sock.sendall(combine)
+            #self.sock.sendall(combine)
+            self.sock.sendall(ms+bytes(msg, 'utf8'))
         except:
             self.rmStopHap()
             print('AFL went away');
@@ -307,7 +315,7 @@ class AFL():
             return None
         msg_len = struct.unpack("i", data)[0]
         #self.lgr.debug('getMsg got msg_len of %d' % msg_len)
-        msg = "" 
+        msg = bytearray()
         expected = msg_len
         amount_received = 0
         while amount_received < msg_len:
@@ -332,17 +340,22 @@ class AFL():
         ret_cycle = self.cpu.cycles
         pid = self.top.getPID()
         self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (snap_name, self.return_ip, pid, self.cpu.cycles))
-        ''' return to the call to record that IP '''
+        ''' return to the call to record that IP and original data in the buffer'''
         frame, cycle = self.top.getRecentEnterCycle()
         exit_info = self.top.getMatchingExitInfo()
         previous = cycle - 1
         SIM_run_command('skip-to cycle=%d' % previous)
         self.call_ip = self.top.getEIP(self.cpu)
         pid = self.top.getPID()
+        if exit_info.sock_struct is not None:
+            length = exit_info.sock_struct.length
+        else:
+            length = exit_info.count
+        orig_buffer = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, length) 
         self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
         ''' skip back to return so the snapshot is ready to inject input '''
         SIM_run_command('skip-to cycle=%d' % ret_cycle)
-        self.pickleit(snap_name, exit_info)
+        self.pickleit(snap_name, exit_info, orig_buffer)
 
     def instrumentIO(self, snap_name):
         self.lgr.debug("in instrument IO");
@@ -355,7 +368,7 @@ class AFL():
         flist = [f1]
         self.top.runToInput(self.fd, flist_in=flist)
 
-    def pickleit(self, name, exit_info):
+    def pickleit(self, name, exit_info, orig_buffer):
         self.top.writeConfig(name)
         pickDict = {}
         pickDict['call_ip'] = self.call_ip
@@ -372,6 +385,7 @@ class AFL():
             pickDict['addr_addr'] = exit_info.fname_addr
             pickDict['addr_size'] = count
 
+        pickDict['orig_buffer'] = orig_buffer
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
 
@@ -389,6 +403,8 @@ class AFL():
             if 'addr_addr' in so_pickle:
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']
+            if 'orig_buffer' in so_pickle:
+                self.orig_buffer = so_pickle['orig_buffer']
 
     def fixFaults(self):
         if self.cpu.architecture == 'arm':

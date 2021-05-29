@@ -2,10 +2,11 @@ from simics import *
 import writeData
 import cli
 import os
+import sys
 import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
-           lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, bytes_was=None, 
+           lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False):
         self.dfile = dfile
         self.stay = stay
@@ -34,6 +35,7 @@ class InjectIO():
         self.call_break = None
         self.addr = None
         self.max_len = None
+        self.orig_buffer = None
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()
@@ -58,7 +60,6 @@ class InjectIO():
             self.pad_to_size = int(pad_env)
             self.lgr.debug('injectIO got pad of %d' % self.pad_to_size)
         self.udp_header = os.getenv('AFL_UDP_HEADER')
-        self.bytes_was = bytes_was
         self.write_data = None
         ''' process name and FD to track, i.e., if process differs from the one consuming injected data. '''
         self.target = target
@@ -85,8 +86,13 @@ class InjectIO():
             print('File not found at %s\n\n' % self.dfile)
             return
 
-        with open(self.dfile) as fh:
-            self.in_data = fh.read()
+        #with open(self.dfile) as fh:
+        #    self.in_data = fh.read()
+        with open(self.dfile, 'rb') as fh:
+            if sys.version_info[0] == 2:
+                self.in_data = bytearray(fh.read())
+            else:
+                self.in_data = fh.read()
 
         ''' Got to origin/recv location unless not yet debugging '''
         if self.target is None:
@@ -101,10 +107,11 @@ class InjectIO():
             #lenreg2 = 'r7'
         else:
             lenreg = 'eax'
-        if self.bytes_was is not None:
-            ''' not used? attempt to restore receive buffer to original condition in case injected data is smaller than original and poor code
+        if self.orig_buffer is not None:
+            ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                 references data past the end of what is received. '''
-            self.mem_utils.writeString(self.cpu, self.addr, self.bytes_was) 
+            self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+            self.lgr.debug('injectIO restored %d bytes to original buffer' % len(self.orig_buffer))
 
         if self.target is None and not self.trace_all:
             ''' Set Debug before write to use RESim context on the callHap '''
@@ -129,6 +136,8 @@ class InjectIO():
                     self.bookmarks.setOrigin(self.cpu)
                     cli.quiet_run_command('disable-reverse-execution')
                     cli.quiet_run_command('enable-reverse-execution')
+                    #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                    ''' per trackIO, look at entire buffer for ref to old data '''
                     self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     if self.addr_addr is not None:
                         self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
@@ -214,4 +223,6 @@ class InjectIO():
             if 'addr_addr' in so_pickle:
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']
-
+            if 'orig_buffer' in so_pickle:
+                self.orig_buffer = so_pickle['orig_buffer']
+                self.lgr.debug('injectiO load orig_buffer from pickle')
