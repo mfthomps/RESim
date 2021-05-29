@@ -688,7 +688,11 @@ class reverseToCall():
                         self.lgr.debug('reverseToModReg, did reverse')
                         done=True
                 else:
-                    self.lgr.debug('doRevModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles))
+                    ida_message = 'doRevModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles)
+                    self.lgr.debug(ida_message)
+                    self.context_manager.setIdaMessage(ida_message)
+                    self.cleanup(self.cpu)
+                    self.top.skipAndMail()
                     done=True
             elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
