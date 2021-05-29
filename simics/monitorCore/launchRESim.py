@@ -184,8 +184,10 @@ class LaunchRESim():
             print('File not found: %s' % ini_file)
             exit(1)
         self.config.read(cfg_file)
-        
-        
+        SIMICS_BASE = os.getenv('SIMICS')
+        parent = os.path.dirname(SIMICS_BASE)
+        print('SIMICS dir is %s' % parent) 
+        run_command('add-directory -prepend %s/simics-x86-x58-ich10-6.0.30/targets/x58-ich10/images' % parent)        
         run_command('add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO)
         run_command('add-directory -prepend %s/simics/monitorCore' % RESIM_REPO)
         run_command('add-directory -prepend %s' % SIMICS_WORKSPACE)
