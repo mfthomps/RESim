@@ -53,16 +53,6 @@ class ReportCrash():
             self.decode = decode
         #self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
         #self.crash_report = open('/tmp/crash_report.txt', 'w')
-        '''
-        self.addr, self.max_len = self.dataWatch.firstBufferAddress()
-        if self.addr is None:
-            self.lgr.error('injectIO, no firstBufferAddress found')
-            return
-        self.bytes_was = self.mem_utils.readBytes(self.cpu, self.addr, self.max_len)
-        cksum = sum(self.bytes_was)
-        self.lgr.debug('reportCrash cksum of data was 0x%x' % cksum)
-        '''
-        self.bytes_was = None
 
     def go(self):
          if self.index > 0 and self.target is not None:
@@ -93,13 +83,23 @@ class ReportCrash():
         ''' TBD why keep size? '''
         #self.top.injectIO(self.flist[self.index], keep_size = True)
         ''' TBD do we need/want data watches? ''' 
-        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, bytes_was=self.bytes_was, target=self.target, targetFD=self.targetFD)
+        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, targetFD=self.targetFD, callback=self.doneForward)
 
     def doneBackward(self, dumb):
         self.crash_report.write("\n\nBacktrace:\n")
         orig_stdout = sys.stdout
         sys.stdout = self.crash_report
         self.top.listBookmarks()
+        self.top.setCommandCallback(None)
+        sys.stdout = orig_stdout 
+        self.crash_report.close()
+        self.index += 1
+        self.go() 
+
+    def doneNothing(self, dumb):
+        self.crash_report.write("\n\nNothing found:\n")
+        orig_stdout = sys.stdout
+        sys.stdout = self.crash_report
         self.top.setCommandCallback(None)
         sys.stdout = orig_stdout 
         self.crash_report.close()
@@ -137,14 +137,14 @@ class ReportCrash():
         self.crash_report.flush()
         sys.stdout = orig_stdout 
 
-    def doneForward(self, dumb):
+    def doneForward(self, dumb=None):
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         bad_addr = self.top.getSEGVAddr()
         is_rop = False
         if bad_addr is not None:
             self.crash_report.write("SEGV on access to address: 0x%x\n" % bad_addr)
-            self.lgr.debug("SEGV on access to address: 0x%x\n" % bad_addr)
+            self.lgr.debug("reportCrash doneForward SEGV on access to address: 0x%x\n" % bad_addr)
             #SIM_run_command('pselect %s' % self.cpu.name)
             #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
             self.reportStack()
@@ -156,7 +156,7 @@ class ReportCrash():
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         elif self.top.getBookmarksInstance() is None:
             self.crash_report.write('Crash prior to reaching target process')
-            self.lgr.debug('Crash prior to reaching target process, no bookmarks')
+            self.lgr.debug('reportCrash doneForward Crash prior to reaching target process, no bookmarks')
             self.reportStack()
             self.doneBackward(None)
             return
@@ -169,11 +169,11 @@ class ReportCrash():
                 bad_addr = self.top.getFaultAddr()
                 if bad_addr is not None:
                     self.crash_report.write("Unhandled fault on access to address: 0x%x\n" % bad_addr)
-                    self.lgr.debug("Unhandled fault on access to address: 0x%x\n" % bad_addr)
+                    self.lgr.debug("reportCrash doneForward Unhandled fault on access to address: 0x%x\n" % bad_addr)
                     self.reportStack()
                 else:
                     self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
-                    self.top.setCommandCallback(None)
+                    SIM_run_alone(self.doneNothing,None)
                     return            
         self.lgr.debug('reportCrash doneForward eip: 0x%x instruction %s' %(eip, instruct[1]))
         if is_rop:
@@ -198,7 +198,8 @@ class ReportCrash():
             self.top.revTaintReg('pc')
         else:
             copy_mark = self.dataWatch.getCopyMark()
-            if copy_mark is not None:
+            ''' iterators may not have call_cycle '''
+            if copy_mark is not None and copy_mark.call_cycle is not None:
                 ''' In a mem copy function.  Get the parameters,
                     back up to the call, and try to find the source
                     of the length field. '''
