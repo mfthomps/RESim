@@ -543,6 +543,10 @@ class memUtils():
         SIM_write_phys_memory(cpu, phys, value, 4)
 
     def writeBytes(self, cpu, address, bstring):
+        ''' TBD remove? just just use writestring? '''
+        if len(bstring) == 0:
+            self.lgr.error('memUtils writeBytes got empty bstring')
+            return
         lcount = len(bstring)/4
         carry = len(bstring) % 4
         if carry != 0:
@@ -552,10 +556,14 @@ class memUtils():
         for i in range(lcount):
             eindex = min(sindex+4, len(bstring))
             value = bstring[sindex:eindex] 
+            print('value is %d' % int(value))
             count = len(value)
             sindex +=4
             #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
             phys = self.v2p(cpu, address)
+            if phys is None:
+                self.lgr.error('memUtils writeBytes no translation for address 0x%x' % address)
+                return
             #SIM_write_phys_memory(cpu, phys_block.address, value, count)
             SIM_write_phys_memory(cpu, phys, value, count)
             address += 4
@@ -577,7 +585,7 @@ class memUtils():
         sindex = 0
         for i in range(lcount):
             eindex = min(sindex+4, len(string))
-            if sys.version_info[0] > 2:
+            if sys.version_info[0] > 2 and type(string) != bytearray and type(string) != bytes:
                 sub = string[sindex:eindex].encode('utf-8','ignore') 
             else:
                 sub = string[sindex:eindex]

@@ -1,6 +1,7 @@
 from simics import *
 import armCond
 import re
+import sys
 modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 def modifiesOp0(mn):
@@ -165,7 +166,8 @@ def armLDM(cpu, instruct, reg, lgr):
     if op1.startswith('{') and op1.endswith('}'):
         regset = op1[1:-1]
         xregs = regset.split(',')
-        regs = map(str.strip, xregs)
+        regs_map = map(str.strip, xregs)
+        regs = list(regs_map)
         if reg in regs:
             if mul < 0:
                 regs.reverse()

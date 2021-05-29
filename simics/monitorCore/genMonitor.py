@@ -3597,7 +3597,7 @@ class GenMonitor():
         self.bookmarks = None
 
     def instructTrace(self, fname):
-        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, self.context_manager[self.target], fname)
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname)
         pid = self.getPID()
         self.instruct_trace.start() 
 

@@ -1,4 +1,5 @@
 from simics import *
+import sys
 import taskUtils
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, addr,  
@@ -34,7 +35,10 @@ class WriteData():
         self.call_hap = None
         self.call_break = None
         # see in_data
-        self.udp_header = udp_header
+        if sys.version_info[0] > 2:
+            self.udp_header = bytes(udp_header, encoding='utf8')
+        else:
+            self.udp_header = udp_header
         self.pad_to_size = pad_to_size
         self.mem_utils = mem_utils
         self.backstop = backstop

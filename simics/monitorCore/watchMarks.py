@@ -63,8 +63,10 @@ class WatchMarks():
                 if buf_start is not None:
                     offset = src - buf_start
                     self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
-                else:
+                elif length is not None:
                     self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. Buffer unknown!)' % (length, src, dest, )
+                else:
+                    self.msg = 'Modify Copy length is none, not where wth'
         def getMsg(self):
             return self.msg
 
@@ -393,6 +395,9 @@ class WatchMarks():
         retval = None
         cycle = self.cpu.cycles
         for mark in self.mark_list:
+            if mark.cycle is None or mark.call_cycle is None:
+                self.lgr.debug('getCopyMark no call_cycle for mark %s' % mark)
+                continue
             if cycle >= mark.call_cycle and cycle <= mark.cycle:
                 if mark.mark.__class__.__name__ == 'CopyMark':
                     retval = mark

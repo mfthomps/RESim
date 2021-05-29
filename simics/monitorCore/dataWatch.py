@@ -11,6 +11,7 @@ import watchMarks
 import backStop
 import net
 import os
+import sys
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'mempcpy', 
             'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse']
@@ -77,12 +78,17 @@ class DataWatch():
         self.ghost_stop_hap = None
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None):
-        self.lgr.debug('DataWatch set range start 0x%x length 0x%x back_stop: %r' % (start, length, back_stop))
+        ''' TBD try forcing watch to maxlen '''
+        if max_len is None:
+            my_len = length
+        else:
+            my_len = max_len
+        self.lgr.debug('DataWatch set range start 0x%x watch lenght 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
             self.lgr.debug('DataWatch, backstop set, start data session')
 
-        end = start+length
+        end = start+my_len
         overlap = False
         for index in range(len(self.start)):
             if self.start[index] != 0:
@@ -92,26 +98,29 @@ class DataWatch():
                     self.lgr.debug('DataWatch setRange found overlap, skip it')
                     if start not in self.other_starts:
                         self.other_starts.append(start)
-                        self.other_lengths.append(length)
+                        self.other_lengths.append(my_len)
                     break
                 elif self.start[index] >= start and this_end <= end:
                     self.lgr.debug('DataWatch setRange found subrange, replace it')
                     self.start[index] = start
-                    self.length[index] = length
+                    self.length[index] = my_len
                     overlap = True
                     break
                 elif start == (this_end+1):
-                    self.length[index] = self.length[index]+length
+                    self.length[index] = self.length[index]+my_len
                     overlap = True
                     break
         if not overlap:
             self.start.append(start)
-            self.length.append(length)
+            self.length.append(my_len)
             self.hack_reuse.append(0)
             self.cycle.append(self.cpu.cycles)
             #self.lgr.debug('DataWatch adding start 0x%x cycle 0x%x' % (start, self.cpu.cycles))
         if msg is not None:
-            fixed = unicode(msg, errors='replace')
+            if sys.version_info[0] >= 3:
+                fixed = msg
+            else:
+                fixed = unicode(msg, errors='replace')
             # TBD why max_len and not count???
             if recv_addr is None:
                 recv_addr = start
@@ -1150,7 +1159,10 @@ class DataWatch():
     def trackIO(self, fd, callback, compat32):
         self.lgr.debug('DataWatch trackIO for fd %d' % fd)
         ''' first make sure we are not in the kernel on this FD '''
-        self.rev_to_call.preCallFD(fd) 
+        # NO, would reverse to state that may not be properly initialized.
+        # Do not assume that call to receive implies the system is ready
+        # to receive.
+        #self.rev_to_call.preCallFD(fd) 
 
         self.lgr.debug('DataWatch trackIO call watch')
         self.watch(break_simulation=False)
@@ -1357,8 +1369,10 @@ class DataWatch():
 
     def getCopyMark(self):
         retval =  self.watchMarks.getCopyMark()
-        if retval is None:
-            if self.pending_call and self.cpu.cycles > self.watchMarks.latestCycle() and self.cpu.cycles > self.watchMarks.getCallCycle():
+        latest_cycle = self.watchMarks.latestCycle()
+        call_cycle = self.watchMarks.getCallCycle()
+        if retval is None and latest_cycle is not None and call_cycle is not None:
+            if self.pending_call and self.cpu.cycles > latest_cycle and self.cpu.cycles > call_cycle:
                 self.lgr.debug('dataWatch getCopyMark pending was %s ' % self.mem_something.fun)
                 ''' We may be in a copy and died therein '''
                 strcpy = False

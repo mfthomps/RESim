@@ -2,6 +2,7 @@ import os
 import json
 import random
 import backStop
+import time
 from simics import *
 '''
 Manage code coverage tracking, maintaining two hits files per coverage unit (i.e., per full_path)
@@ -49,8 +50,8 @@ class Coverage():
         ''' manage set of basic block addresses we don't want to cover due to their being used in other threads (performance) '''
         self.crate_dead_zone = None
         self.dead_map = []
-        self.dead_weight = 0
         self.run_from_snap = run_from_snap
+        self.time_start = time.time()
         random.seed(12345)
      
     def loadBlocks(self, block_file):
@@ -87,7 +88,7 @@ class Coverage():
             self.lgr.error('coverage: No blocks file at %s' % block_file)
             return
         self.loadBlocks(block_file)         
-        so_entry = self.so_map.getSOAddr(self.full_path)
+        so_entry = self.so_map.getSOAddr(self.full_path, pid=self.pid)
         if so_entry is None:
             self.lgr.error('coverage no SO entry for %s' % self.full_path)
             return
@@ -173,6 +174,13 @@ class Coverage():
     def getStatus(self):
         return self.did_exit
 
+    def saveDeadFile(self):
+        dead_file = '%s.dead' % self.run_from_snap
+        with open(dead_file, 'w') as fh:
+            fh.write(json.dumps(self.dead_map))
+        SIM_run_alone(SIM_run_command, 'q')
+                         
+
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
         ''' 
@@ -184,9 +192,10 @@ class Coverage():
         
         dead_set = False
         if self.create_dead_zone:
+            ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
             pid = self.top.getPID()
             if pid != self.pid:
-                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  dead_weight %d  num spots %d' % (pid, self.pid, self.dead_weight, len(self.dead_map)))
+                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
         
         if self.physical or (self.afl and not self.linear):    
@@ -198,7 +207,7 @@ class Coverage():
             return
         if addr in self.afl_del_breaks:
             ''' already 255 hits, see if a jumper will alter the PC'''
-            if self.backstop_cycles > 0:
+            if self.backstop_cycles is not None and self.backstop_cycles > 0:
                 self.backstop.setFutureCycleAlone(self.backstop_cycles)
             if self.jumpers is not None and addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[addr])
@@ -216,9 +225,9 @@ class Coverage():
                     if addr_str in self.blocks:
                         self.funs_hit.append(this_addr)
                         #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
-                    #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (addr, addr_str, 
-                    #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
-                    if self.backstop_cycles > 0:
+                    self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (this_addr, addr_str, 
+                           len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
+                    if self.backstop_cycles is not None and self.backstop_cycles > 0:
                         self.backstop.setFutureCycleAlone(self.backstop_cycles)
                 else:
                     #self.lgr.debug('addr already in blocks_hit')
@@ -236,15 +245,14 @@ class Coverage():
                     this_addr = self.addr_map[break_num]
                     if this_addr not in self.dead_map:
                         self.dead_map.append(this_addr)
-                    else:
-                        self.dead_weight = self.dead_weight+1
-                    if self.dead_weight > 70 * len(self.dead_map):
-                        self.lgr.debug('dead weight %d dead spots' % len(self.dead_map)) 
-                        dead_file = '%s.dead' % self.run_from_snap
-                        with open(dead_file, 'w') as fh:
-                            fh.write(json.dumps(self.dead_map))
-                        SIM_run_alone(SIM_run_command, 'q')
-                         
+                        self.time_start = time.time()
+                if self.create_dead_zone:
+                    now = time.time()
+                    delta = now - self.time_start 
+                    #self.lgr.debug('delta is %d' % int(delta))
+                    if int(delta) > 120: 
+                        self.lgr.debug('120 seconds since last dead spot %d dead spots' % len(self.dead_map)) 
+                        self.saveDeadFile()
 
                 prejump_addr = None
                 if self.jumpers is not None and addr in self.jumpers:
@@ -272,7 +280,7 @@ class Coverage():
                     self.trace_bits[index] =  self.trace_bits[index]+1
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
                 self.prev_loc = cur_loc >> 1
-                if self.backstop_cycles > 0:
+                if self.backstop_cycles is not None and self.backstop_cycles > 0:
                     self.backstop.setFutureCycleAlone(self.backstop_cycles)
         
     def getTraceBits(self): 
@@ -448,8 +456,8 @@ class Coverage():
                 self.mergeCover()
             self.funs_hit = []
             self.blocks_hit = {}
-        #self.lgr.debug('coverage doCoverage set backstop')
-        if self.backstop_cycles > 0:
+            self.lgr.debug('coverage reset blocks_hit')
+        if self.backstop_cycles is not None and self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
         if self.afl:
@@ -496,7 +504,7 @@ class Coverage():
             map_size_pow2 = 16
             self.map_size = 1 << map_size_pow2
             self.trace_bits = bytearray(self.map_size)
-        if self.run_from_snap is not None and not self.create_dead_zone:
+        if self.run_from_snap is not None:
             dead_file = '%s.dead' % self.run_from_snap
             if os.path.isfile(dead_file):
                 with open(dead_file) as fh:
@@ -539,3 +547,7 @@ class Coverage():
 
     def getBlocksHit(self):
         return self.blocks_hit
+
+    def clearHits(self):
+        self.funs_hit = []
+        self.blocks_hit = {}
