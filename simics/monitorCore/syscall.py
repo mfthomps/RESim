@@ -201,6 +201,8 @@ class ExitInfo():
    
         ''' who to call from sharedSyscall, e.g., to watch mmap for SO maps '''
         self.syscall_instance = syscall_instance
+        ''' stop and reset reversing origin if set '''
+        self.origin_reset = False
     def setValue(self, addr):
         self.retval_addr = addr
 
@@ -1768,7 +1770,7 @@ class Syscall():
                 retval = True
         return retval
            
-    def setExits(self, frames):
+    def setExits(self, frames, reset=False):
         for pid in frames:
             self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
             pc = frames[pid]['pc']
@@ -1784,5 +1786,6 @@ class Syscall():
             if callname == 'socketcall' or callname.upper() in net.callname:
                 ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
                 self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+            exit_info.origin_reset = reset
             self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
             self.sharedSyscall.addExitHap(pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.traceProcs, self.name)

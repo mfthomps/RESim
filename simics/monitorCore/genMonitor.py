@@ -79,6 +79,7 @@ import playAFL
 import reportCrash
 import injectIO
 import writeData
+import instructTrace
 
 import json
 import pickle
@@ -273,6 +274,7 @@ class GenMonitor():
         if init_script is not None:
             cmd = 'run-command-file %s' % init_script
             SIM_run_command(cmd)
+            self.lgr.debug('ran INIT_SCRIPT %s' % init_script)
         if self.one_done_module is not None:
             #self.one_done_module.onedone(self)
             SIM_run_alone(self.one_done_module.onedone, self)
@@ -1523,7 +1525,11 @@ class GenMonitor():
     def getPID(self):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         return this_pid
- 
+
+    def getCPL(self): 
+        cpu, comm, this_pid = self.task_utils[self.target].curProc() 
+        cpl = memUtils.getCPL(cpu)
+
     def skipBackToUser(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.rev_to_call[self.target].jumpOverKernel(pid)
@@ -2254,12 +2260,14 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params)
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
         call_params.nth = count
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToIO on FD %d' % fd)
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None:
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
         calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
         if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
@@ -2283,18 +2291,21 @@ class GenMonitor():
                                skip_and_mail=skip_and_mail)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
+
         ''' find processes that are in the kernel on IO calls '''
-        '''
         frames = self.getDbgFrames()
+        skip_calls = ['select', 'pselect', '_newselect']
         for pid in list(frames):
+            if frames[pid] is None:
+                self.lgr.error('frames[%d] is None' % pid)
+                continue
             call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-            self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
-            if call not in calls:
+            self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
+            if call not in calls or call in skip_calls:
                del frames[pid]
         if len(frames) > 0:
             self.lgr.debug('runToIO, call to setExits')
-            the_syscall.setExits(frames) 
-        '''
+            the_syscall.setExits(frames, reset=reset) 
         
         SIM_run_command('c')
 
@@ -2352,6 +2363,9 @@ class GenMonitor():
     def getSOFromFile(self, fname):
         retval = ''
         pid, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None:
+           self.lgr.error('gotSOFromFile, no debug pid defined')
+           return retval
         self.lgr.debug('getSOFromFile pid:%d fname %s' % (pid, fname))
         text_seg  = self.soMap[self.target].getSOAddr(fname, pid=pid) 
         if text_seg is None:
@@ -2894,9 +2908,12 @@ class GenMonitor():
         except SimExc_General as e:
             print('ERROR... try continue?')
             self.lgr.error('ERROR in retrack  try continue? %s' % str(e))
-            SIM_run_command('c')
+            if 'already running' in str(e):
+                self.lgr.debug('thinks it is already running?')
+            else:
+                SIM_run_command('c')
 
-    def trackIO(self, fd):
+    def trackIO(self, fd, reset=False):
         self.stopTrackIO()
         self.clearWatches()
         self.lgr.debug('trackIO stopped track and cleared watchs')
@@ -2908,7 +2925,7 @@ class GenMonitor():
 
         if self.coverage is not None:
             self.coverage.doCoverage()
-        self.runToIO(fd, linger=True, break_simulation=False)
+        self.runToIO(fd, linger=True, break_simulation=False, reset=reset)
 
     def stopTrackIO(self):
         self.lgr.debug('stopTrackIO')
@@ -3145,7 +3162,7 @@ class GenMonitor():
         SIM_run_command('c')
        
 
-    def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, bytes_was=None, 
+    def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False):
         if self.bookmarks is not None:
             self.goToOrigin()
@@ -3156,7 +3173,7 @@ class GenMonitor():
         cell_name = self.getTopComponentName(cpu)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
-                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, bytes_was=bytes_was, stop_on_read=sor, coverage=cover,
+                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all)
         self.injectIOInstance.go()
     
@@ -3203,7 +3220,7 @@ class GenMonitor():
     def saveMemory(self, addr, size, fname):
         cpu = self.cell_config.cpuFromCell(self.target)
         byte_array = self.mem_utils[self.target].readBytes(cpu, addr, size)
-        with open(fname, 'w') as fh:
+        with open(fname, 'wb') as fh:
             fh.write(byte_array)
 
     def pageInfo(self, addr):
@@ -3236,7 +3253,7 @@ class GenMonitor():
                 full_path = self.targetFS[self.target].getFull(fname)
             else:
                 full_path = None
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.coverage.enableCoverage(pid, fname=full_path)
             self.coverage.doCoverage()
         else:
@@ -3417,8 +3434,8 @@ class GenMonitor():
         self.afl(n=-1, sor=sor, fname=fname)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None):
-        ''' sor is stop on read; target names process other than consumer; dead is a file name into which it
-            generates list of breakpoints to later ignore because they are hit by some other thread over and over'''
+        ''' sor is stop on read; target names process other than consumer; if dead is True,it 
+            generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         if target is None:
@@ -3466,7 +3483,7 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
-        self.aflPlay = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], None,
+        self.aflPlay = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage,
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, findbb=bb)
         if self.aflPlay is not None:
             self.aflPlay.go()
@@ -3578,6 +3595,20 @@ class GenMonitor():
 
     def resetBookmarks(self):
         self.bookmarks = None
+
+    def instructTrace(self, fname):
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, self.context_manager[self.target], fname)
+        pid = self.getPID()
+        self.instruct_trace.start() 
+
+    def saveDeadCoverage(self):
+        ''' force the current dead zone coverage basic blocks to be saved to a file, and quit '''
+        self.coverage.saveDeadFile()
+
+    def setBreak(self, addr):
+        resim = self.getRESimContext()
+        bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Write, addr, self.mem_utils[self.target].WORD_SIZE, 0)
+        print('set execution break at 0x%x bp %d' % (addr, bp))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
