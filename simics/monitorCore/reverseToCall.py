@@ -57,6 +57,16 @@ class RegisterModType():
         self.value = value
         self.mod_type = mod_type
         self.src_reg = None
+    def toString(self):
+        retval = None
+        if self.mod_type == RegisterModType.ADDR:
+            retval = 'Address: 0x%x' % self.value
+        elif self.mod_type == RegisterModType.REG:
+            retval = 'Register: %s' % self.value
+        else:
+            retval = 'Bail'
+        return retval
+
 
 
 class reverseToCall():
@@ -942,7 +952,7 @@ class reverseToCall():
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('followTaintArm %s' % instruct[1])
-        self.lgr.debug('followTaintArm reg_mod_type: %s' % str(reg_mod_type))
+        self.lgr.debug('followTaintArm reg_mod_type: %s' % reg_mod_type.toString())
         if reg_mod_type is not None:
             if reg_mod_type.mod_type == RegisterModType.ADDR:
                 address = reg_mod_type.value + self.offset
