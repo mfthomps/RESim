@@ -99,9 +99,9 @@ class WatchMarks():
             self.modify = modify
 
         def getMsg(self):
-            if self.addr is None or self.start is None:
+            if self.start is None:
                 mark_msg = 'Error getting mark message'
-            elif self.modify:
+            elif self.modify and self.addr is not None:
                 mark_msg = 'Memory mod, addr: 0x%x original buffer %d bytes starting at 0x%x' % (self.addr, self.length, self.start)
             elif self.addr is None:
                 mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
@@ -322,7 +322,7 @@ class WatchMarks():
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         dm = self.DataMark(addr, start, length, None, modify=True)
         self.addWatchMark(ip, dm)
-        self.lgr.debug('watchMarks memoryMod 0x%x %s appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+        self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
     def dataRead(self, addr, start, length, cmp_ins): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -380,7 +380,7 @@ class WatchMarks():
         ret_mark = None
         cycle = self.cpu.cycles
         for mark in self.mark_list:
-            if cycle >= mark.call_cycle and cycle <= mark.cycle:
+            if mark.call_cycle is not None and mark.cycle is not None and cycle >= mark.call_cycle and cycle <= mark.cycle:
                 if mark.mark.__class__.__name__ == 'CopyMark':
                     offset = address - mark.mark.dest
                     retval = mark.mark.src+offset
