@@ -276,7 +276,7 @@ class AFL():
         #self.writeData()
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, filter=self.packet_filter, backstop_cycles=self.backstop_cycles, force_default_context=True)
+                 pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True)
         self.write_data.write()
            
         cli.quiet_run_command('c') 
