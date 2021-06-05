@@ -405,7 +405,7 @@ class Coverage():
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
             self.bb_hap.append(hap)
 
-    def mergeCover(self):
+    def mergeCover(self, target=None):
         all_name = '%s.all.hits' % (self.full_path)
         self.lgr.debug('cover mergeCover into %s' % all_name)
         all_json = {}
@@ -416,7 +416,10 @@ class Coverage():
             except:
                 pass
             fh.close()
-        last_name = '%s.hits' % self.full_path
+        if target is None:
+            last_name = '%s.hits' % self.full_path
+        else:
+            last_name = '%s.%s.hits' % (self.full_path, target)
         if not os.path.isfile(last_name):
             self.lgr.debug('coverage mergeCover failed to find recent hits file at %s' % last_name)
             return
@@ -433,7 +436,7 @@ class Coverage():
         s = json.dumps(all_json)
         with open(all_name, 'w') as fh:
             fh.write(s)
-        os.remove(last_name) 
+        #os.remove(last_name) 
         self.lgr.debug('coverage merge %d new hits, removed %s' % (new_hits, last_name))
         print('Previous data run hit %d new BBs' % new_hits)
  
