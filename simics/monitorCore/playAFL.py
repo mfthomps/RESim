@@ -115,8 +115,9 @@ class PlayAFL():
                 self.coverage.saveCoverage(fname=self.target)
             self.delStopHap(None)               
             if self.findbb is not None:
-                for f in sorted(self.bnt_list):
-                    print(f)
+                for f, n in sorted(self.bnt_list):
+                    print('%-30s  packet %d' % (f, n))
+                print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
 
     def playBreak(self, bnt_index):
@@ -141,7 +142,8 @@ class PlayAFL():
                 if self.findbb is not None and self.index < len(self.afl_list):
                     hit_bbs = self.coverage.getBlocksHit()
                     if self.findbb in hit_bbs:
-                        self.bnt_list.append(self.afl_list[self.index])
+                        packet_num = self.write_data.getCurrentPacket()
+                        self.bnt_list.append((self.afl_list[self.index], packet_num))
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, None)

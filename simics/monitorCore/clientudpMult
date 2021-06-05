@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+#
+#  Send multiple UDP packets as read from a file found
+#  at /tmp/sendudp, with packets delimited by RrUdP
+#
+import sys
+import time
+import os
+import socket
+host = sys.argv[1].strip()
+port = int(sys.argv[2].strip())
+print('ip %s' % host)
+print('port %d' % port)
+header = None
+if len(sys.argv) > 3:
+    header = sys.argv[3]
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+server_addr = (host, port)
+#server_addr = ('localhost', port)
+infile = '/tmp/sendudp'
+
+with open (infile) as fh:
+    s = fh.read()
+    if header is not None:
+        if not s.startswith(header):
+            print('file does not start with %s' % header)
+            exit(1)
+        parts = s.split(header)
+        print('num messages is %d' % len(parts))
+        index = 1
+        for p in parts[1:]:
+            packet = 'RrUdP'+p
+            print('len packet is %d' % len(packet))
+            sock.sendto(packet, server_addr)
+            time.sleep(.01)
+    else:
+        sock.sendto(s, server_addr)
+        

@@ -76,6 +76,7 @@ import backStop
 import fuzz
 import afl
 import playAFL
+import replayAFL
 import reportCrash
 import injectIO
 import writeData
@@ -86,6 +87,7 @@ import pickle
 import re
 import shutil
 import imp
+import glob
 
 
 class Prec():
@@ -115,7 +117,12 @@ class GenMonitor():
         self.proc_break = None
         self.gdb_mailbox = None
         self.stop_hap = None
-        self.log_dir = '/tmp/'
+        #self.log_dir = '/tmp/'
+        self.log_dir = os.path.join(os.getcwd(), 'logs')
+        try:
+            os.mkdir(self.log_dir)
+        except:
+            pass
         self.mode_hap = None
         self.hack_list = []
         self.traceOpen = {}
@@ -180,17 +187,32 @@ class GenMonitor():
         self.one_done_module = None
         one_done_script = os.getenv('ONE_DONE_SCRIPT')
         if one_done_script is not None:
-            abs_path = os.path.abspath(('./%s' % one_done_script))
-            self.one_done_module = imp.load_source(one_done_script, abs_path)
+            if one_done_script.startswith('/'):
+                abs_path = one_done_script
+            if os.path.isfile('./'+one_done_script):
+                abs_path = os.path.abspath(('./%s' % one_done_script))
+            else:
+                abs_path = os.path.join(os.path.dirname(__file__), one_done_script)
+
+            if os.path.isfile(abs_path):
+                self.one_done_module = imp.load_source(one_done_script, abs_path)
+            else:
+                self.lgr.error('no onedone found for %s' % one_done_script)
 
         self.injectIOInstance = None
+        ''' retrieved from snapshot pickle, not necessarily current '''
+        self.debug_info = None
+
+
+        ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
+
 
     def genInit(self, comp_dict):
         '''
         remove all previous breakpoints.  
         '''
-        self.lgr = resim_utils.getLogger('noname', os.path.join(self.log_dir, 'monitors'))
+        self.lgr = resim_utils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
         SIM_run_command("delete -all")
         self.target = os.getenv('RESIM_TARGET')
@@ -212,6 +234,9 @@ class GenMonitor():
             stack_base_file = os.path.join('./', self.run_from_snap, 'stack_base.pickle')
             if os.path.isfile(stack_base_file):
                 self.stack_base = pickle.load( open(stack_base_file, 'rb') )
+            debug_info_file = os.path.join('./', self.run_from_snap, 'debug_info.pickle')
+            if os.path.isfile(debug_info_file):
+                self.debug_info = pickle.load( open(debug_info_file, 'rb') )
 
         for cell_name in comp_dict:
             if 'RESIM_PARAM' in comp_dict[cell_name]:
@@ -1025,7 +1050,7 @@ class GenMonitor():
     def debugPid(self, pid):
         self.debugPidList([pid], self.debug)
 
-    def debugPidGroup(self, pid, final_fun=None):
+    def debugPidGroup(self, pid, final_fun=None, to_user=True):
         leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
         if leader_pid is None:
             self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
@@ -1033,16 +1058,20 @@ class GenMonitor():
         self.lgr.debug('debugPidGroup cell %s pid %d found leader %d' % (self.target, pid, leader_pid))
         pid_dict = self.task_utils[self.target].getGroupPids(leader_pid)
         pid_list = list(pid_dict.keys())
-        self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun)
+        self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun, to_user=to_user)
 
-    def debugPidList(self, pid_list, debug_function, final_fun=None):
+    def debugPidList(self, pid_list, debug_function, final_fun=None, to_user=True):
         #self.stopTrace()
         self.soMap[self.target].setContext(pid_list)
         self.lgr.debug('debugPidList cell %s' % self.target)
-        f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
+        if to_user:
+            f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
         f3 = stopFunction.StopFunction(debug_function, [], nest=False)
-        flist = [f1, f2, f3]
+        if to_user:
+            flist = [f1, f2, f3]
+        else:
+            flist = [f2, f3]
         if final_fun is not None:
             f4 = stopFunction.StopFunction(final_fun, [], nest=False)
             flist.append(f4)
@@ -1152,12 +1181,15 @@ class GenMonitor():
         status = self.is_monitor_running.isRunning()
         if not status:
             try:
+                self.lgr.debug('toRunningProc try continue')
                 SIM_run_command('c')
                 pass
             except SimExc_General as e:
                 print('ERROR... try continue?')
                 self.lgr.error('ERROR in toRunningProc  try continue? %s' % str(e))
                 SIM_run_command('c')
+        else:
+            self.lgr.debug('toRunningProc thinks it is already running')
        
 
     def getEIP(self, cpu=None):
@@ -2774,6 +2806,14 @@ class GenMonitor():
         stack_base_file = os.path.join('./', name, 'stack_base.pickle')
         pickle.dump( self.stack_base, open(stack_base_file, "wb" ) )
 
+        debug_info_file = os.path.join('./', name, 'debug_info.pickle')
+        debug_info = {}
+        debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid()
+        if debug_pid is not None:
+            debug_info['pid'] = debug_pid
+            debug_info['cpu'] = debug_cpu.name
+        pickle.dump( debug_info, open(debug_info_file, "wb" ) )
+
     def showCycle(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         cycles = self.bookmarks.getCurrentCycle(cpu)
@@ -2913,15 +2953,21 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False):
+    def trackIO(self, fd, reset=False, callback=None):
+        if self.bookmarks is None:
+            self.lgr.error('trackIO called but no debugging session exists.')
+            return
         self.stopTrackIO()
         self.clearWatches()
+        if callback is None:
+            done_callback = self.stopTrackIO
+        else:
+            done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watchs')
-        if not self.dataWatch[self.target].trackIO(fd, self.stopTrackIO, self.is_compat32):
+        if not self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32):
             self.lgr.error('trackIO failed kernel skip')
             return 
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
-
 
         if self.coverage is not None:
             self.coverage.doCoverage()
@@ -3176,7 +3222,20 @@ class GenMonitor():
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all)
         self.injectIOInstance.go()
-    
+   
+    def aflInject(self, target, index):
+        afl_dir = os.getenv('AFL_OUTPUT')
+        glob_mask = '%s/%s/queue/id:*%s,src*' % (afl_dir, target, index)
+        glist = glob.glob(glob_mask)
+        if len(glist) == 0:
+            print('No files found looking for %s' % glob_mask)
+        elif len(glist) == 1:
+            self.injectIO(glist[0])
+            print('injecting %s' % glist[0])
+        else:
+            print('Too many matches, try adding leading zeros?')
+
+ 
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
         self.dataWatch[self.target].tagIterator(index)
@@ -3488,15 +3547,20 @@ class GenMonitor():
         if self.aflPlay is not None:
             self.aflPlay.go()
 
+    def replayAFL(self, target, index, targetFD): 
+        ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
+        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr) 
+
     def playBreak(self, n=1):
+        # TBD not used?
         self.aflPlay.playBreak(n)
 
-    def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None):
+    def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None, trackFD=None):
         ''' generate crash reports for all crashes in a given AFL target diretory -- or a given specific file '''
         self.lgr.debug('crashReport %s' % fname)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         rc = reportCrash.ReportCrash(self, cpu, pid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
-              target=target, targetFD=targetFD)
+              target=target, targetFD=targetFD, trackFD=trackFD)
         rc.go()
 
     def getSEGVAddr(self):
@@ -3521,11 +3585,15 @@ class GenMonitor():
                         for branch in bb['succs']:
                             if branch not in hits[fun]:
                                 print('function: %s branch 0x%x from 0x%x not in hits' % (blocks[fun]['name'], branch, bb_hit))
+
     def aflBNT(self, target, fun_name=None):
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         self.debugPidGroup(pid)
         self.lgr.debug('aflBNT target %s' % target)
-        fname = '%s.%s.hits' % (self.full_path, target)
+        if target is None:
+            fname = '%s.hits' % self.full_path
+        else:
+            fname = '%s.%s.hits' % (self.full_path, target)
         hits = json.load(open(fname))
         block_file = self.full_path+'.blocks'
         blocks = json.load(open(block_file))
@@ -3599,11 +3667,32 @@ class GenMonitor():
     def instructTrace(self, fname):
         self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname)
         pid = self.getPID()
-        self.instruct_trace.start() 
+        cpu = self.cell_config.cpuFromCell(self.target)
+        cpl = memUtils.getCPL(cpu)
+        if cpl != 0:
+            self.instruct_trace.start() 
+
+    def debugIfNot(self):
+        ''' warning, assumes current pid is teh one to be debugged. '''
+        if self.bookmarks is None:
+            self.debug()
+
+    def debugSnap(self, final_fun=None):
+        retval = True
+        if self.debug_info is not None and 'pid' in self.debug_info:
+            self.debugPidGroup(self.debug_info['pid'], to_user=False, final_fun=final_fun)
+        else:
+            self.lgr.error('debugSnap, no debug_info read from snapshot')
+            retval = False
+        return retval
 
     def saveDeadCoverage(self):
         ''' force the current dead zone coverage basic blocks to be saved to a file, and quit '''
         self.coverage.saveDeadFile()
+
+    def mergeCover(self, target=None):
+        self.debugIfNot()
+        self.coverage.mergeCover(target=target)
 
     def setBreak(self, addr):
         resim = self.getRESimContext()
