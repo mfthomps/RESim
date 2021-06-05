@@ -63,6 +63,7 @@ class WriteData():
         #     self.call_ip, self.return_ip, str(self.cell), self.stop_on_read))
 
         self.pid = self.top.getPID()
+        self.filter = filter
 
     def write(self):
         retval = None
@@ -92,7 +93,11 @@ class WriteData():
             index = self.in_data[5:].find(self.udp_header)
             if index > 0:
                 first_data = self.in_data[:(index+5)]
-                self.mem_utils.writeString(self.cpu, self.addr, first_data) 
+                if self.filter is not None and not self.filter.filter(first_data):
+                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(first_data))) 
+                    self.lgr.debug('writeData first_data failed filter, wrote nulls')
+                else: 
+                    self.mem_utils.writeString(self.cpu, self.addr, first_data) 
                 self.in_data = self.in_data[len(first_data):]
                 # TBD add handling of padding with udp header                
                 retval = len(first_data)
@@ -105,7 +110,11 @@ class WriteData():
                 #self.mem_utils.writeString(self.cpu, self.addr, b) 
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d' % (self.udp_header, self.current_packet, len(data)))
-                self.mem_utils.writeString(self.cpu, self.addr, data) 
+                if self.filter is not None and not self.filter.filter(data):
+                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
+                    self.lgr.debug('writeData failed filter, wrote nulls')
+                else:
+                    self.mem_utils.writeString(self.cpu, self.addr, data) 
                 retval = len(data)
                 self.in_data = ''
                 #retval = 100
@@ -160,3 +169,6 @@ class WriteData():
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
             self.call_hap = None
             self.call_break = None
+
+    def getCurrentPacket(self):
+        return self.current_packet
