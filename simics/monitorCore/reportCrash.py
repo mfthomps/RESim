@@ -9,7 +9,7 @@ import decodeArm
 import pageUtils
 
 class ReportCrash():
-    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, target=None, targetFD=None):
+    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, target=None, targetFD=None, trackFD=None):
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -51,6 +51,8 @@ class ReportCrash():
             self.decode = decodeArm
         else:
             self.decode = decode
+        ''' Will be None if ReportCrash to inject data, otherwise the FD to trackIO on '''
+        self.trackFD = trackFD
         #self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
         #self.crash_report = open('/tmp/crash_report.txt', 'w')
 
@@ -82,8 +84,15 @@ class ReportCrash():
         self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
         ''' TBD why keep size? '''
         #self.top.injectIO(self.flist[self.index], keep_size = True)
-        ''' TBD do we need/want data watches? ''' 
-        self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, targetFD=self.targetFD, callback=self.doneForward)
+        ''' Either inject or track '''
+        if self.trackFD is None:
+            self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, targetFD=self.targetFD, callback=self.doneForward)
+        else:
+            ''' Be sure we are debugging and then do the trackIO '''
+            self.top.debugSnap(final_fun = self.doTrack)
+
+    def doTrack(self):
+        self.top.trackIO(self.trackFD, reset=True, callback=self.doneForward)
 
     def doneBackward(self, dumb):
         self.crash_report.write("\n\nBacktrace:\n")
