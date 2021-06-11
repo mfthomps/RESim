@@ -134,6 +134,8 @@ class reverseToCall():
             self.context_manager.genDeleteBreakpoint(self.enter_break2)
             self.context_manager.genDeleteHap(self.sysenter_hap, immediate=True)
             self.enter_break1 = None
+        else:
+           self.lgr.debug('noWatchSysenter, NO ENTER BREAK')
 
     def v2p(self, cpu, v):
         try:
@@ -1254,8 +1256,8 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
-                    self.lgr.debug(taskUtils.stringFromFrame(frame))
+                    #self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                    #self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
                     if callname == 'select' or callname == '_newselect':        
@@ -1276,10 +1278,10 @@ class reverseToCall():
                         recent_cycle, recent_frame = self.recent_cycle[pid]
                         if cycles > recent_cycle:
                             self.recent_cycle[pid] = [cycles, frame]
-                            self.lgr.debug('sysenterHap setting most recent cycle')
+                            #self.lgr.debug('sysenterHap setting most recent cycle')
                     else:
                         self.recent_cycle[pid] = [cycles, frame]
-                        self.lgr.debug('sysenterHap setting first recent cycle')
+                        #self.lgr.debug('sysenterHap setting first recent cycle')
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
