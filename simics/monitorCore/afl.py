@@ -11,6 +11,7 @@ import cli
 import stopFunction
 import writeData
 import imp 
+#import tracemalloc
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
@@ -89,6 +90,7 @@ class AFL():
         self.pid = self.top.getPID()
         self.total_hits = 0
         self.bad_trick = False
+        self.trace_snap1 = None
         self.empty_trace_bits = None
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
@@ -131,6 +133,7 @@ class AFL():
                 self.synchAFL()
                 self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
                 self.fault_hap = None
+                #tracemalloc.start()
                 # hack around Simics model bug
                 #self.fixFaults()
             else:
@@ -157,6 +160,7 @@ class AFL():
         self.synchAFL()
         self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
         self.fault_hap = None
+        self.top.noWatchSysEnter()
         self.goN(0) 
 
     def loadJumpers(self, fname):
@@ -189,6 +193,7 @@ class AFL():
                 avg = self.total_hits/100
                 self.lgr.debug('afl average hits in last 100 iterations is %d' % avg)
                 self.total_hits = 0
+                struct._clearcache()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
             if status != 0:
@@ -207,6 +212,17 @@ class AFL():
                 return
             if status != 0:
                 self.lgr.debug('afl stopHap status back from sendall trace_bits')
+            '''
+            if self.iteration == 1:
+                self.trace_snap1 = tracemalloc.take_snapshot()
+            elif self.iteration == 1000:
+                trace_snap2 = tracemalloc.take_snapshot()
+                top_stats = trace_snap2.compare_to(self.trace_snap1, 'lineno')
+                self.lgr.debug('found %d topstats' % len(top_stats))
+                for stat in top_stats[:10]:
+                    self.lgr.debug(stat)
+                SIM_run_command('q')
+            '''
             self.iteration += 1 
             self.in_data = self.getMsg()
             if self.in_data is None:
@@ -273,12 +289,15 @@ class AFL():
             self.lgr.debug('afl goN call continue, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
             self.coverage.watchExits(pid=self.pid)
 
-        #self.writeData()
-        self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
+        if self.write_data is None:
+            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True)
+        else:
+           self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
+
         self.write_data.write()
-           
+    
         cli.quiet_run_command('c') 
 
     def whenDone(self):
