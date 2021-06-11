@@ -92,6 +92,7 @@ class ReportCrash():
             self.top.debugSnap(final_fun = self.doTrack)
 
     def doTrack(self):
+        SIM_run_command('disable-reverse-execution')
         self.top.trackIO(self.trackFD, reset=True, callback=self.doneForward)
 
     def doneBackward(self, dumb):
@@ -151,12 +152,14 @@ class ReportCrash():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         bad_addr = self.top.getSEGVAddr()
         is_rop = False
+        read_count = self.dataWatch.readCount()
+        self.crash_report.write('%d read/recv calls prior to crash\n' % read_count)
         if bad_addr is not None:
             self.crash_report.write("SEGV on access to address: 0x%x\n" % bad_addr)
             self.lgr.debug("reportCrash doneForward SEGV on access to address: 0x%x\n" % bad_addr)
             #SIM_run_command('pselect %s' % self.cpu.name)
             #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles - 1))
-            self.reportStack()
+            #self.reportStack()
             #SIM_run_command('pselect %s' % self.cpu.name)
             #SIM_run_command('skip-to cycle=%d' % (self.cpu.cycles + 1))
             if instruct[1].startswith('ldm') and 'pc' in instruct[1]:
@@ -240,11 +243,13 @@ class ReportCrash():
                         self.lgr.debug('reportCrash, not a strcpy not handled.') 
             elif bad_addr % pageUtils.PAGE_SIZE == 0:
                 self.lgr.debug('reportCrash thinks it is a page boundary')
+                self.reportStack()
                 self.crash_report.write('\nPage boundary.\n')
                 self.doneBackward(None)
             else:
                 self.lgr.debug('reportCrash not a copy mark, look for bad reference.')
                 self.top.setCommandCallback(self.doneBackward)
+                self.reportStack()
                 self.tryCorruptRef(instruct)
            
         #SIM_run_alone(self.goAlone, None)
