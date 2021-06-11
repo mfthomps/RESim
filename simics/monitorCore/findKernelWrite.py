@@ -330,6 +330,9 @@ class findKernelWrite():
                     if data_watch is not None:
                         offset = self.addr - data_watch
                         data_str = 'Offset %d from start of buffer at 0x%x' % (offset, data_watch)
+                        which_read = self.dataWatch.whichRead()
+                        if which_read is not None:
+                            data_str = data_str+(' following %d read/recvs' % which_read)
 
                 self.lgr.debug('skipAlone access to 0x%x' % self.memory_transaction.logical_address)
                 if self.memory_transaction.logical_address == self.addr:
