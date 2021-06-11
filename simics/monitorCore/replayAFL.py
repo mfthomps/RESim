@@ -4,26 +4,6 @@ import time
 import shutil
 #import threading
 from simics import *
-here= os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-client_path = os.path.join(here, 'workspace','clientudpMult')
-def feedDriver(ip, port, header, lgr):
-    lgr.debug('feedDriver, enter loop')
-    result = 1
-    cmd = 'scp -P 4022 /tmp/sendudp localhost:/tmp/sendudp'
-    while result != 0:
-        lgr.debug('do cmd: %s' % cmd)
-        result = os.system(cmd)
-        lgr.debug('back from command')
-        if result != 0:
-            lgr.debug('driver not responding')
-            time.sleep(1)
-    lgr.debug('out of feedDriver loop') 
-    cmd = 'scp -P 4022 %s localhost:/tmp/' % client_path
-    result = os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
-    result = os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost /tmp/clientudpMult %s %d' % (ip, port)
-    result = os.system(cmd)
 
 class ReplayAFL():
     def __init__(self, top, target, index, targetFD, lgr):
@@ -37,6 +17,8 @@ class ReplayAFL():
         self.target = target
         self.index = index
         self.targetFD = targetFD
+        here= os.path.dirname(os.path.realpath(__file__))
+        self.client_path = os.path.join(here, 'clientudpMult')
         self.top.debugSnap(final_fun = self.go)
 
     def startAlone(self, driver):
@@ -63,7 +45,7 @@ class ReplayAFL():
             #SIM_run_alone(self.startAlone, driver)
             shutil.copyfile(glist[0], '/tmp/sendudp')
             script_file = os.path.join(self.resim_dir, 'simics', 'monitorCore', 'sendDriver.sh')
-            cmd = '%s %s %s %s &' % (script_file, self.ip, self.port, self.header)
+            cmd = '%s %s %s %s %s &' % (script_file, self.client_path, self.ip, self.port, self.header)
             result=os.system(cmd)
             self.lgr.debug('ReplayAFL tmpdriver cmd: %s result %s' % (cmd, result))
             self.lgr.debug('call track for fd %d' % self.targetFD)
