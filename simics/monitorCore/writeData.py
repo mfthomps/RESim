@@ -35,7 +35,7 @@ class WriteData():
         self.call_hap = None
         self.call_break = None
         # see in_data
-        if sys.version_info[0] > 2:
+        if sys.version_info[0] > 2 and type(udp_header) == str:
             self.udp_header = bytes(udp_header, encoding='utf8')
         else:
             self.udp_header = udp_header
@@ -64,6 +64,12 @@ class WriteData():
 
         self.pid = self.top.getPID()
         self.filter = filter
+
+    def reset(self, in_data, expected_packet_count, addr):
+        self.in_data = in_data
+        self.addr = addr
+        self.expected_packet_count = expected_packet_count
+        self.current_packet = 0
 
     def write(self):
         retval = None
@@ -104,10 +110,6 @@ class WriteData():
                 #self.lgr.debug('writeData wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
                 #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
             else:
-                #self.lgr.debug('writeData next UDP header %s not found packet %d  write nulls and cut packet count' % (self.udp_header, self.current_packet))
-                #self.lgr.debug(self.in_data[:500])
-                #b = bytearray(100)
-                #self.mem_utils.writeString(self.cpu, self.addr, b) 
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d' % (self.udp_header, self.current_packet, len(data)))
                 if self.filter is not None and not self.filter.filter(data):
