@@ -93,10 +93,10 @@ class Fuzz():
         fh.truncate(self.current_size)
         #self.lgr.debug('truncated to %d' % self.current_size)
         if self.pad_char is not None and not nopad:
-            pad_count = self.pad_to_size - self.current_size
+            pad_count = int(self.pad_to_size - self.current_size)
             pad_string = self.pad_char*pad_count
             fh.seek(0, 2)
-            fh.write(pad_string)  
+            fh.write(bytes(pad_string, encoding='utf8'))  
         fh.close()
         size = os.path.getsize(self.path)
         if self.pad_char is not None:
@@ -164,7 +164,7 @@ class Fuzz():
                 self.checkPad()
         
     def writeData(self):    
-        with open(self.path) as fh:
+        with open(self.path, 'rb') as fh:
             in_data = fh.read()
         self.write_data = writeData.WriteData(self.top, self.cpu, in_data, self.packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=None, 
