@@ -202,7 +202,9 @@ class GenMonitor():
         self.injectIOInstance = None
         ''' retrieved from snapshot pickle, not necessarily current '''
         self.debug_info = None
-
+  
+        ''' once disabled, cannot go back ''' 
+        self.disable_reverse = False
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -704,7 +706,8 @@ class GenMonitor():
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugPid()
             ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
-            self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
+            if not self.disable_reverse:
+                self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
 
             if group:
                 leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
@@ -2014,6 +2017,7 @@ class GenMonitor():
                 self.injectIOInstance.setCallHap()
 
     def noWatchSysEnter(self):
+        self.lgr.debug('noWatchSysEnter')
         self.rev_to_call[self.target].noWatchSysenter()
 
  
@@ -2301,7 +2305,8 @@ class GenMonitor():
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
-        if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
+        # note hack for identifying old arm kernel
+        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.callname[1:]:
                 #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
@@ -2335,6 +2340,8 @@ class GenMonitor():
             self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
             if call not in calls or call in skip_calls:
                del frames[pid]
+            else:
+               self.lgr.debug('kept frames for pid %d' % pid)
         if len(frames) > 0:
             self.lgr.debug('runToIO, call to setExits')
             the_syscall.setExits(frames, reset=reset) 
@@ -3476,7 +3483,7 @@ class GenMonitor():
             self.coverage.doCoverage()
         self.runToOpen(substring)    
 
-    def fuzz(self, path, n=None, fname=None):
+    def fuzz(self, path, n=1, fname=None):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
@@ -3497,6 +3504,8 @@ class GenMonitor():
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
+        ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
+        self.disable_reverse = True
         if target is None:
             self.debugPidGroup(pid)
         full_path = None
@@ -3510,6 +3519,7 @@ class GenMonitor():
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, linear=linear, target=target, create_dead_zone=dead)
         if target is None:
+            self.noWatchSysEnter()
             fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name):
