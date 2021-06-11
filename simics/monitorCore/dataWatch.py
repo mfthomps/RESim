@@ -1380,7 +1380,11 @@ class DataWatch():
                     strcpy = True
                 retval = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, None, None, strcpy=strcpy)
         return retval
-           
+        
+    def readCount(self):
+        return self.watchMarks.readCount()   
+    def whichRead(self):
+        return self.watchMarks.whichRead()   
 
     def pickleit(self, name):
         self.watchMarks.pickleit(name)

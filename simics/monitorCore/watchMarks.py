@@ -623,6 +623,34 @@ class WatchMarks():
     def getCallCycle(self):
         return self.call_cycle
 
+    def readCount(self):
+        ''' get count of read/recv, i.e., CallMarks having recv_addr values '''
+        retval = 0
+        for mark in self.mark_list:
+           if isinstance(mark.mark, self.CallMark):
+               if mark.mark.recv_addr is not None:
+                   retval += 1
+        return retval
+
+    def whichRead(self):
+        ''' Return the number of reads that have occured prior to this cycle.
+            Intended to decorate automated backtrace bookmarks with context.'''
+        found = None
+        num_reads = 0
+        for mark in reversed(self.mark_list):
+           if isinstance(mark.mark, self.CallMark):
+               if mark.mark.recv_addr is not None:
+                   num_reads += 1
+                   if mark.call_cycle >= self.cpu.cycles:
+                       found = num_reads
+        if found is None:
+            retval = None
+        else:
+            retval = num_reads - (found - 1)
+                 
+        return retval
+        
+
     def loadPickle(self, name):
         mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
         if os.path.isfile(mark_file):
