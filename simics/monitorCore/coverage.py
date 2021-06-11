@@ -355,7 +355,7 @@ class Coverage():
 
     def restoreAFLBreaks(self):
         ''' leave unused code as cautionary tale re: pom '''
-        self.afl_del_breaks = []
+        self.afl_del_breaks.clear()
         return 
 
 
@@ -469,7 +469,7 @@ class Coverage():
             self.prev_loc = 0
             self.did_exit = 0
             self.hit_count = 0
-            self.afl_del_breaks = []
+            self.afl_del_breaks.clear()
 
     def startDataSessions(self, dumb):
         if not self.enabled:
