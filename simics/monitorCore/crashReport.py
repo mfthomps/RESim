@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+'''
+Executable program for generating crash reports by starting/stopping
+RESim for each crash.
+'''
 import os
 import sys
 import glob
@@ -15,6 +19,7 @@ analysis.
 '''
 here= os.path.dirname(os.path.realpath(__file__))
 client_path = os.path.join(here, 'clientudpMult')
+print('Client path is %s' % client_path)
 def feedDriver(ip, port, header):
     result = 1
     cmd = 'scp -P 4022 /tmp/sendudp localhost:/tmp/sendudp'
@@ -28,7 +33,7 @@ def feedDriver(ip, port, header):
     result = os.system(cmd)
     cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
     result = os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost /tmp/clientudpMult %s %d' % (ip, port)
+    cmd = 'ssh -p 4022 mike@localhost /tmp/clientudpMult %s %d %s' % (ip, port, header)
     result = os.system(cmd)
 
 ''' ini file to run in RESim '''
@@ -56,29 +61,32 @@ if len(sys.argv) > 3:
     if header is None:
         header = ''
 
-''' path to AFL output directory '''
-afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-afl_dir = os.path.join(afl_output, target)
-if not os.path.isdir(afl_dir):
-   print('No afl directory found at %s' % afl_dir)
-   exit
-
-
-''' Get all crash files '''
-crashes_dir = os.path.join(afl_dir, 'crashes*')
-gmask = '%s/*' % crashes_dir
-print("ReportCrash gmask: %s" % gmask)
-glist = glob.glob(gmask)
-flist=[]
-for g in glist:
-    if os.path.basename(g).startswith('id:'):
-        flist.append(g)
+if os.path.isfile(target):
+    flist = [target]
+else:
+    ''' path to AFL output directory '''
+    afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
+    afl_dir = os.path.join(afl_output, target)
+    if not os.path.isdir(afl_dir):
+       print('No afl directory found at %s' % afl_dir)
+       exit
+    
+    
+    ''' Get all crash files '''
+    crashes_dir = os.path.join(afl_dir, 'crashes*')
+    gmask = '%s/*' % crashes_dir
+    print("ReportCrash gmask: %s" % gmask)
+    glist = glob.glob(gmask)
+    flist=[]
+    for g in glist:
+        if os.path.basename(g).startswith('id:'):
+            flist.append(g)
 
 ''' The script to be called by RESim once it is initialized '''
 os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneCrash.py')
 
 index=0
-for f in flist:
+for f in sorted(flist):
     os.environ['ONE_DONE_PATH'] = f
     os.environ['ONE_DONE_PARAM'] = str(index)
     if trackFD is not None:
@@ -88,6 +96,7 @@ for f in flist:
         #os.system('./tmpdrive.sh &')
     print("starting monitor")
     result = os.system('./monitor.sh %s' % resim_ini)
+    print('Monitor exited, try next')
     if result != 0:
         exit
 
