@@ -83,7 +83,7 @@ class DataWatch():
             my_len = length
         else:
             my_len = max_len
-        self.lgr.debug('DataWatch set range start 0x%x watch lenght 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
+        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
             self.lgr.debug('DataWatch, backstop set, start data session')
@@ -833,6 +833,9 @@ class DataWatch():
             SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
             self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here TBD FIX THIS.' % (addr, offset, length, start, pid, eip))
             #self.stopWatch()
+        else:
+            self.lgr.debug('dataWatch finishReadHap, modification by kernel, set kernelReturn hap')
+            SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
 
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
@@ -897,7 +900,7 @@ class DataWatch():
             #self.lgr.debug('%s' % st.getJson()) 
             # look for memcpy'ish... TBD generalize 
             frames = st.getFrames(20)
-            mem_stuff = self.memsomething(frames, mem_funs)
+            mem_stuff = self.memsomething(frames, mem_funs, st)
         
             if mem_stuff is not None:
                 self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
@@ -1128,7 +1131,7 @@ class DataWatch():
             return
         ''' look for memcpy'ish... TBD generalize '''
         frames = st.getFrames(20)
-        mem_stuff = self.memsomething(frames, my_mem_funs)
+        mem_stuff = self.memsomething(frames, my_mem_funs, st)
         if mem_stuff is not None:
             self.lgr.debug('mem_stuff function %s, ret_ip is 0x%x' % (mem_stuff.fun, mem_stuff.ret_addr))
             self.mem_something = self.MemSomething(mem_stuff.fun, None, mem_stuff.ret_addr, None, None, None, 
@@ -1300,7 +1303,7 @@ class DataWatch():
             fun_precidence = 0 
         return fun_precidence
     
-    def memsomething(self, frames, local_mem_funs):
+    def memsomething(self, frames, local_mem_funs, st):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
         mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.']
         retval = None
@@ -1309,7 +1312,7 @@ class DataWatch():
         #self.lgr.debug('memsomething max_index %d' % (max_index))
         for i in range(max_index, -1, -1):
             frame = frames[i]
-            #self.lgr.debug('dataWatch memsomething frame instruct is %s' % frame.instruct)
+            self.lgr.debug('dataWatch memsomething frame %d instruct is %s' % (i, frame.instruct))
             if frame.instruct is not None:
                 if frame.fun_name is not None:
                     fun = frame.fun_name
@@ -1338,7 +1341,6 @@ class DataWatch():
                             self.lgr.debug('fun in local_mem_funs %s' % fun)
                             fun_precidence = self.funPrecidence(fun)
                             if fun_precidence == 0 and i > 3:
-                                ''' a strcpy or some such more than 3 frames down, don't buy it '''
                                 self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                                 continue
                         if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
