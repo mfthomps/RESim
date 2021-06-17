@@ -34,6 +34,7 @@ class InjectIO():
         self.call_hap = None
         self.call_break = None
         self.addr = None
+        self.addr_addr = None
         self.max_len = None
         self.orig_buffer = None
         self.loadPickle(snap_name)
