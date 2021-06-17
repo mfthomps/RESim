@@ -49,6 +49,13 @@ class StackTrace():
             return
         self.doTrace()
 
+    def isCallTo(self, instruct, fun):
+        if instruct.startswith(self.callmn):
+            parts = instruct.split()
+            if parts[1].startswith(fun):
+                return True
+        return False
+            
     def isArmCall(self, instruct):
         retval = False
         if instruct.startswith(self.callmn):
@@ -283,7 +290,7 @@ class StackTrace():
         esp = self.reg_frame['sp']
         eip = self.reg_frame['pc']
         if self.stack_base is not None:
-            self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
+            #self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
         else:
             #self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
             pass
@@ -404,7 +411,7 @@ class StackTrace():
                                     else:
                                         ''' record the direct branch, e.g., B fuFun '''
                                         frame = self.FrameEntry(call_to, fname, first_instruct, ptr, fun_addr=fun_hex, fun_name=fun)
-                                        self.lgr.debug('stackTrace direct branch fname: %s frame %s' % (fname, frame.dumpString()))
+                                        #self.lgr.debug('stackTrace direct branch fname: %s frame %s' % (fname, frame.dumpString()))
                                         self.addFrame(frame)
                                 elif self.cpu.architecture != 'arm':
                                     bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
@@ -470,17 +477,20 @@ class StackTrace():
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
                             frame = self.FrameEntry(call_ip, 'unknown', instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                             self.addFrame(frame)
-                            #self.lgr.debug('stackTrace fname none frame %s' % frame.dumpString())
+                            self.lgr.debug('stackTrace fname none added frame %s' % frame.dumpString())
                         else:
                             ''' ad-hoc detect clib ghost frames, assume clib does not call other libraries.  exceptions?  TBD '''
                             if fname.startswith('clib'):
                                 if not prev_fname.startswith('clib') and not prev_fname.startswith('libpthread'):
-                                    self.lgr.debug('stackTrace found call from clib to 0x%x, assume a ghost frame')
+                                    #self.lgr.debug('stackTrace found call from clib to 0x%x, assume a ghost frame')
                                     skip_this = True        
                             if not skip_this:
                                 frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                 self.addFrame(frame)
-                            #self.lgr.debug('stackTrace fname %s frame %s' % (fname, frame.dumpString()))
+                                #self.lgr.debug('stackTrace fname %s added frame %s' % (fname, frame.dumpString()))
+                            else:
+                                pass
+                                #self.lgr.debug('stackTrace told to skip %s' % frame.dumpString())
                         if not skip_this:
                             prev_fname = fname
                             prev_ip = call_ip
@@ -525,8 +535,14 @@ class StackTrace():
         return len(self.frames)
 
     def addFrame(self, frame):
-        fun_addr = self.ida_funs.getFun(frame.ip)
-        fun_of_ip = self.ida_funs.getName(fun_addr)
-        frame.fun_of_ip = fun_of_ip
-        self.frames.append(frame)
+        prev_instruct = ''
+        if len(self.frames) > 0:
+            prev_instruct = self.frames[-1].instruct
+        if frame.instruct != prev_instruct:
+            fun_addr = self.ida_funs.getFun(frame.ip)
+            fun_of_ip = self.ida_funs.getName(fun_addr)
+            frame.fun_of_ip = fun_of_ip
+            self.frames.append(frame)
+        else:
+            self.lgr.debug('stackTrace skipping back to back identical calls: %s' % frame.instruct)
         
