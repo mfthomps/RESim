@@ -1,4 +1,5 @@
 import os
+import sys
 import pickle
 import shutil
 import writeData
@@ -96,7 +97,10 @@ class Fuzz():
             pad_count = int(self.pad_to_size - self.current_size)
             pad_string = self.pad_char*pad_count
             fh.seek(0, 2)
-            fh.write(bytes(pad_string, encoding='utf8'))  
+            if sys.version_info[0] == 3:
+                fh.write(bytes(pad_string, encoding='utf8'))  
+            else:
+                fh.write(pad_string)  
         fh.close()
         size = os.path.getsize(self.path)
         if self.pad_char is not None:
