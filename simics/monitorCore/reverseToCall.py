@@ -849,7 +849,10 @@ class reverseToCall():
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
                             rval = self.task_utils.getMemUtils().readPtr(self.cpu, addr)
-                            self.lgr.debug('cycleRegisterMod at eip %x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x prev 0x%x' % (eip, addr, 
+                            if addr is None or rval is None:
+                                self.lgr.debug('cycleRegisterMod eip 0x%x cannot get register value from %s' % (eip, instruct[1]))
+                                continue
+                            self.lgr.debug('cycleRegisterMod at eip 0x%x, is ldm instruction addr 0x%x reg val 0x%x wanting 0x%x prev 0x%x' % (eip, addr, 
                                     rval, self.reg_val, self.prev_reg_val))
                             if addr is not None and self.reg == 'pc':
                                 self.lgr.debug('cycleRegisterMod, modification of PC register, set as addr type for 0x%x' % addr)
