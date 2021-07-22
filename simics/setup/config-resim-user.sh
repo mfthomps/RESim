@@ -3,11 +3,9 @@
 # Configure a user account to use RESim, creates a ~git/RESim and a  ~/workspace for
 # running RESim.
 #
-git config --global http.proxy http://webproxy:3128
-git config --global https.proxy https://webproxy:3128
+#git config --global http.proxy http://webproxy:3128
+#git config --global https.proxy https://webproxy:3128
 cat >> ~/.bashrc <<- EOM
-export http_proxy=http://webproxy:3128
-export https_proxy=https://webproxy:3128
 export RESIM=~/git/RESim
 EOM
 mkdir ~/git

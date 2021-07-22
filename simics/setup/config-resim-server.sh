@@ -3,7 +3,7 @@
 #  Configure a CGC blade server for use with RESim
 #
 echo "10.20.200.41 webproxy" >> /etc/hosts
-echo "Acquire::http::Proxy \"http://webproxy:3128\";" >> /etc/apt/apt.conf
+#echo "Acquire::http::Proxy \"http://webproxy:3128\";" >> /etc/apt/apt.conf
 mv /etc/apt/sources.list /etc/apt/sources.list.cgc
 sources=/etc/apt/sources.list
 cat > $sources <<- EOM
