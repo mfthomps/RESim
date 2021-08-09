@@ -227,17 +227,27 @@ class LaunchRESim():
                         cmd = "%s=%s" % (name, value)
                         run_command(cmd)
         
-                print('Start the %s' % self.config.get('driver', '$host_name'))
-                run_command('run-command-file ./targets/%s' % self.config.get('driver','SIMICS_SCRIPT'))
+                driver_script = self.config.get('driver','SIMICS_SCRIPT')
+                if not self.SIMICS_VER.startswith('4'):
+                    if 'genx86.simics' in driver_script:
+                        driver_script = driver_script.replace('genx86.simics', 'genx86_5.simics')
+                        print('DO REPLACE now %s' % driver_script)
+                    else:
+                        print('genx86.simics not in %s' % driver_script)
+                print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 done = False
                 count = 0
                 while not done and not DRIVER_WAIT: 
-                    run_command('c 50000000000')
+                    #print('***RUN SOME **')
+                    #run_command('c 50000000000')
+                    run_command('c 500000000')
                     if os.path.isfile('driver-ready.flag'):
+                        #print('GOT DRIVER READY')
                         done = True 
                     count += 1
-                    #print count
+                    #print(count)
                 self.link_dict['driver'] = assignLinkNames('driver', self.comp_dict['driver'])
                 switch_map = linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'])
                 if DRIVER_WAIT:
@@ -266,6 +276,7 @@ class LaunchRESim():
                     cgc.doInit()
         
     def doSections(self):
+        print('**************************W')
         for section in self.config.sections():
             if section in self.not_a_target:
                 continue
@@ -294,10 +305,12 @@ class LaunchRESim():
                         params = params + " "+cmd
                         if self.SIMICS_VER.startswith('4'):
                            run_command('$'+cmd)
-    
+   
             if self.SIMICS_VER.startswith('4'):
                 cmd='run-command-file "./targets/%s"' % (script)
             else:
+                if 'genx86.simics' in script:
+                    script = script.replace('genx86.simics', 'genx86_5.simics')
                 cmd='run-command-file "./targets/%s" %s' % (script, params)
             print('cmd is %s' % cmd)
             run_command(cmd)
