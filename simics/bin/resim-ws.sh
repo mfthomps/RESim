@@ -13,6 +13,12 @@ if [[ -z "$RESIM_DIR" ]]; then
    exit
 fi
 $SIMDIR/bin/project-setup  || exit
-cp $RESIM_DIR/simics/workspace/monitor6.sh monitor.sh
+
+FOUR=4.8
+if [[ $SIMDIR == *"$FOUR"* ]]; then
+    cp $RESIM_DIR/simics/workspace/monitor.sh monitor.sh
+else
+    cp $RESIM_DIR/simics/workspace/monitor6.sh monitor.sh
+fi
 here=`pwd`
 echo "Workspace setup at $here."
