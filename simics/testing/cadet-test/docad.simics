@@ -3,20 +3,33 @@
 #  Run the client.py script on the driver and check
 #  for ROP report in the log
 #
-decl {
-   param cgc : string = ""
+if $simics_version != 4.8{
+    decl {
+       param cgc : string = ""
+    }
 }
 @cgc.debugProc('cadet01')
 @cgc.watchROP()
-!./findWindow.sh "Simics Target Consoles"
-!xdotool key Down
-!xdotool key Return
-!sleep 2
-!./findWindow.sh driver.mb.sb.com
+echo "ver is $simics_version"
+if $simics_version == 4.8{
+    !./findWindow.sh ".*driver.mb.sb.com.0..*"
+
+}else{
+    !./findWindow.sh "Simics Target Consoles"
+    !xdotool key Down
+    !xdotool key Return
+    !sleep 2
+    !./findWindow.sh driver.mb.sb.com
+}
 !xdotool type "          ./client.py"
 !xdotool key Return
 script-branch "sent it" {
-    local $console = driver.serconsole.con
+    local $console = NIL
+    if $simics_version == 4.8 {
+        $console = driver.serconsole1.con
+    }else{
+        $console = driver.serconsole.con
+    }
     $console.wait-for-string "sent it"
     echo "client sent string, run some then check log"
 }
