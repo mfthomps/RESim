@@ -310,9 +310,9 @@ class WatchMarks():
             cycles=cycles+1
         self.addWatchMark(ip, cm, cycles=cycles)
         if recv_addr is None:
-            self.lgr.debug('watchMarks markCall 0x%x %s' % (ip, msg))
+            self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s' % (ip, cycles, msg))
         else:
-            self.lgr.debug('watchMarks markCall 0x%x %s recv_addr: 0x%x' % (ip, msg, recv_addr))
+            self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s recv_addr: 0x%x' % (ip, cycles, msg, recv_addr))
             if self.recent_buf_address is None:
                 self.recent_buf_address = recv_addr
                 self.recent_buf_max_len = max_len
