@@ -1,0 +1,25 @@
+#
+#  invoked via xdotool command to simics prompt
+#  Run the client.py script on the driver and check
+#  for ROP report in the log
+#
+decl {
+   param cgc : string = ""
+}
+@cgc.debugProc('cadet01')
+@cgc.watchROP()
+!./findWindow.sh "Simics Target Consoles"
+!xdotool key Down
+!xdotool key Return
+!sleep 2
+!./findWindow.sh driver.mb.sb.com
+!xdotool type "          ./client.py"
+!xdotool key Return
+script-branch "sent it" {
+    local $console = driver.serconsole.con
+    $console.wait-for-string "sent it"
+    echo "client sent string, run some then check log"
+}
+#
+# Now run the simulation
+c 50000000000

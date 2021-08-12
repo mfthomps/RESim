@@ -1,0 +1,7 @@
+script-branch "driver login" {
+    local $console = driver.serconsole.con
+    $console.wait-for-string "ubuntu login: "
+    $console.input "mike\n"
+    $console.wait-for-string "ubuntu login: "
+    $console.input "mike\n"
+}
