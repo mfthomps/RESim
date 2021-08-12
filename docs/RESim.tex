@@ -230,10 +230,6 @@ the nth recv call.
 
 \item {\tt uncall} – Reverse execution until the call instruction that entered the current function.
 
-\item {\tt precall([pid]} - Reverse until prior to system call for given or current PID.  
-Note that this, like all reversing calls, assumes you have recorded time into which you can reverse\footnote{This command previoulsy was manually combined
-with trackIO in cases where the read was waiting in the kernel.  That logic has now been combined into trackIO.}
-
 \item {\tt revToWrite(address)} – Reverse execution until a write operation to the given address within the debugged process.
 
 \item {\tt revToModReg(reg)} – Reverse execution until the given register is modified.
@@ -256,12 +252,12 @@ of the bookmark string.
 Note however, that data watches are based on the len field given in the read or recv, and thus data references are not necessarily to data actually read (e.g., a read of ten bytes
 that returns one byte would break on a reference to the fifth byte in the buffer.)
 
-\item {\tt trackIO(FD)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
-FD, RESim will back up to prior to the system call before proceeding.  This insures the very next received data is tracked. Data watches persist after the
+FD, RESim will ensure that call is tracked.  Data watches persist after the
 call, e.g., to support {\tt retrack} described below.  Each use of trackIO will reset all data watches, but does not clear watch marks, i.e., you can still skip to those simulation cycles.  Also see 
-the {\tt tagIterator} command.
+the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse time origin to be reset if the kernel was waiting on a read/recv. See \ref{real-networks} 
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -338,7 +334,7 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 See section \ref{maze}.
 
 \item {\tt mapCoverage} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
-saved in a <prog>.hits file in IDA db directory, and will be read by the IDA client colorBlocks script   Subsequent uses of this command
+saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client colorBlocks script   Subsequent uses of this command
 will reset the coverage tracking.  Use {\tt stopCoverage} to stop basic block tracking.  The basic blocks database is read from the .blocks file created
 by the IDA client findBlocks script.  See section \ref{coverage} for information on how the IDA client represents code coverage and highlights
 branches that have not been taken.
@@ -352,26 +348,36 @@ a return from a read, set basic block coverage and iteratively execute while red
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt afl(fname=None, target=None, targetFD=None)} -- Uses a network connection of localhost:8765 with an AFL server (githum/mfthomps/AFL).  The simulation is assumed to be stopped on a return from the read of interest.  See \ref{fuzz}
+\item{\tt afl(fname=None, target=None, targetFD=None, dead=False)} -- Uses a network connection of localhost:8765 with an AFL server (githum/mfthomps/AFL).  The simulation is assumed to be stopped on a return from the read of interest.  See \ref{fuzz}
 
-\item{tt aflFD(fd, configfile)} -- Prepares a simulation for fuzzing by running to an input system call for the given FD.  It saves the pre-call state in a configuration
+\item{tt aflFD(fd, configfile)} -- Prepares a simulation for injectIO or fuzzing by running to an input system call for the given FD.  It saves the pre-call state in a snapshot
 file with the given name.  Saved state includes the syscall call and return PCs for use in multi-packet UDP fuzzing, and buffer address and size.
+Note using this with TCP and real networks can lead to undefined behavior.  Use a driver computer instead of real networks.  
 
 \item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an afl-output directory whose path is defined in the AFL\_OUTPUT
 item in the ENV section of your ini file.  Each file in the target's {\tt queue} subdirectory will be played with code coverage tracked.
 The coverage file for the executable will be updated.  This is intended to update the branch-not-taken (BNT) data for manual review.
 
+\item{\tt aflBNT(target)} -- List branches not taken as found in a hits file named by the current process and the given target.  The target name can be ``all'' to
+name the combined hits file, e.g., someproc.all.hits.
+
+\item{\tt bbAFL(target, bb)} -- Replay all execution paths in a named AFL output directory and list those that hit a given address.  Intended to find input files that
+lead to a basic block having a branch not take (BNT), e.g., as found using the {\tt aflBNT} command.
+
 \item{\tt crashReport(target)} Generate crash reports for each crash discovred by AFL.  The given {\tt target} is as defined in the {\tt playAFL} command, except you can optionally provide the
-full path to a file, in which case only that file will be reported on. 
+full path to a file, in which case only that file will be reported on.  NOTE: when handling multi-packet data sets, use the {\tt crashReport.py} script to launch RESim multiple times,
+one for each data file.
+
+\item{\tt replayAFL(target, index)} -- Replay a specific AFL session named by a target (see {tt playAFL} and index identifier, e.g., {\tt 0012}.
 
 \item{\tt satisfyCondition} -- (experimental) Assess the comparison instruction at a given address and attempt to satisfy it by altering input data.  
-Initially handles simple ARM {\tt cmp reg, <value>} instructions.  The 
+Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The 
 reverse track function is used to determine the source of the register content, and if that is a receive, it alters the data to satisfy the
 comparison and then uses {\tt retrack} to run forward and track the new execution flow.
 
-\item {\tt idaMessage} -- display the most recent message made available to IDA.  For example, after a runToBind, this will display the FD that was bound to.
+\item{\tt idaMessage} -- display the most recent message made available to IDA.  For example, after a runToBind, this will display the FD that was bound to.
 
-\item {\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of Watch Marks. Uuse {\tt showMalloc} to 
+\item{\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of Watch Marks. Use {\tt showMalloc} to 
 then list by pid, block address and size.
 
 \end{itemize}
@@ -412,6 +418,8 @@ particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed 
 .py extension.  The file must be relative to the Simics workspace and it must have a boolean {\tt filter(data)} method that returns
 False if the packet is to be rejected.  
 \item {\tt AFL\_OUTPUT} -- Path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. 
+\item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
+\item {\tt TARGET\_PORT} -- Port to use on driver fuctions such as {\tt replayAFL}
 
 \end{itemize}
 
@@ -510,7 +518,7 @@ It also assumes you have IDA Pro.
 \begin{verbatim}
    git clone https://github.com/mfthomps/RESim.git
 \end{verbatim}
-\item Install python-magic from gz file:  pip install <path>
+\item Install python-magic from gz file:  pip install $<$path$>$
 \begin{verbatim}
    sudo pip install /mnt/re_images/python_pkgs/python-magic-0.4.15.tar.gz
 \end{verbatim}
@@ -578,7 +586,7 @@ $RESIM/simics/ida/dumpFuns.py
 You may also run the {\tt findBlocks.py} script to generate a database of basic blocks that will be read by the RESim {\tt mapCoverage} command.
 This will then track basic block coverage, and that can be highlighted using the {\tt colorBlocks.py} script.
 
-From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc<program>} command, naming the program of interest.
+From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc$<$program$>$} command, naming the program of interest.
 RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
 Using {\tt debugProc} rather than {\tt debugPid} allows RESim to collect shared object information for the target process.
 You may now attach the IDA gdb debugger to the process.   After the debugger has attached, run this IDA plugin script:
@@ -593,6 +601,10 @@ return to a known state.
 
 There are situations where it is most productive, or necessary, to enage with the Simics command line directly.  If you change the execution state
 via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.
+
+The {\tt Debugger / Run to user space} command (or {\tt cgc.resynch()} will move the simulation ahead to the next user space instruction in any
+of the debugged threads.  This may be necessary to establish context for IDA breakpoints to work.  For example, if you are debugging a program,
+and run ahead arbitrarily and stop in some other process/kernel context, the IDA breakpoints will not work.
 
 RESim commands are available in IDA via the Debugger menu item, and via right clicking on addresses.  
 
@@ -613,8 +625,8 @@ The format of directive files depend on the subfunction.  Each subfunction also 
 triggered on a {\tt read} or {\tt write} operation. 
  
 \begin{itemize}
-\item {\tt sub\_replace <operation>}-- Replace a substring within a read or write buffer (specified by the
-{\tt <operation>}, with a given string.
+\item {\tt sub\_replace $<$operation$>$}-- Replace a substring within a read or write buffer (specified by the
+{\tt $<$operation$>$}, with a given string.
 The directives file includes one or more sets of directives.
 The directives use regular expression syntax.
 An example directives file looks like:
@@ -630,7 +642,7 @@ root::
 \end{verbatim}
 \noindent This example might be run when the {\tt su} command is captured in the debugger.
 
-\item {\tt script\_replace <operation>}-- Replace a substring within a script buffer with a given string.
+\item {\tt script\_replace $<$operation$>$}-- Replace a substring within a script buffer with a given string.
 The intended use is to dynamically modify commands read from script files. Some implementations read 8k
 from the script file, operate on the next no-comment line, and then advance the file pointer and repeat.  This causes your Dmod target to be read
 many times.  With a script\_replace Dmod, the target match is only considered when it matches the start
@@ -650,7 +662,7 @@ modprobe e100
 \end{verbatim}
 \noindent This example might be run when the {\tt su} command is captured in the debugger.
 
-\item {\tt full\_replace <operation>} -- Replace the entire write or read buffer with a given string.
+\item {\tt full\_replace $<$operation$>$} -- Replace the entire write or read buffer with a given string.
 The directives file includes a single directive whose replacement string may include multiple lines.
 \begin{verbatim}
 full_replace write
@@ -663,8 +675,8 @@ SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="00:e0:27:0f:ca:a
   ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", NAME="eth1"
 \end{verbatim}
 
-\item {\tt match\_cmd <operation>} Execute a list of Simics commands when the trigger string is found
-in a read or write buffer (per the {\tt <operation>} field), and a separate substring is also found.  If the trigger string is
+\item {\tt match\_cmd $<$operation$>$} Execute a list of Simics commands when the trigger string is found
+in a read or write buffer (per the {\tt $<$operation$>$} field), and a separate substring is also found.  If the trigger string is
 found, the function will terminate, i.e., no more {\tt write} syscalls will be evaluated.  Simics commands may reference
 CLI variables defined via the RESim configuration files, such as network connection names described in \ref{networks}.
 \begin{verbatim}
@@ -745,11 +757,18 @@ When a data watch buffer within the stack appears to be substantially overwritte
 The associated hueristic is intended to catch reuse of stack buffers to avoid false watch marks.  Beware of false removals, i.e., you
 may miss accesses to buffers.
 
-A related function,  {\tt injectIO}, injects data from a file into a read buffer identified using trackIO or runToIO.  If there are no
-data watch buffers, the function jumps back to the origin before injecting the data -- it assumes the origin was snapshotted following
-a data read using runToIO (or aflFD).
+A related function,  {\tt injectIO}, injects data from a file into a read buffer identified via the aflFD function, which creates a snapshot
+and stores information related to the data input, including the original buffer data.
 
-*** We disable watches in order to query the stack frame without trigginer haps.  Do our readWord function trigger read haps? eh?
+\subsection{When are you done?}
+When tracking data, you need to decide when to stop looking for data references.  The primary mechanism for this is the BACK\_STOP\_CYCLES
+setting.  When tracking data, RESim declares it is done tracking after that number of execution cycles occur with no data references.
+Note this can mask interesting behavior (and faults) if the number of cycles is too small.  Note also that failure to account for all data
+buffers can lead to tracking ending prematurely.  When in doubt, test with ridiculously large cycle counts.
+
+\subsection{Warning}
+Use of real networks to generate tracked data can lead to silent corruption of the simulation unless care is taken to reset the reversing origin
+after the real network is done interacting with the system.  See \ref{real-networks}.
 
 \section{Example workflows}
 \label{example-workflows}
@@ -872,7 +891,7 @@ AFL generates fuzzed data.  RESim injects this data directly into the target mem
 For single UDP packets, we simply truncate the AFL data to conform to expected UDP packet size (trusting that AFL will not focus future resources on fuzzing 
 truncated data.)  
 
-Handling multiple packets currently requires that we assume the recv calls are made from a common use space address, and
+Handling multiple packets currently requires that we assume the recv calls are made from a common user space address, and
 the returns from recv all end up a the same user space address.  This seems a safe assumption for most applications.  Our
 approach is to stop at the recv call, then set the EIP to the return value and inject the next bunch of data.
 Splitting multiple UDP packets for each coverage session currently takes one of two approaches.  If the application is known
@@ -885,12 +904,17 @@ to see reduced coverage for such data sets.
 The more challenging case is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
 minimum size is 1400 bytes, a 2 byte sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
 
+\subsection{fuzz TCP}
+Use the {\tt aflTCP} command to start a session to fuzz TCP.  When setting up the snapshot, use a driver computer rather than
+real networks, e.g, with netcat.  Otherwise undefined behavior will result, e.g. if the process tries to send to the socket.
+
 \subsection{Packet filters}
 Sometimes you may wish to focus the fuzzing on a specific code path determined by data within the packet.  This may be of particular
 interest in multi-packet UDP cases where you know a specific command will lead to interesting paths when the 2nd packet is consumed.
 Left alone however, AFL will find interest in code paths generated by the first packet having other commands.  Currently, you can
 define a {\tt AFL\_PACKET\_FILTER} as a python program to reject AFL data that does not contain desired content, e.g., a specific byte
-at a specific offset.
+at a specific offset.  The program must have a {\tt filter(data)} method that returns False if the packet is to be rejected.  Rejection
+causes nulls to be written in place of the packet.  The intention is that will yield poor coverage, causing AFL not see new paths.
 
 \subsection{Address jumpers}
 \label{jumpers}
@@ -908,6 +932,18 @@ and you want the fuzzing guidance (i.e., code coverage feedback) to be driven by
 {\tt aflFD} as if the 1st process were the target.  Then provide the {\tt afl} command with the optional {\tt target} and {\tt targetFD}
 parameters to name the 2nd process and FD from which it reads the data.
 
+\subsection{Thread isolation}
+Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
+Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process.  Given the costs
+of tracking context, often this is the best alternative.  You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
+breakpoints using the {\tt dead=True} parameter.  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
+name of the snapshot from which the session began.  When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
+when establishing code coverage.
+
+If performance appears to drop way off after a while, consider running with the dead switch again, this time using found paths instead of your seed.  Of course
+this situation could suggest discovery of input data that causes other threads to consume fuzzed data, i.e., yet another shiny object.
+It would be nice if RESim could provide notice that some other thread is consuming breakpoints, however the act of reading modeled state during a 
+breakpoint slows down the execution cycles by multiples.  One clue may be the stability displayed by AFL.  A low value can suggest interference by other threads.
 
 \subsection{Crash analysis}
 If AFL finds crashes, use the {\tt crashReport} command to generate reports on each crash.  These reports include stack traces, reverse
@@ -925,12 +961,23 @@ workspace directory as an example.
 
 \subsection{Update code coverage}
 The new code paths discovered by AFL can be added to your aggregate code coverage file using the {\tt playAFL} command.  This is intended
-to aid manual analysis to see if the new path lead to other interesting paths that can then be fed back to AFL.  Refer to the BNT window on
+to aid manual analysis to see if the new path leads to other interesting paths that can then be fed back to AFL.  
+The  aflBNT command displays the brachces not taken (BNT).  You can then use the bbAFL command to identify AFL-generated data files
+that lead to source of the BNT.  Also, refer to the BNT window on
 the IDA client.
 
 \subsection{Fuzzing performance}
 The number of breakpoints hit for coverage has a large effect on performance.
 Avoid references to the target model from within the coverage HAP -- a call to getPID reduces execution iterations from 20/sec to 5/sec.
+And see Thread isolation above.
+
+The default is for the {\tt afl} command to set breakpoints on physical addresses.  Use {\tt linear=True} to force linear addresses, which will
+result in use of the contextManager to maintain execution context.  Depending on the application, this may have different performance properties than 
+use of physical addresses.  
+
+One thing that may affect performance when using physical addresses is paging. If a significant amount of application code is not paged in at the
+start, RESim must dynamically break on page table structures and dynamically add breakpoints and Haps in order to track the basic blocks.  Depending on
+the  application and your goals, consider running the program to a steady state prior to creating the snapshot for fuzzing.
 
 \subsection{Fuzzing workflow}
 Assume a UDP service that you'd like to fuzz with a single packet at a time.
@@ -1052,7 +1099,7 @@ We've subsequently gone back to only relying on Core\_Exception breakpoints.
 
 \section{External tracking of shared object libraries}
 During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in IDA Pro to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
-synthesizing access to {\tt /proc/<pid>/map}
+synthesizing access to {\tt /proc/$<$pid$>$/map}
 
 When the program of interest is loaded via an execve system call, breakpoints are set to catch the open system call.  The resulting callbacks look for opening of shared library files, i.e., *.so.*.   When shared objects are opened, breakpoints are then set to catch the next use of mmap by the process.  We assume the resulting allocated address is where the shared object will be loaded.  Empirical evidence indicates this simple brute force strategy works.  These breakpoints and callbacks persist until the process execution reaches the text segment of the program.
 
@@ -1200,6 +1247,9 @@ breakpoints will not be caught when processor is in the resim context.
 TBD: define multiple contexts to allow parallel debugging of different processes on the same cell.  (Parallel 
 debugging of processes on different cells should be easier since they each have independent context managers.)
 
+IDA breakpoints and the Simics debug server make assumptions about the current context.  If you are in an arbitary state, 
+you will need to reestablish the debug context before IDA breakpoints will work.
+Use the {\tt cgc.resynch()} or Run to user in IDA to run the simulation ahead to the debug context.
 
 \section{What is different from Simics?}
 RESim is based the Simics simulator, including the \textit{Hindsight} product.  It does not incorporate the \textit{Analyzer} product
@@ -1280,6 +1330,9 @@ Add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a s
 driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
 and execute the driver-script.sh from the workspace.
 
+Smaller scp and ssh sessions seem to work well with drivers.  Add an authorized\_keys file to what the driver-script.sh to facilitate xfer of scripts/data to the driver
+during the simulation.  Take care to reset the reversing origin after you are done with the real-networ (see the trackIO reset option.)
+
 \subsubsection{Notes on updating the driver}
 If building a new driver, use the DRIVER\_WAIT directive in the ini file to prevent RESim from waiting for the driver to finish 
 (the driver\_ready.flag) -- at least until you finish configuring a driver.
@@ -1298,7 +1351,7 @@ This section includes ad-hoc suggestions for users with little Simics experience
 
 \item See the \textit{ethernet...} manual for connecting real networks.
 
-\item Use wireshark <switch> to see traffic going through one of the switches.
+\item Use wireshark $<$switch$>$ to see traffic going through one of the switches.
 
 \item The enable-realtime-mode prevents the simulation from running faster than real time.  Useful when trying to login
 to a virtual console, or avoid network timeouts.  Also useful when working remotely and you cannot get a ctl C in 
@@ -1317,6 +1370,8 @@ trace0.start
 \end{verbatim}
 
 \item The Simics command line uses standard bash history.  The up arrow can save much time and syntax problems.
+
+\item Capture command line output (redirect a copy) to a file using the output-file-start / output-file-stop commands
 \end{itemize}
 
 \section{Implementation notes}
@@ -1391,13 +1446,19 @@ Systems scripts error reporting is sparse and tedious.   Copy the needed Simics 
 and change the simics env variable to scripts where needed -- or remove preface and use relative file if local. 
 
 \subsection{Real networks: WARNING}
+\label{real-networks}
 Simics supports traffic between the simulation and a real network using {\tt connect-real-network} commands and related commands using a \textit{service node}.
 This can be useful to quickly generate new packets and send them to the target, but without needing to interact with a driver component.
 Note however that Simics has limitations on the use of real networks when reverse execution is enabled.  Some of these limitations can lead to silent corruption
 of the simulation.  Others to crashes.  An obvious limitation is that you cannot replay periods in which real network traffic was received (though Simics supports a different IO replay feature).
 
-Most problems related to real network can be avoided by connecting the real network prior to enabling reverse execution, e.g., via a debugProc command.
+Most problems related to real network can be avoided by connecting and completing use of the real network prior to enabling reverse execution, e.g., via a debugProc command.  Or using
+{\tt resetOrigin} after all real-network IO is finished.  See the {\tt reset} option to the trackIO function.  It should be used when real-networks interact with drivers, e.g, an ssh
+script to cause data to be sent to the target.
+
 Use the {\tt INIT\_SCRIPT} ENV directive in the init file to specify a simics script to load at the start of each session.
+
+Real networks should be avoided when debugging or fuzzing TCP services since they can lead to undefined behavior.
 
 \subsection{Tracing calls already made}
 Consider a system that has been run to a state at which the analyst wishes to commence tracing all calls made by a thread group.  Any call currently
@@ -1412,6 +1473,17 @@ A fork followed by an exit may result in the exit occuring before the child is e
 Programs may be sensitive to packetizing that occurs under TCP.  All testing and operations may have occurred with
 complete data transfers in which each read call returns all data needed for a transaction.  If the fuzzing session
 were to force the client to perform multiple reads, untested code might be exercised.
+
+\subsection{Multi-write injections}
+Reverse execution is only available subsequent to the last write.  Strategies for making the analyst aware of that.
+Can we easily inject the first packet and then send subsequent packets via a real network? Nope, real networks go haywire on multipacket
+analysis.  How about from a driver?  May need to explore shared disk with the driver?  Can we wait for simics agents?
+
+\subsection{Fuzzing: too many crashes}
+Some applications are just too easy to crash.  This can result in scores of ``unique'' crashes from AFL.  Often, these are all the same
+crash with a small change in how we get there.  Any heuristic that suppresses a crash seems like a bad idea, unless analysis convincingly demonstrates otherwise.
+Perhaps a tool to scan crash reports to eliminate duplicates, i.e., we usually don't care how we got there if a high confidence stack frame is the same?
+And crashReport function itself should run that tool when done, along with a grep on ROP.
 
 \subsection{Code coverage (in process)}
 \label{coverage}
@@ -1451,6 +1523,17 @@ which basic block hits are unique to that data file. Each subsequent data sessio
 \subsection{Real networks and UDP}
 Using {\tt cat foo > /dev/udp/localhost/60060} is fine for a single packet.  However multiple packets seem to get lost unless brief sleeps are
 added between the cat commands.
+
+\subsection{Multipacket workflows}
+Often, when working with multiple packets, you need to avoid use of real networks and data injection to avoid potential corruption of the simulation.
+This is generally true when reverse execution is required for the analysis.  This is not the case for code coverage operations such as AFL sessions that
+have no requirement for reverse execution.  Analyis over the full session of a multipacket simulation requires a driver computer that sends the desired
+packets.  Any checkpoint used for such a session must reflect time prior to the return from the read/recv call.  Sessions used for fuzzing 
+require a snapshot that reflect the precise return from the first read/recv call.  
+
+We therefore expect many workflows to use two different snapshots, one for data injection and one for analysis over the full data period, e.g., via trackIO.
+The latter rquires at least two computers in the simulation.  
+
 
 
 \end{appendices}

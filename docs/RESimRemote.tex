@@ -100,19 +100,12 @@ See section \ref{section-system} if this RESim server has not yet been configure
 \textbf{Steps below are implemented in RESim/simics/setup/config-resim-user.sh}
 The following steps are taken for each user on the RESim server.
 \begin{itemize}
-\item Configure your git on RESim server to use a proxy:
-\begin{verbatim}
-    git config --global http.proxy http://webproxy:3128
-    git config --global https.proxy https://webproxy:3128
-\end{verbatim}
 
 \item Add to your .bashrc:
 \begin{verbatim}
-    export http_proxy=http://webproxy:3128
-    export https_proxy=https://webproxy:3128
     export RESIM=~/git/RESIM
 \end{verbatim}
-\item Start a new shell to inherit those variables:
+\item Start a new shell to inherit that variable:
 \begin{verbatim}
    bash
 \end{verbatim}
@@ -164,10 +157,6 @@ These steps are only required once for each new server.
    10.20.200.41 webproxy
 \end{verbatim}
 
-\item Modify /etc/apt/apt.conf to include:
-\begin{verbatim}
-   Acquire::http::Proxy "http://webproxy:3128";
-\end{verbatim}
 
 \item Confirm the /etc/apt/sources.list refers to the proper mirror, e.g., 
 \begin{verbatim}
