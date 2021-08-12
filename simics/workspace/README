@@ -19,7 +19,7 @@ Then continue the simulation and hit <enter> on the ./client.py command.
 RESim will stop the simulation when it detects a ROP caused by an overwrite of an return
 address from the cgc_check function (which used to return to main).
 
-Copy the msc/cadet01 executable to your local maching running IDA (if not the Simics server).
+Copy the cadet01 executable to your local maching running IDA (if not the Simics server).
 Start IDA opening the cadet01 executable, and attach the process.
 Run the rev.py "recent script".
 

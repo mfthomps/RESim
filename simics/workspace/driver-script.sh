@@ -22,4 +22,4 @@ chmod a+r /var/log/syslog
 chmod a+r /var/log/messages
 echo "just stuff" > /var/log/messages.0
 chmod a+r /var/log/messages.0
-
+/usr/bin/simics-agent --overwrite --upload /tmp/driver-ready.flag
