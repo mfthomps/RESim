@@ -44,7 +44,7 @@ decl {
 load-module integrator-cp-comp
 load-module std-comp
 load-module memory-comp
-load-module os-awareness
+#load-module os-awareness
 
 #
 # DDR SDRAM

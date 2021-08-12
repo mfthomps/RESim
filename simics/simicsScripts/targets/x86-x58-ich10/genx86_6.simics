@@ -1,0 +1,57 @@
+decl{
+    params from "x86-x58-ich10-system6.include"
+    result southbridge : string
+    result northbridge : string
+    result system : string
+    result motherboard : string
+    result eth0 : string
+    result eth1 : string
+    result eth2 : string
+    result eth3 : string
+#    result switch0_con : string
+#    result switch1_con : string
+#    result switch2_con : string
+#    result switch3_con : string
+#    result vswitch1_con : string
+
+}
+
+add-directory "%script%"
+$cpu_class="core-i7-single"
+
+$use_bcm_nic = "NO"
+
+echo "using disk image "+$disk_image
+
+run-command-file "%script%/x86-x58-ich10-system6.include"
+
+if $use_disk2{
+    echo "using 2nd disk image "+$disk2_image
+    $disk2 = (create-sata-disk-comp $system.disk2
+                                       size = $disk2_size
+                                       file = $disk2_image)
+    connect $southbridge.sata_slot[2] $disk2.sata_slot
+}
+if $use_disk3{
+    echo "using 3nd disk image "+$disk3_image
+    $disk3 = (create-sata-disk-comp $system.disk3
+                                       size = $disk3_size
+                                       file = $disk3_image)
+    connect $southbridge.sata_slot[3] $disk3.sata_slot
+}
+
+instantiate-components
+
+$system.cell->time_quantum = 0.0001
+
+$system->system_info = "Viper - "+$host_name
+
+#create-text-console-comp $system.serconsole1
+#connect $system.serconsole1.serial $southbridge.serial[0]
+#create-text-console-comp $system.serconsole2
+#connect $system.serconsole2.serial $southbridge.serial[1]
+
+$eth0 = $host_name.mb.sb.eth_slot
+
+instantiate-components
+

@@ -1,0 +1,444 @@
+decl {
+ ! Sets up the hardware and BIOS for a X58-ICH10 virtual machine, exposing many
+ ! configuration options as Simics parameters. This include file is used by
+ ! other scripts to setup a complete virtual machine.
+ ! Supports PC BIOS (legacy BIOS) and EFI BIOS.
+ ! Adds two disks to the machine. If disk image and disk size are NIL, no disk
+ ! will be added.
+ ! Also adds a CD-ROM to the machine.
+
+ group "CPU"
+
+ param cpu_class : string = "core-i7"
+ ! The type of the CPU class on the target.
+
+ param num_cpus : int = 1
+ ! Number of physical processors in the machine.
+
+ param num_cores : int = 1
+ ! Number of cores per physical processor in the machine. Allowed values are
+ ! 1 - 128.
+
+ param num_threads : {1, 2, 4} = 1
+ ! Number of threads per processor core in the machine.
+
+ param cpi : int = 1
+ ! Clock cycles per executed instruction for the processors.
+
+ param freq_mhz : int = 2000
+ ! Processor frequency in MHz.
+
+ param apic_freq_mhz : int = 133
+ ! APIC frequency in MHz.
+
+ group "Consoles"
+ param show_con0 : bool = FALSE
+ ! Automatically display the text console on the first serial port.
+ param show_con1 : bool = FALSE
+ ! Automatically display the text console on the second serial port.
+ param show_gfx_con : bool = TRUE
+ ! Automatically display the graphics console.
+ param hide_consoles : bool = FALSE
+ ! Do not display any console windows at startup.
+
+ group "Disks"
+
+ param create_disk0 : {"ide", "sata"} or nil = "sata"
+ ! Creates a primary disk of type IDE or SATA. Also sets IDE or SATA type of
+ ! <param>bios_image</param>.
+
+ param disk0_image : file("*") or nil = NIL
+ ! Image file representing the contents of the primary disk.
+
+ param disk0_size : int or nil = NIL
+ ! Size of the primary disk in bytes. If <tt>NIL</tt>, the size of
+ ! <param>disk0_image</param> is used.
+
+ param create_disk1 : {"ide", "sata"} or nil = "sata"
+ ! Creates a second disk of type IDE or SATA. Should be the same as
+ ! <param>create_disk0</param>.
+
+ param disk1_image : file("*") or nil = NIL
+ ! Image file representing the contents of the second disk.
+
+ param disk1_size : int or nil = NIL
+ ! Size of the second disk in bytes. If <tt>NIL</tt>, the size of
+ ! <param>disk1_image</param> is used.
+
+ group "DVD/CD-ROM"
+
+ param create_cdrom : {"ide", "sata"} or nil = "sata"
+ ! Creates a CD-ROM of type IDE or SATA. Should be the same as
+ ! <param>create_disk0</param>.
+
+ group "System"
+
+ param machine_name : string = "board"
+ ! Name of the machine. Used for the top level component.
+
+ param memory_megs : int = 2048
+ ! Amount of RAM in the machine, in MiB.
+
+ param rtc_time : string = "2008-06-05 23:52:01"
+ ! The date and time of the simulated real-time clock at boot.
+
+ param use_acpi : bool = TRUE
+ ! Enables ACPI in the BIOS.
+
+ param mac_address : string = "00:19:A0:E1:1C:9F"
+ ! MAC address of the primary Ethernet adapter.
+
+ param enable_efi : bool = FALSE
+ ! Sets EFI BIOS, else PC BIOS (legacy BIOS).
+
+ param bios_image : file("*") or nil = NIL
+ ! BIOS file. If NIL, set to <param>sata_bios_image</param>,
+ ! <param>sata_efi_bios_image</param> or <param>ide_bios_image</param>.
+
+ param sata_bios_image : file("*") or nil
+ = "%simics%/targets/x58-ich10/images/seabios-simics-x58-ich10-sata-1.11-20180508.bin"
+ ! PC BIOS (legacy BIOS) file if SATA disk (<param>create_disk0</param> =
+ ! "sata").
+
+ param sata_efi_bios_image : file("*") or nil
+ = "%simics%/targets/x58-ich10/images/SIMICSX58IA32X64-ahci.fd"
+ ! EFI BIOS file if SATA disk (<param>create_disk0</param> = "sata").
+
+ param ide_bios_image : file("*") or nil
+ = "%simics%/targets/x58-ich10/images/seabios-simics-x58-ich10-ata-1.11-20180508.bin"
+ ! PC BIOS (legacy BIOS) file if IDE disk (<param>create_disk0</param> = "ide").
+
+ param gpu : string = "accel-vga"
+ ! PCI based VGA compatible graphics adapter.
+
+ param vga_bios_image : file("*") or nil
+ = "%simics%/targets/x58-ich10/images/seavgabios-simics-x58-ich10-1.11-20180508.bin"
+ ! VGABIOS file.
+
+ param lan_bios_image : file("*") or nil = NIL
+ ! ROM BIOS file for the ICH10 LAN Ethernet adaptor
+
+ param spi_flash_image : file("*") or nil
+ = "%simics%/targets/x58-ich10/images/spi-flash.bin"
+ ! The ICH10 SPI flash file to use.
+
+ param create_usb_tablet : bool = FALSE
+ ! Connects a USB tablet device for input using absolute positioning that
+ ! provides better user experience than a mouse.
+
+ group "Simulation"
+
+ param use_vmp : bool = TRUE
+ ! Enables host virtualization (VMP) for better simulation performance. This
+ ! option affects simulated time. See the performance chapter in the
+ ! <em>Simics User's Guide</em> for more information about VMP.
+
+ param enable_break_on_reboot : bool = FALSE
+ ! Interrupts the simulation if the machine is rebooted.
+
+ param enable_system_clock : bool = FALSE
+ ! Enables a configuration with a separate clock to which devices are bound
+ ! instead of to the first CPU.
+
+ param system_clock_class : string = "clock"
+ ! The class used for the system clock if the
+ ! <param>enable_system_clock</param> parameter is true.
+
+
+
+
+
+    param use_disk2 : bool = FALSE
+    param use_disk3 : bool = FALSE
+    param disk_image : string
+    param disk2_image : string = ""
+    param disk3_image : string = ""
+    param disk_size : int
+    param disk2_size : int = 0
+    param disk3_size : int = 0
+    param mac_address_0 : string
+    param mac_address_1 : string
+    param mac_address_2 : string
+    param mac_address_3 : string
+
+    param eth_dev : string = "i82543gc"
+
+    param host_name       : string
+
+    result system : string
+    result southbridge : string
+    result northbridge : string
+    result motherboard : string
+    result eth1 : string
+    result eth2 : string
+    result eth3 : string
+
+
+
+}
+### RESim params
+$disk0_image = $disk_image
+$disk0_size = $disk_size
+if $use_disk2{
+    $disk1_image = $disk2_image
+    $disk1_size = $disk2_size
+}
+$eth1 = "None"
+$eth2 = "None"
+$eth3 = "None"
+
+
+### Bios
+if $enable_efi {
+    if $bios_image == NIL {
+        $bios_image = $sata_efi_bios_image
+        if $create_disk0 == "ide" {
+            interrupt-script "The EFI BIOS does not support IDE"
+        }
+    }
+} else {
+    if $bios_image == NIL {
+        if $create_disk0 == "ide" {
+            $bios_image = $ide_bios_image
+        } else {
+            $bios_image = $sata_bios_image
+        }
+    }
+}
+
+###
+
+load-module isa-comp
+load-module pci-comp
+load-module std-comp
+load-module x86-comp
+load-module x86-nehalem-comp
+load-module x58-ich10-comp
+load-module memory-comp
+load-module os-awareness
+load-module textcon
+load-module graphcon
+load-module console-components
+
+#$system = (create-chassis-x58-ich10 name = $machine_name)
+$system = (create-chassis-x58-ich10 name = $host_name)
+
+if $lan_bios_image == NIL {
+    $lan_bios_image = ""
+}
+
+### motherboard
+$motherboard = (create-motherboard-x58-ich10
+                $system.mb
+                rtc_time = $rtc_time
+                acpi = $use_acpi
+                break_on_reboot = $enable_break_on_reboot
+                bios = $bios_image
+                mac_address = $mac_address
+                spi_flash = $spi_flash_image
+                lan_bios = $lan_bios_image
+                system_clock = $enable_system_clock
+                system_clock_class = $system_clock_class)
+$southbridge = $motherboard.sb
+$northbridge = $motherboard.nb
+
+### processor
+$create_processor = "create-processor-" + $cpu_class
+$cpu = []
+foreach $count in (range $num_cpus) {
+    $cpu[$count] = (exec $create_processor
+                         + " $motherboard.cpu + $count"
+                         + " freq_mhz = $freq_mhz"
+                         + " apic_freq_mhz = $apic_freq_mhz"
+                         + " use_vmp = $use_vmp"
+                         + " cpi = $cpi"
+                         + " n_cores = $num_cores"
+                         + " n_threads = $num_threads")
+    connect $motherboard.socket[$count] $cpu[$count].socket
+}
+
+### memory
+$dimm = (create-simple-memory-module $motherboard.memory
+                                      memory_megs = $memory_megs)
+connect $motherboard.dimm[0] $dimm.mem_bus
+
+### GPU
+if $gpu == "accel-vga" {
+    if $vga_bios_image != NIL {
+        $vga = (create-pci-accel-vga-comp $motherboard.gpu $vga_bios_image)
+    } else {
+            interrupt-script "Undefined VGABIOS file" -error
+    }
+} else {
+    interrupt-script "Undefined GPU" -error
+}
+connect $northbridge.gpu $vga.pci_bus
+
+### consoles
+$console = (create-gfx-console-comp $system.console
+                       visible = ($show_gfx_con and (not $hide_consoles)))
+connect $console.mouse $southbridge.mse_console
+connect $console.keyboard $southbridge.kbd_console
+connect $console.device $vga.console
+
+(create-txt-console-comp $system.serconsole
+                         visible = ($show_con0 and (not $hide_consoles)))
+connect $system.serconsole.serial $southbridge.serial[0]
+(create-txt-console-comp $system.serconsole1
+                         visible = ($show_con1 and (not $hide_consoles)))
+connect $system.serconsole1.serial $southbridge.serial[1]
+
+### Primary disk
+$disk0 = NIL
+if $create_disk0 == "ide" {
+    if $disk0_image != NIL and $disk0_size != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 file = $disk0_image
+                                                     size = $disk0_size)
+    } else if $disk0_image != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 file = $disk0_image)
+    } else if $disk0_size != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 size = $disk0_size)
+    }
+    if $disk0 {
+        connect $southbridge.ide_slot[0] $disk0.ide_slot
+    } else {
+        echo ("$system.disk0 was not created: neither disk0_image" +
+              " nor disk0_size were specified.")
+    }
+}
+if $create_disk0 == "sata" {
+    if $disk0_image != NIL and $disk0_size != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 file = $disk0_image
+                                                      size = $disk0_size)
+    } else if $disk0_image != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 file = $disk0_image)
+    } else if $disk0_size != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 size = $disk0_size)
+    }
+    if $disk0 {
+        connect $southbridge.sata_slot[0] $disk0.sata_slot
+    } else {
+        echo ("$system.disk0 was not created: neither disk0_image" +
+              " nor disk0_size were specified.")
+    }
+}
+
+### CD-ROM
+if $create_cdrom == "ide" {
+    $cdrom = (create-ide-cdrom-comp $system.cdrom)
+    connect $southbridge.ide_slot[1] $cdrom.ide_slot
+}
+if $create_cdrom == "sata" {
+    $cdrom = (create-sata-cdrom-comp $system.cdrom)
+    connect $southbridge.sata_slot[1] $cdrom.sata_slot
+}
+
+### Second disk
+$disk1 = NIL
+if $create_disk1 == "ide" {
+    if $disk1_image != NIL and $disk1_size != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image
+                                                     size = $disk1_size)
+    } else if $disk1_image != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image)
+    } else if $disk1_size != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 size = $disk1_size)
+    }
+    if $disk1 {
+        connect $southbridge.ide_slot[2] $disk1.ide_slot
+    }
+}
+if $create_disk1 == "sata" {
+    if $disk1_image != NIL and $disk1_size != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image
+                                                      size = $disk1_size)
+    } else if $disk1_image != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image)
+    } else if $disk1_size != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 size = $disk1_size)
+    }
+    if $disk1 != NIL {
+            connect $southbridge.sata_slot[2] $disk1.sata_slot
+    }
+}
+
+### process tracker
+#create-os-awareness name = $system + ".software"
+
+### nic
+if defined use_broadcom{
+   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_1 mac_address1 = $mac_address_2)
+   echo "pci_slot[0] gets mac address "+ $mac_address_1+" and "+ $mac_address_2
+   connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
+}else{
+   # ignore name assignments, simics cli fu
+   if $mac_address_1 != "None"    {
+      echo "mac addr 1 is "+$mac_address_1
+      if $eth_dev == "i82559"{
+          $eth_comp = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+          #$eth_comp = (create-pci-dec21140a-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "northbridge pci_slot[0] gets mac address "+ $mac_address_1
+      connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
+      $eth1 = $motherboard.nb.$eth_dev.eth
+   }
+   if $mac_address_2 != "None"{
+      echo "mac addr 2 is "+$mac_address_2
+      if $eth_dev == "i82559"{
+          $eth_comp2 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp2 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp2 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp2 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "northbridge pci_slot[1] gets mac address "+ $mac_address_2
+      connect $motherboard.nb.pci_slot[1] $eth_comp2.pci_bus
+      $eth2 = $motherboard.nb.$eth_dev+2.eth
+   }
+   if $mac_address_3 != "None"{
+      echo "mac addr 3 is "+$mac_address_3
+      if $eth_dev == "i82559"{
+          $eth_comp3 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp3 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp3 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp3 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          echo "eth_comp3 is "+$eth_comp3
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      # TBD simics error  "AttributeError: 'pre_obj' object has no attribute 'pci_devices'"
+      if $eth_dev == "i82574_v2" {
+          instantiate-components 
+          echo "pci express pcie_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.nb.pcie_slot[0] $eth_comp3.pci_bus
+          echo "connect "+$motherboard+".nb.pcie_slot[0] "+$eth_comp3+".pci_bus"
+      }else{
+          echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
+      }
+      $eth3 = $motherboard.nb.$eth_dev+3.eth
+   }
+}
+
+### USB Tablet
+if ($create_usb_tablet == TRUE) {
+    load-module usb-comp
+    $tablet = (create-usb-tablet-component $system.tablet)
+    connect $tablet.usb_host $system.mb.sb.usb_port[0]
+    connect $tablet.abs_mouse $console.abs_mouse
+}

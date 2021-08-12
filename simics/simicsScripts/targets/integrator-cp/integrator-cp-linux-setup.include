@@ -108,7 +108,6 @@ set 0x16000030 769
 
 $cpu.set-pc 0x8000
 
-
 if $create_network == TRUE {
     $eth_connector = $system + ".connector_eth"
     run-command-file "%simics%/targets/common/ethernet-setup.include"
