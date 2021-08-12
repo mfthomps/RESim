@@ -174,7 +174,7 @@ class StackTrace():
         call_addr = None
         try:
             call_addr = int(parts[1],16)
-            fun = self.funFromAddr(call_addr)
+            fun = str(self.funFromAddr(call_addr))
             #self.lgr.debug('getFunName call_addr 0x%x got %s' % (call_addr, fun))
         except ValueError:
             #self.lgr.debug('getFunName, %s not a hex' % parts[1])
@@ -291,6 +291,7 @@ class StackTrace():
         eip = self.reg_frame['pc']
         if self.stack_base is not None:
             #self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
+            pass
         else:
             #self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
             pass
