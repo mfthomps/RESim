@@ -142,7 +142,7 @@ class WriteData():
             return
         pid = self.top.getPID()
         if pid != self.pid:
-            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
             #self.lgr.debug('writeData callHap current packet %d no data left, stopping' % (self.current_packet))
