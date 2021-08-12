@@ -1766,7 +1766,7 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
                      'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
-        if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
+        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             call_list.remove('socketcall')
             call_list.remove('mmap2')
             for scall in net.callname[1:]:
@@ -2360,7 +2360,7 @@ class GenMonitor():
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         calls = ['read', 'socketcall']
-        if cpu.architecture == 'arm' or self.mem_utils[self.target].WORD_SIZE == 8:
+        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.readcalls:
                 calls.append(scall.lower())
@@ -3517,7 +3517,8 @@ class GenMonitor():
         else: 
             full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
-            self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, linear=linear, target=target, create_dead_zone=dead)
+            self.run_from_snap, self.context_manager[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
+            linear=linear, target=target, create_dead_zone=dead)
         if target is None:
             self.noWatchSysEnter()
             fuzz_it.goN(0)
@@ -3532,18 +3533,20 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.debugPidGroup(pid)
         print('fd is %d' % fd)
-        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], snap_name, self.lgr, fd=fd)
+        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
+           self.dataWatch[self.target], snap_name, self.lgr, self.context_manager[self.target], fd=fd)
 
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFL(self, target, n=1, sor=False):
+    def playAFL(self, target, n=1, sor=False, linear=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage, 
-              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor)
+              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], self.lgr, 
+              packet_count=n, stop_on_read=sor, linear=linear)
         if play is not None:
             play.go()
 

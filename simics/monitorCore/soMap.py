@@ -315,7 +315,8 @@ class SOMap():
             if addr_in >= self.text_start[pid] and addr_in <= self.text_end[pid]:
                 retval = self.text_prog[pid]
             else:
-                for text_seg in sorted(self.so_file_map[pid]):
+                #for text_seg in sorted(self.so_file_map[pid]):
+                for text_seg in self.so_file_map[pid]:
                     start = text_seg.locate 
                     end = start + text_seg.size
                     if start <= addr_in and addr_in <= end:
@@ -336,7 +337,8 @@ class SOMap():
             if addr_in >= self.text_start[pid] and addr_in <= self.text_end[pid]:
                 retval = self.text_prog[pid], self.text_start[pid], self.text_end[pid]
             else:
-                for text_seg in sorted(self.so_file_map[pid]):
+                #for text_seg in sorted(self.so_file_map[pid]):
+                for text_seg in self.so_file_map[pid]:
                     #start = text_seg.locate + text_seg.offset
                     start = text_seg.locate 
                     end = start + text_seg.size

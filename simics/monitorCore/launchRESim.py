@@ -219,6 +219,7 @@ class LaunchRESim():
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             checkVLAN(self.config)
             run_command('set-min-latency min-latency = 0.01')
+            interact = None
             if self.config.has_section('driver'):
                 run_command('$eth_dev=i82543gc')
                 for name in self.comp_dict['driver']:
@@ -226,19 +227,18 @@ class LaunchRESim():
                     if name.startswith('$'):
                         cmd = "%s=%s" % (name, value)
                         run_command(cmd)
+                    elif name == 'INTERACT_SCRIPT':
+                        interact = self.comp_dict['driver'][name]
         
-                driver_script = self.config.get('driver','SIMICS_SCRIPT')
-                if not self.SIMICS_VER.startswith('4'):
-                    if 'genx86.simics' in driver_script:
-                        driver_script = driver_script.replace('genx86.simics', 'genx86_5.simics')
-                        print('DO REPLACE now %s' % driver_script)
-                    else:
-                        print('genx86.simics not in %s' % driver_script)
+                driver_script = self.getSimicsScript('driver')
                 print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 done = False
                 count = 0
+                if interact is not None:
+                    print('Will run interact %s' % interact)
+                    run_command('run-command-file %s' % interact)
                 while not done and not DRIVER_WAIT: 
                     #print('***RUN SOME **')
                     #run_command('c 50000000000')
@@ -274,9 +274,17 @@ class LaunchRESim():
                     print('genMonitor for target %s' % RESIM_TARGET)
                     cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict)
                     cgc.doInit()
-        
+    
+    def getSimicsScript(self, section):    
+        script = self.config.get(section,'SIMICS_SCRIPT')
+        if 'genx86' in script:
+            if self.SIMICS_VER.startswith('5'):
+                script = script.replace('genx86.simics', 'genx86_5.simics')
+            elif self.SIMICS_VER.startswith('6'):
+                script = script.replace('genx86.simics', 'genx86_6.simics')
+        return script
+          
     def doSections(self):
-        print('**************************W')
         for section in self.config.sections():
             if section in self.not_a_target:
                 continue
@@ -286,7 +294,7 @@ class LaunchRESim():
             run_command('$mac_address_3=None')
             
             params=''
-            script = self.config.get(section,'SIMICS_SCRIPT')
+            script = self.getSimicsScript(section)
             if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
@@ -309,8 +317,6 @@ class LaunchRESim():
             if self.SIMICS_VER.startswith('4'):
                 cmd='run-command-file "./targets/%s"' % (script)
             else:
-                if 'genx86.simics' in script:
-                    script = script.replace('genx86.simics', 'genx86_5.simics')
                 cmd='run-command-file "./targets/%s" %s' % (script, params)
             print('cmd is %s' % cmd)
             run_command(cmd)

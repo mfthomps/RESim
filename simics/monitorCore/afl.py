@@ -15,7 +15,7 @@ import imp
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
-    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, lgr, fd=None, 
+    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, lgr, fd=None, 
                  packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
@@ -54,6 +54,8 @@ class AFL():
         self.stop_on_read = stop_on_read
         self.dataWatch = dataWatch
         self.coverage = coverage
+        self.context_manager = context_manager
+        self.linear = linear
         # For multi-packet UDP.  afl_packet_count may be adjusted less than given packet count.
         self.packet_count = packet_count
         self.afl_packet_count = None
@@ -164,13 +166,15 @@ class AFL():
         self.goN(0) 
 
     def loadJumpers(self, fname):
+        ''' jumpers are linear addresses '''
         jfile = fname+'.jumpers'
         if os.path.isfile(jfile):
             jumpers = json.load(open(jfile))
             self.jumpers = {}
             for from_bb in jumpers:
-                phys_block = self.cpu.iface.processor_info.logical_to_physical(int(from_bb), Sim_Access_Execute)
-                self.jumpers[phys_block.address] = jumpers[from_bb]
+                #phys_block = self.cpu.iface.processor_info.logical_to_physical(int(from_bb), Sim_Access_Execute)
+                #self.jumpers[phys_block.address] = jumpers[from_bb]
+                self.jumpers[int(from_bb)] = jumpers[from_bb]
 
     def rmStopHap(self):
         if self.stop_hap is not None:
@@ -206,6 +210,7 @@ class AFL():
             self.sendMsg('resim_done iteration: %d status: %d size: %d' % (self.iteration, status, self.orig_data_length))
             try: 
                 self.sock.sendall(trace_bits)
+                pass
             except:
                 self.lgr.debug('AFL went away while we were sending trace_bits')
                 self.rmStopHap()
@@ -279,6 +284,10 @@ class AFL():
             self.lgr.debug('afl goN dead zone iteration %d' % self.iteration)
         ''' clear the bit_trace '''
         #self.lgr.debug('afl goN call doCoverage')
+        if self.linear:
+            #self.lgr.debug('afl, linear use context manager to watch tasks')
+            self.context_manager.restoreDebugContext()
+            self.context_manager.watchTasks()
         self.coverage.doCoverage()
 
         #self.lgr.debug('afl, did coverage, cycle: 0x%x' % self.cpu.cycles)
@@ -297,6 +306,7 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
+    
     
         cli.quiet_run_command('c') 
 
@@ -317,13 +327,22 @@ class AFL():
         msg_size = len(msg)
         ms = struct.pack("i", msg_size) 
         #self.sock.sendall(ms+bytes(msg, 'utf8'))
-        try:
-            #self.sock.sendall(combine)
-            self.sock.sendall(ms+bytes(msg, 'utf8'))
-        except:
-            self.rmStopHap()
-            print('AFL went away');
-            self.lgr.debug('AFL went away while in sendMsg');
+        if sys.version_info[0] == 3:
+            try:
+                #self.sock.sendall(combine)
+                self.sock.sendall(ms+bytes(msg, 'utf8'))
+            except:
+                self.rmStopHap()
+                print('AFL went away');
+                self.lgr.debug('AFL went away while in sendMsg');
+        else:
+            try:
+                #self.sock.sendall(combine)
+                self.sock.sendall(ms+msg)
+            except:
+                self.rmStopHap()
+                print('AFL went away');
+                self.lgr.debug('AFL went away while in sendMsg');
         #self.lgr.debug('sent to AFL len %d: %s' % (msg_size, msg))
 
     def getMsg(self):
@@ -388,6 +407,7 @@ class AFL():
         self.top.runToInput(self.fd, flist_in=flist)
 
     def pickleit(self, name, exit_info, orig_buffer):
+        self.lgr.debug('afl pickleit, begin')
         self.top.writeConfig(name)
         pickDict = {}
         pickDict['call_ip'] = self.call_ip
@@ -398,6 +418,8 @@ class AFL():
         else:
             pickDict['size'] = exit_info.count
         self.lgr.debug('afl pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
+        ''' Otherwise console has no indiation of when done. '''
+        print('Configuration file saved, ok to quit.')
 
         if exit_info.fname_addr is not None:
             count = self.mem_utils.readWord32(self.cpu, exit_info.count)

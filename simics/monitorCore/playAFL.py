@@ -6,7 +6,8 @@ import os
 import pickle
 
 class PlayAFL():
-    def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, snap_name, lgr, packet_count=1, stop_on_read=False, findbb=None):
+    def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
+             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, findbb=None, linear=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -14,6 +15,7 @@ class PlayAFL():
         self.dataWatch = dataWatch
         self.snap_name = snap_name
         self.cpu = cpu
+        self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
         self.findbb = findbb
@@ -70,8 +72,14 @@ class PlayAFL():
         cli.quiet_run_command('save-snapshot name = origin')
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         if self.coverage is not None:
-            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=False)
-            self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=True)
+            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=False, linear=linear)
+            physical = True
+            if linear:
+                physical = False
+                self.lgr.debug('afl, linear use context manager to watch tasks')
+                self.context_manager.restoreDebugContext()
+                self.context_manager.watchTasks()
+            self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
 
     def go(self):
         if self.stop_hap is None:

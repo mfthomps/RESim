@@ -310,14 +310,14 @@ class GenContextMgr():
                 hap.set()
 
     def clearAllBreak(self, dumb):
-        self.lgr.debug('contextManager clearAllBreak')
+        #self.lgr.debug('contextManager clearAllBreak')
         ''' Called to clear breaks within the resim context '''
         for bp in self.breakpoints:
             #if bp.cell == self.resim_context:
             bp.clear()
         
     def clearAllHap(self, keep_maze_breaks=False):
-        self.lgr.debug('clearAllHap start')
+        #self.lgr.debug('clearAllHap start')
         
         for hap in self.haps:
             if not keep_maze_breaks or hap.name != 'exitMaze':
@@ -408,7 +408,8 @@ class GenContextMgr():
                    add_it = True
                    leader_pid = parent_pid
                else:
-                   self.lgr.debug('contextManager pid:%d (%s) not in cache, nor is parent in watch_rec_list 0x%x' % (pid, comm, parent))
+                   #self.lgr.debug('contextManager pid:%d (%s) not in cache, nor is parent in watch_rec_list 0x%x' % (pid, comm, parent))
+                   pass
            if add_it:
                ''' TBD, we have no reason to believe this clone is created by the group leader? Using parent or real_parent is no help'''
                self.lgr.debug('contextManager adding clone %d (%s) leader is %d' % (pid, comm, leader_pid))
@@ -417,7 +418,8 @@ class GenContextMgr():
                self.watchExit(new_addr, pid)
                self.top.recordStackClone(pid, leader_pid)
            else:
-               self.lgr.debug('contextManager pid:%d (%s) not in cache, group leader 0x%x  leader pid %d' % (pid, comm, group_leader, leader_pid))
+               pass
+               #self.lgr.debug('contextManager pid:%d (%s) not in cache, group leader 0x%x  leader pid %d' % (pid, comm, group_leader, leader_pid))
         elif pid in self.pid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
@@ -428,7 +430,7 @@ class GenContextMgr():
             if self.debugging_pid is not None:
                 cpu.current_context = self.resim_context
                 #self.lgr.debug('resim_context')
-            self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
+            #self.lgr.debug('Now scheduled %d new_addr 0x%x' % (pid, new_addr))
             self.watching_tasks = True
             self.setAllBreak()
             only_maze_breaks = False
@@ -453,7 +455,7 @@ class GenContextMgr():
                 if self.debugging_pid is not None:
                     cpu.current_context = self.default_context
                     #self.lgr.debug('default_context')
-                self.lgr.debug('No longer scheduled')
+                #self.lgr.debug('No longer scheduled')
                 self.watching_tasks = False
                 #self.auditExitBreaks()
                 #self.clearAllBreak()
@@ -595,7 +597,7 @@ class GenContextMgr():
 
     def restoreDebugContext(self):
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('contextManager restoreDebugContext')
+        #self.lgr.debug('contextManager restoreDebugContext')
 
     def restoreDebug(self):
         self.debugging_pid = self.debugging_pid_saved

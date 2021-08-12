@@ -40,6 +40,7 @@ class PtableInfo():
         self.entry_size = 4
         self.nx = 0
         self.entry = None
+        self.phys_addr = None
     def valueString(self):
         retval =  'pdir_protect: %s ptable_protect: %s page_protect %s  ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), 
              str(self.ptable_protect), str(self.page_protect), self.ptable_exists, self.page_exists)
@@ -49,7 +50,12 @@ class PtableInfo():
             if self.page_addr is not None:
                 retval = retval + ' page_addr: 0x%x  nx:%d entry:0x%x' % (self.page_addr, self.nx, self.entry)
         else:
-            retval = retval + ' page-addr: 0x%x  nx: %d  Entry is None' % (self.page_addr, self.nx) 
+              
+            if self.page_addr is not None:
+                retval = retval + ' page-addr: 0x%x  nx: %d  Entry is None' % (self.page_addr, self.nx) 
+            else:
+                retval = retval + ' page-addr is None'
+               
         return retval
 
 class PageAddrInfo():
@@ -242,7 +248,7 @@ def getPageEntrySize(cpu):
     else:
         return 8
 
-def findPageTableArm(cpu, va, lgr):
+def findPageTableArm(cpu, va, lgr, use_sld=None):
     ptable_info = PtableInfo()
     ttbr = cpu.translation_table_base0
     base = memUtils.bitRange(ttbr, 14,31)
@@ -252,8 +258,8 @@ def findPageTableArm(cpu, va, lgr):
     first_shifted = first_index << 2
     first_addr = base_shifted | first_shifted
     ptable_info.pdir_addr = first_addr
-    #print('first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
-    
+    #lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+   
     fld = SIM_read_phys_memory(cpu, first_addr, 4)
     if fld == 0:
         return ptable_info
@@ -269,8 +275,11 @@ def findPageTableArm(cpu, va, lgr):
     ptable_info.ptable_addr = second_addr
     sld = SIM_read_phys_memory(cpu, second_addr, 4)
     #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
-    if sld == 0:
-        return ptable_info
+    if use_sld is None:
+        if sld == 0:
+            return ptable_info
+    else:
+        sld = use_sld
     
     #ptable_info.page_protect = memUtils.testBit(sld, 2)
     ptable_info.page_exists = True
@@ -281,9 +290,9 @@ def findPageTableArm(cpu, va, lgr):
     ptable_info.entry = sld
     return ptable_info 
 
-def findPageTable(cpu, addr, lgr):
+def findPageTable(cpu, addr, lgr, use_sld=None):
     if cpu.architecture == 'arm':
-        return findPageTableArm(cpu, addr, lgr)
+        return findPageTableArm(cpu, addr, lgr, use_sld)
 
     elif isIA32E(cpu):
         #lgr.debug('findPageTable is IA32E')
