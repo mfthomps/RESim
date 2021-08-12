@@ -1,5 +1,11 @@
 script-branch "driver login" {
-    local $console = driver.serconsole.con
+    echo "ver is <" + $simics_version+">"
+    local $console = NIL
+    if $simics_version == 4.8 {
+        $console = driver.serconsole1.con
+    }else{
+        $console = driver.serconsole.con
+    }
     $console.wait-for-string "ubuntu login: "
     $console.input "mike\n"
     $console.wait-for-string "ubuntu login: "

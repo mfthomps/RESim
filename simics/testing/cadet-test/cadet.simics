@@ -2,8 +2,12 @@
 # Use xdotool to run the docad.simics script.
 # Calling that script directly from RESim would break scope
 #
-!./findWindow.sh cadet-tst
-!xdotool type 'run-command-file docad.simics cgc=cgc'
+!./findWindow.sh cadet01-tst
+if $simics_version == 4.8{
+    !xdotool type 'run-command-file docad.simics'
+}else{
+    !xdotool type 'run-command-file docad.simics cgc=cgc'
+}
 !xdotool key Return
 #
 # the following buffers until simics stops, e.g., the ROP.
