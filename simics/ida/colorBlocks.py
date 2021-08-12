@@ -26,15 +26,18 @@ def getBBId(graph, bb):
    
 
 def doColor(latest_hits_file, all_hits_file, pre_hits_file):
-    with open(latest_hits_file) as funs_fh:
-        latest_hits_json = json.load(funs_fh)
-    print('loaded blocks from %s, got %d functions' % (latest_hits_file, len(latest_hits_json)))
+    if os.path.isfile(latest_hits_file):
+        with open(latest_hits_file) as funs_fh:
+            latest_hits_json = json.load(funs_fh)
+        print('loaded blocks from %s, got %d functions' % (latest_hits_file, len(latest_hits_json)))
+    else:
+        latest_hits_json = {}
     if os.path.isfile(all_hits_file):
         with open(all_hits_file) as funs_fh:
             all_hits_json = json.load(funs_fh)
+        print('loaded blocks from %s, got %d functions' % (all_hits_file, len(all_hits_json)))
     else:
         all_hits_json = {}
-    print('loaded blocks from %s, got %d functions' % (all_hits_file, len(all_hits_json)))
     if os.path.isfile(pre_hits_file):
         with open(pre_hits_file) as funs_fh:
             pre_hits_json = json.load(funs_fh)
@@ -121,15 +124,15 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
 def colorBlocks():
     ''' return list of branches not taken '''
     fname = idaapi.get_root_filename()
-    latest_funs_file = fname+'.hits' 
-    if not os.path.isfile(latest_funs_file):
+    latest_hits_file = fname+'.hits' 
+    if not os.path.isfile(latest_hits_file):
         ''' maybe a symbolic link, ask monitor for name '''
         cmd = '@cgc.getCoverageFile()'
-        latest_funs_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
-        if not os.path.isfile(latest_funs_file):
-            print('No hits file found %s' % latest_funs_file)
-            return
+        latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
+        if not os.path.isfile(latest_hits_file):
+            print('No hits file found %s' % latest_hits_file)
+            
     all_hits_file = fname+'.all.hits'
     pre_hits_file = fname+'.pre.hits'
-    edges = doColor(latest_funs_file, all_hits_file, pre_hits_file)
+    edges = doColor(latest_hits_file, all_hits_file, pre_hits_file)
     return edges
