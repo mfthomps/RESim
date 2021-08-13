@@ -2,9 +2,9 @@
 ## Reverse engineering using a full system simulator.
 
 RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics'[1] 
-platform’s high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.
+platform’s high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from images extracted from the physical systems being modeled.
 
-Broadly, RESim aids reverse engineering of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of kernel hosting the processes.
+Broadly, RESim aids reverse engineering and vulnerability analysis of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of kernel hosting the processes.
 
 RESim also provides interactive visibility into individual executing programs through use of a 
 custom plug-in to the IDA Pro disassembler/debugger.  The disassembler/debugger
@@ -16,6 +16,10 @@ based on system events, e.g., change a password file entry when read by the *su*
 
 Analysis is performed entirely through observation of the simulated target system’s memory and processor state, 
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be *external* because the analysis observation functions have no effect on the state of the simulated system.
+
+RESim has been integrated with the *American Fuzzing Lop* (AFL) fuzzer.  This fuzzing system injects fuzzed data directly into the
+application read buffer, simplifying the fuzzing setup and workflow.  RESim automatically replays and analyzes any detected crashes, 
+identifying the causes of crashes, e.g., corruption of execution control.
 
 Please refer to [the RESim User's Guide](docs/RESim-UsersGuide.pdf) for additional information.  A brief demonstration of RESim can be seen here:
 (https://nps.box.com/s/rf3n104ualg38pon6b7fm6m6wqk9zz50)
