@@ -1,6 +1,7 @@
 import idaapi
 import idc
 import idaversion
+import ida_kernwin
 from idaapi import simplecustviewer_t
 import gdbProt
 import json
@@ -65,8 +66,12 @@ class BranchNotTaken(simplecustviewer_t):
         command = '@cgc.goToBasicBlock(0x%x)' % branch_from
         #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped()
-        self.isim.signalClient()
+        if 'not in blocks' in simicsString:
+            ida_kernwin.jumpto(branch_from)
+        else:
+            eip = gdbProt.getEIPWhenStopped()
+            if eip is not None:
+                self.isim.signalClient()
         return True
 
     def OnKeydown(self, vkey, shift):
