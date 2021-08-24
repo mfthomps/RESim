@@ -14,5 +14,6 @@ do
     sleep 1
 done
 scp -P 4022 $1 localhost:/tmp/
-ssh -p 4022 mike@localhost chmod a+x /tmp/$1
-ssh -p 4022 mike@localhost /tmp/$1 $2 $3 $4
+base=$(basename -- $1)
+ssh -p 4022 mike@localhost chmod a+x /tmp/$base
+ssh -p 4022 mike@localhost /tmp/$base $2 $3 $4
