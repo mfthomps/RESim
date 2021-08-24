@@ -1,6 +1,7 @@
 from simics import Sim_Trans_Load
 import pickle
 import os
+import sys
 class WatchMarks():
     def __init__(self, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -449,10 +450,12 @@ class WatchMarks():
         if count > 0:
             dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
-                dst_str = dst_str.decode('ascii', 'replace')
+                if (sys.version_info < (3,0)):
+                    dst_str = dst_str.decode('ascii', 'replace')
             src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
-                src_str = src_str.decode('ascii', 'replace')
+                if (sys.version_info < (3,0)):
+                    src_str = src_str.decode('ascii', 'replace')
         else:
             dst_str = ''
             src_str = ''
