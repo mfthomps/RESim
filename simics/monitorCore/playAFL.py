@@ -7,7 +7,7 @@ import pickle
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, findbb=None, linear=False):
+             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -18,7 +18,7 @@ class PlayAFL():
         self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
-        self.findbb = findbb
+        self.findbb = None
         self.write_data = None
         self.orig_buffer = None
         afl_output = os.getenv('AFL_OUTPUT')
@@ -45,8 +45,6 @@ class PlayAFL():
         self.stop_hap = None
         self.call_hap = None
         self.call_break = None
-        self.bb_break = None
-        self.bb_hap = None
         self.addr = None
         self.in_data = None
         #self.backstop_cycles =   100000
@@ -81,7 +79,11 @@ class PlayAFL():
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
 
-    def go(self):
+    def go(self, findbb=None):
+        self.bnt_list = []
+        self.index = -1
+        self.hit_total = 0
+        self.findbb = findbb
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_run_alone(self.goAlone, None)
@@ -117,7 +119,8 @@ class PlayAFL():
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
             SIM_run_command('c')
         else:
-            if self.coverage is not None:
+            ''' did all sessions '''
+            if self.coverage is not None and self.findbb is None:
                 hits = self.coverage.getHitCount()
                 self.lgr.debug('Found %d total hits, save as %s' % (hits, self.target))
                 self.coverage.saveCoverage(fname=self.target)
@@ -127,6 +130,7 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
+            cli.quiet_run_command('restore-snapshot name = origin')
 
     def playBreak(self, bnt_index):
         self.current_packet = 1
@@ -159,6 +163,7 @@ class PlayAFL():
 
     def delStopHap(self, dumb):
         SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
+        self.stop_hap = None
 
     def loadPickle(self, name):
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
