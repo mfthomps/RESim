@@ -3042,7 +3042,9 @@ class GenMonitor():
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
         else:
-            print('addres 0x%x not in blocks hit' % addr)
+            print('address 0x%x not in blocks hit' % addr)
+            self.lgr.debug('address 0x%x not in blocks hit' % addr)
+            self.gdbMailbox('address %s not in blocks hit.' % addr)
         return cycle
        
     def mft4(self, pid): 
@@ -3524,7 +3526,9 @@ class GenMonitor():
             fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name):
-        ''' fd -- will runToIOish on that FD
+        ''' 
+            Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
+            fd -- will runToIOish on that FD
             snap_name -- will writeConfig to that snapshot.  Use that snapshot for fuzz and afl commands. '''
         cpu = self.cell_config.cpuFromCell(self.target)
         cell_name = self.getTopComponentName(cpu)
@@ -3554,11 +3558,13 @@ class GenMonitor():
         ''' replay all AFL discovered paths for purposes of discovering which data files hit a given BB '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
-        self.debugPidGroup(pid)
-        self.aflPlay = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage,
-              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.lgr, packet_count=n, stop_on_read=sor, findbb=bb)
+        if self.aflPlay is None:
+            self.debugPidGroup(pid)
+            self.aflPlay = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage,
+                  self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
+                  self.lgr, packet_count=n, stop_on_read=sor)
         if self.aflPlay is not None:
-            self.aflPlay.go()
+            self.aflPlay.go(findbb=bb)
 
     def replayAFL(self, target, index, targetFD): 
         ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
