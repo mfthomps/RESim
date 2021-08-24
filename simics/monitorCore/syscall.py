@@ -760,6 +760,7 @@ class Syscall():
             if socket_callname != 'socket' and socket_callname != 'setsockopt':
                 self.lgr.debug('syscall socketParse get SockStruct from param2: 0x%x' % frame['param2'])
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
+                self.lgr.debug('ss is %s' % ss.getString())
         else:
             ''' callname is the socket function '''
             socket_callname = callname
@@ -916,6 +917,12 @@ class Syscall():
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
                 #    SIM_break_simulation(ida_msg)
+            elif ss.length is None:
+                self.lgr.error('ss length none') 
+            elif ss.fd is None:
+                self.lgr.error('ss fd none') 
+            elif pid is None:
+                self.lgr.error('pid is none') 
             else:
                 ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
