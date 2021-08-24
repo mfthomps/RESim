@@ -58,7 +58,7 @@ def getRelocate(path, lgr):
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = proc1.communicate()
     retval = {}
-    for line in output[0].splitlines():
+    for line in output[0].decode("utf-8").splitlines():
         parts = line.split()
         if len(parts) == 5:
             try:
