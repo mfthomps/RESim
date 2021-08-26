@@ -10,6 +10,10 @@ Manage code coverage tracking, maintaining two hits files per coverage unit (i.e
 
 Note, AFL coverage defaults to physical addresses.  Use linear=True when enabling coverage to use
 virtual addresses.  That assumes you have enable the contextManager to alter the cpu context on task switches.
+
+Tracks a single code file at a time, e.g., main or a single so file.  TBD expand to include multiple blocks_hit dictionaries?
+
+Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
     def __init__(self, top, full_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
@@ -44,6 +48,8 @@ class Coverage():
         self.linear = False
         self.physical = False
         self.addr_map = {}
+        ''' offset due to relocation, e.g., of so file '''
+        self.offset = 0
         if self.cpu.architecture == 'arm':
             pcreg = 'pc'
         else:
@@ -447,9 +453,10 @@ class Coverage():
                             hit_blocks[ofun_str] = []
                         hit_blocks[ofun_str].append(bb)       
                         got_it = True
-                        break
-                if got_it:
-                    break
+                        #break
+                # ida may put same block into multiple functions, e.g., arm "b fu"
+                #if got_it:
+                #    break
         s = json.dumps(hit_blocks)
         if fname is None:
             save_name = '%s.hits' % self.full_path
