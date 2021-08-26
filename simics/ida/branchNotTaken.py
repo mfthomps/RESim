@@ -21,6 +21,20 @@ class BranchNotTaken(simplecustviewer_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+    def getOffset(self):
+        retva = None
+        fname = idaapi.get_root_filename()
+        command = "@cgc.getSOFromFile('%s')" % fname
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('so stuff: %s' % simicsString) 
+        if ':' in simicsString:
+            adders = simicsString.split(':')[1]
+            start = adders.split('-')[0]
+            try:
+                retval = int(start,16)
+            except ValueError:
+                print('could not get hex from %s' % start)
+        return retval 
 
     def Create(self, isim):
         self.isim = isim
@@ -40,6 +54,7 @@ class BranchNotTaken(simplecustviewer_t):
 
     def updateList(self, branches):
         print "in updateList"
+        offset = self.getOffset()
         if branches is None:
             print('Branch Not Taken list is None')
             return
@@ -47,7 +62,9 @@ class BranchNotTaken(simplecustviewer_t):
         self.ClearLines()
         for b in branches:
             f = idc.get_func_name(b)
-            cline = 'to 0x%x from 0x%x %s' % (b, branches[b], f)
+            to_val = b + offset
+            from_val = branches[b]+offset
+            cline = 'to 0x%x from 0x%x %s' % (to_val, from_val, f)
             self.AddLine(cline)
 
         return None

@@ -48,25 +48,11 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     ''' New hits '''
     p.bg_color =  new_hit_color
     num_new = 0
-    edges = OrderedDict()
     for fun in latest_hits_json:
         fun_addr = int(fun)
         f = idaapi.get_func(fun_addr)
-        #print('fun addr 0x%x' % fun_addr)
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        ''' get edges leaving all hit blocks '''
-        ''' edges[branch_to] = branch_from '''
-        ''' retain order of hits in list of branches not taken '''
-        for bb_addr in latest_hits_json[fun]:
-            ''' get the BB and check its branch-to's '''
-            block = getBB(graph, bb_addr)
-            if block is not None:
-                for s in block.succs():
-                    if s.start_ea not in latest_hits_json[fun] and not (fun in pre_hits_json and s.start_ea in pre_hits_json[fun]) and s.start_ea not in edges:
-                        #print('added edges[0%x] block 0x%x block.end_ea 0x%x bb_addr was 0x%x ' % (s.start_ea, block.start_ea, block.end_ea, bb_addr))
-                        ''' branch from block was not hit ''' 
-                        edges[s.start_ea] = block.start_ea
-                                          
+
         for bb in latest_hits_json[fun]:
             block = getBB(graph, bb)
             if block is not None:
@@ -87,7 +73,6 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
                     exit(1)
 
     print('Data run generated %d new hits' % num_new)
-    print('Unhit edges')
 
     ''' Not hit on recent data session, but hit previously '''
     p.bg_color =  not_hit_color
@@ -119,7 +104,6 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
                 if (fun not in latest_hits_json or bb not in latest_hits_json[fun]) and (fun not in all_hits_json or bb not in all_hits_json[fun]):
                     ida_graph.set_node_info(fun_addr, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
                     #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
-    return edges
 
 def colorBlocks():
     ''' return list of branches not taken '''
@@ -127,12 +111,11 @@ def colorBlocks():
     latest_hits_file = fname+'.hits' 
     if not os.path.isfile(latest_hits_file):
         ''' maybe a symbolic link, ask monitor for name '''
-        cmd = '@cgc.getCoverageFile()'
-        latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
-        if not os.path.isfile(latest_hits_file):
-            print('No hits file found %s' % latest_hits_file)
+        #cmd = '@cgc.getCoverageFile()'
+        #latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
+        #if not os.path.isfile(latest_hits_file):
+        print('No hits file found %s' % latest_hits_file)
             
     all_hits_file = fname+'.all.hits'
     pre_hits_file = fname+'.pre.hits'
-    edges = doColor(latest_hits_file, all_hits_file, pre_hits_file)
-    return edges
+    doColor(latest_hits_file, all_hits_file, pre_hits_file)

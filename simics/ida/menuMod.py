@@ -1,6 +1,6 @@
 import idaapi
 import os
-idaapi.require("colorBlocks")
+idaapi.require("getEdges")
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -301,12 +301,12 @@ class RunToAcceptHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
-class ColorBlocksHandler(idaapi.action_handler_t):
+class GetEdgesHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
         self.isim = isim
     def activate(self, ctx):
-        branches = colorBlocks.colorBlocks()
+        branches = getEdges.getEdges()
         self.isim.updateBNT(branches)
         return 1
     def update(self, ctx):
@@ -459,10 +459,10 @@ def register(isim):
         'Run to accept', 
         RunToAcceptHandler(isim))
 
-    color_blocks_action = idaapi.action_desc_t(
-        'color_blocks:action',
-        'Color blocks', 
-        ColorBlocksHandler(isim))
+    get_edges_action = idaapi.action_desc_t(
+        'get_edges:action',
+        'Get branches not taken', 
+        GetEdgesHandler(isim))
 
     this_dir = os.path.dirname(os.path.realpath(__file__))
     play_icon = os.path.join(this_dir, "play.png")
@@ -500,7 +500,7 @@ def register(isim):
     idaapi.register_action(track_io_action)
     idaapi.register_action(retrack_action)
     idaapi.register_action(run_to_accept_action)
-    idaapi.register_action(color_blocks_action)
+    idaapi.register_action(get_edges_action)
 
 
 def attach():
@@ -602,7 +602,7 @@ def attach():
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
-        'color_blocks:action',
+        'get_edges:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
