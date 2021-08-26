@@ -21,6 +21,8 @@ class PlayAFL():
         self.findbb = None
         self.write_data = None
         self.orig_buffer = None
+        self.max_len = None
+        self.return_ip = None
         afl_output = os.getenv('AFL_OUTPUT')
         if afl_output is None:
             afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
@@ -64,7 +66,9 @@ class PlayAFL():
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
-        self.loadPickle(snap_name)
+        if not self.loadPickle(snap_name):
+            print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
+            return None
         cli.quiet_run_command('disable-reverse-execution')
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
@@ -80,6 +84,10 @@ class PlayAFL():
             self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
 
     def go(self, findbb=None):
+        if self.call_ip is None:
+            self.lgr.debug('No call IP, refuse to go.')
+            print('No call IP, refuse to go.')
+            return
         self.bnt_list = []
         self.index = -1
         self.hit_total = 0
@@ -108,7 +116,7 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
             if self.addr is None:
-                self.addr, max_len = self.dataWatch.firstBufferAddress()
+                self.addr, self.max_len = self.dataWatch.firstBufferAddress()
         
             #self.top.restoreRESimContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
@@ -166,8 +174,10 @@ class PlayAFL():
         self.stop_hap = None
 
     def loadPickle(self, name):
+        retval = False
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         if os.path.isfile(afl_file):
+            retval = True
             self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
@@ -178,3 +188,4 @@ class PlayAFL():
                 self.max_len = so_pickle['size']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
+        return retval
