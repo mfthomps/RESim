@@ -2296,7 +2296,7 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params)
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False, run_fun=None):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation)        
         call_params.nth = count
         cell = self.cell_config.cell_context[self.target]
@@ -2345,7 +2345,8 @@ class GenMonitor():
         if len(frames) > 0:
             self.lgr.debug('runToIO, call to setExits')
             the_syscall.setExits(frames, reset=reset) 
-        
+        if run_fun is not None:
+            SIM_run_alone(run_fun, None) 
         SIM_run_command('c')
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
@@ -2960,7 +2961,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -2978,7 +2979,7 @@ class GenMonitor():
 
         if self.coverage is not None:
             self.coverage.doCoverage()
-        self.runToIO(fd, linger=True, break_simulation=False, reset=reset)
+        self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun)
 
     def stopTrackIO(self):
         self.lgr.debug('stopTrackIO')
@@ -3244,6 +3245,33 @@ class GenMonitor():
         else:
             print('Too many matches, try adding leading zeros?')
 
+    def doudp(self, dumb):
+        port = os.getenv('TARGET_PORT')
+        cmd = './doudp.sh %s' % port
+        #cmd = 'bash -c "cat /tmp/sendudp > /dev/udp/localhost/%s"' % (port)
+        print('cmd is: %s' % cmd)
+        os.system(cmd)
+        print('back from command')
+
+    def aflTrack(self, target, index, FD, port):
+        afl_dir = os.getenv('AFL_OUTPUT')
+        glob_mask = '%s/%s/queue/id:*%s,src*' % (afl_dir, target, index)
+        glist = glob.glob(glob_mask)
+        if len(glist) == 0:
+            print('No files found looking for %s' % glob_mask)
+        elif len(glist) == 1:
+            #print('will debug pid %d' % self.debug_info['pid'])
+            #self.debugPidGroup(self.debug_info['pid'])
+            shutil.copyfile(glist[0], '/tmp/sendudp')
+            self.trackIO(FD, run_fun=self.doudp)
+            print('tracking %s' % glist[0])
+            #cmd = 'bash -c "cat %s > /dev/udp/localhost/%d"' % (glist[0], port)
+            #cmd = './doudp.sh %s %d' %  (glist[0], port)
+            #print('cmd is: %s' % cmd)
+            #os.system(cmd)
+            #print('back from command')
+        else:
+            print('Too many matches, try adding leading zeros?')
  
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
