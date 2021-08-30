@@ -7,7 +7,7 @@ import pickle
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, findbb=None, linear=False):
+             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -18,9 +18,11 @@ class PlayAFL():
         self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
-        self.findbb = findbb
+        self.findbb = None
         self.write_data = None
         self.orig_buffer = None
+        self.max_len = None
+        self.return_ip = None
         afl_output = os.getenv('AFL_OUTPUT')
         if afl_output is None:
             afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
@@ -45,8 +47,6 @@ class PlayAFL():
         self.stop_hap = None
         self.call_hap = None
         self.call_break = None
-        self.bb_break = None
-        self.bb_hap = None
         self.addr = None
         self.in_data = None
         #self.backstop_cycles =   100000
@@ -66,7 +66,9 @@ class PlayAFL():
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
-        self.loadPickle(snap_name)
+        if not self.loadPickle(snap_name):
+            print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
+            return None
         cli.quiet_run_command('disable-reverse-execution')
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
@@ -81,7 +83,15 @@ class PlayAFL():
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
 
-    def go(self):
+    def go(self, findbb=None):
+        if self.call_ip is None:
+            self.lgr.debug('No call IP, refuse to go.')
+            print('No call IP, refuse to go.')
+            return
+        self.bnt_list = []
+        self.index = -1
+        self.hit_total = 0
+        self.findbb = findbb
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_run_alone(self.goAlone, None)
@@ -106,7 +116,7 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
             if self.addr is None:
-                self.addr, max_len = self.dataWatch.firstBufferAddress()
+                self.addr, self.max_len = self.dataWatch.firstBufferAddress()
         
             #self.top.restoreRESimContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
@@ -117,7 +127,8 @@ class PlayAFL():
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
             SIM_run_command('c')
         else:
-            if self.coverage is not None:
+            ''' did all sessions '''
+            if self.coverage is not None and self.findbb is None:
                 hits = self.coverage.getHitCount()
                 self.lgr.debug('Found %d total hits, save as %s' % (hits, self.target))
                 self.coverage.saveCoverage(fname=self.target)
@@ -127,6 +138,7 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
+            cli.quiet_run_command('restore-snapshot name = origin')
 
     def playBreak(self, bnt_index):
         self.current_packet = 1
@@ -159,10 +171,13 @@ class PlayAFL():
 
     def delStopHap(self, dumb):
         SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
+        self.stop_hap = None
 
     def loadPickle(self, name):
+        retval = False
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         if os.path.isfile(afl_file):
+            retval = True
             self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
@@ -173,3 +188,4 @@ class PlayAFL():
                 self.max_len = so_pickle['size']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
+        return retval

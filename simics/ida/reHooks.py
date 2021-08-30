@@ -364,7 +364,7 @@ class StringMemoryHandler(idaapi.action_handler_t):
             #sparm = "'%s'" % sas.iStr1.value
             sparm = "'%s'" % str(sas.iStr1.value).strip()
             dog = 'SendGDBMonitor("@cgc.writeString(0x%x, %s)");' % (sas.iAddr.value, sparm)
-            print('dog is <%s>' % dog)
+            print('string is <%s>' % dog)
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.writeString(0x%x, %s)");' % (sas.iAddr.value, sparm))
             time.sleep(2)
             self.isim.updateBookmarkView()

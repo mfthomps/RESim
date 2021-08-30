@@ -56,7 +56,25 @@ In most other systems, the debugger or its agent would run on the target, and th
 would cause the kernel to page
 in the memory containing the referenced code.\footnote{See \ref{external} for another example of the implications}.
 
-\section{Analysis artifacts}
+\subsection{This Guide}
+The remainer of this introduction provides an overview of RESim features and its limitations and availability.  Following the introduction:
+\begin{itemize}
+\item Section \ref{workflow} 
+describes a notional workflow, highlighting functions and features of RESim and how an analyst might use them to reverse engineer a 
+network of computers.  
+\item The set of commands supported by RESim are listed in section \ref{commands}.  
+\item Section \ref{configuration} details
+the elements of RESim configuration files (ini files) that define the system to be simulated.  
+\item The mechanics of installing and running 
+RESim are described in section \ref{running}.  This includes descriptions of data tracking (forward and reverse) and code coverage. 
+\item Examples of RESim use are provided in section \ref{example-workflows}.  
+\item Use of AFL to expand code coverage and identify vulnerabilities is described in section \ref{fuzz}.
+\item Section \ref{implementation} describes the implementation strategy and some of its consequences.
+\item Section \ref{troubleshooting} provides some trouble-shooting tips.
+\item The Appendices provide a set of notes and hints that have not yet been integrated into the body of the guide.
+\end{itemize}
+
+\subsection{Analysis artifacts}
 RESim generates system traces of all processes on a computer, starting with system boot, or from a selected checkpoint.  Trace reports include two components: 
 \begin{enumerate}
 \item A record of system calls, identifying the calling process and selected parameters, e.g., names of files and sockets and IP addresses.
@@ -83,18 +101,42 @@ back to initial ingest of the data, e.g., via a recv system call.
 \item System traces as previously described, but constrained to actions taken by threads within the process being analyzed.
 \end{itemize}
 
-\section{Dynamic analysis of programs executing in their environment}
+\subsection{Dynamic analysis of programs executing in their environment}
 RESim couples an IDA Pro disassembler debugger client with the Simics simulation to present a dynamic view into a running process.  The analyst sets breakpoints and navigates through function calls in both the forward and reverse execution directions.  This facilitates tracking the sources of data.  For example, if a program is found to be consuming data at some location of interest, reverse execution might identify a system call that brings the data into the process’s address space.
 
 A key property that distinguishes RESim from other RE strategies is that analysis occurs on processes as they execute in their native environment, and as they interact with other processes and devices within the system.  Consider an example process that communicates with a remote computer via a network while also interacting with a local process via a pipe.  When the analyst pauses RESim for inspection, the entire system pauses.  The simulation can then be resumed (or single-stepped) from the precise state at which it was paused, without having to account for timeouts and other temporal-based discontinuities between the process of interest and its environment.
 
-\section{Limitations}
+\subsection{Limitations}
 RESim analyzes Linux-based systems for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
 extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 
+\subsection{Development and Availability}
+In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
+RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
+Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
+All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}  A fork of the AFL fuzzer integrated with 
+RESim is availabe at: \url{https://github.com/mfthomps/AFL}.
 
-\section{Workflow}
+
+\section{Notional Workflow}
+\label{workflow}
+This section provides an overview of how RESim can be used by an analyst to reverse engineer a system. Details are provided elsewhere
+in this guide.  The general steps include:
+\begin{itemize}
+\item Extract software images from target systems.
+\item Identify Simics models to simulate the target hardware.
+\item Construct a RESim configuration file to identify system image file locations and RESim parameters.
+\item Use RESim to extract a set of kernel parameters if not already extracted for the kernel images being used.
+\item Run the simulation to produce full system traces and processing reports for the simulated systems.
+\item Identify processes of interest, and use the RESim IDA Pro debugging client to analyze their behavior, e.g, the protocols they consume.
+\item Use the integrated AFL fuzzer to improve code coverage within the targeted process.
+\item Analyze RESim sessions to identify unexplored code paths and identify input data to reach those paths, potentially feeding those back to AFL.
+\item Automatically assess any crashes generated by AFL to identify potentially exploitable vulnerabilities.
+\item Use RESim to analyzing the vulnerabilities and craft proof of concept exploits.
+\end{itemize}
+
+\subsection{Configuration files}
 Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
 processors and interface devices, e.g., network cards, disks and system consoles.  RESim currently includes the following platforms: 
 \begin{itemize}
@@ -107,12 +149,14 @@ the initial RAM disk, one ethernet and serial ports.
 Other platforms can be modeled via Simics, the detailes of which are beyond the scope of this manual.
 Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
 
+\subsection{Kernel parameter extraction}
 RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task 
 records and addresses of selected kernel symbols.  The CREATE\_RESIM\_PARAMS directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
 and extract the desired parameters.  This allows RESim to analyze disparate Linux kernels without a priori 
 knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
 See section \ref{getting-started}.
 
+\subsection{Find interesting processes}
 Once the kernel parameters have been extracted, the RESim configuration file is modified to reference the parameter file, and the simulation is restarted. The user is
 presented with a command line interface console.  This console manages the simulation via a combination of RESim and Simics commands, including commands to:
 \begin{itemize}
@@ -127,6 +171,18 @@ presented with a command line interface console.  This console manages the simul
 \end{itemize}
 \noindent See section \ref{commands} for details of RESim commands.
 
+A typical strategy with RESim is to initially perform a full system trace on a system as a means of identifying programs of interest, e.g., which can then be
+further analyzed using the interactive IDA Pro client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
+system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
+event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
+IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
+and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directiv.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
+run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
+see network ports being listened to. 
+
+
+
+\subsection{Analyze a process}
 When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
 
 RESim extends IDA Pro debugger functions and the analyst accesses these functions via menus and hot keys.   The disassembler/debug client can be used to:
@@ -141,21 +197,18 @@ RESim extends IDA Pro debugger functions and the analyst accesses these function
 \item Set and jump to bookmarks
 \end{itemize}
 
-\subsection{Find interesting processes}
-A typical strategy with RESim is to initially perform a full system trace on a system as a means of identifying programs of interest, e.g., which can then be
-further analyzed using the interactive IDA Pro client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
-system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
-event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
-IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
-and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directiv.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
-run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
-see network ports being listened to. See \ref{example-workflows} for more detailed examples of RESim workflows.
+\subsection{Code coverage with AFL}
+Using RESim to understand the protocols handled by a process, (and associated vulnerabilities),  typically involves providing the process with
+crafted data and observing its behavior and modifying data to achieve greater code coverage.  AFL contributes to code coverage expansion
+and vulnerability identification through automated guided fuzzing.  AFL provide RESim with randomized inputs that 
+it continually augments based on feedback that RESim generates reflecting code paths reached by each input.  
 
-\section{Development and Availability}
-In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
-RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
-Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
-All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}
+A set of RESim functions can then be used to replay AFL sessions to automatically identify and display unexplored code paths within
+the IDA client.  This allows the analyst to identify and generate inputs for additional code paths, and feed these inputs back into 
+new AFL sessions.  See section \ref{fuzz} for information on the use of AFL.
+
+
+See \ref{example-workflows} for detailed examples of RESim workflows.
 
 
 \section{RESim commands}
@@ -168,13 +221,14 @@ e.g., "{\tt @cgc.tasks()}".
 \item {\tt tasks} -- List currently executing process names and their PIDs.
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
-Tracing continues until the stopTrace command is issued.  Also see \ref{postprocessing}
+Tracing continues until the stopTrace command is issued.  
+See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
 
 \item {\tt toProc} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
 
 \item {\tt writeConfig} – Uses the Simics write-configuration command to save the simulation state for later loading with read-configuration.  This wrapper also saves process naming information, shared object maps and network configuration commands for reference subsequent to use of the read-configuration function.
 
-\item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  Also see \ref{postprocessing}
+\item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
 
 \item {\tt showProcTrace} – Generate a process family summary of all processes that executed since the traceProcess (or traceAll) command.
 
@@ -228,7 +282,8 @@ the nth recv call.
 
 \item {\tt revOver} – Reverse execution to the previous instruction in the debugged process – without entering functions, e.g., any function that may have returned to the current EIP.  Note that ROP may throw this off, causing you to land at the earliest recorded bookmark.  Use {\tt revInto} to reverse following a ROP.
 
-\item {\tt uncall} – Reverse execution until the call instruction that entered the current function.
+\item {\tt uncall} – Reverse execution until the call instruction that entered the current function.  This may be unreliable with some ARM
+programs.
 
 \item {\tt revToWrite(address)} – Reverse execution until a write operation to the given address within the debugged process.
 
@@ -301,7 +356,9 @@ of the pipe.
 uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
 potential instruction calls are to functions.  The monitor-local {\tt stackTrace} command displays a
 stack trace that uses the IDA function database to resolve names.  (TBD, does not yet handle plt, and thus shows call addresses for such calls).
-This function is not always reliable, e.g., phantom frames may appear based on calls that occurred previously.
+This function is not always reliable, e.g., phantom frames may appear based on calls that occurred previously. ARM stack frames may be
+difficult to determine due to its myriad ways of calling and returning. 
+
 
 \item {\tt writeReg} – Write value to a register (Note: deletes existing bookmarks.)
 \item {\tt writeWord} – Write word to an address. This function will delete existing bookmarks and craete a new origin.  If there are data watch marks,
@@ -334,17 +391,17 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 See section \ref{maze}.
 
 \item {\tt mapCoverage} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
-saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client colorBlocks script   Subsequent uses of this command
+saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client when the {\tt color} option is used. Subsequent uses of {\tt mapCoverage}
 will reset the coverage tracking.  Use {\tt stopCoverage} to stop basic block tracking.  The basic blocks database is read from the .blocks file created
 by the IDA client findBlocks script.  See section \ref{coverage} for information on how the IDA client represents code coverage and highlights
 branches that have not been taken.
 
-\item {\tt showCoverage} -- display summary of basic block coverage.  Also see the IDA client {\tt color blocks} command and see the resetBlocks.py script.
+\item {\tt showCoverage} -- display summary of basic block coverage.  Also see the IDA client {\tt color} and {\tt clear} options.
 
 \item{\tt goToBasicBlock} -- Skip the simulation state to the first hit of the block named by an address (requires use of {\tt mapCoverage}..
 
 \item{\tt fuzz(IOFile} -- Trim a data file to the minimum needed to not affect coverage. Assume the simulation is at 
-a return from a read, set basic block coverage and iteratively execute while reducing the
+a return from a read (e.g., using aflFD), set basic block coverage and iteratively execute while reducing the
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
@@ -362,13 +419,17 @@ The coverage file for the executable will be updated.  This is intended to updat
 name the combined hits file, e.g., someproc.all.hits.
 
 \item{\tt bbAFL(target, bb)} -- Replay all execution paths in a named AFL output directory and list those that hit a given address.  Intended to find input files that
-lead to a basic block having a branch not take (BNT), e.g., as found using the {\tt aflBNT} command.
+lead to a basic block having a branch not take (BNT), e.g., as found using the {\tt aflBNT} command.  While this function can be invoked
+multiple times, RESim must be restarted prior to use of other debug features, e.g., trackIO or injectIO.
 
 \item{\tt crashReport(target)} Generate crash reports for each crash discovred by AFL.  The given {\tt target} is as defined in the {\tt playAFL} command, except you can optionally provide the
 full path to a file, in which case only that file will be reported on.  NOTE: when handling multi-packet data sets, use the {\tt crashReport.py} script to launch RESim multiple times,
 one for each data file.
 
-\item{\tt replayAFL(target, index)} -- Replay a specific AFL session named by a target (see {tt playAFL} and index identifier, e.g., {\tt 0012}.
+\item{\tt replayAFL(target, index, FD)} -- Replay a specific AFL session named by a target (see {\tt playAFL} and index identifier, e.g., {\tt 0012}.  This function assumes a driver component. The driver will use the sendDriver.sh script to send the named file (and currently hardcoded clientudpMulti client program) to the target using an address and port per the ini file {\tt TARGET\_IP} and {\tt TARGET\_PORT} values.  RESim will use the trackIO function on the given FD.  Use this to analyze multipacket processing.
+
+\item{\tt aflInject(target, index} -- Replay an AFL session, similar to {\tt replayAFL}, except the {\tt injectIO} function is used without
+a driver component.  Thus, only single-packet processing can be analyzed.
 
 \item{\tt satisfyCondition} -- (experimental) Assess the comparison instruction at a given address and attempt to satisfy it by altering input data.  
 Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The 
@@ -381,10 +442,6 @@ comparison and then uses {\tt retrack} to run forward and track the new executio
 then list by pid, block address and size.
 
 \end{itemize}
-
-\subsection{Postprocessing}
-\label{postprocessing}
-See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
 
 \section{Defining a target system}
 \label{configuration}
@@ -502,17 +559,14 @@ upon boot.  It is intended that the agent will load scripts to generate traffic 
 \ref{driver} for information on using and updating driver platforms.
 
 \section{Running the simulation}
-RESim sessions are started from the Simics workspace using the \$RESIM/simics/monitorCore/launchRESim.py program,
-where {\tt \$RESIM} is a path to the RESim repo.  That program requires some environment variables, which are typically
-set in a bash script, an example of which is in
-\begin{verbatim}
-$RESIM/simics/workspace/monitor.sh
-\end{verbatim}
-\noindent Modify that script to name the path to your RESim repo. (The {\tt montitor5.sh} version works with Simics 5.)
+\label{running}
+RESim sessions are started from the Simics workspace using the {\tt resim} command (the path to which should be in your PATH
+environment variable).
 
 \subsection{Installation}
-RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8 and 5.0 are supported.
-It also assumes you have IDA Pro.
+RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8, 5 and 6 are supported.
+It also assumes you have IDA Pro. See the \textit{RESim Remote Access Guide} for information on remote access to RESim
+servers.
 \begin{itemize}
 \item Get RESim from the git repo:
 \begin{verbatim}
@@ -526,23 +580,30 @@ It also assumes you have IDA Pro.
 \begin{verbatim}
     apt-get install xterm
 \end{verbatim}
-\item In your ~/idaxx/cfg directory, there are a number of xml files that need to be replaced with those found
+\item Define environment variables.  In your {\tt .bashrc}, define the following:
+\begin{itemize}
+\item RESIM\_DIR  Path to your git clone.
+\item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}
+\item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
+\item PATH Extend your PATH variable to include {\tt \$RESIM\_DIR/simics/bin}
+
+\end{itemize}
+\item In your {\tt \$IDA\_DIR/cfg} directory, there are a number of xml files that need to be replaced with those found
 in {\tt simics/ida/cfg}.  Backup the original xmls first.
 \end{itemize}
+
 \subsection{Getting started}
 \label{getting-started}
 Steps to define and run a RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
 computer upon which Simics is installed with a x86-x58-ich10 platform.
 \begin{enumerate}
-\item Create a Simics workspace, e.g.,
+\item Create a Simics workspace using the {\tt resim\_ws.sh} script:
 \begin{verbatim}
 mkdir mywork; cd mywork
-../install/simics-5/simics-5.0.185/bin/project-setup
+resim_ws.sh
 \end{verbatim}
 
-\item Copy files from {\tt \$RESIM/simics/workspace} into the new workspace.
-\item Clone the RESim repo 
-\item Modify the monitor.sh script to reflect your Simics installation and the path to your RESim repo.
+\item Copy any desired files from {\tt \$RESIM/simics/workspace} into the new workspace.
 \item Modify the mytarget.ini as follows:
 \begin{itemize}
 \item Set the {\tt disk\_image} entry to name paths to your target disk image.
@@ -551,20 +612,21 @@ the file in the {\tt RESIM\_UNISTD} parameter.
 \item Copy the target systems root file system, or a subset of the file system containing binaries of interest to the local computer
 and name that path in the {\tt RESIM\_ROOT\_PREFIX} parameter.  These images are used when analyzing specified programs, and are given
 to IDA Pro for analysis.
-\item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim.
+\item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim
+(unless the param file already exists, in which case you are done with initial setup).
 \end{itemize}
-\item Launch RESim using {\tt ./monitor.sh mytarget}.  That will start Simics and give you the Simics command prompt.
+\item Launch RESim using {\tt resim mytarget}.  That will start Simics and give you the Simics command prompt.
 \item  Continue the simulation until the kernel appears to have booted, then stop.
 \item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominial interaction
 with the target system via its console, e.g., to schedule a new process.  If it displays a message saying it is not in the kernel,
 try running ahead a bit, e.g., {\tt r 10000} and try the gkp.go command again.
 \item After the parameters are created, quit Simics and remove the {\tt CREATE\_RESIM\_PARAMS} parameter.
-\item Restart the monitor.sh.  RESim will begin to boot the target and pause once it has confirmed the current task record.  You
+\item Restart using the {\tt resim} command.  RESim will begin to boot the target and pause once it has confirmed the current task record.  You
 may now use RESim commands listed in \ref{commands}.
 \end{enumerate}
 
-\subsubsection{Kernel Parameters for 32-bit compatability}
-If a 64-bit Linux environment incudes 32-bit applications, first create kernel parameters per the above, and then run until one of the 32-bit applications
+\subsubsection{Kernel Parameters for 32-bit compatibility}
+If a 64-bit Linux environment includes 32-bit applications, first create kernel parameters per the above, and then run until one of the 32-bit applications
 is scheduled and use @cgc.writeConfig to save
 the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PARAMS to YES.  Then start the monitor and use
 {\tt @gkp.compat32()}.  This will modify the kernel parameters in the .param file to include those needed to monitor 32-bit applications.
@@ -574,37 +636,38 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
 {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
 
+Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
+
 The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is localhost and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
 and to only log the exception.  Save the settings.  You should only need to do this step once.
 
 The first time you open a given program in IDA, run this script (from File / Script file):
 \begin{verbatim}
-$RESIM/simics/ida/dumpFuns.py 
+$RESIM_DIR/simics/ida/dumpFuns.py 
 \end{verbatim}
 \noindent This will create a data file used by RESim when generating stack traces.
-You may also run the {\tt findBlocks.py} script to generate a database of basic blocks that will be read by the RESim {\tt mapCoverage} command.
-This will then track basic block coverage, and that can be highlighted using the {\tt colorBlocks.py} script.
+You may also run the {\tt findBlocks.py} script to generate a database of basic blocks that will be used by RESim for tracking code
+coverage and to instrument RESim for use with AFL.
 
 From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc$<$program$>$} command, naming the program of interest.
 RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
-Using {\tt debugProc} rather than {\tt debugPid} allows RESim to collect shared object information for the target process.
-You may now attach the IDA gdb debugger to the process.   After the debugger has attached, run this IDA plugin script:
+Assuming you started IDA with the {\tt runIDA.sh} command, you may now press {\tt shift-r}, which will cause IDA to attached to the
+process and load its RESim plugin.  Alternately you can manually attach the process and run the IDAPython script at:
 \begin{verbatim}
 $RESIM/simics/ida/rev.py
 \end{verbatim}
+
 You can now run the commands found in the debugger help menu.  Note those commands generally invoke RESim commands listed in \ref{commands}.
 
-Note the RESim IDA client is not a robust debug environment in the sense that you can easily have Simics leave your intended execute context.
+Note the RESim IDA client is not a robust debug environment in the sense that you can easily cause Simics to leave your intended execute context.
 There are attempts to catch the termination of the process being debugged.  But in general, you should consider defining bookmarks to enable you to
 return to a known state.  
 
 There are situations where it is most productive, or necessary, to enage with the Simics command line directly.  If you change the execution state
 via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.
-
-The {\tt Debugger / Run to user space} command (or {\tt cgc.resynch()} will move the simulation ahead to the next user space instruction in any
-of the debugged threads.  This may be necessary to establish context for IDA breakpoints to work.  For example, if you are debugging a program,
-and run ahead arbitrarily and stop in some other process/kernel context, the IDA breakpoints will not work.
+For example, if you are debugging a program,
+and run ahead arbitrarily and stop in some other process/kernel context, the IDA breakpoints will not work until you resynch.
 
 RESim commands are available in IDA via the Debugger menu item, and via right clicking on addresses.  
 
@@ -722,7 +785,7 @@ indirectly).  Use of the {\tt background=True} option with the {\tt runToDmod} c
 system calls associated with the Dmod, even while you focus on the behavior of X. 
 
 
-\section{Tracking data}
+\subsection{Tracking data}
 \label{tracking}
 RESim provides several functions for tracking data consumed by processes.  A {\tt Data Watch} data structure tracks input buffers into which
 data is read, e.g., automatically as the result of a {\tt runToIO} command.  The {\tt watchData} command causes the simulation to proceed until any of the
@@ -760,15 +823,72 @@ may miss accesses to buffers.
 A related function,  {\tt injectIO}, injects data from a file into a read buffer identified via the aflFD function, which creates a snapshot
 and stores information related to the data input, including the original buffer data.
 
-\subsection{When are you done?}
+\subsubsection{When are you done?}
 When tracking data, you need to decide when to stop looking for data references.  The primary mechanism for this is the BACK\_STOP\_CYCLES
 setting.  When tracking data, RESim declares it is done tracking after that number of execution cycles occur with no data references.
 Note this can mask interesting behavior (and faults) if the number of cycles is too small.  Note also that failure to account for all data
 buffers can lead to tracking ending prematurely.  When in doubt, test with ridiculously large cycle counts.
 
-\subsection{Warning}
+\subsubsection{Warning}
 Use of real networks to generate tracked data can lead to silent corruption of the simulation unless care is taken to reset the reversing origin
 after the real network is done interacting with the system.  See \ref{real-networks}.
+
+\subsection{Code coverage}
+\label{coverage}
+Features to reflect code coverage should support human analysis as well as automated analysis, e.g., fuzzing.  To support the human, coverage is highlighted within IDA using color-coded
+basic blocks.  The scope of coverage is tied either to the text segment, i.e., the program, or a single shared library.  We refer to this as a \textit{coverage unit}..  
+Coverage tracking commences with use of the {\tt mapCoverage} command and is intended to aid understanding of program response to inputs tracked via 
+the {\tt trackIO} or {\tt injectIO} commands.  Those basic blocks which are only hit between coverage commencement and the first input event are separately colored so as to not
+be confused with blocks hit subsequent to receipt of input.  This distinction is intended to facilitate comparisons between \textit{data sessions} defined as periods
+between receipt of input (or IO injection) and quiescence with respect to the backstop logic.
+Within the IDA display, coverage properties of basic blocks will be
+coded into five colors:
+\begin{itemize}
+\item Never executed.
+\item Never executed during a data session
+\item Executed during a data session, but not during this data session
+\item Executed during this session and some previous data session.
+\item Executed only during this data session.
+\end{itemize}
+
+The {\tt coverage} module maintains three data files for each coverage unit: a running total set of hits from previous data sessions; the hits for the most recent data session;
+and hits which occur prior to the first input data reference (e.g., reads, selects, etc).  The running total is only updated immediately prior to the start 
+of a new data session.  At the start of each data session, the coverage module will restore any breakpoints found
+in the recent session data file and then merge it into the running total.  The coverage module will then clear its internal hits data.  
+When the IDA client is started with the {\tt color} argument, it will first
+reset all basic block colors,  and will then read the hits files and color blocks accordingly.  The running hits file is intended to persist across
+RESim sessions.  
+
+
+\subsubsection{Branches not taken}
+The IDA client generates a list of basic block branches that were not taken, i.e., unused exits from hit basic blocks.  This list is presented in the {\tt BNT} window of the IDA client
+and is intended to help the analyst see places where changes in input data may have resulted in added coverage.  When used following a
+RESim {\tt mapCoverage} command, double-clicking on an entry will take the simulation to the corresponding 
+cycle.  Note this is only available for the very first coverage hit of each basic block, and of course only within a session that hit the from block (see the bbAFL function).  This window is most useful when IDA is started with the {\tt color} option.
+
+The {\tt color} option and {\tt BNT} window can also be used outside of the {\tt mapCoverage} context, e.g., to analyze branches not 
+taken during AFL sessions.  Double-clicking an entry in the BNT window will go to the source of the branch not taken (note the simulation state
+is not altered.)  The following is a notional code coverage workflow.
+\begin{itemize}
+\item Use AFL to fuzz a target.
+\item Use the playAFL command to replay all of the sessions, generating a new hits file.
+\item Copy that hits file over the target hits file.
+\item Start a RESim session from the checkpoint used during AFL.
+\item Start IDA and use the {\tt resetBlocks} script to clear block coloring; then use {\tt Color blocks} to color all blocks hit
+during the AFL session.
+\item Find an interesting BNT in the BNT window.
+\item Use the bbAFL function to search for all AFL data files that hit the source block.
+\item Restart RESim and use the {\tt injectIO}, {\tt aflInject}, {\tt aflTrack} or {aflReplay} functions to play the data file identified above.
+\item Run to the source block of interest and investigate whether an altered input could result in a branch to the BNT.
+\end{itemize}
+Note in the above workflow, you may wish to use 2 different checkpoints.  The {\tt playAFL} and {\tt bbAFL} functions must run from the
+checkpoint used with AFL.  However the other functions that use trackIO could run from checkpoints that include a driver component.  And 
+that checkpoint might be from early on in the process's life, e.g., to identify the sources of state values that do not seem to result from
+the input data.
+
+
+Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
+which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
 
 \section{Example workflows}
 \label{example-workflows}
@@ -882,7 +1002,8 @@ to force RESim to continue the data session until the next read/recv is called. 
 is hit before crash handling completes.  On the other hand, if processing of the data occurs in a separate thread, use of sor (stop on read) will
 miss all of that processing. 
 \end{itemize}
-Use the RESim afl command to start an AFL session.  There is no need to run a debug command first, that is done automatically on the current PID. 
+Use the RESim afl command to start an AFL session.  There is no need to run a debug command first, that is done automatically pid upon which
+the aflFD command was performed.
 
 \subsection{Multiple UDP packets}
 AFL is organized as a file fuzzer, and it is up to the user to adapt it (or the target) for network environments.
@@ -962,7 +1083,7 @@ workspace directory as an example.
 \subsection{Update code coverage}
 The new code paths discovered by AFL can be added to your aggregate code coverage file using the {\tt playAFL} command.  This is intended
 to aid manual analysis to see if the new path leads to other interesting paths that can then be fed back to AFL.  
-The  aflBNT command displays the brachces not taken (BNT).  You can then use the bbAFL command to identify AFL-generated data files
+The  aflBNT command displays the branches not taken (BNT).  You can then use the bbAFL command to identify AFL-generated data files
 that lead to source of the BNT.  Also, refer to the BNT window on
 the IDA client.
 
@@ -1030,6 +1151,7 @@ However, sometimes the inputs leading to unwanted paths is not known.  While the
 help identify such inputs, it may be simpler to simply break on them an feedback a poor coverage report.
 
 \section{Implementation strategy}
+\label{implementation}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
 RESim primarily gathers information about a system through monitoring of events, i.e., observed via callbacks tied to 
 breakpoints.  Two key features of RESim enable its flexibility and performance.  
@@ -1054,19 +1176,31 @@ Other than IDA analysis, we do not maintain state across different sessions (i.e
 Shared object maps vary by alsr.
 
 \section{Troubleshooting}
-RESim is under ongoing development and does not have a robust regression testing system.  So there will be bugs.
-Check the logs, both the RESim log (currently noname.log in /tmp/monitors) and others such as /tmp/revToCall.log
+\label{troubleshooting}
+RESim is an ongoing development and has a limited regression testing system.  So there will be bugs.
+Check the logs, in {\tt workspace/logs}.  
 RESim bugs, e.g., Python errors, are often masked when driving from the IDA Client.  When things seem broken, they
 may well be.  Redo what fails using the RESim command line, and you may see the error.
 
 Stack traces in RESim are sometimes better than in IDA (though RESim is responsible for both).
+
+IDA Pro's debugger at times may get lost.  You can exit IDA and restart it using the {\tt runIDA.sh} command followed by the
+{\tt shift-r} hotkey to reconnect to the simulation.
+
+If you find yourself in the kernel, you can usually use the {\tt run2User} command or its IDA debugger equivalent.
+
+The simulation may reach a state that you cannot proceed from.  Use bookmarks (or watch marks) to return to a known state.
+
+Information about share object file use by processes is only gathered when directed by use of the {\tt debugProc} command.
+While you can attach to any process at any time, this key shared object information will not be available.  See \ref{implementation}
+for more information.
 
 \pagebreak
 \begin{appendices}
 \section{Analysis on a custom stripped kernel}
 Use of external analysis, (i.e., observation of system memory during system execution, to track application processes), requires some knowledge of kernel data structures, e.g., the location of the current task pointer within global data.   While this information can be derived from kernel symbol tables, some systems, e.g., purpose-built appliances, include only stripped kernels compiled with unknown configuration settings.
 
-Within 32-bit Linux, the address of the current task record can be found either within a task register (while in user mode), or relative to the base of the stack while in kernel mode.  Heuristics can then be used to locate the offsets of critical fields within the record, e.g., the PID and comm (first 16 characters of the program name).  While the current task record provides information about what is currently running – it cannot be efficiently used to determine when the current task has changed.  For that, the RESim tool prefers to know the address of the pointer to the current task record, i.e., the address of the kernel data structure that is updated whenever a task switch occurs.
+Within 32-bit Linux, the address of the current task record can be found either within a task register (while in user mode), or relative to the base of the stack while in kernel mode.  Heuristics can then be used to locate the offsets of critical fields within the record, e.g., the PID and comm (first 16 characters of the program name).  While the current task record provides information about what is currently running – it cannot be efficiently used to determine when the current task has changed.  For that, the RESim tool must know the address of the pointer to the current task record, i.e., the address of the kernel data structure that is updated whenever a task switch occurs.
 
 Once we have the address of the current task record, a brute force search is performed starting at 0xc1000000, looking for that same value in memory.  This search resulted in two such addresses being found, and use of breakpoints indicate the one at the higher memory location is updated first on a task switch. 
 
@@ -1168,13 +1302,13 @@ not been present at the time of the system call.  In other words,
 in 64-bit Linux, breakpoints may never be hit when set on the virtual address of a file name referenced in an open call.
 
 Even though the kernel is able to read the file name without ever referencing its virtual address, the kernel does
-need to bring the desired page into physical memory so that it may read the file name.  In doing so, the kernel
+need to bring the desired page into physical memory so that it may read the file name.  It happens that while doing so, the kernel
 updates the page tables such that references to the virtual memory address will lead to the file name in
-physical memory – even though such a reference may never happen.  RESim takes advantage of the kernel's
+physical memory, \textit{even though such a reference may never occur}.  RESim takes advantage of the kernel's
 page table maintenance by setting breakpoints on the paging structures referenced by the virtual address.
 In some cases, the target page table may not be present at the time of the system call, so we must first
 break on an update to a page directory entry, and then later break on an update to the page table entry,
-finally yielding address of the page in physical memory.
+finally yielding address of the page in physical memory that we can read.
 
 Note this property of the 64-bit Linux implementation has implications beyond tracing of system calls.  A reverse
 engineer may wish to dynamically observe the opening of a particular file name observed within an executable image.
@@ -1219,7 +1353,7 @@ VLAN defintions in which the VLAN subnet differs from that of the parent interfa
 requires the parent interface to be define.  Wind River considers this common configuration
 of VLANs (with differing subnets) to be a "use case" beyond their intended features.
 
-\subsection{What FD is this?}
+\section{What FD is this?}
 You have created a input stimulus and would like to understand the resulting behavior of a specific process
 that runs a long time as a service.
 Running a full system trace up to the stimulus as a means of getting context may not be practical.  So you start
@@ -1484,40 +1618,6 @@ Some applications are just too easy to crash.  This can result in scores of ``un
 crash with a small change in how we get there.  Any heuristic that suppresses a crash seems like a bad idea, unless analysis convincingly demonstrates otherwise.
 Perhaps a tool to scan crash reports to eliminate duplicates, i.e., we usually don't care how we got there if a high confidence stack frame is the same?
 And crashReport function itself should run that tool when done, along with a grep on ROP.
-
-\subsection{Code coverage (in process)}
-\label{coverage}
-Features to reflect code coverage should support human analysis as well as automated analysis, e.g., fuzzing.  To support the human, coverage is highlighted within IDA using color-coded
-basic blocks.  The scope of coverage is tied either to the text segment, i.e., the program, or a single shared library.  We refer to this as a \textit{coverage unit}..  
-Coverage tracking commences with use of the {\tt mapCoverage} command and is intended to aid understanding of program response to inputs tracked via 
-the {\tt trackIO} or {\tt injectIO} commands.  Those basic blocks which are only hit between coverage commencement and the first input event are separately colored so as to not
-be confused with blocks hit subsequent to receipt of input.  This distinction is intended to facilitate comparisons between \textit{data sessions} defined as periods
-between receipt of input (or IO injection) and quiescence with respect to the backstop logic.
-Within the IDA display, coverage properties of basic blocks will be
-coded into five colors:
-\begin{itemize}
-\item Never executed.
-\item Never executed during a data session
-\item Executed during a data session, but not during this data session
-\item Executed during this session and some previous data session.
-\item Executed only during this data session.
-\end{itemize}
-
-The {\tt coverage} module maintains three data files for each coverage unit: a running total set of hits from previous data sessions; the hits for the most recent data session;
-and hits which occur prior to the first input data reference (e.g., reads, selects, etc).  The running total is only updated immediately prior to the start 
-of a new data session.  At the start of each data session, the coverage module will restore any breakpoints found
-in the recent session data file and then merge it into the running total.  The coverage module will then clear its internal hits data.  The IDA client {\tt injectIO} command will first
-reset all basic block colors.  When the simulation stops, the IDA plugin will read the three hits files and color blocks accordingly.  The running hits file is intended to persist across
-RESim sessions.  
-
-\subsubsection{Branches not taken}
-The IDA client generates a list of basic block branches that were not taken, i.e., unused exits from hit basic blocks.  This list is presented in the {\tt BNT} window of the IDA client
-and is intended to help the analyst see places where changes in input data may have resulted in added coverage.  Double-clicking on an entry will take the simulation to the corresponding 
-cycle.  Note this is only available for the very first coverage hit of each basic block.
-
-
-Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
-which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
 
 
 \subsection{Real networks and UDP}

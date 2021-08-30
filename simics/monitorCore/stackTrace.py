@@ -467,7 +467,7 @@ class StackTrace():
                                 else:
                                     ''' first frame matches expected function '''
                                     cur_fun_name = None
-                            instruct = '%s   %s' % (self.callmn, fun)
+                                instruct = '%s   %s' % (self.callmn, fun)
                         if fun_hex is not None:
                             #self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct))
                             self.soCheck(fun_hex)

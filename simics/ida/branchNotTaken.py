@@ -1,8 +1,10 @@
 import idaapi
 import idc
 import idaversion
+import ida_kernwin
 from idaapi import simplecustviewer_t
 import gdbProt
+import getEdges
 import json
 import os
 import time
@@ -10,7 +12,7 @@ class BranchNotTaken(simplecustviewer_t):
     def __init__(self):
         self.isim = None
 
-    class datawatch_handler(idaapi.action_handler_t):
+    class bnt_handler(idaapi.action_handler_t):
         def __init__(self, callback):
             idaapi.action_handler_t.__init__(self)
             self.callback = callback
@@ -20,6 +22,20 @@ class BranchNotTaken(simplecustviewer_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+    def getOffset(self):
+        retva = None
+        fname = idaapi.get_root_filename()
+        command = "@cgc.getSOFromFile('%s')" % fname
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('so stuff: %s' % simicsString) 
+        if ':' in simicsString:
+            adders = simicsString.split(':')[1]
+            start = adders.split('-')[0]
+            try:
+                retval = int(start,16)
+            except ValueError:
+                print('could not get hex from %s' % start)
+        return retval 
 
     def Create(self, isim):
         self.isim = isim
@@ -34,11 +50,16 @@ class BranchNotTaken(simplecustviewer_t):
 
     def register(self):
 
-        pass
+        form = idaversion.get_current_widget()
+        the_name = "refresh_bnt"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh BNT list", self.bnt_handler(self.updateList)))
+        idaapi.attach_action_to_popup(form, None, the_name)
 
 
-    def updateList(self, branches):
+    def updateList(self):
+        branches = getEdges.getEdges()
         print "in updateList"
+        offset = self.getOffset()
         if branches is None:
             print('Branch Not Taken list is None')
             return
@@ -46,7 +67,9 @@ class BranchNotTaken(simplecustviewer_t):
         self.ClearLines()
         for b in branches:
             f = idc.get_func_name(b)
-            cline = 'to 0x%x from 0x%x %s' % (b, branches[b], f)
+            to_val = b + offset
+            from_val = branches[b]+offset
+            cline = 'to 0x%x from 0x%x %s' % (to_val, from_val, f)
             self.AddLine(cline)
 
         return None
@@ -65,8 +88,12 @@ class BranchNotTaken(simplecustviewer_t):
         command = '@cgc.goToBasicBlock(0x%x)' % branch_from
         #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        eip = gdbProt.getEIPWhenStopped()
-        self.isim.signalClient()
+        if 'not in blocks' in simicsString:
+            ida_kernwin.jumpto(branch_from)
+        else:
+            eip = gdbProt.getEIPWhenStopped()
+            if eip is not None:
+                self.isim.signalClient()
         return True
 
     def OnKeydown(self, vkey, shift):
