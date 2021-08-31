@@ -25,5 +25,5 @@ cp $TD/checkROP.sh .
 # use ~/bin/set-title
 set-title "cadet01-tst"
 
-./monitor.sh ubuntu_driver.ini
+resim ubuntu_driver.ini
 ./checkROP.sh
