@@ -103,11 +103,17 @@ The following steps are taken for each user on the RESim server.
 
 \item Add to your .bashrc:
 \begin{verbatim}
-    export RESIM=~/git/RESIM
+    export RESIM_DIR=~/git/RESim
+    export SIMDIR=/mnt/simics/simics-4.8/simics-4.8.170
 \end{verbatim}
+\item Add to your .profile:
+\begin{verbatim}
+   PATH=$RESIM_DIR/simics/bin:$PATH
+\end{verbatim}
+
 \item Start a new shell to inherit that variable:
 \begin{verbatim}
-   bash
+   bash -l
 \end{verbatim}
 
 \item Use git to clone the RESim repo on the RESim server, e.g., 
@@ -120,9 +126,8 @@ The following steps are taken for each user on the RESim server.
 \item Create a "workspace" directory, and cd to it.  Then initialize
 it as a Simics workspace:
 \begin{verbatim}
-    /mnt/simics/simics-4.8/simics-4.8.170/bin/workspace-setup
+    resim-ws.sh
 \end{verbatim}
-
 
 \item Copy the files in {\tt git/RESim/simics/workspace} to your workspace, and follow the README instructions.
 \end{itemize}
@@ -132,15 +137,12 @@ The steps above are intended to allow you to run tests using the CADET01 service
 For each new project, create and initialize a new workspace.  Simply create a directory
 with an informative name, cd to it and run the workspace or project setup command as described above.
 
-Then copy the monitor.sh from {\tt git/RESim/simics/workspace} to your workspace.
-
 \section{Simics 5 procedures}
 This section addresses bladet10 which has both Simics 4.8 and Simics 5.
 When creating a new workspace, initialize it with:
 \begin{verbatim}
-/mnt/re_images/simics5/latest/bin/project-setup
+   resim-ws.sh
 \end{verbatim}
-\noindent Copy the {\tt git/RESim/simics/workspace/monitor5-blade.sh} to your workspace and use it (rename to taste) when starting RESim.
 
 Two scripts in /usr/bin are used to control the license server.  Use simics5-license.sh and simics4-license.sh to set the server for the
 version of Simics that you wish to run.  Those scripts need only be run when changing versions.
