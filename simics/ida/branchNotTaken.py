@@ -4,6 +4,7 @@ import idaversion
 import ida_kernwin
 from idaapi import simplecustviewer_t
 import gdbProt
+import getEdges
 import json
 import os
 import time
@@ -11,7 +12,7 @@ class BranchNotTaken(simplecustviewer_t):
     def __init__(self):
         self.isim = None
 
-    class datawatch_handler(idaapi.action_handler_t):
+    class bnt_handler(idaapi.action_handler_t):
         def __init__(self, callback):
             idaapi.action_handler_t.__init__(self)
             self.callback = callback
@@ -49,10 +50,14 @@ class BranchNotTaken(simplecustviewer_t):
 
     def register(self):
 
-        pass
+        form = idaversion.get_current_widget()
+        the_name = "refresh_bnt"
+        idaapi.register_action(idaapi.action_desc_t(the_name, "refresh BNT list", self.bnt_handler(self.updateList)))
+        idaapi.attach_action_to_popup(form, None, the_name)
 
 
-    def updateList(self, branches):
+    def updateList(self):
+        branches = getEdges.getEdges()
         print "in updateList"
         offset = self.getOffset()
         if branches is None:

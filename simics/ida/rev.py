@@ -37,6 +37,17 @@ import functionSig
 #import dbgHooks
 import regFu
 import menuMod
+import bookmarkView
+import idaSIM
+import stackTrace
+import dataWatch
+import branchNotTaken
+import writeWatch
+import reHooks
+import dbgHooks
+import menuMod
+
+'''
 idaapi.require("idaSIM")
 idaapi.require("stackTrace")
 idaapi.require("dataWatch")
@@ -46,7 +57,7 @@ idaapi.require("bookmarkView")
 idaapi.require("reHooks")
 idaapi.require("dbgHooks")
 idaapi.require("menuMod")
-idaapi.require("colorBlocks")
+'''
 from idaapi import Choose
 '''
     Ida script to reverse execution of Simics to the next breakpoint.
@@ -57,14 +68,6 @@ from idaapi import Choose
 '''
 #reg_list =['eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp', 'ax', 'bx', 'cx', 'dx', 'ah', 'al', 'bh', 'bl', 'ch', 'cl', 'dh', 'dl']
 #reg_list = idaapi.ph_get_regnames()
-reg_list = idautils.GetRegisterList()
-kernel_base =  0xc0000000
-info = idaapi.get_inf_structure()
-if info.is_64bit():
-    print('64-bit')
-    kernel_base = 0xFFFFFFFF00000000
-else:
-    print('32-bit')
 
 def showHelp(prompt=False):
     print('in showHelp')
@@ -438,8 +441,16 @@ class RunToConnectHandler(idaapi.action_handler_t):
 
 
 
-if __name__ == "__main__":
+def RESimClient():
     #Wait() 
+    reg_list = idautils.GetRegisterList()
+    kernel_base =  0xc0000000
+    info = idaapi.get_inf_structure()
+    if info.is_64bit():
+        print('64-bit')
+        kernel_base = 0xFFFFFFFF00000000
+    else:
+        print('32-bit')
     bookmark_view = bookmarkView.bookmarkView()
     stack_trace = stackTrace.StackTrace()
     data_watch = dataWatch.DataWatch()
@@ -450,7 +461,13 @@ if __name__ == "__main__":
     #primePump()
     #nameSysCalls(True)
     #print('back from nameSysCalls')
+    idc.refresh_lists()
+    idc.auto_wait()
     form = idaversion.find_widget("Stack view")
+    print('form is %s' % str(form))
+    if form is None:
+        print('failed to find stack view')
+        return
     #print('do switch')
     idaversion.activate_widget(form, True)
     #print('now create bookmark_view')
@@ -474,6 +491,7 @@ if __name__ == "__main__":
 
     branch_not_taken.Create(isim)
     branch_not_taken.register()
+    branch_not_taken.updateList()
    
     write_watch.Create(isim)
     write_watch.register()
@@ -520,3 +538,6 @@ if __name__ == "__main__":
     idaversion.batch(0)
     #isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)
+
+if __name__ == "__main__":
+    RESimClient()

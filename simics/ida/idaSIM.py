@@ -655,8 +655,8 @@ class IdaSIM():
     def updateDataWatch(self):
         data_watch_results = self.data_watch.updateDataWatch()
 
-    def updateBNT(self, branches):
-        self.branch_not_taken.updateList(branches)
+    def updateBNT(self):
+        self.branch_not_taken.updateList()
     
     def updateWriteWatch(self):
         write_watch_results = self.write_watch.updateWriteWatch()

@@ -1,6 +1,5 @@
 import idaapi
 import os
-idaapi.require("getEdges")
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -301,17 +300,6 @@ class RunToAcceptHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
-class GetEdgesHandler(idaapi.action_handler_t):
-    def __init__(self, isim):
-        idaapi.action_handler_t.__init__(self)
-        self.isim = isim
-    def activate(self, ctx):
-        branches = getEdges.getEdges()
-        self.isim.updateBNT(branches)
-        return 1
-    def update(self, ctx):
-        return idaapi.AST_ENABLE_ALWAYS
-
 def register(isim):
     do_show_cycle_action = idaapi.action_desc_t(
         'do_show_cycle:action',
@@ -459,11 +447,6 @@ def register(isim):
         'Run to accept', 
         RunToAcceptHandler(isim))
 
-    get_edges_action = idaapi.action_desc_t(
-        'get_edges:action',
-        'Get branches not taken', 
-        GetEdgesHandler(isim))
-
     this_dir = os.path.dirname(os.path.realpath(__file__))
     play_icon = os.path.join(this_dir, "play.png")
     continue_forward_action = idaapi.action_desc_t(
@@ -500,7 +483,6 @@ def register(isim):
     idaapi.register_action(track_io_action)
     idaapi.register_action(retrack_action)
     idaapi.register_action(run_to_accept_action)
-    idaapi.register_action(get_edges_action)
 
 
 def attach():
@@ -599,10 +581,6 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
         'do_show_cycle:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
-        'Debugger/ReSIM/',
-        'get_edges:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/',
