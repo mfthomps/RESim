@@ -7,6 +7,7 @@ if [[ -z "$RESIM_DIR" ]]; then
     echo "RESIM_DIR not defined."
     exit
 fi
+TD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 rm -fr cadet-tst
 mkdir cadet-tst
 cd cadet-tst
@@ -18,7 +19,6 @@ cp $WS/cadet01 $WS/cadet01.funs $WS/ubuntu_driver.ini $WS/ubuntu.param $WS/drive
 sed -i '/OS_TYPE=LINUX32/a INIT_SCRIPT=cadet.simics' ubuntu_driver.ini
 echo "INTERACT_SCRIPT=teecadet.simics" >> ubuntu_driver.ini
 
-TD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cp $TD/*.simics .
 cp $TD/findWindow.sh .
 cp $TD/checkROP.sh .
