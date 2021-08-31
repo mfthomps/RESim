@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Create a Simics workspace for use with RESim
-# Link to this file from someplace in your path, e.g.,
+# Add thi simics/bin to your path or link to this file from someplace in your path, e.g.,
 #  ln -s $RESIM_DIR/simics/bin/resim-ws.sh $HOME/bin/resim-ws.sh
 #
 if [[ -z "$SIMDIR" ]]; then
@@ -13,6 +13,9 @@ if [[ -z "$RESIM_DIR" ]]; then
    exit
 fi
 $SIMDIR/bin/project-setup  || exit
-cp $RESIM_DIR/simics/workspace/monitor6.sh monitor.sh
+cp $RESIM_DIR/simics/workspace/mytarget.ini .
+cp $RESIM_DIR/simics/workspace/driver-script.sh .
+cp $RESIM_DIR/simics/workspace/ubuntu.param .
+cp $RESIM_DIR/simics/workspace/ubuntu.ini .
 here=`pwd`
 echo "Workspace setup at $here."

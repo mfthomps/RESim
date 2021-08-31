@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+#  Start the RESim monitor for a given ini file.
+#
+if [[ -z "$RESIM_DIR" ]]; then
+    echo "RESIM_DIR not defined."
+    exit
+fi
+if [[ -z "$SIMDIR" ]]; then
+    echo "SIMDIR not defined."
+    exit
+fi
+#  Define path to the local RESim repo
+# compatibility...
+export RESIM=$RESIM_DIR
+if [ "$#" -ne 1 ]; then
+    echo "usage: ./monitor.sh <target>"
+    echo "   Where <target> is the base name of a RESim ini file"
+    exit
+fi
+S4='simics-4.8'
+S5='simics-5'
+S6='simics-6'
+if [[ "$SIMDIR" == *"$S4"* ]];then
+    export SIMICS_VER=4.8
+elif [[ "$SIMDIR" == *"$S5"* ]];then
+    export SIMICS_VER=5.0
+elif [[ "$SIMDIR" == *"$S6"* ]];then
+    export SIMICS_VER=6.0
+else
+    echo "Unable to get simics version (SIMICS_VER) from $SIMDIR"
+fi
+export RESIM_INI=$1
+export RESIM_TARGET=$1
+export SIMICS_WORKSPACE=`pwd`
+export SIMICS=$SIMDIR
+#
+#  For use with driver components
+#
+rm -f driver-ready.flag
+#
+# Launch RESim
+#
+./simics -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
