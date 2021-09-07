@@ -16,7 +16,7 @@ from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, lgr, fd=None, 
-                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False):
+                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
         if pad_env is not None:
@@ -73,6 +73,7 @@ class AFL():
         self.target = target
         self.create_dead_zone = create_dead_zone
         self.backstop.setCallback(self.whenDone)
+        self.port = port
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
         if stop_on_read:
@@ -87,7 +88,7 @@ class AFL():
                 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
-        self.server_address = ('localhost', 8765)
+        self.server_address = ('localhost', self.port)
         self.iteration = 1
         self.pid = self.top.getPID()
         self.total_hits = 0
@@ -317,7 +318,8 @@ class AFL():
     def synchAFL(self):
         
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_address = ('localhost', 8765)
+        server_address = ('localhost', self.port)
+        self.lgr.debug('afl conect to port %d' % self.port)
         self.sock.connect(server_address)
         self.sendMsg('hi from resim')
         reply = self.getMsg()

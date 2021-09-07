@@ -191,7 +191,7 @@ class Coverage():
             if pt.ptable_addr is not None:
                 if pt.ptable_addr not in self.missing_tables:
                     self.missing_tables[pt.ptable_addr] = []
-                    self.lgr.debug('coverage no physical address for 0x%x, set break on ptable_addr 0x%x' % (bb_rel, pt.ptable_addr))
+                    self.lgr.debug('coverage no physical address for 0x%x, set break on phys ptable_addr 0x%x' % (bb_rel, pt.ptable_addr))
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
@@ -222,6 +222,9 @@ class Coverage():
         SIM_run_alone(SIM_run_command, 'q')
                         
     def addHapAlone(self, bplist): 
+        if len(bplist) == 0:
+            self.lgr.error('coverage addHapAlone with empty bplist')
+            return
         #self.lgr.debug('addHapAlone set on range %d to %d' % (bplist[0], bplist[-1]))
         hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bplist[0], bplist[-1])
         #self.lgr.debug('addHapAlone adding hap %d' % hap)
@@ -234,7 +237,8 @@ class Coverage():
             type_name = SIM_get_mem_op_type_name(op_type)
             physical = memory.physical_address
             #self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
-            if length == 4 and self.cpu.architecture == 'arm':
+            #if length == 4 and self.cpu.architecture == 'arm':
+            if length == 4:
                 if op_type is Sim_Trans_Store:
                     value = SIM_get_mem_op_value_le(memory)
                     if value == 0:
@@ -248,11 +252,13 @@ class Coverage():
                         self.begin_tmp_hap = len(self.bb_hap)
                         print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
                     prev_bp = None
+                    got_one = False
                     for bb in self.missing_tables[physical]:
                         pt = pageUtils.findPageTable(self.cpu, bb, self.lgr, use_sld=value)
                         if pt.page_addr is None or pt.page_addr == 0:
-                            self.lgr.error('pt still not set for 0x%x' % bb)
+                            self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
+                        got_one = True
                         addr = pt.page_addr | (bb & 0x00000fff)
                         bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
                         #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
@@ -263,6 +269,8 @@ class Coverage():
                             bb_index = len(self.bp_list)
                         self.bp_list.append(bp)                 
                         prev_bp = bp
+                    if not got_one:
+                        self.lgr.error('tableHap no pt for any bb address 0x%x' % value)
                     SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
             else:
                 self.lgr.error('coverage tableHap not yet handled')

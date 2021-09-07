@@ -1981,6 +1981,7 @@ class GenMonitor():
         self.noWatchSysEnter()
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
+        self.noWatchSysEnter()
         self.lgr.debug('genMonitor noReverse')
 
     def allowReverse(self):
@@ -3529,7 +3530,7 @@ class GenMonitor():
     def aflTCP(self, sor=False, fname=None, linear=False):
         self.afl(n=-1, sor=sor, fname=fname)
 
-    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None):
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3548,7 +3549,7 @@ class GenMonitor():
             full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.context_manager[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
-            linear=linear, target=target, create_dead_zone=dead)
+            linear=linear, target=target, create_dead_zone=dead, port=port)
         if target is None:
             self.noWatchSysEnter()
             fuzz_it.goN(0)
@@ -3558,15 +3559,18 @@ class GenMonitor():
             Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
             fd -- will runToIOish on that FD
             snap_name -- will writeConfig to that snapshot.  Use that snapshot for fuzz and afl commands. '''
-        cpu = self.cell_config.cpuFromCell(self.target)
-        cell_name = self.getTopComponentName(cpu)
-        debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
-        if debug_pid is None:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
-            self.debugPidGroup(pid)
-        print('fd is %d' % fd)
-        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
-           self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd)
+        if self.reverseEnabled():
+            cpu = self.cell_config.cpuFromCell(self.target)
+            cell_name = self.getTopComponentName(cpu)
+            debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
+            if debug_pid is None:
+                cpu, comm, pid = self.task_utils[self.target].curProc() 
+                self.debugPidGroup(pid)
+            print('fd is %d' % fd)
+            fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
+               self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd)
+        else:
+            print('Reverse execution must be enabled to run aflFD')
 
     def hasBookmarks(self):
         return self.bookmarks is not None

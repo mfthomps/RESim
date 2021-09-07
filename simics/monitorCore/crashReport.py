@@ -98,6 +98,7 @@ def main():
     
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneCrash.py')
+    resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
     
     index=0
     for f in sorted(flist):
@@ -109,7 +110,7 @@ def main():
             driver.start()
             #os.system('./tmpdrive.sh &')
         print("starting monitor")
-        result = os.system('./monitor.sh %s' % resim_ini)
+        result = os.system('%s %s' % (resim_path, resim_ini))
         print('Monitor exited, try next')
         if result != 0:
             exit
