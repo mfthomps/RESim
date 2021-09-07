@@ -295,7 +295,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None):
         return findPageTableArm(cpu, addr, lgr, use_sld)
 
     elif isIA32E(cpu):
-        #lgr.debug('findPageTable is IA32E')
+        lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr) 
     else:
         #lgr.debug('findPageTable not IA32E')
@@ -330,7 +330,10 @@ def findPageTable(cpu, addr, lgr, use_sld=None):
 
             ptable_entry_addr = ptable_base + (4*ptable)
             ptable_info.ptable_addr = ptable_entry_addr
-            entry = SIM_read_phys_memory(cpu, ptable_entry_addr, 4)                
+            if use_sld is not None:
+                entry = use_sld
+            else:
+                entry = SIM_read_phys_memory(cpu, ptable_entry_addr, 4)                
             #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
             if entry == 0:
                 return ptable_info
