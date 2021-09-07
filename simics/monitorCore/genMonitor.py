@@ -3566,7 +3566,7 @@ class GenMonitor():
             self.debugPidGroup(pid)
         print('fd is %d' % fd)
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
-           self.dataWatch[self.target], snap_name, self.lgr, self.context_manager[self.target], fd=fd)
+           self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd)
 
     def hasBookmarks(self):
         return self.bookmarks is not None
@@ -3720,7 +3720,7 @@ class GenMonitor():
             self.instruct_trace.start() 
 
     def debugIfNot(self):
-        ''' warning, assumes current pid is teh one to be debugged. '''
+        ''' warning, assumes current pid is the one to be debugged. '''
         if self.bookmarks is None:
             self.debug()
 
