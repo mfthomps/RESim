@@ -1,0 +1,2 @@
+#!/bin/bash
+$RESIM_DIR/simics/monitorCore/crashReport.py $@
