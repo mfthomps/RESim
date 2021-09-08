@@ -465,7 +465,7 @@ user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
 \item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
-\item{\tt INITIAL\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
+\item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
 doing so after enabling reverse execution (which should be avoided due to Simics foibles).
 \item{\tt AFL\_PAD} Cause data received from AFL to be padded to this minimum packet size, intended for services having a minimum udp packet size.
 This value will also be used to determine the size of writes to receive buffers when multi-packet AFL is used.
@@ -585,6 +585,8 @@ servers.
 \item RESIM\_DIR  Path to your git clone.
 \item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}
 \item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
+\item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
+\item AFL\_DATA Path to directory containing the AFL seeds and output data.
 \item PATH Extend your PATH variable to include {\tt \$RESIM\_DIR/simics/bin}
 
 \end{itemize}
@@ -975,6 +977,15 @@ like you trackIO.  Use the IDA "add data watch" to add the buffer, and then use 
 \section{Fuzzing with AFL}
 \label{fuzz}
 RESim is integrated with a forked version of AFL from github/mfthomps/AFL.
+The AFL fuzzer was modified to provide its fuzzed input to RESim via a
+network socket.  RESim uses that socket to send AFL results of the fuzzing
+session in terms of basic block edges hit.  The {\tt -R} switch tells AFL
+that this is a RESim session.
+
+Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  But you must first prepare and
+test a single fuzzing instance as described below.
+
+Clone the AFL repo and use {\tt make} to build the executable.
 Assuming you've created a set of IO files that follow different paths through the service of interest, the first step
 is to reduce them to the minimal number of bytes needed to function.
 Use the {\tt fuzz} command for each of your IO files to create a minimal set of seeds for AFL. Prior to using the fuzz command,
@@ -991,7 +1002,7 @@ On the AFL side, create a script to start AFL, naming your seed directory and an
   # Use below for continuation of AFL session
   #seeds=-
   outdir=/mnt/hgfs/SEED/afl/afl-output/xyz60000/
-  ./afl-fuzz -i $seeds -o $outdir -f /mnt/hgfs/SEED/afl/target_input.io -R RESim-xyz-60000
+  ./afl-fuzz -i $seeds -o $outdir -R RESim-xyz-60000
 \end{verbatim}
 Use a {\tt -s} switch to set a maximum data size, e.g., to match how big a packet can be for UDP input.  Within afl.py in RESim there are two 
 hardcoded values you may wish to alter:
@@ -1100,6 +1111,8 @@ One thing that may affect performance when using physical addresses is paging. I
 start, RESim must dynamically break on page table structures and dynamically add breakpoints and Haps in order to track the basic blocks.  Depending on
 the  application and your goals, consider running the program to a steady state prior to creating the snapshot for fuzzing.
 
+Use the {\tt -n} option to the resim command to suppress the GUI and windows, this can be the different between 2 sessions per second and 10.
+
 \subsection{Fuzzing workflow}
 Assume a UDP service that you'd like to fuzz with a single packet at a time.
 \begin{itemize}
@@ -1138,17 +1151,41 @@ such that fuzzing sessions start precisely when/where the application is about t
 Consider a thread that processes selected data provided by another thread that receives network data
 and writes some version of the data to a pipe.
 
-Fuzzed data can be easily injected directly into application memory, bypassing data reception by the kernel.
+Fuzzed data is injected directly into application memory, bypassing data reception by the kernel.
 This can often be achieved with multi-packet UDP or TCP sessions by simply skipping over receive system
-calls in injecting the next data packet.
+calls when injecting the next data packet.
 
 The fuzzer, e.g., AFL, relies on feedback from instrumentation on the taget to tell it which code paths
 were hit while consuming a specific input.  So long as that feedback indicates new code paths, the fuzzer
 will pursue those paths in attempts to find more branches on those paths.  Sometimes however, we would like
 to avoid some paths, e.g., to focus on some areas of interest.  If the inputs leading to different paths
-are well enough understood, applying filters to fuzzed data can deter the fuzzer from following unwanted path.
+are well enough understood, applying filters to fuzzed data can deter the fuzzer from following unwanted paths.
 However, sometimes the inputs leading to unwanted paths is not known.  While theorem satisfaction tools might
-help identify such inputs, it may be simpler to simply break on them an feedback a poor coverage report.
+help identify such inputs, it may be simpler to simply break on them and feedback a poor coverage report.
+
+\subsection{Parallel fuzzing}
+\label{parallel-fuzzing}
+AFL includes support for parallel fuzzing in which multiple instances of AFL all fuzz the same binary.
+RESim builds on this support and currently supports parallel fuzzing on a single computer.  Support for
+multiple computers is in process.
+
+Assuming you have (and are currently in) a RESim workspace directory that contains an ini file and checkpoint, use the {\tt clonewd.sh}
+command to create some number of copies of the workspace.  For example:
+\begin{verbatim}
+    clonewd.sh 6
+\end{verbatim}
+\noindent will create six numbered subdirectories with a prefix of {\tt resim\_}.  Each of those subdirectories is a RESim workspace
+having its own {\tt logs/} subdirectory,  all other files are simply links.
+
+Then use the {\tt runAFL} command, naming the ini file to be used in the fuzzing sessions.  The system will spawn multiple pairs of
+AFL and RESim, and create an AFL xterm for each to display the AFL status screen.  Simics is started without the gui or windows.
+Pressing {\tt Enter} will terminate all sessions, (the AFL screens will linger for ten seconds.)
+
+AFL results are stored relative to your {\tt AFL\_OUTPUT} environment variable in subdirectories named by the workspace and the instances, e.g.,
+\begin{verbatim}
+    $AFL_OUTPUT/myworkspace/resim_1
+\end{verbatim}
+The stdout and stderr from each of the Simics sessions is currently dumped to a file at {\tt /tmp/resim.log}.
 
 \section{Implementation strategy}
 \label{implementation}
@@ -1415,7 +1452,8 @@ released.  If you lack the patch, see the {\tt fixFaults} function in the afl.py
 
 \section{Performance tricks}
 Use disable-reverse-execution whenever you do not really need reversing, e.g., while moving forward to a known connect or accept
-within a program being debugged.
+within a program being debugged.  Actually, use {\tt cgc.noReverse()} and {\tt cgc.allowReverse()}, which will disable the sysenter
+Haps maintained by the revToCall module.  Programs can be pathological with their use of syscalls.
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
 
