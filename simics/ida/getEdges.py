@@ -6,6 +6,7 @@ import idaapi
 import ida_graph
 import ida_gdl
 import gdbProt
+import idc
 '''
 Get the branches not taken
 '''
@@ -22,7 +23,7 @@ def getBBId(graph, bb):
         return None
    
 
-def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex):
+def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex, in_path):
     if os.path.isfile(latest_hits_file):
         with open(latest_hits_file) as funs_fh:
             latest_hits_json = json.load(funs_fh)
@@ -42,8 +43,7 @@ def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex):
     else:
         pre_hits_json = {}
     edges = OrderedDict()
-    prog_name = all_hits_file.split('.')[0]
-    blocks_file = '%s.blocks' % prog_name
+    blocks_file = '%s.blocks' % in_path
     blocks_json = {}
     if not os.path.isfile(blocks_file):
         print('No blocks file at %s' % blocks_file) 
@@ -73,28 +73,35 @@ def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex):
 
 def getEdges():
     ''' return list of branches not taken '''
-    fname = idaapi.get_root_filename()
-    latest_hits_file = fname+'.hits' 
-    if not os.path.isfile(latest_hits_file):
-        ''' maybe a symbolic link, ask monitor for name '''
-        cmd = '@cgc.getCoverageFile()'
-        latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('RESIM_IDA_DATA not defined.')
+    else:
+        #in_path = idaapi.get_root_filename()
+        in_path = idc.eval_idc("ARGV[1]")
+        base = os.path.basename(in_path)
+        fname = os.path.join(resim_ida_data, base, base)
+        latest_hits_file = fname+'.hits' 
         if not os.path.isfile(latest_hits_file):
-            print('No hits file found %s' % latest_hits_file)
-            return
-    command = "@cgc.getSOFromFile('%s')" % fname
-    simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-    print('so stuff: %s' % simicsString) 
-    if ':' in simicsString:
-        adders = simicsString.split(':')[1]
-        start = adders.split('-')[0]
-        try:
-            start_hex = int(start,16)
-        except ValueError:
-            print('could not get hex from %s' % start)
-            return
-            
-    all_hits_file = fname+'.all.hits'
-    pre_hits_file = fname+'.pre.hits'
-    edges = doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex)
-    return edges
+            ''' maybe a symbolic link, ask monitor for name '''
+            cmd = '@cgc.getCoverageFile()'
+            latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
+            if not os.path.isfile(latest_hits_file):
+                print('No hits file found %s' % latest_hits_file)
+                return
+        command = "@cgc.getSOFromFile('%s')" % fname
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('so stuff: %s' % simicsString) 
+        if ':' in simicsString:
+            adders = simicsString.split(':')[1]
+            start = adders.split('-')[0]
+            try:
+                start_hex = int(start,16)
+            except ValueError:
+                print('could not get hex from %s' % start)
+                return
+                
+        all_hits_file = fname+'.all.hits'
+        pre_hits_file = fname+'.pre.hits'
+        edges = doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex, in_path)
+        return edges

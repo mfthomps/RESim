@@ -451,6 +451,17 @@ def RESimClient():
         kernel_base = 0xFFFFFFFF00000000
     else:
         print('32-bit')
+    idc.refresh_lists()
+    idc.auto_wait()
+    form = idaversion.find_widget("Stack view")
+    print('form is %s' % str(form))
+    if form is None:
+        print('failed to find stack view')
+        return
+    print('stack should have focus')
+    idaversion.activate_widget(form, True)
+    
+
     bookmark_view = bookmarkView.bookmarkView()
     stack_trace = stackTrace.StackTrace()
     data_watch = dataWatch.DataWatch()
@@ -461,17 +472,7 @@ def RESimClient():
     #primePump()
     #nameSysCalls(True)
     #print('back from nameSysCalls')
-    idc.refresh_lists()
-    idc.auto_wait()
-    form = idaversion.find_widget("Stack view")
-    print('form is %s' % str(form))
-    if form is None:
-        print('failed to find stack view')
-        return
-    #print('do switch')
-    idaversion.activate_widget(form, True)
     #print('now create bookmark_view')
-    print('RESim Ida Client Version 1.2')
     isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, branch_not_taken, write_watch, kernel_base, reg_list)
     bookmark_view.Create(isim)
     bookmark_view.register()
@@ -503,8 +504,9 @@ def RESimClient():
     dbg_hooks = dbgHooks.DBGHooks(isim)
     dbg_hooks.hook()
     
-    form=idaversion.find_widget("IDA View-EIP")
-    idaversion.activate_widget(form, True)
+    #form=idaversion.find_widget("IDA View-EIP")
+    #idaversion.activate_widget(form, True)
+    #print('IDA View-EIP form is %s' % str(form))
     # MakeCode(eip)
 
     '''
@@ -538,6 +540,7 @@ def RESimClient():
     idaversion.batch(0)
     #isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)
+    print('RESim Ida Client Version 1.2')
 
 if __name__ == "__main__":
     RESimClient()

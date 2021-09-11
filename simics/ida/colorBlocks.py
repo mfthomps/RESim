@@ -4,7 +4,9 @@ import os
 import idaapi
 import ida_graph
 import ida_gdl
+import idc
 import gdbProt
+import subprocess
 '''
 Color basic blocks to reflect whether blocks were hit during the most recent data session, or any data session.
 '''
@@ -106,16 +108,22 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
                     #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
 
 def colorBlocks():
-    ''' return list of branches not taken '''
-    fname = idaapi.get_root_filename()
-    latest_hits_file = fname+'.hits' 
-    if not os.path.isfile(latest_hits_file):
-        ''' maybe a symbolic link, ask monitor for name '''
-        #cmd = '@cgc.getCoverageFile()'
-        #latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
-        #if not os.path.isfile(latest_hits_file):
-        print('No hits file found %s' % latest_hits_file)
-            
-    all_hits_file = fname+'.all.hits'
-    pre_hits_file = fname+'.pre.hits'
-    doColor(latest_hits_file, all_hits_file, pre_hits_file)
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('RESIM_IDA_DATA not defined.')
+    else:
+        #in_path = idaapi.get_root_filename()
+        in_path = idc.eval_idc("ARGV[1]")
+        base = os.path.basename(in_path)
+        fname = os.path.join(resim_ida_data, base, base)
+        latest_hits_file = fname+'.hits' 
+        if not os.path.isfile(latest_hits_file):
+            ''' maybe a symbolic link, ask monitor for name '''
+            #cmd = '@cgc.getCoverageFile()'
+            #latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
+            #if not os.path.isfile(latest_hits_file):
+            print('No hits file found %s' % latest_hits_file)
+        else:                
+            all_hits_file = fname+'.all.hits'
+            pre_hits_file = fname+'.pre.hits'
+            doColor(latest_hits_file, all_hits_file, pre_hits_file)

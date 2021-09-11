@@ -8,6 +8,7 @@ import getEdges
 import json
 import os
 import time
+import idc
 class BranchNotTaken(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -23,8 +24,9 @@ class BranchNotTaken(simplecustviewer_t):
             return idaapi.AST_ENABLE_ALWAYS
 
     def getOffset(self):
-        retva = None
-        fname = idaapi.get_root_filename()
+        retval = None
+        #fname = idaapi.get_root_filename()
+        fname = idc.eval_idc("ARGV[1]")
         command = "@cgc.getSOFromFile('%s')" % fname
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         print('so stuff: %s' % simicsString) 
@@ -88,7 +90,7 @@ class BranchNotTaken(simplecustviewer_t):
         command = '@cgc.goToBasicBlock(0x%x)' % branch_from
         #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        if 'not in blocks' in simicsString:
+        if type(simicsString) is str and 'not in blocks' in simicsString:
             ida_kernwin.jumpto(branch_from)
         else:
             eip = gdbProt.getEIPWhenStopped()

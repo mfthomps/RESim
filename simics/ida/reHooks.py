@@ -471,6 +471,7 @@ def register(isim):
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
+    print('reHooks did register')
 
 class Hooks(UI_Hooks):
         def populating_widget_popup(self, form, popup):

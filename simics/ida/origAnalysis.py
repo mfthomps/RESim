@@ -17,7 +17,7 @@ class OrigAnalysis():
         self.root_path = path
         funfile = path+'.funs'
         if os.path.isfile(funfile):
-            print('function file: %s' % funfile)
+            #print('function file: %s' % funfile)
             with open(funfile) as fh:
                 jfuns = json.load(fh)
                 for sfun in jfuns:
