@@ -417,14 +417,31 @@ class Syscall():
         frame = self.task_utils.getFrame(regs_addr, self.cpu)
         return frame
 
+    def stopTraceAlone(self, dumb):
+        self.lgr.debug('stopTraceAlone')
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+
+        self.lgr.debug('stopTraceAlone2')
+        if self.background_break is not None:
+            SIM_delete_breakpoint(self.background_break)
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
+            self.background_break = None
+            self.background_hap = None
+        self.lgr.debug('stopTraceAlone done')
+
+
     def stopTrace(self, immediate=False):
-        #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
+        SIM_run_alone(self.stopTraceAlone, None)
+        self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces():
             self.sharedSyscall.stopTrace()
 
@@ -433,23 +450,13 @@ class Syscall():
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
 
-        if self.stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-
-        if self.background_break is not None:
-            SIM_delete_breakpoint(self.background_break)
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
-            self.background_break = None
-            self.background_hap = None
-
         if self.top is not None and self.call_list is not None:
             for callname in self.call_list:
                 self.top.rmCallTrace(self.cell_name, callname)
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        #self.lgr.debug('syscall stopTrace return for %s' % self.name)
+        self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
         self.watch_first_mmap = fd
