@@ -445,11 +445,11 @@ class StackTrace():
                             if cur_fun_name is not None:
                                 if fun.startswith('.'):
                                     fun = fun[1:]
-                                if not fun.startswith(cur_fun_name) or cur_fun_name.startswith(fun):
+                                if not (fun.startswith(cur_fun_name) or cur_fun_name.startswith(fun)):
                                     if self.cpu.architecture != 'arm':
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                         if (bp + self.mem_utils.WORD_SIZE) != ptr:
-                                            self.lgr.debug('StackTrace candidate %s does not match%sand bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
+                                            self.lgr.debug('StackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
                                             count += 1
                                             ptr = ptr + self.mem_utils.WORD_SIZE
                                             cur_fun_name = None
