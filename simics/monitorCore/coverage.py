@@ -6,7 +6,7 @@ import time
 from simics import *
 import pageUtils
 '''
-Manage code coverage tracking, maintaining two hits files per coverage unit (i.e., per full_path)
+Manage code coverage tracking, maintaining two hits files per coverage unit.
 
 Note, AFL coverage defaults to physical addresses.  Use linear=True when enabling coverage to use
 virtual addresses.  That assumes you have enable the contextManager to alter the cpu context on task switches.
@@ -16,7 +16,7 @@ Tracks a single code file at a time, e.g., main or a single so file.  TBD expand
 Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
-    def __init__(self, top, full_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
+    def __init__(self, top, full_path, hits_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
         self.lgr = lgr
         self.cell = cell
         self.cpu = cpu
@@ -30,7 +30,7 @@ class Coverage():
         self.funs_hit = []
         self.blocks_hit = {}
         self.full_path = full_path
-        block_file = self.full_path+'.blocks'
+        self.hits_path = hits_path
         self.did_cover = False
         self.enabled = False
         self.latest_hit = None
@@ -417,9 +417,14 @@ class Coverage():
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
-        save_name = '%s.%s.hits' % (self.full_path, fname)
+        save_name = '%s.%s.hits' % (self.hits_path, fname)
+        try:
+            os.makedirs(os.path.dirname(self.hits_path))
+        except:
+            pass
         with open(save_name, 'w') as outj:
             json.dump(self.blocks_hit, outj)
+            self.lgr.debug('coveraged saveHits saved blocks_hit to %s' % save_name)
 
     def showCoverage(self):
         ''' blocks_hit and funs_hit are populated via the HAP. '''
@@ -467,9 +472,13 @@ class Coverage():
                 #    break
         s = json.dumps(hit_blocks)
         if fname is None:
-            save_name = '%s.hits' % self.full_path
+            save_name = '%s.hits' % self.hits_path
         else:
-            save_name = '%s.%s.hits' % (self.full_path, fname)
+            save_name = '%s.%s.hits' % (self.hits_path, fname)
+        try:
+            os.makedirs(os.path.dirname(self.hits_path))
+        except:
+            pass
         with open(save_name, 'w') as fh:
             fh.write(s)
             fh.flush()
@@ -529,7 +538,7 @@ class Coverage():
             self.bb_hap.append(hap)
 
     def mergeCover(self, target=None):
-        all_name = '%s.all.hits' % (self.full_path)
+        all_name = '%s.all.hits' % (self.hits_path)
         self.lgr.debug('cover mergeCover into %s' % all_name)
         all_json = {}
         if os.path.isfile(all_name):
@@ -540,9 +549,9 @@ class Coverage():
                 pass
             fh.close()
         if target is None:
-            last_name = '%s.hits' % self.full_path
+            last_name = '%s.hits' % self.hits_path
         else:
-            last_name = '%s.%s.hits' % (self.full_path, target)
+            last_name = '%s.%s.hits' % (self.hits_path, target)
         if not os.path.isfile(last_name):
             self.lgr.debug('coverage mergeCover failed to find recent hits file at %s' % last_name)
             return
@@ -627,7 +636,8 @@ class Coverage():
         self.create_dead_zone = create_dead_zone
         if fname is not None:
             self.full_path = fname
-        self.lgr.debug('cover enableCoverage fname is %s linear: %r' % (self.full_path, linear))
+            self.hits_path = self.top.getIdaData(fname)
+        self.lgr.debug('cover enableCoverage fname is %s linear: %r' % (self.hits_path, linear))
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
         # dynamically alter control flow, e.g., to avoid CRC checks
@@ -650,7 +660,7 @@ class Coverage():
         self.enabled = False
 
     def difCoverage(self, fname):
-        save_name = '%s.%s.hits' % (self.full_path, fname)
+        save_name = '%s.%s.hits' % (self.hits_path, fname)
         if not os.path.isfile(save_name):
             print('No file named %s' % save_name)
             return
@@ -663,7 +673,7 @@ class Coverage():
 
     def getCoverageFile(self):
         ''' Intended to let IDA plugin get file without knowing symbolic links '''
-        retval = '%s.hits' % self.full_path
+        retval = '%s.hits' % self.hits_path
         self.lgr.debug('coverage returning file %s' % retval) 
         return retval
 

@@ -4,6 +4,9 @@ been initialized.  This one calls AFL
 '''
 import os
 def onedone(top):
-    path=os.getenv('ONE_DONE_PATH')
     port=int(os.getenv('ONE_DONE_PARAM'))
-    top.afl(port=port)
+    protocol=os.getenv('ONE_DONE_PARAM2')
+    if protocol == 'tcp': 
+        top.aflTCP(port=port)
+    else:
+        top.afl(port=port)

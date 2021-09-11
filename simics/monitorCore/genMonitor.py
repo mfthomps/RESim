@@ -761,7 +761,10 @@ class GenMonitor():
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.lgr.debug('create coverage module')
-                    self.coverage = coverage.Coverage(self, full_path, self.context_manager[self.target], cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+                    ida_path = self.getIdaData(full_path)
+                    if ida_path is not None:
+                        self.coverage = coverage.Coverage(self, full_path, ida_path, self.context_manager[self.target], 
+                           cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
                 else:
@@ -776,6 +779,15 @@ class GenMonitor():
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
 
+    def getIdaData(self, full_path):
+        retval = None
+        resim_ida_data = os.getenv('RESIM_IDA_DATA')
+        if resim_ida_data is None:
+            self.lgr.error('RESIM_IDA_DATA not defined')
+        else: 
+            base = os.path.basename(full_path)
+            retval = os.path.join(resim_ida_data, base, base)
+        return retval
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1804,9 +1816,9 @@ class GenMonitor():
 
         #if syscall is None or syscall_trace == syscall: 
         #    self.call_traces[cell_name].clear()   
-
         if cell_name in self.trace_all and (syscall is None or self.trace_all[cell_name]==syscall):
-            self.trace_all[cell_name].stopTrace(immediate=True)
+            self.lgr.debug('call stopTrace for trace_all')
+            self.trace_all[cell_name].stopTrace(immediate=False)
             del self.trace_all[cell_name]
 
             for exit in self.exit_maze:
@@ -3527,8 +3539,8 @@ class GenMonitor():
         fuzz_it = fuzz.Fuzz(self, cpu, cell_name, path, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.run_from_snap, self.lgr, n, full_path)
         fuzz_it.trim()
 
-    def aflTCP(self, sor=False, fname=None, linear=False):
-        self.afl(n=-1, sor=sor, fname=fname)
+    def aflTCP(self, sor=False, fname=None, linear=False, port=8765):
+        self.afl(n=-1, sor=sor, fname=fname, port=port)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
@@ -3575,6 +3587,9 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
+    def playAFLTCP(self, target, sor=False, linear=False):
+        self.playAFL(target, n=-1, sor=sor, linear=linear)
+
     def playAFL(self, target, n=1, sor=False, linear=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3586,6 +3601,37 @@ class GenMonitor():
         if play is not None:
             play.go()
 
+    def findBB(self, target, bb):
+        afl_output = self.getAFLOutput()
+        target_dir = os.path.join(afl_output, target)
+        flist = os.listdir(target_dir)
+        #print('flist is %s' % str(flist))
+        if 'coverage' in flist:
+            ''' is not parallel fuzzing '''
+            coverage_dir = os.path.join(target_dir, 'coverage')
+            queue_dir = os.path.join(target_dir, 'queue')
+            hit_files = os.listdir(coverage_dir)
+            
+            for f in hit_files:
+                path = os.path.join(coverage_dir, f)
+                hit_list = json.load(open(path))
+                if bb in hit_list:
+                    qfile = os.path.join(queue_dir, f)
+                    print('found 0x%x in %s' % (bb, qfile))
+        else: 
+            ''' is parallel fuzzing '''
+            print('is parallel')
+            for drone in flist:
+                coverage_dir = os.path.join(target_dir, drone, 'coverage')
+                queue_dir = os.path.join(target_dir, drone, 'queue')
+                hit_files = os.listdir(coverage_dir)
+                for f in hit_files:
+                    path = os.path.join(coverage_dir, f)
+                    hit_list = json.load(open(path))
+                    if bb in hit_list:
+                        qfile = os.path.join(queue_dir, f)
+                        print('found 0x%x in %s' % (bb, qfile))
+    
     def bbAFL(self, target, bb, n=1, sor=False):
         ''' replay all AFL discovered paths for purposes of discovering which data files hit a given BB '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3641,25 +3687,27 @@ class GenMonitor():
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         self.debugPidGroup(pid)
         self.lgr.debug('aflBNT target %s' % target)
-        if target is None:
-            fname = '%s.hits' % self.full_path
-        else:
-            fname = '%s.%s.hits' % (self.full_path, target)
-        hits = json.load(open(fname))
-        block_file = self.full_path+'.blocks'
-        blocks = json.load(open(block_file))
-        print('aflBNT found %d functions and %d blocks' % (len(hits), len(blocks)))
-        if fun_name is None:
-            for fun in hits:
-                self.findBNT(fun, hits, blocks) 
-        else:
-            for fun in blocks:
-                if blocks[fun]['name'] == fun_name:
+        ida_path = self.getIdaData(self.full_path)
+        if ida_path is not None:
+            if target is None:
+                fname = '%s.hits' % ida_path
+            else:
+                fname = '%s.%s.hits' % (ida_path, target)
+            hits = json.load(open(fname))
+            block_file = self.full_path+'.blocks'
+            blocks = json.load(open(block_file))
+            print('aflBNT found %d functions and %d blocks' % (len(hits), len(blocks)))
+            if fun_name is None:
+                for fun in hits:
                     self.findBNT(fun, hits, blocks) 
-                    break
-
-    def quit(self):
-        SIM_run_command('q')
+            else:
+                for fun in blocks:
+                    if blocks[fun]['name'] == fun_name:
+                        self.findBNT(fun, hits, blocks) 
+                        break
+    
+        def quit(self):
+            SIM_run_command('q')
 
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()
@@ -3686,7 +3734,8 @@ class GenMonitor():
 
     def addJumper(self, from_bb, to_bb):
         ''' Add a jumper for use in code coverage and AFL, e.g., to skip a CRC '''
-        jname = self.full_path+'.jumpers'
+        ida_path = self.getIdaData(self.full_path)
+        jname = ida_path+'.jumpers'
         if os.path.isfile(jname):
             with open(jname) as fh:
                 jumpers = json.load(fh)
@@ -3749,6 +3798,17 @@ class GenMonitor():
         resim = self.getRESimContext()
         bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Write, addr, self.mem_utils[self.target].WORD_SIZE, 0)
         print('set execution break at 0x%x bp %d' % (addr, bp))
+
+    def getAFLOutput(self):
+        afl_output = os.getenv('AFL_OUTPUT')
+        if afl_output is None:
+            afl_output = os.getenv('AFL_DATA')
+            if afl_output is None:
+                afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
+                self.lgr.debug('Using default AFL_OUPUT directory of %s' % afl_output)
+            else:
+                afl_output = os.path.join(afl_output, 'output')
+        return afl_output
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

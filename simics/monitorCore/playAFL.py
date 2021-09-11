@@ -3,7 +3,9 @@ import writeData
 import cli
 import sys
 import os
+import glob
 import pickle
+import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
@@ -23,9 +25,7 @@ class PlayAFL():
         self.orig_buffer = None
         self.max_len = None
         self.return_ip = None
-        afl_output = os.getenv('AFL_OUTPUT')
-        if afl_output is None:
-            afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
+        afl_output = top.getAFLOutput()
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
             try:
@@ -41,7 +41,17 @@ class PlayAFL():
             return None
         self.target = target
         self.afl_dir = os.path.join(afl_output, target,'queue')
-        self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
+        if os.path.isdir(self.afl_dir):
+            self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
+        else:
+            ''' Assume Parallel fuzzing '''
+            gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
+            print('gpath is %s' % gpath)
+            glist = glob.glob(gpath)
+            self.afl_list = []
+            for path in glist:
+                if 'sync:' not in path:
+                    self.afl_list.append(path)
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
         self.stop_hap = None
@@ -149,6 +159,20 @@ class PlayAFL():
         self.lgr.debug('playAFL playBreak')
         self.goAlone(None)
 
+    def recordHits(self, hit_bbs):
+        ''' hits will go in a "coverage" directory along side queue, etc. '''
+        queue_dir = os.path.dirname(self.afl_list[self.index])
+        queue_parent = os.path.dirname(queue_dir)
+        coverage_dir = os.path.join(queue_parent, 'coverage')
+        try:
+            os.makedirs(coverage_dir)
+        except:
+            pass
+        fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
+        hit_list = list(hit_bbs.keys())
+        with open(fname, 'w') as fh:
+            json.dump(hit_list, fh) 
+
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('in stopHap')
         if self.stop_hap is not None:
@@ -159,11 +183,14 @@ class PlayAFL():
                     delta = hits - self.hit_total
                     self.hit_total = hits 
                     self.lgr.debug('Found %d new hits' % delta)
+                hit_bbs = self.coverage.getBlocksHit()
                 if self.findbb is not None and self.index < len(self.afl_list):
-                    hit_bbs = self.coverage.getBlocksHit()
+                    self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:
                         packet_num = self.write_data.getCurrentPacket()
                         self.bnt_list.append((self.afl_list[self.index], packet_num))
+                else:
+                    self.recordHits(hit_bbs)
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, None)

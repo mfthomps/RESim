@@ -24,21 +24,24 @@ def ioHandler(read_array):
         while(True):
             r, w, e = select.select(read_array, [], [], 10) 
             for item in r:
-                data = os.read(item.fileno(), 10)
+                data = os.read(item.fileno(), 800)
                 fh.write(data+b'\n')
 
     
 def main():
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
+    parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
+    parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
-    try:
-        resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
-    except:
+    resim_dir = os.getenv('RESIM_DIR')
+    if resim_dir is None:
         print('missing RESIM_DIR envrionment variable')
         exit(1)
+    resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
+
     here = os.getcwd()
     afl_name = os.path.basename(here)
     try:
@@ -53,7 +56,11 @@ def main():
         print('missing AFL_DATA envrionment variable')
         exit(1)
     afl_out = os.path.join(afl_data, 'output', afl_name)
-    afl_seeds = os.path.join(afl_data, 'seeds', afl_name)
+    if args.continue_run == True:
+        afl_seeds = '-'
+    else:
+        afl_seeds = os.path.join(afl_data, 'seeds', afl_name)
+
     try:
         os.makedirs(afl_out)
     except:
@@ -65,13 +72,19 @@ def main():
     master_slave = '-M'
     max_packet_size = 1448
     glist = glob.glob('resim_*')
+
+    if args.tcp:
+        os.environ['ONE_DONE_PARAM2']='tcp'
+    else:
+        os.environ['ONE_DONE_PARAM2']='udp'
+
     port = 8700
     read_array = []
     for instance in glist:
         if not os.path.isdir(instance):
             continue
         afl_cmd = '%s -i %s -o %s -s %d %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, max_packet_size, master_slave, instance, port, afl_name)
-        print('afl_cmd %s' % afl_cmd) 
+        #print('afl_cmd %s' % afl_cmd) 
         os.chdir(instance)
     
         cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
@@ -81,6 +94,7 @@ def main():
         resim_ini = args.ini
         cmd = '%s %s -n' % (resim_path, resim_ini)
         os.environ['ONE_DONE_PARAM'] = str(port)
+        print('cmd is %s' % cmd)
         resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         resim_procs.append(resim_ps)
         read_array.append(resim_ps.stdout)
@@ -89,7 +103,6 @@ def main():
         os.chdir(here)
         master_slave = '-S'
         port = port + 1
-        print('end loop')
 
     io_handler = threading.Thread(target=ioHandler, args=([read_array]))
     io_handler.start()

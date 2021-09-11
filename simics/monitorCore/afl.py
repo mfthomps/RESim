@@ -114,9 +114,11 @@ class AFL():
                 if full_path is None:
                     self.lgr.error('unable to get full path from %s' % fname)
                     return
-                self.loadJumpers(full_path)
+                ida_path = self.top.getIdaData(full_path)
+                self.loadJumpers(ida_path)
             else:
-                self.loadJumpers(self.top.getFullPath())
+                ida_path = self.top.getIdaData(self.top.getFullPath())
+                self.loadJumpers(ida_path)
         if fd is not None:
             self.prepInject(snap_name)
         else:
