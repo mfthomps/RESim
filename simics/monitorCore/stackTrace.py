@@ -539,7 +539,7 @@ class StackTrace():
         prev_instruct = ''
         if len(self.frames) > 0:
             prev_instruct = self.frames[-1].instruct
-        if frame.instruct != prev_instruct:
+        if self.ida_funs is not None and frame.instruct != prev_instruct:
             fun_addr = self.ida_funs.getFun(frame.ip)
             fun_of_ip = self.ida_funs.getName(fun_addr)
             frame.fun_of_ip = fun_of_ip

@@ -483,6 +483,7 @@ class Coverage():
             fh.write(s)
             fh.flush()
         self.lgr.debug('coverage saveCoverage to %s' % save_name)
+        print('Coverage saveCoverage to %s' % save_name)
 
 
     def restoreAFLBreaks(self):

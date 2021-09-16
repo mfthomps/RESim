@@ -9,11 +9,18 @@ fname=/tmp/sendudp
 #
 # Catch failures that likely can't occur in this context
 #
-while !  scp -P 4022 $fname localhost:/tmp/sendudp
+i="0"
+while !  scp -P 4022 $fname mike@localhost:/tmp/sendudp
 do
     sleep 1
+    i=$[$i+1]
+    if [ $i -gt 10 ];then
+        exit
+    fi
 done
-scp -P 4022 $1 localhost:/tmp/
+scp -P 4022 $1 mike@localhost:/tmp/
 base=$(basename -- $1)
 ssh -p 4022 mike@localhost chmod a+x /tmp/$base
+echo "now run it"
 ssh -p 4022 mike@localhost /tmp/$base $2 $3 $4
+echo "back from run"

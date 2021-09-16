@@ -206,6 +206,8 @@ class GenMonitor():
         ''' once disabled, cannot go back ''' 
         self.disable_reverse = False
 
+        self.gdb_port = 9123
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
 
@@ -682,16 +684,15 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         if pid is None:
             ''' Our first debug '''
-            port = 9123 
             cpu, comm, pid = self.task_utils[self.target].curProc() 
-            self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, port, pid, self.is_compat32))
+            self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, self.gdb_port, pid, self.is_compat32))
 
             if cpu.architecture == 'arm':
-                cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, port)
+                cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
             elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, port)
+                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
             else:
-                cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, port)
+                cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
             self.lgr.debug('cmd: %s' % cmd)
             SIM_run_command(cmd)
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
@@ -1093,7 +1094,7 @@ class GenMonitor():
         debug_group = False
         if debug_function == self.debugGroup:
             debug_group = True
-        self.toRunningProc(None, pid_list, flist, debug_group=True)
+        self.toRunningProc(None, pid_list, flist, debug_group=True, final_fun=final_fun)
 
     def changedThread(self, cpu, third, forth, memory):
         cur_addr = SIM_get_mem_op_value_le(memory)
@@ -1152,7 +1153,7 @@ class GenMonitor():
                     return True
         return False
 
-    def toRunningProc(self, proc, want_pid_list=None, flist=None, debug_group=False):
+    def toRunningProc(self, proc, want_pid_list=None, flist=None, debug_group=False, final_fun=None):
         ''' intended for use when process is already running '''
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         ''' if already in proc, just attach debugger '''
@@ -1174,7 +1175,11 @@ class GenMonitor():
                     self.lgr.debug('toRunningProc already at pid %d, done' % pid)
                     f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
-                    self.toUser([f1, f2])
+                    if final_fun is not None:
+                        f3 = stopFunction.StopFunction(final_fun, [], nest=False)
+                        self.toUser([f1, f2, f3])
+                    else:
+                        self.toUser([f1, f2])
                     #self.debugGroup()
                     return
         ''' Set breakpoint on current_task to watch task switches '''
@@ -1521,6 +1526,9 @@ class GenMonitor():
 
     def idaMessage(self):
         self.context_manager[self.target].showIdaMessage()
+
+    def getIdaMessage(self):
+        return self.context_manager[self.target].getIdaMessage()
 
     def resynch(self):
         ''' poor name? If not in user space of one of the thread group, go there '''
@@ -2182,7 +2190,7 @@ class GenMonitor():
                 return True
         return False
 
-    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, ignore_running=False, name=None):
+    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, ignore_running=False, name=None, flist=None):
         ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
@@ -2199,7 +2207,7 @@ class GenMonitor():
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
                                call_list=call, call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, 
-                               background=background, name=name)
+                               background=background, name=name, flist_in=flist)
                                #compat32=self.is_compat32, background=background)
         if run:
             self.is_monitor_running.setRunning(True)
@@ -2289,11 +2297,15 @@ class GenMonitor():
         self.lgr.debug('runToRead to %s' % substring)
         self.runTo(call, call_params)
 
-    def runToAccept(self, fd):
+    def runToAccept(self, fd, flist=None):
         call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         call_params = syscall.CallParams('accept', fd, break_simulation=True)        
         self.lgr.debug('runToAccept on FD: %d call is: %s' % (fd, str(call)))
-        self.runTo(call, call_params, linger=True)
+        if flist is None:
+            linger = True
+        else:
+            linger = False
+        self.runTo(call, call_params, linger=linger, flist=flist)
         
     def runToBind(self, addr):
         #addr = '192.168.31.52:20480'
@@ -2415,6 +2427,7 @@ class GenMonitor():
 
     def getSOFromFile(self, fname):
         retval = ''
+        self.lgr.debug('getSOFromFile %s' % fname)
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
            self.lgr.error('gotSOFromFile, no debug pid defined')
@@ -3550,6 +3563,8 @@ class GenMonitor():
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
         if target is None:
+            # keep gdb 9123 port free
+            self.gdb_port = 9124
             self.debugPidGroup(pid)
         full_path = None
         if fname is not None and target is None:
@@ -3644,9 +3659,12 @@ class GenMonitor():
         if self.aflPlay is not None:
             self.aflPlay.go(findbb=bb)
 
-    def replayAFL(self, target, index, targetFD): 
+    def replayAFL(self, target, index, targetFD, instance=None): 
         ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
-        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr) 
+        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance) 
+
+    def replayAFLTCP(self, target, index, targetFD, instance=None): 
+        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True) 
 
     def playBreak(self, n=1):
         # TBD not used?
@@ -3781,6 +3799,7 @@ class GenMonitor():
         retval = True
         if self.debug_info is not None and 'pid' in self.debug_info:
             self.debugPidGroup(self.debug_info['pid'], to_user=False, final_fun=final_fun)
+            self.lgr.debug('debugSnap did debugPidGroup for pid %d' % self.debug_info['pid'])
         else:
             self.lgr.error('debugSnap, no debug_info read from snapshot')
             retval = False
