@@ -82,8 +82,12 @@ class IdaSIM():
         try:
             regs = json.loads(simicsString)
         except:
-            print('failed to get regs from %s' % simicsString)
-            return
+            try:
+                simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.printRegJson()");')
+                regs = json.loads(simicsString)
+            except:
+                print('failed to get regs from %s' % simicsString)
+                return
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
