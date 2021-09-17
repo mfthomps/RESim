@@ -26,6 +26,7 @@ class PlayAFL():
         self.max_len = None
         self.return_ip = None
         afl_output = top.getAFLOutput()
+        self.all_hits = []
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
             try:
@@ -39,19 +40,25 @@ class PlayAFL():
         if packet_count > 1 and not (self.udp_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return None
-        self.target = target
-        self.afl_dir = os.path.join(afl_output, target,'queue')
-        if os.path.isdir(self.afl_dir):
-            self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
+        if os.path.isfile(target):
+            self.target = 'oneplay'
+            self.afl_dir = os.path.dirname(target)
+            base = os.path.basename(target)
+            self.afl_list = [base]
         else:
-            ''' Assume Parallel fuzzing '''
-            gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
-            print('gpath is %s' % gpath)
-            glist = glob.glob(gpath)
-            self.afl_list = []
-            for path in glist:
-                if 'sync:' not in path:
-                    self.afl_list.append(path)
+            self.target = target
+            self.afl_dir = os.path.join(afl_output, target,'queue')
+            if os.path.isdir(self.afl_dir):
+                self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
+            else:
+                ''' Assume Parallel fuzzing '''
+                gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
+                print('gpath is %s' % gpath)
+                glist = glob.glob(gpath)
+                self.afl_list = []
+                for path in glist:
+                    if 'sync:' not in path:
+                        self.afl_list.append(path)
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
         self.stop_hap = None
@@ -112,8 +119,7 @@ class PlayAFL():
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
-                if self.findbb is not None:
-                    self.coverage.clearHits() 
+                self.coverage.clearHits() 
             if self.orig_buffer is not None:
                 self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
@@ -140,8 +146,18 @@ class PlayAFL():
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None:
                 hits = self.coverage.getHitCount()
-                self.lgr.debug('Found %d total hits, save as %s' % (hits, self.target))
-                self.coverage.saveCoverage(fname=self.target)
+                self.lgr.debug('All sessions done, save as %s' % (self.target))
+                hits_path = self.coverage.getHitsPath()
+  
+                s = json.dumps(self.all_hits)
+                save_name = '%s.%s.hits' % (hits_path, self.target)
+                try:
+                    os.makedirs(os.path.dirname(hits_path))
+                except:
+                    pass
+                with open(save_name, 'w') as fh:
+                    fh.write(s)
+                    fh.flush()
             self.delStopHap(None)               
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
@@ -172,12 +188,16 @@ class PlayAFL():
         hit_list = list(hit_bbs.keys())
         with open(fname, 'w') as fh:
             json.dump(hit_list, fh) 
+        for hit in hit_list:
+            if hit not in self.all_hits:
+                self.all_hits.append(hit)
 
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('in stopHap')
         if self.stop_hap is not None:
             if self.coverage is not None:
-                self.lgr.debug('playAFL stopHap index %d, got %d hits' % (self.index, self.coverage.getHitCount()))
+                num_packets = self.write_data.getCurrentPacket()
+                self.lgr.debug('playAFL stopHap index %d, got %d hits, %d packets' % (self.index, self.coverage.getHitCount(), num_packets))
                 hits = self.coverage.getHitCount()
                 if hits > self.hit_total:
                     delta = hits - self.hit_total

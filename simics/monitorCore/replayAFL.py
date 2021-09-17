@@ -7,7 +7,7 @@ from simics import *
 import stopFunction
 
 class ReplayAFL():
-    def __init__(self, top, target, index, targetFD, lgr, instance = None, tcp=False):
+    def __init__(self, top, target, index, targetFD, lgr, instance = None, tcp=False, cover=False):
         self.lgr = lgr
         self.top = top
         self.afl_dir = os.getenv('AFL_OUTPUT')
@@ -25,6 +25,7 @@ class ReplayAFL():
         self.instance = instance
         self.tcp = tcp
         self.targetFD = targetFD
+        self.cover = cover
         here= os.path.dirname(os.path.realpath(__file__))
         if not tcp:
             self.client_path = os.path.join(here, 'clientudpMult')
@@ -36,6 +37,8 @@ class ReplayAFL():
         driver.start()
 
     def trackAlone(self, fd):
+        if self.cover:
+            self.top.enableCoverage()
         self.top.trackIO(fd, reset=True)
 
     def doTrack(self):
@@ -80,6 +83,8 @@ class ReplayAFL():
             self.lgr.debug('ReplayAFL tmpdriver cmd: %s result %s' % (cmd, result))
             self.lgr.debug('call track for fd %d' % self.targetFD)
             if not self.tcp: 
+                if self.cover:
+                    self.top.enableCoverage()
                 self.top.trackIO(self.targetFD, reset=True)
             else:
                 ''' Run to accept to get the new FD and then do trackIO from the doTrack callback'''

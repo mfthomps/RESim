@@ -3659,12 +3659,12 @@ class GenMonitor():
         if self.aflPlay is not None:
             self.aflPlay.go(findbb=bb)
 
-    def replayAFL(self, target, index, targetFD, instance=None): 
+    def replayAFL(self, target, index, targetFD, instance=None, cover=False): 
         ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
-        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance) 
+        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, cover=cover) 
 
-    def replayAFLTCP(self, target, index, targetFD, instance=None): 
-        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True) 
+    def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False): 
+        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True, cover=cover) 
 
     def playBreak(self, n=1):
         # TBD not used?

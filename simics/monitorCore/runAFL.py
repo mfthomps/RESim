@@ -33,6 +33,7 @@ def main():
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -78,12 +79,16 @@ def main():
     else:
         os.environ['ONE_DONE_PARAM2']='udp'
 
+    if args.max_bytes is not None:
+        size_str = '-s %d' % args.max_bytes 
+    else:
+        size_str = ''
     port = 8700
     read_array = []
     for instance in glist:
         if not os.path.isdir(instance):
             continue
-        afl_cmd = '%s -i %s -o %s -s %d %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, max_packet_size, master_slave, instance, port, afl_name)
+        afl_cmd = '%s -i %s -o %s %s %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, master_slave, instance, port, afl_name)
         #print('afl_cmd %s' % afl_cmd) 
         os.chdir(instance)
     

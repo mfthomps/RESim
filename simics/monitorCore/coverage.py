@@ -2,6 +2,7 @@ import os
 import json
 import random
 import backStop
+from collections import OrderedDict
 import time
 from simics import *
 import pageUtils
@@ -28,7 +29,7 @@ class Coverage():
         self.blocks = None
         self.block_total = 0
         self.funs_hit = []
-        self.blocks_hit = {}
+        self.blocks_hit = OrderedDict()
         self.full_path = full_path
         self.hits_path = hits_path
         self.did_cover = False
@@ -95,7 +96,7 @@ class Coverage():
         self.bb_hap = []
         if not keep_hits:
             self.funs_hit = []
-            self.blocks_hit = {}
+            self.blocks_hit = OrderedDict()
 
     def cover(self, force_default_context=False, physical=False):
         self.lgr.debug('coverage: cover physical: %r linear: %r' % (physical, self.linear))
@@ -436,6 +437,30 @@ class Coverage():
         if not self.enabled:
             return
         self.lgr.debug('saveCoverage for %d functions' % len(self.funs_hit))
+        #hit_list = list(self.blocks_hit.keys())
+        hit_list = []
+        for hit, cycle in self.blocks_hit.items():
+            hit_list.append(hit)
+        s = json.dumps(hit_list)
+        if fname is None:
+            save_name = '%s.hits' % self.hits_path
+        else:
+            save_name = '%s.%s.hits' % (self.hits_path, fname)
+        try:
+            os.makedirs(os.path.dirname(self.hits_path))
+        except:
+            pass
+        with open(save_name, 'w') as fh:
+            fh.write(s)
+            fh.flush()
+        self.lgr.debug('coverage saveCoverage to %s' % save_name)
+        print('Coverage saveCoverage to %s' % save_name)
+
+    def saveCoverageNOT_USED(self, fname = None):
+        ''' Not used. More value in saving order of hits.  Function allocation can always be recalculated '''
+        if not self.enabled:
+            return
+        self.lgr.debug('saveCoverage for %d functions' % len(self.funs_hit))
         ''' New dictionary for json.   Key is function address as a string '''
         hit_blocks = {}
         ''' funs_hit is list of addresses as integers '''
@@ -539,6 +564,8 @@ class Coverage():
             self.bb_hap.append(hap)
 
     def mergeCover(self, target=None):
+        ''' TBD fix this'''
+        return
         all_name = '%s.all.hits' % (self.hits_path)
         self.lgr.debug('cover mergeCover into %s' % all_name)
         all_json = {}
@@ -600,7 +627,7 @@ class Coverage():
             if not no_merge:
                 self.mergeCover()
             self.funs_hit = []
-            self.blocks_hit = {}
+            self.blocks_hit = OrderedDict()
             self.lgr.debug('coverage reset blocks_hit')
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
@@ -625,7 +652,7 @@ class Coverage():
             self.saveCoverage(fname = 'pre')
             self.restoreBreaks()
             self.funs_hit = []
-            self.blocks_hit = {}
+            self.blocks_hit = OrderedDict()
             self.blocks_hit[self.latest_hit] = first_data_cycle
             self.latest_hit = None
         else:
@@ -696,4 +723,10 @@ class Coverage():
 
     def clearHits(self):
         self.funs_hit = []
-        self.blocks_hit = {}
+        self.blocks_hit = OrderedDict()
+
+    def getHitsPath(self):
+        return self.hits_path
+
+    def appendName(self, name):
+        self.hits_path = '%s-%s' % (self.hits_path, name)
