@@ -125,6 +125,10 @@ class DataWatch():
             if recv_addr is None:
                 recv_addr = start
             self.watchMarks.markCall(fixed, max_len, recv_addr, length)
+            if self.prev_cycle is None:
+                ''' first data read, start data session if doing coverage '''
+                self.top.startDataSessions()
+                self.prev_cycle = self.cpu.cycles
 
     def close(self, fd):
         ''' called when FD is closed and we might be doing a trackIO '''
