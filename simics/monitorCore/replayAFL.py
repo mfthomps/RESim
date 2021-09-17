@@ -54,14 +54,14 @@ class ReplayAFL():
         self.lgr.debug('replayAFL go')
         retval = False
         if self.instance is None:
-            glob_mask = '%s/%s/queue/id:*%s,src*' % (self.afl_dir, self.target, self.index)
+            glob_mask = '%s/%s/queue/id:*0%s,src*' % (self.afl_dir, self.target, self.index)
             glist = glob.glob(glob_mask)
             if len(glist) == 0:
                 glob_mask = '%s/%s/queue/id:*%s,orig*' % (self.afl_dir, self.target, self.index)
                 glist = glob.glob(glob_mask)
         else:
             resim_instance = 'resim_%d' % self.instance
-            glob_mask = '%s/%s/%s/queue/id:*%s,src*' % (self.afl_dir, self.target, resim_instance, self.index)
+            glob_mask = '%s/%s/%s/queue/id:*0%s,src*' % (self.afl_dir, self.target, resim_instance, self.index)
             glist = glob.glob(glob_mask)
       
 
@@ -77,8 +77,17 @@ class ReplayAFL():
             #self.lgr.debug('start thread')
             #SIM_run_alone(self.startAlone, driver)
             shutil.copyfile(glist[0], '/tmp/sendudp')
+            dumb, forwarding = cli.quiet_run_command('list-port-forwarding-setup')
+            ssh_port = None
+            for line in forwarding.splitlines():
+                if line.strip().endswith(':22'):
+                    ssh_port = line.split()[3] 
+                    break
+            if ssh_port is None:
+                self.lgr.error('No forwarding port found for ssh port 21')
+                return
             script_file = os.path.join(self.resim_dir, 'simics', 'monitorCore', 'sendDriver.sh')
-            cmd = '%s %s %s %s %s &' % (script_file, self.client_path, self.ip, self.port, self.header)
+            cmd = '%s %s %s %s %s %s &' % (script_file, ssh_port, self.client_path, self.ip, self.port, self.header)
             result=os.system(cmd)
             self.lgr.debug('ReplayAFL tmpdriver cmd: %s result %s' % (cmd, result))
             self.lgr.debug('call track for fd %d' % self.targetFD)

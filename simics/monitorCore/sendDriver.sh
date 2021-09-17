@@ -8,9 +8,11 @@
 fname=/tmp/sendudp
 #
 # Catch failures that likely can't occur in this context
+#     sendDriver.sh ssh_port client_path target_ip target_port header
 #
+ssh_port=$1
 i="0"
-while !  scp -P 4022 $fname mike@localhost:/tmp/sendudp
+while !  scp -o "StrictHostKeyChecking=no" -P $ssh_port $fname mike@localhost:/tmp/sendudp
 do
     sleep 1
     i=$[$i+1]
@@ -18,9 +20,9 @@ do
         exit
     fi
 done
-scp -P 4022 $1 mike@localhost:/tmp/
-base=$(basename -- $1)
-ssh -p 4022 mike@localhost chmod a+x /tmp/$base
+scp -o "StrictHostKeyChecking=no" -P $ssh_port $2 mike@localhost:/tmp/
+base=$(basename -- $2)
+ssh -o "StrictHostKeyChecking=no" -p $ssh_port mike@localhost chmod a+x /tmp/$base
 echo "now run it"
-ssh -p 4022 mike@localhost /tmp/$base $2 $3 $4
+ssh -o "StrictHostKeyChecking=no" -p $ssh_port mike@localhost /tmp/$base $3 $4 $5
 echo "back from run"
