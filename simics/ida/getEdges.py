@@ -10,18 +10,11 @@ import idc
 '''
 Get the branches not taken
 '''
-def getBB(graph, bb_addr):
-    for block in graph['blocks']:
+def findBB(function, bb_addr):
+    for block in function['blocks']:
         if block['start_ea'] <= bb_addr and block['end_ea'] > bb_addr:
             return block
     return None
-def getBBId(graph, bb):
-    bb = getBB(graph, bb)
-    if bb is not None:
-        return bb.id
-    else:
-        return None
-   
 
 def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex, in_path):
     if os.path.isfile(latest_hits_file):
@@ -51,24 +44,23 @@ def doEdges(latest_hits_file, all_hits_file, pre_hits_file, start_hex, in_path):
     with open(blocks_file) as blocks_fh:
         blocks_json = json.load(blocks_fh)
     
-    for fun in latest_hits_json:
-        fun_addr = int(fun)
-        f = idaapi.get_func(fun_addr)
-        #print('fun addr 0x%x' % fun_addr)
-        #graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        graph = blocks_json[fun]
+    for bb in latest_hits_json:
+        f = idaapi.get_func(bb)
+        f_string = '%d' % f.start_ea
+        if f_string not in blocks_json:
+            print('failed to find function %s in blocks_json for fun addr 0x%x' % f_string, f.start_ea)
+            continue
+        function = blocks_json[f_string]
+        block = findBB(function, bb)
         ''' get edges leaving all hit blocks '''
         ''' edges[branch_to] = branch_from '''
         ''' retain order of hits in list of branches not taken '''
-        for bb_addr in latest_hits_json[fun]:
-            ''' get the BB and check its branch-to's '''
-            block = getBB(graph, bb_addr)
-            if block is not None:
-                for s in block['succs']:
-                    if s not in latest_hits_json[fun] and not (fun in pre_hits_json and s in pre_hits_json[fun]) and s not in edges:
-                        #print('added edges[0%x] block 0x%x block.end_ea 0x%x bb_addr was 0x%x ' % (s.start_ea, block.start_ea, block.end_ea, bb_addr))
-                        ''' branch from block was not hit ''' 
-                        edges[s] = block['start_ea']
+        if block is not None:
+            for s in block['succs']:
+                if s not in latest_hits_json and not (s in pre_hits_json) and s not in edges:
+                    #print('added edges[0%x] block 0x%x block.end_ea 0x%x bb_addr was 0x%x ' % (s.start_ea, block.start_ea, block.end_ea, bb_addr))
+                    ''' branch from block was not hit ''' 
+                    edges[s] = block['start_ea']
     return edges
 
 def getEdges():
@@ -91,7 +83,8 @@ def getEdges():
                 return
         command = "@cgc.getSOFromFile('%s')" % fname
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        print('so stuff: %s' % simicsString) 
+        #print('command: %s' % command)
+        #print('so stuff: %s' % simicsString) 
         if ':' in simicsString:
             adders = simicsString.split(':')[1]
             start = adders.split('-')[0]
