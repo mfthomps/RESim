@@ -10,8 +10,13 @@ import json
 target = sys.argv[1]
 instance = sys.argv[2]
 index = sys.argv[3]
-instance_2 = sys.argv[4]
-index_2 = sys.argv[5]
+hits_file = None
+instance_2 = None
+if os.path.isfile(sys.argv[4]):
+    hits_file = sys.argv[4]
+else:
+    instance_2 = sys.argv[4]
+    index_2 = sys.argv[5]
 
 
 resim_num = 'resim_%s' % instance
@@ -23,17 +28,20 @@ if len(glist) == 0:
     print('No file found for %s' % glob_mask)
 else:
     print(glist[0]) 
-
-resim_num = 'resim_%s' % instance_2
-glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index_2)
-glist2 = glob.glob(glob_mask)
-if len(glist2) == 0:
-    print('No file found for %s' % glob_mask)
-else:
-    print(glist2[0]) 
-
 hits1 = json.load(open(glist[0]))
-hits2 = json.load(open(glist2[0]))
+
+if instance_2 is not None:
+    resim_num = 'resim_%s' % instance_2
+    glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index_2)
+    glist2 = glob.glob(glob_mask)
+    if len(glist2) == 0:
+        print('No file found for %s' % glob_mask)
+    else:
+        print(glist2[0]) 
+    
+    hits2 = json.load(open(glist2[0]))
+else:
+    hits2 = json.load(open(hits_file))
 
 lesser = min(len(hits1), len(hits2))
 print('least hits of the 2 is %d' % lesser)
@@ -50,4 +58,4 @@ for h1 in hits1:
 
 for h2 in hits2:
     if h2 not in hits1:
-        print('h2 0x%x not in 1' % (h2, hits2.index(h2)))
+        print('h2 0x%x not in 1 index %d' % (h2, hits2.index(h2)))
