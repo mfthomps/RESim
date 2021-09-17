@@ -4,6 +4,7 @@ import idaapi
 import ida_graph
 import ida_gdl
 import idaversion
+import idc
 def getBB(graph, bb):
     for block in graph:
         if block.start_ea <= bb and block.end_ea > bb:
@@ -13,7 +14,8 @@ def getBB(graph, bb):
 def resetBlocks():
     p = idaapi.node_info_t()
     p.bg_color =  0xFFFFCC
-    fname = idaapi.get_root_filename()
+    #fname = idaapi.get_root_filename()
+    fname = idc.eval_idc("ARGV[1]")
     funs_fh = open(fname+'.funs') 
     funs_file = fname+'.funs'
     if not os.path.isfile(funs_file):
@@ -31,7 +33,7 @@ def resetBlocks():
         if f is None:
             #print('no function found for 0x%x' % fun_addr)
             continue
-        print('doing function found for 0x%x' % fun_addr)
+        #print('doing function found for 0x%x' % fun_addr)
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         for bb in graph:
             ida_graph.set_node_info(fun_addr, bb.id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)

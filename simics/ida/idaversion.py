@@ -1,3 +1,4 @@
+import time
 import idaapi
 if idaapi.IDA_SDK_VERSION <= 699:
     import idc
@@ -174,6 +175,7 @@ def add_func(fun, flag):
     else:
         ida_funcs.add_func(fun, flag)
 
+
 def find_widget(title):
     if idaapi.IDA_SDK_VERSION <= 699:
         form = idaapi.find_tform(title)
@@ -193,6 +195,26 @@ def get_current_widget():
     else:
         form = ida_kernwin.get_current_widget()
     return form
+
+def grab_focus(title):
+    done = False
+    limit = 10
+    i=0
+    while not done:
+        form = find_widget(title)
+        if form is None:
+            print('No form titled %s' % title)
+            break
+        activate_widget(form, True)
+        cur_form = get_current_widget()
+        if form == cur_form:
+            done = True
+        else:
+            print('failed grab focus %s' % title)
+            time.sleep(1)
+            i = i+1
+            if i > limit:
+                done = True
 
 def get_widget_type(form):
     if idaapi.IDA_SDK_VERSION <= 699:

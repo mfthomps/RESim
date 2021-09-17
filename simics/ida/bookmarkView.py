@@ -51,9 +51,9 @@ class bookmarkView(simplecustviewer_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
-    def Create(self, isim):
+    def Create(self, isim, title):
         self.isim = isim
-        title = "Bookmarks"
+
         if not simplecustviewer_t.Create(self, title):
             print("failed create of bookmarks viewer")
             return False

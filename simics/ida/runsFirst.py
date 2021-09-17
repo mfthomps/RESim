@@ -1,7 +1,9 @@
 '''
-Attach debugger to localhost and Launch RESim ida client.  First color blocks is requested.
+Attach debugger to localhost and Launch RESim ida client.  First color blocks if requested.
+Intended to start RESim as the result of a hotkey.
 '''
 import sys
+import os
 import idc
 import ida_dbg
 here = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'ida')
@@ -10,15 +12,36 @@ import colorBlocks
 import resetBlocks
 import rev
 import time
+import reHooks
+import subprocess
 
 ok = True
 arg_count = idc.eval_idc("ARGV.count")
-if arg_count > 1:
-    arg1 = idc.eval_idc("ARGV[1]")
+target_path=idc.eval_idc("ARGV[1]")
+print('in runsFirst target_path %s' % target_path)
+if arg_count > 2:
+    arg1 = idc.eval_idc("ARGV[2]")
     if arg1 == 'color':
+        print('did color')
+        '''
+        if arg_count > 3:
+            remote = idc.eval_idc("ARGV[3]")
+            cmd = 'ssh %s "echo \$RESIM_IDA_DATA"' % (remote)
+            ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            ida_data = ps.communicate()[0].decode('utf-8').strip()
+            print('ida_data at %s' % ida_data)
+            in_path = idaapi.get_root_filename()
+            infile = os.path.basename(in_path)
+            remote_ida_path = os.path.join(ida_data, infile)
+            my_ida_path = os.path.join(os.getenv('RESIM_IDA_DATA'), infile)
+            cmd = 'scp %s:%s/*.hits %s/' % (remote, remote_ida_path, my_ida_path)
+            print('cmd is %s' % cmd)
+            os.system(cmd)
+        '''
+            
         resetBlocks.resetBlocks()
         colorBlocks.colorBlocks()
-        print('did color')
+        
     elif arg1 == 'clear':
         resetBlocks.resetBlocks()
         print('did clear')
@@ -32,4 +55,7 @@ if ok:
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
     print('attach result %d' % result)
+    ''' Hooks must be set from __main__, or so it seems '''
+    re_hooks = reHooks.Hooks()
+    re_hooks.hook()
     rev.RESimClient()

@@ -8,6 +8,7 @@ import getEdges
 import json
 import os
 import time
+import idc
 class BranchNotTaken(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -23,8 +24,9 @@ class BranchNotTaken(simplecustviewer_t):
             return idaapi.AST_ENABLE_ALWAYS
 
     def getOffset(self):
-        retva = None
-        fname = idaapi.get_root_filename()
+        retval = None
+        #fname = idaapi.get_root_filename()
+        fname = idc.eval_idc("ARGV[1]")
         command = "@cgc.getSOFromFile('%s')" % fname
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         print('so stuff: %s' % simicsString) 
@@ -37,9 +39,8 @@ class BranchNotTaken(simplecustviewer_t):
                 print('could not get hex from %s' % start)
         return retval 
 
-    def Create(self, isim):
+    def Create(self, isim, title):
         self.isim = isim
-        title = "BNT"
         if not simplecustviewer_t.Create(self, title):
             print("failed create of BNT viewer")
             return False
@@ -54,6 +55,7 @@ class BranchNotTaken(simplecustviewer_t):
         the_name = "refresh_bnt"
         idaapi.register_action(idaapi.action_desc_t(the_name, "refresh BNT list", self.bnt_handler(self.updateList)))
         idaapi.attach_action_to_popup(form, None, the_name)
+        print('BNT did register')
 
 
     def updateList(self):
@@ -88,7 +90,7 @@ class BranchNotTaken(simplecustviewer_t):
         command = '@cgc.goToBasicBlock(0x%x)' % branch_from
         #print('cmd is %s' % command)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        if 'not in blocks' in simicsString:
+        if type(simicsString) is str and 'not in blocks' in simicsString:
             ida_kernwin.jumpto(branch_from)
         else:
             eip = gdbProt.getEIPWhenStopped()
