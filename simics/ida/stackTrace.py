@@ -34,9 +34,8 @@ class StackTrace(simplecustviewer_t):
         eip = gdbProt.getEIPWhenStopped()
         self.isim.signalClient()
 
-    def Create(self, isim):
+    def Create(self, isim, title):
         self.isim = isim
-        title = "stack trace"
         if not simplecustviewer_t.Create(self, title):
             print("failed create of stacktrace viewer")
             return False

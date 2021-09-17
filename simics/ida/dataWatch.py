@@ -21,9 +21,8 @@ class DataWatch(simplecustviewer_t):
             return idaapi.AST_ENABLE_ALWAYS
 
 
-    def Create(self, isim):
+    def Create(self, isim, title):
         self.isim = isim
-        title = "data watch"
         if not simplecustviewer_t.Create(self, title):
             print("failed create of datawatch viewer")
             return False

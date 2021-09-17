@@ -39,9 +39,8 @@ class BranchNotTaken(simplecustviewer_t):
                 print('could not get hex from %s' % start)
         return retval 
 
-    def Create(self, isim):
+    def Create(self, isim, title):
         self.isim = isim
-        title = "BNT"
         if not simplecustviewer_t.Create(self, title):
             print("failed create of BNT viewer")
             return False
@@ -56,6 +55,7 @@ class BranchNotTaken(simplecustviewer_t):
         the_name = "refresh_bnt"
         idaapi.register_action(idaapi.action_desc_t(the_name, "refresh BNT list", self.bnt_handler(self.updateList)))
         idaapi.attach_action_to_popup(form, None, the_name)
+        print('BNT did register')
 
 
     def updateList(self):

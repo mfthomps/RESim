@@ -45,6 +45,7 @@ import branchNotTaken
 import writeWatch
 import reHooks
 import dbgHooks
+import ida_dbg
 import menuMod
 
 '''
@@ -443,6 +444,8 @@ class RunToConnectHandler(idaapi.action_handler_t):
 
 def RESimClient():
     #Wait() 
+    ida_dbg.wait_for_next_event(idc.WFNE_ANY, -1)
+    print('back from dbg wait')
     reg_list = idautils.GetRegisterList()
     kernel_base =  0xc0000000
     info = idaapi.get_inf_structure()
@@ -453,13 +456,6 @@ def RESimClient():
         print('32-bit')
     idc.refresh_lists()
     idc.auto_wait()
-    form = idaversion.find_widget("Stack view")
-    print('form is %s' % str(form))
-    if form is None:
-        print('failed to find stack view')
-        return
-    print('stack should have focus')
-    idaversion.activate_widget(form, True)
     
 
     bookmark_view = bookmarkView.bookmarkView()
@@ -474,7 +470,11 @@ def RESimClient():
     #print('back from nameSysCalls')
     #print('now create bookmark_view')
     isim = idaSIM.IdaSIM(stack_trace, bookmark_view, data_watch, branch_not_taken, write_watch, kernel_base, reg_list)
-    bookmark_view.Create(isim)
+
+    idaversion.grab_focus('Stack view')
+    bm_title = "Bookmarks"
+    bookmark_view.Create(isim, bm_title)
+    idaversion.grab_focus(bm_title)
     bookmark_view.register()
     bookmark_list = bookmark_view.updateBookmarkView()
     if bookmark_list is not None:
@@ -484,17 +484,29 @@ def RESimClient():
                 eip = int(eip_str, 16)
                 idc.MakeCode(eip) 
 
-    stack_trace.Create(isim)
+    idaversion.grab_focus(bm_title)
+    st_title = 'stack trace'
+    stack_trace.Create(isim, st_title)
+    idaversion.grab_focus(st_title)
     stack_trace.register()
 
-    data_watch.Create(isim)
+    idaversion.grab_focus(st_title)
+    dw_title = 'data watch'
+    data_watch.Create(isim, dw_title)
+    idaversion.grab_focus(dw_title)
     data_watch.register()
 
-    branch_not_taken.Create(isim)
+    bnt_title = 'BNT'
+    idaversion.grab_focus(dw_title)
+    branch_not_taken.Create(isim, bnt_title)
+    idaversion.grab_focus(bnt_title)
     branch_not_taken.register()
-    branch_not_taken.updateList()
-   
-    write_watch.Create(isim)
+    #branch_not_taken.updateList()
+  
+    idaversion.grab_focus(bnt_title)
+    ww_title = 'write watch' 
+    write_watch.Create(isim, ww_title)
+    idaversion.grab_focus(ww_title)
     write_watch.register()
    
     reHooks.register(isim)
