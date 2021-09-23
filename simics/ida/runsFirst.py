@@ -55,7 +55,8 @@ if ok:
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
     print('attach result %d' % result)
-    ''' Hooks must be set from __main__, or so it seems '''
-    re_hooks = reHooks.Hooks()
-    re_hooks.hook()
-    rev.RESimClient()
+    if result == 1:
+        ''' Hooks must be set from __main__, or so it seems '''
+        re_hooks = reHooks.Hooks()
+        re_hooks.hook()
+        rev.RESimClient()
