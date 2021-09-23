@@ -76,8 +76,10 @@ class DataWatch():
         self.malloc_dict = {}
         self.pending_call = False
         self.ghost_stop_hap = None
+        ''' don't set backstop on reads of these addresses, e.g., for ioctl '''
+        self.no_backstop = []
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False):
         ''' TBD try forcing watch to maxlen '''
         if max_len is None:
             my_len = length
@@ -129,6 +131,8 @@ class DataWatch():
                 ''' first data read, start data session if doing coverage '''
                 self.top.startDataSessions()
                 self.prev_cycle = self.cpu.cycles
+        if no_backstop:
+            self.no_backstop.append(start)
 
     def close(self, fd):
         ''' called when FD is closed and we might be doing a trackIO '''
@@ -471,7 +475,8 @@ class DataWatch():
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                     self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
             elif self.mem_something.fun == 'strdup':
-                self.mem_something.count = self.getStrLen(self.mem_something.src)        
+                if self.mem_something.src is not None:
+                    self.mem_something.count = self.getStrLen(self.mem_something.src)        
             elif self.mem_something.fun == 'strcpy':
                 if self.cpu.architecture == 'arm':
                     if self.mem_something.src is None:
@@ -594,6 +599,8 @@ class DataWatch():
             resim_context = self.context_manager.getRESimContext()
             proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, self.mem_something, proc_break, 'memcpy_return_hap')
+            if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+                self.back_stop.setFutureCycle(self.back_stop_cycles)
             self.lgr.debug('getMemParams set hap on ret_ip at 0x%x context %s Now run!' % (self.mem_something.ret_ip, 
                  str(self.cpu.current_context)))
             SIM_run_command('c')
@@ -865,7 +872,7 @@ class DataWatch():
 
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
 
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop and addr not in self.no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         else:
             self.lgr.debug('dataWatch readHap NO backstop set.  break sim %r  use back %r' % (self.break_simulation, self.use_back_stop))
