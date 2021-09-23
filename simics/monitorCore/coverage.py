@@ -143,7 +143,10 @@ class Coverage():
                             self.unmapped_addrs.append(bb_rel)
                             continue
                         else:
-                            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                            if self.afl:
+                                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                            else:
+                                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
                             self.addr_map[bp] = bb_rel
                     else:
                         bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
@@ -162,7 +165,8 @@ class Coverage():
             self.lgr.debug('coverage generated ?? context %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         else:
-            self.lgr.debug('coverage generated %d RESim context breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
+            self.lgr.debug('coverage generated %d RESim context breaks and %d unmapped, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), 
+                    len(self.unmapped_addrs), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         self.block_total = len(self.bp_list)
         if self.afl:
@@ -304,12 +308,17 @@ class Coverage():
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
+        if self.physical or (self.afl and not self.linear):    
+            addr = memory.physical_address
+        else:
+            addr = memory.logical_address
         ''' 
         NOTE!  reading simulated memory may slow down fuzzing by a factor of 2!
-        ''' 
         pid = self.top.getPID()
         if pid != self.pid:
-            self.lgr.debug('converage bbHap, not my pid, got %d I am %d' % (pid, self.pid))
+            self.lgr.debug('converage bbHap, bp 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
+            return
+        ''' 
         
         dead_set = False
         if self.create_dead_zone:
@@ -319,11 +328,6 @@ class Coverage():
                 self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
         
-        if self.physical or (self.afl and not self.linear):    
-            addr = memory.physical_address
-        else:
-            addr = memory.logical_address
-        #self.lgr.debug('coverage bbHap address 0x%x bp %d' % (addr, break_num))
         if addr == 0:
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             return
@@ -337,6 +341,9 @@ class Coverage():
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             return
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d' % (this_addr, break_num))
+        if self.backstop_cycles is not None and self.backstop_cycles > 0:
+            self.backstop.setFutureCycleAlone(self.backstop_cycles)
         if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
             if not self.afl:
@@ -350,8 +357,6 @@ class Coverage():
                         #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
                     #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (this_addr, addr_str, 
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
-                    if self.backstop_cycles is not None and self.backstop_cycles > 0:
-                        self.backstop.setFutureCycleAlone(self.backstop_cycles)
                 else:
                     #self.lgr.debug('addr already in blocks_hit')
                     pass
@@ -403,8 +408,6 @@ class Coverage():
                     self.trace_bits[index] =  self.trace_bits[index]+1
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
                 self.prev_loc = cur_loc >> 1
-                if self.backstop_cycles is not None and self.backstop_cycles > 0:
-                    self.backstop.setFutureCycleAlone(self.backstop_cycles)
         
     def getTraceBits(self): 
         #self.lgr.debug('hit count is %d' % self.hit_count)
