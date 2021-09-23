@@ -9,7 +9,7 @@ import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False):
+             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -91,7 +91,8 @@ class PlayAFL():
         cli.quiet_run_command('save-snapshot name = origin')
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         if self.coverage is not None:
-            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, afl=False, linear=linear)
+            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+               afl=False, linear=linear, create_dead_zone=create_dead_zone)
             physical = True
             if linear:
                 physical = False
@@ -99,6 +100,9 @@ class PlayAFL():
                 self.context_manager.restoreDebugContext()
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
+
+
+
 
     def go(self, findbb=None):
         if self.call_ip is None:
@@ -116,12 +120,21 @@ class PlayAFL():
     def goAlone(self, dumb):
         self.current_packet=1
         self.index += 1
+        done = False
+        if self.target != 'oneplay':
+            ''' skip files if already have coverage '''
+            while not done and self.index < len(self.afl_list):
+                fname = self.getHitsPath(self.index)
+                if not os.path.isfile(fname):
+                    done = True
+                else:
+                    self.index += 1
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
                 self.coverage.clearHits() 
             if self.orig_buffer is not None:
-                self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
+                self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
             with open(full, 'rb') as fh:
@@ -175,9 +188,8 @@ class PlayAFL():
         self.lgr.debug('playAFL playBreak')
         self.goAlone(None)
 
-    def recordHits(self, hit_bbs):
-        ''' hits will go in a "coverage" directory along side queue, etc. '''
-        queue_dir = os.path.dirname(self.afl_list[self.index])
+    def getHitsPath(self, index):
+        queue_dir = os.path.dirname(self.afl_list[index])
         queue_parent = os.path.dirname(queue_dir)
         coverage_dir = os.path.join(queue_parent, 'coverage')
         try:
@@ -185,7 +197,12 @@ class PlayAFL():
         except:
             pass
         fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
+        return fname
+
+    def recordHits(self, hit_bbs):
+        ''' hits will go in a "coverage" directory along side queue, etc. '''
         hit_list = list(hit_bbs.keys())
+        fname = self.getHitsPath(self.index)
         with open(fname, 'w') as fh:
             json.dump(hit_list, fh) 
         for hit in hit_list:
