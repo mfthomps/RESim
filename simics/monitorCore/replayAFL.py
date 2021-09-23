@@ -1,18 +1,18 @@
-import glob
 import os
 import time
 import shutil
+import subprocess
+import shlex
 #import threading
 from simics import *
 import stopFunction
+import aflPath
 
 class ReplayAFL():
-    def __init__(self, top, target, index, targetFD, lgr, instance = None, tcp=False, cover=False):
+    def __init__(self, top, target, index, targetFD, lgr, instance = None, tcp=False, cover=False, trace=False):
         self.lgr = lgr
         self.top = top
-        self.afl_dir = os.getenv('AFL_OUTPUT')
-        if self.afl_dir is None:
-            self.afl_dir = os.path.join(os.getenv('AFL_DATA'), 'output')
+        self.afl_dir = aflPath.getAFL_OUTPUT()
         self.ip = os.getenv('TARGET_IP')
         self.port = os.getenv('TARGET_PORT')
         if self.ip is None or self.port is None: 
@@ -26,6 +26,9 @@ class ReplayAFL():
         self.tcp = tcp
         self.targetFD = targetFD
         self.cover = cover
+        self.trace = trace
+        ''' child process that manages driver '''
+        self.send_driver = None
         here= os.path.dirname(os.path.realpath(__file__))
         if not tcp:
             self.client_path = os.path.join(here, 'clientudpMult')
@@ -39,7 +42,7 @@ class ReplayAFL():
     def trackAlone(self, fd):
         if self.cover:
             self.top.enableCoverage()
-        self.top.trackIO(fd, reset=True)
+        self.top.trackIO(fd, reset=True, callback=self.killDriver)
 
     def doTrack(self):
         ''' Invoked as a callback when the accept call returns '''
@@ -53,30 +56,16 @@ class ReplayAFL():
     def go(self):
         self.lgr.debug('replayAFL go')
         retval = False
-        if self.instance is None:
-            glob_mask = '%s/%s/queue/id:*0%s,src*' % (self.afl_dir, self.target, self.index)
-            glist = glob.glob(glob_mask)
-            if len(glist) == 0:
-                glob_mask = '%s/%s/queue/id:*%s,orig*' % (self.afl_dir, self.target, self.index)
-                glist = glob.glob(glob_mask)
-        else:
-            resim_instance = 'resim_%d' % self.instance
-            glob_mask = '%s/%s/%s/queue/id:*0%s,src*' % (self.afl_dir, self.target, resim_instance, self.index)
-            glist = glob.glob(glob_mask)
-      
-
-        if len(glist) == 0:
-            self.lgr.error('No files found looking for %s %s %s' % (self.target, self.index, glob_mask))
-        elif len(glist) == 1:
+        afl_file = aflPath.getAFLPath(self.target, self.index, self.instance)
+        if afl_file is not None: 
             retval = True
-            print('tracking %s' % glist[0])
-        else:
-            self.lgr.error('Too many matches, try adding leading zeros?')
+            print('Replaying %s' % afl_file)
+            
         if retval:
             #driver = threading.Thread(target=feedDriver, args=(self.ip, self.port, self.header, self.lgr, ))
             #self.lgr.debug('start thread')
             #SIM_run_alone(self.startAlone, driver)
-            shutil.copyfile(glist[0], '/tmp/sendudp')
+            shutil.copyfile(afl_file, '/tmp/sendudp')
             dumb, forwarding = cli.quiet_run_command('list-port-forwarding-setup')
             ssh_port = None
             for line in forwarding.splitlines():
@@ -88,21 +77,31 @@ class ReplayAFL():
                 return
             script_file = os.path.join(self.resim_dir, 'simics', 'monitorCore', 'sendDriver.sh')
             cmd = '%s %s %s %s %s %s &' % (script_file, ssh_port, self.client_path, self.ip, self.port, self.header)
-            result=os.system(cmd)
-            self.lgr.debug('ReplayAFL tmpdriver cmd: %s result %s' % (cmd, result))
-            self.lgr.debug('call track for fd %d' % self.targetFD)
-            if not self.tcp: 
-                if self.cover:
-                    self.top.enableCoverage()
-                self.top.trackIO(self.targetFD, reset=True)
-            else:
-                ''' Run to accept to get the new FD and then do trackIO from the doTrack callback'''
+            #result=os.system(cmd)
+            self.send_driver = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.lgr.debug('ReplayAFL tmpdriver cmd: %s ' % (cmd))
+            self.lgr.debug('replay for fd %d' % self.targetFD)
+            if self.trace:
                 self.top.noReverse()
-                self.lgr.debug('replayAFL run to accept')
-                f1 = stopFunction.StopFunction(self.doTrack, [], nest=False)
-                flist = [f1]
-                self.top.runToAccept(self.targetFD, flist=flist)
+                self.top.traceAll()
+                SIM_run_command('c') 
+            else:
+                if not self.tcp: 
+                    if self.cover:
+                        self.top.enableCoverage()
+                    self.top.trackIO(self.targetFD, reset=True, callback=self.killDriver)
+                else:
+                    ''' Run to accept to get the new FD and then do trackIO from the doTrack callback'''
+                    self.top.noReverse()
+                    self.lgr.debug('replayAFL run to accept')
+                    f1 = stopFunction.StopFunction(self.doTrack, [], nest=False)
+                    flist = [f1]
+                    self.top.runToAccept(self.targetFD, flist=flist)
 
         return retval
 
-
+    def killDriver(self):
+        if self.send_driver is not None:
+            self.send_driver.kill()
+            self.lgr.debug('replayAFL killed driver')
+            self.send_driver = None
