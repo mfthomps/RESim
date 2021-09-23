@@ -5,6 +5,18 @@
 # localhost 4022 via Simics real networks and port forwarding.
 # Assumes the driver has a user "mike", and ssh keys are used
 #
+cleanup() {
+    # kill all processes whose parent is this process
+    pkill -P $$
+}
+
+for sig in INT QUIT HUP TERM; do
+  trap "
+    cleanup
+    trap - $sig EXIT
+    kill -s $sig "'"$$"' "$sig"
+done
+trap cleanup EXIT
 fname=/tmp/sendudp
 #
 # Catch failures that likely can't occur in this context
