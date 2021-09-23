@@ -655,6 +655,9 @@ class SharedSyscall():
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of waiting bytes '''
                     self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
+                    if exit_info.syscall_instance.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False)
             else:
                 trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
 
