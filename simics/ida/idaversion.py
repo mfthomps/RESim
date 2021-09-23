@@ -210,11 +210,16 @@ def grab_focus(title):
         if form == cur_form:
             done = True
         else:
-            print('failed grab focus %s' % title)
-            time.sleep(1)
-            i = i+1
-            if i > limit:
+            cur_form = ida_kernwin.get_current_viewer()
+            if cur_form == form:
+                print('**but the viewer matches?')
                 done = True
+            else:
+                print('failed grab focus %s' % title)
+                time.sleep(1)
+                i = i+1
+                if i > limit:
+                    done = True
 
 def get_widget_type(form):
     if idaapi.IDA_SDK_VERSION <= 699:
