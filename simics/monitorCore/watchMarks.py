@@ -72,7 +72,7 @@ class WatchMarks():
             return self.msg
 
     class SetMark():
-        def __init__(self, dest, length, buf_start):
+        def __init__(self, dest, length, buf_start, lgr):
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
@@ -81,7 +81,7 @@ class WatchMarks():
                 self.msg = 'memset %d bytes starting 0x%x (offset %d into buffer at 0x%x)' % (length, dest, offset, buf_start)
             else:
                 offset = 0
-                self.lgr.debug('memset %d bytes starting 0x%x **Not a known buffer' % length, dest)
+                lgr.debug('memset %d bytes starting 0x%x **Not a known buffer' % length, dest)
         def getMsg(self):
             return self.msg
 
@@ -285,11 +285,11 @@ class WatchMarks():
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, msg):
+        def __init__(self, return_cycle, call_cycle, ip, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
-            self.mark = msg
+            self.mark = mark
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
@@ -406,10 +406,10 @@ class WatchMarks():
         return retval
         
                 
-    def addWatchMark(self, ip, msg, cycles=None):
+    def addWatchMark(self, ip, mark, cycles=None):
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, msg)
+        wm = self.WatchMark(cycles, self.call_cycle, ip, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -425,7 +425,7 @@ class WatchMarks():
 
     def memset(self, dest, length, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        sm = self.SetMark(dest, length, buf_start)
+        sm = self.SetMark(dest, length, buf_start, self.lgr)
         self.addWatchMark(ip, sm)
         self.lgr.debug('watchMarks memset 0x%x %s' % (ip, sm.getMsg()))
 
