@@ -102,7 +102,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         bb_id = getBBId(graph_dict[f], bb)
         if bb_id is not None:
             if bb not in latest_hits_json and bb not in all_hits_json:
-                ida_graph.set_node_info(fun.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
+                ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
                 #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
 
 def colorBlocks():
