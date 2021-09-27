@@ -72,6 +72,10 @@ class Coverage():
         self.missing_tables = {}
         self.missing_breaks = {}
         self.missing_haps = {}
+        self.force_default_context = False
+        self.resim_context = self.context_manager.getRESimContext()
+        self.default_context = self.context_manager.getDefaultContext()
+        self.jumpers = {}
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -98,7 +102,33 @@ class Coverage():
             self.funs_hit = []
             self.blocks_hit = OrderedDict()
 
+    def setBreak(self, bb_rel):
+        bp = None
+        if self.afl or self.physical:
+            if not self.linear:
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
+                if phys_block.address == 0 or phys_block.address is None:
+                    self.unmapped_addrs.append(bb_rel)
+                else:
+                    if self.afl:
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                    else:
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
+                    self.addr_map[bp] = bb_rel
+            else:
+                bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+            #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+        elif self.force_default_context:
+            bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+        else:
+            #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
+            #cell = self.cpu.physical_memory
+            #bp = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+            bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
+        return bp
+ 
     def cover(self, force_default_context=False, physical=False):
+        self.force_default_context = force_default_context
         self.lgr.debug('coverage: cover physical: %r linear: %r' % (physical, self.linear))
         self.offset = 0
         self.physical = physical
@@ -124,8 +154,6 @@ class Coverage():
             self.lgr.error('Coverge: No basic blocks defined')
             return
         self.stopCover()
-        resim_context = self.context_manager.getRESimContext()
-        default_context = self.context_manager.getDefaultContext()
         for fun in self.blocks:
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
@@ -136,32 +164,12 @@ class Coverage():
                 if self.afl:
                     rand = random.randrange(0, self.map_size)
                     self.afl_map[bb_rel] = rand
-                if self.afl or physical:
-                    if not self.linear:
-                        phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
-                        if phys_block.address == 0 or phys_block.address is None:
-                            self.unmapped_addrs.append(bb_rel)
-                            continue
-                        else:
-                            if self.afl:
-                                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-                            else:
-                                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
-                            self.addr_map[bp] = bb_rel
-                    else:
-                        bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
-                    #bp = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
-                elif force_default_context:
-                    bp = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
-                else:
-                    #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
-                    #cell = self.cpu.physical_memory
-                    #bp = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-                    bp = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
-                self.bp_list.append(bp)                 
+                bp = self.setBreak(bb_rel)
+                if bp is not None:
+                    self.bp_list.append(bp)                 
                 #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                 #   int(fun), bb, self.offset, bp))
-        if self.afl or force_default_context:
+        if self.afl or self.force_default_context:
             self.lgr.debug('coverage generated ?? context %d breaks, now set bb_hap first bp: %d  last: %d current_context %s' % (len(self.bp_list), self.bp_list[0], self.bp_list[-1], 
               self.cpu.current_context))
         else:
@@ -346,6 +354,14 @@ class Coverage():
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
         if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
+            ''' see if a jumper should skip over code by changing the PC '''
+            prejump_addr = None
+            if self.jumpers is not None and this_addr in self.jumpers:
+                #self.lgr.debug('got jumper, skip from 0x%x' % this_addr)
+                #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.jumpers[this_addr], Sim_Access_Execute)
+                self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
+                #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
+                prejump_addr = this_addr
             if not self.afl:
                 #self.lgr.debug('this_addr is 0x%x' % this_addr) 
                 if this_addr not in self.blocks_hit:
@@ -381,14 +397,6 @@ class Coverage():
                         self.lgr.debug('120 seconds since last dead spot %d dead spots' % len(self.dead_map)) 
                         self.saveDeadFile()
 
-                ''' see if a jumper should skip over code by changing the PC '''
-                prejump_addr = None
-                if self.jumpers is not None and this_addr in self.jumpers:
-                    #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.jumpers[this_addr], Sim_Access_Execute)
-                    self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
-                    #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
-                    prejump_addr = this_addr
-                    addr = phys_block.address
                 cur_loc = self.afl_map[this_addr]
                 index = cur_loc ^ self.prev_loc
                 #self.lgr.debug('coverage bbHap cur_loc %d, index %d' % (cur_loc, index))
@@ -400,7 +408,7 @@ class Coverage():
                     if prejump_addr is not None: 
                         self.afl_del_breaks.append(prejump_addr)
                     if True:
-                        #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, addr))
+                        #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, this_addr))
                         if this_addr not in self.afl_del_breaks:
                             SIM_delete_breakpoint(break_num)
                             self.afl_del_breaks.append(this_addr)
@@ -540,29 +548,26 @@ class Coverage():
             
     def restoreBreaks(self):
         ''' Restore the hits found in self.blocks_hit '''
-        resim_context = self.context_manager.getRESimContext()
-        default_context = self.context_manager.getDefaultContext()
         tmp_list = []
         prev_break = None
+        #self.lgr.debug('restoreBreaks')
         for bb in self.blocks_hit:
-            if self.afl:
-                breakpoint = SIM_breakpoint(default_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
-            else:
-                breakpoint = SIM_breakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, bb, 1, Sim_Breakpoint_Temporary)
-            if prev_break is not None and breakpoint != (prev_break+1):
-                #self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
-                hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
-                tmp_list = []
-                self.bb_hap.append(hap)
+            breakpoint = self.setBreak(bb)
+            if breakpoint is not None:
+                #self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
+                if prev_break is not None and breakpoint != (prev_break+1):
+                    #self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
+                    hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
+                    tmp_list = []
+                    self.bb_hap.append(hap)
 
-            tmp_list.append(breakpoint)
-            #self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
-            ''' so it will be deleted '''
-            self.bp_list.append(bb)
-            prev_break = breakpoint    
-        self.lgr.debug('coverage restoreBreaks restored %d breaks' % len(tmp_list))
+                tmp_list.append(breakpoint)
+                ''' so it will be deleted '''
+                self.bp_list.append(bb)
+                prev_break = breakpoint    
+        #self.lgr.debug('coverage restoreBreaks restored %d breaks' % len(tmp_list))
         if len(tmp_list) > 0:
-            self.lgr.debug('coverage restoreBreaks first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
+            #self.lgr.debug('coverage restoreBreaks first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
             self.bb_hap.append(hap)
 
@@ -604,14 +609,14 @@ class Coverage():
         print('Previous data run hit %d new BBs' % new_hits)
  
 
-    def doCoverage(self, force_default_context=False, no_merge=False, physical=False):
+    def doCoverage(self, no_merge=False, physical=False):
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
-            self.cover(force_default_context=force_default_context, physical=physical)
+            self.cover(physical=physical)
             self.did_cover = True
         else:
             if not self.afl:
@@ -620,7 +625,7 @@ class Coverage():
                 for bp in self.bp_list[self.begin_tmp_bp:]:
                     SIM_delete_breakpoint(bp)
                 for hap in self.bb_hap[self.begin_tmp_hap:]:
-                    #self.lgr.debug('coverage doCoverage delete hap %d' % hap)
+                    #self.lgr.debug('coverage doCoverage delete tmp_bp hap %d' % hap)
                     SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
                 
                 self.bp_list = self.bp_list[:self.begin_tmp_bp]
@@ -632,6 +637,7 @@ class Coverage():
             self.funs_hit = []
             self.blocks_hit = OrderedDict()
             self.lgr.debug('coverage reset blocks_hit')
+
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
 
@@ -661,18 +667,21 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, jumpers=None, create_dead_zone=False):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, create_dead_zone=False):
         self.enabled = True
         self.pid = pid
         self.create_dead_zone = create_dead_zone
         if fname is not None:
             self.full_path = fname
             self.hits_path = self.top.getIdaData(fname)
+        
+        ida_path = self.top.getIdaData(self.full_path)
+        # dynamically alter control flow, e.g., to avoid CRC checks
+        self.loadJumpers(ida_path)
+
         self.lgr.debug('cover enableCoverage fname is %s linear: %r' % (self.hits_path, linear))
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
-        # dynamically alter control flow, e.g., to avoid CRC checks
-        self.jumpers = jumpers
         # force use of linear breakpoints vice physical memory
         self.linear = linear
         self.afl = afl
@@ -725,6 +734,7 @@ class Coverage():
         return self.blocks_hit
 
     def clearHits(self):
+        self.restoreBreaks()
         self.funs_hit = []
         self.blocks_hit = OrderedDict()
 
@@ -733,3 +743,15 @@ class Coverage():
 
     def appendName(self, name):
         self.hits_path = '%s-%s' % (self.hits_path, name)
+
+    def loadJumpers(self, fname):
+        ''' jumpers are linear addresses '''
+        jfile = fname+'.jumpers'
+        if os.path.isfile(jfile):
+            jumpers = json.load(open(jfile))
+            self.jumpers = {}
+            for from_bb in jumpers:
+                #phys_block = self.cpu.iface.processor_info.logical_to_physical(int(from_bb), Sim_Access_Execute)
+                #self.jumpers[phys_block.address] = jumpers[from_bb]
+                self.jumpers[int(from_bb)] = jumpers[from_bb]
+            self.lgr.debug('coverage loaded %d jumpers' % len(self.jumpers))
