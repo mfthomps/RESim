@@ -59,8 +59,8 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
-        #self.lgr.debug('writeData packet count %d add: 0x%x max_len %d  call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r' % (self.expected_packet_count, self.addr, self.max_len, 
-        #     self.call_ip, self.return_ip, str(self.cell), self.stop_on_read))
+        #self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r' % (self.expected_packet_count, 
+        #     self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read))
 
         self.pid = self.top.getPID()
         self.filter = filter
