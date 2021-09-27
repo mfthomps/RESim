@@ -543,10 +543,10 @@ class findKernelWrite():
                         SIM_run_alone(self.cleanup, False)
                         ida_message = "Content of 0x%x referenced in a memory copy from failed read at 0x%x" % (self.addr, copy_addr)
                         self.top.skipAndMail()
-                       
+                        return 
                     self.lgr.debug('findKernelWrite, found mem copy, now look for address 0x%x, value is 0x%x' % (copy_addr, value))
                     SIM_run_alone(self.cleanup, False)
-                    self.top.stopAtKernelWrite(copy_addr, self.rev_to_call)
+                    self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes)
                 else:
                     self.lgr.debug('thinkWeWrote, call backOneAlone')
                     SIM_run_alone(self.backOneAlone, offset)

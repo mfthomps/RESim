@@ -479,7 +479,7 @@ class SharedSyscall():
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
-        #self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d ' % (self.cell_name, exit_info.callnum, callname, pid))
+        self.lgr.debug('exitHap cell %s callnum %d name %s  pid %d ' % (self.cell_name, exit_info.callnum, callname, pid))
         if callname == 'clone':
             self.lgr.debug('exitHap is clone pid %d  eax %d' % (pid, eax))
             if eax > 20000:
@@ -649,9 +649,15 @@ class SharedSyscall():
             if exit_info.retval_addr is not None:
                 result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                 if result is not None:
-                    trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result))
+                    trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x written to 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result, exit_info.retval_addr))
                 else:
                     self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
+                if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
+                    ''' in case we want to break on a read of waiting bytes '''
+                    self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
+                    if exit_info.syscall_instance.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False, no_backstop=True)
             else:
                 trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
 
@@ -770,7 +776,7 @@ class SharedSyscall():
                 SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
     
         if trace_msg is not None and len(trace_msg.strip())>0:
-            #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
+            self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
         return True
 

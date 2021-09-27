@@ -1,5 +1,6 @@
 from simics import Sim_Trans_Load
 import pickle
+import json
 import os
 import sys
 class WatchMarks():
@@ -72,7 +73,7 @@ class WatchMarks():
             return self.msg
 
     class SetMark():
-        def __init__(self, dest, length, buf_start):
+        def __init__(self, dest, length, buf_start, lgr):
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
@@ -81,12 +82,13 @@ class WatchMarks():
                 self.msg = 'memset %d bytes starting 0x%x (offset %d into buffer at 0x%x)' % (length, dest, offset, buf_start)
             else:
                 offset = 0
-                self.lgr.debug('memset %d bytes starting 0x%x **Not a known buffer' % length, dest)
+                self.msg = 'memset %d bytes starting 0x%x **Not a known buffer' % (length, dest)
+                lgr.debug(self.msg)
         def getMsg(self):
             return self.msg
 
     class DataMark():
-        def __init__(self, addr, start, length, cmp_ins, modify=False):
+        def __init__(self, addr, start, length, cmp_ins, trans_size, modify=False):
             self.addr = addr
             if addr is not None:
                 self.offset = addr - start
@@ -98,16 +100,17 @@ class WatchMarks():
             self.end_addr = None
             self.loop_count = 0
             self.modify = modify
+            self.trans_size = trans_size
 
         def getMsg(self):
             if self.start is None:
                 mark_msg = 'Error getting mark message'
             elif self.modify and self.addr is not None:
-                mark_msg = 'Memory mod, addr: 0x%x original buffer %d bytes starting at 0x%x' % (self.addr, self.length, self.start)
+                mark_msg = 'Write %d to  0x%08x offset %4d into 0x%8x (buf size %4d)' % (self.trans_size, self.addr, self.offset, self.start, self.length)
             elif self.addr is None:
                 mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
             elif self.end_addr is None:
-                mark_msg = 'Read from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.addr, self.offset, self.start, self.length, self.cmp_ins)
+                mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
                 length = self.end_addr- self.addr + 1
                 mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
@@ -285,11 +288,11 @@ class WatchMarks():
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, msg):
+        def __init__(self, return_cycle, call_cycle, ip, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
-            self.mark = msg
+            self.mark = mark
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
@@ -313,23 +316,23 @@ class WatchMarks():
         if recv_addr is None:
             self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s' % (ip, cycles, msg))
         else:
-            self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s recv_addr: 0x%x' % (ip, cycles, msg, recv_addr))
+            self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s wrote to: 0x%x' % (ip, cycles, msg, recv_addr))
             if self.recent_buf_address is None:
                 self.recent_buf_address = recv_addr
                 self.recent_buf_max_len = max_len
         self.recordIP(ip)
   
-    def memoryMod(self, start, length, addr=None):
+    def memoryMod(self, start, length, trans_size, addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        dm = self.DataMark(addr, start, length, None, modify=True)
+        dm = self.DataMark(addr, start, length, None, trans_size, modify=True)
         self.addWatchMark(ip, dm)
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, cmp_ins): 
+    def dataRead(self, addr, start, length, cmp_ins, trans_size): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip:
-            dm = self.DataMark(addr, start, length, cmp_ins)
+            dm = self.DataMark(addr, start, length, cmp_ins, trans_size)
             self.addWatchMark(ip, dm)
             self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
@@ -341,7 +344,7 @@ class WatchMarks():
                     pm.mark.addrRange(addr)
                     self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
-                    dm = self.DataMark(addr, start, length, cmp_ins)
+                    dm = self.DataMark(addr, start, length, cmp_ins, trans_size)
                     self.addWatchMark(ip, dm)
                     self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
@@ -406,10 +409,10 @@ class WatchMarks():
         return retval
         
                 
-    def addWatchMark(self, ip, msg, cycles=None):
+    def addWatchMark(self, ip, mark, cycles=None):
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, msg)
+        wm = self.WatchMark(cycles, self.call_cycle, ip, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -425,7 +428,7 @@ class WatchMarks():
 
     def memset(self, dest, length, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        sm = self.SetMark(dest, length, buf_start)
+        sm = self.SetMark(dest, length, buf_start, self.lgr)
         self.addWatchMark(ip, sm)
         self.lgr.debug('watchMarks memset 0x%x %s' % (ip, sm.getMsg()))
 
@@ -668,3 +671,34 @@ class WatchMarks():
         pickDict['recent_buf_max_len'] = self.recent_buf_max_len
         self.lgr.debug('watchMarks pickleit to %s recent_buf_addres: %s' % (mark_file, str(self.recent_buf_address)))
         pickle.dump( pickDict, open( mark_file, "wb") ) 
+
+    def saveJson(self, fname):
+        my_marks = []
+        for mark in self.mark_list:
+            entry = {}
+            self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
+            if isinstance(mark.mark, self.CopyMark):
+                entry['mark_type'] = 'copy' 
+                entry['src'] = mark.mark.src 
+                entry['dest'] = mark.mark.dest 
+                entry['length'] = mark.mark.length 
+                entry['reference_buffer'] = mark.mark.buf_start 
+            elif isinstance(mark.mark, self.CallMark):
+                entry['mark_type'] = 'call' 
+                entry['recv_addr'] = mark.mark.recv_addr
+                entry['length'] = mark.mark.len
+            elif isinstance(mark.mark, self.DataMark) and not mark.mark.modify:
+                entry['mark_type'] = 'read' 
+                entry['addr'] = mark.mark.addr
+                entry['reference_buffer'] = mark.mark.start
+                entry['trans_size'] = mark.mark.trans_size
+            elif isinstance(mark.mark, self.DataMark) and mark.mark.modify:
+                entry['mark_type'] = 'write' 
+                entry['addr'] = mark.mark.addr
+                entry['reference_buffer'] = mark.mark.start
+                entry['trans_size'] = mark.mark.trans_size
+            else:
+                continue
+            my_marks.append(entry)
+        with open(fname, 'w') as fh:
+            json.dump(my_marks, fh) 

@@ -81,13 +81,13 @@ import reportCrash
 import injectIO
 import writeData
 import instructTrace
+import aflPath
 
 import json
 import pickle
 import re
 import shutil
 import imp
-import glob
 
 
 class Prec():
@@ -207,6 +207,8 @@ class GenMonitor():
         self.disable_reverse = False
 
         self.gdb_port = 9123
+
+        self.replayInstance = None
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -2382,7 +2384,6 @@ class GenMonitor():
         call_params3 = syscall.CallParams('recvfrom', fd, break_simulation=break_simulation)        
         call_params3.nth = count
         cell = self.cell_config.cell_context[self.target]
-        cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         calls = ['read', 'socketcall']
@@ -3015,7 +3016,6 @@ class GenMonitor():
         self.dataWatch[self.target].setRetrack(False)
         if self.coverage is not None:
             self.coverage.saveCoverage()
-        
 
     def clearWatches(self):
         self.dataWatch[self.target].clearWatches()
@@ -3245,7 +3245,7 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False):
+            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None):
         if self.bookmarks is not None:
             self.goToOrigin()
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3256,20 +3256,23 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
-                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all)
+                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json)
         self.injectIOInstance.go()
    
-    def aflInject(self, target, index):
-        afl_dir = os.getenv('AFL_OUTPUT')
-        glob_mask = '%s/%s/queue/id:*%s,src*' % (afl_dir, target, index)
-        glist = glob.glob(glob_mask)
-        if len(glist) == 0:
-            print('No files found looking for %s' % glob_mask)
-        elif len(glist) == 1:
-            self.injectIO(glist[0])
-            print('injecting %s' % glist[0])
+    def aflInject(self, target, index, instance=None, cover=False, save_json=False):
+        afl_file = aflPath.getAFLPath(target, index, instance)
+        if afl_file is not None:
+            self.injectIO(afl_file, cover=cover, save_json=save_json)
+
+    def aflInjectTCP(self, target, index, instance=None, cover=False, save_json=False):
+        afl_file = aflPath.getAFLPath(target, index, instance)
+        if afl_file is not None:
+            if save_json:
+                self.injectIO(afl_file, cover=cover, n=-1, save_json='/tmp/track.json')
+            else:
+                self.injectIO(afl_file, cover=cover, n=-1)
         else:
-            print('Too many matches, try adding leading zeros?')
+            print('no file found at %s' % afl_file)
 
     def doudp(self, dumb):
         port = os.getenv('TARGET_PORT')
@@ -3279,25 +3282,12 @@ class GenMonitor():
         os.system(cmd)
         print('back from command')
 
-    def aflTrack(self, target, index, FD, port):
-        afl_dir = os.getenv('AFL_OUTPUT')
-        glob_mask = '%s/%s/queue/id:*%s,src*' % (afl_dir, target, index)
-        glist = glob.glob(glob_mask)
-        if len(glist) == 0:
-            print('No files found looking for %s' % glob_mask)
-        elif len(glist) == 1:
-            #print('will debug pid %d' % self.debug_info['pid'])
-            #self.debugPidGroup(self.debug_info['pid'])
-            shutil.copyfile(glist[0], '/tmp/sendudp')
+    def aflTrack(self, target, index, FD, port, instance = None):
+        afl_file = aflPath.getAFLPath(target, index, instance)
+        if afl_file is not None:
+            shutil.copyfile(afl_file, '/tmp/sendudp')
             self.trackIO(FD, run_fun=self.doudp)
-            print('tracking %s' % glist[0])
-            #cmd = 'bash -c "cat %s > /dev/udp/localhost/%d"' % (glist[0], port)
-            #cmd = './doudp.sh %s %d' %  (glist[0], port)
-            #print('cmd is: %s' % cmd)
-            #os.system(cmd)
-            #print('back from command')
-        else:
-            print('Too many matches, try adding leading zeros?')
+            print('tracking %s' % afl_file)
  
     def tagIterator(self, index):    
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
@@ -3367,7 +3357,7 @@ class GenMonitor():
     def watchROP(self):
         self.ropCop[self.target].watchROP()
 
-    def enableCoverage(self, fname=None):
+    def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO '''
         if self.coverage is not None:
@@ -3376,8 +3366,8 @@ class GenMonitor():
             else:
                 full_path = None
             pid, cpu = self.context_manager[self.target].getDebugPid() 
-            self.coverage.enableCoverage(pid, fname=full_path)
-            self.coverage.doCoverage()
+            self.coverage.enableCoverage(pid, fname=full_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles)
+            self.coverage.doCoverage(physical=physical)
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
@@ -3553,6 +3543,7 @@ class GenMonitor():
         fuzz_it.trim()
 
     def aflTCP(self, sor=False, fname=None, linear=False, port=8765):
+        ''' not hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765):
@@ -3602,19 +3593,21 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFLTCP(self, target, sor=False, linear=False):
-        self.playAFL(target, n=-1, sor=sor, linear=linear)
+    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False):
+        self.playAFL(target, n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode)
 
-    def playAFL(self, target, n=1, sor=False, linear=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], self.lgr, 
-              packet_count=n, stop_on_read=sor, linear=linear)
+              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode)
         if play is not None:
             play.go()
+        else:
+            print('playAFL failed?')
 
     def findBB(self, target, bb):
         afl_output = self.getAFLOutput()
@@ -3659,12 +3652,12 @@ class GenMonitor():
         if self.aflPlay is not None:
             self.aflPlay.go(findbb=bb)
 
-    def replayAFL(self, target, index, targetFD, instance=None, cover=False): 
+    def replayAFL(self, target, index, targetFD, instance=None, cover=False, trace=False): 
         ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
-        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, cover=cover) 
+        self.replay_instance = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, cover=cover, trace=trace) 
 
-    def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False): 
-        replay = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True, cover=cover) 
+    def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False, trace=False): 
+        self.replay_instance = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True, cover=cover, trace=trace) 
 
     def playBreak(self, n=1):
         # TBD not used?

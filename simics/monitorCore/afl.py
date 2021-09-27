@@ -106,31 +106,21 @@ class AFL():
         self.addr_addr = None
         self.addr_size = None
         self.orig_buffer = None
-        self.jumpers = None
-        full_path = None
-        if target is None:
-            if fname is not None:
-                full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
-                if full_path is None:
-                    self.lgr.error('unable to get full path from %s' % fname)
-                    return
-                ida_path = self.top.getIdaData(full_path)
-                self.loadJumpers(ida_path)
-            else:
-                ida_path = self.top.getIdaData(self.top.getFullPath())
-                self.loadJumpers(ida_path)
         if fd is not None:
             self.prepInject(snap_name)
         else:
             self.lgr.debug('AFL init from snap %s' % snap_name)
             self.loadPickle(snap_name)
+            env_max_len = os.getenv('AFL_MAX_LEN')
+            if env_max_len is not None:
+                self.max_len = int(env_max_len)
             if target is None:
                 self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
                 if self.orig_buffer is not None:
                     self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
                     self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
                 self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-                    afl=True, fname=fname, linear=linear, jumpers=self.jumpers, create_dead_zone=self.create_dead_zone)
+                    afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
                 cli.quiet_run_command('disable-reverse-execution')
                 cli.quiet_run_command('enable-unsupported-feature internals')
                 cli.quiet_run_command('save-snapshot name = origin')
@@ -155,7 +145,7 @@ class AFL():
         self.pid = self.top.getPID()
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-            afl=True, jumpers=self.jumpers)
+            afl=True)
         self.coverage.doCoverage()
         cmd = 'skip-to bookmark = bookmark0'
         cli.quiet_run_command(cmd)
@@ -168,16 +158,6 @@ class AFL():
         self.top.noWatchSysEnter()
         self.goN(0) 
 
-    def loadJumpers(self, fname):
-        ''' jumpers are linear addresses '''
-        jfile = fname+'.jumpers'
-        if os.path.isfile(jfile):
-            jumpers = json.load(open(jfile))
-            self.jumpers = {}
-            for from_bb in jumpers:
-                #phys_block = self.cpu.iface.processor_info.logical_to_physical(int(from_bb), Sim_Access_Execute)
-                #self.jumpers[phys_block.address] = jumpers[from_bb]
-                self.jumpers[int(from_bb)] = jumpers[from_bb]
 
     def rmStopHap(self):
         if self.stop_hap is not None:

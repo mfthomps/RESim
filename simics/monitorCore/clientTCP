@@ -7,10 +7,26 @@ import sys
 import time
 import os
 import socket
+import logging
+import logging.handlers
+
+lgr = logging.getLogger('clientTCPlog')
+#lhStdout = lgr.handlers[0]
+lgr.setLevel(logging.DEBUG)
+fh = logging.FileHandler('/tmp/clientTCP.log')
+fh.setLevel(logging.DEBUG)
+frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+fh.setFormatter(frmt)
+lgr.addHandler(fh)
+lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
+#lgr.removeHandler(lhStdout)
+lgr.info('Start of log from clientTCP')
+
+
 host = sys.argv[1].strip()
 port = int(sys.argv[2].strip())
-print('ip %s' % host)
-print('port %d' % port)
+lgr.debug('ip %s' % host)
+lgr.debug('port %d' % port)
 header = None
 if len(sys.argv) > 3:
     header = sys.argv[3]
@@ -22,17 +38,17 @@ infile = '/tmp/sendudp'
 while True:
     try:
         sock.connect(server_addr)
-        print('connect ok')
+        lgr.debug('connect ok')
         break
     except socket.error, e:
-        print('connect fail %s' % e)
+        lgr.debug('connect fail %s' % e)
         time.sleep(1)
         
     
 with open (infile) as fh:
     s = fh.read()
     sock.sendall(s) 
-    print('sent %d bytes' % len(s))
+    lgr.debug('sent %d bytes' % len(s))
     got = sock.recv(1024)
-    print('got %s' % got)
-    time.sleep(3)
+    lgr.debug('got %s' % got)
+    time.sleep(13)

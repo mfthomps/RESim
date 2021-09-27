@@ -107,31 +107,52 @@ class SelectInfo():
             low, high = self.readit(addr)
             return '0x%x (0x%x:0x%x)' % (addr, low, high)
 
-    def getString(self):
-        return 'nfds: %d  readfds: %s writefds: %s exceptfds: %s timeout: 0x%x' % (self.nfds, 
-              self.getSet(self.readfds), self.getSet(self.writefds), 
-              self.getSet(self.exceptfds), self.timeout)
+    def getAllFDString(self):
+        read_list = self.getFDString(self.readfds)     
+        write_list = self.getFDString(self.writefds)     
+        except_list = self.getFDString(self.exceptfds)     
+        fd_list = ''
+        if len(read_list)>0:
+            fd_list = 'read FD: %s' % read_list
+        if len(write_list)>0:
+            fd_list = fd_list+' write FD: %s' % write_list
+        if len(except_list)>0:
+            fd_list = fd_list+' except FD: %s' % except_list
+        return fd_list
 
-    def hasFD(self, fd):
+    def getString(self):
+
+        return 'nfds: %d  readfds: %s writefds: %s exceptfds: %s timeout: 0x%x %s' % (self.nfds, 
+              self.getSet(self.readfds), self.getSet(self.writefds), 
+              self.getSet(self.exceptfds), self.timeout, self.getAllFDString())
+
+    def setHasFD(self, fd, fd_set):
         retval = False
-        #self.lgr.debug('SelectInfo hasFD test newfds %d against %d' % (fd, self.nfds))
         if fd < self.nfds:
             #self.lgr.debug('SelectInfo hasFD under newfds %d' % fd)
-            if self.readfds is not None:
-                read_low, read_high = self.readit(self.readfds)
+            if fd_set is not None:
+                read_low, read_high = self.readit(fd_set)
                 if read_low is not None:
                     the_set = read_low | (read_high << 32) 
                     if memUtils.testBit(the_set, fd):
                         #self.lgr.debug('SeletInfo found %d in the read set 0x%x' % (fd, the_set))
                         retval = True
-            if self.writefds is not None:
-                write_low, write_high = self.readit(self.writefds)
-                if write_low is not None:
-                    the_set = write_low | (write_high << 32) 
-                    #self.lgr.debug('the write set 0x%x' % the_set)
-                    if memUtils.testBit(the_set, fd):
-                        #self.lgr.debug('SeletInfo found %d in the write set 0x%x' % (fd, the_set))
-                        retval = True
+        return retval
+
+    def getFDString(self, fd_set):
+        retval = ''
+        for i in range(0, self.nfds):
+            if self.setHasFD(i, fd_set):
+                if len(retval) == 0:
+                    retval = '%d' % i
+                else:
+                    retval = retval + ', %d' % i 
+        return retval
+
+    def hasFD(self, fd):
+        retval = False
+        if self.setHasFD(fd, self.readfds) or self.setHasFD(fd, self.writefds) or self.setHasFD(fd, self.exceptfds):
+            retval = True
         return retval 
 
     def getFDList(self):
