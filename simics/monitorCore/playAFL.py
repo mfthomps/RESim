@@ -9,7 +9,7 @@ import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False):
+             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -86,20 +86,23 @@ class PlayAFL():
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
+        env_max_len = os.getenv('AFL_MAX_LEN')
+        if env_max_len is not None:
+            self.max_len = int(env_max_len)
         cli.quiet_run_command('disable-reverse-execution')
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         if self.coverage is not None:
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=False, linear=linear, create_dead_zone=create_dead_zone)
+               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone)
             physical = True
             if linear:
                 physical = False
                 self.lgr.debug('afl, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
                 self.context_manager.watchTasks()
-            self.coverage.doCoverage(force_default_context=False, no_merge=True, physical=physical)
+            self.coverage.doCoverage(no_merge=True, physical=physical)
 
 
 
@@ -133,8 +136,9 @@ class PlayAFL():
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
                 self.coverage.clearHits() 
+                #self.coverage.doCoverage() 
             if self.orig_buffer is not None:
-                self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
+                #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
             with open(full, 'rb') as fh:
