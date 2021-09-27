@@ -110,6 +110,7 @@ class DataWatch():
                     break
                 elif start == (this_end+1):
                     self.length[index] = self.length[index]+my_len
+                    self.lgr.debug('DataWatch extending subrange')
                     overlap = True
                     break
         if not overlap:
@@ -142,13 +143,13 @@ class DataWatch():
         
 
 
-    def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False):
+    def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False, no_backstop=False):
         self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
            len(self.start), len(self.read_hap)))
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         if len(self.start) > 0:
             self.setBreakRange(i_am_alone)
@@ -636,7 +637,7 @@ class DataWatch():
             addr = self.mem_something.src
             if self.mem_something.op_type != Sim_Trans_Load:
                 addr = self.mem_something.dest
-            self.finishReadHap(self.mem_something.op_type, eip, addr, self.mem_something.length, self.mem_something.start, pid)
+            self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, pid)
             self.lgr.debug('undoAlone would run forward, first restore debug context')
             self.context_manager.restoreDebugContext()
             self.top.restoreDebugBreaks()
@@ -683,7 +684,8 @@ class DataWatch():
         if self.call_hap is not None:
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             if self.cpu.cycles > self.cycles_was:
-                self.lgr.debug('hitCallCallback pid:%d memory 0x%x  BAD cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
+                #self.lgr.debug('hitCallCallback pid:%d memory 0x%x  BAD cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
+                pass
             else:
                 self.lgr.debug('hitCallCallback pid:%d memory 0x%x  cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
             VT_in_time_order(self.vt_handler, memory)
@@ -787,7 +789,7 @@ class DataWatch():
             self.addr = addr 
             self.op_type = op_type 
     
-    def finishReadHap(self, op_type, eip, addr, length, start, pid, index=None):
+    def finishReadHap(self, op_type, trans_size, eip, addr, length, start, pid, index=None):
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
@@ -813,7 +815,7 @@ class DataWatch():
                     buf_start = self.findRange(edi)
                     self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
                 else: 
-                    self.watchMarks.dataRead(addr, start, length, self.getCmp())
+                    self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
                 if self.break_simulation:
                     SIM_break_simulation('DataWatch read data')
 
@@ -831,9 +833,9 @@ class DataWatch():
                     self.lgr.debug('dataWatch finishReadHap remove watch for index %d' % index)
                     self.start[index] = 0
                 else:
-                    self.watchMarks.memoryMod(start, length, addr=addr)
+                    self.watchMarks.memoryMod(start, length, trans_size, addr=addr)
             else:
-                self.watchMarks.memoryMod(start, length, addr=addr)
+                self.watchMarks.memoryMod(start, length, trans_size, addr=addr)
             if self.break_simulation:
                 ''' TBD when to treat buffer as unused?  does it matter?'''
                 self.start[index] = 0
@@ -855,7 +857,8 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
-        self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), self.cpu.cycles))
+        self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s bytes: %d cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), 
+            memory.size, self.cpu.cycles))
         #if addr == 0xb5f70686:
         #    SIM_break_simulation('wet')
         #return
@@ -869,6 +872,14 @@ class DataWatch():
         if len(self.read_hap) == 0:
             return
         self.prev_cycle = self.cpu.cycles
+        if op_type != Sim_Trans_Load and addr in self.no_backstop:
+            self.start[index] = 0
+            self.lgr.debug('watchData readHap modified no_backstop memory, remove from watch list')
+            if index < len(self.read_hap):
+                if self.read_hap[index] is not None:
+                    self.lgr.debug('dataWatch readHap  delete hap %d' % self.read_hap[index])
+                    self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                    self.read_hap[index] = None
 
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
 
@@ -928,7 +939,7 @@ class DataWatch():
                 #self.lgr.debug('DataWatch readHap not memsomething, reset the watch ')
                 #self.watch()
                 pass
-        self.finishReadHap(op_type, eip, addr, length, start, pid, index=index)
+        self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
  
        
     def showWatch(self):
@@ -956,9 +967,9 @@ class DataWatch():
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
             
 
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
-            #self.lgr.debug('dataWatch, setBreakRange call to setFutureCycle')
-            self.back_stop.setFutureCycle(self.back_stop_cycles, now=i_am_alone)
+        #if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        #    #self.lgr.debug('dataWatch, setBreakRange call to setFutureCycle')
+        #    self.back_stop.setFutureCycle(self.back_stop_cycles, now=i_am_alone)
 
     def stopHap(self, stop_action, one, exception, error_string):
         if stop_action is None or stop_action.hap_clean is None:
@@ -1057,7 +1068,7 @@ class DataWatch():
             del self.hack_reuse[1:]
             del self.cycle[1:]
             self.lgr.debug('clearWatches, left only first entry, start is 0x%x' % (self.start[0]))
-            self.watchMarks.memoryMod(self.start[0], self.length[0])
+            self.watchMarks.memoryMod(self.start[0], self.length[0], 0)
         else:
             found = None
             ''' self.cycle is a list of cycles corresponding to each watch mark entry
@@ -1077,7 +1088,7 @@ class DataWatch():
                 del self.hack_reuse[index+1:]
                 del self.cycle[index+1:]
                 self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x' % (index, index, self.start[index]))
-                self.watchMarks.memoryMod(self.start[index], self.length[index])
+                self.watchMarks.memoryMod(self.start[index], self.length[index], 0)
                 
 
     def setIdaFuns(self, ida_funs):
@@ -1090,6 +1101,7 @@ class DataWatch():
 
     def setCallback(self, callback):
         ''' what should backStop call when no activity for N cycles? '''
+        self.lgr.debug('dataWatch setCallback, call to backstop to set callback')
         self.back_stop.setCallback(callback)
 
     def showWatchMarks(self):
@@ -1401,3 +1413,6 @@ class DataWatch():
 
     def pickleit(self, name):
         self.watchMarks.pickleit(name)
+
+    def saveJson(self, fname):
+        self.watchMarks.saveJson(fname)
