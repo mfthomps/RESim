@@ -7,7 +7,7 @@ import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False):
+           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -47,6 +47,9 @@ class InjectIO():
                 self.lgr.error('injectIO, no firstBufferAddress found')
                 return
         else:
+            env_max_len = os.getenv('AFL_MAX_LEN')
+            if env_max_len is not None:
+                self.max_len = int(env_max_len)
             self.lgr.debug('injectIO loaded from pickle, addr: 0x%x max_len %d' % (self.addr, self.max_len))
         if packet_size is not None:
             self.max_len = packet_size
@@ -72,6 +75,8 @@ class InjectIO():
         # No data tracking, just trace all system calls
         self.trace_all = trace_all
 
+        self.save_json = save_json
+
         self.stop_hap = None
 
     def go(self):
@@ -85,7 +90,11 @@ class InjectIO():
         if self.addr is None:
             return
         if self.callback is None:
-            self.callback = self.top.stopTrackIO
+            if self.save_json is not None:
+                self.callback = self.saveJson
+                self.lgr.debug('injectIO set callback to %s' % str(self.callback))
+            else:
+                self.callback = self.top.stopTrackIO
         if not os.path.isfile(self.dfile):
             print('File not found at %s\n\n' % self.dfile)
             return
@@ -155,7 +164,7 @@ class InjectIO():
                     cli.quiet_run_command('c')
                 else:
                     print('retracking IO') 
-                    self.lgr.debug('retracking IO') 
+                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=False, callback=self.callback, use_backstop=use_backstop)    
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
@@ -174,7 +183,10 @@ class InjectIO():
         self.lgr.debug('injectIO injectCallback')
         self.context_manager.watchGroupExits()
         self.bookmarks = self.top.getBookmarksInstance()
-        self.top.trackIO(self.targetFD)
+        if self.save_json is not None:
+            self.top.trackIO(self.targetFD, callback=self.saveJson)
+        else:
+            self.top.trackIO(self.targetFD)
 
     def delCallHap(self):
         if self.write_data is not None:
@@ -231,3 +243,7 @@ class InjectIO():
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectiO load orig_buffer from pickle')
+
+    def saveJson(self):
+        self.dataWatch.saveJson(self.save_json)
+        self.top.stopTrackIO
