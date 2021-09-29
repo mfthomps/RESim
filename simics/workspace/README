@@ -1,6 +1,9 @@
 Summary of CADET01 example.
 
-Use the ubuntu_driver.ini configuration script.  This includes a driver computer and the
+Use the ubuntu_driver.ini configuration script:  
+   resim ubuntu_driver.ini
+
+This includes a driver computer and the
 target "ubuntu" system that runs the vulnerable cadet service.
 
 As the driver boots, login to it (mike/password) and tee up the ./client.py script
@@ -20,8 +23,8 @@ RESim will stop the simulation when it detects a ROP caused by an overwrite of a
 address from the cgc_check function (which used to return to main).
 
 Copy the cadet01 executable to your local maching running IDA (if not the Simics server).
-Start IDA opening the cadet01 executable, and attach the process.
-Run the rev.py "recent script".
+Start IDA using the runIDA.sh script and use shift R to attach to the process and load
+the RESim plugins.
 
 View the stack and observe the return address is to somewhere within the cgc_check function.
 
