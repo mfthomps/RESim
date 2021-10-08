@@ -35,6 +35,11 @@ if [ $# -gt 1 ];then
        remote_ida=$( ssh $remote "echo \$RESIM_IDA_DATA" )
        rsync -avh $remote:$remote_ida/$target_base/*.hits $RESIM_IDA_DATA/$target_base/
     fi
+    tunnel=$( ps -aux | grep [9]123 )
+    if [[ -z "$tunnel" ]];then
+        echo "No tunnel found for $remote, create one."
+        ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null $remote
+    fi
 fi
 
 target_path=$(realpath $target)
