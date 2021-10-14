@@ -55,6 +55,7 @@ def getText(path, lgr):
 
 def getRelocate(path, lgr):
     cmd = 'readelf -r %s' % path
+    #lgr.debug('getRelocate %s' % path)
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = proc1.communicate()
     retval = {}
@@ -64,8 +65,15 @@ def getRelocate(path, lgr):
             try:
                 addr = int(parts[3], 16)
             except:
+                #lgr.debug('getRelocate nothing from %s' % line)
                 continue
+            if addr == 0:
+                addr = int(parts[0], 16)
+            #lgr.debug('getRelocate add entry for 0x%x' % addr)
             retval[addr] = parts[4]
+        else:
+            pass
+            #lgr.debug('getRelocate not 5 %s' % line)
     return retval
 
 def getTextNOTUSED(path, lgr):
