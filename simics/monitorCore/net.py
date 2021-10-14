@@ -171,7 +171,7 @@ class SockStruct():
         else:
             return None
 
-    def isRoutable(self):
+    def isExternal(self):
         if self.sa_family == 2:
             ip = self.dottedIP()
             if not ip.startswith('0.0.') and not ip.startswith('127.'):
@@ -181,8 +181,8 @@ class SockStruct():
     def addressInfo(self):
         ''' for use in printing traces '''
         flag = ''
-        if self.isRoutable():
-            flag = 'ROUTABLE IP'
+        if self.isExternal():
+            flag = 'EXTERNAL IP'
         return flag
 
     def getString(self):
