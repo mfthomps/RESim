@@ -112,6 +112,14 @@ class PlayAFL():
             self.lgr.debug('No call IP, refuse to go.')
             print('No call IP, refuse to go.')
             return
+
+        full_path = self.coverage.getFullPath()
+        hits_path = self.coverage.getHitsPath()+'.prog'
+        if not os.path.isfile(hits_path):
+            with open(hits_path, 'w') as fh:
+                fh.write(full_path)
+        
+        print('full_path is %s' % full_path)
         self.bnt_list = []
         self.index = -1
         self.hit_total = 0
