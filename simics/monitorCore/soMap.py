@@ -67,14 +67,14 @@ class SOMap():
         pid = self.getSOPid(pid)
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
-            self.lgr.debug('SOMap isCode, regot pid after getSOPid failed, pid:%d missing from so_file_map' % pid)
+            #self.lgr.debug('SOMap isCode, regot pid after getSOPid failed, pid:%d missing from so_file_map' % pid)
             return False
         if pid in self.text_start and address >= self.text_start[pid] and address <= self.text_end[pid]:
             return True
         if pid not in self.so_file_map:
             pid = self.task_utils.getCurrentThreadLeaderPid()
         if pid not in self.so_file_map:
-            self.lgr.debug('SOMap isCode, pid:%d missing from so_file_map' % pid)
+            #self.lgr.debug('SOMap isCode, pid:%d missing from so_file_map' % pid)
             return False
         for text_seg in self.so_file_map[pid]:
             start = text_seg.locate 
@@ -197,6 +197,14 @@ class SOMap():
             if self.ida_funs is not None:
                 self.ida_funs.add(full_path, start)
 
+    def listSO(self):
+        for pid in self.so_file_map:
+            if pid in self.text_start:
+                print('pid:%d  0x%x - 0x%x   %s' % (pid, self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
+            else:
+                print('pid:%d  no text found' % pid)
+          
+            
     def showSO(self, pid=None):
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
