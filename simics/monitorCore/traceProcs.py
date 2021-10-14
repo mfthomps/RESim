@@ -22,21 +22,26 @@ class FileWatch():
         self.outfile = outfile
 
 class TraceProcs():
-    def __init__(self, cell_name, lgr, run_from_snap=None):
+    def __init__(self, cell_name, context_manager, task_utils, lgr, run_from_snap=None):
         self.lgr = lgr
         self.cell_name = cell_name
-        ''' dict of Pinfo indexed by pid '''
+        self.context_manager = context_manager
+        self.task_utils = task_utils
+        ''' dict of Pinfo indexed by pid -- WHICH ARE STRINGS! '''
         self.plist = {}
         self.did_that = []
         self.pipe_handle = {}
         self.socket_handle = {}
         self.latest_pid_instance = {}
         self.init_proc_list = {}
+        self.watch_all_exits = False
+        self.lgr.debug('traceProcs init')
         ''' init_proc_list is the pid/comm pair read from a checkpoint json
             On display, we'll the entries that do not have children
         '''
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+            self.lgr.debug('traceProcs init %d pids' % len(self.plist))
         else:
             pass
             #for pid in proc_list:
@@ -55,11 +60,13 @@ class TraceProcs():
             self.socket_handle = proc_pickle['socket_handle']
             self.latest_pid_instance = proc_pickle['latest_pid_instance']
             self.init_proc_list = proc_pickle['init_proc_list']
+            self.lgr.debug('traceProcs loaded %d pids' % len(self.plist))
             
 
     def pickleit(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
         proc_pickle = {}
+        self.cleanProcs()
         proc_pickle['plist'] = self.plist
         proc_pickle['pipe_handle'] = self.pipe_handle
         proc_pickle['socket_handle'] = self.socket_handle
@@ -72,12 +79,14 @@ class TraceProcs():
         if str(pid) in self.plist:
             return True
         else:
+            self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (pid, len(self.plist)))
             return False
 
     def exit(self, pid):
         pid = str(pid)
         self.pipe_handle.pop(pid, None)
         self.socket_handle.pop(pid, None)
+        self.lgr.debug('traceProc exit pid %s' % pid)
         entry = self.plist.pop(pid, None)
         if entry is not None:
             if pid not in self.latest_pid_instance:
@@ -101,7 +110,7 @@ class TraceProcs():
         if pid in self.init_proc_list:
            comm = self.init_proc_list.pop(pid, None)
            self.init_proc_list[pidq] = comm
-           self.lgr.debug('traceProc exit from proc in initial list comm %s' % comm)
+           self.lgr.debug('traceProc exit from proc in initial list pid:%d comm %s' % (pid, comm))
 
     def getPrecs(self):
         return self.plist
@@ -130,9 +139,11 @@ class TraceProcs():
         if parent is not None:
             parent = str(parent)
         if pid in self.plist:      
-            self.lgr.error('addProc, pid:%s already in plist parent: %s' % (pid, parent))
+            ''' edge case of snapshot created during execve '''
+            if pid not in self.init_proc_list:
+                self.lgr.error('traceProc addProc, pid:%s already in plist parent: %s' % (pid, parent))
             return False
-        self.lgr.debug('traceProc addProc pid:%s  parent %s' % (pid, parent))
+        self.lgr.debug('traceProc addProc pid:%s  parent %s  plist now %d' % (pid, parent, len(self.plist)))
         if parent is not None:
             if parent not in self.plist:
                 self.lgr.debug('No parent %s yet for pid:%s, add it.' % (parent, pid)) 
@@ -148,6 +159,8 @@ class TraceProcs():
                 self.plist[pid].prog = '<clone>'
         elif comm is not None:  
             self.plist[pid].prog = comm
+        if self.watch_all_exits:
+            self.context_manager.watchExit(pid = int(pid))
         return True
 
     def setName(self, pid, prog, args, quiet=True):
@@ -470,3 +483,24 @@ class TraceProcs():
             return self.plist[pid].ftype
         else:
             return None
+
+    def watchAllExits(self):
+        self.lgr.debug('traceProcs watchAllExits for %d pids' % len(self.plist))
+        self.cleanProcs()
+        for pid in self.plist:
+            self.context_manager.watchExit(pid=int(pid))
+        self.watch_all_exits = True
+
+    def cleanProcs(self):
+        task_list = self.task_utils.getTaskStructs()
+        pid_list = []
+        for t in task_list:
+            pid_list.append(str(task_list[t].pid)) 
+        self.lgr.debug('traceProcs cleanProcs start with %d pids, task utils gave %d' % (len(self.plist), len(pid_list)))
+        tmp_list = list(self.plist.keys())
+        for p in tmp_list:
+            if p not in pid_list:
+                self.plist.pop(p, None)
+        self.lgr.debug('traceProcs cleanProcs end with %d pids' % len(self.plist))
+      
+                

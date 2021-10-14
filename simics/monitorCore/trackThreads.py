@@ -45,7 +45,7 @@ class TrackThreads():
 
         execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
         execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
-        self.execve_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+        self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
         self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
         #self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
@@ -148,57 +148,6 @@ class TrackThreads():
             self.addSO(prog_string, pid)
 
 
-    def firstMmapHap(self, syscall_info, third, forth, memory):
-        ''' invoked after mmap call, looking to track SO libraries.  Intended to be called after open of .so. '''
-        cpu, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug('firstMmapHap in pid %d look for pid %d' % (pid, syscall_info.pid))
-        if syscall_info.pid not in self.first_mmap_hap:
-            return
-        if syscall_info.cpu is not None and cpu != syscall_info.cpu:
-            self.lgr.debug('firstMmapHap, wrong cpu %s %s' % (cpu.name, syscall_info.cpu.name))
-            return
-        if syscall_info.pid is not None and pid != syscall_info.pid:
-            self.lgr.debug('firstMmapHap, wrong pid %d %d' % (pid, syscall_info.pid))
-            return
-        if self.debugging and not self.context_manager.amWatching(pid):
-            self.lgr.debug('firstMmapHap looked  found %d.  Do nothing' % (pid))
-            return
-        if self.bang_you_are_dead:
-            self.lgr.error('firstMmapHap call to dead hap pid %d' % pid) 
-            return
-        if cpu.architecture == 'arm':
-            frame = self.task_utils.frameFromRegs(cpu)
-        else:
-            frame = self.task_utils.frameFromStackSyscall()
-        callname = self.task_utils.syscallName(syscall_info.callnum, self.compat32)
-        if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
-            ida_msg = 'firstMmapHap %s pid:%d FD: %d buf: 0x%x len: %d  File FD was %d' % (callname, pid, frame['param3'], frame['param1'], frame['param2'], 
-                  syscall_info.fd)
-        else:
-            ida_msg = 'firstMmapHap %s pid:%d FD: %d buf: 0x%x len: %d offset: 0x%x  File FD was %d' % (callname, pid, 
-               frame['param5'], frame['param1'], frame['param2'], frame['param6'], syscall_info.fd)
-
-        self.lgr.debug(ida_msg)
-        self.traceMgr.write(ida_msg+'\n')
-        syscall_info.call_count = syscall_info.call_count+1
-        #self.lgr.debug('firstMmapHap delete self?')
-        self.context_manager.genDeleteHap(self.first_mmap_hap[pid])
-        del self.first_mmap_hap[pid]
-        syscall_info.call_count = syscall_info.call_count+1
-        exit_info = ExitInfo(cpu, pid, syscall_info.callnum)
-        exit_info.fname = syscall_info.fname
-        exit_info.count = frame['param2']
-        exit_info.syscall_entry = self.top.getEIP()
-        name = 'firstMmap exit'
-        try:
-            ''' backward compatibility '''
-            sysret64 = self.param.sysret64
-        except AttributeError:
-            sysret64 = None
-        if cpu.architecture == 'arm':
-            self.sharedSyscall.addExitHap(pid, self.param.arm_ret, None, None, syscall_info.callnum, exit_info, self.traceProcs, name)
-        else:
-            self.sharedSyscall.addExitHap(pid, self.param.sysexit, self.param.iretd, sysret64, syscall_info.callnum, exit_info, self.traceProcs, name)
 
 
     def trackSO(self):
@@ -238,7 +187,7 @@ class TrackThreads():
         callnum = self.task_utils.syscallNumber('clone', self.compat32)
         entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
         self.lgr.debug('trackClone entry 0x%x' % entry)
-        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
         self.clone_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, None, proc_break, 'track-clone')
 
     def stopTrackClone(self, immediate):

@@ -67,7 +67,7 @@ class TrackFunctionWrite():
             return
         else:
             ''' set break on function entry '''
-            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, 1, 0)
             self.fun_entry_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.funEnterHap, None, 
                 proc_break, 'track-fun-write-entry')
         self.lgr.debug('trackFunctionWrite for %s 0x%x' % (fun, start))
@@ -91,7 +91,7 @@ class TrackFunctionWrite():
             self.ret_addr = self.mem_utils.readPtr(self.cpu, esp)
             self.lgr.debug('funEnterHap ret 0x%x' % self.ret_addr)
             
-        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, 
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, 
                        Sim_Access_Execute, self.ret_addr, 1, 0)
         self.fun_exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.funExitHap, None, 
             proc_break, 'track-fun-write-exit')
@@ -136,7 +136,7 @@ class TrackFunctionWrite():
     def blanketWrites(self):
         count = self.param.kernel_base
         self.lgr.debug('blanketWrites kernel_base 0x%x' % count)
-        proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Write, 0, count, 0)
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, 0, count, 0)
         self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, 
             proc_break, 'blanket_writes')
 

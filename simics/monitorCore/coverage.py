@@ -741,6 +741,9 @@ class Coverage():
     def getHitsPath(self):
         return self.hits_path
 
+    def getFullPath(self):
+        return self.full_path
+
     def appendName(self, name):
         self.hits_path = '%s-%s' % (self.hits_path, name)
 

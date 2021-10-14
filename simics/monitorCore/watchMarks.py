@@ -676,7 +676,7 @@ class WatchMarks():
         my_marks = []
         for mark in self.mark_list:
             entry = {}
-            self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
+            #self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
             if isinstance(mark.mark, self.CopyMark):
                 entry['mark_type'] = 'copy' 
                 entry['src'] = mark.mark.src 

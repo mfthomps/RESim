@@ -36,10 +36,10 @@ class TraceMalloc():
         if self.ida_funs is not None:
             malloc_fun_addr, end = self.ida_funs.getAddr('malloc')
             if malloc_fun_addr is not None:
-                malloc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, malloc_fun_addr, 1, 0)
+                malloc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, malloc_fun_addr, 1, 0)
                 self.malloc_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocHap, None, malloc_break, 'malloc')
                 free_fun_addr, end = self.ida_funs.getAddr('free')
-                free_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, free_fun_addr, 1, 0)
+                free_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, free_fun_addr, 1, 0)
                 self.free_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.freeHap, None, free_break, 'free')
 
             else:
@@ -59,7 +59,7 @@ class TraceMalloc():
                 size = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
                 #self.lgr.debug('malloc size %d' % size)
             malloc_rec = self.MallocRec(pid, size, cpu.cycles)
-            malloc_ret_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
+            malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
             self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
 
     def freeHap(self, dumb, context, break_num, memory):

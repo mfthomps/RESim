@@ -15,7 +15,7 @@ class CloneChild():
         callnum = task_utils.syscallNumber('clone')
         entry = self.task_utils.getSyscallEntry(callnum)
         self.lgr.debug('cloneChild callnum is %s entry 0x%x' % (callnum, entry))
-        self.call_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+        self.call_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
         self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, nth, self.call_break,'cloneChild')
         self.exit_break = None
         self.exit_hap = None

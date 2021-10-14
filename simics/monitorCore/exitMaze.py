@@ -58,9 +58,8 @@ def getEIP(cpu):
     return reg_value
 
 class ExitMaze():
-    def __init__(self, top, cpu, cell, pid, syscall, context_manager, task_utils, mem_utils, debugging, one_proc, lgr):
+    def __init__(self, top, cpu, pid, syscall, context_manager, task_utils, mem_utils, debugging, one_proc, lgr):
         self.cpu = cpu
-        self.cell = cell
         self.pid = pid
         self.task_utils = task_utils
         self.lgr = lgr
@@ -90,6 +89,9 @@ class ExitMaze():
         self.function_ret = None
         self.just_return = False
         self.compare_hap = None
+        self.stack_frames = []
+        self.broke_out_count = 0
+        self.planted_break_sets = 0
 
     def mazeReturn(self, was_running=False):
         if self.function_ret is None:
@@ -126,7 +128,7 @@ class ExitMaze():
             return
         if count < 4:
             self.stack_frames = st.getFrames(count-1)
-            self.lgr.debug('ExitMaze, only %d stack frames')
+            self.lgr.debug('ExitMaze, only %d stack frames' % count)
         else:
             self.stack_frames = st.getFrames(4)
 
@@ -204,7 +206,7 @@ class ExitMaze():
                     self.instructs[eip] = instruct
                     self.lgr.debug('adding to list %x %s' % (eip, instruct[1]))
                     ret_addr = eip + instruct[0]
-                    ret_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
+                    ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                     self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, i, ret_break, 'retMaze')
                     self.lgr.debug('call from pid:%d eip 0x%x, %s set break/hap on return now run' % (self.pid, eip, instruct[1]))
                     SIM_run_command('c')
@@ -395,6 +397,7 @@ class ExitMaze():
 
 
     def removeDebugBreaks(self):
+        self.lgr.debug('exitMaze removeDebugBreaks')
         self.top.removeDebugBreaks()
         self.syscall.stopTrace()
         self.top.stopThreadTrack()
@@ -405,7 +408,7 @@ class ExitMaze():
         for jmp_to_eip, cmp_eip in self.break_addrs:
             if cmp_eip == 0:
                 continue
-            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, cmp_eip, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, cmp_eip, 1, 0)
             if first_break is None:
                 first_break = proc_break
             last_break = proc_break
@@ -457,7 +460,7 @@ class ExitMaze():
         first_break = None
         self.context_manager.addNoWatch()
         for jmp_to_eip, cmp_eip in self.break_addrs:
-            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, jmp_to_eip, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, jmp_to_eip, 1, 0)
             if first_break is None:
                 first_break = proc_break
             last_break = proc_break
@@ -470,6 +473,7 @@ class ExitMaze():
         #SIM_run_command('list-breakpoints')
         #self.top.showHaps()
         #SIM_run_command('system-perfmeter')
+        self.planted_break_sets = self.planted_break_sets+1
         if then_run:
             self.lgr.debug('ExitMaze pid:%d Try to breakout, will continue' % self.pid)
             SIM_run_command('c')
@@ -521,6 +525,7 @@ class ExitMaze():
         SIM_break_simulation('broke out')
 
     def breakoutHap(self, from_eip, third, breakpoint, memory):
+        ''' TBD can we manage breakpoints/haps with runAlone vice stopping execution? '''
         if self.breakout_hap is None:
             return
         cpu, comm, pid = self.task_utils.curProc() 
@@ -535,6 +540,7 @@ class ExitMaze():
                 print('exitMaze breakoutHap hit return from function at 0x%x' % eip)
             else:
                 print('exitMaze breakoutHap broke out to 0x%x, cmp was at 0x%x' % (eip, cmp_eip))
+            self.broke_out_count = self.broke_out_count + 1
             self.context_manager.genDeleteHap(self.breakout_hap)
             self.breakout_hap = None
             self.lgr.debug('ExitMaze breakoutHap, am out at 0x%x cmp was at 0x%x' % (eip, cmp_eip))
@@ -543,4 +549,6 @@ class ExitMaze():
             SIM_run_alone(self.addStopAlone, None)
         else:
             self.lgr.debug('ExitMaze breakoutHap for wrong pid %d, expeced %d' % (pid, self.pid))
-        
+       
+    def getStatus(self):
+        return self.pid, self.planted_break_sets, self.broke_out_count 

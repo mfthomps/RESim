@@ -238,7 +238,7 @@ class DataWatch():
             self.stopWatch()
         if self.cpu.architecture == 'arm':
             cell = self.top.getCell()
-            proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, 
                  kernel_return_info, proc_break, 'memcpy_return_hap')
         else:
@@ -247,7 +247,7 @@ class DataWatch():
        
        
     class MemSomething():
-        def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, run=False): 
+        def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, run=False, trans_size=None): 
             self.fun = fun
             self.addr = addr
             self.ret_ip = ret_ip
@@ -256,6 +256,7 @@ class DataWatch():
             self.the_string = None
             self.count = count
             self.called_from_ip = called_from_ip
+            self.trans_size = trans_size
             ''' used for finishReadHap '''
             self.op_type = op_type
             self.length = length
@@ -932,7 +933,8 @@ class DataWatch():
                 if op_type != Sim_Trans_Load:
                     src = None
                     dest = addr
-                self.mem_something = self.MemSomething(mem_stuff.fun, addr, mem_stuff.ret_addr, src, dest, None, mem_stuff.called_from_ip, op_type, length, start)
+                self.mem_something = self.MemSomething(mem_stuff.fun, addr, mem_stuff.ret_addr, src, dest, None, 
+                      mem_stuff.called_from_ip, op_type, length, start, trans_size=memory.size)
                 SIM_run_alone(self.handleMemStuff, None)
                 return
             else:

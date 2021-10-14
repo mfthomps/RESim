@@ -36,12 +36,12 @@ class RopCop():
         if self.cpu.architecture == 'arm':
             prefix = 'ldm'
             self.callmn = 'bl'
-            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
             self.rop_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.ropHapArm, None, proc_break, 'rop_hap')
         else:
             prefix = 'ret'
             self.callmn = 'call'
-            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
             self.rop_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.ropHap, None, proc_break, 'rop_hap')
         self.lgr.debug('ropCop setHap done on 0x%x size 0x%x' % (self.text, self.size))
 

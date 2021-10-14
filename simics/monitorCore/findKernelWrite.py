@@ -465,19 +465,19 @@ class findKernelWrite():
             '''
             self.lgr.debug('thinkWeWrote in kernel. go forward to exit')
             if self.cpu.architecture == 'arm':
-                self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
+                self.kernel_exit_break1 = self.context_manager.genBreakpoint(None, 
                                                         Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
                 self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                                            None, self.kernel_exit_break1, 'findKernelWrite armexit')
                 #self.cleanup()
             else:
                 if self.param.sysexit is not None:
-                    self.kernel_exit_break1 = self.context_manager.genBreakpoint(self.cell, 
+                    self.kernel_exit_break1 = self.context_manager.genBreakpoint(None, 
                                                             Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
                     self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                                            None, self.kernel_exit_break1, 'findKernelWrite sysexit')
                 if self.param.iretd is not None:
-                    self.kernel_exit_break2 = self.context_manager.genBreakpoint(self.cell, 
+                    self.kernel_exit_break2 = self.context_manager.genBreakpoint(None, 
                                                             Sim_Break_Linear, Sim_Access_Execute, self.param.iretd, 1, 0)
                     self.exit_hap2 = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                                            None, self.kernel_exit_break2, 'findKernelWrite iretd')

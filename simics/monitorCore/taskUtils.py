@@ -465,7 +465,7 @@ class TaskUtils():
         for ts in ts_list:
            if ts_list[ts].pid == pid:
                return ts
-        self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
+        #self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
         return None
  
     def getTaskListPtr(self, rec=None):
