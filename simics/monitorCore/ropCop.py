@@ -27,7 +27,10 @@ class RopCop():
     def watchROP(self, watching=True):
         self.watching = watching
         self.lgr.debug('watchROP %r' % watching)
-        self.setHap()
+        if watching:
+            self.setHap()
+        else:
+            self.clearHap()
 
     def setHap(self):
         if not self.watching:
@@ -76,12 +79,27 @@ class RopCop():
             try:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             except:
-                self.lgr.debug('ropCop  failed to disassble instruct %x ' % (eip))
+                self.lgr.error('ropCop  failed to disassemble instruct %x ' % (eip))
                 return
             if instruct[1].startswith('call'):
                 done = True
             else:
                 eip = eip+1
+        if not done and self.cpu.architecture != 'arm':
+            ''' is the return to a signal handler? '''
+            ''' hacky look for int 80 or sysenter '''
+            for eip in range(return_to, return_to+40):
+                try:
+                    instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                except:
+                    self.lgr.error('ropCop looking for sighandler failed to disassble instruct %x ' % (eip))
+                    return
+                if instruct[1].startswith('int') or instruct[1].startswith('sysenter'):
+                    dumb, comm, cur_pid  = self.task_utils.curProc()
+                    self.lgr.debug('ropCop found signal in pid %d' % cur_pid)
+                    done = True
+                    break
+          
         if not done:
             self.lgr.debug('********************* not call prior to 0x%x' % (return_to))
             self.in_process = True
