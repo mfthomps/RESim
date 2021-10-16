@@ -48,13 +48,15 @@ class WatchMarks():
             return self.msg
 
     class CopyMark():
-        def __init__(self, src, dest, length, buf_start, op_type, strcpy=False):
+        def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, base=None, sp=None):
             self.src = src
             self.dest = dest
             self.length = length
             self.buf_start = buf_start
             self.op_type = op_type
             self.strcpy = strcpy
+            self.sp = sp
+            self.base = base
             if op_type == Sim_Trans_Load:
                 if buf_start is not None:
                     offset = src - buf_start
@@ -170,10 +172,12 @@ class WatchMarks():
             return self.msg
 
     class ScanMark():
-        def __init__(self, src, dest, count):
+        def __init__(self, src, dest, count, sp=None, base=None):
             self.src = src    
             self.dest = dest    
             self.count = count    
+            self.sp = sp    
+            self.base = base    
             if dest is None:
                 self.msg = 'sscanf failed to parse from 0x%x' % src
             else:
@@ -210,11 +214,13 @@ class WatchMarks():
             return self.msg
 
     class SprintfMark():
-        def __init__(self, fun, src, dest, count):
+        def __init__(self, fun, src, dest, count, sp=None, base=None):
             self.fun = fun    
             self.src = src    
             self.dest = dest    
             self.count = count    
+            self.sp = sp    
+            self.base = base    
             self.msg = '%s src: 0x%x dest 0x%x len %d' % (fun, src, dest, count)
 
         def getMsg(self):
@@ -417,9 +423,24 @@ class WatchMarks():
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
 
+    def getStackBase(self, dest):
+        base = None
+        sp = None
+        if self.cpu.architecture != 'arm':
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            base = self.mem_utils.getRegValue(self.cpu, 'ebp')
+            if dest > sp and dest <= base:
+                  ''' copy is to a stack buffer.  Record so it can be deleted when opportuntity arises '''
+                  pass
+            else:
+                sp = None
+                base = None
+        return sp, base
+
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.CopyMark(src, dest, length, buf_start, op_type, strcpy)
+        sp, base = self.getStackBase(dest)
+        cm = self.CopyMark(src, dest, length, buf_start, op_type, strcpy, base=base, sp=sp)
         self.lgr.debug('watchMarks copy 0x%x %s' % (ip, cm.getMsg()))
         #self.removeRedundantDataMark(dest)
         wm = self.addWatchMark(ip, cm)
@@ -475,7 +496,8 @@ class WatchMarks():
 
     def sscanf(self, src, dest, count):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        sm = self.ScanMark(src, dest, count)        
+        sp, base = self.getStackBase(dest)
+        sm = self.ScanMark(src, dest, count, sp=sp, base=base)        
         self.addWatchMark(ip, sm)
         self.lgr.debug('watchMarks sscanf 0x%x %s' % (ip, sm.getMsg()))
 
@@ -488,7 +510,8 @@ class WatchMarks():
 
     def sprintf(self, fun, src, dest, count):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        lm = self.SprintfMark(fun, src, dest, count)        
+        sp, base = self.getStackBase(dest)
+        lm = self.SprintfMark(fun, src, dest, count, sp=sp, base=base)        
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
 
@@ -674,6 +697,7 @@ class WatchMarks():
 
     def saveJson(self, fname):
         my_marks = []
+        self.lgr.debug('watchMarks saveJson %d marks' % len(self.mark_list))
         for mark in self.mark_list:
             entry = {}
             #self.lgr.debug('saveJson mark %s' % str(mark.mark)) 

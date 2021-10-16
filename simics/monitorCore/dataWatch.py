@@ -27,6 +27,7 @@ class DataWatch():
         self.length = []
         self.hack_reuse = []
         self.cycle = []
+        self.mark = []
         self.read_hap = []
         self.top = top
         self.cpu = cpu
@@ -78,14 +79,17 @@ class DataWatch():
         self.ghost_stop_hap = None
         ''' don't set backstop on reads of these addresses, e.g., for ioctl '''
         self.no_backstop = []
+        ''' support deletion of stack buffers after return from function '''
+        self.stack_buffers = {}
+        self.stack_buf_hap = {}
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None):
         ''' TBD try forcing watch to maxlen '''
         if max_len is None:
             my_len = length
         else:
             my_len = max_len
-        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
+        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
             self.lgr.debug('DataWatch, backstop set, start data session')
@@ -118,6 +122,18 @@ class DataWatch():
             self.length.append(my_len)
             self.hack_reuse.append(0)
             self.cycle.append(self.cpu.cycles)
+            self.mark.append(watch_mark)
+            if watch_mark is not None and watch_mark.mark.sp is not None:
+                self.lgr.debug('DataWatch setRange stack buffer, set a break to delete this range on return')
+                ret_to = self.getReturnAddr()
+                if ret_to is not None:
+                    if ret_to not in self.stack_buffers:
+                        self.stack_buffers[ret_to] = []
+                        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
+                        self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+                    index = len(self.start)-1
+                    self.stack_buffers[ret_to].append(index)
+
             #self.lgr.debug('DataWatch adding start 0x%x cycle 0x%x' % (start, self.cpu.cycles))
         if msg is not None:
             if sys.version_info[0] >= 3:
@@ -134,6 +150,25 @@ class DataWatch():
                 self.prev_cycle = self.cpu.cycles
         if no_backstop:
             self.no_backstop.append(start)
+
+    def stackBufHap(self, dumb, third, forth, memory):
+        eip = memory.logical_address
+        if eip in self.stack_buf_hap:
+            self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
+            for range_index in self.stack_buffers[eip]:
+                self.lgr.debug('dataWatch stackBufHap remove watch for index %d' % range_index)
+                self.context_manager.genDeleteHap(self.read_hap[range_index], immediate=False)
+                self.read_hap[range_index] = None
+                self.start[range_index] = 0
+
+    def getReturnAddr(self):
+        retval = None
+        if self.cpu.architecture != 'arm': 
+            bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+            if bp != 0:
+                ret_to_addr = bp + self.mem_utils.WORD_SIZE
+                retval = self.mem_utils.readPtr(self.cpu, ret_to_addr)
+        return retval
 
     def close(self, fd):
         ''' called when FD is closed and we might be doing a trackIO '''
@@ -242,8 +277,12 @@ class DataWatch():
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, 
                  kernel_return_info, proc_break, 'memcpy_return_hap')
         else:
-            self.lgr.debug('Only ARM kernel return handled for now') 
-            self.watch()
+            #self.lgr.debug('Only ARM kernel return handled for now') 
+            #self.watch()
+            cell = self.top.getCell()
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+            self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, 
+                 kernel_return_info, proc_break, 'memcpy_return_hap')
        
        
     class MemSomething():
@@ -291,8 +330,6 @@ class DataWatch():
                    self.mem_something.dest, self.mem_something.count))
             
             if self.mem_something.op_type == Sim_Trans_Load:
-                self.lgr.debug('returnHap set range for copy')
-                self.setRange(self.mem_something.dest, self.mem_something.count, None) 
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
                     self.lgr.error('dataWatch buf_start for 0x%x is none in memcpyis?' % (self.mem_something.src))
@@ -300,7 +337,10 @@ class DataWatch():
             else:
                 self.lgr.debug('returnHap copy not a Load')
                 buf_start = self.findRange(self.mem_something.dest)
-            self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
+            mark = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
+            if self.mem_something.op_type == Sim_Trans_Load:
+                self.lgr.debug('returnHap set range for copy')
+                self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
         elif self.mem_something.fun == 'memcmp':
             buf_start = self.findRange(self.mem_something.dest)
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
@@ -319,12 +359,12 @@ class DataWatch():
         elif self.mem_something.fun == 'strcpy':
             self.lgr.debug('dataWatch returnHap, strcpy return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
-            self.setRange(self.mem_something.dest, self.mem_something.count, None) 
             buf_start = self.findRange(self.mem_something.src)
             if buf_start is None:
                 self.lgr.error('dataWatch buf_start for 0x%x is none in strcpy?' % (self.mem_something.src))
-            self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type, 
+            mark = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type, 
                        strcpy=True)
+            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark = mark) 
         elif self.mem_something.fun == 'memset':
             self.setRange(0, 0, None) 
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (self.mem_something.dest, self.mem_something.count))
@@ -338,21 +378,22 @@ class DataWatch():
             self.lgr.debug('dataWatch returnHap, strdup return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
             if self.mem_something.op_type == Sim_Trans_Load:
-                self.setRange(self.mem_something.dest, self.mem_something.count, None) 
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
                     self.lgr.error('dataWatch buf_start for 0x%x is none in strdup?' % (self.mem_something.src))
             else:
                 buf_start = self.findRange(self.mem_something.dest)
-            self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
+            mark=self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
+            if self.mem_something.op_type == Sim_Trans_Load:
+                self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
         elif self.mem_something.fun == 'sscanf':
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             param_count = self.mem_utils.getSigned(eax)
             self.lgr.debug('dataWatch returnHap, sscanf return from sscanf src 0x%x param_count %d' % (self.mem_something.src, param_count))
             if param_count > 0:
                 for i in range(param_count):
-                    self.setRange(self.mem_something.dest_list[i], self.mem_something.count, None) 
-                    self.watchMarks.sscanf(self.mem_something.src, self.mem_something.dest_list[i], self.mem_something.count)
+                    mark = self.watchMarks.sscanf(self.mem_something.src, self.mem_something.dest_list[i], self.mem_something.count)
+                    self.setRange(self.mem_something.dest_list[i], self.mem_something.count, None, watch_mark=mark) 
             else:
                 self.lgr.debug('dataWatch returnHap sscanf returned error')
                 self.watchMarks.sscanf(self.mem_something.src, None, None)
@@ -365,10 +406,10 @@ class DataWatch():
                 self.lgr.debug('dataWatch vsnprintf dest is None')
             self.mem_something.src = self.mem_something.addr
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
-            self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count)
+            mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count)
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
-            self.setRange(self.mem_something.dest, self.mem_something.count, None) 
+            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
         elif self.mem_something.fun == 'fprintf' or self.mem_something.fun == 'printf':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fprintf(self.mem_something.fun, self.mem_something.src)
@@ -614,7 +655,7 @@ class DataWatch():
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, self.mem_something, proc_break, 'memsomething_return_hap')
-        self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d' % proc_break)
+        self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
         if self.mem_something.run:
             SIM_run_command('c')
 
@@ -763,8 +804,12 @@ class DataWatch():
         self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
         if self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
-            self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x ' % (self.mem_something.src))
+            self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x  %s clear backstop' % (self.mem_something.src, self.cpu.current_context))
             self.pending_call = True
+            ''' iterator may take  while to return? '''
+            self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
+            self.back_stop.clearCycle()
+            #SIM_break_simulation('handle memstuff')
             SIM_run_alone(self.runToReturnAlone, None)
         else: 
             ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
@@ -800,7 +845,7 @@ class DataWatch():
                 #if not self.break_simulation:
                 #    self.stopWatch()
                 self.lgr.debug('dataWatch finishReadHap, read in kernel, set kernelReturn hap')
-                self.return_hap = 'eh'
+                #self.return_hap = 'eh'
                 SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
             else:
                 #self.lgr.debug('finishReadHap Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
@@ -808,6 +853,7 @@ class DataWatch():
                 self.prev_read_cycle = self.cpu.cycles
                 msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
                             offset, length, start, eip))
+                #self.lgr.debug(msg)
                 self.context_manager.setIdaMessage(msg)
                 if instruct[1].startswith('repe cmpsb'):
                     esi = self.mem_utils.getRegValue(self.cpu, 'esi')
@@ -832,6 +878,8 @@ class DataWatch():
                 if self.hack_reuse[index] > self.length[index]/3:
                     ''' Assume reused stack buffer, remove it from watch '''
                     self.lgr.debug('dataWatch finishReadHap remove watch for index %d' % index)
+                    self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                    self.read_hap[index] = None
                     self.start[index] = 0
                 else:
                     self.watchMarks.memoryMod(start, length, trans_size, addr=addr)
@@ -858,8 +906,8 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
-        self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s bytes: %d cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), 
-            memory.size, self.cpu.cycles))
+        #self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s bytes: %d cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), 
+        #    memory.size, self.cpu.cycles))
         #if addr == 0xb5f70686:
         #    SIM_break_simulation('wet')
         #return
@@ -904,6 +952,7 @@ class DataWatch():
             SIM_run_alone(self.setStopHap, None)
 
         start, length = self.getStartLength(index, addr) 
+        #self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x' % (index, addr, start))
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         #start, end = self.context_manager.getText()
@@ -1114,7 +1163,7 @@ class DataWatch():
 
     def tagIterator(self, index):
         ''' Call from IDA Client to collapse a range of data references into the given watch mark index ''' 
-        self.lgr.debug('DataWatch tagIterator')
+        self.lgr.debug('DataWatch tagIterator index %d' % index)
         if self.ida_funs is not None:
             watch_mark = self.watchMarks.getMarkFromIndex(index)
             if watch_mark is not None:
@@ -1337,8 +1386,17 @@ class DataWatch():
         #self.lgr.debug('memsomething max_index %d' % (max_index))
         for i in range(max_index, -1, -1):
             frame = frames[i]
-            self.lgr.debug('dataWatch memsomething frame %d instruct is %s' % (i, frame.instruct))
+            if frame.fun_addr is None:
+                #self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
+                frame.fun_addr = self.ida_funs.getFun(frame.ip)
+            if frame.fun_addr is None:
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
+                pass
+            else:
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
+                pass
             if frame.instruct is not None:
+                fun = None
                 if frame.fun_name is not None:
                     fun = frame.fun_name
                     if '@' in frame.fun_name:
@@ -1347,7 +1405,7 @@ class DataWatch():
                             fun_hex = int(fun, 16) 
                             if self.ida_funs is not None:
                                 fun_name = self.ida_funs.getName(fun_hex)
-                                self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                                #self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
                                 if fun_name is not None:
                                     fun = fun_name
                             else:
@@ -1360,35 +1418,36 @@ class DataWatch():
                             #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                    #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
-                    if fun in local_mem_funs or self.user_iterators.isIterator(frame.fun_addr, self.lgr):
-                        if fun in local_mem_funs:
-                            self.lgr.debug('fun in local_mem_funs %s' % fun)
-                            fun_precidence = self.funPrecidence(fun)
-                            if fun_precidence == 0 and i > 3:
-                                self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
-                                continue
-                        if self.user_iterators.isIterator(frame.fun_addr, self.lgr):
-                            self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
-                            fun_precidence = 999
-                        self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
-                        if fun_precidence < max_precidence:
-                            self.lgr.debug('Stackframe memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
+                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                if fun in local_mem_funs or self.user_iterators.isIterator(frame.fun_addr):
+                    if fun in local_mem_funs:
+                        #self.lgr.debug('fun in local_mem_funs %s' % fun)
+                        fun_precidence = self.funPrecidence(fun)
+                        if fun_precidence == 0 and i > 3:
+                            self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                             continue
-                        max_precidence = fun_precidence
-                        if frame.sp > 0:
-                            ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
-                        elif frame.ret_addr is not None:
-                            ret_addr = frame.ret_addr
-                        else:
-                            self.lgr.error('memsomething sp is zero and no ret_addr?')
-                            ret_addr = None
-                        self.lgr.debug('dataWatch memsomething frame.ip is 0x%x' % frame.ip)
-                        retval = self.MemStuff(ret_addr, fun, frame.ip)
-                        
+                    if self.user_iterators.isIterator(frame.fun_addr):
+                        #self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
+                        fun_precidence = 999
+                    #self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
+                    if fun_precidence < max_precidence:
+                        #self.lgr.debug('Stackframe memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
+                        continue
+                    max_precidence = fun_precidence
+                    if frame.sp > 0 and i != 0:
+                        ''' TBD poor assumption about sp pointing to the return address?  have we made this so, arm exceptions? '''
+                        ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
+                    elif frame.ret_addr is not None:
+                        ret_addr = frame.ret_addr
                     else:
-                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
-                        pass
+                        self.lgr.error('memsomething sp is zero and no ret_addr?')
+                        ret_addr = None
+                    #self.lgr.debug('dataWatch memsomething frame.ip is 0x%x' % frame.ip)
+                    retval = self.MemStuff(ret_addr, fun, frame.ip)
+                    
+                else:
+                    #self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                    pass
         return retval
 
     def getMarkCopyOffset(self, address):

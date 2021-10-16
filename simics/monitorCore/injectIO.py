@@ -7,7 +7,7 @@ import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None):
+           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, limit_one=False, no_rop=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -40,6 +40,8 @@ class InjectIO():
         self.addr_addr = None
         self.max_len = None
         self.orig_buffer = None
+        self.limit_one = limit_one
+        self.clear_retrack = False
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()
@@ -78,8 +80,9 @@ class InjectIO():
         self.save_json = save_json
 
         self.stop_hap = None
+        self.no_rop = no_rop
 
-    def go(self):
+    def go(self, no_go_receive=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
             memory, e.g., starting at R1 of a ARM recv.  Adjust the returned length, e.g., R0
@@ -108,7 +111,7 @@ class InjectIO():
                 self.in_data = fh.read()
 
         ''' Got to origin/recv location unless not yet debugging '''
-        if self.target is None:
+        if self.target is None and not no_go_receive:
             self.dataWatch.goToRecvMark()
 
         lenreg = None
@@ -128,12 +131,16 @@ class InjectIO():
 
         if self.target is None and not self.trace_all:
             ''' Set Debug before write to use RESim context on the callHap '''
+            ''' We assume we are in user space in the target process and thus will not move.'''
             self.top.stopDebug()
             self.top.debugPidGroup(self.pid) 
+            if self.no_rop:
+                self.lgr.debug('injectIO stop ROP')
+                self.top.watchROP(watching=False)
 
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, write_callback=self.writeCallback)
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, write_callback=self.writeCallback, limit_one=self.limit_one)
         self.bookmarks = self.top.getBookmarksInstance()
 
         #bytes_wrote = self.writeData()
@@ -147,16 +154,22 @@ class InjectIO():
             self.lgr.debug('injectIO did write %d bytes to addr 0x%x max_len %d cycle: 0x%x  Now clear watches' % (bytes_wrote, self.addr, self.max_len, self.cpu.cycles))
             if not self.stay:
                 if not self.trace_all:
+                    eip = self.top.getEIP(self.cpu)
+                    self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.bookmarks.setOrigin(self.cpu)
                     cli.quiet_run_command('disable-reverse-execution')
                     cli.quiet_run_command('enable-reverse-execution')
+                    eip = self.top.getEIP(self.cpu)
+                    self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     if self.addr_addr is not None:
                         self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
-                    self.top.watchROP()
-                self.top.traceAll()
+                    if not self.no_rop:
+                        self.top.watchROP()
+                else:
+                    self.top.traceAll()
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -165,7 +178,7 @@ class InjectIO():
                 else:
                     print('retracking IO') 
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
-                    self.top.retrack(clear=False, callback=self.callback, use_backstop=use_backstop)    
+                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
             self.lgr.debug('injectIO debug to %s' % self.target)
@@ -179,7 +192,8 @@ class InjectIO():
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):
-        ''' called at the end of the debug hap chain, meaning we are in the target process. '''
+        ''' called at the end of the debug hap chain, meaning we are in the target process. 
+            Intended for watching process other than the one reading the data. '''
         self.lgr.debug('injectIO injectCallback')
         self.context_manager.watchGroupExits()
         self.bookmarks = self.top.getBookmarksInstance()
@@ -244,6 +258,13 @@ class InjectIO():
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectiO load orig_buffer from pickle')
 
-    def saveJson(self):
-        self.dataWatch.saveJson(self.save_json)
+    def saveJson(self, save_file=None):
+        if save_file is None and self.save_json is not None:
+            self.dataWatch.saveJson(self.save_json)
+        elif save_file is not None:
+            self.dataWatch.saveJson(save_file)
         self.top.stopTrackIO
+
+    def setDfile(self, dfile):
+        self.dfile = dfile
+        self.clear_retrack = True

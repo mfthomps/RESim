@@ -29,6 +29,7 @@ derived from cgcMonitor, which was developed for the DARPA Cyber Grand Challenge
 from simics import *
 import cli
 import os
+import sys
 import errno
 import struct
 import resim_utils
@@ -82,6 +83,7 @@ import injectIO
 import writeData
 import instructTrace
 import aflPath
+import trackAFL
 
 import json
 import pickle
@@ -695,16 +697,16 @@ class GenMonitor():
             ''' Our first debug '''
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, self.gdb_port, pid, self.is_compat32))
-
-            if cpu.architecture == 'arm':
-                cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
-            elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
-            else:
-                cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
-            self.lgr.debug('cmd: %s' % cmd)
-            SIM_run_command(cmd)
-            self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+            if self.bookmarks is None:
+                if cpu.architecture == 'arm':
+                    cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
+                elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+                    cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+                else:
+                    cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+                self.lgr.debug('cmd: %s' % cmd)
+                SIM_run_command(cmd)
+                self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
             if not self.rev_execution_enabled:
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 cmd = 'enable-reverse-execution'
@@ -889,7 +891,7 @@ class GenMonitor():
     def getIDAFuns(self, full_path):
         fun_path = full_path+'.funs'
         iterator_path = full_path+'.iterators'
-        self.user_iterators = userIterators.UserIterators(iterator_path)
+        self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr)
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
             if os.path.islink(full_path):
@@ -937,6 +939,7 @@ class GenMonitor():
         
 
     def watchProc(self, proc):
+        ''' SEE watchTasks '''
         ''' TBD remove?  can just use debugProc and then disable reverse-exectution?  Highlight on/off on IDA '''
         plist = self.task_utils[self.target].getPidsForComm(proc)
         if len(plist) > 0:
@@ -2171,6 +2174,7 @@ class GenMonitor():
         else:
             pid_list = self.context_manager[self.target].getThreadPids()
             prec = Prec(cpu, None, pid_list, who='to text')
+        ''' NOTE obscure use of flist to determine if SO files are tracked '''
         if flist is None:
             prec.debugging = True
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
@@ -3032,7 +3036,9 @@ class GenMonitor():
         if callback is None:
             callback = self.stopTrackIO
         ''' Use existing data watches to track IO.  Clears later watch marks '''
-        self.lgr.debug('retrack')
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.getEIP(cpu)
+        self.lgr.debug('retrack cycle: 0x%x eip: 0x%x' % (cpu.cycles, eip))
         if clear:
             cpu = self.cell_config.cpuFromCell(self.target)
             origin = self.bookmarks.getFirstCycle()
@@ -3301,10 +3307,15 @@ class GenMonitor():
         prev_len = self.mem_utils[self.target].getRegValue(cpu, lenreg)
         self.lgr.debug('traceInject prev_len is %s' % prev_len)
         if len(byte_string) > prev_len:
-           
-            a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
+            '''
+            if sys.version_info[0] == 3:
+                a = input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
+            else:
+                a = raw_input('Warning: your injection is %d bytes; previous reads was only %d bytes.  Continue?' % (len(byte_string), prev_len))
             if a.lower() != 'y':
                 return
+            '''
+            self.lgr.warning('your injection is %d bytes; previous reads was only %d bytes?' % (len(byte_string), prev_len))
         self.lgr.debug('traceInject Addr: 0x%x length: %d byte_string is %s' % (addr, len(byte_string), str(byte_string)))
         self.mem_utils[self.target].writeString(cpu, addr, byte_string) 
         self.writeRegValue(lenreg, len(byte_string))
@@ -3316,7 +3327,7 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None):
+            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, limit_one=False, no_rop=False):
         if self.bookmarks is not None:
             self.goToOrigin()
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3327,13 +3338,17 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
-                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json)
+                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_rop=no_rop)
         self.injectIOInstance.go()
+        return self.injectIOInstance
    
     def aflInject(self, target, index, instance=None, cover=False, save_json=False):
         afl_file = aflPath.getAFLPath(target, index, instance)
+        save_json_file = None
+        if save_json:
+            save_json_file = '/tmp/trackio.json' 
         if afl_file is not None:
-            self.injectIO(afl_file, cover=cover, save_json=save_json)
+            self.injectIO(afl_file, cover=cover, save_json=save_json_file)
 
     def aflInjectTCP(self, target, index, instance=None, cover=False, save_json=False):
         afl_file = aflPath.getAFLPath(target, index, instance)
@@ -3425,8 +3440,8 @@ class GenMonitor():
             SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
-    def watchROP(self):
-        self.ropCop[self.target].watchROP()
+    def watchROP(self, watching=True):
+        self.ropCop[self.target].watchROP(watching=watching)
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''
@@ -3741,6 +3756,10 @@ class GenMonitor():
               target=target, targetFD=targetFD, trackFD=trackFD)
         rc.go()
 
+    def trackAFL(self, target):
+        track_afl = trackAFL.TrackAFL(self, target, self.lgr)
+        track_afl.go()
+
     def getSEGVAddr(self):
         if self.bookmarks is not None:
             return self.bookmarks.getSEGVAddr()
@@ -3900,8 +3919,12 @@ class GenMonitor():
             print('pid %d  syscall %s' % (pid, call))
 
     def watchTasks(self):
-        ''' watch this task and its threads, will append to others if already watching '''
+        ''' watch this task and its threads, will append to others if already watching 
+        NOTE assumes it is in execve and we want to track SO files
+        '''
         self.context_manager[self.target].watchTasks(set_debug_pid=True)
+        ''' flist of other than None causes watch of open/mmap for SO tracking '''
+        self.execToText(flist=[])
     
 
 if __name__=="__main__":        

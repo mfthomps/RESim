@@ -259,6 +259,9 @@ class GenContextMgr():
         if hap_handle is None:
             self.lgr.warning('genDelteHap called with handle of none')
             return
+        if isinstance(hap_handle, str):
+            self.lgr.error('contextManager genDeleteHap hap_handle is string? %s' % hap_handle)
+            return 
         self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
         hap_copy = list(self.haps)
         for hap in hap_copy:
@@ -281,13 +284,16 @@ class GenContextMgr():
 
     def genHapIndex(self, hap_type, callback, parameter, handle, name=None):
         #self.lgr.debug('genHapIndex break_handle %d' % handle)
+        retval = None
         for bp in self.breakpoints:
             if bp.handle == handle:
                 hap_handle = self.nextHapHandle()
                 hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name)
                 self.haps.append(hap)
-                return hap.handle
+                retval = hap.handle
+                break
         #self.lgr.error('genHapIndex failed to find break %d' % breakpoint)
+        return retval
 
     def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None):
         self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
@@ -303,6 +309,7 @@ class GenContextMgr():
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
+        return None
 
 
     def setAllHap(self, only_maze_breaks=False):

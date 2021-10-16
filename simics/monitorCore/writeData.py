@@ -4,7 +4,7 @@ import taskUtils
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, addr,  
                  max_length, call_ip, return_ip, mem_utils, backstop, lgr, udp_header=None, pad_to_size=None, filter=None, 
-                 force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None):
+                 force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -45,6 +45,7 @@ class WriteData():
         self.backstop_cycles = backstop_cycles
         self.write_callback = write_callback
         self.lgr = lgr
+        self.limit_one = limit_one
 
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
@@ -152,17 +153,22 @@ class WriteData():
             frame = self.top.frameFromRegs(self.cpu)
             frame_s = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('writeData frame: %s' % frame_s)
-            #self.lgr.debug('writeData callHap, skip over kernel receive processing and write more data')
-            self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
-            count = self.write()
-            if self.current_packet >= self.expected_packet_count:
-                # set backstop if needed, we are on the last (or only) packet.
-                #SIM_run_alone(self.delCallHap, None)
-                if self.backstop_cycles > 0:
-                    #self.lgr.debug('writeData setting backstop')
-                    self.backstop.setFutureCycle(self.backstop_cycles)
-            if self.write_callback is not None:
-                SIM_run_alone(self.write_callback, count)
+            if self.limit_one:
+                self.lgr.warning('writeData callHap, would write more data, but limit_one')
+                self.lgr.debug(frame_s)
+            
+            else:
+                self.lgr.debug('writeData callHap, skip over kernel receive processing and write more data')
+                self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
+                count = self.write()
+                if self.current_packet >= self.expected_packet_count:
+                    # set backstop if needed, we are on the last (or only) packet.
+                    #SIM_run_alone(self.delCallHap, None)
+                    if self.backstop_cycles > 0:
+                        #self.lgr.debug('writeData setting backstop')
+                        self.backstop.setFutureCycle(self.backstop_cycles)
+                if self.write_callback is not None:
+                    SIM_run_alone(self.write_callback, count)
 
     def delCallHap(self, dumb):
         #self.lgr.debug('writeData delCallHap')
