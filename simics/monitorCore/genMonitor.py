@@ -90,6 +90,7 @@ import pickle
 import re
 import shutil
 import imp
+import glob
 
 
 class Prec():
@@ -3697,9 +3698,10 @@ class GenMonitor():
     def findBB(self, target, bb):
         afl_output = self.getAFLOutput()
         target_dir = os.path.join(afl_output, target)
-        flist = os.listdir(target_dir)
+        #flist = os.listdir(target_dir)
+        flist = glob.glob(target_dir+'/resim_*/')
         #print('flist is %s' % str(flist))
-        if 'coverage' in flist:
+        if len(flist) == 0:
             ''' is not parallel fuzzing '''
             coverage_dir = os.path.join(target_dir, 'coverage')
             queue_dir = os.path.join(target_dir, 'queue')
@@ -3715,8 +3717,8 @@ class GenMonitor():
             ''' is parallel fuzzing '''
             print('is parallel')
             for drone in flist:
-                coverage_dir = os.path.join(target_dir, drone, 'coverage')
-                queue_dir = os.path.join(target_dir, drone, 'queue')
+                coverage_dir = os.path.join(drone, 'coverage')
+                queue_dir = os.path.join(drone, 'queue')
                 hit_files = os.listdir(coverage_dir)
                 for f in hit_files:
                     path = os.path.join(coverage_dir, f)
@@ -3775,13 +3777,14 @@ class GenMonitor():
     def setCommandCallback(self, callback):
         self.command_callback = callback 
 
-    def findBNT(self, fun, hits, blocks):
-            for bb_hit in hits[fun]:
-                for bb in blocks[fun]['blocks']:
-                    if bb['start_ea'] == bb_hit:
-                        for branch in bb['succs']:
-                            if branch not in hits[fun]:
-                                print('function: %s branch 0x%x from 0x%x not in hits' % (blocks[fun]['name'], branch, bb_hit))
+
+    def findBNT(self, hits, fun_blocks):
+        for bb in fun_blocks['blocks']:
+            for bb_hit in hits:
+                if bb_hit == bb['start_ea']:
+                    for branch in bb['succs']:
+                        if branch not in hits:
+                            print('function: %s branch 0x%x from 0x%x not in hits' % (fun_blocks['name'], branch, bb_hit))
 
     def aflBNT(self, target, fun_name=None):
         cpu, comm, pid  = self.task_utils[self.target].curProc()
@@ -3793,17 +3796,18 @@ class GenMonitor():
                 fname = '%s.hits' % ida_path
             else:
                 fname = '%s.%s.hits' % (ida_path, target)
+            ''' hits are now just flat lists without functoins '''
             hits = json.load(open(fname))
             block_file = self.full_path+'.blocks'
             blocks = json.load(open(block_file))
-            print('aflBNT found %d functions and %d blocks' % (len(hits), len(blocks)))
+            print('aflBNT found %d hits and %d blocks' % (len(hits), len(blocks)))
             if fun_name is None:
-                for fun in hits:
-                    self.findBNT(fun, hits, blocks) 
+                for fun in blocks:
+                    self.findBNT(hits, blocks[fun]) 
             else:
                 for fun in blocks:
                     if blocks[fun]['name'] == fun_name:
-                        self.findBNT(fun, hits, blocks) 
+                        self.findBNT(hits, blocks[fun]) 
                         break
     
         def quit(self):
