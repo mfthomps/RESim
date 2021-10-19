@@ -124,15 +124,17 @@ class DataWatch():
             self.cycle.append(self.cpu.cycles)
             self.mark.append(watch_mark)
             if watch_mark is not None and watch_mark.mark.sp is not None:
-                self.lgr.debug('DataWatch setRange stack buffer, set a break to delete this range on return')
                 ret_to = self.getReturnAddr()
                 if ret_to is not None:
+                    self.lgr.debug('DataWatch setRange stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
                     if ret_to not in self.stack_buffers:
                         self.stack_buffers[ret_to] = []
                         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
                         self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
                     index = len(self.start)-1
                     self.stack_buffers[ret_to].append(index)
+                else:
+                    self.lgr.debug('DataWatch setRange stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
             #self.lgr.debug('DataWatch adding start 0x%x cycle 0x%x' % (start, self.cpu.cycles))
         if msg is not None:
@@ -804,9 +806,10 @@ class DataWatch():
         #self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
         if self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
-            self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x  %s clear backstop' % (self.mem_something.src, self.cpu.current_context))
-            if self.mem_something.ret_ip is None:
-                self.lgr.error('handleMemStuff thinks iterator, but no ret_to address found, bail')
+            if self.mem_something.src is not None:
+                self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x  %s clear backstop' % (self.mem_something.src, self.cpu.current_context))
+            else:
+                self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
             self.pending_call = True
             ''' iterator may take  while to return? '''
@@ -1435,7 +1438,7 @@ class DataWatch():
                     if self.user_iterators.isIterator(frame.fun_addr):
                         #self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
                         fun_precidence = 999
-                    #self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
+                    self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
                     if fun_precidence < max_precidence:
                         #self.lgr.debug('Stackframe memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
                         continue
