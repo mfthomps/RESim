@@ -57,6 +57,15 @@ class TrackAFL():
             self.lgr.debug('trackAFL go, bout to go to origin.  eip 0x%x cycles 0x%x' % (eip, cpu.cycles))
             self.top.goToOrigin()
         eip = self.top.getEIP(cpu)
+        got_one=False
+        while not got_one and self.index < len(self.afl_list):
+            if not os.path.isfile(self.getTrackPath(self.index)):
+                got_one = True
+            else:
+                self.index = self.index+1
+        if not got_one:
+            print('All files have been processed (have trackio output files)')
+            return
         self.lgr.debug('trackAFL eip: 0x%x, cycles 0x%x go file: %s' % (eip, cpu.cycles, self.afl_list[self.index]))
         if self.inject_instance is None:
             self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=True, no_rop=True)
