@@ -18,13 +18,15 @@ import time
 import glob
 import threading
 import select
-def ioHandler(read_array):
+def ioHandler(read_array, stop):
     log = '/tmp/resim.log'
     with open(log, 'wb') as fh:
         while(True):
+            if stop():
+                print('ioHandler sees stop, exiting.')
+                return
             r, w, e = select.select(read_array, [], [], 10) 
             for item in r:
-
                     data = os.read(item.fileno(), 800)
                     fh.write(data+b'\n')
 
@@ -83,6 +85,12 @@ def main():
         afl_data = os.getenv('AFL_DATA')
     except:
         print('missing AFL_DATA envrionment variable')
+        exit(1)
+
+    if not args.ini.endswith('.ini'):
+        args.ini = args.ini+'.ini'
+    if not os.path.isfile(args.ini):
+        print('Ini file %s not found.' % args.ini)
         exit(1)
     afl_out = os.path.join(afl_data, 'output', afl_name)
     if args.continue_run == True:
@@ -144,17 +152,17 @@ def main():
     else:
         print('Running single instance')
         resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs)
-
-    io_handler = threading.Thread(target=ioHandler, args=([read_array]))
+    stop_threads = False
+    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
     io_handler.start()
     my_in = input('any key to quit')
     for ps in resim_procs:
         ps.stdin.write(b'quit\n')
     print('did quit')
     print('done')
+    stop_threads = True
     for fd in read_array:
         fd.close()
-    io_handler.kill()
     time.sleep(10)
     print('back from sleep')
     #output = resim_ps.communicate()
