@@ -48,13 +48,13 @@ class PlayAFL():
         else:
             self.target = target
             self.afl_dir = os.path.join(afl_output, target,'queue')
-            if os.path.isdir(self.afl_dir):
+            gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
+            print('gpath is %s' % gpath)
+            glist = glob.glob(gpath)
+            if len(glist) == 0 and os.path.isdir(self.afl_dir):
                 self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
             else:
                 ''' Assume Parallel fuzzing '''
-                gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
-                print('gpath is %s' % gpath)
-                glist = glob.glob(gpath)
                 self.afl_list = []
                 for path in glist:
                     if 'sync:' not in path:
@@ -114,7 +114,15 @@ class PlayAFL():
             return
 
         full_path = self.coverage.getFullPath()
+
+
         hits_path = self.coverage.getHitsPath()+'.prog'
+        parent = os.path.dirname(os.path.abspath(hits_path))
+        print('parent is %s' % parent)
+        try:
+            os.makedirs(parent)
+        except:
+            pass
         if not os.path.isfile(hits_path):
             with open(hits_path, 'w') as fh:
                 fh.write(full_path)

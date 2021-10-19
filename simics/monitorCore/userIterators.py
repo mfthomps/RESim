@@ -7,6 +7,9 @@ class UserIterators():
         self.load(path)
         self.lgr.debug('userIterators count now %d from %s' % (len(self.iterators), self.path))
         ida_data = os.getenv('RESIM_IDA_DATA')
+        if ida_data is None:
+            self.lgr.error('RESIM_IDA_DATA not defined')
+            return
         base = os.path.basename(self.path).rsplit('.', )[0]
         self.new_path = os.path.join(ida_data, base, base+'.iterators')
         self.load(self.new_path)

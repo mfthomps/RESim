@@ -159,7 +159,7 @@ class Coverage():
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
                 if bb_rel in self.dead_map:
-                    self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
+                    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
                     continue
                 if self.afl:
                     rand = random.randrange(0, self.map_size)
