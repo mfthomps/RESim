@@ -109,6 +109,7 @@ class InjectIO():
                 self.in_data = bytearray(fh.read())
             else:
                 self.in_data = fh.read()
+        self.lgr.debug('write data size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging '''
         if self.target is None and not no_go_receive:
