@@ -437,6 +437,7 @@ class GenContextMgr():
             ''' Was not watching any task '''
             if new_task in self.watch_rec_list:
                 self.watching_tasks = True
+                self.restoreDebugContext()
                 ''' Should watch new task '''
                 if new_task not in self.nowatch_list:
                     ''' should watch all but maze ''' 
@@ -494,6 +495,7 @@ class GenContextMgr():
                 else:
                     ''' New task not in maze breakout'''
                     self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task not in maze breakout.  Delete all haps.')
+                    self.restoreDefaultContext() 
                     SIM_run_alone(self.clearAllHap, False)
                     self.watching_tasks = False
                     if len(self.watch_rec_list) == 0 and len(self.nowatch_list) == 0:
@@ -789,13 +791,15 @@ class GenContextMgr():
         if self.task_break is None:
             self.setTaskHap()
         self.watching_tasks = True
-        self.watchExit()
-        #self.pageFaultGen.recordPageFaults()
-        if ctask in self.watch_rec_list:
-            self.lgr.debug('watchTasks, current task already being watched')
-            return
-        self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
-        self.watch_rec_list[ctask] = pid
+        if self.watchExit():
+            #self.pageFaultGen.recordPageFaults()
+            if ctask in self.watch_rec_list:
+                self.lgr.debug('watchTasks, current task already being watched')
+                return
+            self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
+            self.watch_rec_list[ctask] = pid
+        else:
+            self.lgr.warning('watchTasks, call to watchExit failed pid %d' % pid)
         if pid not in self.pid_cache:
             self.pid_cache.append(pid)
         group_leader = self.task_utils.getGroupLeaderPid(pid)
@@ -837,7 +841,7 @@ class GenContextMgr():
         self.lgr.debug('contextManager killGroup lead %d' % lead_pid)
         pids = []
         if lead_pid == self.group_leader:
-            for comm in self.debugging_com:
+            for comm in self.debugging_comm:
                 pids = self.task_utils.getPidsForComm(comm) 
                 if lead_pid in pids:
                     break
@@ -968,7 +972,7 @@ class GenContextMgr():
     def watchExit(self, rec=None, pid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
-        #self.lgr.debug('contextManager watchExit')
+        self.lgr.debug('contextManager watchExit')
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
@@ -996,7 +1000,7 @@ class GenContextMgr():
             else:
                 cell = self.default_context
                 #cell = self.resim_context
-            #self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d' % (watch_pid, watch_comm, pid))
+            self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on context: %s' % (watch_pid, watch_comm, pid, cell))
             self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             #self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
