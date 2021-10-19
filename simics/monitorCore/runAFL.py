@@ -24,15 +24,43 @@ def ioHandler(read_array):
         while(True):
             r, w, e = select.select(read_array, [], [], 10) 
             for item in r:
-                data = os.read(item.fileno(), 800)
-                fh.write(data+b'\n')
 
+                    data = os.read(item.fileno(), 800)
+                    fh.write(data+b'\n')
+
+def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs):
+    afl_cmd = '%s -i %s -o %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, afl_name)
+    #print('afl_cmd %s' % afl_cmd) 
+
+    cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    print('created afl')
+
+    cmd = '%s %s -n' % (resim_path, resim_ini)
+    os.environ['ONE_DONE_PARAM'] = str(port)
+    print('cmd is %s' % cmd)
+    resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    resim_procs.append(resim_ps)
+    read_array.append(resim_ps.stdout)
+    read_array.append(resim_ps.stderr)
+    print('created resim port %d' % port)
+
+    io_handler = threading.Thread(target=ioHandler, args=([read_array]))
+    io_handler.start()
+    my_in = input('any key to quit')
+    for ps in resim_procs:
+        ps.stdin.write(b'quit\n')
+    print('did quit')
+    print('done')
+    output = resim_ps.communicate()
+    return resim_ps
     
 def main():
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    parser.add_argument('-d', '--dead', action='store_true', help='Trial run to identify dead blocks, i.e., those being hit by other threads.')
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
@@ -72,12 +100,15 @@ def main():
         pass
     master_slave = '-M'
     max_packet_size = 1448
-    glist = glob.glob('resim_*')
+    glist = glob.glob('resim_*/')
 
     if args.tcp:
         os.environ['ONE_DONE_PARAM2']='tcp'
     else:
         os.environ['ONE_DONE_PARAM2']='udp'
+
+    if args.dead:
+        os.environ['ONE_DONE_PARAM3']='TRUE'
 
     if args.max_bytes is not None:
         size_str = '-s %d' % args.max_bytes 
@@ -85,29 +116,34 @@ def main():
         size_str = ''
     port = 8700
     read_array = []
-    for instance in glist:
-        if not os.path.isdir(instance):
-            continue
-        afl_cmd = '%s -i %s -o %s %s %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, master_slave, instance, port, afl_name)
-        #print('afl_cmd %s' % afl_cmd) 
-        os.chdir(instance)
+    if len(glist) > 0:
+        print('Parallel, doing %d instances' % len(glist))
+        for instance in glist:
+            if not os.path.isdir(instance):
+                continue
+            afl_cmd = '%s -i %s -o %s %s %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, master_slave, instance[:-1], port, afl_name)
+            print('afl_cmd %s' % afl_cmd) 
+            os.chdir(instance)
+        
+            cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+            afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            print('created afl')
     
-        cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
-        afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-        print('created afl')
-
-        resim_ini = args.ini
-        cmd = '%s %s -n' % (resim_path, resim_ini)
-        os.environ['ONE_DONE_PARAM'] = str(port)
-        print('cmd is %s' % cmd)
-        resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-        resim_procs.append(resim_ps)
-        read_array.append(resim_ps.stdout)
-        read_array.append(resim_ps.stderr)
-        print('created resim port %d' % port)
-        os.chdir(here)
-        master_slave = '-S'
-        port = port + 1
+            resim_ini = args.ini
+            cmd = '%s %s -n' % (resim_path, resim_ini)
+            os.environ['ONE_DONE_PARAM'] = str(port)
+            print('cmd is %s' % cmd)
+            resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            resim_procs.append(resim_ps)
+            read_array.append(resim_ps.stdout)
+            read_array.append(resim_ps.stderr)
+            print('created resim port %d' % port)
+            os.chdir(here)
+            master_slave = '-S'
+            port = port + 1
+    else:
+        print('Running single instance')
+        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs)
 
     io_handler = threading.Thread(target=ioHandler, args=([read_array]))
     io_handler.start()
@@ -116,7 +152,12 @@ def main():
         ps.stdin.write(b'quit\n')
     print('did quit')
     print('done')
-    output = resim_ps.communicate()
+    for fd in read_array:
+        fd.close()
+    io_handler.kill()
+    time.sleep(10)
+    print('back from sleep')
+    #output = resim_ps.communicate()
   
 if __name__ == '__main__':
     sys.exit(main())
