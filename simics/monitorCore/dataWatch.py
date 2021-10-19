@@ -801,10 +801,13 @@ class DataWatch():
         lost to the vagaries of the implementation by the time we hit the breakpoint.  We need to stop; Reverse to the call; record the parameters;
         set a break on the return; and continue.  We'll assume not too many instructions between us and the call, so manually walk er back.
         '''
-        self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
+        #self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
         if self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
             self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x  %s clear backstop' % (self.mem_something.src, self.cpu.current_context))
+            if self.mem_something.ret_ip is None:
+                self.lgr.error('handleMemStuff thinks iterator, but no ret_to address found, bail')
+                return
             self.pending_call = True
             ''' iterator may take  while to return? '''
             self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
@@ -975,7 +978,10 @@ class DataWatch():
             mem_stuff = self.memsomething(frames, mem_funs, st)
         
             if mem_stuff is not None:
-                self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
+                if mem_stuff.ret_addr is not None and mem_stuff.called_from_ip is not None:
+                    self.lgr.debug('DataWatch readHap ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
+                else:
+                    self.lgr.debug('DataWatch readHap ret_ip  or called_from_ip no ret_addr found')
                 ''' referenced memory address is src/dest depending on op_type''' 
                 dest = None
                 src = addr
@@ -1443,7 +1449,8 @@ class DataWatch():
                         self.lgr.error('memsomething sp is zero and no ret_addr?')
                         ret_addr = None
                     #self.lgr.debug('dataWatch memsomething frame.ip is 0x%x' % frame.ip)
-                    retval = self.MemStuff(ret_addr, fun, frame.ip)
+                    if ret_addr is not None:
+                        retval = self.MemStuff(ret_addr, fun, frame.ip)
                     
                 else:
                     #self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
