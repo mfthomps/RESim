@@ -151,7 +151,7 @@ class RopCop():
 
     def clearHap(self):
         if self.rop_hap is not None:
-            self.context_manager.genDeleteHap(self.rop_hap, immediate=True)
+            self.context_manager.genDeleteHap(self.rop_hap, immediate=False)
             self.lgr.debug('ropCop cleared hap %d' % self.rop_hap)
             self.rop_hap = None
         self.did_these = []
