@@ -3330,7 +3330,8 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, limit_one=False, no_rop=False):
+            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, 
+            save_json=None, limit_one=False, no_rop=False, go=True):
         if self.bookmarks is not None:
             self.goToOrigin()
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3342,7 +3343,8 @@ class GenMonitor():
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_rop=no_rop)
-        self.injectIOInstance.go()
+        if go:
+            self.injectIOInstance.go()
         return self.injectIOInstance
    
     def aflInject(self, target, index, instance=None, cover=False, save_json=False):

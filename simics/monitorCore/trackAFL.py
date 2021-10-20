@@ -68,7 +68,8 @@ class TrackAFL():
             return
         self.lgr.debug('trackAFL eip: 0x%x, cycles 0x%x go file: %s' % (eip, cpu.cycles, self.afl_list[self.index]))
         if self.inject_instance is None:
-            self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=True, no_rop=True)
+            self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=True, no_rop=False, go=False)
+            self.inject_instance.go()
         else:
             self.inject_instance.setDfile(self.afl_list[self.index])
             ''' do not skip to the receive buffer, its cycle had been incremented for obscure reasons '''
