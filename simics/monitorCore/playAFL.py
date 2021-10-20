@@ -9,7 +9,7 @@ import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False):
+             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -25,6 +25,7 @@ class PlayAFL():
         self.orig_buffer = None
         self.max_len = None
         self.return_ip = None
+        self.cfg_file = cfg_file
         afl_output = top.getAFLOutput()
         self.all_hits = []
         pad_env = os.getenv('AFL_PAD') 
@@ -104,6 +105,20 @@ class PlayAFL():
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=physical)
 
+            full_path = self.coverage.getFullPath()
+            full_path = os.path.abspath(full_path)
+    
+            hits_path = self.coverage.getHitsPath()+'.prog'
+            parent = os.path.dirname(os.path.abspath(hits_path))
+            print('parent is %s' % parent)
+            try:
+                os.makedirs(parent)
+            except:
+                pass
+            with open(hits_path, 'w') as fh:
+                fh.write(full_path+'\n')
+                fh.write(self.cfg_file+'\n')
+            print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
 
 
 
@@ -113,21 +128,6 @@ class PlayAFL():
             print('No call IP, refuse to go.')
             return
 
-        full_path = self.coverage.getFullPath()
-
-
-        hits_path = self.coverage.getHitsPath()+'.prog'
-        parent = os.path.dirname(os.path.abspath(hits_path))
-        print('parent is %s' % parent)
-        try:
-            os.makedirs(parent)
-        except:
-            pass
-        if not os.path.isfile(hits_path):
-            with open(hits_path, 'w') as fh:
-                fh.write(full_path)
-        
-        print('full_path is %s' % full_path)
         self.bnt_list = []
         self.index = -1
         self.hit_total = 0

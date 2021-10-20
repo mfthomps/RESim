@@ -105,7 +105,7 @@ class GenMonitor():
     ''' Top level RESim class '''
     SIMICS_BUG=False
     PAGE_SIZE = 4096
-    def __init__(self, comp_dict, link_dict):
+    def __init__(self, comp_dict, link_dict, cfg_file):
         self.comp_dict = comp_dict
         self.link_dict = link_dict
         self.param = {}
@@ -210,6 +210,8 @@ class GenMonitor():
         self.gdb_port = 9123
 
         self.replayInstance = None
+    
+        self.cfg_file = cfg_file
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -3680,7 +3682,7 @@ class GenMonitor():
         return self.bookmarks is not None
 
     def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False):
-        self.playAFL(target, n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode)
+        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode)
 
     def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
@@ -3688,7 +3690,8 @@ class GenMonitor():
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage, 
-              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], self.lgr, 
+              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
+              self.cfg_file, self.lgr, 
               packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode)
         if play is not None:
             play.go()
