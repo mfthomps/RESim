@@ -8,20 +8,17 @@ import os
 import glob
 import json
 import argparse
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 
 all_funs = []
 all_hits = []
-def getFuns(prog):
+def getFuns(prog_path):
     retval = None
-    ida_data = os.getenv('RESIM_IDA_DATA')
-    prog_path = os.path.join(ida_data, prog, prog+'.prog')
-    if not os.path.isfile(prog_path):
-        print('no prog file at %s' % prog_path)
-    else:
-        prog = None
-        with open(prog_path) as fh:
-            prog = fh.read()+'.funs'
-        retval = json.load(open(prog))
+    prog = prog_path+'.funs'
+    retval = json.load(open(prog))
     return retval
 
 def getCover(fpath, funs):
@@ -40,7 +37,11 @@ def getCover(fpath, funs):
 
 def getPathList(target):
     afl_path = os.getenv('AFL_DATA')
+    if afl_path is None:
+        print('AFL_DATA not defined')
+        exit(1)
     glob_mask = '%s/output/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
+    print('glob_mask is %s' % glob_mask)
     glist = glob.glob(glob_mask)
     return glist
 
@@ -58,6 +59,24 @@ def getAFLPath(target, instance, index):
 #for hit in hits1:
 #    print('0x%x' % hit)
 
+def getHeader(ini):
+    config = ConfigParser.ConfigParser()
+    config.read(ini)
+    retval = None
+    if not config.has_option('ENV', 'AFL_UDP_HEADER'):
+        print('no AFL_UDP_HEADER')
+    else:
+        retval = config.get('ENV', 'AFL_UDP_HEADER')
+        print('found header: %s' % retval)
+    return retval
+
+def getPackets(f, header):
+    retval = -1
+    with open(f) as fh:
+        data = fh.read()
+        retval = data.count(header) 
+    return retval  
+
 def main():
     parser = argparse.ArgumentParser(prog='showCoverage', description='Show coverage of one or more hits files')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
@@ -65,9 +84,26 @@ def main():
     parser.add_argument('-i', '--index', action='store', help='index')
     parser.add_argument('-n', '--instance', action='store', help='instance')
     args = parser.parse_args()
-    funs = getFuns(args.prog)
-    if funs is None:
+
+    ida_data = os.getenv('RESIM_IDA_DATA')
+    if ida_data is None:
+        print('RESIM_IDA_DATA not defined')
         exit(1)
+    data_path = os.path.join(ida_data, args.prog, args.prog+'.prog')
+    udp_header = None
+    funs = None
+    with open(data_path) as fh:
+        lines = fh.read().strip().splitlines()
+        print('num lines is %d' % len(lines))
+        prog_file = lines[0].strip()
+        funs = getFuns(prog_file)
+        if funs is None:
+            exit(1)
+        if len(lines) > 1:
+            ini_file = lines[1].strip()
+            print('ini file is %s' % ini_file)
+            udp_header = getHeader(ini_file)
+
     if args.index is not None:
         path = getAFLPath(args.target, args.instance, args.index)
         num_hits, num_funs = getCover(path, funs) 
@@ -76,8 +112,16 @@ def main():
     if args.index is None and args.instance is None:
         flist = getPathList(args.target)
         for f in flist:
+            base = os.path.basename(f)
+            parent = os.path.dirname(f)
+            instance = os.path.dirname(parent)
+            queue = os.path.join(instance, 'queue', base)
             num_hits, num_funs = getCover(f, funs) 
-            print('hits: %d  funs: %d   %s' % (num_hits, num_funs, f))
+            if udp_header is not None:
+                num_packets = getPackets(queue, udp_header)
+                print('hits: %04d  funs: %04d packets: %02d  %s' % (num_hits, num_funs, num_packets, f))
+            else:
+                print('hits: %04d  funs: %04d   %s' % (num_hits, num_funs, f))
         print('%d sessions' % len(flist))
         print('total functions: %d  total hits: %d' % (len(all_funs), len(all_hits)))        
          
