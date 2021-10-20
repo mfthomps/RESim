@@ -1,2 +1,3 @@
 #!/bin/bash
+export AFL_SKIP_CPUFREQ=True
 $RESIM_DIR/simics/monitorCore/runAFL.py $@
