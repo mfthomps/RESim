@@ -710,6 +710,8 @@ class GenMonitor():
                 self.lgr.debug('cmd: %s' % cmd)
                 SIM_run_command(cmd)
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+                if not self.disable_reverse:
+                    self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
             if not self.rev_execution_enabled:
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 cmd = 'enable-reverse-execution'
@@ -720,9 +722,6 @@ class GenMonitor():
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugPid()
-            ''' tbd read elf and pass executable pages? NO, would not determine other executable pages '''
-            if not self.disable_reverse:
-                self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
 
             if group:
                 leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
