@@ -3815,8 +3815,8 @@ class GenMonitor():
                         self.findBNT(hits, blocks[fun]) 
                         break
     
-        def quit(self):
-            SIM_run_command('q')
+    def quit(self):
+        SIM_run_command('q')
 
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()

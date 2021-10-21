@@ -40,7 +40,7 @@ def main():
     print('Client path is %s' % client_path)
     parser = argparse.ArgumentParser(prog='crashReport', description='Generate reports on crashes found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
-    parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file.')
+    parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
     parser.add_argument('-f', '--fd', action='store', help='FD read by target process.  Needed for driver-based systems, e.g., for multipacket  sessions.')
 
     args = parser.parse_args()
@@ -76,21 +76,30 @@ def main():
             header = config.get('ENV', 'AFL_UDP_HEADER')
     
     if os.path.isfile(target):
+        ''' single file to report on '''
         flist = [target]
     else:
         ''' path to AFL output directory '''
-        afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-        afl_dir = os.path.join(afl_output, target)
+        afl_output = os.getenv('AFL_OUTPUT')
+        if afl_output is None:
+            afl_output = os.getenv('AFL_DATA')
+            afl_dir = os.path.join(afl_output, 'output', target)
+        else:
+            afl_dir = os.path.join(afl_output, target)
         if not os.path.isdir(afl_dir):
            print('No afl directory found at %s' % afl_dir)
            exit
         
         
         ''' Get all crash files '''
-        crashes_dir = os.path.join(afl_dir, 'crashes*')
-        gmask = '%s/*' % crashes_dir
-        print("ReportCrash gmask: %s" % gmask)
+        gmask = afl_dir+'/resim_*/crashes/*'
         glist = glob.glob(gmask)
+        if len(glist) == 0:
+            ''' not parallel '''
+            crashes_dir = os.path.join(afl_dir, 'crashes*')
+            gmask = '%s/*' % crashes_dir
+            print("ReportCrash gmask: %s" % gmask)
+            glist = glob.glob(gmask)
         flist=[]
         for g in glist:
             if os.path.basename(g).startswith('id:'):
@@ -109,8 +118,8 @@ def main():
             driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, ))
             driver.start()
             #os.system('./tmpdrive.sh &')
-        print("starting monitor")
-        result = os.system('%s %s' % (resim_path, resim_ini))
+        print("starting monitor without UI")
+        result = os.system('%s %s -n' % (resim_path, resim_ini))
         print('Monitor exited, try next')
         if result != 0:
             exit
