@@ -1,4 +1,5 @@
 import os
+import json
 import glob
 from simics import *
 class TrackAFL():
@@ -9,20 +10,29 @@ class TrackAFL():
         self.target = target
         self.afl_dir = os.path.join(afl_output, target,'queue')
         self.stop_hap = None
-        if os.path.isdir(self.afl_dir):
-            self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
-        else:
-            ''' Assume Parallel fuzzing '''
-            gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
-            print('gpath is %s' % gpath)
-            glist = glob.glob(gpath)
-            self.afl_list = []
-            for path in glist:
-                if 'sync:' not in path:
-                    self.afl_list.append(path)
+        self.afl_list = []
         self.lgr.debug('trackAFL afl list has %d items' % len(self.afl_list))
         self.index = 0
         self.inject_instance = None
+
+        afl_output = top.getAFLOutput()
+        self.target = target
+        self.afl_dir = os.path.join(afl_output, target)
+        unique_path = os.path.join(self.afl_dir, target+'.unique')
+        print('look for unique at %s' % unique_path)
+        if os.path.isfile(unique_path):
+            self.afl_list = json.load(open(unique_path))
+            self.lgr.debug('trackAFL found unique file at %s, %d entries' % (unique_path, len(self.afl_list)))
+        else:
+            gpath = os.path.join(self.afl_dir, 'resim_*', 'queue', 'id:*')
+            glist = glob.glob(gpath)
+            if len(glist) > 0:
+                for path in glist:
+                    if 'sync:' not in path:
+                        self.afl_list.append(path)
+            else:
+                if os.path.isdir(self.afl_dir):
+                    self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
 
     def getTrackPath(self, index):
         queue_dir = os.path.dirname(self.afl_list[index])
