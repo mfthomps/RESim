@@ -118,7 +118,7 @@ class PlayAFL():
             with open(hits_path, 'w') as fh:
                 fh.write(full_path+'\n')
                 fh.write(self.cfg_file+'\n')
-            print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
+            #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
 
 
 
@@ -147,6 +147,10 @@ class PlayAFL():
                 if not os.path.isfile(fname):
                     done = True
                 else:
+                    hits_json = json.load(open(fname))
+                    for hit in hits_json:
+                        if hit not in self.all_hits:
+                            self.all_hits.append(hit)
                     self.index += 1
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
@@ -191,6 +195,7 @@ class PlayAFL():
                 with open(save_name, 'w') as fh:
                     fh.write(s)
                     fh.flush()
+                print('Hits file written to %s' % save_name)
             self.delStopHap(None)               
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
