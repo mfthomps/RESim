@@ -1114,6 +1114,10 @@ class DataWatch():
             self.lgr.debug('DataWatch clear Watches cycle 0x%x' % cycle)
         self.stopWatch()
         self.break_simulation = True
+        self.stack_buffers = {}
+        for eip in self.stack_buf_hap:
+            self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
+        self.stack_buf_hap = {}
         if cycle is None:
             del self.start[:]
             del self.length[:]

@@ -44,7 +44,7 @@ class GenHap():
     def show(self):
         if self.handle is not None and self.hap_num is not None:
             print('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
-            self.lgr.debug('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
+            #self.lgr.debug('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
             for bp in self.breakpoint_list:
                 bp.show()
         elif self.handle is not None:
@@ -97,8 +97,8 @@ class GenHap():
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
-            #self.lgr.debug('GenHap set hap_handle %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), 
-            #              self.name, str(bp.break_num), bp.addr, str(bp.handle)))
+            #self.lgr.debug('GenHap set hap_handle %s name: %s on break %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
+            #              self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
             self.hap_num = SIM_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -304,7 +304,7 @@ class GenContextMgr():
                 bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=False)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=True)
                 self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
