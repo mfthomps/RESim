@@ -57,6 +57,8 @@ class TrackAFL():
             self.index = self.index+1
             if self.index < len(self.afl_list):
                 SIM_run_alone(self.go, None)
+            else:
+                print('All files have been processed (have trackio output files)')
 
     def go(self, dumb=None):
         cpu = self.top.getCPU()
