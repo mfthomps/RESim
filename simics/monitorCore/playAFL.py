@@ -226,11 +226,13 @@ class PlayAFL():
 
     def recordHits(self, hit_bbs):
         ''' hits will go in a "coverage" directory along side queue, etc. '''
-        hit_list = list(hit_bbs.keys())
+        #hit_list = list(hit_bbs.keys())
         fname = self.getHitsPath(self.index)
         with open(fname, 'w') as fh:
-            json.dump(hit_list, fh) 
-        for hit in hit_list:
+            #json.dump(hit_list, fh) 
+            json.dump(hit_bbs, fh) 
+        #for hit in hit_list:
+        for hit in hit_bbs:
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
 
