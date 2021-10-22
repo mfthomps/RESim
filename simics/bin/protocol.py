@@ -36,8 +36,10 @@ refs = {}
 ''' Identify which data offsets have been modified (written to) '''
 mods = {}
 
+orig_addr = None
 for mark in trackdata:
-    if mark['mark_type'] == 'call':
+    #print('mark type %s' % mark['mark_type'])
+    if mark['mark_type'] == 'call' and orig_addr is None:
         orig_addr = mark['recv_addr']
         orig_len = mark['length']
         print('original addr 0x%x : %d' % (orig_addr, orig_len))
