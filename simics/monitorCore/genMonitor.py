@@ -3331,6 +3331,8 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True):
+        if type(save_json) is bool:
+            save_json = '/tmp/track.json'
         if self.bookmarks is not None:
             self.goToOrigin()
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3791,9 +3793,6 @@ class GenMonitor():
                             print('function: %s branch 0x%x from 0x%x not in hits' % (fun_blocks['name'], branch, bb_hit))
 
     def aflBNT(self, target, fun_name=None):
-        cpu, comm, pid  = self.task_utils[self.target].curProc()
-        self.debugPidGroup(pid)
-        self.lgr.debug('aflBNT target %s' % target)
         ida_path = self.getIdaData(self.full_path)
         if ida_path is not None:
             if target is None:
