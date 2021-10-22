@@ -697,9 +697,11 @@ class WatchMarks():
 
     def saveJson(self, fname):
         my_marks = []
-        self.lgr.debug('watchMarks saveJson %d marks' % len(self.mark_list))
+        self.lgr.debug('watchMarks saveJson %d marks to file %s' % (len(self.mark_list), fname))
         for mark in self.mark_list:
             entry = {}
+            entry['ip'] = mark.ip
+            entry['cycle'] = mark.cycle
             #self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
             if isinstance(mark.mark, self.CopyMark):
                 entry['mark_type'] = 'copy' 
@@ -721,6 +723,12 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['reference_buffer'] = mark.mark.start
                 entry['trans_size'] = mark.mark.trans_size
+            elif isinstance(mark.mark, self.KernelMark):
+                entry['mark_type'] = 'kernel' 
+                entry['addr'] = mark.mark.addr
+                entry['count'] = mark.mark.count
+                entry['callnum'] = mark.mark.callnum
+                entry['fd'] = mark.mark.fd
             else:
                 continue
             my_marks.append(entry)
