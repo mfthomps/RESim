@@ -163,8 +163,6 @@ def main():
     stop_threads = True
     for fd in read_array:
         fd.close()
-    time.sleep(10)
-    print('back from sleep')
     #output = resim_ps.communicate()
   
 if __name__ == '__main__':
