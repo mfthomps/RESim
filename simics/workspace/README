@@ -1,14 +1,29 @@
 Summary of CADET01 example.
 
-Use the ubuntu_driver.ini configuration script:  
-   resim ubuntu_driver.ini
+This example requires that you put the id_rsa  and id_rsa.pub files
+from simics/workspace into your local ~/.ssh directory.   This is
+needed to ssh into one of the simulated computers.
+
+You should have two terminals on the system that is running Simics.
+One should be in the workspace directory.  
+
+Use the ubuntu_driver.ini configuration script to start RESim.  And
+use the "-n" option to not display X11 console windows, which may slow down the system:  
+   resim ubuntu_driver.ini -n
 
 This includes a driver computer and the
 target "ubuntu" system that runs the vulnerable cadet service.
 
-As the driver boots, login to it (mike/password) and tee up the ./client.py script
+Watch the messages on the terminal as the driver boots, and once the driver
+is running ssh to it.  You can do this as soon as you see this message:
+    Host TCP port 4022 -> 10.20.200.91:22
 
-When RESim presents the simics> prompt, direct it to debug cadet01:
+Use this ssh command from your 2nd terminal to ssh to the driver:
+    ssh -p 4022 mike@localhost
+
+Once you are on the driver, tee up the ./client.py script
+
+When RESim presents the "simics>"  prompt, direct it to debug cadet01:
    @cgc.debugProc('cadet01')
 
 Save snapshot for future runs without having to boot
