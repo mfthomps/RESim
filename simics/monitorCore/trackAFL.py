@@ -14,6 +14,7 @@ class TrackAFL():
         self.lgr.debug('trackAFL afl list has %d items' % len(self.afl_list))
         self.index = 0
         self.inject_instance = None
+        self.did_exit = []
 
         afl_output = top.getAFLOutput()
         self.target = target
@@ -21,7 +22,12 @@ class TrackAFL():
         unique_path = os.path.join(self.afl_dir, target+'.unique')
         print('look for unique at %s' % unique_path)
         if os.path.isfile(unique_path):
-            self.afl_list = json.load(open(unique_path))
+            cover_list = json.load(open(unique_path))
+            for path in cover_list:
+                base = os.path.basename(path)
+                grand = os.path.dirname(os.path.dirname(path))
+                new = os.path.join(grand, 'queue', base)
+                self.afl_list.append(new)
             self.lgr.debug('trackAFL found unique file at %s, %d entries' % (unique_path, len(self.afl_list)))
         else:
             gpath = os.path.join(self.afl_dir, 'resim_*', 'queue', 'id:*')
@@ -59,6 +65,13 @@ class TrackAFL():
                 SIM_run_alone(self.go, None)
             else:
                 print('All files have been processed (have trackio output files)')
+                self.checkCrashes()
+
+    def checkCrashes(self):
+        for crashed in self.did_exit:
+            self.lgr.debug('File resulted in exit: %s' % crashed)
+            print('File resulted in exit: %s' % crashed)
+        return
 
     def go(self, dumb=None):
         cpu = self.top.getCPU()
@@ -77,10 +90,12 @@ class TrackAFL():
                 self.index = self.index+1
         if not got_one:
             print('All files have been processed (have trackio output files)')
-            return
+            self.checkCrashes()
         self.lgr.debug('trackAFL eip: 0x%x, cycles 0x%x go file: %s' % (eip, cpu.cycles, self.afl_list[self.index]))
         if self.inject_instance is None:
-            self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=True, no_rop=False, go=False)
+            self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=False, no_rop=False, go=False)
+            #self.inject_instance = self.top.injectIO(self.afl_list[self.index], callback=self.doNext, limit_one=True, no_rop=False, go=False)
+            self.inject_instance.setExitCallback(self.reportExit)
             self.inject_instance.go()
         else:
             self.inject_instance.setDfile(self.afl_list[self.index])
@@ -92,3 +107,9 @@ class TrackAFL():
             self.lgr.debug('trackAFL setStopAlone')
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
             SIM_break_simulation('trackafl')
+
+    def reportExit(self):
+        print('Process exited -- crash?')
+        self.lgr.debug('Process exited -- crash?')
+        self.did_exit.append(self.afl_list[self.index])
+        self.setStopAlone(None)
