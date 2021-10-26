@@ -3687,12 +3687,15 @@ class GenMonitor():
     def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False):
         self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid)
-        play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage, 
+        bb_coverage = self.coverage
+        if no_cover:
+            bb_coverage = None
+        play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, 
               packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode)
