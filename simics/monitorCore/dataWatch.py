@@ -392,13 +392,14 @@ class DataWatch():
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             param_count = self.mem_utils.getSigned(eax)
             self.lgr.debug('dataWatch returnHap, sscanf return from sscanf src 0x%x param_count %d' % (self.mem_something.src, param_count))
+            buf_start = self.findRange(self.mem_something.src)
             if param_count > 0:
                 for i in range(param_count):
-                    mark = self.watchMarks.sscanf(self.mem_something.src, self.mem_something.dest_list[i], self.mem_something.count)
+                    mark = self.watchMarks.sscanf(self.mem_something.src, self.mem_something.dest_list[i], self.mem_something.count, buf_start)
                     self.setRange(self.mem_something.dest_list[i], self.mem_something.count, None, watch_mark=mark) 
             else:
                 self.lgr.debug('dataWatch returnHap sscanf returned error')
-                self.watchMarks.sscanf(self.mem_something.src, None, None)
+                self.watchMarks.sscanf(self.mem_something.src, None, None, buf_start)
         elif self.mem_something.fun == 'strlen':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.count))
@@ -406,9 +407,10 @@ class DataWatch():
         elif self.mem_something.fun == 'vsnprintf' or self.mem_something.fun == 'sprintf':
             if self.mem_something.dest is None:
                 self.lgr.debug('dataWatch vsnprintf dest is None')
+            buf_start = self.findRange(self.mem_something.src)
             self.mem_something.src = self.mem_something.addr
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
-            mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count)
+            mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
@@ -1489,5 +1491,5 @@ class DataWatch():
     def pickleit(self, name):
         self.watchMarks.pickleit(name)
 
-    def saveJson(self, fname):
-        self.watchMarks.saveJson(fname)
+    def saveJson(self, fname, packet=1):
+        self.watchMarks.saveJson(fname, packet=packet)
