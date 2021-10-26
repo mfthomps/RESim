@@ -688,7 +688,7 @@ class GenContextMgr():
 
     def restoreDebugContext(self):
         self.cpu.current_context = self.resim_context
-        #self.lgr.debug('contextManager restoreDebugContext')
+        self.lgr.debug('contextManager restoreDebugContext')
 
     def restoreDebug(self):
         self.debugging_pid = self.debugging_pid_saved
@@ -864,7 +864,7 @@ class GenContextMgr():
                     #self.rmTask(pid, killed=True)
                     #if pid in self.demise_cache:
                     #    self.demise_cache.remove(pid)
-                    if self.pageFaultGen is not None:
+                    if self.pageFaultGen is not None and self.exit_callback is None:
                         if self.pageFaultGen.handleExit(pid, lead_pid):
                             print('SEGV on pid %d?' % pid)
                             self.lgr.debug('genContextManager SEGV on pid %d -- stop trace of exit_syscall' % pid)
@@ -873,11 +873,11 @@ class GenContextMgr():
                 self.clearExitBreaks()
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %d, leader was %d' % (lead_pid, self.group_leader))
-            if self.pageFaultGen is not None:
+            if self.pageFaultGen is not None and self.exit_callback is None:
                 self.pageFaultGen.handleExit(lead_pid, self.group_leader)
         else:
             self.lgr.debug('contextManager killGroup NO leader.  got %d' % (lead_pid))
-            if self.pageFaultGen is not None:
+            if self.pageFaultGen is not None and self.exit_callback is None:
                 self.pageFaultGen.handleExit(lead_pid, lead_pid)
 
 
@@ -893,7 +893,7 @@ class GenContextMgr():
             #exit_syscall.handleExit(pid, ida_msg, killed=True)
         else:
             self.rmTask(pid)
-            if self.pageFaultGen is not None:
+            if self.pageFaultGen is not None and self.exit_callback is None:
                 group_leader = self.task_utils.getGroupLeaderPid(pid)
                 self.pageFaultGen.handleExit(pid, group_leader)
             self.clearExitBreaks()
