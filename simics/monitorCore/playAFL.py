@@ -20,6 +20,7 @@ class PlayAFL():
         self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
+        self.afl_mode = afl_mode
         self.findbb = None
         self.write_data = None
         self.orig_buffer = None
@@ -69,6 +70,9 @@ class PlayAFL():
         self.in_data = None
         #self.backstop_cycles =   100000
         self.backstop_cycles =   900000
+        bsc = os.getenv('BACK_STOP_CYCLES')
+        if bsc is not None:
+            self.backstop_cycles = int(bsc)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         self.afl_packet_count = None
@@ -119,6 +123,7 @@ class PlayAFL():
                 fh.write(full_path+'\n')
                 fh.write(self.cfg_file+'\n')
             #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
+            #self.backstop.setCallback(self.whenDone)
 
 
 
@@ -171,13 +176,24 @@ class PlayAFL():
             if self.addr is None:
                 self.addr, self.max_len = self.dataWatch.firstBufferAddress()
         
+            if self.orig_buffer is not None:
+                ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
+                    references data past the end of what is received. '''
+                self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+                self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles)
-            self.write_data.write()
-            self.lgr.debug('playAFL goAlone file %s continue from cycle 0x%x %d cpu context: %s' % (self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
+            eip = self.top.getEIP(self.cpu)
+            count = self.write_data.write()
+            self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
+
+            if self.afl_mode: 
+                self.coverage.watchExits()
+            else:
+                self.coverage.watchExits(callback=self.reportExit)
             SIM_run_command('c')
         else:
             ''' did all sessions '''
@@ -242,6 +258,7 @@ class PlayAFL():
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
                 self.lgr.debug('playAFL stopHap index %d, got %d hits, %d packets' % (self.index, self.coverage.getHitCount(), num_packets))
+                self.backstop.clearCycle()
                 hits = self.coverage.getHitCount()
                 if hits > self.hit_total:
                     delta = hits - self.hit_total
@@ -280,3 +297,8 @@ class PlayAFL():
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
         return retval
+
+    def reportExit(self):
+        print('Process exit  cycles 0x%x' % self.cpu.cycles)
+        SIM_break_simulation('process exit')
+ 
