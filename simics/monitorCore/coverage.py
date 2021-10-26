@@ -186,6 +186,7 @@ class Coverage():
         self.bb_hap.append(hap)
 
         if self.afl:
+            self.lgr.debug('coverage watchGroupExits')
             self.context_manager.watchGroupExits()
             self.context_manager.setExitCallback(self.recordExit)
         self.handleUnmapped()
@@ -222,8 +223,12 @@ class Coverage():
         self.lgr.debug('coverage recordExit of program under test')
         SIM_break_simulation('did exit')
 
-    def watchExits(self, pid=None):
+    def watchExits(self, pid=None, callback=None):
         self.context_manager.watchGroupExits(pid=pid)
+        if self.afl:
+            self.context_manager.setExitCallback(self.recordExit)
+        elif callback is not None:
+            self.context_manager.setExitCallback(callback)
 
     def getStatus(self):
         return self.did_exit
