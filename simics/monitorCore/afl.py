@@ -137,6 +137,8 @@ class AFL():
                 self.top.resetOrigin()
        
                 self.top.debugProc(target, self.aflInitCallback)
+        self.coverage.watchExits()
+    
 
     def aflInitCallback(self):
         self.lgr.debug('afl aflInitCallback')
@@ -289,8 +291,7 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
-    
-    
+
         cli.quiet_run_command('c') 
 
     def whenDone(self):
