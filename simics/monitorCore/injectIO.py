@@ -219,7 +219,8 @@ class InjectIO():
             SIM_run_command('enable-reverse-execution') 
 
     def resetReverseAlone(self, count):
-        packet_num = self.write_data.getCurrentPacket()
+        ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
+        packet_num = self.write_data.getCurrentPacket() - 1
         self.saveJson(packet=packet_num)
         self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
         self.resetOrigin(None)
@@ -278,3 +279,6 @@ class InjectIO():
 
     def setExitCallback(self, exit_callback):
         self.context_manager.setExitCallback(exit_callback)
+
+    def setSaveJson(self, save_file):
+        self.save_json = save_file

@@ -702,6 +702,7 @@ class WatchMarks():
         self.lgr.debug('watchMarks saveJson %d marks to file %s packet %d' % (len(self.mark_list), fname, packet))
         if os.path.isfile(fname):
             my_marks = json.load(open(fname))
+            self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
         for mark in self.mark_list:
             entry = {}
             entry['ip'] = mark.ip

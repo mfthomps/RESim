@@ -5,6 +5,7 @@ import subprocess
 import shlex
 #import threading
 from simics import *
+import cli
 import stopFunction
 import aflPath
 
@@ -17,6 +18,7 @@ class ReplayAFL():
         self.port = os.getenv('TARGET_PORT')
         if self.ip is None or self.port is None: 
             print('Missing TARGET_IP or TARGET_PORT in the ini file.')
+            self.lgr.warning('Missing TARGET_IP or TARGET_PORT in the ini file.')
             return
         self.header = os.getenv('AFL_UDP_HEADER')
         self.resim_dir = os.getenv('RESIM')
@@ -34,6 +36,7 @@ class ReplayAFL():
             self.client_path = os.path.join(here, 'clientudpMult')
         else:
             self.client_path = os.path.join(here, 'clientTCP')
+        self.lgr.debug('replayAFL call debugSnap')
         self.top.debugSnap(final_fun = self.go)
 
     def startAlone(self, driver):

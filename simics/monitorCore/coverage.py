@@ -354,7 +354,7 @@ class Coverage():
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             return
-        #self.lgr.debug('coverage bbHap address 0x%x bp %d' % (this_addr, break_num))
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d cycle: 0x%x' % (this_addr, break_num, self.cpu.cycles))
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
         if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:

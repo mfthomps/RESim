@@ -3331,6 +3331,8 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True):
+        ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
+            the instance is not defined until it is done.'''
         if type(save_json) is bool:
             save_json = '/tmp/track.json'
         if self.bookmarks is not None:
@@ -3637,7 +3639,7 @@ class GenMonitor():
         ''' not hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port)
 
-    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765):
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765, one_done=False):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3658,7 +3660,7 @@ class GenMonitor():
             full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.context_manager[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
-            linear=linear, target=target, create_dead_zone=dead, port=port)
+            linear=linear, target=target, create_dead_zone=dead, port=port, one_done=one_done)
         if target is None:
             self.noWatchSysEnter()
             fuzz_it.goN(0)
@@ -3705,7 +3707,7 @@ class GenMonitor():
             print('playAFL failed?')
 
     def findBB(self, target, bb):
-        afl_output = self.getAFLOutput()
+        afl_output = aflPath.getAFLOutput()
         target_dir = os.path.join(afl_output, target)
         #flist = os.listdir(target_dir)
         flist = glob.glob(target_dir+'/resim_*/')
@@ -3749,7 +3751,7 @@ class GenMonitor():
             self.aflPlay.go(findbb=bb)
 
     def replayAFL(self, target, index, targetFD, instance=None, cover=False, trace=False): 
-        ''' replay a specific AFL data file using a driver listening on localhost 4023 '''
+        ''' replay a specific AFL data file using a driver listening on localhost 4022 '''
         self.replay_instance = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, cover=cover, trace=trace) 
 
     def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False, trace=False): 
@@ -3815,9 +3817,11 @@ class GenMonitor():
                     if blocks[fun]['name'] == fun_name:
                         self.findBNT(hits, blocks[fun]) 
                         break
-    
-    def quit(self):
+    def quitAlone(self, dumb): 
         SIM_run_command('q')
+   
+    def quit(self):
+        SIM_run_alone(self.quitAlone, None)
 
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()
@@ -3874,8 +3878,8 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname):
-        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname)
+    def instructTrace(self, fname, all_proc=False):
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc)
         pid = self.getPID()
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
@@ -3910,16 +3914,6 @@ class GenMonitor():
         bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Write, addr, self.mem_utils[self.target].WORD_SIZE, 0)
         print('set execution break at 0x%x bp %d' % (addr, bp))
 
-    def getAFLOutput(self):
-        afl_output = os.getenv('AFL_OUTPUT')
-        if afl_output is None:
-            afl_output = os.getenv('AFL_DATA')
-            if afl_output is None:
-                afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-                self.lgr.debug('Using default AFL_OUPUT directory of %s' % afl_output)
-            else:
-                afl_output = os.path.join(afl_output, 'output')
-        return afl_output
 
     def showSyscallExits(self):
         exit_list = self.sharedSyscall[self.target].getExitList('traceAll')

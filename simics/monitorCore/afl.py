@@ -16,7 +16,7 @@ from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, lgr, fd=None, 
-                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765):
+                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, one_done=False):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
         if pad_env is not None:
@@ -74,6 +74,7 @@ class AFL():
         self.create_dead_zone = create_dead_zone
         self.backstop.setCallback(self.whenDone)
         self.port = port
+        self.one_done = one_done
         ''' careful changing this, may hit backstop before crashed process killed '''
         #self.backstop_cycles =  500000
         if stop_on_read:
@@ -117,7 +118,7 @@ class AFL():
             if target is None:
                 self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
                 if self.orig_buffer is not None:
-                    self.lgr.debug('restore bytes to %s cpu %s' % (str(self.addr), str(self.cpu)))
+                    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
                     self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
                 self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                     afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
@@ -137,7 +138,7 @@ class AFL():
                 self.top.resetOrigin()
        
                 self.top.debugProc(target, self.aflInitCallback)
-        self.coverage.watchExits()
+        #self.coverage.watchExits()
     
 
     def aflInitCallback(self):
@@ -190,6 +191,12 @@ class AFL():
                 with open('/tmp/icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
+
+            if self.one_done:
+                self.sock.close()
+                self.coverage.stopCover()
+                self.lgr.debug('afl one and done, removed coverage breaks')
+                return
 
             ''' Send the status message '''
             self.sendMsg('resim_done iteration: %d status: %d size: %d' % (self.iteration, status, self.orig_data_length))
@@ -291,7 +298,7 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
-
+        #self.lgr.debug('afl goN context %s' % self.cpu.current_context)
         cli.quiet_run_command('c') 
 
     def whenDone(self):

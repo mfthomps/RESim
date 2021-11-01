@@ -182,9 +182,10 @@ class PlayAFL():
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
                 self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
+            #self.context_manager.restoreDebugContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles)
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
@@ -192,8 +193,11 @@ class PlayAFL():
 
             if self.afl_mode: 
                 self.coverage.watchExits()
-            else:
+            elif self.coverage is not None:
                 self.coverage.watchExits(callback=self.reportExit)
+            else:
+                self.context_manager.watchGroupExits()
+                self.context_manager.setExitCallback(self.reportExit)
             SIM_run_command('c')
         else:
             ''' did all sessions '''
