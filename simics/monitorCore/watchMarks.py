@@ -237,6 +237,16 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class FwriteMark():
+        def __init__(self, fun, src, count):
+            self.fun = fun    
+            self.src = src    
+            self.src = count    
+            self.msg = '%s src 0x%x count %d' % (fun, src, count)
+
+        def getMsg(self):
+            return self.msg
+
     class IteratorMark():
         def __init__(self, fun, addr, buf_start): 
             self.fun = fun
@@ -522,6 +532,12 @@ class WatchMarks():
         lm = self.FprintfMark(fun, src)
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
+
+    def fwrite(self, fun, src, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        wm = self.FwriteMark(fun, src, count)
+        self.addWatchMark(ip, wm)
+        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, wm.getMsg()))
 
     def xmlGetProp(self, src, count, the_string, dest):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
