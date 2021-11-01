@@ -160,22 +160,23 @@ class WatchMarks():
             return self.msg
 
     class StrChrMark():
-        def __init__(self, ours, the_chr, count):
+        def __init__(self, start, the_chr, count):
             self.the_chr = the_chr
-            self.ours = ours    
+            self.start = start    
             self.count = count    
-            if self.the_chr > 20 and self.the_chr < 127:
-                self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (ours, self.the_chr, chr(self.the_chr))
+            if self.the_chr > 20:
+                self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (start, self.the_chr, chr(self.the_chr))
             else:
-                self.msg = 'strchr in string at 0x%x find 0x%x' % (ours, self.the_chr)
+                self.msg = 'strchr in string at 0x%x find 0x%x' % (start, self.the_chr)
         def getMsg(self):
             return self.msg
 
     class ScanMark():
-        def __init__(self, src, dest, count, sp=None, base=None):
+        def __init__(self, src, dest, count, buf_start, sp, base):
             self.src = src    
             self.dest = dest    
             self.count = count    
+            self.buf_start = buf_start    
             self.sp = sp    
             self.base = base    
             if dest is None:
@@ -214,11 +215,12 @@ class WatchMarks():
             return self.msg
 
     class SprintfMark():
-        def __init__(self, fun, src, dest, count, sp=None, base=None):
+        def __init__(self, fun, src, dest, count, buf_start, sp, base):
             self.fun = fun    
             self.src = src    
             self.dest = dest    
             self.count = count    
+            self.buf_start = buf_start    
             self.sp = sp    
             self.base = base    
             self.msg = '%s src: 0x%x dest 0x%x len %d' % (fun, src, dest, count)
@@ -497,17 +499,17 @@ class WatchMarks():
         self.addWatchMark(ip, cm)
         self.lgr.debug('watchMarks compare (%s) 0x%x %s' % (fun, ip, cm.getMsg()))
 
-    def strchr(self, ours, the_chr, count):
+    def strchr(self, start, the_chr, count):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = self.StrChrMark(ours, the_chr, count)
-        self.removeRedundantDataMark(ours)
+        cm = self.StrChrMark(start, the_chr, count)
+        self.removeRedundantDataMark(start)
         self.addWatchMark(ip, cm)
         self.lgr.debug('watchMarks strchr 0x%x %s' % (ip, cm.getMsg()))
 
-    def sscanf(self, src, dest, count):
+    def sscanf(self, src, dest, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sp, base = self.getStackBase(dest)
-        sm = self.ScanMark(src, dest, count, sp=sp, base=base)        
+        sm = self.ScanMark(src, dest, count, buf_start, sp, base)        
         self.addWatchMark(ip, sm)
         self.lgr.debug('watchMarks sscanf 0x%x %s' % (ip, sm.getMsg()))
 
@@ -518,10 +520,10 @@ class WatchMarks():
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks strlen 0x%x %s' % (ip, lm.getMsg()))
 
-    def sprintf(self, fun, src, dest, count):
+    def sprintf(self, fun, src, dest, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sp, base = self.getStackBase(dest)
-        lm = self.SprintfMark(fun, src, dest, count, sp=sp, base=base)        
+        lm = self.SprintfMark(fun, src, dest, count, buf_start, sp, base)        
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
 
@@ -711,19 +713,35 @@ class WatchMarks():
         self.lgr.debug('watchMarks pickleit to %s recent_buf_addres: %s' % (mark_file, str(self.recent_buf_address)))
         pickle.dump( pickDict, open( mark_file, "wb") ) 
 
-    def saveJson(self, fname):
+    def saveJson(self, fname, packet=1):
         my_marks = []
-        self.lgr.debug('watchMarks saveJson %d marks to file %s' % (len(self.mark_list), fname))
+        self.lgr.debug('watchMarks saveJson %d marks to file %s packet %d' % (len(self.mark_list), fname, packet))
+        if os.path.isfile(fname):
+            my_marks = json.load(open(fname))
+            self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
         for mark in self.mark_list:
             entry = {}
             entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
+            entry['packet'] = packet
             #self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
             if isinstance(mark.mark, self.CopyMark):
                 entry['mark_type'] = 'copy' 
                 entry['src'] = mark.mark.src 
                 entry['dest'] = mark.mark.dest 
                 entry['length'] = mark.mark.length 
+                entry['reference_buffer'] = mark.mark.buf_start 
+            if isinstance(mark.mark, self.ScanMark):
+                entry['mark_type'] = 'scan' 
+                entry['src'] = mark.mark.src 
+                entry['dest'] = mark.mark.dest 
+                entry['length'] = mark.mark.count 
+                entry['reference_buffer'] = mark.mark.buf_start 
+            elif isinstance(mark.mark, self.SprintfMark):
+                entry['mark_type'] = 'sprint' 
+                entry['src'] = mark.mark.src
+                entry['dest'] = mark.mark.dest
+                entry['count'] = mark.mark.count
                 entry['reference_buffer'] = mark.mark.buf_start 
             elif isinstance(mark.mark, self.CallMark):
                 entry['mark_type'] = 'call' 
@@ -745,6 +763,18 @@ class WatchMarks():
                 entry['count'] = mark.mark.count
                 entry['callnum'] = mark.mark.callnum
                 entry['fd'] = mark.mark.fd
+            elif isinstance(mark.mark, self.StrChrMark):
+                entry['mark_type'] = 'strchr' 
+                entry['the_char'] = mark.mark.the_char
+                entry['start'] = mark.mark.start
+                entry['count'] = mark.mark.count
+            elif isinstance(mark.mark, self.CompareMark):
+                entry['mark_type'] = 'compare' 
+                entry['src_str'] = mark.mark.src_str
+                entry['dst_str'] = mark.mark.dst_str
+                entry['ours'] = mark.mark.ours
+                entry['theirs'] = mark.mark.theirs
+                entry['count'] = mark.mark.count
             else:
                 continue
             my_marks.append(entry)

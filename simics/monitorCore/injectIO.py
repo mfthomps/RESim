@@ -7,7 +7,8 @@ import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, limit_one=False, no_rop=False):
+           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, 
+           limit_one=False, no_rop=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -146,16 +147,16 @@ class InjectIO():
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
+        eip = self.top.getEIP(self.cpu)
         if self.target is None:
             self.dataWatch.clearWatchMarks()
             self.dataWatch.clearWatches()
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles)
-            self.lgr.debug('injectIO did write %d bytes to addr 0x%x max_len %d cycle: 0x%x  Now clear watches' % (bytes_wrote, self.addr, self.max_len, self.cpu.cycles))
+            self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x max_len %d cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.max_len, self.cpu.cycles))
             if not self.stay:
                 if not self.trace_all:
-                    eip = self.top.getEIP(self.cpu)
                     self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.bookmarks.setOrigin(self.cpu)
                     cli.quiet_run_command('disable-reverse-execution')
@@ -218,7 +219,10 @@ class InjectIO():
             SIM_run_command('enable-reverse-execution') 
 
     def resetReverseAlone(self, count):
-        self.lgr.debug('injectIO, handling subsequent packet, must reset watch marks and bookmarks')
+        ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
+        packet_num = self.write_data.getCurrentPacket() - 1
+        self.saveJson(packet=packet_num)
+        self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
         self.resetOrigin(None)
         self.dataWatch.clearWatchMarks()
         self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
@@ -259,13 +263,22 @@ class InjectIO():
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectiO load orig_buffer from pickle')
 
-    def saveJson(self, save_file=None):
+    def saveJson(self, save_file=None, packet=None):
+        if packet is None:
+            packet = self.write_data.getCurrentPacket()
+        self.lgr.debug('injectIO saveJson packet %d' % packet)
         if save_file is None and self.save_json is not None:
-            self.dataWatch.saveJson(self.save_json)
+            self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
-            self.dataWatch.saveJson(save_file)
+            self.dataWatch.saveJson(save_file, packet=packet)
         self.top.stopTrackIO
 
     def setDfile(self, dfile):
         self.dfile = dfile
         self.clear_retrack = True
+
+    def setExitCallback(self, exit_callback):
+        self.context_manager.setExitCallback(exit_callback)
+
+    def setSaveJson(self, save_file):
+        self.save_json = save_file

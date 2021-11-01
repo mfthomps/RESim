@@ -60,8 +60,8 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
-        #self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r' % (self.expected_packet_count, 
-        #     self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read))
+        #self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+        #     self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
 
         self.pid = self.top.getPID()
         self.filter = filter
@@ -72,7 +72,7 @@ class WriteData():
         self.expected_packet_count = expected_packet_count
         self.current_packet = 0
 
-    def write(self):
+    def write(self, record=False):
         retval = None
         if self.expected_packet_count <= 1 and self.udp_header is None:
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
@@ -97,12 +97,13 @@ class WriteData():
                 self.in_data = ''
                 retval = tot_len
         elif self.udp_header is not None:
+            ''' see if there will be yet another udp header '''
             index = self.in_data[5:].find(self.udp_header)
             if index > 0:
                 first_data = self.in_data[:(index+5)]
-                if self.filter is not None and not self.filter.filter(first_data):
+                if self.filter is not None and not self.filter.filter(first_data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(first_data))) 
-                    self.lgr.debug('writeData first_data failed filter, wrote nulls')
+                    #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 
                 self.in_data = self.in_data[len(first_data):]
@@ -111,11 +112,12 @@ class WriteData():
                 #self.lgr.debug('writeData wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
                 #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
             else:
+                ''' no next udp header found'''
                 data = self.in_data[:self.max_len]
-                #self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d' % (self.udp_header, self.current_packet, len(data)))
-                if self.filter is not None and not self.filter.filter(data):
+                #self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d max_len %d in_data len %d' % (self.udp_header, self.current_packet, len(data), self.max_len, len(self.in_data)))
+                if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
-                    self.lgr.debug('writeData failed filter, wrote nulls')
+                    #self.lgr.debug('writeData failed filter, wrote nulls')
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, data) 
                 retval = len(data)
@@ -126,14 +128,17 @@ class WriteData():
         else:
             self.lgr.error('writeData could not handle data parameters.')
 
-        self.setCallHap()
+        if len(self.in_data) > 0:
+            self.setCallHap()
+        else:
+            SIM_run_alone(self.delCallHap, None)
         self.current_packet += 1
         return retval
 
     def setCallHap(self):
         if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            #self.lgr.debug('writeData set callHap, cell is %s' % str(self.cell))
+            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
@@ -152,15 +157,16 @@ class WriteData():
         else:
             frame = self.top.frameFromRegs(self.cpu)
             frame_s = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('writeData frame: %s' % frame_s)
+            #self.lgr.debug('callHap writeData frame: %s' % frame_s)
             if self.limit_one:
                 self.lgr.warning('writeData callHap, would write more data, but limit_one')
-                self.lgr.debug(frame_s)
+                #self.lgr.debug(frame_s)
             
             else:
-                self.lgr.debug('writeData callHap, skip over kernel receive processing and write more data')
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
+                #print('did write')
+                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)

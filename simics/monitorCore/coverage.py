@@ -186,6 +186,7 @@ class Coverage():
         self.bb_hap.append(hap)
 
         if self.afl:
+            self.lgr.debug('coverage watchGroupExits')
             self.context_manager.watchGroupExits()
             self.context_manager.setExitCallback(self.recordExit)
         self.handleUnmapped()
@@ -222,8 +223,12 @@ class Coverage():
         self.lgr.debug('coverage recordExit of program under test')
         SIM_break_simulation('did exit')
 
-    def watchExits(self, pid=None):
+    def watchExits(self, pid=None, callback=None):
         self.context_manager.watchGroupExits(pid=pid)
+        if self.afl:
+            self.context_manager.setExitCallback(self.recordExit)
+        elif callback is not None:
+            self.context_manager.setExitCallback(callback)
 
     def getStatus(self):
         return self.did_exit
@@ -349,7 +354,7 @@ class Coverage():
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             return
-        #self.lgr.debug('coverage bbHap address 0x%x bp %d' % (this_addr, break_num))
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d cycle: 0x%x' % (this_addr, break_num, self.cpu.cycles))
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
             self.backstop.setFutureCycleAlone(self.backstop_cycles)
         if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:

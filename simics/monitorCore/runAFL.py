@@ -32,7 +32,7 @@ def ioHandler(read_array, stop):
 
 def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs):
     afl_cmd = '%s -i %s -o %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, afl_name)
-    #print('afl_cmd %s' % afl_cmd) 
+    print('afl_cmd %s' % afl_cmd) 
 
     cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
