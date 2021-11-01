@@ -29,12 +29,13 @@ def isMod(mark, offset, mods):
     return retval
 
 class ReadMark():
-    def __init__(self, offset, size, data, ip, cycle):
+    def __init__(self, offset, size, data, ip, cycle, packet):
         self.offset = offset
         self.size = size
         self.data = data
         self.ip = ip
         self.cycle = cycle
+        self.packet = packet
 
 def getReadMarks(jpath):
     ''' jpath is path to the trackio '''
@@ -51,6 +52,9 @@ def getReadMarks(jpath):
         #print('session data is %s' % session_data)
   
     read_marks = []
+    if not os.path.isfile(jpath):
+        print('Missing file: %s' % jpath)
+        return None, None
     trackdata = json.load(open(jpath))
     ''' Support tracking data references back to their original buffer location '''
     refs = {}
@@ -84,6 +88,48 @@ def getReadMarks(jpath):
                 refs[mark['dest']] = mark['src'] 
                 offset = mark['src'] - orig_addr
                 #print('copy %d bytes from offset %d  new ref[0x%x] = 0x%x' % (mark['length'], offset, mark['dest'], mark['src']))
+
+        if mark['mark_type'] == 'scan':
+            if mark['reference_buffer'] != orig_addr:
+                orig = findOrig(mark['reference_buffer'], refs, orig_addr, orig_len)
+                if orig is None:
+                    print('copy, COULD NOT FIND original buffer for 0x%x' % mark['reference_buffer'])
+                else:
+                    if mark['src'] in refs and refs[mark['src']] == mark['dest']:
+                        print('mark[0x%x] already in refs and that equals the dest. Looks like a copy-back, skipping dest 0x%x.' % (mark['src'], mark['dest']))
+                    else:
+                        refs[mark['dest']] = mark['src'] 
+                        orig_offset = orig - orig_addr
+                        offset = mark['src'] - mark['reference_buffer']
+                        tot_offset = orig_offset + offset
+                        print('scan %d bytes from offset %d  new ref[0x%x] = 0x%x' % (mark['length'], tot_offset, mark['dest'], mark['src']))
+                 
+            else:
+                ''' original buffer, so (src - orig_addr)  is the offset into the original.'''
+                refs[mark['dest']] = mark['src'] 
+                offset = mark['src'] - orig_addr
+                print('scan %d bytes from offset %d  new ref[0x%x] = 0x%x' % (mark['length'], offset, mark['dest'], mark['src']))
+
+        if mark['mark_type'] == 'sprint':
+            if mark['reference_buffer'] != orig_addr:
+                orig = findOrig(mark['reference_buffer'], refs, orig_addr, orig_len)
+                if orig is None:
+                    print('copy, COULD NOT FIND original buffer for 0x%x' % mark['reference_buffer'])
+                else:
+                    if mark['src'] in refs and refs[mark['src']] == mark['dest']:
+                        print('mark[0x%x] already in refs and that equals the dest. Looks like a copy-back, skipping dest 0x%x.' % (mark['src'], mark['dest']))
+                    else:
+                        refs[mark['dest']] = mark['src'] 
+                        orig_offset = orig - orig_addr
+                        offset = mark['src'] - mark['reference_buffer']
+                        tot_offset = orig_offset + offset
+                        print('sprint %d bytes from offset %d  new ref[0x%x] = 0x%x' % (mark['length'], tot_offset, mark['dest'], mark['src']))
+                 
+            else:
+                ''' original buffer, so (src - orig_addr)  is the offset into the original.'''
+                refs[mark['dest']] = mark['src'] 
+                offset = mark['src'] - orig_addr
+                print('sprint %d bytes from offset %d  new ref[0x%x] = 0x%x' % (mark['length'], offset, mark['dest'], mark['src']))
         
         if mark['mark_type'] == 'read':
             if mark['reference_buffer'] == orig_addr:
@@ -96,7 +142,7 @@ def getReadMarks(jpath):
                     size = mark['trans_size']
                     data = int.from_bytes(session_data[offset:offset+size], byteorder='big')
                     #data = struct.unpack("i", ba)[0]
-                    read_mark = ReadMark(offset, mark['trans_size'], data, mark['ip'], mark['cycle'])
+                    read_mark = ReadMark(offset, mark['trans_size'], data, mark['ip'], mark['cycle'], mark['packet'])
                     read_marks.append(read_mark)
             else:
                 orig = findOrig(mark['reference_buffer'], refs, orig_addr, orig_len)
@@ -113,7 +159,7 @@ def getReadMarks(jpath):
                         #print('read %d offset %d' % (mark['trans_size'], tot_offset))
                         size = mark['trans_size']
                         data = int.from_bytes(session_data[tot_offset:tot_offset+size], byteorder='big')
-                        read_mark = ReadMark(offset, mark['trans_size'], data, mark['ip'], mark['cycle'])
+                        read_mark = ReadMark(offset, mark['trans_size'], data, mark['ip'], mark['cycle'], mark['packet'])
                         read_marks.append(read_mark)
      
         if mark['mark_type'] == 'write' and mark['addr'] is not None:
@@ -126,6 +172,8 @@ def getReadMarks(jpath):
        
             for i in range(mark['trans_size']): 
                 mods[mark['reference_buffer']].append(offset+i)
+        if mark['mark_type'] == 'compare':
+            print('compare')
 
 
     return read_marks, file_len
