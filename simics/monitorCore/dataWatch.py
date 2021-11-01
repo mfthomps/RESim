@@ -13,7 +13,7 @@ import net
 import os
 import sys
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'mempcpy', 
-            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'xmlStrcmp',
+            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'fwrite', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse']
             #'printf', 'fprintf', 'sprintf', 'vsnprintf']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -334,7 +334,8 @@ class DataWatch():
             if self.mem_something.op_type == Sim_Trans_Load:
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
-                    self.lgr.error('dataWatch buf_start for 0x%x is none in memcpyis?' % (self.mem_something.src))
+                    self.lgr.error('dataWatch buf_start for 0x%x is none in memcpyish?' % (self.mem_something.src))
+                    SIM_break_simulation('mempcpy')
                     return
             else:
                 self.lgr.debug('returnHap copy not a Load')
@@ -355,10 +356,16 @@ class DataWatch():
                    self.mem_something.src, self.mem_something.dest, self.mem_something.count))
         elif self.mem_something.fun == 'strchr':
             buf_start = self.findRange(self.mem_something.dest)
-            self.watchMarks.strchr(self.mem_something.dest, self.mem_something.the_chr, self.mem_something.count)
+            if self.cpu.architecture != 'arm':
+                self.lgr.debug('datawatch strchr confusion, mem_something.the_chr is 0x%x' % self.mem_something.the_chr)
+                #the_chr = self.mem_utils.readByte(self.cpu, self.mem_something.the_chr)
+                the_chr = self.mem_something.the_chr
+            else:
+                the_chr = self.mem_something.the_chr
+            self.watchMarks.strchr(self.mem_something.dest, the_chr, self.mem_something.count)
             self.lgr.debug('dataWatch returnHap, return from %s strchr 0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
                    self.mem_something.src, self.mem_something.the_chr, self.mem_something.count))
-        elif self.mem_something.fun == 'strcpy':
+        elif self.mem_something.fun == 'strcpy' or self.mem_something.fun == 'strncpy':
             self.lgr.debug('dataWatch returnHap, strcpy return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
             buf_start = self.findRange(self.mem_something.src)
@@ -415,6 +422,9 @@ class DataWatch():
         elif self.mem_something.fun == 'fprintf' or self.mem_something.fun == 'printf':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fprintf(self.mem_something.fun, self.mem_something.src)
+        elif self.mem_something.fun == 'fwrite':
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
+            self.watchMarks.fwrite(self.mem_something.fun, self.mem_something.src, self.mem_something.count)
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -489,7 +499,7 @@ class DataWatch():
             self.watchMarks.registerCallCycle();
             ''' assuming we are a the call to a memsomething, get its parameters '''
             self.pending_call = True
-            self.lgr.debug('dataWatch getMemParams set true')
+            self.lgr.debug('dataWatch getMemParams, pending_call set True,  fun is %s' % self.mem_something.fun)
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             if self.mem_something.fun == 'memcpy' or self.mem_something.fun == 'memmove' or self.mem_something.fun == 'mempcpy' or self.mem_something.fun == 'j_memcpy': 
                 if self.cpu.architecture == 'arm':
@@ -500,7 +510,7 @@ class DataWatch():
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
                     self.mem_something.src = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                     self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
-                self.lgr.debug('getMemParams dest 0x%x  src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, 
+                self.lgr.debug('getMemParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, 
                     self.mem_something.count))
             elif self.mem_something.fun == 'memset':
                 self.mem_something.src = None
@@ -522,11 +532,15 @@ class DataWatch():
             elif self.mem_something.fun == 'strdup':
                 if self.mem_something.src is not None:
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
-            elif self.mem_something.fun == 'strcpy':
+            elif self.mem_something.fun == 'strcpy' or self.mem_something.fun == 'strncpy':
                 if self.cpu.architecture == 'arm':
                     if self.mem_something.src is None:
                         self.mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r1')
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
+                    if self.mem_something.fun == 'strncpy':
+                        n = self.mem_utils.getRegValue(self.cpu, 'r3')
+                        if self.mem_something.count > n:
+                            self.mem_something.count = n
                     self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     ''' TBD this fails on buffer overlap, but that leads to crash anyway? '''
                     self.lgr.debug('getMemParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (self.mem_something.src, self.mem_something.dest, self.mem_something.count))
@@ -534,6 +548,12 @@ class DataWatch():
                     if self.mem_something.src is None:
                         self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
+                    if self.mem_something.fun == 'strncpy':
+                        n_addr = sp+2*self.mem_utils.WORD_SIZE
+                        n = self.mem_utils.readWord(self.cpu, n_addr)
+                        self.lgr.debug('getMemParams strncpy count was %d, n was %d  n_addr was 0x%x' % (self.mem_something.count, n, n_addr))
+                        if self.mem_something.count > n:
+                            self.mem_something.count = n
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
             elif self.mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
                 if self.cpu.architecture == 'arm':
@@ -605,7 +625,15 @@ class DataWatch():
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
                     self.mem_something.count = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
             elif self.mem_something.fun == 'fprintf' or self.mem_something.fun == 'printf':
+                self.lgr.warning('why not record printf?')
                 pass
+            elif self.mem_something.fun == 'fwrite':
+                if self.cpu.architecture == 'arm':
+                    self.mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    self.mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
+                else:
+                    self.mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                    self.mem_something.count = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
 
             # Begin XML
             elif self.mem_something.fun == 'xmlGetProp':
@@ -948,7 +976,7 @@ class DataWatch():
         if self.read_hap[index] is None or self.read_hap[index] == 0:
             self.lgr.debug('readHap index %d none or zero' % index)
             return
-        #self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x' % (pid, index, addr, eip, self.cpu.cycles))
+        self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x' % (pid, index, addr, eip, self.cpu.cycles))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -1397,16 +1425,18 @@ class DataWatch():
         max_precidence = -1
         max_index = len(frames)-1
         #self.lgr.debug('memsomething max_index %d' % (max_index))
+        outer_index = None
+        prev_fun = None
         for i in range(max_index, -1, -1):
             frame = frames[i]
             if frame.fun_addr is None:
-                #self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
+                self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
                 frame.fun_addr = self.ida_funs.getFun(frame.ip)
             if frame.fun_addr is None:
-                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
+                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
                 pass
             else:
-                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
+                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
                 pass
             if frame.instruct is not None:
                 fun = None
@@ -1431,7 +1461,13 @@ class DataWatch():
                             #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                if fun is not None and fun == prev_fun:
+                    self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
+                    continue
+                else:
+                    prev_fun = fun
+                
                 if fun in local_mem_funs or self.user_iterators.isIterator(frame.fun_addr):
                     if fun in local_mem_funs:
                         #self.lgr.debug('fun in local_mem_funs %s' % fun)
@@ -1444,23 +1480,27 @@ class DataWatch():
                         fun_precidence = 999
                     self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
                     if fun_precidence < max_precidence:
-                        #self.lgr.debug('Stackframe memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
+                        self.lgr.debug('dataWatch memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
                         continue
                     max_precidence = fun_precidence
-                    if frame.sp > 0 and i != 0:
+                    if frame.ret_addr is not None:
+                        ret_addr = frame.ret_addr
+                    elif frame.sp > 0 and i != 0:
                         ''' TBD poor assumption about sp pointing to the return address?  have we made this so, arm exceptions? '''
                         ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
-                    elif frame.ret_addr is not None:
-                        ret_addr = frame.ret_addr
+                        self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
                     else:
                         self.lgr.error('memsomething sp is zero and no ret_addr?')
                         ret_addr = None
-                    #self.lgr.debug('dataWatch memsomething frame.ip is 0x%x' % frame.ip)
                     if ret_addr is not None:
+                        self.lgr.debug('dataWatch memsomething ret_addr 0x%x frame.ip is 0x%x' % (ret_addr, frame.ip))
                         retval = self.MemStuff(ret_addr, fun, frame.ip)
                     
                 else:
-                    #self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                    if frame.fun_addr is None:
+                        self.lgr.debug('no soap, fun fun_addr is NONE') 
+                    else:
+                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
                     pass
         return retval
 

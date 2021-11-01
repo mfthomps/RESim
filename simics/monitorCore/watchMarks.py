@@ -164,7 +164,7 @@ class WatchMarks():
             self.the_chr = the_chr
             self.ours = ours    
             self.count = count    
-            if self.the_chr > 20:
+            if self.the_chr > 20 and self.the_chr < 127:
                 self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (ours, self.the_chr, chr(self.the_chr))
             else:
                 self.msg = 'strchr in string at 0x%x find 0x%x' % (ours, self.the_chr)
@@ -231,6 +231,16 @@ class WatchMarks():
             self.fun = fun    
             self.src = src    
             self.msg = '%s src 0x%x' % (fun, src)
+
+        def getMsg(self):
+            return self.msg
+
+    class FwriteMark():
+        def __init__(self, fun, src, count):
+            self.fun = fun    
+            self.src = src    
+            self.src = count    
+            self.msg = '%s src 0x%x count %d' % (fun, src, count)
 
         def getMsg(self):
             return self.msg
@@ -520,6 +530,12 @@ class WatchMarks():
         lm = self.FprintfMark(fun, src)
         self.addWatchMark(ip, lm)
         self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
+
+    def fwrite(self, fun, src, count):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        wm = self.FwriteMark(fun, src, count)
+        self.addWatchMark(ip, wm)
+        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, wm.getMsg()))
 
     def xmlGetProp(self, src, count, the_string, dest):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
