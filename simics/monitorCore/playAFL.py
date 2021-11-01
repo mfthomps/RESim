@@ -1,5 +1,6 @@
 from simics import *
 import writeData
+import aflPath
 import cli
 import sys
 import os
@@ -27,7 +28,7 @@ class PlayAFL():
         self.max_len = None
         self.return_ip = None
         self.cfg_file = cfg_file
-        afl_output = top.getAFLOutput()
+        afl_output = aflPath.getAFLOutput()
         self.all_hits = []
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
