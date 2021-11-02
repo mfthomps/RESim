@@ -765,7 +765,7 @@ class WatchMarks():
                 entry['fd'] = mark.mark.fd
             elif isinstance(mark.mark, self.StrChrMark):
                 entry['mark_type'] = 'strchr' 
-                entry['the_char'] = mark.mark.the_char
+                entry['the_char'] = mark.mark.the_chr
                 entry['start'] = mark.mark.start
                 entry['count'] = mark.mark.count
             elif isinstance(mark.mark, self.CompareMark):
