@@ -155,6 +155,7 @@ class PlayAFL():
                 else:
                     hits_json = json.load(open(fname))
                     for hit in hits_json:
+                        hit = int(hit)
                         if hit not in self.all_hits:
                             self.all_hits.append(hit)
                     self.index += 1
@@ -254,6 +255,7 @@ class PlayAFL():
             json.dump(hit_bbs, fh) 
         #for hit in hit_list:
         for hit in hit_bbs:
+            hit = int(hit)
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
 
