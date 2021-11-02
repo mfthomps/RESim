@@ -13,7 +13,7 @@ import net
 import os
 import sys
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'mempcpy', 
-            'j_memcpy', 'strchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'fwrite', 'xmlStrcmp',
+            'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'fwrite', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse']
             #'printf', 'fprintf', 'sprintf', 'vsnprintf']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -354,7 +354,7 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
                    self.mem_something.src, self.mem_something.dest, self.mem_something.count))
-        elif self.mem_something.fun == 'strchr':
+        elif self.mem_something.fun in ['strchr', 'strrchr']:
             buf_start = self.findRange(self.mem_something.dest)
             if self.cpu.architecture != 'arm':
                 self.lgr.debug('datawatch strchr confusion, mem_something.the_chr is 0x%x' % self.mem_something.the_chr)
@@ -577,7 +577,7 @@ class DataWatch():
                         self.mem_something.count = min(limit, self.getStrLen(self.mem_something.src))
                     else:
                         self.mem_something.count = self.getStrLen(self.mem_something.src)        
-            elif self.mem_something.fun == 'strchr':
+            elif self.mem_something.fun in ['strchr', 'strrchr']:
                 if self.cpu.architecture == 'arm':
                     self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     self.mem_something.the_chr = self.mem_utils.getRegValue(self.cpu, 'r1')
