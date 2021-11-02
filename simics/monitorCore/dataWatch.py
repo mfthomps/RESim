@@ -1432,13 +1432,13 @@ class DataWatch():
         for i in range(max_index, -1, -1):
             frame = frames[i]
             if frame.fun_addr is None:
-                self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
+                #self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
                 frame.fun_addr = self.ida_funs.getFun(frame.ip)
             if frame.fun_addr is None:
-                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
                 pass
             else:
-                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
                 pass
             if frame.instruct is not None:
                 fun = None
@@ -1490,19 +1490,19 @@ class DataWatch():
                     elif frame.sp > 0 and i != 0:
                         ''' TBD poor assumption about sp pointing to the return address?  have we made this so, arm exceptions? '''
                         ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
-                        self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
+                        #self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
                     else:
-                        self.lgr.error('memsomething sp is zero and no ret_addr?')
+                        #self.lgr.error('memsomething sp is zero and no ret_addr?')
                         ret_addr = None
                     if ret_addr is not None:
-                        self.lgr.debug('dataWatch memsomething ret_addr 0x%x frame.ip is 0x%x' % (ret_addr, frame.ip))
+                        #self.lgr.debug('dataWatch memsomething ret_addr 0x%x frame.ip is 0x%x' % (ret_addr, frame.ip))
                         retval = self.MemStuff(ret_addr, fun, frame.ip)
                     
                 else:
-                    if frame.fun_addr is None:
-                        self.lgr.debug('no soap, fun fun_addr is NONE') 
-                    else:
-                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                    #if frame.fun_addr is None:
+                    #    self.lgr.debug('no soap, fun fun_addr is NONE') 
+                    #else:
+                    #    self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
                     pass
         return retval
 

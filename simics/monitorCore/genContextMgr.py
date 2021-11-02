@@ -983,13 +983,13 @@ class GenContextMgr():
         elif rec is None:
             rec = self.task_utils.getRecAddrForPid(pid)
         if rec is None:
-            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
+            #self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d ' % (pid, cur_pid))
             return False
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
-            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            #self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return False
         
         if pid not in self.task_rec_bp or self.task_rec_bp[pid] is None:
