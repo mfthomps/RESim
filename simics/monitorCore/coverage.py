@@ -254,7 +254,7 @@ class Coverage():
             op_type = SIM_get_mem_op_type(memory)
             type_name = SIM_get_mem_op_type_name(op_type)
             physical = memory.physical_address
-            self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
+            #self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
             #if length == 4 and self.cpu.architecture == 'arm':
             if length == 4:
                 if op_type is Sim_Trans_Store:
@@ -354,6 +354,7 @@ class Coverage():
                 self.backstop.setFutureCycleAlone(self.backstop_cycles)
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
+            #self.lgr.debug('coverage bbHap 0x%x in del_breaks, return' % this_addr)
             return
         #self.lgr.debug('coverage bbHap address 0x%x bp %d cycle: 0x%x' % (this_addr, break_num, self.cpu.cycles))
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
@@ -414,10 +415,19 @@ class Coverage():
                     if prejump_addr is not None: 
                         self.afl_del_breaks.append(prejump_addr)
                     if True:
-                        self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, this_addr))
+                        ''' Current strategy is to assume deleting breaks is just as bad as hitting saturated breaks.  consider before 
+                            prematurely optimizing'''
+                        #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, this_addr))
                         if this_addr not in self.afl_del_breaks:
-                            SIM_delete_breakpoint(break_num)
+                            #SIM_delete_breakpoint(break_num)
+                            #index = self.bp_list.index(break_num)
                             self.afl_del_breaks.append(this_addr)
+                            '''
+                            if index < self.begin_tmp_bp:
+                                self.afl_del_breaks.append(this_addr)
+                            else:
+                                self.bp_list.remove(break_num)
+                            '''
                 else:
                     self.trace_bits[index] =  self.trace_bits[index]+1
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
