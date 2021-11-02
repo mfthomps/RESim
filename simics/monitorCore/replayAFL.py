@@ -13,7 +13,7 @@ class ReplayAFL():
     def __init__(self, top, target, index, targetFD, lgr, instance = None, tcp=False, cover=False, trace=False):
         self.lgr = lgr
         self.top = top
-        self.afl_dir = aflPath.getAFL_OUTPUT()
+        self.afl_dir = aflPath.getAFLOutput()
         self.ip = os.getenv('TARGET_IP')
         self.port = os.getenv('TARGET_PORT')
         if self.ip is None or self.port is None: 
