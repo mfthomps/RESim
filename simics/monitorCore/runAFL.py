@@ -47,14 +47,19 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
 
-    io_handler = threading.Thread(target=ioHandler, args=([read_array]))
+    stop_threads = False
+    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
     io_handler.start()
+
     my_in = input('any key to quit')
     for ps in resim_procs:
         ps.stdin.write(b'quit\n')
     print('did quit')
     print('done')
-    output = resim_ps.communicate()
+    stop_threads = True
+    for fd in read_array:
+        fd.close()
+
     return resim_ps
     
 def main():
