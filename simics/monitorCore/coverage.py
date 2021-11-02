@@ -254,7 +254,7 @@ class Coverage():
             op_type = SIM_get_mem_op_type(memory)
             type_name = SIM_get_mem_op_type_name(op_type)
             physical = memory.physical_address
-            #self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
+            self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
             #if length == 4 and self.cpu.architecture == 'arm':
             if length == 4:
                 if op_type is Sim_Trans_Store:
@@ -554,8 +554,8 @@ class Coverage():
 
             
     def restoreBreaks(self):
-        if not self.afl:
-            return
+        ''' TBD any need for this?  '''
+        return
         ''' Restore the hits found in self.blocks_hit '''
         tmp_list = []
         prev_break = None
@@ -574,9 +574,9 @@ class Coverage():
                 ''' so it will be deleted '''
                 self.bp_list.append(bb)
                 prev_break = breakpoint    
-        #self.lgr.debug('coverage restoreBreaks restored %d breaks' % len(tmp_list))
+        self.lgr.debug('coverage restoreBreaks restored %d breaks' % len(tmp_list))
         if len(tmp_list) > 0:
-            #self.lgr.debug('coverage restoreBreaks first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
+            self.lgr.debug('coverage restoreBreaks first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
             self.bb_hap.append(hap)
 
@@ -623,13 +623,13 @@ class Coverage():
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
-        self.lgr.debug('coverage doCoverage')    
+        #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
             self.cover(physical=physical)
             self.did_cover = True
         else:
             self.restoreBreaks()
-            self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
+            #self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
             if self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
                     SIM_delete_breakpoint(bp)
@@ -639,7 +639,7 @@ class Coverage():
                 
                 self.bp_list = self.bp_list[:self.begin_tmp_bp]
                 self.bb_hap = self.bb_hap[:self.begin_tmp_hap]
-                self.lgr.debug('coverage doCoverage now have %d breaks' % len(self.bp_list))
+                #self.lgr.debug('coverage doCoverage now have %d breaks' % len(self.bp_list))
 
         if not self.afl:
             if not no_merge:
