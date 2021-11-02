@@ -317,7 +317,7 @@ class StackTrace():
         if self.ida_funs is not None:
             cur_fun = self.ida_funs.getFun(eip)
         if cur_fun is None:
-            self.lgr.debug('stackTrace doX86, curFun for eip 0x%x is NONE.' % eip)
+            self.lgr.debug('stackTrace doX86, curFun for eip 0x%x is NONE' % eip)
             pass
         else:
             self.lgr.debug('stackTrace doX86 cur_fun is 0x%x' % cur_fun)
@@ -375,7 +375,7 @@ class StackTrace():
                         self.lgr.debug('stackTrace x86 call addr 0x%x fun %s cur_fun: 0x%x' % (call_addr, fun_name, cur_fun))
                     else:
                         self.lgr.debug('stackTrace x86 call addr 0x%x fun %s cur_fun is None' % (call_addr, fun_name))
-                    #self.lgr.debug('stackTrace 8x86 pushed bp is 0x%x' % pushed_bp)
+                    self.lgr.debug('stackTrace 8x86 pushed bp is 0x%x' % pushed_bp)
                     if call_addr != cur_fun and quick_return is None:
                         self.findReturnFromCall(esp, cur_fun)
                    
@@ -397,8 +397,11 @@ class StackTrace():
         return bp
     
     def findReturnFromCall(self, ptr, cur_fun, max_bytes=None, eip=None):        
+        ''' See if an x86 return instruction is within a few bytes of the SP.  Handles clib cases where ebp is not pushed. 
+            Likely more complicated then it needs to be.  Many special cases.'''
         got_fun_name = None
         cur_fun_name = None
+        cur_is_clib = False
         if cur_fun is not None:
             cur_fun_name = self.funFromAddr(cur_fun)
             self.lgr.debug('stackTrace findReturnFromCall ptr 0x%x cur_fun 0x%x (%s)' % (ptr, cur_fun, cur_fun_name))
@@ -409,7 +412,10 @@ class StackTrace():
         current_instruct = None
         if eip is not None:
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
-            self.lgr.debug('stackTrace findReturnFromCall given eip for %s' % current_instruct)
+            lib_file = self.top.getSO(eip)
+            if 'libc' in lib_file.lower():
+                cur_is_clib = True
+            self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
         retval = None
         if max_bytes is None:
             limit = ptr + 500
@@ -480,6 +486,14 @@ class StackTrace():
                             self.lgr.debug('Found GOT call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x' % (instruct, got_fun_name, call_ip, call_addr))
                             fname = self.soMap.getSOFile(call_ip)
                             frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=cur_fun_name)
+                            frame.ret_addr = call_ip + instruct_of_call[0] 
+                            self.addFrame(frame)
+                        elif got_fun_name is not None and cur_is_clib:
+                            retval = ptr
+                            self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x' % (instruct, 
+                                  got_fun_name, call_ip, call_addr))
+                            fname = self.soMap.getSOFile(call_ip)
+                            frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=got_fun_name)
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                         elif (fun_name is not None and fun_name.startswith('memcpy')) and (current_instruct is not None and current_instruct.startswith('rep movsd')):

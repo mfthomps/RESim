@@ -2515,7 +2515,7 @@ class GenMonitor():
                     end = start + text_seg.size
                 else:
                     start = text_seg.address
-                    end = text_seg.address + text_seg_size
+                    end = text_seg.address + text_seg.size
                 retval = ('%s:0x%x-0x%x' % (fname, start, end))
             else:
                 print('None')
