@@ -101,12 +101,15 @@ class WriteData():
             index = self.in_data[5:].find(self.udp_header)
             if index > 0:
                 first_data = self.in_data[:(index+5)]
+                self.in_data = self.in_data[len(first_data):]
+                if len(first_data) > self.max_len:
+                    #self.lgr.debug('writeData, udp, trimmed first data to max_len')
+                    first_data = first_data[:self.max_len]
                 if self.filter is not None and not self.filter.filter(first_data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(first_data))) 
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 
-                self.in_data = self.in_data[len(first_data):]
                 # TBD add handling of padding with udp header                
                 retval = len(first_data)
                 #self.lgr.debug('writeData wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
