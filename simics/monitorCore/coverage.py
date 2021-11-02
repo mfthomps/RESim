@@ -254,7 +254,7 @@ class Coverage():
             op_type = SIM_get_mem_op_type(memory)
             type_name = SIM_get_mem_op_type_name(op_type)
             physical = memory.physical_address
-            self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
+            #self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
             #if length == 4 and self.cpu.architecture == 'arm':
             if length == 4:
                 if op_type is Sim_Trans_Store:
