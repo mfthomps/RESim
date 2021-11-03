@@ -49,19 +49,7 @@ class PlayAFL():
             base = os.path.basename(target)
             self.afl_list = [base]
         else:
-            self.target = target
-            self.afl_dir = os.path.join(afl_output, target,'queue')
-            gpath = os.path.join(afl_output, target, 'resim_*', 'queue', 'id:*')
-            print('gpath is %s' % gpath)
-            glist = glob.glob(gpath)
-            if len(glist) == 0 and os.path.isdir(self.afl_dir):
-                self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
-            else:
-                ''' Assume Parallel fuzzing '''
-                self.afl_list = []
-                for path in glist:
-                    if 'sync:' not in path:
-                        self.afl_list.append(path)
+            self.afl_list = aflPath.getTargetQueue(target, get_all=True)
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
         self.stop_hap = None

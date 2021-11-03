@@ -12,6 +12,8 @@ try:
     import ConfigParser
 except:
     import configparser as ConfigParser
+sys.path.append('../monitorCore')
+import aflPath
 
 all_funs = []
 all_hits = []
@@ -44,20 +46,6 @@ def getPathList(target):
     print('glob_mask is %s' % glob_mask)
     glist = glob.glob(glob_mask)
     return glist
-
-def getAFLPath(target, instance, index):             
-    resim_num = 'resim_%s' % instance
-    afl_path = os.getenv('AFL_DATA')
-    retval = None 
-    glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
-    glist = glob.glob(glob_mask)
-    if len(glist) == 0:
-        print('No file found for %s' % glob_mask)
-    else:
-        retval = glist[0]
-    return retval 
-#for hit in hits1:
-#    print('0x%x' % hit)
 
 def getHeader(ini):
     config = ConfigParser.ConfigParser()
@@ -105,7 +93,7 @@ def main():
             udp_header = getHeader(ini_file)
 
     if args.index is not None:
-        path = getAFLPath(args.target, args.instance, args.index)
+        path = aflPath.getAFLCoveragePath(args.target, args.instance, args.index)
         num_hits, num_funs = getCover(path, funs) 
         print('hits: %d  funs: %d   %s' % (num_hits, num_funs, path))
 

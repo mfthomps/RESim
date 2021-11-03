@@ -39,30 +39,7 @@ def main():
         ''' single file to report on '''
         afl_list = [target]
     else:
-    
-        afl_output = aflPath.getAFLOutput()
-        target = target
-        afl_dir = os.path.join(afl_output, target)
-        unique_path = os.path.join(afl_dir, target+'.unique')
-        print('TrackAFL, NOTE will only play the first packet.  Paths from %s' % unique_path)
-        if os.path.isfile(unique_path):
-            cover_list = json.load(open(unique_path))
-            for path in cover_list:
-                base = os.path.basename(path)
-                grand = os.path.dirname(os.path.dirname(path))
-                new = os.path.join(grand, 'queue', base)
-                afl_list.append(new)
-            lgr.debug('trackAFL found unique file at %s, %d entries' % (unique_path, len(afl_list)))
-        else:
-            gpath = os.path.join(afl_dir, 'resim_*', 'queue', 'id:*')
-            glist = glob.glob(gpath)
-            if len(glist) > 0:
-                for path in glist:
-                    if 'sync:' not in path:
-                        afl_list.append(path)
-            else:
-                if os.path.isdir(afl_dir):
-                    afl_list = [f for f in os.listdir(afl_dir) if os.path.isfile(os.path.join(afl_dir, f))]
+        afl_list = aflPath.getTargetQueue(target)
 
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneTrack.py')
