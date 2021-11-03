@@ -365,7 +365,7 @@ class SOMap():
         pid = self.getSOPid(pid)
         if pid is None:
             return None
-        self.lgr.debug('getSOAddr look for addr for pid %d in_fname %s' % (pid, in_fname))
+        #self.lgr.debug('getSOAddr look for addr for pid %d in_fname %s' % (pid, in_fname))
         ''' TBD fix this? '''
         #if pid in self.text_prog:
         #    self.lgr.debug('getSOAddr YES pid %d is in text_prog as %s' % (pid, self.text_prog[pid]))
@@ -375,31 +375,31 @@ class SOMap():
             retval = elfText.Text(self.text_start[pid], 0, size)
         elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
-                self.lgr.debug('getSOAddr fpath %s' % fpath)
+                #self.lgr.debug('getSOAddr fpath %s' % fpath)
                 base = os.path.basename(fpath)
                 other_base = None
                 full = os.path.join(self.targetFS.getRootPrefix(), fpath[1:])
                 if os.path.islink(full):
                     other_base =  os.readlink(full)
                 in_base = os.path.basename(in_fname)
-                self.lgr.debug('compare <%s> or <%s> to <%s>' % (base, other_base, in_base))
+                #self.lgr.debug('compare <%s> or <%s> to <%s>' % (base, other_base, in_base))
                 if base == in_base or other_base == in_base:
                     retval = self.so_addr_map[pid][fpath]
-                    self.lgr.debug('compare found match fpath %s retval is 0x%x' % (fpath, retval.address))
+                    #self.lgr.debug('compare found match fpath %s retval is 0x%x' % (fpath, retval.address))
                     break
             if retval is None:
                 for fpath in self.so_addr_map[pid]:
-                    self.lgr.debug('getSOAddr fpath2 %s' % fpath)
+                    #self.lgr.debug('getSOAddr fpath2 %s' % fpath)
                     base = os.path.basename(fpath)
                     other_base = None
                     full = os.path.join(self.targetFS.getRootPrefix(), fpath[1:])
                     if os.path.islink(full):
                         other_base =  os.readlink(full)
                     in_base = os.path.basename(in_fname)
-                    self.lgr.debug('compare %s or %s to %s' % (base, other_base, in_base))
+                    #self.lgr.debug('compare %s or %s to %s' % (base, other_base, in_base))
                     if in_base.startswith(base) or (other_base is not None and in_base.startswith(other_base)):
                         retval = self.so_addr_map[pid][fpath]
-                        self.lgr.debug('compare found startswith match')
+                        #self.lgr.debug('compare found startswith match')
                         break
 
             if retval is None:
