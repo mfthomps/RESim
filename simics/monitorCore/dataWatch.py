@@ -335,8 +335,9 @@ class DataWatch():
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
                     self.lgr.error('dataWatch buf_start for 0x%x is none in memcpyish?' % (self.mem_something.src))
-                    SIM_break_simulation('mempcpy')
-                    return
+                    buf_start = 0
+                    #SIM_break_simulation('mempcpy')
+                    #return
             else:
                 self.lgr.debug('returnHap copy not a Load')
                 buf_start = self.findRange(self.mem_something.dest)
