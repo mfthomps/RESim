@@ -14,30 +14,9 @@ try:
     import ConfigParser
 except:
     import configparser as ConfigParser
+sys.path.append('../monitorCore')
+import aflPath
 
-
-
-def getPathList(target):
-    afl_path = os.getenv('AFL_DATA')
-    if afl_path is None:
-        print('AFL_DATA not defined')
-        exit(1)
-    glob_mask = '%s/output/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
-    print('glob_mask is %s' % glob_mask)
-    glist = glob.glob(glob_mask)
-    return glist
-
-def getAFLPath(target, instance, index):             
-    resim_num = 'resim_%s' % instance
-    afl_path = os.getenv('AFL_DATA')
-    retval = None 
-    glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
-    glist = glob.glob(glob_mask)
-    if len(glist) == 0:
-        print('No file found for %s' % glob_mask)
-    else:
-        retval = glist[0]
-    return retval 
 
 #for hit in hits1:
 #    print('0x%x' % hit)
@@ -86,7 +65,8 @@ def main():
 
     hit_dict = {}
 
-    flist = getPathList(args.target)
+    flist = aflPath.getAFLCoverageList(args.target, get_all=True)
+
     for f in flist:
         base = os.path.basename(f)
         parent = os.path.dirname(f)
