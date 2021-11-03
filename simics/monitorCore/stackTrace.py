@@ -492,7 +492,7 @@ class StackTrace():
                         elif got_fun_name is not None and cur_is_clib:
                             retval = ptr
                             #self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x' % (instruct, 
-                                  got_fun_name, call_ip, call_addr))
+                            #      got_fun_name, call_ip, call_addr))
                             fname = self.soMap.getSOFile(call_ip)
                             frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=got_fun_name)
                             frame.ret_addr = call_ip + instruct_of_call[0] 
