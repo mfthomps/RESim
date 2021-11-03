@@ -413,7 +413,7 @@ class StackTrace():
         if eip is not None:
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
             lib_file = self.top.getSO(eip)
-            if 'libc' in lib_file.lower():
+            if lib_file is not None and 'libc' in lib_file.lower():
                 cur_is_clib = True
             #self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
         retval = None
@@ -425,7 +425,6 @@ class StackTrace():
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
                 self.lgr.debug('stackTrace findReturnFromCall, failed to read from 0x%x' % ptr)
-                count += 1
                 ptr = ptr + self.mem_utils.WORD_SIZE
                 done = True
                 continue
