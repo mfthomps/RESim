@@ -296,7 +296,7 @@ class GenContextMgr():
         return retval
 
     def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None):
-        self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
+        #self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
         bp_start = None
         bp_list = []
         for bp in self.breakpoints:
@@ -305,7 +305,7 @@ class GenContextMgr():
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
                 hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=True)
-                self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
+                #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
         #self.lgr.error('genHapRange failed to find break for handles %d or %d' % (breakpoint_start, breakpoint_end))
@@ -972,7 +972,7 @@ class GenContextMgr():
     def watchExit(self, rec=None, pid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
-        self.lgr.debug('contextManager watchExit')
+        #self.lgr.debug('contextManager watchExit')
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
