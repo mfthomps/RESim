@@ -14,7 +14,9 @@ try:
     import ConfigParser
 except:
     import configparser as ConfigParser
-sys.path.append('../monitorCore')
+resim_dir = os.getenv('RESIM_DIR')
+
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 
 

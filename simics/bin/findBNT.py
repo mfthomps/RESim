@@ -31,9 +31,9 @@ def aflBNT(prog, target, fun_name=None):
         if target is None:
             fname = '%s.hits' % ida_path
         else:
-            print('is none, double dip')
             fname = '%s.%s.hits' % (ida_path, target)
-        ''' hits are now just flat lists without functoins '''
+            print('Using hits file %s' % fname)
+        ''' hits are now just flat lists without functions '''
         hits = json.load(open(fname))
         data_path = ida_path+'.prog'
         with open(data_path) as fh:
