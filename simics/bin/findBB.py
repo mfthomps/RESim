@@ -36,9 +36,11 @@ def findBB(target, bb):
             if bb in hit_list:
                 qfile = os.path.join(queue_dir, f)
                 print('found 0x%x in %s' % (bb, qfile))
+                found_count += 1
     else: 
         ''' is parallel fuzzing '''
         print('is parallel, %d files' % len(flist))
+        found_count = 0
         for drone in flist:
             coverage_dir = os.path.join(drone, 'coverage')
             queue_dir = os.path.join(drone, 'queue')
@@ -47,10 +49,15 @@ def findBB(target, bb):
             for f in hit_files:
                 path = os.path.join(coverage_dir, f)
                 hit_list = json.load(open(path))
-                #print('look for 0x%x in hit_list of len %d' % (bb, len(hit_list)))
-                if bb in hit_list:
+                #print('look for 0x%x in hit_list of len %d file: %s' % (bb, len(hit_list), f))
+                #for hit in hit_list:
+                #    print('\t\thit: 0x%x' % hit)
+                if str(bb) in hit_list:
                     qfile = os.path.join(queue_dir, f)
                     print('found 0x%x in %s' % (bb, qfile))
+                    found_count += 1
+    print('Found %d sessions that hit 0x%x' % (found_count, bb))
+        
 
 def main():
     parser = argparse.ArgumentParser(prog='findBBB', description='Show AFL queue entries that lead to a given basic block address.')
