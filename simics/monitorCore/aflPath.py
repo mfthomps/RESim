@@ -56,7 +56,10 @@ def getAFLCoverageList(target, get_all=False):
         afl_dir = os.path.join(afl_path, target)
         unique_path = os.path.join(afl_dir, target+'.unique')
         if os.path.isfile(unique_path):
-            glist = json.load(open(unique_path))
+            ulist = json.load(open(unique_path))
+            glist = []
+            for path in ulist:
+                glist.append(os.path.join(afl_dir, path)) 
 
     if glist is None:
         glob_mask = '%s/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
@@ -77,8 +80,9 @@ def getTargetQueue(target, get_all=False):
     if not get_all and os.path.isfile(unique_path):
         cover_list = json.load(open(unique_path))
         for path in cover_list:
-            base = os.path.basename(path)
-            grand = os.path.dirname(os.path.dirname(path))
+            full = os.path.join(afl_dir, path)
+            base = os.path.basename(full)
+            grand = os.path.dirname(os.path.dirname(full))
             new = os.path.join(grand, 'queue', base)
             afl_list.append(new)
         print('trackAFL found unique file at %s, %d entries' % (unique_path, len(afl_list)))
@@ -95,3 +99,14 @@ def getTargetQueue(target, get_all=False):
             if os.path.isdir(afl_dir):
                 afl_list = [f for f in os.listdir(afl_dir) if os.path.isfile(os.path.join(afl_dir, f))]
     return afl_list
+
+def getTargetPath(target):
+    afl_output = getAFLOutput()
+    target_path = os.path.join(afl_output, target)
+    return target_path
+
+def getRelativePath(f, target):
+    afl_output = getAFLOutput()
+    target_path = os.path.join(afl_output, target)
+    retval = f[len(target_path)+1:]
+    return retval
