@@ -2502,7 +2502,7 @@ class GenMonitor():
 
     def getSO(self, eip):
         fname = self.getSOFile(eip)
-        self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
+        #self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
         retval = None
         if fname is not None:
             text_seg  = self.soMap[self.target].getSOAddr(fname) 
@@ -3818,6 +3818,7 @@ class GenMonitor():
                         self.findBNT(hits, blocks[fun]) 
                         break
     def quitAlone(self, dumb): 
+        sys.stderr.write('user rquested quit')
         SIM_run_command('q')
    
     def quit(self):
@@ -3889,7 +3890,7 @@ class GenMonitor():
     def debugIfNot(self):
         ''' warning, assumes current pid is the one to be debugged. '''
         if self.bookmarks is None:
-            self.debug()
+            self.debug(group=True)
 
     def debugSnap(self, final_fun=None):
         retval = True
