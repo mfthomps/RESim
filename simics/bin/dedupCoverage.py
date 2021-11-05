@@ -69,6 +69,8 @@ def main():
 
     flist = aflPath.getAFLCoverageList(args.target, get_all=True)
 
+    prefix = aflPath.getTargetPath(args.target)
+
     for f in flist:
         base = os.path.basename(f)
         parent = os.path.dirname(f)
@@ -83,17 +85,20 @@ def main():
                 if listMatch(hit_dict[item], hits):
                     gotone = item
                     break
+        rel_path = aflPath.getRelativePath(f, args.target)
         if not gotone:
-            print('new hit list %d hits %s' % (numhits, f))
-            hit_dict[f] = hits
+            print('new hit list %d hits %s' % (numhits, rel_path))
+            hit_dict[rel_path] = hits
         else:
-            print('%s hits already in %s' % (f, gotone))
-            if queue_len < os.path.getsize(gotone):
-                print('but this one is smaller, so replace it')
+            print('%s hits already in %s' % (rel_path, gotone))
+            full = os.path.join(prefix, rel_path)
+            if queue_len < os.path.getsize(full):
+                print('but this one is smaller, so replace it path %s' % rel_path)
                 del hit_dict[gotone]
-                hit_dict[f] = hits
+                hit_dict[rel_path] = hits
     for f in hit_dict:
-        print('hits: %d fsize: %d  %s' % (len(hit_dict[f]), os.path.getsize(f), f))
+        full = os.path.join(prefix, f)
+        print('hits: %d fsize: %d  %s' % (len(hit_dict[f]), os.path.getsize(full), f))
     print('got %d unique hit lists' % len(hit_dict))
     saveUnique(hit_dict, args.target)
 
