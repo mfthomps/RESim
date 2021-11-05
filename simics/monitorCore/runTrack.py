@@ -14,6 +14,7 @@ import threading
 import time
 import argparse
 import json
+import shlex
 import aflPath
 import resim_utils
 '''
@@ -57,11 +58,18 @@ def main():
         trackoutput = os.path.join(tdir, 'trackio', base)
         if not os.path.isfile(trackoutput):
             os.environ['ONE_DONE_PARAM'] = trackoutput
-            print("starting monitor without UI")
-            result = os.system('%s %s -n' % (resim_path, resim_ini))
-            print('Monitor exited, try next')
-            if result != 0:
-                exit
+            #result = os.system('%s %s -n' % (resim_path, resim_ini))
+            cmd = '%s %s -n' % (resim_path, resim_ini)
+            print("starting monitor without UI cmd: %s" % cmd)
+            resim_ps = subprocess.Popen(shlex.split(cmd), stderr=subprocess.PIPE)
+            #result = os.system('%s %s -n' % (resim_path, resim_ini))
+            err=resim_ps.communicate()
+            if err is not None and 'quit' in err:
+                print(err)
+                exit(0)
+            else:
+                print(err)
+                print('Monitor exited, try next')
     
     print('done')
 
