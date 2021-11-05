@@ -171,6 +171,13 @@ class WatchMarks():
         def getMsg(self):
             return self.msg
 
+    class StrtousMark():
+        def __init__(self, src):
+            self.src = src
+            self.msg = 'strtoul at 0x%x' % (self.src)
+        def getMsg(self):
+            return self.msg
+
     class ScanMark():
         def __init__(self, src, dest, count, buf_start, sp, base):
             self.src = src    
@@ -360,7 +367,7 @@ class WatchMarks():
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, self.DataMark):
                     pm.mark.addrRange(addr)
-                    self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
+                    #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
                     dm = self.DataMark(addr, start, length, cmp_ins, trans_size)
                     self.addWatchMark(ip, dm)
@@ -505,6 +512,12 @@ class WatchMarks():
         self.removeRedundantDataMark(start)
         self.addWatchMark(ip, cm)
         self.lgr.debug('watchMarks strchr 0x%x %s' % (ip, cm.getMsg()))
+
+    def strtoul(self, src):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        cm = self.StrtousMark(src)
+        self.addWatchMark(ip, cm)
+        self.lgr.debug('watchMarks strtous 0x%x %s' % (ip, cm.getMsg()))
 
     def sscanf(self, src, dest, count, buf_start):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
