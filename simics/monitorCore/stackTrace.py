@@ -389,6 +389,7 @@ class StackTrace():
                 fname = self.soMap.getSOFile(call_addr)
                 if fname is None:
                     fname = 'unknown'
+                #self.lgr.debug('stackTrace x86 frame add call_inst 0x%x  inst: %s' % (call_inst, instruct)) 
                 frame = self.FrameEntry(call_inst, fname, instruct, (bp - self.mem_utils.WORD_SIZE), fun_addr=call_addr, fun_name=fun_name, ret_addr=ret_to)
                 self.addFrame(frame)
             else:
@@ -525,11 +526,12 @@ class StackTrace():
                 #print('faddr 0x%x' % faddr)
                 fun_name = None
                 if self.ida_funs is not None:
-                    fun_name = self.ida_funs.getName(faddr)
+                    #fun_name = self.ida_funs.getName(faddr)
+                    fun_name = self.funFromAddr(faddr)
                 if fun_name is not None:
                     if fun_name.startswith('.'):
                         fun_name = fun_name[1:]
-                    instruct = '%s %s' % (self.callmn, fun_name)
+                    retval = '%s %s' % (self.callmn, fun_name)
             except ValueError:
                 pass
         return retval
