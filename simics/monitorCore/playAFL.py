@@ -114,7 +114,11 @@ class PlayAFL():
                 fh.write(self.cfg_file+'\n')
             #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
-
+        hang_cycles = 90000000
+        hang = os.getenv('HANG_CYCLES')
+        if hang is not None:
+            hang_cycles = int(hang)
+        self.backstop.setHangCallback(self.hangCallback, hang_cycles)
 
 
     def go(self, findbb=None):
@@ -130,6 +134,10 @@ class PlayAFL():
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_run_alone(self.goAlone, None)
+
+    def hangCallback(self, cycles):
+        self.lgr.debug('playAFL hang detected')
+        SIM_break_simulation('hang')
 
     def goAlone(self, dumb):
         self.current_packet=1
@@ -180,7 +188,7 @@ class PlayAFL():
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
 
             if self.afl_mode: 
                 self.coverage.watchExits()
@@ -253,7 +261,9 @@ class PlayAFL():
         if self.stop_hap is not None:
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
-                self.lgr.debug('playAFL stopHap index %d, got %d hits, %d packets' % (self.index, self.coverage.getHitCount(), num_packets))
+                self.lgr.debug('playAFL stopHap index %d, got %d hits, %d packets cycles: 0x%x' % (self.index, self.coverage.getHitCount(), 
+                     num_packets, self.cpu.cycles))
+                #self.backstop.checkEvent()
                 self.backstop.clearCycle()
                 hits = self.coverage.getHitCount()
                 if hits > self.hit_total:
