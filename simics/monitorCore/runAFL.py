@@ -30,8 +30,8 @@ def ioHandler(read_array, stop):
                     data = os.read(item.fileno(), 800)
                     fh.write(data+b'\n')
 
-def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs):
-    afl_cmd = '%s -i %s -o %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, afl_name)
+def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path):
+    afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
     print('afl_cmd %s' % afl_cmd) 
 
     cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
@@ -69,6 +69,7 @@ def main():
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-d', '--dead', action='store_true', help='Trial run to identify dead blocks, i.e., those being hit by other threads.')
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
+    parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -127,6 +128,16 @@ def main():
         size_str = '-s %d' % args.max_bytes 
     else:
         size_str = ''
+
+    dict_path = ''
+    if args.dictionary is not None:
+       dpath = os.path.join(os.path.dirname(afl_path), 'dictionaries', args.dictionary)
+       if os.path.isfile(dpath):
+           dict_path = '-x %s' % dpath
+       else:
+           print('No dictionary at %s' % dpath)
+           exit(1)
+        
     port = 8700
     read_array = []
     if len(glist) > 0:
@@ -134,7 +145,8 @@ def main():
         for instance in glist:
             if not os.path.isdir(instance):
                 continue
-            afl_cmd = '%s -i %s -o %s %s %s %s -p %d -R %s' % (afl_path, afl_seeds, afl_out, size_str, master_slave, instance[:-1], port, afl_name)
+            afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
+                  master_slave, instance[:-1], port, dict_path, afl_name)
             print('afl_cmd %s' % afl_cmd) 
             os.chdir(instance)
         
@@ -156,7 +168,7 @@ def main():
             port = port + 1
     else:
         print('Running single instance')
-        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs)
+        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path)
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
     io_handler.start()
