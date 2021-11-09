@@ -164,7 +164,7 @@ class WatchMarks():
             self.the_chr = the_chr
             self.start = start    
             self.count = count    
-            if self.the_chr > 20:
+            if self.the_chr > 20 and self.the_chr < 256:
                 self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (start, self.the_chr, chr(self.the_chr))
             else:
                 self.msg = 'strchr in string at 0x%x find 0x%x' % (start, self.the_chr)
