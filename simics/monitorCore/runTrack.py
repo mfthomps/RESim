@@ -9,7 +9,10 @@ import sys
 import glob
 import subprocess
 import shutil
-import ConfigParser
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 import threading
 import time
 import argparse
@@ -63,14 +66,16 @@ def main():
             cmd = '%s %s -n' % (resim_path, resim_ini)
             print("starting monitor without UI cmd: %s" % cmd)
             resim_ps = subprocess.Popen(shlex.split(cmd), stderr=subprocess.PIPE)
+            print("Back from simics")
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             i, o, e = select.select( [sys.stdin], [], [], 1)
-            if is is not None:
+            if i is not None:
                 print('got keyboard')
                 exit(0)
 
             err=resim_ps.communicate()
             if err is not None and 'quit' in err:
+                print('got err')
                 print(err)
                 exit(0)
             else:
