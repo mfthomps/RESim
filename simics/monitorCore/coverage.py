@@ -42,7 +42,7 @@ class Coverage():
         self.map_size = None
         self.trace_bits = None
         self.afl_map = {}
-        self.did_exit = 0
+        self.proc_status = 0
         self.hit_count = 0
         self.afl_del_breaks = []
         self.pid = None
@@ -197,15 +197,15 @@ class Coverage():
             if pt.page_addr is not None:
                 if pt.page_addr not in self.missing_pages:
                     self.missing_pages[pt.page_addr] = []
-                    self.lgr.debug('coverage no physical address for 0x%x, set break on page_addr 0x%x' % (bb_rel, pt.page_addr))
-                    break_num = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
+                    #self.lgr.debug('coverage no physical address for 0x%x, set break on page_addr 0x%x' % (bb_rel, pt.page_addr))
+                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                           None, break_num)
             if pt.ptable_addr is not None:
                 if pt.ptable_addr not in self.missing_tables:
                     self.missing_tables[pt.ptable_addr] = []
-                    self.lgr.debug('coverage no physical address for 0x%x, set break on phys ptable_addr 0x%x' % (bb_rel, pt.ptable_addr))
+                    #self.lgr.debug('coverage no physical address for 0x%x, set break on phys ptable_addr 0x%x' % (bb_rel, pt.ptable_addr))
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
@@ -219,9 +219,14 @@ class Coverage():
         return len(self.bp_list)
 
     def recordExit(self):
-        self.did_exit = 1
+        self.proc_status = 1
         self.lgr.debug('coverage recordExit of program under test')
         SIM_break_simulation('did exit')
+
+    def recordHang(self, cycles):
+        self.proc_status = 2
+        self.lgr.debug('coverage recordhang of program under test cycle 0x%x' % cycles)
+        SIM_break_simulation('did hang')
 
     def watchExits(self, pid=None, callback=None):
         self.context_manager.watchGroupExits(pid=pid)
@@ -231,7 +236,7 @@ class Coverage():
             self.context_manager.setExitCallback(callback)
 
     def getStatus(self):
-        return self.did_exit
+        return self.proc_status
 
     def saveDeadFile(self):
         dead_file = '%s.dead' % self.run_from_snap
@@ -351,14 +356,14 @@ class Coverage():
         if this_addr in self.afl_del_breaks:
             ''' already 255 hits, see if a jumper will alter the PC'''
             if self.backstop_cycles is not None and self.backstop_cycles > 0:
-                self.backstop.setFutureCycleAlone(self.backstop_cycles)
+                self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             #self.lgr.debug('coverage bbHap 0x%x in del_breaks, return' % this_addr)
             return
         #self.lgr.debug('coverage bbHap address 0x%x bp %d cycle: 0x%x' % (this_addr, break_num, self.cpu.cycles))
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
         if (self.physical or self.afl or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
             ''' see if a jumper should skip over code by changing the PC '''
@@ -659,13 +664,13 @@ class Coverage():
             self.lgr.debug('coverage reset blocks_hit')
 
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
             #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
             self.prev_loc = 0
-            self.did_exit = 0
+            self.proc_status = 0
             self.hit_count = 0
             self.afl_del_breaks = []
 

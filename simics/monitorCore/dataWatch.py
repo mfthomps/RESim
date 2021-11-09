@@ -45,7 +45,7 @@ class DataWatch():
         self.return_hap = None
         self.prev_cycle = None
         ''' for guessing if stack buffer is being re-used '''
-        self.prev_read_cycle = None
+        self.prev_read_cycle = 0
         self.ida_funs = None
         self.relocatables = None
         self.user_iterators = None
@@ -595,7 +595,7 @@ class DataWatch():
                 if self.cpu.architecture == 'arm':
                     self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
                     self.mem_something.the_chr = self.mem_utils.getRegValue(self.cpu, 'r1')
-                    self.lgr.debug('getMemParams strchr, src: 0x%x chr: %s count(maybe): %d' % (self.mem_something.src, self.mem_something.the_chr, self.mem_something.count))
+                    self.lgr.debug('getMemParams strchr, src: 0x%x chr: %s count(maybe): %s' % (self.mem_something.src, self.mem_something.the_chr, str(self.mem_something.count)))
                 else:
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
                     self.mem_something.the_chr = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)

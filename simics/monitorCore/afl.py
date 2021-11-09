@@ -36,8 +36,12 @@ class AFL():
         if self.packet_filter is not None:
             file_path = './%s.py' % self.packet_filter
             abs_path = os.path.abspath(file_path)
-            self.filter_module = imp.load_source(self.packet_filter, abs_path)
-            self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
+            if os.path.isfile(abs_path):
+                self.filter_module = imp.load_source(self.packet_filter, abs_path)
+                self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
+            else:
+                self.lgr.error('failed to find filter at %s' % self.packet_filter)
+                return
             '''
             module_name = self.packet_filter
             spec = importlib.util.spec_from_file_location(module_name, file_path)
@@ -75,8 +79,6 @@ class AFL():
         self.backstop.setCallback(self.whenDone)
         self.port = port
         self.one_done = one_done
-        ''' careful changing this, may hit backstop before crashed process killed '''
-        #self.backstop_cycles =  500000
         if stop_on_read:
             self.backstop_cycles = 0
         else:
@@ -107,6 +109,11 @@ class AFL():
         self.addr_addr = None
         self.addr_size = None
         self.orig_buffer = None
+        hang_cycles = 90000000
+        hang = os.getenv('HANG_CYCLES')
+        if hang is not None:
+            hang_cycles = int(hang)
+        self.backstop.setHangCallback(self.coverage.recordHang, hang_cycles)
         if fd is not None:
             self.prepInject(snap_name)
         else:
@@ -186,9 +193,14 @@ class AFL():
                 struct._clearcache()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
-            if status != 0:
-                self.lgr.debug('afl finishUp status not zero %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
+            if status == 1:
+                self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
                 with open('/tmp/icrashed', 'wb') as fh:
+                    fh.write(self.orig_in_data)
+                self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
+            elif status == 2:
+                self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to /tmp/ihung' %(status, self.iteration)) 
+                with open('/tmp/ihung', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
 

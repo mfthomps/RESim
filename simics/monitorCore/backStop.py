@@ -31,9 +31,9 @@ Manage cycle events to limit how far a session can run without some intervening 
 class BackStop():
     def cycle_handler(self, obj, cycles):
         ''' callback for hitting backstop cycle '''
+        #self.lgr.debug("backStop, cycle_handler ")
         if self.back_stop_cycle is None:
             return
-        #self.lgr.debug("backStop, cycle_handler ")
         if self.cpu is not None:
             #self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x' % (self.cpu.name, self.cpu.cycles))
             self.clearCycle()
@@ -56,6 +56,8 @@ class BackStop():
         self.cycle_event = None 
         self.cpu = cpu
         self.callback = None
+        self.hang_callback = None
+        self.hang_cycles = None
         self.lgr.debug('backStop init cpu %s' % self.cpu.name)
 
     def setCallback(self, callback):
@@ -68,20 +70,37 @@ class BackStop():
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = None
 
+    def checkEvent(self):
+        if self.cycle_event is None:
+            print('backstop NO event') 
+        else:
+            print('backstop yes, has event') 
+
     def setFutureCycleAlone(self, cycles):
         if self.cycle_event is None:
             self.cycle_event = SIM_register_event("cycle event", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
+            #self.lgr.debug('backstop did register')
         else:
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
+            #self.lgr.debug('backstop did registercancel')
         self.back_stop_cycle = self.cpu.cycles + cycles
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
-        #self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x' % (self.cpu.cycles, cycles))
+        #self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x should stop at 0x%x' % (self.cpu.cycles, cycles, self.back_stop_cycle))
 
     def setFutureCycle(self, cycles, now=False):
+        if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
+            self.lgr.debug('backstop hang cycles exceeded')
+            self.hang_callback(self.cpu.cycles)
+         
         if not now:
             SIM_run_alone(self.setFutureCycleAlone, cycles)
         else:
             self.setFutureCycleAlone(cycles)
+
+    def setHangCallback(self, callback, cycles):
+        self.hang_cycles = self.cpu.cycles + cycles
+        self.hang_callback = callback
+        self.lgr.debug('backstop setHangCallback to %s' % str(callback))
 
 if __name__ == "__main__":
     bs = backStop()
