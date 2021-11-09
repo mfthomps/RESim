@@ -196,6 +196,7 @@ class DataWatch():
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
+        self.lgr.debug('watch break_sim %s  use_back %s  no_back %s' % (str(break_simulation), str(self.use_back_stop), str(no_backstop)))
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         self.watchFunEntries()
@@ -535,6 +536,9 @@ class DataWatch():
                 addr_of_ret_addr = sp - self.mem_fun_entries[fun].ret_addr_offset
                 ret_addr = self.mem_utils.readPtr(self.cpu, addr_of_ret_addr)
                 self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x' % (addr_of_ret_addr, ret_addr))
+        else: 
+            ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
+            self.lgr.debug('memSomthingEntry ARM ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
         self.mem_something = self.MemSomething(fun, None, ret_addr, None, None, None, None, None, None, None)
         #                                     (fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None): 
         SIM_run_alone(self.getMemParams, False)
@@ -732,8 +736,16 @@ class DataWatch():
                 ''' see if src is one of our buffers '''
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
-                    skip_fun = True
-                    self.lgr.debug('dataWatch getMemParams, 0x%x not a buffer we care about, skip it' % self.mem_something.src)
+                    ''' handle ambigous calls such as strcmp '''
+                    if self.mem_something.dest is not None:
+                        buf_start = self.findRange(self.mem_something.dest)
+                    if buf_start is None:
+                        skip_fun = True
+                        if self.mem_something.src is not None and self.mem_something.dest is not None:
+                            self.lgr.debug('dataWatch getMemParams, src 0x%x and dst 0x%x not buffers we care about, skip it' % (self.mem_something.src,
+                                 self.mem_something.dest))
+                        else:
+                            self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
             if not skip_fun:
                 #self.stopWatch(leave_fun_entries = True)
                 self.stopWatch()
@@ -779,7 +791,7 @@ class DataWatch():
             if self.mem_something.op_type != Sim_Trans_Load:
                 addr = self.mem_something.dest
             self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, pid)
-            self.lgr.debug('undoAlone would run forward, first restore debug context')
+            self.lgr.debug('dataWatch undoAlone would run forward, first restore debug context')
             self.context_manager.restoreDebugContext()
             self.top.restoreDebugBreaks()
             SIM_run_command('c')
