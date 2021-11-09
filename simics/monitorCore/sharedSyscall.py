@@ -267,9 +267,10 @@ class SharedSyscall():
                         #self.dataWatch.watch(break_simulation=False)
                         self.lgr.debug('sharedSyscall accept call dataWatch watch')
                         self.dataWatch.watch(break_simulation=exit_info.call_params.break_simulation)
-                binders = socket_syscall.getBinders()
-                if binders is not None:
-                    binders.accept(pid, exit_info.sock_struct.fd, new_fd)
+                if socket_syscall is not None:
+                    binders = socket_syscall.getBinders()
+                    if binders is not None:
+                        binders.accept(pid, exit_info.sock_struct.fd, new_fd)
             else:
                 trace_msg = ('\treturn from socketcall ACCEPT pid:%d, sock_fd: %d  new_fd: %d NULL addr\n' % (pid, exit_info.sock_struct.fd, new_fd))
         elif socket_callname == "socketpair":
