@@ -3040,7 +3040,7 @@ class GenMonitor():
         ''' Use existing data watches to track IO.  Clears later watch marks '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.getEIP(cpu)
-        self.lgr.debug('retrack cycle: 0x%x eip: 0x%x' % (cpu.cycles, eip))
+        self.lgr.debug('retrack cycle: 0x%x eip: 0x%x callback %s' % (cpu.cycles, eip, str(callback)))
         if clear:
             cpu = self.cell_config.cpuFromCell(self.target)
             origin = self.bookmarks.getFirstCycle()
@@ -3821,8 +3821,8 @@ class GenMonitor():
         sys.stderr.write('user rquested quit')
         SIM_run_command('q')
    
-    def quit(self):
-        SIM_run_alone(self.quitAlone, None)
+    def quit(self, cycles=None):
+        SIM_run_alone(self.quitAlone, cycles)
 
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()

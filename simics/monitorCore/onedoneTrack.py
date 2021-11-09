@@ -6,10 +6,11 @@ starts RESim.
 '''
 import os
 global mytop, myinject
-def quit():
+def quit(cycles=None):
     global mytop, myinject
+    print('in onedoneTrack quit')
     myinject.saveJson()
-    mytop.quit()
+    mytop.quit(cycles)
 
 def reportExit():
     path=os.getenv('ONE_DONE_PATH')
