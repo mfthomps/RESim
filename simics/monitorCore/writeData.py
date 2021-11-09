@@ -83,6 +83,8 @@ class WriteData():
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
             else:
+                if len(self.in_data) > self.max_len:
+                    self.in_data = self.in_data[:self.max_len]
                 self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 tot_len = len(self.in_data)
                 #self.lgr.debug('writeData TCP last packet, wrote %d bytes to 0x%x packet_num %d' % (tot_len, self.addr, self.current_packet))
@@ -131,15 +133,17 @@ class WriteData():
         else:
             self.lgr.error('writeData could not handle data parameters.')
 
-        if len(self.in_data) > 0:
-            self.setCallHap()
-        else:
-            SIM_run_alone(self.delCallHap, None)
+        self.setCallHap()
+        #if len(self.in_data) > 0:
+        #    self.setCallHap()
+        #else:
+        #    SIM_run_alone(self.delCallHap, None)
         self.current_packet += 1
         return retval
 
     def setCallHap(self):
-        if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
+        #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
+        if self.call_hap is None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
             #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
