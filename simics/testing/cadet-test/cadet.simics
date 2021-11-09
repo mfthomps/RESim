@@ -6,9 +6,11 @@
 if $simics_version == 4.8{
     !xdotool type 'run-command-file docad4.simics'
 }else{
-    !xdotool type 'run-command-file docad.simics cgc=cgc'
+#    !xdotool type 'run-command-file docad.simics cgc=cgc'
+    !xdotool type 'run-command-file docad.simics'
 }
 !xdotool key Return
+run-command-file mapdriver.simics
 #
 # the following buffers until simics stops, e.g., the ROP.
 # TBD, if it fails it hangs?
