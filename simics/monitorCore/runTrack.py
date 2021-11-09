@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
 Executable program for running injectIO for all AFL queue sessions by starting/stopping
 RESim for each session.  This permits multi-packet replays which would otherwise corrupt
@@ -14,6 +14,7 @@ import threading
 import time
 import argparse
 import json
+import select
 import shlex
 import aflPath
 import resim_utils
@@ -63,6 +64,11 @@ def main():
             print("starting monitor without UI cmd: %s" % cmd)
             resim_ps = subprocess.Popen(shlex.split(cmd), stderr=subprocess.PIPE)
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
+            i, o, e = select.select( [sys.stdin], [], [], 1)
+            if is is not None:
+                print('got keyboard')
+                exit(0)
+
             err=resim_ps.communicate()
             if err is not None and 'quit' in err:
                 print(err)
