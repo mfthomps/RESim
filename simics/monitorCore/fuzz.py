@@ -186,7 +186,7 @@ class Fuzz():
         self.writeData()
         if self.backstop_cycles > 0:
             self.lgr.debug('fuzz setting backstop')
-            self.backstop.setFutureCycleAlone(self.backstop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
         self.lgr.debug('fuzz, did coverage, now run')
         SIM_run_command('c') 
 
