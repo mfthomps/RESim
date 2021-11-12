@@ -168,9 +168,6 @@ class PlayAFL():
                 #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
-            if '00011' in full: 
-                 #self.context_manager.watchTasks()
-                 self.top.instructTrace('0011.trace', all_proc=True, kernel=True)
             with open(full, 'rb') as fh:
                 if sys.version_info[0] == 2:
                     self.in_data = bytearray(fh.read())
