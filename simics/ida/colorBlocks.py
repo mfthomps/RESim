@@ -52,7 +52,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     num_new = 0
     graph_dict = {}
     for bb in latest_hits_json:
-        #print('bb is 0x%x' % bb)
+        print('bb is 0x%x' % bb)
         f = idaapi.get_func(bb)
         if f not in graph_dict:
             graph_dict[f] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)

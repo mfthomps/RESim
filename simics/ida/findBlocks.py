@@ -31,4 +31,4 @@ s = json.dumps(blocks, indent=4)
 with open(fname+'.blocks', 'w') as fh:
     fh.write(s)
 funs_fh.close()
-print 'done'
+print('done')

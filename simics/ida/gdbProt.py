@@ -92,7 +92,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
                 try:
                     retval = int(mail[2:], 16)
                 except:
-                    print 'Error: %s' % mail[2:]
+                    print('Error: %s' % mail[2:])
                 #print 'getEIPWhenStopped found ip of %x, now empty mailbox' % retval
                 Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
         else:

@@ -104,7 +104,7 @@ The script installs its functions as a hotkeys. Note use <fn> key on Mac
     Alt-Shift-q  quit ida debug session
     Alt-Shift-h  show help
     """
-    print lines['hotkeys']
+    print(lines['hotkeys'])
     #print('do okTextForm')
     #f = okTextForm.okTextForm(lines, prompt)
     #return f.go()
@@ -157,13 +157,13 @@ def getAddress(simicsString):
     try:
         toks = simicsString.split(' ')
     except:
-	print 'getAddress not a string to split'
+	print('getAddress not a string to split')
 	return None
     addr = None
     for tok in toks:
         #print 'look at tok [%s]' % tok
         if tok.find("skip_this_address") != -1:
-            print 'SKIP THIS ADDRESS' 
+            print('SKIP THIS ADDRESS')
             return 0
 	if tok.startswith('cs:') or tok.startswith('ip:'):
 		#print 'got cs! %s' % tok
@@ -433,7 +433,7 @@ class RunToConnectHandler(idaapi.action_handler_t):
 
     # Say hello when invoked.
     def activate(self, ctx):
-        print "Hello!"
+        print("Hello!")
         return 1
 
     # This action is always available.

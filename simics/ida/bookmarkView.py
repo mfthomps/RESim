@@ -174,20 +174,20 @@ class bookmarkView(simplecustviewer_t):
         try:
             x1, y1, x2, y2 = self.GetSelection()
         except:
-            print 'nothing selected'
+            print('nothing selected')
             for lineno in range(0, 99999):
                 try:
                     line = self.GetLine(lineno)[0]
                 except:
                     return
                 if line is not None:
-                    print line
+                    print(line)
                 else:
                     return
             return
         #print('%d %d %d %d' % (x1, y1, x2, y2)) 
         for lineno in range(y1, y2+1):
-            print self.GetLine(lineno)[0]
+            print(self.GetLine(lineno)[0])
 
     def OnKeydown(self, vkey, shift):
         if vkey == 27:

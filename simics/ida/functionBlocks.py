@@ -13,20 +13,20 @@ dumcount = 0
 for eh in segs:
     if dumcount == 0:
         ea = eh
-        print 'segment %d starts at %x' % (dumcount, eh)
+        print('segment %d starts at %x' % (dumcount, eh))
     dumcount += 1
 
-print 'ea is %x' % ea
-print 'now loop'
+#print 'ea is %x' % ea
+#print 'now loop'
 # Loop through all the functions and create a file with one line per function as:
 # address name
 seg_start = SegStart(ea)
 seg_end = SegEnd(ea)
-print 'seg start: %x  seg_end: %x' % (seg_start, seg_end)
+print('seg start: %x  seg_end: %x' % (seg_start, seg_end))
 blocks = open('blocks.txt', 'w')
 for function_ea in Functions(seg_start, seg_end):
     #funfile.write('%s %s\n' % (hex(function_ea), GetFunctionName(function_ea)))
-    print 'fuction info addr: %x name: %s' % (function_ea, GetFunctionName(function_ea))
+    print('fuction info addr: %x name: %s' % (function_ea, GetFunctionName(function_ea)))
     #items = line.split()
     #print '%s:%s' % (items[0], items[1])
     #value = int(items[0], 16)
@@ -44,4 +44,4 @@ for function_ea in Functions(seg_start, seg_end):
 blocks.close()
 idaapi.qexit(0) 
 
-print 'done'
+print('done')

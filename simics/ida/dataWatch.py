@@ -74,7 +74,7 @@ class DataWatch(simplecustviewer_t):
         self.Jump(index)
 
     def updateDataWatch(self):
-        print "in updateDataWatch"
+        print("in updateDataWatch")
         #self.Close()
         #self.Create()
         #print('did create')

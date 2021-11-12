@@ -133,14 +133,14 @@ def genSignatures():
     base_file = os.path.join(sig_dir, fname)+'.json'
     seg_start = idc.SegStart(ea)
     seg_end = idc.SegEnd(ea)
-    print 'seg start: %x  seg_end: %x' % (seg_start, seg_end)
+    print('seg start: %x  seg_end: %x' % (seg_start, seg_end))
     blocks = open(base_file, 'w')
     fun_sig = {}
     for function_ea in idautils.Functions(seg_start, seg_end):
         fun_name = idc.GetFunctionName(function_ea)
         fun_sig[fun_name] = getFunSig(function_ea)
     blocks.write(json.dumps(fun_sig))
-    print 'done creating %s' % base_file
+    print('done creating %s' % base_file)
     blocks.flush()
     blocks.close()
 
@@ -175,7 +175,7 @@ def querySignatures():
             print('no json found for %s' % look_for)
             sys.exit(1)
         for f in flist:
-            print f
+            print(f)
             rcb_file = f
             if f.startswith('CB'):
                 break

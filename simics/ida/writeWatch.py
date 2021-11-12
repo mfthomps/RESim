@@ -41,7 +41,7 @@ class WriteWatch(simplecustviewer_t):
 
 
     def updateWriteWatch(self):
-        print "in updateWriteWatch"
+        print("in updateWriteWatch")
         #self.Close()
         #self.Create()
         #print('did create')

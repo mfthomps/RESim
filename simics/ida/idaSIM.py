@@ -45,7 +45,7 @@ class IdaSIM():
         cursor = idaversion.get_screen_ea()
         curAddr = idaversion.get_reg_value(self.PC)
         if cursor == curAddr:
-            print 'attempt to go back to where you are ignored'
+            print('attempt to go back to where you are ignored')
             return
         #doRevToAddr(cursor)
         command = '@cgc.revToAddr(0x%x, extra_back=%d)' % (cursor, 0)
@@ -170,7 +170,7 @@ class IdaSIM():
         Issue the Simics "rev" command via GDB and then move forward the actual breakpoint
     '''
     def doReverse(self, extra_back=None):
-        print 'in doReverse'
+        print('in doReverse')
         curAddr = idaversion.get_reg_value(self.PC)
         #goNowhere()
         #print('doReverse, back from goNowhere curAddr is %x' % curAddr)
@@ -178,11 +178,11 @@ class IdaSIM():
         # if currently at a breakpoint, we need to back an instruction to so we don't break
         # here
         if isBpt > 0:
-       	    print 'curAddr is %x, it is a breakpoint, do a rev step over' % curAddr
+       	    print('curAddr is %x, it is a breakpoint, do a rev step over' % curAddr)
             addr = self.doRevStepOver()
             if addr is None:
                 return None
-            print 'in doReverse, did RevStepOver got addr of %x' % addr
+            print('in doReverse, did RevStepOver got addr of %x' % addr)
             isBpt = idc.CheckBpt(addr)
             if isBpt > 0:
     	        # back up onto a breakpoint, we are done
@@ -214,7 +214,7 @@ class IdaSIM():
     '''
     def wroteToSP(self):
         sp = idaversion.get_reg_value(self.SP)
-        print 'Running backwards to previous write to ESP:0x%x' % sp
+        print('Running backwards to previous write to ESP:0x%x' % sp)
         self.wroteToAddress(sp)
      
                         
@@ -223,7 +223,7 @@ class IdaSIM():
         lines = msg.split('\n')
         if len(lines) > 1:
             msg = lines[0]
-        print 'got mailbox message: <%s>' % msg
+        print('got mailbox message: <%s>' % msg)
         return msg
     
     def getUIAddress(self, prompt):    
@@ -289,7 +289,7 @@ class IdaSIM():
     def showSimicsMessage(self):
         command = '@cgc.idaMessage()' 
         simics_string = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        print simics_string
+        print(simics_string)
        
         if type(simics_string) is str:
            if 'Simics got lost' in simics_string:
@@ -306,7 +306,7 @@ class IdaSIM():
            print('%s not in reg list' % highlighted)
            highlighted = idaversion.ask_str('Wrote to register:', 'Which register?')
 
-        print 'Looking for a write to %s...' % highlighted
+        print('Looking for a write to %s...' % highlighted)
         command = "@cgc.revToModReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         eip = None
@@ -325,7 +325,7 @@ class IdaSIM():
            print('%s not in reg list' % highlighted)
            print('%s' % str(self.reg_list))
            highlighted = idaversion.ask_str('Track register:', 'Which register?')
-        print 'backtrack to source of to %s...' % highlighted
+        print('backtrack to source of to %s...' % highlighted)
         command = "@cgc.revTaintReg('%s')" % highlighted
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         print('trackRegister got simicsString %s' % simicsString)
@@ -392,7 +392,7 @@ class IdaSIM():
         print('Bookmarks (highlight & alt-shift-b to go there)')
         command = '@cgc.listBookmarks()' 
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        print simicsString
+        print(simicsString)
         self.bookmark_view.updateBookmarkView()
        
        
@@ -649,7 +649,7 @@ class IdaSIM():
         bookmark_list = self.bookmark_view.updateBookmarkView()
 
     def rebuildBookmarkView(self):
-        print 'rebuilding bookmark view'
+        print('rebuilding bookmark view')
         self.bookmark_view.Create(self)
         bookmark_list = self.bookmark_view.updateBookmarkView()
     
@@ -666,7 +666,7 @@ class IdaSIM():
         write_watch_results = self.write_watch.updateWriteWatch()
     
     def rebuildStackTrace(self):
-        print 'rebuilding stack trace'
+        print('rebuilding stack trace')
         self.stack_trace.Create(self)
         stack_trace_results = self.stack_trace.updateStackTrace()
     
@@ -751,7 +751,7 @@ class IdaSIM():
      
     def showCycle(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.showCycle()");')
-        print simicsString
+        print(simicsString)
     
     def refreshBookmarks(self):
         self.bookmark_view.updateBookmarkView()
@@ -785,7 +785,7 @@ class IdaSIM():
             highlighted = idaversion.getHighlight()
             retval = None
             if highlighted is not None:
-                print 'highlighted is %s' % highlighted
+                print('highlighted is %s' % highlighted)
                 if self.isReg(highlighted):
                     retval = idaversion.get_reg_value(highlighted)
                 else:

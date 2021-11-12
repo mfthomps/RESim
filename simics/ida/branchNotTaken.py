@@ -60,7 +60,7 @@ class BranchNotTaken(simplecustviewer_t):
 
     def updateList(self):
         branches = getEdges.getEdges()
-        print "in updateList"
+        print("in updateList")
         offset = self.getOffset()
         if branches is None:
             print('Branch Not Taken list is None')
