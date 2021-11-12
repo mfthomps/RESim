@@ -387,14 +387,14 @@ class GenMonitor():
             ''' likely some other pid in our group '''
             wrong_pid = True
         eip = self.getEIP(cpu)
-        self.lgr.debug('stopHap pid %d eip 0x%x cycle: 0x%x wrong_pid: %r' % (pid, eip, stop_action.hap_clean.cpu.cycles, wrong_pid))
+        self.lgr.debug('genMonitor stopHap pid %d eip 0x%x cycle: 0x%x wrong_pid: %r' % (pid, eip, stop_action.hap_clean.cpu.cycles, wrong_pid))
         for hc in stop_action.hap_clean.hlist:
             if hc.hap is not None:
                 if hc.htype == 'GenContext':
-                    self.lgr.debug('genMonitor stopHap delete GenContext hap %s' % str(hc.hap))
+                    self.lgr.debug('genMonitor stopHap stopAction delete GenContext hap %s' % str(hc.hap))
                     self.context_manager[self.target].genDeleteHap(hc.hap)
                 else:
-                    self.lgr.debug('stopHap will delete hap %s' % str(hc.hap))
+                    self.lgr.debug('genMonitor stopHap stopAction will delete hap %s type %s' % (str(hc.hap), str(hc.htype)))
                     SIM_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
@@ -461,13 +461,15 @@ class GenMonitor():
                         ''' stick with original debug pid '''
                         pid = debug_pid
                     
-            self.lgr.debug('run2User pid %d in kernel space (%d), set hap' % (pid, cpl))
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+            self.lgr.debug('run2User pid %d in kernel space (%d), set mode hap %d' % (pid, cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
-            hap_clean.add("Core_Mode_Change", self.mode_hap)
+            # fails when deleted? wtf?
+            #hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
+            self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
@@ -3757,10 +3759,6 @@ class GenMonitor():
     def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False, trace=False): 
         self.replay_instance = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True, cover=cover, trace=trace) 
 
-    def playBreak(self, n=1):
-        # TBD not used?
-        self.aflPlay.playBreak(n)
-
     def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None, trackFD=None):
         ''' generate crash reports for all crashes in a given AFL target diretory -- or a given specific file '''
         self.lgr.debug('crashReport %s' % fname)
@@ -3879,8 +3877,8 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname, all_proc=False):
-        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc)
+    def instructTrace(self, fname, all_proc=False, kernel=False):
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel)
         pid = self.getPID()
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
@@ -3930,6 +3928,20 @@ class GenMonitor():
         self.context_manager[self.target].watchTasks(set_debug_pid=True)
         ''' flist of other than None causes watch of open/mmap for SO tracking '''
         self.execToText(flist=[])
+
+    def ni(self):
+        eip = self.getEIP()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        next_ip = eip + instruct[0]
+        cell = cpu.current_context
+        bp = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, next_ip, self.mem_utils[self.target].WORD_SIZE, 0)
+        self.lgr.debug('ni eip 0x%x break set on 0x%x cell %s' % (eip, next_ip, cell))
+        hap_clean = hapCleaner.HapCleaner(cpu)
+        stop_action = hapCleaner.StopAction(hap_clean, [bp])
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        SIM_run_command('c')
     
 
 if __name__=="__main__":        
