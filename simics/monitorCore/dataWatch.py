@@ -54,7 +54,6 @@ class DataWatch():
         self.retrack = False
         self.back_stop = back_stop
         self.watchMarks = watchMarks.WatchMarks(mem_utils, cpu, cell_name, run_from_snap, lgr)
-        back_stop_string = os.getenv('BACK_STOP_CYCLES')
         self.call_break = None
         self.call_hap = None
         self.call_stop_hap = None
@@ -62,6 +61,7 @@ class DataWatch():
         ''' used to guess if we encountered a ghost frame '''
         self.cycles_was = 0
         self.undo_hap = None
+        back_stop_string = os.getenv('BACK_STOP_CYCLES')
         if back_stop_string is None:
             self.back_stop_cycles = 5000000
         else:
@@ -687,7 +687,9 @@ class DataWatch():
                     self.mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
                 else:
                     self.mem_something.src = self.mem_utils.readPtr(self.cpu, sp)
+                self.lgr.debug('dataWatch is strlen, cal getStrLen for 0x%x' % self.mem_something.src)
                 self.mem_something.count = self.getStrLen(self.mem_something.src)        
+                self.lgr.debug('dataWatch back from getStrLen')
             elif self.mem_something.fun in ['vsnprintf', 'sprintf']:
                 # TBD generalized this
                 self.mem_something.dest, self.mem_something.src, dumb = self.getCallParams(sp)
@@ -733,6 +735,7 @@ class DataWatch():
             #self.context_manager.restoreDefaultContext()
             skip_fun = False
             if not data_hit:
+                self.lgr.debug('dataWatch not data_hit, find range for buf_start')
                 ''' see if src is one of our buffers '''
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
@@ -900,6 +903,9 @@ class DataWatch():
         while not done:
             v = self.mem_utils.readByte(self.cpu, addr)
             #self.lgr.debug('getStrLen got 0x%x from 0x%x' % (v, addr))
+            if v is None:
+                self.lgr.debug('getStrLen got NONE for 0x%x' % (addr))
+                done = True
             if v == 0:
                 done = True
             else:
