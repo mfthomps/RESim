@@ -363,7 +363,7 @@ class GenMonitor():
             mode = 0
         phys = self.mem_utils[self.target].v2p(cpu, eip)
         if phys is None:
-            self.lgr.error('modeChanged failed to get phys addr for 0x%x' % eip)
+            self.lgr.debug('modeChanged failed to get phys addr for 0x%x' % eip)
             SIM_break_simulation('bad phys')
             return
         instruct = SIM_disassemble_address(cpu, phys, 0, 0)
@@ -465,7 +465,7 @@ class GenMonitor():
             self.lgr.debug('run2User pid %d in kernel space (%d), set mode hap %d' % (pid, cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? wtf?
-            #hap_clean.add("Core_Mode_Change", self.mode_hap)
+            hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
