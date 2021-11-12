@@ -51,8 +51,9 @@ class RegisterModType():
     UNKNOWN = 0
     REG = 1
     ADDR = 2
+    FUN_VAL = 3
     ''' pursuing taint via other means '''
-    BAIL = 3
+    BAIL = 4
     def __init__(self, value, mod_type, src_reg=None):
         self.value = value
         self.mod_type = mod_type
@@ -63,6 +64,8 @@ class RegisterModType():
             retval = 'Address: 0x%x' % self.value
         elif self.mod_type == RegisterModType.REG:
             retval = 'Register: %s' % self.value
+        elif self.mod_type == RegisterModType.FUN_VAL:
+            retval = 'Function return r0 of zero'
         else:
             retval = 'Bail'
         return retval
@@ -719,6 +722,13 @@ class reverseToCall():
                     self.cleanup(self.cpu)
                     self.top.skipAndMail()
                     done=True
+            elif reg_mod_type.mod_type == RegisterModType.FUN_VAL:
+                eip = self.top.getEIP(self.cpu)
+                self.bookmarks.setBacktrackBookmark('eip:0x%x function return set to 0' % eip)
+                ida_message = 'Function returned zero at 0x%x' % eip
+                done=True
+                self.cleanup(self.cpu)
+
             elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
                 ''' current eip modifies self.reg, done, or continue taint '''
@@ -807,7 +817,11 @@ class reverseToCall():
                 mn = self.decode.getMn(instruct[1])
                 self.lgr.debug('cycleRegisterMod decode is %s' % mn)
                 if self.conditionalMet(mn):
-                    if self.decode.modifiesOp0(mn):
+                    ''' TBD generalize '''
+                    if (self.reg == 'r0' or self.reg == 'eax') and self.reg_val == 0 and self.isRet(instruct[1], eip):
+                        done = True 
+                        retval = RegisterModType(None, RegisterModType.FUN_VAL)
+                    elif self.decode.modifiesOp0(mn):
                         self.lgr.debug('get operands from %s' % instruct[1])
                         op1, op0 = self.decode.getOperands(instruct[1])
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
