@@ -1,12 +1,13 @@
 from simics import *
 class InstructTrace():
-    def __init__(self, top, lgr, fname, all_proc=False):
+    def __init__(self, top, lgr, fname, all_proc=False, kernel=False):
         self.top = top
         self.lgr = lgr
         SIM_run_command('load-module trace')
         tracer_name = SIM_run_command('new-tracer')
         self.tracer = SIM_get_object(tracer_name)
         self.all_proc = all_proc
+        self.kernel = kernel
         print('tracer is %s' % tracer_name)
         tfile = '/tmp/%s' % fname
         #cmd = 'output-file-start %s' % tfile
@@ -16,15 +17,18 @@ class InstructTrace():
         print('begin, or what?')
         pid = self.top.getPID()
         cpu = self.top.getCPU()
-        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+        if not kernel:
+            self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
 
     def start(self,dumb=None):
         pid = self.top.getPID()
+        print('instructTrace starting pid is %d' % pid)
         self.lgr.debug('instructTrace starting pid is %d' % pid)
         self.tracer.cli_cmds.start()
 
     def stop(self,dumb=None):
         pid = self.top.getPID()
+        print('instructTrace stopping pid is %d' % pid)
         self.lgr.debug('instructTrace stopping pid is %d' % pid)
         self.tracer.cli_cmds.stop()
 
