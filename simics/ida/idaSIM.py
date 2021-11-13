@@ -178,16 +178,16 @@ class IdaSIM():
         # if currently at a breakpoint, we need to back an instruction to so we don't break
         # here
         if isBpt > 0:
-       	    print('curAddr is %x, it is a breakpoint, do a rev step over' % curAddr)
+            print('curAddr is %x, it is a breakpoint, do a rev step over' % curAddr)
             addr = self.doRevStepOver()
             if addr is None:
                 return None
             print('in doReverse, did RevStepOver got addr of %x' % addr)
             isBpt = idc.CheckBpt(addr)
             if isBpt > 0:
-    	        # back up onto a breakpoint, we are done
+                # back up onto a breakpoint, we are done
                 print('doReverse backed to breakpoint, we are done')
-    	    return addr
+            return addr
     
         #print 'do reverse'
         param = ''
@@ -432,8 +432,8 @@ class IdaSIM():
         if addr is not None:
             bptEnabled = idc.CheckBpt(addr)
             if bptEnabled < 0:
-        	    print('breakAtStart bpt set at 0x%x' % addr)
-        	    idc.AddBpt(addr)
+                print('breakAtStart bpt set at 0x%x' % addr)
+                idc.AddBpt(addr)
         else:
             print('setBreakAtStart, got no loc for _start')
         return addr

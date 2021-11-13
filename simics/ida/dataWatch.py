@@ -98,9 +98,9 @@ class DataWatch(simplecustviewer_t):
             uline = '%3d 0x%08x 0x%08x %s' % (index, entry['ip'], entry['cycle'], entry['msg'])
             line = uline.encode('ascii', 'replace')
             #print('do %s' % line)
-            if 'return from' in line:
+            if 'return from' in str(line):
                 cline = idaapi.COLSTR(str(line), idaapi.SCOLOR_DREF)
-            elif 'closed FD' in line:
+            elif 'closed FD' in str(line):
                 cline = idaapi.COLSTR(str(line), idaapi.SCOLOR_DREF)
             else:
                 cline = str(line)
@@ -126,6 +126,7 @@ class DataWatch(simplecustviewer_t):
         line = idaapi.tag_remove(line)
         #print('line is %s' % line)
         parts = line.split()
+        print('parts0 is %s' % parts[0])
         index = None
         try:
             index = int(parts[0])

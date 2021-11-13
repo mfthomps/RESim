@@ -22,7 +22,6 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-
 import time
 import idaapi
 import idaversion
@@ -157,22 +156,22 @@ def getAddress(simicsString):
     try:
         toks = simicsString.split(' ')
     except:
-	print('getAddress not a string to split')
-	return None
+        print('getAddress not a string to split')
+        return None
     addr = None
     for tok in toks:
         #print 'look at tok [%s]' % tok
         if tok.find("skip_this_address") != -1:
             print('SKIP THIS ADDRESS')
             return 0
-	if tok.startswith('cs:') or tok.startswith('ip:'):
-		#print 'got cs! %s' % tok
+        if tok.startswith('cs:') or tok.startswith('ip:'):
+                #print 'got cs! %s' % tok
                 try:
-		    addr = int(tok[3:], 16)
+                    addr = int(tok[3:], 16)
                 except:
                     print('exception in getAddress trying to get int from tok %s' % tok)
                     print('failed to get int 16 from %s' % tok[3:])
-		break
+                break
     return addr
 
 def getCPL():

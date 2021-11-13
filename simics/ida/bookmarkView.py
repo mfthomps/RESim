@@ -31,6 +31,7 @@ else:
     from ida_kernwin import simplecustviewer_t
 import gdbProt
 import bpUtils
+import sys
 
 BT = 'backtrack '
 START = 'START'
@@ -120,7 +121,8 @@ class bookmarkView(simplecustviewer_t):
         print('did clear and refresh')
         command = '@cgc.listBookmarks()'
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        if type(simicsString) is int or type(simicsString) is long:
+        #if type(simicsString) is int or type(simicsString) is long:
+        if type(simicsString) is int:
             print('listBookmarks got an int?  %d' % simicsString)
             return
         lines = simicsString.split('\n')

@@ -54,9 +54,10 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     for bb in latest_hits_json:
         print('bb is 0x%x' % bb)
         f = idaapi.get_func(bb)
-        if f not in graph_dict:
-            graph_dict[f] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        block = getBB(graph_dict[f], bb)
+        f_string = str(f)
+        if f_string not in graph_dict:
+            graph_dict[f_string] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
+        block = getBB(graph_dict[f_string], bb)
         if block is not None:
             bb_id = block.id
             if bb not in all_hits_json:
