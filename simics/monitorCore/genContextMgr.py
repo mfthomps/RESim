@@ -722,7 +722,8 @@ class GenContextMgr():
             self.lgr.debug('No longer watching pid %d' % pid)
         
     def stopWatchTasks(self):
-        SIM_run_alone(self.stopWatchTasksAlone, None)
+        self.stopWatchTasksAlone(None)
+        #SIM_run_alone(self.stopWatchTasksAlone, None)
 
     def stopWatchTasksAlone(self, dumb):
         if self.task_break is None:
