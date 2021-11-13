@@ -442,11 +442,11 @@ class GenContextMgr():
                 if new_task not in self.nowatch_list:
                     ''' should watch all but maze ''' 
                     SIM_run_alone(self.setAllHap, False)
-                    self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list, watch all but maze')
+                    #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list, watch all but maze')
                 else:
                     ''' should only watch maze breaks '''
                     SIM_run_alone(self.setAllHap, True)
-                    self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list but in maze breakout, watch ONLY maze breaks')
+                    #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list but in maze breakout, watch ONLY maze breaks')
             else:
                 '''New task not in watch_rec_list'''
                 if len(self.watch_rec_list) == 0:
@@ -455,18 +455,18 @@ class GenContextMgr():
                         ''' Set only the maze break '''
                         ''' Was not watching anything, so set current task break '''
                         SIM_run_alone(self.setAllHap, True)
-                        self.lgr.debug('contextManager DEBUG, was not watching, no debug list but task in maze breakout, watch ONLY maze breaks')
+                        #self.lgr.debug('contextManager DEBUG, was not watching, no debug list but task in maze breakout, watch ONLY maze breaks')
                     else:
                         ''' Set all but the maze breaks '''
                         SIM_run_alone(self.setAllHap, False)
-                        self.lgr.debug('contextManager DEBUG, was not watching, no debug list not in maze breakout, watch all but maze')
+                        #self.lgr.debug('contextManager DEBUG, was not watching, no debug list not in maze breakout, watch all but maze')
                 else:
                     ''' Some other tasks are in the debug list '''
                     if new_task in self.nowatch_list:
                         SIM_run_alone(self.setAllHap, True)
-                        self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task in maze breakout, watch ONLY maze breaks')
+                        #self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task in maze breakout, watch ONLY maze breaks')
                     else:
-                        self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task NOT in maze breakout, keep not watching')
+                        #self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task NOT in maze breakout, keep not watching')
                         pass
         else:
             ''' was watching tasks '''
@@ -475,31 +475,32 @@ class GenContextMgr():
                 if new_task in self.nowatch_list:
                     ''' but it is in  the nowatch list clear all but maze'''
                     SIM_run_alone(self.clearAllHap, True)
-                    self.lgr.debug('contextManager DEBUG, was watching, task in debug list; task in maze breakout, delete all but maze breaks')
+                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; task in maze breakout, delete all but maze breaks')
                 elif prev_task in self.nowatch_list:
                     SIM_run_alone(self.clearAllHap, False)
                     SIM_run_alone(self.setAllHap, False)
-                    self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous was in maze, delete haps and create all but maze')
+                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous was in maze, delete haps and create all but maze')
                 else:
-                    self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous not in maze, haps should be good as is.')
+                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous not in maze, haps should be good as is.')
+                    pass
             else:
                 ''' New task not in debug list '''
                 if new_task in self.nowatch_list:
                     if prev_task in self.nowatch_list:
-                        self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, as was the previous task, should be good as is.')
+                        #self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, as was the previous task, should be good as is.')
                         pass
                     else:
-                        self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, previous task was not, delete all and set only maze.')
+                        #self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, previous task was not, delete all and set only maze.')
                         SIM_run_alone(self.clearAllHap, False)
                         SIM_run_alone(self.setAllHap, True)
                 else:
                     ''' New task not in maze breakout'''
-                    self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task not in maze breakout.  Delete all haps.')
+                    #self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task not in maze breakout.  Delete all haps.')
                     self.restoreDefaultContext() 
                     SIM_run_alone(self.clearAllHap, False)
                     self.watching_tasks = False
                     if len(self.watch_rec_list) == 0 and len(self.nowatch_list) == 0:
-                        self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
+                        #self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
                         self.stopWatchTasks()
         
     def changedThread(self, cpu, third, forth, memory):
@@ -517,8 +518,8 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
-            prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
+        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -581,6 +582,13 @@ class GenContextMgr():
                 self.rmTask(pid)
         self.watch_only_this = True
 
+    def delPidRecAlone(self, pid):
+        SIM_delete_breakpoint(self.task_rec_bp[pid])
+        self.lgr.debug('contextManger rmTask pid %d' % pid)
+        SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
+        del self.task_rec_bp[pid]
+        del self.task_rec_hap[pid]
+        del self.task_rec_watch[pid]
     def rmTask(self, pid, killed=False):
         ''' remove a pid from the list of task records being watched.  return True if this is the last thread. '''
         retval = False
@@ -600,12 +608,7 @@ class GenContextMgr():
                 self.lgr.debug('rmTask remove %d from cache, cache now %s' % (pid, str(self.pid_cache)))
             
             if pid in self.task_rec_bp and self.task_rec_bp[pid] is not None:
-                SIM_delete_breakpoint(self.task_rec_bp[pid])
-                self.lgr.debug('contextManger rmTask pid %d' % pid)
-                SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
-                del self.task_rec_bp[pid]
-                del self.task_rec_hap[pid]
-                del self.task_rec_watch[pid]
+                self.delPidRecAlone(pid)
             if len(self.watch_rec_list) == 0:
                 if len(self.debugging_comm) == 0:
                     self.lgr.warning('contextManager rmTask debugging_comm is None')
@@ -699,9 +702,12 @@ class GenContextMgr():
         self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchPid(self, pid):
+        SIM_run_alone(self.stopWatchPidAlone, pid)
+
+    def stopWatchPidAlone(self, pid):
         if pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
-                self.lgr.debug('stopWatchTasks delete bp %d' % self.task_rec_bp[pid])
+                self.lgr.debug('stopWatchPid delete bp %d' % self.task_rec_bp[pid])
                 SIM_delete_breakpoint(self.task_rec_bp[pid])
                 SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
             del self.task_rec_bp[pid]
@@ -715,8 +721,10 @@ class GenContextMgr():
             self.restoreDefaultContext() 
             self.lgr.debug('No longer watching pid %d' % pid)
         
-
     def stopWatchTasks(self):
+        SIM_run_alone(self.stopWatchTasksAlone, None)
+
+    def stopWatchTasksAlone(self, dumb):
         if self.task_break is None:
             self.lgr.debug('stopWatchTasks already stopped')
             return
@@ -769,7 +777,7 @@ class GenContextMgr():
         #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
         self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
-        #self.lgr.debug('genContextManager setTaskHap bp %d' % self.task_break)
+        self.lgr.debug('genContextManager setTaskHap bp %d' % self.task_break)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
         #self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
 
@@ -1040,6 +1048,9 @@ class GenContextMgr():
             self.watchExit(rec, pid)
 
     def clearExitBreaks(self):
+        SIM_run_alone(self.clearExitBreaksAlone, None)
+
+    def clearExitBreaksAlone(self, dumb):
         self.lgr.debug('contextManager clearExitBreaks')
         for pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
