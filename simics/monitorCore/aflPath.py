@@ -72,7 +72,7 @@ def getAFLCoverageList(target, get_all=False):
     return glist
 
 def getTargetQueue(target, get_all=False):
-    ''' get list of queue files.  ignore sync files and return based on target.unique if allowed.'''
+    ''' get list of queue files, relative to afloutput.  ignore sync files and return based on target.unique if allowed.'''
     afl_list = []
     afl_output = getAFLOutput()
     afl_dir = os.path.join(afl_output, target)
@@ -92,6 +92,7 @@ def getTargetQueue(target, get_all=False):
         gpath = os.path.join(afl_dir, 'resim_*', 'queue', 'id:*')
         glist = glob.glob(gpath)
         if len(glist) > 0:
+            #for path in sorted(glist):
             for path in glist:
                 if 'sync:' not in path:
                     afl_list.append(path)

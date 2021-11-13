@@ -45,10 +45,11 @@ class PlayAFL():
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return None
         if os.path.isfile(target):
+            ''' single file to play '''
             self.target = 'oneplay'
-            self.afl_dir = os.path.dirname(target)
-            base = os.path.basename(target)
-            self.afl_list = [base]
+            relative = target[(len(self.afl_dir)+1):]
+            self.afl_list = [relative]
+            self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
         else:
             self.afl_list = aflPath.getTargetQueue(target, get_all=True)
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
@@ -88,16 +89,17 @@ class PlayAFL():
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        self.physical=False
         if self.coverage is not None:
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone)
-            physical = True
+            self.physical = True
             if linear:
-                physical = False
+                self.physical = False
                 self.lgr.debug('afl, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
                 self.context_manager.watchTasks()
-            self.coverage.doCoverage(no_merge=True, physical=physical)
+            self.coverage.doCoverage(no_merge=True, physical=self.physical)
 
             full_path = self.coverage.getFullPath()
             full_path = os.path.abspath(full_path)
@@ -133,13 +135,13 @@ class PlayAFL():
         self.findbb = findbb
         if self.stop_hap is None:
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
-        SIM_run_alone(self.goAlone, None)
+        SIM_run_alone(self.goAlone, False)
 
     def hangCallback(self, cycles):
         self.lgr.debug('playAFL hang detected')
         SIM_break_simulation('hang')
 
-    def goAlone(self, dumb):
+    def goAlone(self, clear_hits):
         self.current_packet=1
         self.index += 1
         done = False
@@ -159,8 +161,9 @@ class PlayAFL():
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
-                self.coverage.clearHits() 
-                #self.coverage.doCoverage() 
+                if clear_hits:
+                    self.coverage.stopCover() 
+                    self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             if self.orig_buffer is not None:
                 #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
@@ -202,7 +205,7 @@ class PlayAFL():
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None:
                 hits = self.coverage.getHitCount()
-                self.lgr.debug('All sessions done, save as %s' % (self.target))
+                self.lgr.debug('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
                 hits_path = self.coverage.getHitsPath()
   
                 s = json.dumps(self.all_hits)
@@ -214,7 +217,7 @@ class PlayAFL():
                 with open(save_name, 'w') as fh:
                     fh.write(s)
                     fh.flush()
-                print('Hits file written to %s' % save_name)
+                print('%d Hits file written to %s' % (len(self.all_hits), save_name))
             self.delStopHap(None)               
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
@@ -222,15 +225,6 @@ class PlayAFL():
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
             cli.quiet_run_command('restore-snapshot name = origin')
-
-    def playBreak(self, bnt_index):
-        self.current_packet = 1
-        self.index = 0
-        self.afl_list = [self.bnt_list[bnt_index]]
-        cli.quiet_run_command('enable-reverse-execution')
-        self.stop_on_break = True
-        self.lgr.debug('playAFL playBreak')
-        self.goAlone(None)
 
     def getHitsPath(self, index):
         queue_dir = os.path.dirname(self.afl_list[index])
@@ -257,7 +251,7 @@ class PlayAFL():
                 self.all_hits.append(hit)
 
     def stopHap(self, dumb, one, exception, error_string):
-        self.lgr.debug('in stopHap')
+        self.lgr.debug('playAFL in stopHap')
         if self.stop_hap is not None:
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
@@ -280,7 +274,7 @@ class PlayAFL():
                     self.recordHits(hit_bbs)
             else:
                 self.lgr.debug('playAFL stopHap')
-            SIM_run_alone(self.goAlone, None)
+            SIM_run_alone(self.goAlone, True)
 
 
     def delStopHap(self, dumb):

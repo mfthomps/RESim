@@ -29,6 +29,15 @@ class InjectIO():
         bsc = os.getenv('BACK_STOP_CYCLES')
         if bsc is not None:
             self.backstop_cycles = int(bsc)
+        hang_cycles = 90000000
+        hang = os.getenv('HANG_CYCLES')
+        if hang is not None:
+            hang_cycles = int(hang)
+        if callback is not None:
+            hang_callback = callback
+        else:
+            hang_callback = self.recordHang
+        self.backstop.setHangCallback(hang_callback, hang_cycles)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         if self.packet_count > 1: 
@@ -282,3 +291,8 @@ class InjectIO():
 
     def setSaveJson(self, save_file):
         self.save_json = save_file
+
+    def recordHang(self, cycles):
+        self.lgr.debug('Hang')
+        print('Hang')
+        SIM_break_simulation('hang')

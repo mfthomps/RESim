@@ -3,9 +3,9 @@
 #  Run the client.py script on the driver and check
 #  for ROP report in the log
 #
-decl {
-       param cgc : string = ""
-}
+#decl {
+#       param cgc : string = ""
+#}
 @cgc.debugProc('cadet01')
 @cgc.watchROP()
 !./findWindow.sh "Simics Target Consoles"

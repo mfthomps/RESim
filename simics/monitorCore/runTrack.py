@@ -66,14 +66,15 @@ def main():
             cmd = '%s %s -n' % (resim_path, resim_ini)
             print("starting monitor without UI cmd: %s" % cmd)
             resim_ps = subprocess.Popen(shlex.split(cmd), stderr=subprocess.PIPE)
+            err=resim_ps.communicate()
             print("Back from simics")
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             i, o, e = select.select( [sys.stdin], [], [], 1)
-            if i is not None:
-                print('got keyboard')
+            if len(i) > 0:
+                data = sys.stdin.read()
+                print('got keyboard %s' % data)
                 exit(0)
 
-            err=resim_ps.communicate()
             if err is not None and 'quit' in err:
                 print('got err')
                 print(err)

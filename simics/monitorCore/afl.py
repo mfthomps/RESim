@@ -109,14 +109,14 @@ class AFL():
         self.addr_addr = None
         self.addr_size = None
         self.orig_buffer = None
-        hang_cycles = 90000000
-        hang = os.getenv('HANG_CYCLES')
-        if hang is not None:
-            hang_cycles = int(hang)
-        self.backstop.setHangCallback(self.coverage.recordHang, hang_cycles)
         if fd is not None:
             self.prepInject(snap_name)
         else:
+            hang_cycles = 90000000
+            hang = os.getenv('HANG_CYCLES')
+            if hang is not None:
+                hang_cycles = int(hang)
+            self.backstop.setHangCallback(self.coverage.recordHang, hang_cycles)
             self.lgr.debug('AFL init from snap %s' % snap_name)
             self.loadPickle(snap_name)
             env_max_len = os.getenv('AFL_MAX_LEN')
