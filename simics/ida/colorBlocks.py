@@ -52,28 +52,33 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     num_new = 0
     graph_dict = {}
     for bb in latest_hits_json:
-        print('bb is 0x%x' % bb)
         f = idaapi.get_func(bb)
-        f_string = str(f)
-        if f_string not in graph_dict:
-            graph_dict[f_string] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        block = getBB(graph_dict[f_string], bb)
+        f_start = f.start_ea
+        #if bb == 0xbba4:
+        #    print('bb is 0x%x f_start is 0x%x' % (bb, f_start))
+        if f_start not in graph_dict:
+            graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
+        block = getBB(graph_dict[f_start], bb)
         if block is not None:
             bb_id = block.id
             if bb not in all_hits_json:
                 ''' first time bb has been hit in any data session '''
                 p.bg_color =  new_hit_color
                 ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                #print('new hit fun 0x%x bb: 0x%x bb_id: %d block.start_ea 0x%x end 0x%x' % (f.start_ea, bb, bb_id, block.start_ea, block.end_ea))
+                #if bb == 0xbba4:
+                #    print('new hit fun 0x%x bb: 0x%x bb_id: %d block.start_ea 0x%x end 0x%x' % (f.start_ea, bb, bb_id, block.start_ea, block.end_ea))
                 num_new += 1
             elif bb in all_hits_json:
                 ''' also hit in earlier data session '''
                 p.bg_color =  old_hit_color
                 ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                #print('old hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                #if bb == 0xbba4:
+                #    print('old hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
             else:
                 print('impossible')
                 exit(1)
+        else: 
+            print('block for 0x%x is None' % bb)
 
     print('Data run generated %d new hits' % num_new)
 
