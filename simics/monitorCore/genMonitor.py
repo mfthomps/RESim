@@ -2398,7 +2398,7 @@ class GenMonitor():
             the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                    self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
                                    calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
-                                   skip_and_mail=skip_and_mail)
+                                   skip_and_mail=skip_and_mail, name='runToIO')
             for call in calls:
                 self.call_traces[self.target][call] = the_syscall
             ''' find processes that are in the kernel on IO calls '''
@@ -2409,7 +2409,7 @@ class GenMonitor():
                     self.lgr.error('frames[%d] is None' % pid)
                     continue
                 call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-                self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
+                self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
                 if call not in calls or call in skip_calls:
                    del frames[pid]
                 else:
@@ -2451,7 +2451,7 @@ class GenMonitor():
         the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
                                calls, call_params=[call_params1,call_params2,call_params3], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
-                               skip_and_mail=skip_and_mail)
+                               skip_and_mail=skip_and_mail, name='runToInput')
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         ''' find processes that are in the kernel on IO calls '''
@@ -2685,15 +2685,15 @@ class GenMonitor():
 
     def clearBookmarks(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
+        self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
             print('** Not debugging?? **')
             self.lgr.debug('clearBookmarks, Not debugging?? **')
             return False
-        self.resetOrigin(cpu)
         self.bookmarks.clearMarks()
+        self.resetOrigin(cpu)
         self.dataWatch[self.target].clearWatchMarks()
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.lgr.debug('genMonitor clearBookmarks')
         self.stopTrackIO()
         self.dataWatch[self.target].clearWatches(cpu.cycles)
         self.rev_to_call[self.target].resetStartCycles()
@@ -3667,7 +3667,7 @@ class GenMonitor():
             self.noWatchSysEnter()
             fuzz_it.goN(0)
 
-    def aflFD(self, fd, snap_name):
+    def aflFD(self, fd, snap_name, count=1):
         ''' 
             Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
             fd -- will runToIOish on that FD
@@ -3681,7 +3681,7 @@ class GenMonitor():
                 self.debugPidGroup(pid)
             print('fd is %d' % fd)
             fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
-               self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd)
+               self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd, count=count)
         else:
             print('Reverse execution must be enabled to run aflFD')
 
