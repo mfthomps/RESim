@@ -12,6 +12,8 @@ class TraceFiles():
         self.lgr = lgr
         self.open_files = {}
         self.traceProcs = traceProcs
+        ''' for tracing of only FD, e.g., to ignore close '''
+        self.tracing_fd = []
 
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
@@ -30,6 +32,7 @@ class TraceFiles():
         with open(outfile, 'w') as fh:
                 fh.write('start of RESim copy of FD %d\n' % fd) 
         self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
+        self.tracing_fd.append(fd)
         
 
     def open(self, path, fd):
@@ -38,10 +41,14 @@ class TraceFiles():
             self.open_files[fd] = self.path_list[path]
 
     def close(self, fd):
-        if fd in self.open_files:
-            self.open_files[fd].fd = None
-            del self.open_files[fd]
-            self.lgr.debug('TraceFiles close %d num open files %d'  % (fd, len(self.open_files)))
+        if fd not in self.tracing_fd:
+            if fd in self.open_files and fd not in self.tracing_fd:
+                self.open_files[fd].fd = None
+                del self.open_files[fd]
+                self.lgr.debug('TraceFiles close %d num open files %d'  % (fd, len(self.open_files)))
+        else:
+            with open(self.open_files[fd].outfile, 'a') as fh:
+                fh.write('\nFile closed.\n')
 
     def write(self, pid, fd, the_bytes):
         if self.traceProcs is not None and len(self.path_list) > 0:
@@ -57,6 +64,7 @@ class TraceFiles():
         
                  
         elif fd in self.open_files:
+            ''' tracing fd '''
             with open(self.open_files[fd].outfile, 'a') as fh:
                 s = ''.join(map(chr,the_bytes))
                 self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
