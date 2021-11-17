@@ -12,7 +12,7 @@ import backStop
 import net
 import os
 import sys
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strncpy', 'strtoul', 'mempcpy', 
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'fwrite', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf']
@@ -305,7 +305,7 @@ class DataWatch():
        
        
     class MemSomething():
-        def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None): 
+        def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None):
             self.fun = fun
             self.addr = addr
             self.ret_ip = ret_ip
@@ -336,9 +336,13 @@ class DataWatch():
         SIM_run_alone(self.deleteReturnHap, None)
         eip = self.top.getEIP(self.cpu)
         if self.cpu.cycles < self.cycles_was:
-            self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles less than when we read the data' % eip)
-            SIM_run_alone(self.startUndoAlone, None)
-            return
+            if self.mem_something.addr is None:
+                '''  Not due to a readHap, just restore breaks and continue '''
+                pass
+            else:
+                self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles less than when we read the data' % eip)
+                SIM_run_alone(self.startUndoAlone, None)
+                return
         self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
         self.context_manager.genDeleteHap(self.return_hap)
         self.return_hap = None
@@ -368,7 +372,7 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'xmlStrcmp']: 
             buf_start = self.findRange(self.mem_something.dest)
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
@@ -511,7 +515,7 @@ class DataWatch():
             self.lgr.debug('dataWatch returnHap, return from iterator %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             buf_start = self.findRange(self.mem_something.src)
             self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, buf_start)
-        elif self.mem_something.fun not in no_stop_funs:
+        elif self.mem_something.fun not in no_stop_funs and mem_something.addr is not None:
             self.lgr.error('dataWatch returnHap no handler for %s' % self.mem_something.fun)
         #SIM_break_simulation('return hap')
         #return
@@ -636,7 +640,7 @@ class DataWatch():
                         if self.mem_something.count > n:
                             self.mem_something.count = n
                     self.mem_something.dest = self.mem_utils.readPtr(self.cpu, sp)
-            elif self.mem_something.fun in ['strcmp', 'strncmp', 'xmlStrcmp']: 
+            elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'xmlStrcmp']: 
                 self.mem_something.dest, self.mem_something.src, dumb = self.getCallParams(sp)
                 if self.cpu.architecture == 'arm':
                     if self.mem_something.fun == 'strncmp':
@@ -791,10 +795,10 @@ class DataWatch():
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             self.watch(i_am_alone=True)
             addr = self.mem_something.src
-            if self.mem_something.op_type != Sim_Trans_Load:
+            if self.mem_something.op_type != Sim_Trans_Load or addr is None:
                 addr = self.mem_something.dest
-            self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, pid)
             self.lgr.debug('dataWatch undoAlone would run forward, first restore debug context')
+            self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, pid)
             self.context_manager.restoreDebugContext()
             self.top.restoreDebugBreaks()
             SIM_run_command('c')
@@ -1074,7 +1078,7 @@ class DataWatch():
             SIM_run_alone(self.setStopHap, None)
 
         start, length = self.getStartLength(index, addr) 
-        #self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x' % (index, addr, start))
+        self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x' % (index, addr, start))
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         #start, end = self.context_manager.getText()
@@ -1601,10 +1605,10 @@ class DataWatch():
                             addr_of_ret_addr = None
                         elif frame.ret_to_addr is not None:
                             addr_of_ret_addr = frame.ret_to_addr
-                            self.lgr.debug('datawatch memsomething using ret_to_addr from frame of 0x%x' % frame.ret_to_addr)
+                            #self.lgr.debug('datawatch memsomething using ret_to_addr from frame of 0x%x' % frame.ret_to_addr)
                         else:
                             addr_of_ret_addr = frame.sp
-                            self.lgr.debug('datawatch memsomething using ret_to_addr from SP of 0x%x' % frame.sp)
+                            #self.lgr.debug('datawatch memsomething using ret_to_addr from SP of 0x%x' % frame.sp)
                         retval = self.MemStuff(ret_addr, fun, frame.ip, addr_of_ret_addr)
                     
                 else:
