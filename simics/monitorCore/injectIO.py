@@ -156,6 +156,9 @@ class InjectIO():
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
+        if bytes_wrote is None:
+            self.lgr.error('got None for bytes_wrote in injectIO')
+            return
         eip = self.top.getEIP(self.cpu)
         if self.target is None:
             self.dataWatch.clearWatchMarks()
@@ -175,6 +178,9 @@ class InjectIO():
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                    ''' special case'''
+                    if self.max_len == 1:
+                        self.addr += 1
                     if self.addr_addr is not None:
                         self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
                     if not self.no_rop:
@@ -235,6 +241,9 @@ class InjectIO():
         self.resetOrigin(None)
         self.dataWatch.clearWatchMarks()
         self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+        ''' special case'''
+        if self.max_len == 1:
+            self.addr += 1
         if self.addr_addr is not None:
             self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
 
