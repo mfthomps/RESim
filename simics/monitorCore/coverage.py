@@ -667,7 +667,7 @@ class Coverage():
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
-        self.lgr.debug('coverage doCoverage')    
+        #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
             self.cover(physical=physical)
             self.did_cover = True
