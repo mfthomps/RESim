@@ -152,17 +152,20 @@ def armSTM(cpu, instruct, addr, lgr):
     return retval
 
 def armLDM(cpu, instruct, reg, lgr):
+    ''' return the value of what would be loaded into the reg register, assuming it is part of an LDM instruction '''
     op1, op0 = getOperands(instruct)
     mn = getMn(instruct)
     retval = None
     ''' incrementing or decrementing from addr in reg? '''
     mul = 1
     if len(mn) > 3 and 'd' in mn[3:]:
+        #lgr.debug('armLDM mul -1')
         mul = -1
     ''' adjusting before xfer or after '''
     before = 0
     if 'b' in mn:
         before = 1
+        #lgr.debug('armLDM before is 1')
     if op1.startswith('{') and op1.endswith('}'):
         regset = op1[1:-1]
         xregs = regset.split(',')
@@ -171,9 +174,11 @@ def armLDM(cpu, instruct, reg, lgr):
         if reg in regs:
             if mul < 0:
                 regs.reverse()
+                before = before*-1
             index = regs.index(reg) - before
             ''' TBD 64 bit?? '''
             offset = index * 4
+            #lgr.debug('armLDM index %d  offset %d' % (index, offset))
             if op0.endswith('!'):
                 op0 = op0[:-1]
             reg_addr = getRegValue(cpu, op0)
