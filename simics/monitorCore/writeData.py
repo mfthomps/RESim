@@ -82,6 +82,9 @@ class WriteData():
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
+                if self.max_len == 1:
+                    ''' Assume reading byte at a time into buffer '''
+                    self.addr = self.addr+1
             else:
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
@@ -158,7 +161,7 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
-            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout TBD switches to control that?' % (self.current_packet))
+            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout TBD switches to control that?' % (self.current_packet))
             #SIM_break_simulation('broken offset')
             SIM_run_alone(self.delCallHap, None)
         else:
@@ -173,7 +176,7 @@ class WriteData():
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
                 #print('did write')
-                self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
