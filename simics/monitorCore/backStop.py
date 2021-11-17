@@ -101,7 +101,7 @@ class BackStop():
 
         if self.hang_event is not None:
             SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
-            self.hang_event = None
+            
 
     def hang_handler(self, obj, cycles):
         self.lgr.debug('backstop hang_handler will call callback %s' % str(self.hang_callback))
