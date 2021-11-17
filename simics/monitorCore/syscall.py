@@ -306,6 +306,8 @@ class Syscall():
         self.record_fd = record_fd
         self.traceall_syscall_info = None
         self.alt_syscall_info = None
+        ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
+        self.hack_cycle = 0
         if trace is None and self.traceMgr is not None:
             tf = '/tmp/syscall_trace.txt'
             #self.traceMgr.open(tf, cpu, noclose=True)
@@ -319,7 +321,7 @@ class Syscall():
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
+            #self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif self.debugging and not self.breakOnExecve() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
@@ -327,13 +329,13 @@ class Syscall():
             f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
             flist = [f1]
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes skipAndMail in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
+            #self.lgr.debug('Syscall cell %s stop action includes skipAndMail in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
+            #self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 
         self.exit_calls = []
         self.exit_calls.append('exit_group')
@@ -354,7 +356,7 @@ class Syscall():
             self.stop_action.setExitAddr(eip)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, self.stop_action)
-        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+        #self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
     def doBreaks(self, compat32, background):
@@ -431,7 +433,7 @@ class Syscall():
                     break_addrs.append(entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, call))
                 else:
-                    #self.lgr.debug('doBreaks set background break at 0x%x' % entry)
+                    self.lgr.debug('doBreaks set background break at 0x%x' % entry)
                     self.background_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     self.background_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, syscall_info, self.background_break)
 
@@ -446,22 +448,22 @@ class Syscall():
         return frame
 
     def stopTraceAlone(self, dumb):
-        self.lgr.debug('stopTraceAlone')
+        #self.lgr.debug('stopTraceAlone')
         if self.stop_hap is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-        self.lgr.debug('stopTraceAlone2')
+        #self.lgr.debug('stopTraceAlone2')
         if self.background_break is not None:
             SIM_delete_breakpoint(self.background_break)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
-        self.lgr.debug('stopTraceAlone done')
+        #self.lgr.debug('stopTraceAlone done')
 
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -469,12 +471,12 @@ class Syscall():
             self.proc_hap.remove(ph)
 
         SIM_run_alone(self.stopTraceAlone, None)
-        self.lgr.debug('did call to alone')
+        #self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces():
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
-            self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
+            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
 
@@ -484,7 +486,7 @@ class Syscall():
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        self.lgr.debug('syscall stopTrace return for %s' % self.name)
+        #self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
         self.watch_first_mmap = fd
@@ -600,14 +602,14 @@ class Syscall():
     def finishParseOpen(self, exit_info, third, forth, memory):
         ''' in case the file name is in memory that was not mapped when open call was issued '''
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('finishParseOpen pid %d' % pid)
+        #self.lgr.debug('finishParseOpen pid %d' % pid)
         if cpu != exit_info.cpu or pid != exit_info.pid:
             return
         if pid not in self.finish_hap:
             return
         exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
         if exit_info.fname is not None:
-            self.lgr.debug('finishParseOpen pid %d got fid %s' % (pid, exit_info.fname))
+            #self.lgr.debug('finishParseOpen pid %d got fid %s' % (pid, exit_info.fname))
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
             SIM_delete_breakpoint(self.finish_break[pid])
             del self.finish_hap[pid]
@@ -881,9 +883,9 @@ class Syscall():
                                  return None
                          
                          if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == ss.sa_data: 
-                             self.lgr.debug('socketParse found match %s' % (call_param.match_param))
+                             #self.lgr.debug('socketParse found match %s' % (call_param.match_param))
                              if call_param.nth is not None:
-                                 self.lgr.debug('socketParse has call_param.nth is %s' % str(call_param.nth))
+                                 #self.lgr.debug('socketParse has call_param.nth is %s' % str(call_param.nth))
                                  call_param.count = call_param.count + 1
                                  if call_param.count >= call_param.nth:
                                      exit_info.call_params = call_param
@@ -1009,9 +1011,12 @@ class Syscall():
                 if (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
+                        self.lgr.debug('call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
                         if call_param.count >= call_param.nth:
+                            self.lgr.debug('count >= param, set it')
                             exit_info.call_params = call_param
                     else:
+                        self.lgr.debub('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
                     break
         elif socket_callname == "recvmsg": 
@@ -1598,6 +1603,13 @@ class Syscall():
                 return
             else:
                 self.linger_cycles.append(cpu.cycles)
+        else:
+            ''' for example, rec calls rec_from '''
+            if self.hack_cycle+20 >= cpu.cycles:
+                self.lgr.debug('syscallHap skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match?.')
+                return
+            else:
+                self.hack_cycle = cpu.cycles
 
         callnum = self.mem_utils.getCallNum(cpu)
         if syscall_info.callnum is None:
