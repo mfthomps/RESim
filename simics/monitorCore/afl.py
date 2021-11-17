@@ -16,7 +16,8 @@ from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, lgr, fd=None, 
-                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, one_done=False):
+                 packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, 
+                 one_done=False, count=1):
         pad_env = os.getenv('AFL_PAD') 
         self.lgr = lgr
         if pad_env is not None:
@@ -79,6 +80,8 @@ class AFL():
         self.backstop.setCallback(self.whenDone)
         self.port = port
         self.one_done = one_done
+        ''' for aflFD to continue to the nth recv '''
+        self.count = count
         if stop_on_read:
             self.backstop_cycles = 0
         else:
@@ -408,7 +411,7 @@ class AFL():
         self.lgr.debug('afl prepInject snap %s' % snap_name)
         f1 = stopFunction.StopFunction(self.instrumentIO, [snap_name], nest=False)
         flist = [f1]
-        self.top.runToInput(self.fd, flist_in=flist)
+        self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 
     def pickleit(self, name, exit_info, orig_buffer):
         self.lgr.debug('afl pickleit, begin')
