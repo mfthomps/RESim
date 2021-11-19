@@ -202,6 +202,8 @@ def isCall(cpu, instruct):
        return True
     elif instruct.startswith('ldr pc'):
        return True
+    elif instruct.startswith('mov pc'):
+       return True
     return False
 
 def inBracket(op):

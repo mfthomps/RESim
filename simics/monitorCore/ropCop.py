@@ -48,16 +48,6 @@ class RopCop():
             self.rop_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.ropHap, None, proc_break, 'rop_hap')
         self.lgr.debug('ropCop setHap done on 0x%x size 0x%x' % (self.text, self.size))
 
-    def isArmCall(self, instruct):
-        retval = False
-        if instruct.startswith(self.callmn):
-            retval = True
-        elif instruct.startswith('ldr'):
-            parts = instruct.split()
-            if parts[1].strip().lower() == 'pc,':
-               retval = True
-        return retval
-
     def ropHap(self, dumb, third, forth, memory):
         ''' callback when ret or pop executed'''
         if self.rop_hap is None:  
@@ -73,7 +63,7 @@ class RopCop():
         return_to = self.mem_utils.readWord32(self.cpu, esp)
         eip = return_to - 8
         done = False
-        #self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (current_eip, return_to))
+        self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (current_eip, return_to))
         while not done and eip < return_to:
             # TBD use instruction length to confirm it is a true call
             try:
@@ -81,7 +71,9 @@ class RopCop():
             except:
                 self.lgr.error('ropCop  failed to disassemble instruct %x ' % (eip))
                 return
-            if instruct[1].startswith('call'):
+            
+            #if instruct[1].startswith('call'):
+            if self.decode.isCall(self.cpu, instruct[1]):
                 done = True
             else:
                 eip = eip+1
@@ -122,7 +114,7 @@ class RopCop():
             pc = ret_addr - 4
             prev_instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
-            if not self.isArmCall(prev_instruct[1]):
+            if not self.decode.isCall(self.cpu, prev_instruct[1]):
                 self.in_process = True
                 self.lgr.debug('********************* not call %s  at 0x%x' % (prev_instruct[1], pc))
                 SIM_run_alone(self.stopAlone, ret_addr)

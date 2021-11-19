@@ -2,6 +2,8 @@ from simics import *
 import json
 import os
 import memUtils
+import decode
+import decodeArm
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None, lr_return=False, ret_to_addr=None):
@@ -25,6 +27,10 @@ class StackTrace():
                  relocate_funs, reg_frame, lgr, max_frames=None, max_bytes=None):
         self.top = top
         self.cpu = cpu
+        if self.cpu.architecture == 'arm':
+            self.decode = decodeArm
+        else:
+            self.decode = decode
         self.pid = pid
         self.lgr = lgr
         self.soMap = soMap
@@ -58,15 +64,6 @@ class StackTrace():
                 return True
         return False
             
-    def isArmCall(self, instruct):
-        retval = False
-        if instruct.startswith(self.callmn):
-            retval = True
-        elif instruct.startswith('ldr'):
-            parts = instruct.split()
-            if parts[1].strip().lower() == 'pc,':
-               retval = True
-        return retval
             
     def followCall(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
@@ -76,7 +73,7 @@ class StackTrace():
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
-            if self.isArmCall(instruct[1]):
+            if self.decode.isCall(self.cpu, instruct[1]):
                 #self.lgr.debug('followCall arm eip 0x%x' % eip)
                 retval = eip
         else:
