@@ -13,7 +13,7 @@ import net
 import os
 import sys
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
-            'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'fwrite', 'xmlStrcmp',
+            'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -84,14 +84,21 @@ class DataWatch():
         self.stack_buf_hap = {}
         ''' optimize parameter gathering without having to reverse '''
         self.mem_fun_entries = {}
+        ''' limit number of marks gathered '''
+        self.max_marks = None
+        ''' used by writeData when simulating responses from ioctl '''
+        self.total_read = 0
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None, fd=None):
+        ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
         if max_len is None:
             my_len = length
         else:
             my_len = max_len
-        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
+        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
+        if fd is not None:
+            self.total_read = self.total_read + length
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
             self.lgr.debug('DataWatch, backstop set, start data session')
@@ -103,20 +110,20 @@ class DataWatch():
                 this_end = self.start[index] + self.length[index]
                 if self.start[index] <= start and this_end >= end:
                     overlap = True
-                    self.lgr.debug('DataWatch setRange found overlap, skip it')
+                    #self.lgr.debug('DataWatch setRange found overlap, skip it')
                     if start not in self.other_starts:
                         self.other_starts.append(start)
                         self.other_lengths.append(my_len)
                     break
                 elif self.start[index] >= start and this_end <= end:
-                    self.lgr.debug('DataWatch setRange found subrange, replace it')
+                    #self.lgr.debug('DataWatch setRange found subrange, replace it')
                     self.start[index] = start
                     self.length[index] = my_len
                     overlap = True
                     break
                 elif start == (this_end+1):
                     self.length[index] = self.length[index]+my_len
-                    self.lgr.debug('DataWatch extending subrange')
+                    #self.lgr.debug('DataWatch extending subrange')
                     overlap = True
                     break
         if not overlap:
@@ -147,7 +154,7 @@ class DataWatch():
             # TBD why max_len and not count???
             if recv_addr is None:
                 recv_addr = start
-            self.watchMarks.markCall(fixed, max_len, recv_addr, length)
+            self.watchMarks.markCall(fixed, max_len, recv_addr, length, fd=fd)
             if self.prev_cycle is None:
                 ''' first data read, start data session if doing coverage '''
                 self.top.startDataSessions()
@@ -161,7 +168,7 @@ class DataWatch():
             self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
             for range_index in self.stack_buffers[eip]:
                 if range_index in self.read_hap:
-                    self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
+                    #self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
                     self.context_manager.genDeleteHap(self.read_hap[range_index], immediate=False)
                     self.read_hap[range_index] = None
                     self.start[range_index] = 0
@@ -180,10 +187,10 @@ class DataWatch():
         ''' called when FD is closed and we might be doing a trackIO '''
         eip = self.top.getEIP(self.cpu)
         msg = 'closed FD: %d' % fd
-        self.watchMarks.markCall(msg, None, None)
+        self.watchMarks.markCall(msg, None, None, fd=fd)
        
     def watchFunEntries(self): 
-        self.lgr.debug('watchFunEntries')
+        #self.lgr.debug('watchFunEntries')
         for fun in self.mem_fun_entries:
             if self.mem_fun_entries[fun].hap is None:
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.mem_fun_entries[fun].eip, 1, 0)
@@ -191,12 +198,12 @@ class DataWatch():
                 self.mem_fun_entries[fun].hap = hap
 
     def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False, no_backstop=False):
-        self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
-           len(self.start), len(self.read_hap)))
+        #self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
+        #   len(self.start), len(self.read_hap)))
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
-        self.lgr.debug('watch break_sim %s  use_back %s  no_back %s' % (str(break_simulation), str(self.use_back_stop), str(no_backstop)))
+        #self.lgr.debug('watch break_sim %s  use_back %s  no_back %s' % (str(break_simulation), str(self.use_back_stop), str(no_backstop)))
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         self.watchFunEntries()
@@ -449,9 +456,13 @@ class DataWatch():
         elif self.mem_something.fun == 'fprintf' or self.mem_something.fun == 'printf':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fprintf(self.mem_something.fun, self.mem_something.src)
-        elif self.mem_something.fun == 'fwrite':
+        elif self.mem_something.fun == 'fwrite' or self.mem_something.fun == 'IO_do_write':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fwrite(self.mem_something.fun, self.mem_something.src, self.mem_something.count)
+        elif self.mem_something.fun == 'glob':
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
+            self.mem_something.count = self.getStrLen(self.mem_something.src)
+            self.watchMarks.glob(self.mem_something.fun, self.mem_something.src, self.mem_something.count)
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -700,8 +711,11 @@ class DataWatch():
             elif self.mem_something.fun == 'fprintf' or self.mem_something.fun == 'printf':
                 dumb2, self.mem_something.src, dumb = self.getCallParams(sp)
 
-            elif self.mem_something.fun == 'fwrite':
+            elif self.mem_something.fun == 'fwrite' or self.mem_something.fun == 'IO_do_write':
                 self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp)
+
+            elif self.mem_something.fun == 'glob' or self.mem_something.fun == 'IO_do_write':
+                self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
 
             # Begin XML
             elif self.mem_something.fun == 'xmlGetProp':
@@ -1027,6 +1041,9 @@ class DataWatch():
 
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
+            return
+        if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
+            SIM_break_simulation('max marks exceeded')
             return
         addr = memory.logical_address
         op_type = SIM_get_mem_op_type(memory)
@@ -1379,19 +1396,18 @@ class DataWatch():
         self.setCallback(callback)
 
 
-    def trackIO(self, fd, callback, compat32):
+    def trackIO(self, fd, callback, compat32, max_marks):
         self.lgr.debug('DataWatch trackIO for fd %d' % fd)
         ''' first make sure we are not in the kernel on this FD '''
         # NO, would reverse to state that may not be properly initialized.
         # Do not assume that call to receive implies the system is ready
         # to receive.
         #self.rev_to_call.preCallFD(fd) 
-
+        self.max_marks = max_marks
         self.lgr.debug('DataWatch trackIO call watch')
         self.watch(break_simulation=False)
         ''' what to do when backstop is reached (N cycles with no activity '''
         self.setCallback(callback)
-        return True
 
     def firstBufferAddress(self):
         return self.watchMarks.firstBufferAddress()
@@ -1527,11 +1543,12 @@ class DataWatch():
     
     def memsomething(self, frames, local_mem_funs, st):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
-        mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.']
+        ''' Will iterate through the frames backwards, looking for the highest level function'''
+        mem_prefixes = ['isoc99_', '.__', '___', '__', '._', '_', '.', 'j_']
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
-        #self.lgr.debug('memsomething max_index %d' % (max_index))
+        #self.lgr.debug('memsomething begin, max_index %d' % (max_index))
         outer_index = None
         prev_fun = None
         for i in range(max_index, -1, -1):
@@ -1580,12 +1597,12 @@ class DataWatch():
                         #self.lgr.debug('fun in local_mem_funs %s' % fun)
                         fun_precidence = self.funPrecidence(fun)
                         if fun_precidence == 0 and i > 3:
-                            self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
+                            #self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                             continue
                     if self.user_iterators.isIterator(frame.fun_addr):
                         #self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
                         fun_precidence = 999
-                    self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
+                    #self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))
                     if fun_precidence < max_precidence:
                         self.lgr.debug('dataWatch memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
                         continue
@@ -1610,7 +1627,7 @@ class DataWatch():
                             addr_of_ret_addr = frame.sp
                             #self.lgr.debug('datawatch memsomething using ret_to_addr from SP of 0x%x' % frame.sp)
                         retval = self.MemStuff(ret_addr, fun, frame.ip, addr_of_ret_addr)
-                    
+                        break 
                 else:
                     #if frame.fun_addr is None:
                     #    self.lgr.debug('no soap, fun fun_addr is NONE') 
@@ -1646,3 +1663,12 @@ class DataWatch():
 
     def saveJson(self, fname, packet=1):
         self.watchMarks.saveJson(fname, packet=packet)
+
+    def getMarkFromIndex(self, index):
+        return self.watchMarks.getMarkFromIndex(index)
+
+    def getTotalRead(self):
+        return self.total_read
+
+    def setMaxMarks(self, marks):
+        self.max_marks = marks
