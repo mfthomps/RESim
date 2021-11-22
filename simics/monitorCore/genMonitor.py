@@ -84,6 +84,8 @@ import writeData
 import instructTrace
 import aflPath
 import trackAFL
+import prepInject
+import prepInjectWatch
 
 import json
 import pickle
@@ -693,13 +695,7 @@ class GenMonitor():
     def debugGroup(self):
         self.debug(group=True)
 
-    def debug(self, group=False):
-        self.lgr.debug('genMonitor debug group is %r' % group)
-        #self.stopTrace()    
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        cell = self.cell_config.cell_context[self.target]
-        if pid is None:
-            ''' Our first debug '''
+    def doDebugCmd(self):
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('debug for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, self.gdb_port, pid, self.is_compat32))
             if self.bookmarks is None:
@@ -714,6 +710,17 @@ class GenMonitor():
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
                 if not self.disable_reverse:
                     self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
+            return pid
+
+
+    def debug(self, group=False):
+        self.lgr.debug('genMonitor debug group is %r' % group)
+        #self.stopTrace()    
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        cell = self.cell_config.cell_context[self.target]
+        if pid is None:
+            ''' Our first debug '''
+            pid = self.doDebugCmd()
             if not self.rev_execution_enabled:
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 cmd = 'enable-reverse-execution'
@@ -1110,6 +1117,16 @@ class GenMonitor():
         debug_group = False
         if debug_function == self.debugGroup:
             debug_group = True
+
+        ''' enable reversing now so we can rev to events prior to scheduling, e.g., arrival of data at kernel '''
+        cmd = 'enable-reverse-execution'
+        SIM_run_command(cmd)
+        self.rev_execution_enabled = True
+        self.doDebugCmd()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.setDebugBookmark('origin', cpu)
+        self.bookmarks.setOrigin(cpu)
+
         self.toRunningProc(None, pid_list, flist, debug_group=True, final_fun=final_fun)
 
     def changedThread(self, cpu, third, forth, memory):
@@ -1618,7 +1635,7 @@ class GenMonitor():
     def getFirstCycle(self):
         return self.bookmarks.getFirstCycle()
 
-    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None):
+    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False):
         '''
         Runs backwards until a write to the given address is found.
         '''
@@ -1630,16 +1647,21 @@ class GenMonitor():
             cell = self.cell_config.cell_context[self.target]
             if self.find_kernel_write is None:
                 self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                    self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, num_bytes, satisfy_value=satisfy_value) 
+                    self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, 
+                    num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
             else:
                 self.find_kernel_write.go(addr)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
 
-    def revTaintAddr(self, addr):
+    def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None):
         '''
         back track the value at a given memory location, where did it come from?
+        prev_buffer of True causes tracking to stop when an address holding the
+        value is found, e.g., as a souce buffer.
+        The callback is used with prev_buffer=True, which always assumes the
+        find will occur in the reverseToCall module.
         '''
         self.lgr.debug('revTaintAddr for 0x%x' % addr)
         if self.reverseEnabled():
@@ -1654,12 +1676,14 @@ class GenMonitor():
             self.bookmarks.setDebugBookmark(bm)
             self.lgr.debug('BT add bookmark: %s' % bm)
             self.context_manager[self.target].setIdaMessage('')
-            self.stopAtKernelWrite(addr, self.rev_to_call[self.target])
+            if callback is not None:
+                self.rev_to_call[self.target].setCallback(callback)
+            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
 
-    def revTaintReg(self, reg):
+    def revTaintReg(self, reg, kernel=False):
         ''' back track the value in a given register '''
         reg = reg.lower()
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -1677,7 +1701,7 @@ class GenMonitor():
             bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
             self.bookmarks.setDebugBookmark(bm)
             self.context_manager[self.target].setIdaMessage('')
-            self.rev_to_call[self.target].doRevToModReg(reg, taint=True)
+            self.rev_to_call[self.target].doRevToModReg(reg, taint=True, kernel=kernel)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -3069,7 +3093,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3080,9 +3104,7 @@ class GenMonitor():
         else:
             done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watchs')
-        if not self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32):
-            self.lgr.error('trackIO failed kernel skip')
-            return 
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
 
         if self.coverage is not None:
@@ -3332,7 +3354,7 @@ class GenMonitor():
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, 
-            save_json=None, limit_one=False, no_rop=False, go=True):
+            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if type(save_json) is bool:
@@ -3344,10 +3366,13 @@ class GenMonitor():
             cpu = this_cpu
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
+        if max_marks is not None:
+            self.dataWatch[self.target].setMaxMarks(max_marks) 
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
-                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_rop=no_rop)
+                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
+                  no_rop=no_rop)
         if go:
             self.injectIOInstance.go()
         return self.injectIOInstance
@@ -3668,6 +3693,9 @@ class GenMonitor():
             fuzz_it.goN(0)
 
     def aflFD(self, fd, snap_name, count=1):
+        self.prepInject(fd, snap_name, count=count)
+
+    def prepInject(self, fd, snap_name, count=1):
         ''' 
             Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
             fd -- will runToIOish on that FD
@@ -3680,10 +3708,18 @@ class GenMonitor():
                 cpu, comm, pid = self.task_utils[self.target].curProc() 
                 self.debugPidGroup(pid)
             print('fd is %d' % fd)
-            fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
-               self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd, count=count)
+            #fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
+            #   self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd, count=count)
+            prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr) 
         else:
             print('Reverse execution must be enabled to run aflFD')
+
+    def prepInjectWatch(self, watch_mark, snap_name):
+        if self.reverseEnabled():
+            cpu = self.cell_config.cpuFromCell(self.target)
+            cell_name = self.getTopComponentName(cpu)
+            prep_inject = prepInjectWatch.PrepInjectWatch(self, cpu, cell_name, self.mem_utils[self.target], self.dataWatch[self.target], self.lgr) 
+            prep_inject.doInject(snap_name, watch_mark)
 
     def hasBookmarks(self):
         return self.bookmarks is not None
@@ -3888,7 +3924,11 @@ class GenMonitor():
     def debugIfNot(self):
         ''' warning, assumes current pid is the one to be debugged. '''
         if self.bookmarks is None:
+            cpu, comm, this_pid = self.task_utils[self.target].curProc() 
+            print('Will debug pid: %d (%s)' % (this_pid, comm))
             self.debug(group=True)
+        else:
+            print('Already debugging.')
 
     def debugSnap(self, final_fun=None):
         retval = True
@@ -3942,6 +3982,9 @@ class GenMonitor():
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         SIM_run_command('c')
+
+    def foolSelect(self, fd):
+        self.sharedSyscall[self.target].foolSelect(fd)
     
 
 if __name__=="__main__":        

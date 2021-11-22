@@ -70,6 +70,11 @@ class RegisterModType():
             retval = 'Bail'
         return retval
 
+class RegisterToTrack():
+    def __init__(self, reg, value, cycle):
+        self.reg = reg
+        self.value = value
+        self.cycle = cycle
 
 
 class reverseToCall():
@@ -116,11 +121,20 @@ class reverseToCall():
             self.uncall_hap = None
             self.uncall_break = None
             self.value = None
+            ''' used for undoing ghost frames '''
             self.save_cycle = None
             self.save_reg_mod = None
             self.ida_funs = None
             self.satisfy_value = None
             self.run_from_snap = run_from_snap
+            ''' keep tracking when entering the kernel '''
+            self.kernel = False
+            ''' what to do when address found and not doing taint (or end of taint) '''
+            self.callback = None
+            ''' list of addresses whose values contribute to a register value'''
+            self.buf_addrs = []
+            ''' registers that contribute to a register value of type RegisterToTrack '''
+            self.reg_queue = []
 
     def getStartCycles(self):
         return self.start_cycles
@@ -416,7 +430,7 @@ class reverseToCall():
         if self.tooFarBack():
             self.lgr.debug('At start of recording, cycle: 0x%x' % self.cpu.cycles)
             print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
-            self.cleanup(self.cpu)
+            self.cleanup(None)
             self.top.skipAndMail() 
             return
         cur_cpu, comm, pid  = self.task_utils.curProc()
@@ -426,12 +440,12 @@ class reverseToCall():
         self.lgr.debug('tryOneStopped reversed 1, eip: %x  %s' % (eip, instruct[1]))
         cpl = memUtils.getCPL(self.cpu)
         done = False
-        if cpl > 0:
+        if cpl > 0 or self.kernel:
             self.lgr.debug('tryBackOne user space')
             if self.step_into or not self.isRet(instruct[1], eip):
                 self.lgr.debug('tryBackOne worked ok')
                 done = True
-                self.cleanup(self.cpu)
+                self.cleanup(None)
                 self.top.skipAndMail()
                 self.context_manager.setExitBreaks()
         elif pid in self.sysenter_cycles and len(self.sysenter_cycles[pid]) > 0:
@@ -651,7 +665,7 @@ class reverseToCall():
     '''
     BEWARE syntax errors are not seen.  TBD make unit test
     '''
-    def doRevToModReg(self, reg, taint=False, offset=0, value=None, num_bytes=None):
+    def doRevToModReg(self, reg, taint=False, offset=0, value=None, num_bytes=None, kernel=False):
         '''
         Run backwards until a write to the given register
         '''
@@ -659,6 +673,7 @@ class reverseToCall():
         self.taint = taint
         self.value = value
         self.num_bytes = num_bytes
+        self.kernel = kernel
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r' % (eip, self.cpu.cycles, reg, offset, taint))
         self.reg = reg
@@ -695,7 +710,7 @@ class reverseToCall():
                             bm = "eip:0x%x follows kernel modification of reg:%s to 0x%x" % (eip, self.reg, rval)
                             self.bookmarks.setBacktrackBookmark(bm)
                             self.context_manager.setIdaMessage(ida_message)
-                            self.cleanup(self.cpu)
+                            self.cleanup(None)
                             self.top.skipAndMail()
                             done = True
                     else:
@@ -719,7 +734,7 @@ class reverseToCall():
                     ida_message = 'doRevModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles)
                     self.lgr.debug(ida_message)
                     self.context_manager.setIdaMessage(ida_message)
-                    self.cleanup(self.cpu)
+                    self.cleanup(None)
                     self.top.skipAndMail()
                     done=True
             elif reg_mod_type.mod_type == RegisterModType.FUN_VAL:
@@ -727,23 +742,30 @@ class reverseToCall():
                 self.bookmarks.setBacktrackBookmark('eip:0x%x function return set to 0' % eip)
                 ida_message = 'Function returned zero at 0x%x' % eip
                 done=True
-                self.cleanup(self.cpu)
+                self.cleanup(None)
 
             elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
                 ''' current eip modifies self.reg, done, or continue taint '''
-                self.lgr.debug('reverseToModReg got mod reg right off self.taint is %r' % self.taint)
+                self.lgr.debug('reverseToModReg got mod reg right off self.taint is %r reg_mod: %s' % (self.taint, reg_mod_type.toString()))
                 if not self.taint:
-                    self.cleanup(self.cpu)
+                    addr = None
+                    if reg_mod_type.mod_type == RegisterModType.ADDR:
+                        self.lgr.debug('reverseToModReg type ADDR record and check queue for more')
+                        addr = reg_mod_type.value + self.offset
+                        ''' record the address and check the register queue for other registers to backtrace'''
+                        self.checkRegQueue(addr)
+                        self.lgr.debug('reverseToModReg back from checkRegQueue')
+                    elif reg_mod_type.mod_type == RegisterModType.REG and self.callback is not None:
+                        ''' Assume looking for address containing data in the reg '''
+                        self.lgr.debug('reverseToModReg type REG assume looking for source of reg, use follow taint')
+                        self.followTaint(reg_mod_type)
                 else:
                     if not self.tooFarBack():
                         eip = self.top.getEIP(self.cpu)
                         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                         self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                        if self.cpu.architecture == 'arm':
-                            self.followTaintArm(reg_mod_type)
-                        else:
-                            self.followTaint(reg_mod_type)
+                        self.followTaint(reg_mod_type)
                     else:
                         self.lgr.debug('doRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
             else:
@@ -795,7 +817,7 @@ class reverseToCall():
                 self.lgr.debug('cycleRegisterMod prev cycle 0x%x prior to first 0x%x, stop here' %(previous, self.start_cycles))
                 break
             cpl = memUtils.getCPL(self.cpu)
-            if cpl == 0:
+            if cpl == 0 and not self.kernel:
                 self.lgr.debug('cycleRegisterMod entered kernel')
                 done = True
             else:
@@ -841,7 +863,7 @@ class reverseToCall():
                             elif mn.startswith('mov') and self.decode.isReg(op1):
                                 self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
-                            elif mn.startswith('add') or mn.startswith('sub'):
+                            elif mn.startswith('add') or mn.startswith('sub') or mn.startswith('rsb'):
                                 parts = op1.split(',') 
                                 if len(parts) == 2:
                                    rn = parts[0].strip()
@@ -853,6 +875,7 @@ class reverseToCall():
                                            retval = RegisterModType(rn, RegisterModType.REG)
                                        else: 
                                            op2_val = self.top.getReg(op2, self.cpu) 
+                                           self.lgr.debug('cycleRegisterMod op2 (%s) is reg, value 0x%x reg_val 0x%x' % (op2, op2_val, self.reg_val))
                                            if op2_val == self.reg_val:
                                                retval = RegisterModType(op2, RegisterModType.REG)
                                                self.lgr.debug('cycleRegisterMod type is reg')
@@ -861,6 +884,9 @@ class reverseToCall():
                                                if rn_val == self.reg_val:
                                                    retval = RegisterModType(rn, RegisterModType.REG)
                                                    self.lgr.debug('cycleRegisterMod type is reg')
+                                               elif self.callback is not None:
+                                                   self.lgr.debug('cycleRegisterMod, handle each register')
+                                                   self.handleRegisters(rn, rn_val, op2, op2_val)
                                                else:
                                                    self.lgr.debug('cycleRegisterMod, out of ideas, bail')
                                                    self.context_manager.setIdaMessage('As far as we can go back.  TBD look for user input on add or sub.')
@@ -927,13 +953,10 @@ class reverseToCall():
                 
                 if not self.taint:
                     self.lgr.debug('resumeAlone call cleanup')
-                    self.cleanup(self.cpu)
+                    self.cleanup(None)
                 else:
                     self.lgr.debug('resumeAlone follow taint')
-                    if self.cpu.architecture == 'arm':
-                        self.followTaintArm(self.save_reg_mod)
-                    else:
-                        self.followTaint(self.save_reg_mod)
+                    self.followTaint(self.save_reg_mod)
 
     def uncallHap(self, my_args, one, exception, error_string):
         if self.uncall_break is None:
@@ -992,20 +1015,25 @@ class reverseToCall():
                 value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 if value is None:
                     self.lgr.debug('followTaintArm value None read from 0x%x' % address)
-                    self.cleanup(self.cpu)
+                    self.cleanup(None)
                     return
                  
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(self.cpu)
-                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value)
+                self.cleanup(None)
+                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.doRevToModReg(reg_mod_type.value, taint=True)
+                self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
                  
-
     def followTaint(self, reg_mod_type):
+        if self.cpu.architecture == 'arm':
+            self.followTaintArm(reg_mod_type)
+        else:
+            self.followTaintX86(reg_mod_type)
+
+    def followTaintX86(self, reg_mod_type):
         ''' we believe the instruction at the current ip modifies self.reg 
             Where does its value come from? '''
         eip = self.top.getEIP(self.cpu)
@@ -1030,7 +1058,7 @@ class reverseToCall():
                    ''' wth, just an address adjustment? '''
                    self.lgr.debug('followTaint, add of %x, assume address adjust, e.g., heap struct' % offset)
                    self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                   self.doRevToModReg(op0, taint=True)
+                   self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
                    return 
             self.lgr.debug('followTaint, not a move, we are stumped')
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
@@ -1039,17 +1067,17 @@ class reverseToCall():
         elif mn == 'pop':
             esp = self.top.getReg('esp', self.cpu) 
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-            self.cleanup(self.cpu)
-            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value)
+            self.cleanup(None)
+            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
 
         elif self.decode.isReg(op1) and not self.decode.isIndirect(op1):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
-            self.doRevToModReg(op1, taint=True)
+            self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
             self.lgr.debug('followTaint, is indrect reg, track %s' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
             self.bookmarks.setBacktrackBookmark('switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
-            self.doRevToModReg(op1, taint=True)
+            self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
 
         #elif mn == 'lea':
         #    address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
@@ -1071,8 +1099,8 @@ class reverseToCall():
                 else:
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(self.cpu)
-                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value)
+                self.cleanup(None)
+                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
@@ -1099,14 +1127,11 @@ class reverseToCall():
             self.lgr.debug('cycleAlone, not bail mod type %s' % reg_mod_type.mod_type)
             if not self.taint:
                 self.lgr.debug('cycleAlone not taint, cleanup')
-                self.cleanup(self.cpu)
+                self.cleanup(None)
             else:
                 if not self.tooFarBack():
                     self.lgr.debug('cycleAlone, not too far back, follow taint?')
-                    if self.cpu.architecture == 'arm':
-                        self.followTaintArm(reg_mod_type)
-                    else:
-                        self.followTaint(reg_mod_type)
+                    self.followTaint(reg_mod_type)
                 else:
                     self.lgr.debug('cycleAlone must backed to first cycle 0x%x' % self.start_cycles)
  
@@ -1117,13 +1142,14 @@ class reverseToCall():
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         self.lgr.debug('stoppedReverseModReg, entered looking for %s cur pid:%d' % (self.reg, pid))
         cpl = memUtils.getCPL(self.cpu)
-        if pid == self.pid and cpl != 0:
+        if pid == self.pid and (cpl != 0 or self.kernel):
             self.cycleAlone(pid)
         else:
             self.lgr.error('stoppedReverseModReg wrong process or in kernel pid %d expected %d' % (pid, self.pid))
-            SIM_run_alone(SIM_run_command, cmd)
+            #SIM_run_alone(SIM_run_command, cmd)
+           
  
-    def cleanup(self, cpu):
+    def cleanup(self, addr):
         self.lgr.debug('reverseToCall cleanup')
         self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
@@ -1132,7 +1158,16 @@ class reverseToCall():
         self.rmBreaks()
         self.is_monitor_running.setRunning(False)
         if not self.taint:
-            self.top.skipAndMail()
+            if self.callback is None:
+                self.top.skipAndMail()
+            else:
+                if addr is not None:
+                    self.lgr.debug('reverseToCall cleanup addr: 0x%x' % addr)
+                tmp_callback = self.callback
+                tmp_buf_addrs = list(self.buf_addrs)
+                self.callback = None
+                self.buf_addrs = []
+                tmp_callback(tmp_buf_addrs)
         self.lgr.debug('cleanup complete')
 
     def isSyscall(self, instruct):
@@ -1159,25 +1194,25 @@ class reverseToCall():
         #if current < self.top.getFirstCycle():
         if current <= self.start_cycles:
             self.lgr.debug('stoppedReverseToCall found cycle 0x%x prior to first, stop here' %(current))
-            self.cleanup(cpu)
+            self.cleanup(None)
         #elif pid == my_args.pid and SIM_processor_privilege_level(cpu) != 0:
-        elif pid == self.pid and memUtils.getCPL(cpu) != 0:
+        elif pid == self.pid and (memUtils.getCPL(cpu) != 0 or self.kernel):
             eip = self.top.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
             if self.first_back and self.isSyscall(instruct[1]):
                 self.lgr.debug('stoppedReverseToCall first back is syscall at %x, we are done' % eip)
-                self.cleanup(cpu)
+                self.cleanup(None)
             elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1], eip) or self.step_into):
                 self.lgr.debug('stoppedReverseToCall first back not a ret or step_into at %x, we are done' % eip)
-                self.cleanup(cpu)
+                self.cleanup(None)
             elif self.decode.isCall(self.cpu, instruct[1]):
                 self.got_calls += 1
                 if self.got_calls == self.need_calls:
                     self.lgr.debug('stoppedReverseToCall %s at %x we must be done' % (instruct[1], eip))
-                    self.cleanup(cpu)
+                    self.cleanup(None)
                 elif eip in self.frame_ips:
                     self.lgr.debug('stoppedReverseToCall %s at %x found stack frame entry, declare we are done' % (instruct[1], eip))
-                    self.cleanup(cpu)
+                    self.cleanup(None)
                 else:
                    self.lgr.debug('stoppedReverseToCall 0x%x got call %s   got_calls %d, need %d' % (eip, instruct[1], self.got_calls, self.need_calls))
                    SIM_run_alone(SIM_run_command, cmd)
@@ -1274,7 +1309,7 @@ class reverseToCall():
 
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
-        #self.lgr.debug('sysenterHap')
+        self.lgr.debug('sysenterHap')
         reversing = False
         if reversing:
             return
@@ -1289,7 +1324,7 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    #self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
                     #self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
@@ -1315,6 +1350,8 @@ class reverseToCall():
                     else:
                         self.recent_cycle[pid] = [cycles, frame]
                         #self.lgr.debug('sysenterHap setting first recent cycle')
+                else:
+                    self.lgr.debug('sysenterHap, cycles already there for pid %d' % pid) 
 
     def setIdaFuns(self, ida_funs):
         self.ida_funs = ida_funs
@@ -1337,6 +1374,8 @@ class reverseToCall():
         self.lgr.debug('getRecentCycleFrame pid %d' % pid)
         if pid in self.recent_cycle:
             ret_cycles, retval = self.recent_cycle[pid]
+        else:
+            self.lgr.debug('getRecentCycleFrame pid %d not there')
         '''
         if pid in self.sysenter_cycles:
             got_it = None
@@ -1368,7 +1407,7 @@ class reverseToCall():
         if self.decode.isReg(op0) and mn == 'cmp' and val is not None:
             self.lgr.debug('satisfyCondition, val is 0x%x' % val) 
             self.satisfy_value = val
-            self.doRevToModReg(op0, taint=True)
+            self.doRevToModReg(op0, taint=True, kernel=self.kernel)
         else:
             if val is None:
                 self.lgr.error('Cannot get val from %s' % op1)
@@ -1438,6 +1477,8 @@ class reverseToCall():
             self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
             #rev_call_pickle = pickle.load( open(rev_call_file, 'rb') ) 
             self.recent_cycle = pickle.load( open(rev_call_file, 'rb') ) 
+            for pid in self.recent_cycle:
+                self.lgr.debug('loadPickle pid %d frame %s' % (pid, str(self.recent_cycle[pid])))
             #self.recent_cycle = rev_call_pickle['recent_cycle']
 
     def pickleit(self, name, cell_name):
@@ -1453,3 +1494,28 @@ class reverseToCall():
             pickle.dump( self.recent_cycle, open( rev_call_file, "wb") ) 
         except TypeError as ex:
             self.lgr.error('trouble dumping pickle of recent_cycle %s' % ex)
+
+    def setCallback(self, callback):
+        self.callback = callback
+
+    def handleRegisters(self, reg1, reg1_val, reg2, reg2_val):
+        self.lgr.debug('handleRegisters')
+        reg_to_track = RegisterToTrack(reg1, reg1_val, self.cpu.cycles)
+        self.reg_queue.append(reg_to_track)
+        reg_to_track = RegisterToTrack(reg2, reg2_val, self.cpu.cycles)
+        self.reg_queue.append(reg_to_track)
+        self.checkRegQueue(None)
+
+    def checkRegQueue(self, buf_addr):
+        if buf_addr is not None:
+            self.buf_addrs.append(buf_addr)
+        self.lgr.debug('checkRegQueue')
+        if len(self.reg_queue) > 0:
+            reg_to_track = self.reg_queue.pop()
+            self.skipToTest(reg_to_track.cycle) 
+            my_reg_mod_type = RegisterModType(reg_to_track.reg, RegisterModType.REG)
+            self.lgr.debug('checkRegQueue, now follow for reg %s' % reg_to_track.reg)
+            self.followTaint(my_reg_mod_type)
+            self.lgr.debug('checkRegQueue, now back from followTaint for  %s' % reg_to_track.reg)
+        else:
+            self.cleanup(None)

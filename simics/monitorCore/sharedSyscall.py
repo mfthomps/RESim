@@ -38,6 +38,8 @@ class SharedSyscall():
         self.allWrite = allWrite.AllWrite()
         ''' used for origin reset'''
         self.stop_hap = None
+        ''' used by writeData to make application think fd has no more data '''
+        self.fool_select = None
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -240,7 +242,7 @@ class SharedSyscall():
                 in_ss = exit_info.sock_struct
                 addr_len = self.mem_utils.readWord32(self.cpu, in_ss.length)
                 self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (in_ss.addr, in_ss.length, addr_len))
-                ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils, fd=new_fd)
+                ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
                 if ss.sa_family == 1:
                     if pid in self.trace_procs:
                         self.traceProcs.accept(pid, exit_info.sock_struct.fd, new_fd, None)
@@ -331,7 +333,7 @@ class SharedSyscall():
                     ''' in case we want to break on a read of this data.  NOTE: length was the given length, changed to count'''
                     self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, eax, exit_info.sock_struct.length))
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, 
-                               max_len=exit_info.sock_struct.length, recv_addr=exit_info.retval_addr)
+                               max_len=exit_info.sock_struct.length, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
                     if exit_info.fname_addr is not None:
                         count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                         msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
@@ -369,7 +371,7 @@ class SharedSyscall():
                 if exit_info.call_params is not None:
                     if exit_info.call_params.break_simulation and self.dataWatch is not None:
                         ''' in case we want to break on a read of this data. ''' 
-                        self.dataWatch.setRange(msg_iov[0].base, eax, msg=trace_msg, max_len=exit_info.sock_struct.length)
+                        self.dataWatch.setRange(msg_iov[0].base, eax, msg=trace_msg, max_len=exit_info.sock_struct.length, fd=exit_info.old_fd)
                         self.lgr.debug('recvmsg set dataWatch')
                     if type(exit_info.call_params.match_param) is str:
                         self.lgr.debug('sharedSyscall recvmsg check string %s against %s' % (s, exit_info.call_params.match_param))
@@ -606,7 +608,7 @@ class SharedSyscall():
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read')
                     # Set range over max length of read to catch coding error reference to previous reads or such
-                    self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count)
+                    self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False)
@@ -757,6 +759,8 @@ class SharedSyscall():
 
         elif callname == 'select' or callname == '_newselect':
             trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.select_info.getString(), eax))
+            if self.fool_select is not None and eax > 0:
+                self.modifySelect(exit_info.select_info, eax)
         elif callname == 'poll' or callname == 'ppoll':
             trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.poll_info.getString(), eax))
         elif callname == 'vfork':
@@ -836,3 +840,14 @@ class SharedSyscall():
                     exit_info_list[pid] = self.exit_info[pid][name].frame
                     exit_info_list[pid]['syscall_num'] = self.exit_info[pid][name].callnum
         return exit_info_list
+
+    def foolSelect(self, fd):
+        ''' Modify return values from select to reflect no data for this fd ''' 
+        self.fool_select = fd
+
+    def modifySelect(self, select_info, eax):
+        if select_info.setHasFD(self.fool_select, select_info.readfds): 
+            select_info.resetFD(self.fool_select, select_info.readfds)
+            eax = eax -1
+            self.mem_utils.setRegValue(self.cpu, 'syscall_ret', eax)
+            self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)

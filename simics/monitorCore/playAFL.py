@@ -79,6 +79,11 @@ class PlayAFL():
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
+        
+        ''' for use with kernel buffer injection '''
+        self.k_start_ptr = None
+        self.k_end_ptr = None
+
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
@@ -124,7 +129,7 @@ class PlayAFL():
 
 
     def go(self, findbb=None):
-        if self.call_ip is None:
+        if self.call_ip is None and self.k_start_ptr is None:
             self.lgr.debug('No call IP, refuse to go.')
             print('No call IP, refuse to go.')
             return
@@ -187,7 +192,8 @@ class PlayAFL():
             #self.context_manager.restoreDebugContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True)
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, 
+                 k_start_ptr=self.k_start_ptr, k_end_ptr=self.k_end_ptr)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
@@ -293,9 +299,13 @@ class PlayAFL():
             self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
+            if 'size' in so_pickle:
                 self.max_len = so_pickle['size']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
+            if 'k_start_ptr' in so_pickle:
+                self.k_start_ptr = so_pickle['k_start_ptr']
+                self.k_end_ptr = so_pickle['k_end_ptr']
         return retval
 
     def reportExit(self):

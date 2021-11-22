@@ -4,7 +4,8 @@ import taskUtils
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, addr,  
                  max_length, call_ip, return_ip, mem_utils, backstop, lgr, udp_header=None, pad_to_size=None, filter=None, 
-                 force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False):
+                 force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
+                  dataWatch=None, fd=None, k_start_ptr=None, k_end_ptr=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -65,6 +66,12 @@ class WriteData():
 
         self.pid = self.top.getPID()
         self.filter = filter
+        self.orig_len = len(in_data)
+        self.dataWatch = dataWatch
+        self.k_start_ptr = k_start_ptr
+        self.k_end_ptr = k_end_ptr
+        ''' NOT USED '''
+        self.fd = fd
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -72,7 +79,22 @@ class WriteData():
         self.expected_packet_count = expected_packet_count
         self.current_packet = 0
 
+    
     def write(self, record=False):
+        if self.k_start_ptr is not None:
+            this_len = len(self.in_data)
+            orig_len = self.getOrigLen()
+            if this_len > orig_len:
+                self.lgr.warning('writeData kernel buffer writing %d bytes' % (this_len))
+            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+            retval = this_len
+            self.modKernBufSize(this_len)
+            #self.setCallHap()
+        else:
+            retval = userBufWrite(record)
+        return retval
+
+    def userBufWrite(self, record=False):
         retval = None
         if self.expected_packet_count <= 1 and self.udp_header is None:
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
@@ -146,9 +168,9 @@ class WriteData():
 
     def setCallHap(self):
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
-        if self.call_hap is None:
+        if self.call_hap is None and self.k_start_ptr is None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
@@ -158,15 +180,15 @@ class WriteData():
             return
         pid = self.top.getPID()
         if pid != self.pid:
-            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
             #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout TBD switches to control that?' % (self.current_packet))
             #SIM_break_simulation('broken offset')
             SIM_run_alone(self.delCallHap, None)
         else:
-            frame = self.top.frameFromRegs(self.cpu)
-            frame_s = taskUtils.stringFromFrame(frame)
+            #frame = self.top.frameFromRegs(self.cpu)
+            #frame_s = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('callHap writeData frame: %s' % frame_s)
             if self.limit_one:
                 self.lgr.warning('writeData callHap, would write more data, but limit_one')
@@ -175,8 +197,8 @@ class WriteData():
             else:
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
-                #print('did write')
                 #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                #print('did write')
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
@@ -185,9 +207,10 @@ class WriteData():
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
+                
 
     def delCallHap(self, dumb):
-        #self.lgr.debug('writeData delCallHap')
+        self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
             SIM_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
@@ -196,3 +219,30 @@ class WriteData():
 
     def getCurrentPacket(self):
         return self.current_packet
+
+    def getOrigLen(self):
+        val1 = self.mem_utils.readWord(self.cpu, self.k_start_ptr)
+        val2 = self.mem_utils.readWord(self.cpu, self.k_end_ptr)
+        retval = abs(val1-val2)
+        return retval
+
+    def modKernBufSize(self, bytes_wrote):
+        if self.k_start_ptr is not None:
+            val1 = self.mem_utils.readWord(self.cpu, self.k_start_ptr)
+            val2 = self.mem_utils.readWord(self.cpu, self.k_end_ptr)
+            #self.lgr.debug('injectIO modKernBufSize bytes_wrote %d  start_ptr 0x%x val1: 0x%x  end_ptr 0x%x val2: 0x%x' % (bytes_wrote, self.k_start_ptr, val1, self.k_end_ptr, val2))
+            if val1 > val2:
+                start_val = val2
+                end_val = val1
+                start_ptr = self.k_end_ptr 
+                end_ptr = self.k_start_ptr 
+            else:
+                start_val = val1
+                end_val = val2
+                start_ptr = self.k_start_ptr 
+                end_ptr = self.k_end_ptr 
+
+            orig_len = end_val - start_val
+            new_end = start_val + bytes_wrote
+            #self.lgr.debug('injectIO modKernBufSize orig_len is %d write new_end of 0x%x to 0x%x' % (orig_len, new_end, end_ptr))
+            self.mem_utils.writeWord(self.cpu, end_ptr, new_end)

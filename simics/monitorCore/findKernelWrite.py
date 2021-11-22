@@ -36,7 +36,7 @@ import time
 '''
 class findKernelWrite():
     def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, 
-                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None):
+                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -63,6 +63,8 @@ class findKernelWrite():
         self.forward_hap = None
         self.cell = cell
         self.satisfy_value = satisfy_value
+        self.kernel = kernel
+        self.prev_buffer = prev_buffer
         self.memory_transaction = None
         self.rev_write_hap = None
         self.broken_hap = None
@@ -438,7 +440,7 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
-        if cpl == 0:
+        if cpl == 0 and not self.kernel:
             if self.found_kernel_write:
                 self.lgr.debug('thinkWeWrote stopToCheckWriteCallback found second write?  but we deleted the breakpoint!!!! ignore this and reverse')
                 #SIM_run_alone(SIM_run_command, 'reverse')
@@ -546,7 +548,7 @@ class findKernelWrite():
                         return 
                     self.lgr.debug('findKernelWrite, found mem copy, now look for address 0x%x, value is 0x%x' % (copy_addr, value))
                     SIM_run_alone(self.cleanup, False)
-                    self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes)
+                    self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
                 else:
                     self.lgr.debug('thinkWeWrote, call backOneAlone')
                     SIM_run_alone(self.backOneAlone, offset)
@@ -558,6 +560,7 @@ class findKernelWrite():
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         value = self.mem_utils.readWord32(self.cpu, self.addr)
+        
         if self.addr == self.prev_addr:
             self.iter_count += 1
             if self.iter_count > 5:
@@ -596,6 +599,10 @@ class findKernelWrite():
         bm = 'eip:0x%x inst:"%s"' % (eip, instruct[1])
         self.bookmarks.setBacktrackBookmark(bm)
         self.lgr.debug('BT bookmark: %s' % bm)
+        ''' If asked to just find previous buffer, then don't continue with reverse taint once a register source is found '''
+        taint = True
+        if self.prev_buffer:
+            taint = False
         if self.decode.modifiesOp0(mn):
             self.lgr.debug('backOneAlone get operands from %s' % instruct[1])
             op1, op0 = self.decode.getOperands(instruct[1])
@@ -613,16 +620,16 @@ class findKernelWrite():
                 #if not self.top.isProtectedMemory(new_address):
                 if not self.top.isProtectedMemory(new_address) and not '[' in op0:
                     self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
-                    self.top.stopAtKernelWrite(new_address, self.rev_to_call)
+                    self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel)
                 else:
                     self.lgr.debug('backOneAlone is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
-                    self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
+                    self.rev_to_call.doRevToModReg(op1, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
  
             elif self.decode.isReg(op1):
                 reg_num = self.cpu.iface.int_register.get_number(op1)
                 value = self.cpu.iface.int_register.read(reg_num)
                 self.lgr.debug('backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
-                self.rev_to_call.doRevToModReg(op1, taint=True, offset=offset, value=self.value, num_bytes = self.num_bytes)
+                self.rev_to_call.doRevToModReg(op1, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
             else:
                 value = None
                 try:
@@ -644,11 +651,11 @@ class findKernelWrite():
             self.lgr.debug('backOneAlone push op0 is %s' % op0)
             if self.decode.isReg(op0): 
                 self.lgr.debug('backOneAlone is push reg %s, find mod', op0)
-                self.rev_to_call.doRevToModReg(op0, taint=True, value=self.value, num_bytes = self.num_bytes)
+                self.rev_to_call.doRevToModReg(op0, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
             else:
                 new_address = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
                 self.lgr.debug('backOneAlone is push addr 0x%x', new_address)
-                self.top.stopAtKernelWrite(new_address, self.rev_to_call)
+                self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
 
         elif self.cpu.architecture == 'arm' and mn.startswith('stm'):
             reg = self.decode.armSTM(self.cpu, instruct[1], self.addr, self.lgr)
@@ -656,12 +663,12 @@ class findKernelWrite():
             if reg is not None:
                 rval = self.mem_utils.getRegValue(self.cpu, reg)
                 self.lgr.debug('backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
-                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes)
+                self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
         elif self.cpu.architecture == 'arm' and mn.startswith('str'):
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
             if reg is not None:
                 self.lgr.debug('backOneAlone is str... reg %s, find mod', reg)
-                self.rev_to_call.doRevToModReg(reg, taint=True, value=self.value, num_bytes = self.num_bytes, offset=offset)
+                self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, offset=offset, kernel=self.kernel)
 
         else:
             self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))
