@@ -58,6 +58,10 @@ def testBit(int_value, bit):
     mask = 1 << bit
     return(int_value & mask)
 
+def clearBit(int_value, bit):
+    mask = 1 << bit
+    return(int_value & ~mask)
+
 def bitRange(value, start, end):
     shifted = value >> start
     num_bits = (end - start) + 1 
