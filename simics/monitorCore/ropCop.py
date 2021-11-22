@@ -63,7 +63,7 @@ class RopCop():
         return_to = self.mem_utils.readWord32(self.cpu, esp)
         eip = return_to - 8
         done = False
-        self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (current_eip, return_to))
+        #self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
         while not done and eip < return_to:
             # TBD use instruction length to confirm it is a true call
             try:
