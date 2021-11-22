@@ -100,6 +100,16 @@ class SelectInfo():
         else:
             return None, None
 
+    def writeit(self, addr, value):
+        if addr > 0:
+            low_mask = 0xffffffff
+            low = value & low_mask
+            high_mask = low_mask << 32
+            high = value & high_mask 
+            high = high >> 32
+            self.mem_utils.writeWord(self.cpu, addr, low)
+            self.mem_utils.writeWord(self.cpu, addr+self.mem_utils.WORD_SIZE, high)
+
     def getSet(self, addr):
         if addr == 0:
             return "NULL"
@@ -138,6 +148,17 @@ class SelectInfo():
                         #self.lgr.debug('SeletInfo found %d in the read set 0x%x' % (fd, the_set))
                         retval = True
         return retval
+
+    def resetFD(self, fd, fd_set):
+        if fd < self.nfds:
+            self.lgr.debug('SelectInfo reset fd %d' % fd)
+            if fd_set is not None:
+                read_low, read_high = self.readit(fd_set)
+                if read_low is not None:
+                    the_set = read_low | (read_high << 32) 
+                    new_value = memUtils.clearBit(the_set, fd)
+                    self.writeit(fd_set, new_value)
+                    self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
 
     def getFDString(self, fd_set):
         retval = ''
@@ -1905,6 +1926,8 @@ class Syscall():
     def setExits(self, frames, reset=False):
         for pid in frames:
             self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
+            if frames[pid] is None:
+                continue
             pc = frames[pid]['pc']
             callnum = frames[pid]['syscall_num']
             syscall_info = SyscallInfo(self.cpu, None, callnum, pc, self.trace, self.call_params)
