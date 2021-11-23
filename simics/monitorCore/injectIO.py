@@ -160,12 +160,15 @@ class InjectIO():
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
 
+        self.bookmarks = self.top.getBookmarksInstance()
+        force_default_context = False
+        if self.bookmarks is None:
+            force_default_context = True
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, 
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
                  write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch, k_start_ptr=self.k_start_ptr,
                  k_end_ptr=self.k_end_ptr)
-        self.bookmarks = self.top.getBookmarksInstance()
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
@@ -205,6 +208,7 @@ class InjectIO():
                 if self.stop_on_read:
                     use_backstop = False
                 if self.trace_all:
+                    self.lgr.debug('injectIO trace_all requested.  Context is %s' % self.cpu.current_context)
                     cli.quiet_run_command('c')
                 elif self.k_start_ptr is None:
                     print('retracking IO') 
@@ -248,9 +252,10 @@ class InjectIO():
     
 
     def resetOrigin(self, dumb):
+        if self.bookmarks is not None:
             self.bookmarks.setOrigin(self.cpu)
-            SIM_run_command('disable-reverse-execution') 
-            SIM_run_command('enable-reverse-execution') 
+        SIM_run_command('disable-reverse-execution') 
+        SIM_run_command('enable-reverse-execution') 
 
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
