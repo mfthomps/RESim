@@ -110,7 +110,7 @@ class GenHap():
             for bp in self.breakpoint_list:
                 bp.clear()
             SIM_hap_delete_callback_id(self.hap_type, self.hap_num)
-            #self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
+            self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
             self.hap_num = None
 
     def getContext(self):
@@ -514,12 +514,15 @@ class GenContextMgr():
 
         
         #DEBUG BLOCK
+        ''' 
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
-        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
+            prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        ''' 
+        pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -714,8 +717,9 @@ class GenContextMgr():
             del self.task_rec_hap[pid]
         ctask = self.task_utils.getCurTaskRec()
         cur_pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
-        if pid == cur_pid:
+        if pid == cur_pid and self.debugging_pid is not None:
             ''' we are stopping due to a clone doing an exec or something similar.  in any event, remove haps and change context if needed '''
+            ''' TBD, do this in some other function? '''
             SIM_run_alone(self.clearAllHap, False)
             self.watching_tasks = False
             self.restoreDefaultContext() 
