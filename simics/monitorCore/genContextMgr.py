@@ -514,11 +514,11 @@ class GenContextMgr():
 
         
         #DEBUG BLOCK
-        ''' 
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
+        ''' 
         self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
             prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
         ''' 
