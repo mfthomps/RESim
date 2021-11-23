@@ -731,6 +731,7 @@ class GenMonitor():
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugPid()
+            self.context_manager[self.target].restoreDebugContext()
 
             if group:
                 leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
