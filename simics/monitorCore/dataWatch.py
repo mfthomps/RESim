@@ -368,8 +368,11 @@ class DataWatch():
                     #SIM_break_simulation('mempcpy')
                     #return
             else:
-                self.lgr.debug('returnHap copy not a Load')
-                buf_start = self.findRange(self.mem_something.dest)
+                self.lgr.debug('returnHap copy not a Load, first see if src is a buf')
+                buf_start = self.findRange(self.mem_something.src)
+                if buf_start is None:
+                    buf_start = self.findRange(self.mem_something.dest)
+
             mark = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
             if self.mem_something.op_type == Sim_Trans_Load:
                 self.lgr.debug('returnHap set range for copy')
@@ -620,7 +623,7 @@ class DataWatch():
                 self.lgr.debug('getMemParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, 
                     self.mem_something.count))
             elif self.mem_something.fun == 'memset':
-                self.mem_something.dest, dumb, self.mem_something.count, dumb = self.getCallParams(sp)
+                self.mem_something.dest, dumb, self.mem_something.count = self.getCallParams(sp)
                 self.mem_something.src = self.mem_something.dest
             elif self.mem_something.fun == 'memcmp':
                 self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp)
@@ -753,7 +756,7 @@ class DataWatch():
             #self.context_manager.restoreDefaultContext()
             skip_fun = False
             if not data_hit:
-                self.lgr.debug('dataWatch not data_hit, find range for buf_start')
+                self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
@@ -767,6 +770,9 @@ class DataWatch():
                                  self.mem_something.dest))
                         else:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
+                else:
+                    self.mem_something.op_type = Sim_Trans_Load
+                    self.lgr.debug('datgaWatch getMemParams got buf_start of 0x%x' % buf_start)
             if not skip_fun:
                 #self.stopWatch(leave_fun_entries = True)
                 self.stopWatch()
@@ -1217,7 +1223,7 @@ class DataWatch():
             for index in range(len(self.start)):
                 if self.start[index] != 0:
                     end = self.start[index] + self.length[index]
-                    #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
+                    self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
                     if addr >= self.start[index] and addr <= end:
                         retval = self.start[index]
                         break
