@@ -91,7 +91,7 @@ class WriteData():
             self.modKernBufSize(this_len)
             #self.setCallHap()
         else:
-            retval = userBufWrite(record)
+            retval = self.userBufWrite(record)
         return retval
 
     def userBufWrite(self, record=False):
@@ -102,10 +102,12 @@ class WriteData():
                 self.in_data = self.in_data[self.max_len:]
                 self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
+                #self.lgr.debug('%s' % next_data)
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
+                    ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
                     self.addr = self.addr+1
             else:
                 if len(self.in_data) > self.max_len:
@@ -170,7 +172,7 @@ class WriteData():
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
         if self.call_hap is None and self.k_start_ptr is None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
@@ -187,8 +189,8 @@ class WriteData():
             #SIM_break_simulation('broken offset')
             SIM_run_alone(self.delCallHap, None)
         else:
-            #frame = self.top.frameFromRegs(self.cpu)
-            #frame_s = taskUtils.stringFromFrame(frame)
+            frame = self.top.frameFromRegs(self.cpu)
+            frame_s = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('callHap writeData frame: %s' % frame_s)
             if self.limit_one:
                 self.lgr.warning('writeData callHap, would write more data, but limit_one')
