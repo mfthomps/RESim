@@ -2,7 +2,8 @@ Summary of CADET01 example.
 
 This example requires that you put the id_rsa  and id_rsa.pub files
 from simics/workspace into your local ~/.ssh directory.   This is
-needed to ssh into one of the simulated computers.
+needed to ssh into one of the simulated computers.  Be sure to set
+the mode on the id_rsa file to 400.
 
 You should have two terminals on the system that is running Simics.
 One should be in the workspace directory.  
@@ -38,8 +39,10 @@ RESim will stop the simulation when it detects a ROP caused by an overwrite of a
 address from the cgc_check function (which used to return to main).
 
 Copy the cadet01 executable to your local maching running IDA (if not the Simics server).
-Start IDA using the runIDA.sh script and use shift R to attach to the process and load
-the RESim plugins.
+Start IDA using the runIDA.sh script. The first time you run IDA for a target binary,
+use the dumpFuns.py and findBlocks.py scripts to generate database files used by RESim for
+the target (File / script files; or View / recent scripts).  Use shift R to attach to 
+the process and load the RESim plugins.
 
 View the stack and observe the return address is to somewhere within the cgc_check function.
 
