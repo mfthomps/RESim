@@ -145,7 +145,7 @@ def get_root_file_name():
     if idaapi.IDA_SDK_VERSION <= 699:
         retval = idc.GetRootFileName()
     else:
-        retval = ida_nalt.root_file_name()
+        retval = ida_nalt.get_root_filename()
     return retval
 
 def ask_addr(value, prompt):

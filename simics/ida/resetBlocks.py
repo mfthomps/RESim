@@ -5,6 +5,7 @@ import ida_graph
 import ida_gdl
 import idaversion
 import idc
+import resimUtils
 def getBB(graph, bb):
     for block in graph:
         if block.start_ea <= bb and block.end_ea > bb:
@@ -16,12 +17,11 @@ def resetBlocks():
     p.bg_color =  0xFFFFCC
     #fname = idaapi.get_root_filename()
     fname = idc.eval_idc("ARGV[1]")
-    funs_fh = open(fname+'.funs') 
     funs_file = fname+'.funs'
     if not os.path.isfile(funs_file):
-        print('No file at %s' % funs_file)
-        return
-            
+        print('No file at %s\n Creating the database files needed by RESim.' % funs_file)
+        resimUtils.dumpFuns(fname=fname)
+    funs_fh = open(funs_file) 
     fun_json = json.load(funs_fh)
     print('funs_file %s' % funs_file)
     for fun in fun_json:
