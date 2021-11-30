@@ -1,11 +1,13 @@
 from simics import *
 import sys
+import os
+import pickle
 import taskUtils
 class WriteData():
-    def __init__(self, top, cpu, in_data, expected_packet_count, addr,  
-                 max_length, call_ip, return_ip, mem_utils, backstop, lgr, udp_header=None, pad_to_size=None, filter=None, 
+    def __init__(self, top, cpu, in_data, expected_packet_count, 
+                 mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
-                  dataWatch=None, fd=None, k_start_ptr=None, k_end_ptr=None):
+                  dataWatch=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -27,14 +29,25 @@ class WriteData():
         #                 and pad the last (or only) packet.
         self.expected_packet_count = expected_packet_count
         # Memory location in which to wrte
-        self.addr = addr
-        self.max_len = max_length
+        self.addr = None
+        self.max_len = None
+
         # Use to skip over kernel recv processing
-        self.call_ip = call_ip
-        self.return_ip = return_ip
-        
+        self.call_ip = None
+        self.return_ip = None
+        self.select_call_ip = None
+        self.select_return_ip = None
+        self.k_start_ptr = None
+        self.k_end_ptr = None
+        ''' NOT USED '''
+        self.fd = None
+
+
+
         self.call_hap = None
         self.call_break = None
+        self.select_hap = None
+        self.select_break = None
         # see in_data
         if sys.version_info[0] > 2 and type(udp_header) == str:
             self.udp_header = bytes(udp_header, encoding='utf8')
@@ -61,6 +74,9 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
+
+        self.loadPickle(snapshot_name)
+
         self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
              self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
 
@@ -68,10 +84,10 @@ class WriteData():
         self.filter = filter
         self.orig_len = len(in_data)
         self.dataWatch = dataWatch
-        self.k_start_ptr = k_start_ptr
-        self.k_end_ptr = k_end_ptr
-        ''' NOT USED '''
-        self.fd = fd
+        env_max_len = os.getenv('AFL_MAX_LEN')
+        if env_max_len is not None:
+            self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
+            self.max_len = int(env_max_len)
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -114,7 +130,8 @@ class WriteData():
                     self.in_data = self.in_data[:self.max_len]
                 self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 tot_len = len(self.in_data)
-                #self.lgr.debug('writeData TCP last packet, wrote %d bytes to 0x%x packet_num %d' % (tot_len, self.addr, self.current_packet))
+                eip = self.top.getEIP(self.cpu)
+                #self.lgr.debug('writeData TCP last packet, wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
@@ -172,10 +189,21 @@ class WriteData():
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
         if self.call_hap is None and self.k_start_ptr is None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
+            if self.select_call_ip is not None:
+                self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
+                self.select_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
 
+    def selectHap(self, dumb, third, break_num, memory):
+        ''' Hit a call to select'''
+        if self.select_hap is None:
+            return
+        if self.stop_on_read:
+            #self.lgr.debug('writeData selectHap stop on read')
+            SIM_break_simulation('writeData selectHap stop on read')
+            return
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''
         if self.call_hap is None:
@@ -189,7 +217,7 @@ class WriteData():
             self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
-            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             if self.write_callback is not None:
@@ -207,7 +235,7 @@ class WriteData():
             else:
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
-                self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 #print('did write')
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
@@ -220,12 +248,17 @@ class WriteData():
                 
 
     def delCallHap(self, dumb):
-        self.lgr.debug('writeData delCallHap')
+        #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
             SIM_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
             self.call_hap = None
             self.call_break = None
+        if self.select_hap is not None:
+            SIM_delete_breakpoint(self.select_break)
+            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
+            self.select_hap = None
+            self.select_break = None
 
     def getCurrentPacket(self):
         return self.current_packet
@@ -256,3 +289,30 @@ class WriteData():
             new_end = start_val + bytes_wrote
             #self.lgr.debug('injectIO modKernBufSize orig_len is %d write new_end of 0x%x to 0x%x' % (orig_len, new_end, end_ptr))
             self.mem_utils.writeWord(self.cpu, end_ptr, new_end)
+
+    def loadPickle(self, name):
+        cell_name = self.top.getTopComponentName(self.cpu)
+        afl_file = os.path.join('./', name, cell_name, 'afl.pickle')
+        if os.path.isfile(afl_file):
+            self.lgr.debug('afl pickle from %s' % afl_file)
+            so_pickle = pickle.load( open(afl_file, 'rb') ) 
+            #print('start %s' % str(so_pickle['text_start']))
+            if 'call_ip' in so_pickle:
+                self.call_ip = so_pickle['call_ip']
+                self.return_ip = so_pickle['return_ip']
+            if 'addr' in so_pickle:
+                self.addr = so_pickle['addr']
+            if 'size' in so_pickle:
+                self.max_len = so_pickle['size']
+            if 'fd' in so_pickle:
+                self.fd = so_pickle['fd']
+            if 'addr_addr' in so_pickle:
+                self.addr_addr = so_pickle['addr_addr']
+                self.addr_size = so_pickle['addr_size']
+            if 'k_start_ptr' in so_pickle:
+                self.k_start_ptr = so_pickle['k_start_ptr']
+                self.k_end_ptr = so_pickle['k_end_ptr']
+
+            if 'orig_buffer' in so_pickle:
+                self.orig_buffer = so_pickle['orig_buffer']
+                self.lgr.debug('injectiO load orig_buffer from pickle')

@@ -66,8 +66,6 @@ class AFL():
         self.current_packet = 0
         self.backstop = backstop
         self.stop_hap = None
-        self.return_ip = None
-        self.call_ip = None
         self.call_break = None
         self.call_hap = None
         self.in_data = None
@@ -109,9 +107,6 @@ class AFL():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.addr = None
-        self.max_len = None
-        self.addr_addr = None
-        self.addr_size = None
         self.orig_buffer = None
         hang_cycles = 90000000
         hang = os.getenv('HANG_CYCLES')
@@ -120,16 +115,8 @@ class AFL():
         self.backstop.setHangCallback(self.coverage.recordHang, hang_cycles)
         self.lgr.debug('AFL init from snap %s' % snap_name)
 
-        ''' used for kernel buffers '''
-        self.len_buf = None
-        self.k_start_ptr = None
-        self.k_end_ptr = None
-
+        self.snap_name = snap_name
         self.loadPickle(snap_name)
-        env_max_len = os.getenv('AFL_MAX_LEN')
-        if env_max_len is not None:
-            self.lgr.debug('Overrode max_len value from pickle with value from environment')
-            self.max_len = int(env_max_len)
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
             if self.orig_buffer is not None:
@@ -311,10 +298,10 @@ class AFL():
             self.coverage.watchExits(pid=self.pid)
 
         if self.write_data is None:
-            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
-                 self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
+            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
+                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read, k_start_ptr=self.k_start_ptr, k_end_ptr=self.k_end_ptr)
+                 stop_on_read=self.stop_on_read)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
@@ -389,20 +376,10 @@ class AFL():
             self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
-            self.call_ip = so_pickle['call_ip']
-            self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
-            if 'size' in so_pickle:
-                self.max_len = so_pickle['size']
-            if 'addr_addr' in so_pickle:
-                self.addr_addr = so_pickle['addr_addr']
-                self.addr_size = so_pickle['addr_size']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-            if 'k_start_ptr' in so_pickle:
-                self.k_start_ptr = so_pickle['k_start_ptr']
-                self.k_end_ptr = so_pickle['k_end_ptr']
 
     def fixFaults(self):
         if self.cpu.architecture == 'arm':

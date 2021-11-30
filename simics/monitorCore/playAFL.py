@@ -25,7 +25,6 @@ class PlayAFL():
         self.findbb = None
         self.write_data = None
         self.orig_buffer = None
-        self.max_len = None
         self.return_ip = None
         self.cfg_file = cfg_file
         self.target = target
@@ -84,16 +83,10 @@ class PlayAFL():
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         
-        ''' for use with kernel buffer injection '''
-        self.k_start_ptr = None
-        self.k_end_ptr = None
-
+        self.snap_name = snap_name
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
-        env_max_len = os.getenv('AFL_MAX_LEN')
-        if env_max_len is not None:
-            self.max_len = int(env_max_len)
         cli.quiet_run_command('disable-reverse-execution')
         cli.quiet_run_command('enable-unsupported-feature internals')
         cli.quiet_run_command('save-snapshot name = origin')
@@ -184,8 +177,6 @@ class PlayAFL():
                     self.in_data = fh.read()
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
-            if self.addr is None:
-                self.addr, self.max_len = self.dataWatch.firstBufferAddress()
         
             if self.orig_buffer is not None:
                 ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
@@ -194,10 +185,9 @@ class PlayAFL():
                 self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
-            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
-                 self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read,
-                 k_start_ptr=self.k_start_ptr, k_end_ptr=self.k_end_ptr)
+            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
+                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
@@ -303,13 +293,8 @@ class PlayAFL():
             self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
-            if 'size' in so_pickle:
-                self.max_len = so_pickle['size']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-            if 'k_start_ptr' in so_pickle:
-                self.k_start_ptr = so_pickle['k_start_ptr']
-                self.k_end_ptr = so_pickle['k_end_ptr']
         return retval
 
     def reportExit(self):

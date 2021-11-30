@@ -7,7 +7,7 @@ import pickle
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, packet_size=None, target=None, targetFD=None, trace_all=False, save_json=None, 
+           coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
            limit_one=False, no_rop=False):
         self.dfile = dfile
         self.stay = stay
@@ -40,8 +40,8 @@ class InjectIO():
         self.backstop.setHangCallback(hang_callback, hang_cycles)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
-        if self.packet_count > 1: 
-            self.stop_on_read = True
+        #if self.packet_count > 1: 
+        #    self.stop_on_read = True
         self.current_packet = 0
         self.call_ip = None
         self.return_ip = None
@@ -60,22 +60,13 @@ class InjectIO():
         self.clear_retrack = False
         self.fd = None
 
-
+        self.snap_name = snap_name
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()
             if self.addr is None:
                 self.lgr.error('injectIO, no firstBufferAddress found')
                 return
-        else:
-            env_max_len = os.getenv('AFL_MAX_LEN')
-            if env_max_len is not None:
-                self.max_len = int(env_max_len)
-                self.lgr.debug('injectIO maybe using env value %d for max_len' % self.max_len)
-            self.lgr.debug('injectIO loaded from pickle, addr: 0x%x max_len %s' % (self.addr, str(self.max_len)))
-        if packet_size is not None:
-            self.lgr.debug('injectIO using packet_size %d for max_len' % packet_size)
-            self.max_len = packet_size
 
         self.coverage = coverage
         if self.cpu.architecture == 'arm':
@@ -102,6 +93,11 @@ class InjectIO():
 
         self.stop_hap = None
         self.no_rop = no_rop
+        sor = os.getenv('STOP_ON_READ')
+        self.lgr.debug('sor is %s' % sor)
+        if sor is not None and sor.lower() == 'true':
+            self.stop_on_read = True
+            self.lgr.debug('injectIO stop_on_read is true')
 
     def go(self, no_go_receive=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
@@ -164,11 +160,10 @@ class InjectIO():
         force_default_context = False
         if self.bookmarks is None:
             force_default_context = True
-        self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, self.addr,  
-                 self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
+        self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
+                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch, k_start_ptr=self.k_start_ptr,
-                 k_end_ptr=self.k_end_ptr)
+                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch)
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
@@ -182,7 +177,7 @@ class InjectIO():
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles)
-            self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x max_len %s cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, str(self.max_len), self.cpu.cycles))
+            self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             if not self.stay:
                 if not self.trace_all:
                     self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
@@ -295,21 +290,8 @@ class InjectIO():
             self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
-            if 'call_ip' in so_pickle:
-                self.call_ip = so_pickle['call_ip']
-                self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
-            if 'size' in so_pickle:
-                self.max_len = so_pickle['size']
-            if 'fd' in so_pickle:
-                self.fd = so_pickle['fd']
-            if 'addr_addr' in so_pickle:
-                self.addr_addr = so_pickle['addr_addr']
-                self.addr_size = so_pickle['addr_size']
-            if 'k_start_ptr' in so_pickle:
-                self.k_start_ptr = so_pickle['k_start_ptr']
-                self.k_end_ptr = so_pickle['k_end_ptr']
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
