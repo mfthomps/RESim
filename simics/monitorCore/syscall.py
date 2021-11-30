@@ -376,7 +376,7 @@ class Syscall():
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, self.stop_action)
+            	     self.stopHap, msg)
         #self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
@@ -1493,7 +1493,7 @@ class Syscall():
         return exit_info
 
 
-    def stopHap(self, stop_action, one, exception, error_string):
+    def stopHap(self, msg, one, exception, error_string):
         '''  Invoked when a syscall (or more typically its exit back to user space) triggers
              a break in the simulation
         '''
@@ -1531,7 +1531,9 @@ class Syscall():
                 ''' TBD when would we want to close it?'''
                 if self.traceMgr is not None:
                     self.traceMgr.flush()
-                self.stop_action.run()
+                ''' Run the stop action, which is a hapCleaner class '''
+                self.stop_action.run(cb_param=msg)
+
                 if self.call_list is not None:
                     for callname in self.call_list:
                         self.top.rmCallTrace(self.cell_name, callname)
