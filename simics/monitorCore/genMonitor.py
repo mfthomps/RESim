@@ -472,7 +472,9 @@ class GenMonitor():
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
-            SIM_run_alone(SIM_run_command, 'continue')
+            simics_status = SIM_simics_is_running()
+            if not simics_status:
+                SIM_run_alone(SIM_run_command, 'continue')
         else:
             self.lgr.debug('run2User, already in user')
             if flist is not None: 
@@ -629,7 +631,12 @@ class GenMonitor():
                         done = False
             if not done:
                 #self.lgr.debug('continue %d cycles' % run_cycles)
-                SIM_continue(run_cycles)
+                ''' using the most recently selected cpu, continue specified number of cycles '''
+                cmd = 'pselect %s' % cpu.name
+                dumb, ret = cli.quiet_run_command(cmd)
+                cmd = 'c %s cycles' % run_cycles
+                dumb, ret = cli.quiet_run_command(cmd)
+                #SIM_continue(run_cycles)
        
     def getDbgFrames(self):
         retval = {}
@@ -658,7 +665,7 @@ class GenMonitor():
         plist = {}
         pid_list = self.context_manager[self.target].getThreadPids()
         tasks = self.task_utils[self.target].getTaskStructs()
-        self.lgr.debug('tasksDBG')
+        self.lgr.debug('tasksDBG, pid_list is %s' % str(pid_list))
         print('Status of debugging threads')
         plist = {}
         for t in tasks:
@@ -3505,6 +3512,7 @@ class GenMonitor():
 
     def showCoverage(self):
         self.coverage.showCoverage()
+        self.coverage.saveCoverage()
 
     def stopCoverage(self):
         self.lgr.debug('stopCoverage')
