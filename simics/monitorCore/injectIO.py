@@ -259,17 +259,19 @@ class InjectIO():
 
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
-        packet_num = self.write_data.getCurrentPacket() - 1
-        self.saveJson(packet=packet_num)
-        self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
+        if count != 0:
+            packet_num = self.write_data.getCurrentPacket() - 1
+            self.saveJson(packet=packet_num)
+            self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
         self.resetOrigin(None)
         self.dataWatch.clearWatchMarks()
-        self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
-        ''' special case'''
-        if self.max_len == 1:
-            self.addr += 1
-        if self.addr_addr is not None:
-            self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+        if count != 0:
+            self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+            ''' special case'''
+            if self.max_len == 1:
+                self.addr += 1
+            if self.addr_addr is not None:
+                self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
 
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
