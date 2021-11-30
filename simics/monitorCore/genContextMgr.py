@@ -521,6 +521,7 @@ class GenContextMgr():
         ''' 
         self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
             prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+       
         ''' 
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
        
@@ -826,7 +827,8 @@ class GenContextMgr():
       
     def changeDebugPid(self, pid):
         if pid not in self.pid_cache:
-            self.lgr.error('contextManager changeDebugPid not in pid cache %d' % pid)
+            if len(self.pid_cache) > 0:
+                self.lgr.error('contextManager changeDebugPid not in pid cache %d' % pid)
             return
         self.lgr.debug('changeDebugPid to %d' % pid)
         self.debugging_pid = pid
