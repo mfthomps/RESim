@@ -347,6 +347,7 @@ class SharedSyscall():
                         SIM_run_alone(self.stopAlone, None)
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d into 0x%x\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr))
+                exit_info.call_params = None
 
         elif socket_callname == "recvmsg": 
             self.lgr.debug('doSockets recvmsg')
@@ -800,7 +801,7 @@ class SharedSyscall():
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:
-                SIM_run_alone(my_syscall.stopAlone, 'found matching call parameters')
+                SIM_run_alone(my_syscall.stopAlone, callname)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
