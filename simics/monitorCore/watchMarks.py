@@ -708,8 +708,11 @@ class WatchMarks():
         self.mark_list.pop()
 
     def latestCycle(self):
-        latest_mark = self.mark_list[-1]
-        return latest_mark.cycle
+        if len(self.mark_list) > 0:
+            latest_mark = self.mark_list[-1]
+            return latest_mark.cycle
+        else:
+            return None
 
     def registerCallCycle(self):
         self.call_cycle = self.cpu.cycles
