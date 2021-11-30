@@ -110,7 +110,7 @@ class GenHap():
             for bp in self.breakpoint_list:
                 bp.clear()
             SIM_hap_delete_callback_id(self.hap_type, self.hap_num)
-            self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
+            #self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
             self.hap_num = None
 
     def getContext(self):
@@ -357,7 +357,7 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             pid = self.watch_rec_list[rec]
-            #self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
+            self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
             retval.append(pid)
         return retval
 
@@ -564,9 +564,9 @@ class GenContextMgr():
         self.alterWatches(new_addr, prev_task)
         if self.catch_pid == pid:
             self.lgr.debug('contextManager changedThread do catch_callback for pid %d' % pid)
-            SIM_break_simulation('in pid %d' % pid)
+            #SIM_break_simulation('in pid %d' % pid)
       
-            #SIM_run_alone(self.catch_callback, None)
+            SIM_run_alone(self.catch_callback, None)
             self.catch_pid = None
               
     def catchPid(self, pid, callback):
