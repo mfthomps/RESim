@@ -7,9 +7,9 @@ import decode
 import decodeArm
 '''
 Create a snapshot from a given watch mark index value, intended to
-be a read or an ioctl.  The snapshot will preceed the read call, and
-will include the address of the kernel buffer, and the address of any
-ioctl data length value.
+an ioctl.  The snapshot will preceed the ioctl call, and
+will include the address of the kernel buffer, and the kernel pointers
+used ot calculate the ioctl return value.
 '''
 class PrepInjectWatch():
     def __init__(self, top, cpu, cell_name, mem_utils, dataWatch, lgr):
@@ -36,9 +36,9 @@ class PrepInjectWatch():
 
 
     def doInject(self, snap_name, watch_mark):
-        ''' Assume the watch mark follows the read of interest, or an ioctl 
+        ''' Assume the watch mark follows an ioctl 
             that preceeds the read.  We will snapshot 
-            prior to the read and record the address of the kernel buffer.'''
+            prior to the ioctl and record the address of the kernel buffer.'''
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
         self.dataWatch.goToMark(watch_mark)
@@ -54,14 +54,9 @@ class PrepInjectWatch():
  
                 ''' Try to reverse and find where kernel keeps count data ''' 
                 self.top.revTaintAddr(mark.mark.recv_addr, kernel=True, prev_buffer=True, callback=self.handleDelta)
-                
 
-                '''
-                #should be just after return from ioctl syscall, record the ip 
-                self.ret_ip = self.top.getEIP()
-                self.top.precall()
-                self.call_ip = self.top.getEIP()
-                '''
+            else:
+                self.lgr.error('prepInjectWatch watch mark is not an ioctl call.')
                
     def handleDelta(self, buf_addr_list): 
         ''' Assume backtrace stopped at something like rsb r6, r3, r6 
