@@ -40,6 +40,11 @@ class PlayAFL():
                 return
         else: 
             self.pad_to_size = 0
+        self.stop_on_read =   stop_on_read
+        if not self.stop_on_read:
+            sor = os.getenv('STOP_ON_READ')
+            if sor is not None and sor.lower() == 'true':
+                self.stop_on_read = True
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         if packet_count > 1 and not (self.udp_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
@@ -64,7 +69,6 @@ class PlayAFL():
         bsc = os.getenv('BACK_STOP_CYCLES')
         if bsc is not None:
             self.backstop_cycles = int(bsc)
-        self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 0
@@ -192,7 +196,7 @@ class PlayAFL():
             #self.context_manager.restoreDebugContext()
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, self.addr,  
                  self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, 
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read,
                  k_start_ptr=self.k_start_ptr, k_end_ptr=self.k_end_ptr)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()

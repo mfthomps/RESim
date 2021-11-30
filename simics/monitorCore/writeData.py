@@ -61,8 +61,8 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
-        #self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
-        #     self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
+        self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+             self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
 
         self.pid = self.top.getPID()
         self.filter = filter
@@ -172,7 +172,7 @@ class WriteData():
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
         if self.call_hap is None and self.k_start_ptr is None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
@@ -181,13 +181,21 @@ class WriteData():
         if self.call_hap is None:
             return
         pid = self.top.getPID()
+        if self.stop_on_read:
+            #self.lgr.debug('writeData stop on read')
+            SIM_break_simulation('writeData stop on read')
+            return
         if pid != self.pid:
             self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
-            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout TBD switches to control that?' % (self.current_packet))
+            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
+            self.cpu.iface.int_register.write(self.len_reg_num, 0)
+            if self.write_callback is not None:
+                SIM_run_alone(self.write_callback, 0)
             #SIM_break_simulation('broken offset')
-            SIM_run_alone(self.delCallHap, None)
+            #SIM_run_alone(self.delCallHap, None)
         else:
             frame = self.top.frameFromRegs(self.cpu)
             frame_s = taskUtils.stringFromFrame(frame)
@@ -199,7 +207,7 @@ class WriteData():
             else:
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
-                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 #print('did write')
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
