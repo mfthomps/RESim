@@ -856,12 +856,15 @@ class DataWatch():
             SIM_run_alone(self.undoAlone, self.mem_something)
         else:
             latest_cycle = self.watchMarks.latestCycle()
-            if latest_cycle > self.cpu.cycles:
-                self.lgr.debug('hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, assume a ghost frame' % (self.cpu.cycles, latest_cycle))
-                SIM_run_alone(self.undoAlone, self.mem_something)
+            if latest_cycle is not None:
+                if latest_cycle > self.cpu.cycles:
+                    self.lgr.debug('hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, assume a ghost frame' % (self.cpu.cycles, latest_cycle))
+                    SIM_run_alone(self.undoAlone, self.mem_something)
+                else:
+                    self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (self.mem_something.fun, eip))
+                    SIM_run_alone(self.getMemParams, True)
             else:
-                self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (self.mem_something.fun, eip))
-                SIM_run_alone(self.getMemParams, True)
+                self.lgr.error('hitCallStopHap, latest_cycle is None')
        
     def vt_handler(self, memory):
         location = memory.physical_address
