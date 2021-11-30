@@ -113,7 +113,6 @@ def main():
     except:
         pass
     master_slave = '-M'
-    max_packet_size = 1448
     glist = glob.glob('resim_*/')
 
     if args.tcp:
