@@ -2465,10 +2465,12 @@ class GenMonitor():
         call_params2.nth = count
         call_params3 = syscall.CallParams('recvfrom', fd, break_simulation=break_simulation)        
         call_params3.nth = count
+        call_params4 = syscall.CallParams('select', fd, break_simulation=break_simulation)        
+        call_params4.nth = count
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        calls = ['read', 'socketcall']
+        calls = ['read', 'socketcall', 'select', '_newselect']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.readcalls:
@@ -2482,7 +2484,7 @@ class GenMonitor():
 
         the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params1,call_params2,call_params3], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               calls, call_params=[call_params1,call_params2,call_params3,call_params4], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
                                skip_and_mail=skip_and_mail, name='runToInput')
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
@@ -3361,7 +3363,7 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, packet_size=None, target=None, targetFD=None, trace_all=False, 
+            sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
@@ -3379,7 +3381,7 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
-                  packet_size=packet_size, target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
+                  target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
                   no_rop=no_rop)
         if go:
             self.injectIOInstance.go()
