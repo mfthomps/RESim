@@ -295,10 +295,11 @@ class ReturnInt():
         return self.msg
 
 class WatchMarks():
-    def __init__(self, mem_utils, cpu, cell_name, run_from_snap, lgr):
+    def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
         self.mem_utils = mem_utils
         self.cpu = cpu
+        self.top = top
         self.cell_name = cell_name
         self.lgr = lgr
         self.call_cycle = None
@@ -466,7 +467,22 @@ class WatchMarks():
             else:
                 sp = None
                 base = None
+        else:
+            st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
+            if st is None:
+                self.lgr.debug('getStackBase stack trace is None, wrong pid?')
+                return
+            frames = st.getFrames(2)
+            for f in frames:
+                self.lgr.debug(f.dumpString())
+            next_frame = frames[1]
+            if next_frame.instruct.startswith('bl'):
+                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                base = next_frame.sp
+            else:
+                self.lgr.debug('watchMarks getStackBase, next frame does not look like an lr return, unable to delete temporary stack frame?')
         return sp, base
+
 
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
