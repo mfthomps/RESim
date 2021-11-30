@@ -76,7 +76,7 @@ class findKernelWrite():
 
         ''' handle case where address is in the initial data watch buffer, but only if that is
             not a true kernel write '''
-        if self.checkInitialBuffer(addr):
+        if not self.kernel and self.checkInitialBuffer(addr):
             self.top.skipAndMail()
             return
         if cpu.architecture == 'arm':
@@ -146,10 +146,18 @@ class findKernelWrite():
 
     def vt_handler(self, memory):
         offset = 0
-        if memory.logical_address != self.addr:
-            offset = self.addr - memory.logical_address
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('vt_handler, logical_address is 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, offset, eip, self.cpu.cycles))
+        if memory.logical_address == 0:
+            ''' TBD this would reflect an error or corruption in Simics due to reality leaks.  Replace with error message. '''
+            phys_block = self.cpu.iface.processor_info.logical_to_physical(self.addr, Sim_Access_Write)
+            phys_addr = phys_block.address
+            if phys_addr != memory.physical_address:
+                offset = memory.physical_address = phys_addr
+            self.lgr.debug('vt_handler, physical_address is 0x%x size: %d offset: %d eip: 0x%x cycle: 0x%x' % (memory.physical_address, memory.size, offset, eip, self.cpu.cycles))
+        else:
+            if memory.logical_address != self.addr:
+                offset = memory.logical_address - self.addr
+            self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, eip, self.cpu.cycles))
         if self.kernel_write_break is not None: 
             SIM_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None 
@@ -171,7 +179,7 @@ class findKernelWrite():
             self.size = size 
 
     def revWriteCallback(self, cpu, third, forth, memory):
-        self.lgr.debug('revWriteCallback hit')
+        #self.lgr.debug('revWriteCallback hit third %s  forth %s' % (third, forth))
         if self.broken_hap is not None:
             SIM_run_alone(self.deleteBrokenAlone, self.broken_hap)
             self.broken_hap = None
