@@ -564,6 +564,7 @@ False if the packet is to be rejected.  Note that AFL replay function, e.g., {\t
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Otherwise the value in the {\tt .bashrc} is used.
 \item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
 \item {\tt TARGET\_PORT} -- Port to use on driver fuctions such as {\tt replayAFL}
+\item {\tt STOP\_ON\_READ} -- Cause AFL and replays to stop once the original read/recv call (or select) is hit.
 
 \end{itemize}
 
@@ -1085,9 +1086,13 @@ network socket.  RESim uses that socket to send AFL results of the fuzzing
 session in terms of basic block edges hit.  The {\tt -R} switch tells AFL
 that this is a RESim session.
 
-RESim injects data received from AFL directly into application memory using {\tt injectIO} functions.
+RESim either injects data received from AFL directly into application memory, or it injects the data into
+a kernel read buffer, depending on the setup steps used to configure the fuzzing session.  UDP and single-read TCP applications
+will typically use application memory.  TCP applications that might issue multiple kernel calls to receive
+data should be configured to inject data into kernel buffer.
+
 The setup steps create a snapshot and associated data that dictate the starting state and the location
-to which data will be writting.   The FD used for the recv or read is no longer needed.
+to which data will be written.  
 
 Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  But you must first prepare and
 test a single fuzzing instance as described below.
@@ -1104,12 +1109,10 @@ to name fuzzing artifcats, so make it meaningful.
 Typically, start the system from scratch and use {\tt debugProc} to debug the desired process.  Then issue the {\tt prepInject} command and
 send the service some data (or wait for some other component to do so.)  The data does not matter -- though make it large enough
 to map any page that might be referenced by the maximum read length.  Update your ini file to reflect
-the snapshot name.
-\item Assuming you've created a set of IO files that follow different paths through the service of interest, 
+the snapshot name.  See section \ref{partal-reads} if injection into kernel memory is needed.
+\item Assuming you've created a set of input files that follow different paths through the service of interest, 
 reduce them to the minimal number of bytes needed to function.
-Use the {\tt fuzz} command for each of your IO files to create a minimal set of seeds for AFL. Prior to using the fuzz command,
-use the {\tt fuzzFD} command to create a RESim snapshot of your target as it returns from the first network read, use of fuzzFD is similar
-to that of runToIO.  Use that snapshot when running the fuzz and afl commands.
+Use the {\tt fuzz} command for each of your input files to create a minimal set of seeds for AFL. Prior to using the fuzz command,
 Each run of the fuzz command creates an output file in {\tt /tmp/trimmer}.  You can run the fuzz command multiple times from the same 
 RESim session (it returns to the original IO state.) 
 \item Copy those trimmer files into the AFL seed directory for this target.
@@ -1144,16 +1147,10 @@ AFL is organized as a file fuzzer, and it is up to the user to adapt it (or the 
 Our fork of AFL uses networking instead of files to provide data to the RESim environment.
 AFL generates fuzzed data.  RESim injects this data directly into the target memory to at a point where the target has returned from a recv syscall.
 For single UDP packets, we simply truncate the AFL data to conform to expected UDP packet size (trusting that AFL will not focus future resources on fuzzing 
-truncated data.)  
-
+truncated data.)    For multiple packets, RESim catches subsequent calls to recv, injects the new data, adjusts the size in the
+return register and skips execution foward to the return from the system call.
 Handling multiple packets currently requires that we assume the recv calls are made from a common user space address, and
-the returns from recv all end up a the same user space address.  This seems a safe assumption for most applications.  Our
-approach is to stop at the recv call, then set the EIP to the return value and inject the next bunch of data.
-
-**TBD** How to skip over calls to select for multiple UDP or TCP packets?  Handle ioctl calls to read number of bytes?
-Given the prevalence of programmers who treat tcp as a packet transport mechanism, how to get fuzzing to take send size into account?
-Record user space addresses of select and ioctl, break on those and fudge values?  Gate code tends to be shared within a process, so should be reliable.
-Select will need to parse input set to see if our FD is requested, other sets will have to be fudged?
+the returns from recv all end up a the same user space address.  This seems a safe assumption for most applications.  
 
 Splitting multiple UDP packets for each coverage session currently takes one of two approaches.  If the application is known
 to have a fixed UDP header, e.g., RrUdP, then we can split AFL data at those strings using the {\tt AFL\_UDP\_HEADER} environment
@@ -1163,44 +1160,48 @@ packets, which should cause AFL
 to see reduced coverage for such data sets.
 
 The more challenging case is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
-minimum size is 1400 bytes, a 2 byte sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
+minimum size is 1400 bytes, a 2 packet sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
 
 \subsection{Fuzzing TCP}
-Use the {\tt aflTCP} command to start a session to fuzz TCP.  When setting up the snapshot, use a driver computer rather than
+Use the {\tt aflTCP} command (or preferrably the {\tt -t} switch on the {\tt runAFL} command) to start a session to fuzz TCP.  
+When setting up the snapshot, use a driver computer rather than
 real networks, e.g, with netcat.  Otherwise undefined behavior will result, e.g. if the process tries to send to the socket.
+TCP sessions initialized using the {\tt prepInject} command assume the application gets its data from a single read call to the kernel.
+Applications that depend on the kernel to provide buffered input, e.g., character-at-a-time reads, may use the ioctl
+system call to manage the buffering.  If ioctl is used, then RESim can inject data directly into the kernel read buffer.  
+Currently, the analyst is responsible for determining if the an application might require ioctl/select support, and if so, use the
+{\tt prepInjectWatch} operation to configure sessions for injection into kernel buffers as described in section \ref{partial-reads} 
 
-If the {\tt prepInject} command captures a read of one byte, the system will assume single byte reads of data into incremented addresses.
-On playback or in AFL, the first byte will be written to the initial address, and then as each read system call is hit, subsequent bytes
-are written to incrementing addresses.
+Note that while kernel data injection may provide the appearance of generating data for multiple application calls to the kernel, in practice
+many programs treat TCP as an application level packet delivery system, and depend on packetizing side effects.  Consider the case were a client
+send a command to the server, waits for a reply and then sends another command.  A developer might implement the server while assuming only a
+single command would be seen with each read.
 
-\subsection{State of the target system}
+\subsubsection{Partial reads}
+\label{partial-reads}
+Consider an application that does not read all data available from an interface, e.g., one that reads a character at a time from the kernel.  
+Such an application may violate assumptions made when injecting data directly into application memory, e.g., the assumption that the application
+will read all necessary data in a single read.  For example, a non-conformant application may end up hanging on a {\tt select} call because
+the kernel does not know there is more data to inject into the application memory.  Another proplem with partial reads that they would break
+the use of {\tt injectIO} since each injection into application memory resets the origin used with reverse execution.
+
+The {\tt prepInjectWatch} operation can be used to
+prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes the application uses
+ioctl to determine who much data is in the kernel buffer.
+
+TBD: add select/ioctl syscall haps to the playAFL function to catch use of those calls when analyst is assuming a single-read model.  Note however
+we don't have the FD of the read.
+
+\subsubsection{State of the target system}
 Stateful services such as FTP typically require some amount of interaction to get the process into the state at which you'd like to fuzz it.
 In the example of FTP, this may include logging in, e.g., as \textit{anonymous}, and issuing the PORT command.  Keeping with the FTP example,
 you would create a driver component and ssh to that as part of the setup.  If you wish to fuzz commands that use PORT, e.g, LIST, you would
 login to the ftp server and then stop the simulation.  Knowing that a command such as LIST will first send the port command, you would use
-{\tt prepInject} with {\tt count=2} to pause the simulation after it has read first the PORT directive and then the LIST directive.  The fuzzing
-injectiion would then be overwritting the LIST directive.
+{\tt prepInject} with {\tt count=2} to pause the simulation after it has first read the PORT directive and then the LIST directive.  The fuzzing
+injection would then be overwritting the LIST directive.
 
-Using AFL to fuzz a sequence of FTP commands is not currenty possible...
-Establish a delimiter, similar to the UDP header.  An inject file might look like:
-\begin{verbatim}
-CMD1
-DELIM
-CMD2
-DELIM
-CMD3
-\end{verbatim}
-RESim would break up the input stream from AFL just as it does for UDP packets.
-With FTP, there are not a lot of state transistion beyond PORT/PASV type commands,
-and those values must be precise and thus are perhaps best establish as part of the
-initial state.
+Using AFL to fuzz a sequence of FTP commands is not currenty possible.
 
-\subsection{Partial reads}
-Consider an application that reads a character at a time from the kernel.  While data injection into the application buffer
-works fine for AFL sessions and coverage replays, it does not support reverse execution and thus hobbles use of injectIO.
-UDP sessions can be handled using the replayAFL operation that relies on the driver to send the desired UDP packet.  Reproducing
-this function with TCP is more challenging due to application protocols.  The {\tt prepInjectWatch} operation can be used to
-prepare snapshots to inject data directly into the kernel buffer instead of into application memory.
 
 \subsection{Packet filters}
 Sometimes you may wish to focus the fuzzing on a specific code path determined by data within the packet.  This may be of particular
@@ -1936,9 +1937,15 @@ on the intervening blocking.  Altering kernel buffer pointers avoids some of tho
 for use by AFL or data tracking must then include the address of the kernel buffer, and the addresses of the two pointer
 values that the kernel references when responding to read calls.  Each are found by using reverse data tracking within the
 prepInjectWatch command, which is intended to be used after the analyst does a trackIO and observes the system calls.
-Current support assumes a call to ioctl followed by a read.  The stapshot will be made prior to the call to ioctl.  RESim
+Current support assumes a call to ioctl followed by a read.  The snapshot will be made prior to the call to ioctl.  RESim
 back traces the return value from ioctl to get the pointer addresses, and it backtraces the read data to get the kernel
 read buffer.  The WriteData module then uses these addresses to modify the kernel for each data injection.
+
+Note that injection into kernel buffers assumes ioctl and read counts less than the length...
+
+\section{Troubleshooting}
+Syscall haps for the default context and the RESim context can co-exist.  The presence of syscall log entries does not
+mean that all the syscalls you intend to catch are being caught.
 
 \end{appendices}
 \end{document}
