@@ -2222,9 +2222,9 @@ class GenMonitor():
         else:
             pid_list = self.context_manager[self.target].getThreadPids()
             prec = Prec(cpu, None, pid_list, who='to text')
+        prec.debugging = True
         ''' NOTE obscure use of flist to determine if SO files are tracked '''
         if flist is None:
-            prec.debugging = True
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
             flist = [f1]
 
@@ -2446,7 +2446,7 @@ class GenMonitor():
                 self.call_traces[self.target][call] = the_syscall
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
-            skip_calls = ['select', 'pselect', '_newselect']
+            skip_calls = ['select', 'pselect6', '_newselect']
             for pid in list(frames):
                 if frames[pid] is None:
                     self.lgr.error('frames[%d] is None' % pid)
@@ -2481,7 +2481,7 @@ class GenMonitor():
         cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        calls = ['read', 'socketcall', 'select', '_newselect']
+        calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
             for scall in net.readcalls:
