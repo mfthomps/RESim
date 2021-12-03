@@ -55,6 +55,7 @@ class RegisterModType():
     ''' pursuing taint via other means '''
     BAIL = 4
     def __init__(self, value, mod_type, src_reg=None):
+        ''' may be a reg name or an address'''
         self.value = value
         self.mod_type = mod_type
         self.src_reg = None
@@ -848,8 +849,8 @@ class reverseToCall():
                         op1, op0 = self.decode.getOperands(instruct[1])
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
                         #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
-                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg):
-                            self.lgr.debug('cycleRegisterMod at %x, we may done, type is unknown' % eip)
+                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
+                            self.lgr.debug('cycleRegisterMod at %x, we be may done, type is unknown' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
@@ -860,6 +861,12 @@ class reverseToCall():
                                 if addr is not None:
                                     self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
+                            elif mn.startswith('xchg'):
+                                if self.decode.regIsPart(op1, self.reg):
+                                    retval = RegisterModType(op0, RegisterModType.REG)
+                                else:
+                                    retval = RegisterModType(op1, RegisterModType.REG)
+
                             elif mn.startswith('mov') and self.decode.isReg(op1):
                                 self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
@@ -1060,6 +1067,11 @@ class reverseToCall():
                    self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                    self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
                    return 
+            elif mn == 'xchg':
+                self.lgr.debug('followTaint, is xchg, track %s' % reg_mod_type.value)
+                self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
+                return
+             
             self.lgr.debug('followTaint, not a move, we are stumped')
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
             self.top.skipAndMail()
@@ -1070,7 +1082,7 @@ class reverseToCall():
             self.cleanup(None)
             self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
 
-        elif self.decode.isReg(op1) and not self.decode.isIndirect(op1):
+        elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
