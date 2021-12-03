@@ -79,7 +79,7 @@ class PrepInject():
 
     def instrumentIO(self, callname):
         self.lgr.debug("in instrument IO, callname is %s" % callname);
-        if callname.startswith('re'):
+        if callname.startswith('re') or callname == 'socketcall':
             SIM_run_alone(self.instrumentAlone, None)
         elif 'select' in callname:
             SIM_run_alone(self.instrumentSelect, None)
