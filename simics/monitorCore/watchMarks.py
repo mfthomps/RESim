@@ -185,6 +185,15 @@ class InetAddrMark():
     def getMsg(self):
         return self.msg
 
+class InetNtopMark():
+    def __init__(self, dest, count, the_str):
+        self.dest = dest    
+        self.count = count    
+        self.msg = 'InetAddr %s dest 0x%x len %d' % (the_str, dest, count)
+
+    def getMsg(self):
+        return self.msg
+
 class LenMark():
     def __init__(self, src, count):
         self.src = src    
@@ -350,7 +359,7 @@ class WatchMarks():
         cycles = self.cpu.cycles
         if recv_addr is not None:
             cycles=cycles+1
-        self.addWatchMark(ip, cm, cycles=cycles)
+        self.addWatchMark(cm, cycles=cycles)
         if recv_addr is None:
             self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s' % (ip, cycles, msg))
         else:
@@ -363,7 +372,7 @@ class WatchMarks():
     def memoryMod(self, start, length, trans_size, addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         dm = DataMark(addr, start, length, None, trans_size, modify=True)
-        self.addWatchMark(ip, dm)
+        self.addWatchMark(dm)
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
     def dataRead(self, addr, start, length, cmp_ins, trans_size): 
@@ -371,7 +380,7 @@ class WatchMarks():
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip:
             dm = DataMark(addr, start, length, cmp_ins, trans_size)
-            self.addWatchMark(ip, dm)
+            self.addWatchMark(dm)
             self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         else:
@@ -383,7 +392,7 @@ class WatchMarks():
                     #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
                     dm = DataMark(addr, start, length, cmp_ins, trans_size)
-                    self.addWatchMark(ip, dm)
+                    self.addWatchMark(dm)
                     self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
 
@@ -447,7 +456,8 @@ class WatchMarks():
         return retval
         
                 
-    def addWatchMark(self, ip, mark, cycles=None):
+    def addWatchMark(self, mark, cycles=None):
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if cycles is None:
             cycles = self.cpu.cycles
         wm = self.WatchMark(cycles, self.call_cycle, ip, mark)
@@ -485,39 +495,34 @@ class WatchMarks():
 
 
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sp, base = self.getStackBase(dest)
         cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, base=base, sp=sp)
-        self.lgr.debug('watchMarks copy 0x%x %s' % (ip, cm.getMsg()))
+        self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
-        wm = self.addWatchMark(ip, cm)
+        wm = self.addWatchMark(cm)
         return wm
         
 
     def memset(self, dest, length, buf_start):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sm = SetMark(dest, length, buf_start, self.lgr)
-        self.addWatchMark(ip, sm)
-        self.lgr.debug('watchMarks memset 0x%x %s' % (ip, sm.getMsg()))
+        self.addWatchMark(sm)
+        self.lgr.debug('watchMarks memset %s' % (sm.getMsg()))
 
     def kernel(self, addr, count, frame):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         callnum = self.mem_utils.getCallNum(self.cpu)
         fd = frame['param1']
         km = KernelMark(addr, count, callnum, fd)
-        self.addWatchMark(ip, km)
-        self.lgr.debug('watchMarks kernel 0x%x %s' % (ip, km.getMsg()))
+        self.addWatchMark(km)
+        self.lgr.debug('watchMarks kernel %s' % (km.getMsg()))
 
     def kernelMod(self, addr, count, frame):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         callnum = self.mem_utils.getCallNum(self.cpu)
         fd = frame['param1']
         km = KernelModMark(addr, count, callnum, fd)
-        self.addWatchMark(ip, km)
-        self.lgr.debug('watchMarks kernelMod 0x%x %s' % (ip, km.getMsg()))
+        self.addWatchMark(km)
+        self.lgr.debug('watchMarks kernelMod %s' % (km.getMsg()))
 
     def compare(self, fun, dest, src, count, buf_start):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if count > 0:
             dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
@@ -531,118 +536,108 @@ class WatchMarks():
             dst_str = ''
             src_str = ''
         cm = CompareMark(fun, dest, src, count, dst_str, src_str, buf_start) 
-        self.addWatchMark(ip, cm)
-        self.lgr.debug('watchMarks compare (%s) 0x%x %s' % (fun, ip, cm.getMsg()))
+        self.addWatchMark(cm)
+        self.lgr.debug('watchMarks compare (%s) %s' % (fun, cm.getMsg()))
 
     def strchr(self, start, the_chr, count):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cm = StrChrMark(start, the_chr, count)
         self.removeRedundantDataMark(start)
-        self.addWatchMark(ip, cm)
-        self.lgr.debug('watchMarks strchr 0x%x %s' % (ip, cm.getMsg()))
+        self.addWatchMark(cm)
+        self.lgr.debug('watchMarks strchr %s' % (cm.getMsg()))
 
     def strtoul(self, src):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cm = StrtousMark(src)
-        self.addWatchMark(ip, cm)
-        self.lgr.debug('watchMarks strtous 0x%x %s' % (ip, cm.getMsg()))
+        self.addWatchMark(cm)
+        self.lgr.debug('watchMarks strtous %s' % (cm.getMsg()))
 
     def sscanf(self, src, dest, count, buf_start):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sp, base = self.getStackBase(dest)
         sm = ScanMark(src, dest, count, buf_start, sp, base)        
-        self.addWatchMark(ip, sm)
-        self.lgr.debug('watchMarks sscanf 0x%x %s' % (ip, sm.getMsg()))
-
+        wm = self.addWatchMark(sm)
+        self.lgr.debug('watchMarks sscanf %s' % (sm.getMsg()))
+        return wm
 
     def strlen(self, src, count):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         lm = LenMark(src, count)        
-        self.addWatchMark(ip, lm)
-        self.lgr.debug('watchMarks strlen 0x%x %s' % (ip, lm.getMsg()))
+        self.addWatchMark(lm)
+        self.lgr.debug('watchMarks strlen %s' % (lm.getMsg()))
 
     def sprintf(self, fun, src, dest, count, buf_start):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         sp, base = self.getStackBase(dest)
         lm = SprintfMark(fun, src, dest, count, buf_start, sp, base)        
-        self.addWatchMark(ip, lm)
-        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
+        wm = self.addWatchMark(lm)
+        self.lgr.debug('watchMarks %s %s' % (fun, lm.getMsg()))
+        return wm
 
     def fprintf(self, fun, src):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         lm = FprintfMark(fun, src)
-        self.addWatchMark(ip, lm)
-        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, lm.getMsg()))
+        wm = self.addWatchMark(lm)
+        self.lgr.debug('watchMarks %s %s' % (fun, lm.getMsg()))
+        return wm
 
     def fwrite(self, fun, src, count):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = FwriteMark(fun, src, count)
-        self.addWatchMark(ip, wm)
-        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, wm.getMsg()))
+        self.addWatchMark(wm)
+        self.lgr.debug('watchMarks %s %s' % (fun, wm.getMsg()))
 
     def glob(self, fun, src, count):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = GlobMark(fun, src, count)
-        self.addWatchMark(ip, wm)
-        self.lgr.debug('watchMarks %s 0x%x %s' % (fun, ip, wm.getMsg()))
+        self.addWatchMark(wm)
+        self.lgr.debug('watchMarks %s %s' % (fun, wm.getMsg()))
+
+    def inet_addr(self, src, count, the_string):
+        xm = InetAddrMark(src, count, the_string)        
+        self.addWatchMark(xm)
+        self.lgr.debug('watchMarks inet_addr %s' % (xm.getMsg()))
+
+    def inet_ntop(self, dest, count, the_string):
+        xm = InetNtopMark(dest, count, the_string)        
+        self.lgr.debug('watchMarks inet_ntop %s' % (xm.getMsg()))
+        wm = self.addWatchMark(xm)
+        return wm
 
     def xmlGetProp(self, src, count, the_string, dest):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         result = 'Not found'
         if dest != 0:
             result = self.mem_utils.readString(self.cpu, dest, 20)
         xm = XMLPropMark(src, count, the_string, result)        
-        self.addWatchMark(ip, xm)
-        self.lgr.debug('watchMarks xmlGetProp 0x%x %s' % (ip, xm.getMsg()))
-
-    def inet_addr(self, src, count, the_string):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        xm = InetAddrMark(src, count, the_string)        
-        self.addWatchMark(ip, xm)
-        self.lgr.debug('watchMarks inet_addr 0x%x %s' % (ip, xm.getMsg()))
+        self.addWatchMark(xm)
+        self.lgr.debug('watchMarks xmlGetProp %s' % (xm.getMsg()))
 
     def iterator(self, fun, src, buf_start):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         im = IteratorMark(fun, src, buf_start)
-        self.addWatchMark(ip, im)
-        self.lgr.debug('watchMarks iterator 0x%x %s' % (ip, im.getMsg()))
+        self.addWatchMark(im)
+        self.lgr.debug('watchMarks iterator %s' % (im.getMsg()))
 
     def malloc(self, addr, size):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         mm = MallocMark(addr, size)
-        self.addWatchMark(ip, mm)
-        self.lgr.debug('watchMarks malloc 0x%x %s' % (ip, mm.getMsg()))
+        self.addWatchMark(mm)
+        self.lgr.debug('watchMarks malloc %s' % (mm.getMsg()))
     def free(self, addr):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         fm = FreeMark(addr)
-        self.addWatchMark(ip, fm)
-        self.lgr.debug('watchMarks free 0x%x %s' % (ip, fm.getMsg()))
+        self.addWatchMark(fm)
+        self.lgr.debug('watchMarks free %s' % (fm.getMsg()))
 
     def freeXMLDoc(self):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         fm = FreeXMLMark()
-        self.addWatchMark(ip, fm)
+        self.addWatchMark(fm)
 
     def xmlParseFile(self, dest, count):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         fm = XMLParseFileMark(dest, count)
-        self.addWatchMark(ip, fm)
+        self.addWatchMark(fm)
       
     def getToken(self, src, dest, the_string):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         fm = GetTokenMark(src, dest, the_string)
-        self.addWatchMark(ip, fm)
+        self.addWatchMark(fm)
 
     def strPtr(self, dest, fun):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         the_string = self.mem_utils.readString(self.cpu, dest, 40)
         fm = StrPtr(fun, the_string)
-        self.addWatchMark(ip, fm)
+        self.addWatchMark(fm)
 
     def returnInt(self, count, fun):
-        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         fm = ReturnInt(fun, count)
-        self.addWatchMark(ip, fm)
+        self.addWatchMark(fm)
 
     def clearWatchMarks(self): 
         self.lgr.debug('watchMarks clearWatchMarks')
