@@ -217,12 +217,15 @@ class WriteData():
             self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0:
-            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            '''
+            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
-            #SIM_break_simulation('broken offset')
+            '''
+            #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
+            SIM_break_simulation('broken offset')
             #SIM_run_alone(self.delCallHap, None)
         else:
             frame = self.top.frameFromRegs(self.cpu)
@@ -235,7 +238,7 @@ class WriteData():
             else:
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
-                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 #print('did write')
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
