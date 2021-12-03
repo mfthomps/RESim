@@ -1450,7 +1450,7 @@ class Syscall():
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
 
-        elif callname == 'select' or callname == '_newselect':        
+        elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':        
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
