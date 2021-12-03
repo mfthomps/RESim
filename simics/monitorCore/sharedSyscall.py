@@ -759,9 +759,12 @@ class SharedSyscall():
                     trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
 
         elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':
-            trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.select_info.getString(), eax))
-            if self.fool_select is not None and eax > 0:
-                self.modifySelect(exit_info.select_info, eax)
+            if exit_info.select_info is not None:
+                trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.select_info.getString(), eax))
+                if self.fool_select is not None and eax > 0:
+                    self.modifySelect(exit_info.select_info, eax)
+            else:
+                trace_msg = ('\treturn from %s pid:%d NO select info result: %d\n' % (callname, pid, eax))
         elif callname == 'poll' or callname == 'ppoll':
             trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.poll_info.getString(), eax))
         elif callname == 'vfork':
