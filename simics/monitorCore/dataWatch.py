@@ -89,16 +89,71 @@ class DataWatch():
         ''' used by writeData when simulating responses from ioctl '''
         self.total_read = 0
 
+        self.disabled = True
+
+
+    def addFreadAlone(self, dumb):
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
+        SIM_break_simulation('handle memstuff')
+
+    def checkFread(self, start, length):
+        retval = False
+        st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+        if st is None:
+            self.lgr.debug('stack trace is None, wrong pid?')
+            return False
+        #self.lgr.debug('%s' % st.getJson()) 
+        # look for memcpy'ish... TBD generalize 
+        frames = st.getFrames(20)
+        for f in frames:
+            if f.fun_name == 'fread':
+                ret_addr = f.ret_addr
+                called_from = f.ip
+                self.mem_something = self.MemSomething(f.fun_name, start, f.ret_addr, start, None, None, 
+                      f.ip, None, length, start)
+                self.lgr.debug('checkFread got fread')
+                SIM_run_alone(self.addFreadAlone, None)
+                retval = True
+                break
+        return retval
+
+    def freadCallback(self, dumb, one, exception, error_string):
+        self.lgr.debug('dataWatch freadCallback')
+        if self.call_stop_hap is not None:
+            cycle_dif = self.cycles_was - self.cpu.cycles
+            #self.lgr.debug('hitCallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
+            SIM_delete_breakpoint(self.call_break)
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.call_hap)
+            self.call_stop_hap = None
+            self.call_hap = None
+        else:
+            return
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        start, dumb2, dumb = self.getCallParams(sp)
+        self.lgr.debug('freadCallback call setRange with start 0x%x len %d' % (start, self.mem_something.length))
+        msg = 'fread to 0x%x %d bytes' % (start, self.mem_something.length)
+        self.setRange(start, self.mem_something.length, msg=msg)
+        self.top.restoreDebugBreaks(was_watching=True)
+        self.watch()
+        SIM_run_alone(SIM_run_command, 'c')
+
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None, fd=None):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
+        if self.disabled:
+            return
         if max_len is None:
             my_len = length
         else:
             my_len = max_len
-        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
+
+        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
         if fd is not None:
             self.total_read = self.total_read + length
+            if self.checkFread(start, length):
+                self.lgr.debug('dataWatch setRange was fread, return for now')
+                return
         if not self.use_back_stop and back_stop:
             self.use_back_stop = True
             self.lgr.debug('DataWatch, backstop set, start data session')
@@ -866,14 +921,19 @@ class DataWatch():
             else:
                 self.lgr.error('hitCallStopHap, latest_cycle is None')
        
-    def vt_handler(self, memory):
-        location = memory.physical_address
+    def vt_handler(self, vt_stuff):
+        location = vt_stuff.memory.physical_address
         self.lgr.debug('vt_handler at 0x%x set call_stop_hap cycle: 0x%x' % (location, self.cpu.cycles))
         SIM_run_alone(self.deleteGhostStopHap, None)
-        SIM_run_alone(self.setCallStopAlone, None)
+        SIM_run_alone(self.setCallStopAlone, vt_stuff.alt_callback)
         SIM_break_simulation('vt_handler')
 
-    def hitCallCallback(self, cpu, third, forth, memory):
+    class VTStuff():
+        def __init__(self, memory, alt_callback):
+            self.memory = memory
+            self.alt_callback = alt_callback
+
+    def hitCallCallback(self, alternate_callback, third, forth, memory):
         if self.call_hap is not None:
             dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
             if self.cpu.cycles > self.cycles_was:
@@ -881,13 +941,18 @@ class DataWatch():
                 pass
             else:
                 self.lgr.debug('hitCallCallback pid:%d memory 0x%x  cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
-            VT_in_time_order(self.vt_handler, memory)
+            vt_stuff = self.VTStuff(memory, alternate_callback)
+            VT_in_time_order(self.vt_handler, vt_stuff)
 
-    def setCallStopAlone(self, dumb):
+    def setCallStopAlone(self, alt_callback):
         self.lgr.debug('dataWatch setCalStopAlone')
-        self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.hitCallStopHap, None)
+        if alt_callback is None:
+            callback = self.hitCallStopHap
+        else:
+            callback = alt_callback
+        self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", callback, None)
 
-    def revAlone(self, dumb):
+    def revAlone(self, alternate_callback=None):
         self.top.removeDebugBreaks(immediate=True)
         self.stopWatch(immediate=True)
         phys_block = self.cpu.iface.processor_info.logical_to_physical(self.mem_something.called_from_ip, Sim_Access_Read)
@@ -899,7 +964,7 @@ class DataWatch():
         #self.call_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
         cell = self.top.getCell()
         self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.called_from_ip, 1, 0)
-        self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.hitCallCallback, self.cpu, self.call_break)
+        self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.hitCallCallback, alternate_callback, self.call_break)
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
         self.save_cycle = self.cpu.cycles - 1
         self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
@@ -922,7 +987,7 @@ class DataWatch():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.ghost_stop_hap)
             self.ghost_stop_hap = None
 
-    def memstuffStopHap(self, dumb, one, exception, error_string):
+    def memstuffStopHap(self, alternate_callback, one, exception, error_string):
         ''' We may had been in a memsomething and have stopped.  Set a break on the address 
             of the call to the function and reverse. '''
         if self.stop_hap is not None:
@@ -932,7 +997,7 @@ class DataWatch():
         else:
             return
         self.lgr.debug('memstuffStopHap, reverse to call at ip 0x%x' % self.mem_something.called_from_ip)
-        SIM_run_alone(self.revAlone, None)
+        SIM_run_alone(self.revAlone, alternate_callback)
 
     def getStrLen(self, src):
         addr = src
@@ -971,7 +1036,7 @@ class DataWatch():
             #SIM_break_simulation('handle memstuff')
             SIM_run_alone(self.runToReturnAlone, None)
         else: 
-            ''' walk backwards to the call, and get the parameters.  TBD, why not do same for strcpy and strcmp? '''
+            ''' run back to the call '''
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.memstuffStopHap, None)
             SIM_break_simulation('handle memstuff')
@@ -1429,6 +1494,7 @@ class DataWatch():
         self.watch(break_simulation=False)
         ''' what to do when backstop is reached (N cycles with no activity '''
         self.setCallback(callback)
+        self.disabled = False
 
     def firstBufferAddress(self):
         return self.watchMarks.firstBufferAddress()
@@ -1693,3 +1759,6 @@ class DataWatch():
 
     def setMaxMarks(self, marks):
         self.max_marks = marks
+
+    def enable(self):
+        self.disabled = False
