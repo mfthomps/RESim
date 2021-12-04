@@ -10,7 +10,7 @@ import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False):
+             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False, crashes=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -55,7 +55,10 @@ class PlayAFL():
             self.afl_list = [relative]
             self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
         else:
-            self.afl_list = aflPath.getTargetQueue(target, get_all=True)
+            if not crashes:
+                self.afl_list = aflPath.getTargetQueue(target, get_all=True)
+            else:
+                self.afl_list = aflPath.getTargetCrashes(target)
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
         self.stop_hap = None
@@ -77,6 +80,7 @@ class PlayAFL():
         self.bnt_list = []
         self.pid = self.top.getPID()
         self.stop_on_break = False
+        self.exit_list = []
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -203,7 +207,7 @@ class PlayAFL():
             SIM_run_command('c')
         else:
             ''' did all sessions '''
-            if self.coverage is not None and self.findbb is None:
+            if self.coverage is not None and self.findbb is None and not self.afl_mode:
                 hits = self.coverage.getHitCount()
                 self.lgr.debug('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
                 hits_path = self.coverage.getHitsPath()
@@ -225,6 +229,16 @@ class PlayAFL():
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
             cli.quiet_run_command('restore-snapshot name = origin')
+            if len(self.exit_list)>0:
+                print('%d Sessions that called exit:' % len(self.exit_list))
+                for exit in sorted(self.exit_list):
+                    print(exit)
+                print('\n\n  Sessions that did not exit:')
+        
+                for item in sorted(self.afl_list):
+                    if item not in self.exit_list:
+                        print(item)
+                
 
     def getHitsPath(self, index):
         queue_dir = os.path.dirname(self.afl_list[index])
@@ -239,6 +253,7 @@ class PlayAFL():
 
     def recordHits(self, hit_bbs):
         ''' hits will go in a "coverage" directory along side queue, etc. '''
+        self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
         fname = self.getHitsPath(self.index)
         with open(fname, 'w') as fh:
@@ -272,6 +287,8 @@ class PlayAFL():
                         self.bnt_list.append((self.afl_list[self.index], packet_num))
                 else:
                     self.recordHits(hit_bbs)
+                if self.coverage.didExit():
+                    self.exit_list.append(self.afl_list[self.index])
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, True)
