@@ -63,19 +63,29 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, modify=False):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, modify=False, ad_hoc=False, dest=None):
         self.addr = addr
+        ''' offset into the buffer starting at start '''
         if addr is not None:
             self.offset = addr - start
         else:
             self.offset = None
+        ''' start is the start of the accessed buffer '''
         self.start = start
+        ''' length of the accessed buffer '''
         self.length = length
         self.cmp_ins = cmp_ins
-        self.end_addr = None
+        ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
+        if ad_hoc:
+            self.end_addr = addr+trans_size-1
+        else:
+            self.end_addr = None
         self.loop_count = 0
         self.modify = modify
+        self.ad_hoc = ad_hoc
         self.trans_size = trans_size
+        self.dest = dest
+        print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
         if self.start is None:
@@ -86,6 +96,13 @@ class DataMark():
             mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
         elif self.end_addr is None:
             mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+        elif self.ad_hoc:
+            length = self.end_addr - self.addr + 1
+            if self.start is not None:
+                offset = self.addr - self.start
+                mark_msg = 'Copy %d bytes from 0x%x to 0x%x. Ad-hoc (from offset %d into buffer at 0x%x)' % (length, self.addr, self.dest, offset, self.start)
+            else:
+                mark_msg = 'Copy %d bytes from 0x%x to 0x%x. Ad-hoc (Source buffer starts before known buffers!)' % (length, self.addr, self.dest)
         else:
             length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
@@ -375,14 +392,26 @@ class WatchMarks():
         self.addWatchMark(dm)
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, cmp_ins, trans_size): 
+    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         ''' TBD generalize for loops that make multiple refs? '''
-        if ip not in self.prev_ip:
+        if ip not in self.prev_ip and not ad_hoc:
             dm = DataMark(addr, start, length, cmp_ins, trans_size)
             self.addWatchMark(dm)
             self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
+        if ad_hoc:
+            pm = self.mark_list[-1]
+            if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None:
+                self.lgr.debug('dataRead previous mark end_addr 0x%x  addr is 0x%x' % (pm.mark.end_addr, addr))
+            if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+                end_addr = addr + trans_size - 1
+                self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                pm.mark.addrRange(end_addr)
+            else:
+                self.lgr.debug('watchMarks create new data mark for 0x%x, start 0x%x, len %d' % (addr, start, length))
+                dm = DataMark(addr, start, length, cmp_ins, trans_size, ad_hoc=True, dest=dest)
+                self.addWatchMark(dm)
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]

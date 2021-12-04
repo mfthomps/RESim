@@ -88,6 +88,8 @@ class DataWatch():
         self.max_marks = None
         ''' used by writeData when simulating responses from ioctl '''
         self.total_read = 0
+        ''' skip hit on ad_hoc buffer that was just added, and likely not yet executed.'''
+        self.last_ad_hoc = 0
 
         self.disabled = True
 
@@ -163,6 +165,7 @@ class DataWatch():
         for index in range(len(self.start)):
             if self.start[index] != 0:
                 this_end = self.start[index] + self.length[index]
+                self.lgr.debug('dataWatch setRange look for related start 0x%x this_end 0x%x' % (start, this_end))
                 if self.start[index] <= start and this_end >= end:
                     overlap = True
                     #self.lgr.debug('DataWatch setRange found overlap, skip it')
@@ -176,10 +179,12 @@ class DataWatch():
                     self.length[index] = my_len
                     overlap = True
                     break
-                elif start == (this_end+1):
+                elif start == (this_end):
                     self.length[index] = self.length[index]+my_len
-                    #self.lgr.debug('DataWatch extending subrange')
+                    self.lgr.debug('DataWatch extending subrange')
                     overlap = True
+                    self.stopWatch()
+                    self.watch()
                     break
         if not overlap:
             self.start.append(start)
@@ -1070,7 +1075,33 @@ class DataWatch():
         def __init__(self, addr, op_type):
             self.addr = addr 
             self.op_type = op_type 
-    
+
+    def checkMove(self, addr, length, eip, instruct):
+        retval = False
+        if instruct[1].startswith('mov'):
+            op2, op1 = self.decode.getOperands(instruct[1])
+            if self.decode.isReg(op1):
+                #self.lgr.debug('dataWatch checkMove is mov to reg %s' % op1)
+                our_reg = op1
+                next_ip = eip
+                next_instruct = instruct
+                for i in range(5):
+                    next_ip = next_ip + next_instruct[0]
+                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                    op2, op1 = self.decode.getOperands(next_instruct[1])
+                    #self.lgr.debug('datawatch checkMove, inst is %s' % next_instruct[1])
+                    if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and op2 in our_reg:
+                        #self.lgr.debug('dataWatch checkMove, maybe op1 is %s' % op1)
+                        dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                        if dest_addr is not None:
+                            if dest_addr != addr:
+                                #self.lgr.debug('dataWatch checkMove would add address 0x%x' % dest_addr)
+                                self.setRange(dest_addr, length)
+                                self.last_ad_hoc=dest_addr
+                                retval = True
+                            break
+        return retval
+                    
     def finishReadHap(self, op_type, trans_size, eip, addr, length, start, pid, index=None):
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
@@ -1099,7 +1130,11 @@ class DataWatch():
                     buf_start = self.findRange(edi)
                     self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
                 else: 
-                    self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
+                    ad_hoc = False
+                    if self.checkMove(addr, trans_size, eip, instruct):
+                        ad_hoc = True
+                    #self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r' % (addr, ad_hoc))
+                    self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size, ad_hoc=ad_hoc, dest=self.last_ad_hoc)
                 if self.break_simulation:
                     SIM_break_simulation('DataWatch read data')
 
@@ -1161,6 +1196,10 @@ class DataWatch():
             return
         if len(self.read_hap) == 0:
             return
+        if op_type != Sim_Trans_Load:
+            if addr == self.last_ad_hoc:
+                ''' we just added this add hoc data move, but had not yet executed the instruction '''
+                return
         self.prev_cycle = self.cpu.cycles
         if op_type != Sim_Trans_Load and addr in self.no_backstop:
             self.start[index] = 0
@@ -1247,6 +1286,7 @@ class DataWatch():
                 #self.lgr.debug('DataWatch readHap not memsomething, reset the watch ')
                 #self.watch()
                 pass
+        ''' NOTE do not get here if found a memsomething '''
         self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
  
        
@@ -1647,7 +1687,7 @@ class DataWatch():
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
-        self.lgr.debug('memsomething begin, max_index %d' % (max_index))
+        #self.lgr.debug('memsomething begin, max_index %d' % (max_index))
         outer_index = None
         prev_fun = None
         for i in range(max_index, -1, -1):
@@ -1656,10 +1696,10 @@ class DataWatch():
                 #self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
                 frame.fun_addr = self.ida_funs.getFun(frame.ip)
             if frame.fun_addr is None:
-                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
                 pass
             else:
-                self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
+                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
                 pass
             if frame.instruct is not None:
                 fun = None
@@ -1684,7 +1724,7 @@ class DataWatch():
                             #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
                 if fun is not None and fun == prev_fun:
                     self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
@@ -1728,10 +1768,10 @@ class DataWatch():
                         retval = self.MemStuff(ret_addr, fun, frame.ip, addr_of_ret_addr)
                         break 
                 else:
-                    if frame.fun_addr is None:
-                        self.lgr.debug('no soap, fun fun_addr is NONE') 
-                    else:
-                        self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
+                    #if frame.fun_addr is None:
+                    #    self.lgr.debug('no soap, fun fun_addr is NONE') 
+                    #else:
+                    #    self.lgr.debug('no soap, fun is <%s> fun_addr 0x%x' % (fun, frame.fun_addr))
                     pass
         return retval
 
