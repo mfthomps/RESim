@@ -54,7 +54,7 @@ class TrackThreads():
         if self.open_syscall is None:
             self.lgr.error('trackThreads startTrack, open_syscall is none')
 
-    def stopSOTrack(self, immediate):
+    def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
         if self.open_syscall is not None:
             #self.lgr.debug('TrackThreads stopTrack stop open trace')
