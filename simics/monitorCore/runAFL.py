@@ -67,9 +67,11 @@ def main():
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    parser.add_argument('-l', '--linear', action='store_true', default=False, help='Use LINEAR addressing for coverage breakpoints.')
     parser.add_argument('-d', '--dead', action='store_true', help='Trial run to identify dead blocks, i.e., those being hit by other threads.')
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
     parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR.')
+    parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -122,6 +124,12 @@ def main():
 
     if args.dead:
         os.environ['ONE_DONE_PARAM3']='TRUE'
+
+    if args.fname is not None: 
+        os.environ['ONE_DONE_PARAM4']=args.fname
+
+    if args.linear:
+        os.environ['ONE_DONE_PARAM5']='TRUE'
 
     if args.max_bytes is not None:
         size_str = '-s %d' % args.max_bytes 
