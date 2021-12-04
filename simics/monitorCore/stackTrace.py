@@ -350,8 +350,8 @@ class StackTrace():
             self.frames[0].ret_to_addr = ret_to_addr
             self.frames[0].fun_addr = cur_fun
             self.frames[0].fun_name = cur_fun_name
-            if cur_fun is not None and ret_to is not None:
-                self.lgr.debug('doX86, set frame 0 ret_to_addr 0x%x  ret_addr 0x%x  fun_addr 0x%x' % (ret_to_addr, ret_to, cur_fun))
+            #if cur_fun is not None and ret_to is not None:
+            #    self.lgr.debug('doX86, set frame 0 ret_to_addr 0x%x  ret_addr 0x%x  fun_addr 0x%x' % (ret_to_addr, ret_to, cur_fun))
             #else:
             #    self.lgr.debug('doX86, set frame 0 ret_to or cur_fun is None')
         
