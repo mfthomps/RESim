@@ -76,6 +76,7 @@ class Coverage():
         self.resim_context = self.context_manager.getRESimContext()
         self.default_context = self.context_manager.getDefaultContext()
         self.jumpers = {}
+        self.did_exit=False
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -138,7 +139,10 @@ class Coverage():
             #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
             #cell = self.cpu.physical_memory
             #bp = SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-            bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
+            if self.afl:
+                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, bb_rel, 1, 0)
+            else:
+                bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, bb_rel, 1, Sim_Breakpoint_Temporary)
         return bp
  
     def cover(self, force_default_context=False, physical=False):
@@ -192,10 +196,10 @@ class Coverage():
                     prev_bp = bp
                     
 
-        #if self.afl or self.force_default_context:
-        #    self.lgr.debug('coverage generated ?? context %d breaks' % (len(self.bp_list)))
-        #else:
-        #    self.lgr.debug('coverage generated %d RESim context breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
+        if self.afl or self.force_default_context:
+            self.lgr.debug('coverage generated ?? context %d breaks' % (len(self.bp_list)))
+        else:
+            self.lgr.debug('coverage generated %d RESim context breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
         self.block_total = len(self.bp_list)
         if len(tmp_list) > 0:
             self.doHapRange(tmp_list)
@@ -204,6 +208,7 @@ class Coverage():
             self.lgr.debug('coverage watchGroupExits')
             self.context_manager.watchGroupExits()
             self.context_manager.setExitCallback(self.recordExit)
+            self.loadExits()
         self.handleUnmapped()
 
     def doHapRange(self, bp_list):
@@ -230,7 +235,7 @@ class Coverage():
                 if pt.ptable_addr not in self.missing_tables:
                     self.missing_tables[pt.ptable_addr] = []
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
-                    #self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (bb_rel, break_num, pt.ptable_addr))
+                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (bb_rel, break_num, pt.ptable_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
                           None, break_num)
@@ -292,7 +297,7 @@ class Coverage():
                         self.lgr.debug('tableHap value is zero, break_num %d' % break_num)
                         return
                    
-                    #self.lgr.debug('tableHap value is 0x%x, add pageHap' % value)
+                    self.lgr.debug('tableHap break %d value is 0x%x, add pageHap' % (break_num, value))
                     bb_index = len(self.bp_list) 
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
@@ -468,7 +473,7 @@ class Coverage():
                 self.prev_loc = cur_loc >> 1
         
     def getTraceBits(self): 
-        #self.lgr.debug('hit count is %d' % self.hit_count)
+        self.lgr.debug('hit count is %d' % self.hit_count)
         return self.trace_bits
 
     def getHitCount(self):
@@ -825,3 +830,29 @@ class Coverage():
                 #self.jumpers[phys_block.address] = jumpers[from_bb]
                 self.jumpers[int(from_bb)] = jumpers[from_bb]
             self.lgr.debug('coverage loaded %d jumpers' % len(self.jumpers))
+
+    def exitHap(self, dumb, third, break_num, memory):
+        self.lgr.debug('coverage exitHap')
+        SIM_break_simulation('coverage existHap')
+        self.did_exit = True
+
+    def didExit(self):
+        return self.did_exit
+
+    def loadExits(self):
+        self.did_exit=False
+        exit_file = 'prog.exit'
+        self.lgr.debug('coverage load exits')
+        if os.path.isfile(exit_file):
+            with open(exit_file) as fh:
+                bp_list = [] 
+                for line in fh:
+                    bb = int(line.strip(),16)
+                    phys_block = self.cpu.iface.processor_info.logical_to_physical(bb, Sim_Access_Execute)
+                    if phys_block.address == 0:
+                        self.lgr.error('loadExists failed to get phy for 0x%x' % bb)
+                        continue
+                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                    self.lgr.debug('loadExits set break on 0x%x, linear 0x%x' % (phys_block.address, bb))
+                    bp_list.append(bp)
+                hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.exitHap, None, bp_list[0], bp_list[-1])
