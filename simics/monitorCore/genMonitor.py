@@ -2686,10 +2686,12 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         else:
             cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-            if not self.context_manager[self.target].amWatching(cur_pid):
-                self.lgr.debug('getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
-                return "{}"
-            pid = cur_pid
+            if pid != cur_pid:
+                if not self.context_manager[self.target].amWatching(cur_pid):
+                    self.lgr.debug('getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
+                    return "{}"
+                else:
+                    pid = cur_pid
         self.lgr.debug('genMonitor getStackTrace pid %d' % pid)
         if pid not in self.stack_base[self.target]:
             stack_base = None
@@ -3679,7 +3681,8 @@ class GenMonitor():
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765, one_done=False):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
-            generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead'''
+            generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
+            fname is to fuzz a library'''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
@@ -3735,10 +3738,10 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False):
-        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode)
+    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False):
+        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
@@ -3749,7 +3752,7 @@ class GenMonitor():
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, 
-              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode)
+              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes)
         if play is not None:
             play.go()
         else:
