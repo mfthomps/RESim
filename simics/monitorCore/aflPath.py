@@ -97,8 +97,25 @@ def getTargetQueue(target, get_all=False):
                 if 'sync:' not in path:
                     afl_list.append(path)
         else:
-            if os.path.isdir(afl_dir):
-                afl_list = [f for f in os.listdir(afl_dir) if os.path.isfile(os.path.join(afl_dir, f))]
+            qdir = os.path.join(afl_dir, 'queue')
+            if os.path.isdir(qdir):
+                afl_list = [f for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
+    return afl_list
+
+def getTargetCrashes(target):
+    afl_list = []
+    afl_output = getAFLOutput()
+    afl_dir = os.path.join(afl_output, target)
+    cpath = os.path.join(afl_dir, 'resim_*', 'crashes', 'id:*')
+    glist = glob.glob(cpath)
+    if len(glist) > 0:
+        #for path in sorted(glist):
+        for path in glist:
+            afl_list.append(path)
+    else:
+        cdir = os.path.join(afl_dir, 'crashes')
+        if os.path.isdir(cdir):
+            afl_list = [f for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
     return afl_list
 
 def getTargetPath(target):
