@@ -366,6 +366,9 @@ class TaskUtils():
             tasks[task_rec_addr] = task
         return tasks
 
+    def recentExitPid(self):
+        return self.exit_pid
+
     def getExitPid(self):
         ''' if we are at or past the point of exit, return the most recently exitied pid. 
             TBD, more robust, multiple PIDs? '''
