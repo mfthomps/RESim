@@ -209,7 +209,7 @@ class WriteData():
         if self.call_hap is None:
             return
         pid = self.top.getPID()
-        if self.stop_on_read:
+        if self.stop_on_read and len(self.in_data) == 0:
             #self.lgr.debug('writeData stop on read')
             SIM_break_simulation('writeData stop on read')
             return
