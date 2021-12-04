@@ -682,9 +682,12 @@ class GenContextMgr():
     def amWatching(self, pid):
         ctask = self.task_utils.getCurTaskRec()
         dumb, comm, cur_pid  = self.task_utils.curProc()
+       
         if pid == cur_pid and (ctask in self.watch_rec_list or len(self.watch_rec_list)==0):
             return True
         elif pid in self.pid_cache:
+            return True
+        elif pid == self.task_utils.recentExitPid():
             return True
         else:
             return False
