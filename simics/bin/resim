@@ -43,6 +43,8 @@ rm -f driver-ready.flag
 # Launch RESim
 #
 if [[ "$2" == -n ]];then
+    export RESIM_DISPLAY=$DISPLAY
+    unset DISPLAY
     ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
 else
     ./simics $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
