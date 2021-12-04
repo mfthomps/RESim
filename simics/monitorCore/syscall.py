@@ -1755,7 +1755,10 @@ class Syscall():
             else: 
                 ida_msg = '%s pid %d' % (callname, pid)
             self.lgr.debug('syscallHap exit of pid:%d' % pid)
-            self.handleExit(pid, ida_msg)
+            if callname == 'exit_group':
+                self.handleExit(pid, ida_msg, exit_group=True)
+            else:
+                self.handleExit(pid, ida_msg)
             self.context_manager.stopWatchPid(pid)
             return
 
@@ -1813,7 +1816,7 @@ class Syscall():
     def unsetDebuggingExit(self):
         self.debugging_exit = False
 
-    def handleExit(self, pid, ida_msg, killed=False, retain_so=False):
+    def handleExit(self, pid, ida_msg, killed=False, retain_so=False, exit_group=False):
             if self.traceProcs is not None:
                 self.traceProcs.exit(pid)
             if killed:
@@ -1830,7 +1833,7 @@ class Syscall():
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
             self.lgr.debug('syscallHap handleExit pid %d last_one %r debugging %d retain_so %r' % (pid, last_one, self.debugging, retain_so))
-            if last_one and self.debugging:
+            if (last_one or exit_group) and self.debugging:
                 if self.debugging_exit:
                     ''' exit before we got to text section '''
                     self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
