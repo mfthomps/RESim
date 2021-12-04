@@ -99,6 +99,8 @@ class InjectIO():
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
 
+        self.dataWatch.enable()
+
     def go(self, no_go_receive=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
             which we assume follows a read, recv, etc.  Then write the dfile content into
