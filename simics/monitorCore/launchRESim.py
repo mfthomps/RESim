@@ -204,6 +204,11 @@ class LaunchRESim():
                 print('DRIVER WILL WAIT')
                 DRIVER_WAIT = True
             #print('assigned %s to %s' % (name, value))
+
+        ''' hack around simics bug generating rafts of x11 traffic '''
+        resim_display = os.getenv('RESIM_DISPLAY')
+        if resim_display is not None:
+            os.environ['DISPLAY'] = resim_display
         
         RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
         self.SIMICS_VER = os.getenv('SIMICS_VER')
