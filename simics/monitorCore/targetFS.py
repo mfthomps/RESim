@@ -7,7 +7,8 @@ class TargetFS():
     def find(self, name):
         for root, dirs, files in os.walk(self.root_prefix):
             if name in files:
-                return os.path.join(root, name)
+                retval = os.path.join(root, name)
+                return os.path.abspath(retval)
         return None
 
     def getRootPrefix(self):
@@ -45,6 +46,20 @@ class TargetFS():
                     retval = flist[0]
                 else:
                     lgr.debug('TargetFS getFull, no glob at %s' % (full+'*'))
+                    ''' try basename '''
+                    base = os.path.basename(path)
+                    fun_file = base+'.funs'
+                    lgr.debug('is relative, fun_file %s' % fun_file)
+                    full_fun = self.find(fun_file)
+                    if full_fun is not None:              
+                        retval = os.path.join(os.path.dirname(full_fun), base)
+                        lgr.debug('getFull found file %s' % retval)
+                    else:
+                        retval = self.find(base)
+                        lgr.debug('getFull used find found file %s' % retval)
+
             else:
                 retval = full
+        if retval is not None:
+            retval = os.path.abspath(retval)
         return retval
