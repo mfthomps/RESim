@@ -165,7 +165,7 @@ class DataWatch():
         for index in range(len(self.start)):
             if self.start[index] != 0:
                 this_end = self.start[index] + self.length[index]
-                self.lgr.debug('dataWatch setRange look for related start 0x%x this_end 0x%x' % (start, this_end))
+                #self.lgr.debug('dataWatch setRange look for related start 0x%x this_end 0x%x' % (start, this_end))
                 if self.start[index] <= start and this_end >= end:
                     overlap = True
                     #self.lgr.debug('DataWatch setRange found overlap, skip it')
@@ -181,7 +181,7 @@ class DataWatch():
                     break
                 elif start == (this_end):
                     self.length[index] = self.length[index]+my_len
-                    self.lgr.debug('DataWatch extending subrange')
+                    #self.lgr.debug('DataWatch extending subrange')
                     overlap = True
                     self.stopWatch()
                     self.watch()
@@ -863,8 +863,8 @@ class DataWatch():
                 self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, None, proc_break, 'memcpy_return_hap')
                 if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
                     self.back_stop.setFutureCycle(self.back_stop_cycles)
-                self.lgr.debug('getMemParams set hap on ret_ip at 0x%x context %s Now run!' % (self.mem_something.ret_ip, 
-                     str(self.cpu.current_context)))
+                #self.lgr.debug('getMemParams set hap on ret_ip at 0x%x context %s Now run!' % (self.mem_something.ret_ip, 
+                #     str(self.cpu.current_context)))
                 if data_hit:
                     SIM_run_command('c')
 
@@ -940,7 +940,7 @@ class DataWatch():
        
     def vt_handler(self, vt_stuff):
         location = vt_stuff.memory.physical_address
-        self.lgr.debug('vt_handler at 0x%x set call_stop_hap cycle: 0x%x' % (location, self.cpu.cycles))
+        #self.lgr.debug('vt_handler at 0x%x set call_stop_hap cycle: 0x%x' % (location, self.cpu.cycles))
         SIM_run_alone(self.deleteGhostStopHap, None)
         SIM_run_alone(self.setCallStopAlone, vt_stuff.alt_callback)
         SIM_break_simulation('vt_handler')
@@ -957,7 +957,8 @@ class DataWatch():
                 #self.lgr.debug('hitCallCallback pid:%d memory 0x%x  BAD cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
                 pass
             else:
-                self.lgr.debug('hitCallCallback pid:%d memory 0x%x  cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
+                #self.lgr.debug('hitCallCallback pid:%d memory 0x%x  cycle: 0x%x' % (pid, memory.physical_address, self.cpu.cycles))
+                pass
             vt_stuff = self.VTStuff(memory, alternate_callback)
             VT_in_time_order(self.vt_handler, vt_stuff)
 
@@ -1106,7 +1107,7 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
-        self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
+        #self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
         if op_type == Sim_Trans_Load:
             if cpl == 0:
                 #if not self.break_simulation:
@@ -1310,8 +1311,8 @@ class DataWatch():
             break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d' % (eip, break_num, self.start[index], end, 
-                self.length[index], index, len(self.read_hap)))
+            #self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d' % (eip, break_num, self.start[index], end, 
+            #    self.length[index], index, len(self.read_hap)))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
             
 
