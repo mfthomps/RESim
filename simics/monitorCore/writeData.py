@@ -221,11 +221,12 @@ class WriteData():
             self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
+            '''
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
-            '''
             #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
-            SIM_break_simulation('broken offset')
+            else:
+                SIM_break_simulation('broken offset')
             #SIM_run_alone(self.delCallHap, None)
         else:
             frame = self.top.frameFromRegs(self.cpu)
