@@ -1,3 +1,5 @@
 #!/bin/bash
 export AFL_SKIP_CPUFREQ=True
+echo "HOSTNAME IS $HOSTNAME"
+export HOSTNAME=$HOSTNAME
 $RESIM_DIR/simics/monitorCore/runAFL.py $@
