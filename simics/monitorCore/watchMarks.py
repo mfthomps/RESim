@@ -85,7 +85,7 @@ class DataMark():
         self.ad_hoc = ad_hoc
         self.trans_size = trans_size
         self.dest = dest
-        print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
+        #print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
         if self.start is None:
@@ -401,17 +401,20 @@ class WatchMarks():
             self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         if ad_hoc:
-            pm = self.mark_list[-1]
-            if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None:
-                self.lgr.debug('dataRead previous mark end_addr 0x%x  addr is 0x%x' % (pm.mark.end_addr, addr))
-            if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                end_addr = addr + trans_size - 1
-                self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
-                pm.mark.addrRange(end_addr)
+            if len(self.mark_list) > 0:
+                pm = self.mark_list[-1]
+                if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None:
+                    self.lgr.debug('dataRead previous mark end_addr 0x%x  addr is 0x%x' % (pm.mark.end_addr, addr))
+                if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+                    end_addr = addr + trans_size - 1
+                    self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                    pm.mark.addrRange(end_addr)
+                else:
+                    self.lgr.debug('watchMarks create new data mark for 0x%x, start 0x%x, len %d' % (addr, start, length))
+                    dm = DataMark(addr, start, length, cmp_ins, trans_size, ad_hoc=True, dest=dest)
+                    self.addWatchMark(dm)
             else:
-                self.lgr.debug('watchMarks create new data mark for 0x%x, start 0x%x, len %d' % (addr, start, length))
-                dm = DataMark(addr, start, length, cmp_ins, trans_size, ad_hoc=True, dest=dest)
-                self.addWatchMark(dm)
+                self.lgr.warning('watchMarks dataRead, ad_hoc bu not mark list')
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
