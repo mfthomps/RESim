@@ -59,6 +59,7 @@ class PlayAFL():
                 self.afl_list = aflPath.getTargetQueue(target, get_all=True)
             else:
                 self.afl_list = aflPath.getTargetCrashes(target)
+            print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
         self.stop_hap = None
