@@ -646,7 +646,9 @@ class Syscall():
                 self.lgr.debug('Unable to get full path for %s' % prog_string)
                 return
             if os.path.isfile(full_path):
-                elf_info = self.soMap.addText(full_path, prog_string, pid)
+                elf_info = None
+                if self.soMap is not None:
+                    elf_info = self.soMap.addText(full_path, prog_string, pid)
                 if elf_info is not None:
                     if self.soMap is not None:
                         if elf_info.address is not None:
