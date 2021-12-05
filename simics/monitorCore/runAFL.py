@@ -80,7 +80,9 @@ def main():
         print('missing RESIM_DIR envrionment variable')
         exit(1)
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
-
+    hostname = os.getenv('HOSTNAME')
+    print('hostname is %s' % hostname)
+    
     here = os.getcwd()
     afl_name = os.path.basename(here)
     try:
@@ -150,10 +152,11 @@ def main():
     if len(glist) > 0:
         print('Parallel, doing %d instances' % len(glist))
         for instance in glist:
+            fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
                 continue
             afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
-                  master_slave, instance[:-1], port, dict_path, afl_name)
+                  master_slave, fuzzid, port, dict_path, afl_name)
             print('afl_cmd %s' % afl_cmd) 
             os.chdir(instance)
         
