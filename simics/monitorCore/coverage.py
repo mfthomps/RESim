@@ -77,6 +77,7 @@ class Coverage():
         self.default_context = self.context_manager.getDefaultContext()
         self.jumpers = {}
         self.did_exit=False
+        self.so_entry = None
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -159,6 +160,7 @@ class Coverage():
         if so_entry is None:
             self.lgr.error('coverage no SO entry for %s' % self.full_path)
             return
+        self.so_entry = so_entry
         if so_entry.address is not None:
             if so_entry.locate is not None:
                 self.offset = so_entry.locate+so_entry.offset
@@ -241,7 +243,14 @@ class Coverage():
                           None, break_num)
                 self.missing_tables[pt.ptable_addr].append(bb_rel)
             else:
-                self.lgr.error('coverage, no page table address for 0x%x' % bb_rel)
+                ''' don't report on external jump tables etc.'''
+                if self.so_entry.text_start is not None:
+                    end = self.so_entry.text_start + self.so_entry.text_size
+                    if bb_rel >= self.so_entry.text_start and bb_rel <= end:
+                        self.lgr.error('coverage, no page table address for text 0x%x so_entry.text_start 0x%x - 0x%x' % (bb_rel, 
+                             self.so_entry.text_start, end))
+                else:
+                    self.lgr.error('coverage, no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
 
 
     def getNumBlocks(self):
@@ -473,7 +482,7 @@ class Coverage():
                 self.prev_loc = cur_loc >> 1
         
     def getTraceBits(self): 
-        self.lgr.debug('hit count is %d' % self.hit_count)
+        #self.lgr.debug('hit count is %d' % self.hit_count)
         return self.trace_bits
 
     def getHitCount(self):
