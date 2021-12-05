@@ -54,6 +54,9 @@ class WriteWatch(simplecustviewer_t):
         if type(simicsString) is int:
             print('updateStackTrace got an int?  %d' % simicsString)
             return
+        if simicsString.startswith('None'):
+            simicsString=simicsString[5:]
+
         try:
             data_json = json.loads(simicsString)
         except:

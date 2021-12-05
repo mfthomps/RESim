@@ -69,6 +69,9 @@ class StackTrace(simplecustviewer_t):
         if type(simicsString) is int:
             print('updateStackTrace got an int?  %d' % simicsString)
             return
+        ''' wayward debugging '''
+        if simicsString.startswith('None'):
+            simicsString=simicsString[5:]
         try:
             st_json = json.loads(simicsString)
         except:
