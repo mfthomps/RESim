@@ -11,7 +11,45 @@ def getAFLOutput():
         print('No AFL_DATA or AFL_OUTPUT')
     return afl_dir
 
-def getAFLPath(target, index, instance):
+def getGlobMask(target, index, instance, which, host=None, sync=False):
+    retval = None
+    this_host = os.getenv('HOST')
+    afl_dir = getAFLOutput()
+    resim_instance = 'resim_%d' % instance
+    if host is None:
+        ''' Look if there are host prefixes, otherwise assume legacy '''
+        tglob_mask = os.path.join('afl_dir', target, this_host)+'*'
+        glist = glob.glob(glob_mask)
+        if len(glist) == 0:
+            ''' assume legacy '''
+            if not sync:
+                retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, resim_instance, which, index)
+            else:
+                retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, resim_instance, which, index)
+        else:
+            fuzzid = '%s_%s' (this_host, resim_instance)
+            if not sync:
+                retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+            else:
+                retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, fuzz_id, which, index)
+    else:
+        parts = this_host.rsplit('-',1)
+        if len(parts) != 2:
+            print('could not handle hostname %s, expected dash followed by number' % this_host)
+            return None
+        fuzzid = '%s-%s_%s' % (parts[0], host, resim_instance)
+        if not sync:
+            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+        else:
+            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+    return retval
+        
+
+def getAFLPath(target, index, instance, host=None):
+    '''
+    Return a path to a queue file named by a target, index and optional instance.
+    Will first look for queue files with "src" in their name.
+    '''
     retval = None
     afl_dir = getAFLOutput()
     if instance is None:
@@ -21,12 +59,11 @@ def getAFLPath(target, index, instance):
             glob_mask = '%s/%s/queue/id:*0%s,sync*' % (afl_dir, target, index)
             glist = glob.glob(glob_mask)
     else:
-        resim_instance = 'resim_%d' % instance
-        glob_mask = '%s/%s/%s/queue/id:*0%s,src*' % (afl_dir, target, resim_instance, index)
+        glob_mask = getGlobMask(target, index, instance, 'queue', host)
         glist = glob.glob(glob_mask)
         if len(glist) == 0:
             print('No file at %s   -- try sync' % glob_mask)
-            glob_mask = '%s/%s/%s/queue/id:*0%s,sync*' % (afl_dir, target, resim_instance, index)
+            glob_mask = getGlobMask(target, index, instance, 'queue', host, sync=True)
             glist = glob.glob(glob_mask)
     if len(glist) == 0:
         print('No files found looking for %s' % glob_mask)
@@ -37,11 +74,11 @@ def getAFLPath(target, index, instance):
     return retval
 
 
-def getAFLCoveragePath(target, instance, index):
+def getAFLCoveragePath(target, instance, index, host=None):
     resim_num = 'resim_%s' % instance
     afl_path = getAFLOutput()
     retval = None
-    glob_mask = '%s/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
+    glob_mask = getGlobMask(target, index, instance, 'coverage', host)
     glist = glob.glob(glob_mask)
     if len(glist) == 0:
         print('No file found for %s' % glob_mask)
@@ -49,7 +86,7 @@ def getAFLCoveragePath(target, instance, index):
         retval = glist[0]
     return retval
 
-def getAFLCoverageList(target, get_all=False):
+def getAFLCoverageList(target, get_all=False, host=None):
     glist = None
     afl_path = getAFLOutput()
     if not get_all:
@@ -62,8 +99,8 @@ def getAFLCoverageList(target, get_all=False):
                 glist.append(os.path.join(afl_dir, path)) 
 
     if glist is None:
-        glob_mask = '%s/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
-        print('glob_mask is %s' % glob_mask)
+        glob_mask = '%s/%s/*resim_*/coverage/id:*,src*' % (afl_path, target)
+
         glist = glob.glob(glob_mask)
         if len(glist) == 0:
             ''' single instance '''
@@ -71,7 +108,7 @@ def getAFLCoverageList(target, get_all=False):
             glist = glob.glob(glob_mask)
     return glist
 
-def getTargetQueue(target, get_all=False):
+def getTargetQueue(target, get_all=False, host=None):
     ''' get list of queue files, relative to afloutput.  ignore sync files and return based on target.unique if allowed.'''
     afl_list = []
     afl_output = getAFLOutput()
