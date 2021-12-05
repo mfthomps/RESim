@@ -726,6 +726,7 @@ class GenMonitor():
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
         cell = self.cell_config.cell_context[self.target]
+        cpu = self.cell_config.cpuFromCell(self.target)
         if not self.did_debug:
             ''' Our first debug '''
             pid = self.doDebugCmd()
