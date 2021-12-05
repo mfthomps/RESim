@@ -215,6 +215,8 @@ class GenMonitor():
     
         self.cfg_file = cfg_file
 
+        self.did_debug = False
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
 
@@ -723,11 +725,11 @@ class GenMonitor():
     def debug(self, group=False):
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
         cell = self.cell_config.cell_context[self.target]
-        if pid is None:
+        if not self.did_debug:
             ''' Our first debug '''
             pid = self.doDebugCmd()
+            self.did_debug=True
             if not self.rev_execution_enabled:
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 cmd = 'enable-reverse-execution'
