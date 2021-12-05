@@ -121,11 +121,9 @@ class TrackThreads():
         if full_path is not None:
             #self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
-            text_segment = elfText.getText(full_path, self.lgr)
-            if text_segment is not None:
-                self.soMap.addText(text_segment.address, text_segment.size, prog_name, pid)
-            else:
-                self.lgr.debug('trackThreads addSO, could not get text segment from %s' % full_path)
+            elf_info = self.soMap.addText(full_path, prog_name, pid)
+            if elf_info is None:
+                self.lgr.debug('trackThreads addSO, could not get elf info from %s' % full_path)
 
     def parseExecve(self):
         cpu, comm, pid = self.task_utils.curProc() 

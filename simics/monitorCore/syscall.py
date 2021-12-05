@@ -646,13 +646,12 @@ class Syscall():
                 self.lgr.debug('Unable to get full path for %s' % prog_string)
                 return
             if os.path.isfile(full_path):
-                text_segment = elfText.getText(full_path, self.lgr)
-                if text_segment is not None:
+                elf_info = self.soMap.addText(full_path, prog_string, pid)
+                if elf_info is not None:
                     if self.soMap is not None:
-                        if text_segment.address is not None:
-                            self.lgr.debug('syscall addElf 0x%x - 0x%x' % (text_segment.address, text_segment.address+text_segment.size))       
-                            self.context_manager.recordText(text_segment.address, text_segment.address+text_segment.size)
-                            self.soMap.addText(text_segment.address, text_segment.size, prog_string, pid)
+                        if elf_info.address is not None:
+                            self.lgr.debug('syscall addElf 0x%x - 0x%x' % (elf_info.address, elf_info.address+elf_info.size))       
+                            self.context_manager.recordText(elf_info.address, elf_info.address+elf_info.size)
                         else:
                             self.lgr.error('addElf got text segment but no text, unexpected.  pid %d' % pid)
                 else:

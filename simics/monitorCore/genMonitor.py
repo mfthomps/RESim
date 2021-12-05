@@ -776,11 +776,10 @@ class GenMonitor():
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
                     self.getIDAFuns(full_path)
                     self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
-    
-                    text_segment = elfText.getText(full_path, self.lgr)
-                    if text_segment is not None:
-                        self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
-                        self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
+                    ''' this is not actually the text segment, it is the entire range of main program sections ''' 
+                    elf_info = self.soMap[self.target].addText(full_path, prog_name, pid)
+                    if elf_info is not None:
+                        self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setIdaFuns(self.ida_funs)
                         self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
                         self.dataWatch[self.target].setIdaFuns(self.ida_funs)
@@ -788,7 +787,7 @@ class GenMonitor():
                         self.bookmarks.setIdaFuns(self.ida_funs)
                         self.dataWatch[self.target].setRelocatables(self.relocate_funs)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
-                             text_segment.address, text_segment.size, self.bookmarks, self.task_utils[self.target], self.lgr)
+                             elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.lgr.debug('create coverage module')
@@ -936,15 +935,14 @@ class GenMonitor():
             full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
             self.lgr.debug('execToText, progname is %s  full: %s' % (prog_name, full_path))
 
-            text_segment = elfText.getText(full_path, self.lgr)
-            if text_segment is not None:
-                if text_segment.address is None:
+            elf_info = self.soMap[self.target].addText(full_path, prog_name, pid)
+            if elf_info is not None:
+                if elf_info.address is None:
                     self.lgr.error('execToText found file %s, but address is None?' % full_path)
                     stopFunction.allFuns(flist)
                     return
-                self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, text_segment.address, text_segment.address+text_segment.size))       
-                self.context_manager[self.target].recordText(text_segment.address, text_segment.address+text_segment.size)
-                self.soMap[self.target].addText(text_segment.address, text_segment.size, prog_name, pid)
+                self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, elf_info.address, elf_info.address+elf_info.size))       
+                self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                 self.runToText(flist)
                 return
             else:
@@ -2530,18 +2528,18 @@ class GenMonitor():
            self.lgr.error('gotSOFromFile, no debug pid defined')
            return retval
         self.lgr.debug('getSOFromFile pid:%d fname %s' % (pid, fname))
-        text_seg  = self.soMap[self.target].getSOAddr(fname, pid=pid) 
-        if text_seg is None:
+        elf_info  = self.soMap[self.target].getSOAddr(fname, pid=pid) 
+        if elf_info is None:
             self.lgr.error('getSO no map for %s' % fname)
             return retval
-        if text_seg.address is not None:
-            if text_seg.locate is not None:
-                start = text_seg.locate+text_seg.offset
-                end = start + text_seg.size
+        if elf_info.address is not None:
+            if elf_info.locate is not None:
+                start = elf_info.locate+elf_info.offset
+                end = start + elf_info.size
             else:
                 # TBD fix this, assume text segment, no offset (fix for relocatable mains)
                 start = 0
-                end = text_seg.address + text_seg.size
+                end = elf_info.address + elf_info.size
             retval = ('%s:0x%x-0x%x' % (fname, start, end))
             print(retval)
         else:
@@ -2553,17 +2551,17 @@ class GenMonitor():
         #self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
         retval = None
         if fname is not None:
-            text_seg  = self.soMap[self.target].getSOAddr(fname) 
-            if text_seg is None:
+            elf_info  = self.soMap[self.target].getSOAddr(fname) 
+            if elf_info is None:
                 self.lgr.error('getSO no map for %s' % fname)
                 return
-            if text_seg.address is not None:
-                if text_seg.locate is not None:
-                    start = text_seg.locate+text_seg.offset
-                    end = start + text_seg.size
+            if elf_info.address is not None:
+                if elf_info.locate is not None:
+                    start = elf_info.locate+elf_info.offset
+                    end = start + elf_info.size
                 else:
-                    start = text_seg.address
-                    end = text_seg.address + text_seg.size
+                    start = elf_info.address
+                    end = elf_info.address + elf_info.size
                 retval = ('%s:0x%x-0x%x' % (fname, start, end))
             else:
                 print('None')
@@ -3878,7 +3876,7 @@ class GenMonitor():
                         self.findBNT(hits, blocks[fun]) 
                         break
     def quitAlone(self, dumb): 
-        sys.stderr.write('user rquested quit')
+        sys.stderr.write('user requested quit')
         SIM_run_command('q')
    
     def quit(self, cycles=None):

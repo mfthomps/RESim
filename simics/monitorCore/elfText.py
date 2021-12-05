@@ -10,6 +10,14 @@ class Text():
         self.offset = offset
         self.size = size
         self.locate = None
+        self.text_start = None
+        self.text_size = None
+        self.text_offset = None
+
+    def setText(self, address, size, offset):
+        self.text_start = address
+        self.text_size = size
+        self.text_offset = offset
 
 def getProgHdr(path):     
     ''' TBD: always use this since kernel does not use section info anyway? '''
@@ -48,7 +56,10 @@ def getText(path, lgr):
     ftype = magic.from_file(path)
     if 'elf' in ftype.lower():
         lgr.debug('elfText getText, just use program header')
-        retval = text_segment = getProgHdr(path)
+        retval = getProgHdr(path)
+        toft = getTextOfText(path, lgr)
+        if toft is not None:
+            retval.setText(toft.address, toft.size, toft.offset)
     else:
         lgr.debug('elfText getText not elf at %s' % path)
     return retval
@@ -76,7 +87,7 @@ def getRelocate(path, lgr):
             #lgr.debug('getRelocate not 5 %s' % line)
     return retval
 
-def getTextNOTUSED(path, lgr):
+def getTextOfText(path, lgr):
     if not os.path.isfile(path):
         return None
     retval = None
@@ -95,11 +106,10 @@ def getTextNOTUSED(path, lgr):
     hack = out[7:]
     #print('readelf got %s from %s' % (hack, path))
     parts = hack.split()
-    if True or len(parts) < 5:
+    if len(parts) < 5:
         ftype = magic.from_file(path)
         if 'elf' in ftype.lower():
-            lgr.debug('elfText getText, no sections, use program header')
-            retval = text_segment = getProgHdr(path)
+            lgr.debug('elfText getText, no sections return none')
         else:
             lgr.debug('elfText getText not elf at %s' % path)
     else: 

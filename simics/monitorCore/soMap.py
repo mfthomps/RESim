@@ -18,9 +18,12 @@ class SOMap():
         self.lgr = lgr
         self.top = top
         self.cell = cell
-        self.text_start = {}
-        self.text_end = {}
+        self.prog_start = {}
+        self.prog_end = {}
         self.text_prog = {}
+        self.prog_text_start = {}
+        self.prog_text_end = {}
+        self.prog_text_offset = {}
         self.hap_list = []
         self.stop_hap = None
         self.ida_funs = None
@@ -37,25 +40,41 @@ class SOMap():
             #print('start %s' % str(so_pickle['text_start']))
             self.so_addr_map = so_pickle['so_addr_map']
             self.so_file_map = so_pickle['so_file_map']
-            self.text_start = so_pickle['text_start']
-            self.text_end = so_pickle['text_end']
             self.text_prog = so_pickle['text_prog']
-            ''' backward compatibility '''
-            if self.text_start is None:
+            ''' backward compatability '''
+            if 'prog_start' in so_pickle:
+                self.prog_start = so_pickle['prog_start']
+                self.prog_end = so_pickle['prog_end']
+            else:
+                self.lgr.debug('soMap loadPickle old format, find text info')
+                self.prog_start = so_pickle['text_start']
+                self.prog_end = so_pickle['text_end']
+                for pid in self.so_file_map:
+                    if pid in self.text_prog:
+                        full_path = self.targetFS.getFull(self.text_prog[pid], lgr=self.lgr)
+                        self.lgr.debug('soMap loadPickle pid in text_prog %d full is %s' % (pid, full_path))
+                        elf_info = elfText.getText(full_path, self.lgr)
+                        if elf_info.text_start is not None:
+                            self.prog_text_start[pid] = elf_info.text_start        
+                            self.prog_text_end[pid] = elf_info.text_start + elf_info.text_size 
+                            self.prog_text_offset[pid] = elf_info.text_offset        
+                            break
+            ''' really old backward compatibility '''
+            if self.prog_start is None:
                 self.lgr.debug('soMap loadPickle text_start is none')
-                self.text_start = {}
-                self.text_end = {}
+                self.prog_start = {}
+                self.prog_end = {}
                 self.text_prog = {}
             
-            #self.lgr.debug('SOMap  loadPickle text 0x%x 0x%x' % (self.text_start, self.text_end))
+            #self.lgr.debug('SOMap  loadPickle text 0x%x 0x%x' % (self.prog_start, self.prog_end))
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
         so_pickle = {}
         so_pickle['so_addr_map'] = self.so_addr_map
         so_pickle['so_file_map'] = self.so_file_map
-        so_pickle['text_start'] = self.text_start
-        so_pickle['text_end'] = self.text_end
+        so_pickle['prog_start'] = self.prog_start
+        so_pickle['prog_end'] = self.prog_end
         so_pickle['text_prog'] = self.text_prog
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
@@ -63,13 +82,13 @@ class SOMap():
 
     def isCode(self, address, pid):
         ''' is the given address within the text segment or those of SO libraries? '''
-        #self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.text_start, self.text_end))
+        #self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.prog_start, self.prog_end))
         pid = self.getSOPid(pid)
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
             #self.lgr.debug('SOMap isCode, regot pid after getSOPid failed, pid:%d missing from so_file_map' % pid)
             return False
-        if pid in self.text_start and address >= self.text_start[pid] and address <= self.text_end[pid]:
+        if pid in self.prog_start and address >= self.prog_start[pid] and address <= self.prog_end[pid]:
             return True
         if pid not in self.so_file_map:
             pid = self.task_utils.getCurrentThreadLeaderPid()
@@ -88,8 +107,8 @@ class SOMap():
         pid = self.getSOPid(pid)
         if pid is None:
             return False
-        if pid in self.text_start:
-            if address >= self.text_start[pid] and address <= self.text_end[pid]:
+        if pid in self.prog_start:
+            if address >= self.prog_start[pid] and address <= self.prog_end[pid]:
                 return True
             else: 
                 return False
@@ -100,9 +119,9 @@ class SOMap():
         ''' intended for when original process exits following a fork '''
         ''' TBD, half-assed logic for deciding if procs were all really deleted '''
         retval = True
-        if old in self.text_start:
-            self.text_start[new] = self.text_start[old]
-            self.text_end[new] = self.text_end[old]
+        if old in self.prog_start:
+            self.prog_start[new] = self.prog_start[old]
+            self.prog_end[new] = self.prog_end[old]
             self.text_prog[new] = self.text_prog[old]
             self.so_addr_map[new] = self.so_addr_map[old]
             self.so_file_map[new] = self.so_file_map[old]
@@ -111,27 +130,33 @@ class SOMap():
             retval = False
         return retval
 
-    def addText(self, start, size, prog, pid_in):
+    def addText(self, path, prog, pid_in):
+        elf_info = elfText.getText(path, self.lgr)
         ''' First check that SO not already loaded from a snapshot '''
         pid = self.getThreadPid(pid_in, quiet=True)
         if pid is None:
             pid = pid_in
-        if pid in self.text_start:
+        if pid in self.prog_start:
             self.lgr.debug('soMap addText pid %d already in map len of so_addr_map %d' % (pid, len(self.so_file_map)))
         else:
             self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
-            self.text_start[pid] = start
-            self.text_end[pid] = start+size
+            self.prog_start[pid] = elf_info.address
+            self.prog_end[pid] = elf_info.address+elf_info.size
+            if elf_info.text_start is not None:
+                self.prog_text_start[pid] = elf_info.text_start
+                self.prog_text_end[pid] = elf_info.text_start + elf_info.text_size
+                self.prog_text_offset[pid] = elf_info.text_offset
             self.text_prog[pid] = prog
             if pid not in self.so_addr_map:
                 self.so_addr_map[pid] = {}
                 self.so_file_map[pid] = {}
+        return elf_info
 
     def noText(self, prog, pid):
         self.lgr.debug('soMap noText, prog %s pid:%d' % (prog, pid))
         self.text_prog[pid] = prog
-        self.text_start[pid] = None
-        self.text_end[pid] = None
+        self.prog_start[pid] = None
+        self.prog_end[pid] = None
 
     def setContext(self, pid_list):
         pid = None
@@ -140,8 +165,8 @@ class SOMap():
                 pid = in_pid
         if pid is None:
             self.lgr.error('soMap setContext found for any input pids %s' % (str(pid_list)))
-        elif pid in self.text_start:
-            self.context_manager.recordText(self.text_start[pid], self.text_end[pid])
+        elif pid in self.prog_start:
+            self.context_manager.recordText(self.prog_start[pid], self.prog_end[pid])
         else:
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
       
@@ -199,8 +224,8 @@ class SOMap():
 
     def listSO(self):
         for pid in self.so_file_map:
-            if pid in self.text_start:
-                print('pid:%d  0x%x - 0x%x   %s' % (pid, self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
+            if pid in self.prog_start:
+                print('pid:%d  0x%x - 0x%x   %s' % (pid, self.prog_start[pid], self.prog_end[pid], self.text_prog[pid]))
             else:
                 print('pid:%d  no text found' % pid)
           
@@ -214,8 +239,8 @@ class SOMap():
             print('no so map for %d' % pid)
         print('SO Map for threads led by group leader pid: %d' % pid)
         if pid in self.so_file_map:
-            if pid in self.text_start:
-                print('0x%x - 0x%x   %s' % (self.text_start[pid], self.text_end[pid], self.text_prog[pid]))
+            if pid in self.prog_start:
+                print('0x%x - 0x%x   %s' % (self.prog_start[pid], self.prog_end[pid], self.text_prog[pid]))
             else:
                 print('pid %d not in text sections' % pid)
                 self.lgr.debug('pid %d not in text sections' % pid)
@@ -233,7 +258,7 @@ class SOMap():
  
     def handleExit(self, pid, killed=False):
         ''' when a thread leader exits, clone the so map structures to each child, TBD determine new thread leader? '''
-        if pid not in self.so_addr_map and pid not in self.text_start:
+        if pid not in self.so_addr_map and pid not in self.prog_start:
             self.lgr.debug('SOMap handleExit pid %d not in so_addr map' % pid)
             return
         self.lgr.debug('SOMap handleExit pid %d' % pid)
@@ -247,9 +272,9 @@ class SOMap():
                         if pid in self.so_addr_map:
                             self.so_addr_map[tpid] = self.so_addr_map[pid]
                             self.so_file_map[tpid] = self.so_file_map[pid]
-                        if pid in self.text_start:
-                            self.text_start[tpid] = self.text_start[pid]
-                            self.text_end[tpid] = self.text_end[pid]
+                        if pid in self.prog_start:
+                            self.prog_start[tpid] = self.prog_start[pid]
+                            self.prog_end[tpid] = self.prog_end[pid]
                             self.text_prog[tpid] = self.text_prog[pid]
                         else:
                             self.lgr.debug('SOMap handle exit, missing text_start entry pid: %d tpid %d' % (pid, tpid))
@@ -259,9 +284,9 @@ class SOMap():
         if pid in self.so_addr_map:
             del self.so_addr_map[pid]
             del self.so_file_map[pid]
-        if pid in self.text_start:
-           del self.text_start[pid]
-           del self.text_end[pid]
+        if pid in self.prog_start:
+           del self.prog_start[pid]
+           del self.prog_end[pid]
            del self.text_prog[pid]
 
 
@@ -324,10 +349,10 @@ class SOMap():
         if pid is None:
             return None
         if pid in self.so_file_map:
-            if pid not in self.text_start:
+            if pid not in self.prog_start:
                 self.lgr.warning('SOMap getSOFile pid %d in so_file map but not text_start' % pid)
                 return None
-            if addr_in >= self.text_start[pid] and addr_in <= self.text_end[pid]:
+            if addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
                 retval = self.text_prog[pid]
             else:
                 #for text_seg in sorted(self.so_file_map[pid]):
@@ -350,8 +375,8 @@ class SOMap():
         if pid is None:
             return None
         if pid in self.so_file_map:
-            if addr_in >= self.text_start[pid] and addr_in <= self.text_end[pid]:
-                retval = self.text_prog[pid], self.text_start[pid], self.text_end[pid]
+            if addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
+                retval = self.text_prog[pid], self.prog_start[pid], self.prog_end[pid]
             else:
                 #for text_seg in sorted(self.so_file_map[pid]):
                 for text_seg in self.so_file_map[pid]:
@@ -379,8 +404,13 @@ class SOMap():
         #    self.lgr.debug('getSOAddr YES pid %d is in text_prog as %s' % (pid, self.text_prog[pid]))
         #if pid in self.text_prog and (in_fname.endswith(self.text_prog[pid]) or self.text_prog[pid].endswith(in_fname)):
         if pid in self.text_prog and (os.path.basename(in_fname) == os.path.basename(self.text_prog[pid])):
-            size = self.text_end[pid] - self.text_start[pid]
-            retval = elfText.Text(self.text_start[pid], 0, size)
+            size = self.prog_end[pid] - self.prog_start[pid]
+            retval = elfText.Text(self.prog_start[pid], 0, size)
+            if pid in self.prog_text_start:
+                text_start = self.prog_text_start[pid]
+                text_size = self.prog_text_end[pid] - self.prog_text_start[pid]
+                text_offset = self.prog_text_offset[pid]
+                retval.setText(text_start, text_size, text_offset)
         elif pid in self.so_file_map:
             for fpath in self.so_addr_map[pid]:
                 #self.lgr.debug('getSOAddr fpath %s' % fpath)
@@ -458,9 +488,9 @@ class SOMap():
     def runToKnown(self, skip=None):        
        cpu, comm, cur_pid = self.task_utils.curProc() 
        map_pid = self.getSOPid(cur_pid)
-       if map_pid in self.text_start: 
-           start =  self.text_start[map_pid] 
-           length = self.text_end[map_pid] - self.text_start[map_pid] 
+       if map_pid in self.prog_start: 
+           start =  self.prog_start[map_pid] 
+           length = self.prog_end[map_pid] - self.prog_start[map_pid] 
            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
            #self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
