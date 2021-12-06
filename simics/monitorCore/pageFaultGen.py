@@ -375,7 +375,6 @@ class PageFaultGen():
     def skipAlone(self, prec):
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
-        self.lgr.debug('pageFaultGen skipAlone eip 0x%x' % prec.eip)
         if self.top.hasBookmarks():
             target_cycles = prec.cycles
             self.lgr.debug('skipAlone skip to 0x%x' % target_cycles)
