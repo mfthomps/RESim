@@ -269,6 +269,7 @@ class IdaSIM():
             curAddr = idaversion.get_reg_value(self.PC)
             #print('Current instruction (0x%x) wrote to 0x%x' % (curAddr, target_addr))
             print('Previous instruction  wrote to 0x%x' % (target_addr))
+        self.bookmark_list = self.bookmark_view.updateBookmarkView()
     
     def trackAddress(self, target_addr):
         disabledSet = bpUtils.disableAllBpts(None)
@@ -285,6 +286,7 @@ class IdaSIM():
         else:
             curAddr = idaversion.get_reg_value(self.PC)
             print('Current instruction (0x%x) is as far back as we can trace 0x%x' % (curAddr, target_addr))
+        self.bookmark_list = self.bookmark_view.updateBookmarkView()
     
     def showSimicsMessage(self):
         command = '@cgc.idaMessage()' 
