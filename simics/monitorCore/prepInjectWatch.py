@@ -7,7 +7,7 @@ import decode
 import decodeArm
 '''
 Create a snapshot from a given watch mark index value, intended to
-an ioctl.  The snapshot will preceed the ioctl call, and
+be an ioctl.  The snapshot will preceed the ioctl call, and
 will include the address of the kernel buffer, and the kernel pointers
 used ot calculate the ioctl return value.
 '''

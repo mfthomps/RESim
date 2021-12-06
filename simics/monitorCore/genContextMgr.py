@@ -694,11 +694,11 @@ class GenContextMgr():
 
     def restoreDefaultContext(self):
         self.cpu.current_context = self.default_context
-        self.lgr.debug('contextManager restoreDefaultContext')
+        #self.lgr.debug('contextManager restoreDefaultContext')
 
     def restoreDebugContext(self):
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('contextManager restoreDebugContext')
+        #self.lgr.debug('contextManager restoreDebugContext')
 
     def restoreDebug(self):
         self.debugging_pid = self.debugging_pid_saved
