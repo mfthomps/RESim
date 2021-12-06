@@ -306,6 +306,13 @@ class SOMap():
         return retval
 
     def getSOFile(self, addr_in):
+        if addr_in is not None:
+            self.lgr.debug('getSOFile addr_in 0x%x' % addr_in)
+        else:
+            self.lgr.debug('getSOFile addr_in is None')
+        if addr_in is None:
+            self.lgr.debug('getSOFile called with None')
+            return None
         retval = None
         #pid = self.getThreadPid(pid_in)
         #if pid is None:
@@ -333,6 +340,7 @@ class SOMap():
             
         else:
             self.lgr.debug('getSOFile no so map for %d' % pid)
+        self.lgr.debug('getSOFile returning %s' % retval)
         return retval
 
     def getSOInfo(self, addr_in):
