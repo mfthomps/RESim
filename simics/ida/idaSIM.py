@@ -304,7 +304,7 @@ class IdaSIM():
     def wroteToRegister(self): 
         highlighted = idaversion.getHighlight()
 
-        if highlighted is None  or highlighted not in self.reg_list:
+        if highlighted is None  or not self.isReg(highlighted):
            print('%s not in reg list' % highlighted)
            highlighted = idaversion.ask_str('Wrote to register:', 'Which register?')
 
@@ -323,7 +323,7 @@ class IdaSIM():
         
     def trackRegister(self): 
         highlighted = idaversion.getHighlight()
-        if highlighted is None  or not self.isReg(highlighted) or highlighted not in self.reg_list:
+        if highlighted is None  or not self.isReg(highlighted):
            print('%s not in reg list' % highlighted)
            print('%s' % str(self.reg_list))
            highlighted = idaversion.ask_str('Track register:', 'Which register?')
