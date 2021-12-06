@@ -313,6 +313,7 @@ class StackTrace():
         #self.lgr.debug('dox86 eip:0x%x esp:0x%x bp:0x%x' % (eip, esp, bp))
         cur_fun = None
         quick_return = None
+        cur_fun_name = None
         if self.ida_funs is not None:
             cur_fun = self.ida_funs.getFun(eip)
         if cur_fun is None:
@@ -330,7 +331,6 @@ class StackTrace():
         else:
             ''' look for call return that is within a few bytes of SP'''
             #self.lgr.debug('doX86,  look for call return that is within a few bytes of SP')
-            cur_fun_name = None
             if cur_fun is not None:
                 cur_fun_name = self.funFromAddr(cur_fun)
             #if self.ida_funs is not None:
