@@ -2223,8 +2223,8 @@ class GenMonitor():
             pid_list = self.context_manager[self.target].getThreadPids()
             prec = Prec(cpu, None, pid_list, who='to text')
         ''' NOTE obscure use of flist to determine if SO files are tracked '''
+        prec.debugging = True
         if flist is None:
-            prec.debugging = True
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
             flist = [f1]
 
