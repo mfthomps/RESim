@@ -1081,6 +1081,12 @@ class GenMonitor():
             flist = [f1, f2, f3, f4]
             self.toExecve(proc, flist=flist, binary=True)
 
+    def listHasDebug(self, flist):
+        for f in flist:
+            if f.fun == self.debug: 
+                return True
+        return False
+
     def debugThis(self):
         ''' Intended for use while debugging a process that clones and you want to only watch 
             the current clone '''
@@ -2201,10 +2207,16 @@ class GenMonitor():
             return
         count = end - start
         self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
+
+        self.context_manager[self.target].watchTasks()
+        if self.listHasDebug(flist):
+            ''' We will be debugging.  Set debugging context now so that any reschedule does not 
+                cause false hits in the text block '''
+            self.context_manager[self.target].setDebugPid()
+
         proc_break = self.context_manager[self.target].genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, count, 0)
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
-            self.lgr.debug('runToText, not debugging yet, assume current process')
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             prec = Prec(cpu, None, [pid], who='to text')
         else:
@@ -2235,7 +2247,6 @@ class GenMonitor():
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
           self.stopHap, stop_action)
 
-        self.context_manager[self.target].watchTasks()
         self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
         SIM_run_alone(SIM_run_command, 'continue')
 

@@ -40,7 +40,7 @@ class StopAction():
         ''' Process the functions in the flist, these are the stopFunction class'''
         if len(self.flist) > 0:
             fun = self.flist.pop(0)
-            print('stop action %s wrong pid %r  match %r' % (str(fun.fun), wrong_pid, fun.match_pid))
+            #print('stop action %s wrong pid %r  match %r' % (str(fun.fun), wrong_pid, fun.match_pid))
             if not (wrong_pid and fun.match_pid):
                 fun.run(self.flist, wrong_pid=wrong_pid, cb_param=cb_param)
 

@@ -306,10 +306,10 @@ class SOMap():
         return retval
 
     def getSOFile(self, addr_in):
-        if addr_in is not None:
-            self.lgr.debug('getSOFile addr_in 0x%x' % addr_in)
-        else:
-            self.lgr.debug('getSOFile addr_in is None')
+        #if addr_in is not None:
+        #    self.lgr.debug('getSOFile addr_in 0x%x' % addr_in)
+        #else:
+        #    self.lgr.debug('getSOFile addr_in is None')
         if addr_in is None:
             self.lgr.debug('getSOFile called with None')
             return None
