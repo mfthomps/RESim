@@ -129,7 +129,7 @@ class DataWatch(simplecustviewer_t):
         line = idaapi.tag_remove(line)
         #print('line is %s' % line)
         parts = line.split()
-        print('parts0 is %s' % parts[0])
+        #print('parts0 is %s' % parts[0])
         index = None
         try:
             index = int(parts[0])
