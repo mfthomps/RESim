@@ -62,16 +62,21 @@ class SharedSyscall():
         return None
 
     def stopTrace(self):
+        my_exit_pids = self.exit_pids[self.cpu.current_context]
         self.lgr.debug('sharedSyscall stopTrace')
         for eip in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[eip])
-        self.exit_pids = {}
+        my_exit_pids = {}
         self.exit_info = {}
 
     def showExitHaps(self):
-        for eip in self.exit_pids:
+        if self.cpu.current_context not in self.exit_pids:
+            print('context %s not in exit_pids' % self.cpu.current_context)
+            return
+        my_exit_pids = self.exit_pids[self.cpu.current_context]
+        for eip in my_exit_pids:
             print('eip: 0x%x' % eip)
-            for pid in self.exit_pids[eip]:
+            for pid in my_exit_pids[eip]:
                 prog = self.task_utils.getProgName(pid)
                 if prog is not None:
                     print('\t%d %s' % (pid, prog))
@@ -79,12 +84,17 @@ class SharedSyscall():
                     print('\t%d' % (pid))
 
     def rmExitHap(self, pid):
+        if self.cpu.current_context not in self.exit_pids:
+            return
+        my_exit_pids = self.exit_pids[self.cpu.current_context]
         if pid is not None:
-            self.lgr.debug('rmExitHap for pid %d' % pid)
-            for eip in self.exit_pids:
-                if pid in self.exit_pids[eip]:
-                    self.exit_pids[eip].remove(pid)
-                    if len(self.exit_pids[eip]) == 0:
+            #self.lgr.debug('rmExitHap for pid %d' % pid)
+            for eip in my_exit_pids:
+                if pid in my_exit_pids[eip]:
+                    my_exit_pids[eip].remove(pid)
+                    #self.lgr.debug('rmExitHap removed pid %d for eip 0x%x' % (pid, eip))
+                    if len(my_exit_pids[eip]) == 0:
+                        #self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
                         self.context_manager.genDeleteHap(self.exit_hap[eip])
             self.exit_info[pid] = {}     
 
@@ -92,8 +102,8 @@ class SharedSyscall():
             ''' assume the exitHap was for a one-off syscall such as execve that
                 broke the simulation. '''
             ''' TBD NOTE procs returning from blocked syscalls will not be caught! '''
-            for eip in self.exit_pids:
-                del self.exit_pids[eip][:]
+            for eip in my_exit_pids:
+                del my_exit_pids[eip][:]
                 self.context_manager.genDeleteHap(self.exit_hap[eip])
                 self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
 
@@ -102,49 +112,54 @@ class SharedSyscall():
         if pid not in self.exit_info:
             self.exit_info[pid] = {}
         self.exit_info[pid][name] = exit_info
-        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s' % (pid, name))
+        #self.lgr.debug('sharedSyscall addExitHap pid:%d name %s' % (pid, name))
         if self.traceProcs is not None:
             self.trace_procs.append(pid)
         self.exit_names[pid] = name
-
-        if exit_eip1 not in self.exit_pids:
-            self.exit_pids[exit_eip1] = []
+        current_context = self.cpu.current_context
+        if current_context not in self.exit_pids:
+            self.exit_pids[current_context] = {}
+        my_exit_pids = self.exit_pids[current_context]
+        if exit_eip1 not in my_exit_pids:
+            my_exit_pids[exit_eip1] = []
 
         if exit_eip1 is not None: 
-            if len(self.exit_pids[exit_eip1]) == 0:
+            #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
+            if len(my_exit_pids[exit_eip1]) == 0:
                 #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap')
-                #self.lgr.debug('sharedSyscall added exit hap %d' % self.exit_hap[exit_eip1])
-            self.exit_pids[exit_eip1].append(pid)
+                #self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
+            my_exit_pids[exit_eip1].append(pid)
+            #self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
 
         if exit_eip2 is not None:
-            if exit_eip2 not in self.exit_pids:
-                self.exit_pids[exit_eip2] = []
+            if exit_eip2 not in my_exit_pids:
+                my_exit_pids[exit_eip2] = []
 
-            if len(self.exit_pids[exit_eip2]) == 0:
+            if len(my_exit_pids[exit_eip2]) == 0:
                 #self.lgr.debug('addExitHap new exit EIP2 0x%x for pid %d' % (exit_eip2, pid))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap2')
                 #self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
-            self.exit_pids[exit_eip2].append(pid)
+            my_exit_pids[exit_eip2].append(pid)
 
         if exit_eip3 is not None:
-            if exit_eip3 not in self.exit_pids:
-                self.exit_pids[exit_eip3] = []
+            if exit_eip3 not in my_exit_pids:
+                my_exit_pids[exit_eip3] = []
 
-            if len(self.exit_pids[exit_eip3]) == 0:
+            if len(my_exit_pids[exit_eip3]) == 0:
                 #self.lgr.debug('addExitHap new exit EIP3 0x%x for pid %d' % (exit_eip3, pid))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip3, 1, 0)
                 self.exit_hap[exit_eip3] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap3')
                 #self.lgr.debug('sharedSyscall added exit hap3 %d' % self.exit_hap[exit_eip3])
-            self.exit_pids[exit_eip3].append(pid)
+            my_exit_pids[exit_eip3].append(pid)
 
         if exit_info is not None:
             callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
@@ -410,9 +425,9 @@ class SharedSyscall():
                 self.lgr.debug('sharedSyscall pid:%d %s missing sock_struct, double call, it hap twice??' % (pid, socket_callname))
         return trace_msg
 
-    def exitHap(self, dumb, third, forth, memory):
+    def exitHap(self, dumb, context, break_num, memory):
         cpu, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug('sharedSyscall exitHap %d (%s) third: %s  forth: %s' % (pid, comm, str(third), str(forth)))
+        #self.lgr.debug('sharedSyscall exitHap %d (%s) context: %s  break_num: %s' % (pid, comm, str(context), str(break_num)))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:
@@ -565,7 +580,7 @@ class SharedSyscall():
                     self.traceProcs.open(pid, comm, exit_info.fname, eax)
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
                 if ('.so.' in exit_info.fname or exit_info.fname.endswith('.so')) and self.track_so:
-                    self.lgr.debug('is open so')
+                    #self.lgr.debug('is open so')
                     #open_syscall = self.top.getSyscall(self.cell_name, 'open')
                     open_syscall = exit_info.syscall_instance
                     if open_syscall is not None: 
