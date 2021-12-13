@@ -56,7 +56,9 @@ class PrepInjectWatch():
                 self.top.revTaintAddr(mark.mark.recv_addr, kernel=True, prev_buffer=True, callback=self.handleDelta)
 
             else:
-                self.lgr.error('prepInjectWatch watch mark is not an ioctl call.')
+                self.lgr.debug('prepInjectWatch watch mark is not an ioctl call.')
+                self.read_mark = watch_mark
+                self.handleReadBuffer(callback=self.instrumentRead)
                
     def handleDelta(self, buf_addr_list): 
         ''' Assume backtrace stopped at something like rsb r6, r3, r6 
@@ -68,20 +70,6 @@ class PrepInjectWatch():
         self.k_start_ptr = min(buf_addr_list[0], buf_addr_list[1]) 
         self.k_end_ptr = max(buf_addr_list[0], buf_addr_list[1]) 
         self.handleReadBuffer()
-         
-
-    def handleReadBuffer(self):
-        ''' now assume watch_mark is at return from a read of interest.'''
-        self.dataWatch.goToMark(self.read_mark)
-        mark = self.dataWatch.getMarkFromIndex(self.read_mark)
-        self.lgr.debug('doInject got mark %s' % mark.mark.getMsg())
-        if type(mark.mark) is watchMarks.CallMark:
-            self.lgr.debug('doInject 2nd is call mark')
-            if 'read' in mark.mark.getMsg():
-                self.lgr.debug('is read, jump to prior to the call')
-                self.fd = mark.mark.fd
-                buf_addr = mark.mark.recv_addr
-                self.top.revTaintAddr(buf_addr, kernel=True, prev_buffer=True, callback=self.instrumentIO)
 
     def instrumentAlone(self, buf_addr_list): 
         self.dataWatch.goToMark(self.ioctl_mark)
@@ -96,6 +84,59 @@ class PrepInjectWatch():
     def instrumentIO(self, buf_addr_list):
         self.lgr.debug('prepInjectWatch in instrument IO buf_addr_list len is %d' % len(buf_addr_list));
         SIM_run_alone(self.instrumentAlone, buf_addr_list)
+
+    def instrumentRead(self, buf_addr_list):
+        self.lgr.debug('prepInjectWatch instrumentRead  buf_addr_list len is %d' % len(buf_addr_list));
+        self.dataWatch.goToMark(self.read_mark)
+        self.top.precall()
+        if len(buf_addr_list) > 1:
+            ''' TBD NOT USED '''
+            ''' assume x86 dual rep movs...  will be 2 sets of esi, edi '''
+            ''' where we found the first byte of the application buffer '''
+            app_esi = buf_addr_list[0]
+            ''' start of kernel buffer copy '''
+            k_esi = buf_addr_list[2]
+            ''' destination of kernel buffer copy, will preceed app_esi by some number of bytes.  IP stuff? '''
+            k_edi = buf_addr_list[3]
+            ''' offset into the kernel buffer where we think data begins '''
+            delta = app_esi - k_edi
+            ''' address within that kernel buffer '''
+            buf_addr = k_esi + delta
+            self.lgr.debug('instrumentRead x86 movsb dance, think buf_addr is 0x%x' % buf_addr)
+        else:
+            buf_addr = buf_addr_list[0]
+        self.pickleit(buf_addr)
+
+    def handleReadBuffer(self, callback=None):
+        if callback is None:
+            callback = self.instrumentIO
+        # go to return from a read of interest.
+        self.dataWatch.goToMark(self.read_mark)
+        mark = self.dataWatch.getMarkFromIndex(self.read_mark)
+        self.lgr.debug('doInject got mark %s' % mark.mark.getMsg())
+
+        ''' go forward one to user space and record the return IP '''
+        SIM_run_command('pselect %s' % self.cpu.name)
+        SIM_run_command('si')
+        self.ret_ip = self.top.getEIP(self.cpu)
+        ''' now record the call '''
+        frame, cycle = self.top.getRecentEnterCycle()
+        previous = cycle - 1
+        SIM_run_command('skip-to cycle=%d' % previous)
+        self.call_ip = self.top.getEIP(self.cpu)
+
+        self.dataWatch.goToMark(self.read_mark)
+        if type(mark.mark) is watchMarks.CallMark:
+            self.lgr.debug('doInject 2nd is call mark')
+            if 'read' in mark.mark.getMsg():
+                self.lgr.debug('is read, jump to prior to the call')
+                self.fd = mark.mark.fd
+                buf_addr = mark.mark.recv_addr
+                self.top.revTaintAddr(buf_addr, kernel=True, prev_buffer=True, callback=callback)
+            else:
+                self.lgr.debug('prepInjectWatch handleReadBuffer read mark does not look like a read mark: %s' % mark.mark.getMsg())
+        else:
+            self.lgr.debug('prepInjectWatch handleReadBuffer read mark is not a callMark')
 
     def pickleit(self, buf_addr):
         self.lgr.debug('prepInjectWatch  pickleit, begin')
@@ -113,3 +154,4 @@ class PrepInjectWatch():
         pickle.dump( pickDict, open( afl_file, "wb") ) 
         ''' Otherwise console has no indiation of when done. '''
         print('Configuration file saved, ok to quit.')
+        self.top.quit()
