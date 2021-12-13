@@ -517,12 +517,13 @@ class WatchMarks():
             frames = st.getFrames(2)
             for f in frames:
                 self.lgr.debug(f.dumpString())
-            next_frame = frames[1]
-            if next_frame.instruct.startswith('bl'):
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                base = next_frame.sp
-            else:
-                self.lgr.debug('watchMarks getStackBase, next frame does not look like an lr return, unable to delete temporary stack frame?')
+            if len(frames) > 1:
+                next_frame = frames[1]
+                if next_frame.instruct.startswith('bl'):
+                    sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                    base = next_frame.sp
+                else:
+                    self.lgr.debug('watchMarks getStackBase, next frame does not look like an lr return, unable to delete temporary stack frame?')
         return sp, base
 
 
