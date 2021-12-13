@@ -30,7 +30,7 @@ class WriteData():
         self.expected_packet_count = expected_packet_count
         # Memory location in which to wrte
         self.addr = None
-        self.max_len = None
+        self.max_len = 9999
 
         # Use to skip over kernel recv processing
         self.call_ip = None
@@ -77,8 +77,12 @@ class WriteData():
 
         self.loadPickle(snapshot_name)
 
-        self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
-             self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
+        if self.call_ip is not None:
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+                 self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
+        else:
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+                 self.addr, self.max_len, len(in_data), str(self.cell), self.stop_on_read, self.udp_header))
 
         self.pid = self.top.getPID()
         self.filter = filter
@@ -97,7 +101,9 @@ class WriteData():
 
     
     def write(self, record=False):
+        self.lgr.debug('writeData write, addr is 0x%x' % self.addr)
         if self.k_start_ptr is not None:
+            ''' we have buffer start/end info from tracing ioctl '''
             this_len = len(self.in_data)
             orig_len = self.getOrigLen()
             if this_len > orig_len:
@@ -106,9 +112,25 @@ class WriteData():
             retval = this_len
             self.modKernBufSize(this_len)
             #self.setCallHap()
+        elif self.mem_utils.isKernel(self.addr):
+            ''' not done, no control over size. prep must use maximum buffer'''
+            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+            retval = len(self.in_data)
+            self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
+            if self.dataWatch is not None:
+                self.dataWatch.setReadLimit(retval, self.readLimitCallback)
+            self.in_data = ''
         else:
+            self.lgr.debug('writeData wirte is to user buffer')
             retval = self.userBufWrite(record)
         return retval
+
+    def readLimitCallback(self):
+        ''' Called by dataWatch when kernel buffer sized is consumed '''
+        if self.call_hap is None and self.call_ip is not None:
+            self.lgr.debug('writeData readLimitCallback, add callHap')
+            self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
+            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
     def userBufWrite(self, record=False):
         retval = None
@@ -187,9 +209,9 @@ class WriteData():
 
     def setCallHap(self):
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
-        if self.call_hap is None and self.k_start_ptr is None:
+        if self.call_hap is None and self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             ''' NOTE stop on read will miss processing performed by other threads. '''
-            #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
             if self.select_call_ip is not None:
@@ -223,10 +245,13 @@ class WriteData():
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             '''
             if self.write_callback is not None:
-                SIM_run_alone(self.write_callback, 0)
+                if self.mem_utils.isKernel(self.addr):
+                    SIM_break_simulation('kernel buffer data consumed.')
+                else:
+                    SIM_run_alone(self.write_callback, 0)
             #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
             else:
-                SIM_break_simulation('broken offset')
+                SIM_break_simulation('writeData out of data')
             #SIM_run_alone(self.delCallHap, None)
         else:
             frame = self.top.frameFromRegs(self.cpu)
@@ -306,7 +331,9 @@ class WriteData():
                 self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
-            if 'size' in so_pickle:
+                if self.addr is None:
+                    self.lgr.error('loadPickle got addr of None')
+            if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
