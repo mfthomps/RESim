@@ -1670,6 +1670,11 @@ class GenMonitor():
             print('reverse execution disabled')
             self.skipAndMail()
 
+    def revTaintSP(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        value = self.mem_utils[self.target].getRegValue(cpu, 'sp')
+        self.revTaintAddr(value)
+        
     def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None):
         '''
         back track the value at a given memory location, where did it come from?
