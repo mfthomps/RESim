@@ -1161,7 +1161,7 @@ class reverseToCall():
             #SIM_run_alone(SIM_run_command, cmd)
            
  
-    def cleanup(self, addr):
+    def cleanup(self, addr_list):
         self.lgr.debug('reverseToCall cleanup')
         self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
@@ -1173,10 +1173,12 @@ class reverseToCall():
             if self.callback is None:
                 self.top.skipAndMail()
             else:
-                if addr is not None:
-                    self.lgr.debug('reverseToCall cleanup addr: 0x%x' % addr)
+                if addr_list is not None:
+                    self.lgr.debug('reverseToCall cleanup len of addr_list: %d' % len(addr_list))
+                    tmp_buf_addrs = list(addr_list)
+                else:
+                    tmp_buf_addrs = list(self.buf_addrs)
                 tmp_callback = self.callback
-                tmp_buf_addrs = list(self.buf_addrs)
                 self.callback = None
                 self.buf_addrs = []
                 tmp_callback(tmp_buf_addrs)
