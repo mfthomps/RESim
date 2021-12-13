@@ -43,16 +43,8 @@ class InjectIO():
         #if self.packet_count > 1: 
         #    self.stop_on_read = True
         self.current_packet = 0
-        self.call_ip = None
-        self.return_ip = None
-        self.call_hap = None
-        self.call_break = None
         self.addr = None
         self.addr_addr = None
-
-        ''' used for kernel buffers '''
-        self.k_start_ptr = None
-        self.k_end_ptr = None
 
         self.max_len = None
         self.orig_buffer = None
@@ -131,7 +123,7 @@ class InjectIO():
         self.lgr.debug('write data total size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging, or unless modifying kernel buffer '''
-        if self.target is None and not no_go_receive and self.k_start_ptr is None:
+        if self.target is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
             self.dataWatch.goToRecvMark()
 
         lenreg = None
@@ -190,7 +182,7 @@ class InjectIO():
                     self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
-                    if self.k_start_ptr is None:
+                    if not self.mem_utils.isKernel(self.addr):
                         self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                         ''' special case'''
                         if self.max_len == 1:
@@ -207,7 +199,7 @@ class InjectIO():
                 if self.trace_all:
                     self.lgr.debug('injectIO trace_all requested.  Context is %s' % self.cpu.current_context)
                     cli.quiet_run_command('c')
-                elif self.k_start_ptr is None:
+                elif not self.mem_utils.isKernel(self.addr):
                     print('retracking IO') 
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
@@ -278,7 +270,7 @@ class InjectIO():
     def stopHap(self, count, one, exception, error_string):
         if self.stop_hap is None:
             return
-        self.lgr.debug('injectIO stopHap from writeCalback')
+        self.lgr.debug('injectIO stopHap from writeCallback')
         SIM_run_alone(self.resetReverseAlone, count)
         
     def writeCallback(self, count):
@@ -298,6 +290,13 @@ class InjectIO():
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectiO load orig_buffer from pickle')
+            if 'size' in so_pickle and so_pickle['size'] is not None:
+                self.max_len = so_pickle['size']
+            if 'addr_addr' in so_pickle:
+                self.addr_addr = so_pickle['addr_addr']
+                self.addr_size = so_pickle['addr_size']
+            if 'fd' in so_pickle:
+                self.fd = so_pickle['fd']
 
     def saveJson(self, save_file=None, packet=None):
         if packet is None:
