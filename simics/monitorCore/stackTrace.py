@@ -68,6 +68,8 @@ class StackTrace():
     def followCall(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
+        if return_to == 0 or not self.soMap.isCode(return_to, self.pid):
+            return None
         if self.cpu.architecture == 'arm':
             #self.lgr.debug('followCall return_to 0x%x' % return_to)
             eip = return_to - 4
@@ -78,6 +80,7 @@ class StackTrace():
                 retval = eip
         else:
             eip = return_to - 2
+            #self.lgr.debug('followCall return_to is 0x%x  ip 0x%x' % (return_to, eip))
             # TBD use instruction length to confirm it is a true call
             # not always 2* word size?
             count = 0
