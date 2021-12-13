@@ -74,6 +74,9 @@ class findKernelWrite():
         self.prev_delta = None
         self.iter_count = None
 
+        ''' kernel buffer addresses used for x86 kernel buffer injection '''
+        self.k_buffer_addrs = []
+
         ''' handle case where address is in the initial data watch buffer, but only if that is
             not a true kernel write '''
         if not self.kernel and self.checkInitialBuffer(addr):
@@ -654,6 +657,20 @@ class findKernelWrite():
                         self.lgr.debug('backOneAlone, found constant %x, stumped' % value)
                         SIM_run_alone(self.cleanup, False)
                         self.top.skipAndMail()
+        elif instruct[1].startswith('rep movs'):
+            src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+            if self.prev_buffer:
+                self.k_buffer_addrs.append(src_addr)
+                #self.k_buffer_addrs.append(self.addr)
+                if True or len(self.k_buffer_addrs) > 2:
+                    SIM_run_alone(self.cleanup, False)
+                    self.lgr.debug('got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
+                    self.rev_to_call.cleanup(self.k_buffer_addrs)
+                else:
+                    self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
+            else:
+                self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
+        
         elif mn == 'push':
             op1, op0 = self.decode.getOperands(instruct[1])
             self.lgr.debug('backOneAlone push op0 is %s' % op0)
