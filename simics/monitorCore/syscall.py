@@ -1656,6 +1656,9 @@ class Syscall():
            callname = self.task_utils.syscallName(syscall_info.callnum, syscall_info.compat32) 
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                return
+           if pid == 1 and callname in ['open', 'mmap', 'mmap2']:
+               ''' ad-hoc noise reduction '''
+               return
            callnum = syscall_info.callnum
            #syscall_info.compat32 = False
         ''' call 0 is read in 64-bit '''
@@ -1663,7 +1666,7 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s for pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, 
+        self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
             pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if comm == 'swapper/0' and pid == 1:
