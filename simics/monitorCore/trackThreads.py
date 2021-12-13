@@ -154,7 +154,7 @@ class TrackThreads():
             call_list.append('mmap2')
         self.open_syscall = syscall.Syscall(None, self.cell_name, self.cell, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=call_list,
-                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32)
+                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32, name='trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 
     def cloneHap(self, dumb, third, forth, memory):
