@@ -88,6 +88,8 @@ class DataWatch():
         self.max_marks = None
         ''' used by writeData when simulating responses from ioctl '''
         self.total_read = 0
+        self.read_limit_trigger = None
+        self.read_limit_callback = None
         ''' skip hit on ad_hoc buffer that was just added, and likely not yet executed.'''
         self.last_ad_hoc = 0
 
@@ -153,6 +155,9 @@ class DataWatch():
         self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r' % (start, my_len, length, back_stop))
         if fd is not None:
             self.total_read = self.total_read + length
+            if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
+                self.read_limit_callback()
+            
             if self.checkFread(start, length):
                 self.lgr.debug('dataWatch setRange was fread, return for now')
                 return
@@ -1815,3 +1820,7 @@ class DataWatch():
 
     def enable(self):
         self.disabled = False
+
+    def setReadLimit(self, limit, callback):
+        self.read_limit_trigger = limit
+        self.read_limit_callback = callback
