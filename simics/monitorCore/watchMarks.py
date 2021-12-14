@@ -348,6 +348,7 @@ class WatchMarks():
         for mark in self.mark_list:
             print('%d %s  ip:0x%x' % (i, mark.mark.getMsg(), mark.ip))
             i += 1
+        self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
 
     class WatchMark():
