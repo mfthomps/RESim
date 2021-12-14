@@ -302,6 +302,8 @@ the nth recv call.
 
 \item {\tt runToInput(fd)} -- Like runToIO, but only finds reads, receives, etc.
 
+\item {\tt runToOpen(file)} -- Stops at the open of a given filename.
+
 \item {\tt clone(nth)} – Continue execution until the nth clone system call in the current process occurs, and then halt execution within the child.
 
 \item {\tt runToText()} – Continue execution until the text segment of the currently debugged process is reached.  This, and revToText, are useful after execution transfers to libraries, or Linux linkage functions, e.g., references to the GOT.
@@ -345,10 +347,10 @@ Useful if you are in some library called by some other library, and you want to 
 \subsection{Data tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
-FD, RESim will ensure that call is tracked.  Data watches persist after the
+FD, RESim will ensure that call is tracked.  The count parameter can be used to track the Nth read or recv.   Data watches persist after the
 call, e.g., to support {\tt retrack} described below.  Each use of trackIO will reset all data watches, but does not clear watch marks, i.e., you can still skip to those simulation cycles.  Also see 
 the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse time origin to be reset if the kernel was waiting on a read/recv. See \ref{real-networks}  Data for to be consumed by the taget can originate from a simulated computer, e.g., a driver, or via a real network using something like:
 \begin{verbatim}
@@ -607,6 +609,7 @@ The default value is 900,000,000, which is too large for some ARM implementation
 {\tt BOOT\_CHUNKS} value assigned to any component that has not yet completed its boot.
 \item {\tt DMOD} Optional file to pass to the {\tt runToDmod} command once the component has booted.  See \ref{dmod}.
 \item {\tt PLATFORM} One of the following: x86; arm; or arm5
+\item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded.
 \end{itemize}
 
 \subsection{Network definitions}
@@ -925,6 +928,10 @@ A related function,  {\tt injectIO}, injects data from a file into a read buffer
 and stores information related to the data input, including the original buffer data.
 RESim includes a suite of related data tracking functions to replay AFL queue files.
 
+\subsubsection{Tracking libraries}
+The data references of interest might occur in a shared library.  See section \ref{shared-libraries} for information on opening IDA to 
+observe library references to data.
+
 \subsubsection{When are you done?}
 When tracking data, you need to decide when to stop looking for data references.  The primary mechanism for this is the BACK\_STOP\_CYCLES
 setting.  When tracking data, RESim declares it is done tracking after that number of execution cycles occur with no data references.
@@ -1098,7 +1105,7 @@ Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  B
 test a single fuzzing instance as described below.
 
 \begin{itemize}
-\item Clone the AFL repo and use {\tt make} to build the executable.
+\item Clone the AFL repo (\url{git@github.com:mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
 \item Create a RESim workspace for the fuzzing session.  The name of the workspace will be used
 to name fuzzing artifcats, so make it meaningful.
 \item Confirm your {\.bashrc} file defines the AFL paths per section \ref{installation}.
@@ -1186,11 +1193,11 @@ the kernel does not know there is more data to inject into the application memor
 the use of {\tt injectIO} since each injection into application memory resets the origin used with reverse execution.
 
 The {\tt prepInjectWatch} operation can be used to
-prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes the application uses
-ioctl to determine who much data is in the kernel buffer.
+prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes the ether that the application uses
+ioctl to determine who much data is in the kernel buffer, or that the initial buffer from the prepInjectWatch is as large as any data to be injected.
+The latter case, e.g., an application that simply reads a character at a time until it sees some delimiiter, will stop the simulation when the application
+has consumed all the data provided in the injection and again hits the read call.
 
-TBD: add select/ioctl syscall haps to the playAFL function to catch use of those calls when analyst is assuming a single-read model.  Note however
-we don't have the FD of the read.
 
 \subsubsection{State of the target system}
 Stateful services such as FTP typically require some amount of interaction to get the process into the state at which you'd like to fuzz it.
@@ -1468,6 +1475,7 @@ ARM prefetch abort entry for 64-bit cpu is 0xffff0280.  How to find that with ke
 We've subsequently gone back to only relying on Core\_Exception breakpoints.
 
 \section{External tracking of shared object libraries}
+\ref{shared-libraries}
 During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in IDA Pro to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
 synthesizing access to {\tt /proc/$<$pid$>$/map}
 
@@ -1476,7 +1484,8 @@ When the program of interest is loaded via an execve system call, breakpoints ar
 RESim maintains maps of addresses of shared library files.  Use the {\tt showSOMap} command to view a list of libraries and their load
 addresses.  The {\tt stackTrace} command identfies the library of the current stack frame (or {\tt show} for the current instruction address.
 Once you know the library and its load address, open the library in IDA (and use {\tt dumpFuns.py} and {\tt findBlocks.py} to generate databases
-referened by RESim if not yet created). Rebase the program ({\tt Edit/Segment/rebase} and then attach to the debugger.
+referened by RESim if not yet created). Rebase the program ({\tt Edit/Segment/rebase} and then attach to the debugger. NOTE, depending on the library, rebasing may take a while.
+Wait for IDA to finish before attempting to attach the debugger.
 Switching between libraries currently requires that you exit IDA and then open the other library.
 
 %When a shared object is called, the IDA Pro client retrieves the shared library name from the RESim server and displays it for the user.  When the user opens that file in IDA Pro, and attaches the debugger, the IDA Pro plug-in retrieves the address of the library and causes IDA to rebase using that offset.
