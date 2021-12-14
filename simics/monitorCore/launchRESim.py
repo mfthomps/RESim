@@ -221,6 +221,7 @@ class LaunchRESim():
         
         self.comp_dict = createDict(self.config, self.not_a_target)
         self.link_dict = {}
+
         if RUN_FROM_SNAP is None:
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             checkVLAN(self.config)
@@ -267,6 +268,12 @@ class LaunchRESim():
             run_command('read-configuration %s' % RUN_FROM_SNAP)
             #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
         run_command('log-level 0 -all')
+        ''' dummy logging object to support script branches for automated tests '''
+        try:
+            SIM_create_object('dummy_comp', 'RESim_log', [])
+        except:
+            pass
+        SIM_run_command('RESim_log.log-level 1')
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''

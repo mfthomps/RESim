@@ -1,5 +1,6 @@
 import os
 import logging
+from simics import *
 def getLogger(name, logdir, level=None):
     os.umask(000)
     try:
@@ -23,3 +24,6 @@ def getLogger(name, logdir, level=None):
     #lgr.propogate = False
     return lgr
 
+def rprint(string):
+    rl = SIM_get_object('RESim_log')
+    SIM_log_info(1, rl, 0, string)

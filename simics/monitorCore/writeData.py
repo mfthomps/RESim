@@ -3,6 +3,7 @@ import sys
 import os
 import pickle
 import taskUtils
+from resim_utils import rprint
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
@@ -246,6 +247,7 @@ class WriteData():
             '''
             if self.write_callback is not None:
                 if self.mem_utils.isKernel(self.addr):
+                    rprint('kernel buffer data consumed')
                     SIM_break_simulation('kernel buffer data consumed.')
                 else:
                     SIM_run_alone(self.write_callback, 0)
