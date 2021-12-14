@@ -1932,10 +1932,12 @@ class GenMonitor():
             self.trace_all[target].setRecordFD(record_fd)
             print('Was tracing.  Limit to FD recording? %r' % (record_fd))
         else:
+            context = self.context_manager[target].getDefaultContext()
             cell = self.cell_config.cell_context[target]
             pid, cpu = self.context_manager[target].getDebugPid() 
             if pid is not None:
                 tf = '/tmp/syscall_trace-%s-%d.txt' % (target, pid)
+                context = self.context_manager[target].getRESimContext()
             else:
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
@@ -1955,7 +1957,8 @@ class GenMonitor():
                     if exit_info_list is None:
                         self.lgr.error('No data found in %s' % p_file)
                     else:
-                        self.trace_all[target].setExits(exit_info_list)
+                        ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
+                        self.trace_all[target].setExits(exit_info_list, context_override = context)
 
     def noDebug(self, dumb=None):
         self.lgr.debug('noDebug')
