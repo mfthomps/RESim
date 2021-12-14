@@ -62,12 +62,14 @@ class SharedSyscall():
         return None
 
     def stopTrace(self):
-        my_exit_pids = self.exit_pids[self.cpu.current_context]
-        self.lgr.debug('sharedSyscall stopTrace')
+        for context in self.exit_pids:
+            my_exit_pids = self.exit_pids[context]
+            self.lgr.debug('sharedSyscall stopTrace')
+            for eip in self.exit_hap:
+                self.context_manager.genDeleteHap(self.exit_hap[eip])
+            my_exit_pids = {}
         for eip in self.exit_hap:
-            self.context_manager.genDeleteHap(self.exit_hap[eip])
-        my_exit_pids = {}
-        self.exit_info = {}
+            self.exit_info[eip] = {}
 
     def showExitHaps(self):
         if self.cpu.current_context not in self.exit_pids:
@@ -103,8 +105,11 @@ class SharedSyscall():
                 broke the simulation. '''
             ''' TBD NOTE procs returning from blocked syscalls will not be caught! '''
             for eip in my_exit_pids:
-                del my_exit_pids[eip][:]
-                self.context_manager.genDeleteHap(self.exit_hap[eip])
+                #del my_exit_pids[eip][:]
+                my_exit_pids[eip] = []
+                if eip in self.exit_hap:
+                    self.context_manager.genDeleteHap(self.exit_hap[eip])
+                    del self.exit_hap[eip]
                 self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
 
 
