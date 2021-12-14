@@ -108,15 +108,18 @@ class SharedSyscall():
                 self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
 
 
-    def addExitHap(self, cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name):
+    def addExitHap(self, cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name, context_override=None):
         if pid not in self.exit_info:
             self.exit_info[pid] = {}
         self.exit_info[pid][name] = exit_info
-        #self.lgr.debug('sharedSyscall addExitHap pid:%d name %s' % (pid, name))
+        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s' % (pid, name))
         if self.traceProcs is not None:
             self.trace_procs.append(pid)
         self.exit_names[pid] = name
-        current_context = self.cpu.current_context
+        if context_override is None:
+            current_context = self.cpu.current_context
+        else:
+            current_context = context_override
         if current_context not in self.exit_pids:
             self.exit_pids[current_context] = {}
         my_exit_pids = self.exit_pids[current_context]
@@ -124,28 +127,28 @@ class SharedSyscall():
             my_exit_pids[exit_eip1] = []
 
         if exit_eip1 is not None: 
-            #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
+            self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
             if len(my_exit_pids[exit_eip1]) == 0:
-                #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
+                self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap')
-                #self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
+                self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
             my_exit_pids[exit_eip1].append(pid)
-            #self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
+            self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
 
         if exit_eip2 is not None:
             if exit_eip2 not in my_exit_pids:
                 my_exit_pids[exit_eip2] = []
 
             if len(my_exit_pids[exit_eip2]) == 0:
-                #self.lgr.debug('addExitHap new exit EIP2 0x%x for pid %d' % (exit_eip2, pid))
+                self.lgr.debug('addExitHap new exit EIP2 0x%x for pid %d' % (exit_eip2, pid))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap2')
-                #self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
+                self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
             my_exit_pids[exit_eip2].append(pid)
 
         if exit_eip3 is not None:
@@ -340,7 +343,15 @@ class SharedSyscall():
                     ''' obscure use of fname_addr to store source of recvfrom '''
                     src_ss = net.SockStruct(self.cpu, exit_info.fname_addr, self.mem_utils, fd=-1)
                     src = 'from: %s' % src_ss.getString()
-
+                if exit_info.old_fd is None:
+                    self.lgr.error('sharedSyscall exit_info old_fd is None for recv call')
+                    exit_info.call_params = None
+                    trace_msg = ('\treturn from socketcall %s pid:%d  FD: None' % (socket_callname, pid))
+                    return trace_msg 
+                if exit_info.sock_struct.length is None:
+                    self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call')
+                    trace_msg = ('\treturn from socketcall %s pid:%d  FD: %d length none (from revToCall?)' % (socket_callname, pid, exit_info.old_fd))
+                    return trace_msg 
                 trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, pid, 
                      exit_info.old_fd, exit_info.sock_struct.length, eax, exit_info.retval_addr, src, s))
                 my_syscall = exit_info.syscall_instance
@@ -361,6 +372,15 @@ class SharedSyscall():
                         self.lgr.debug('sharedSyscall found origin reset, do it')
                         SIM_run_alone(self.stopAlone, None)
             else:
+                if exit_info.retval_addr is None:
+                    self.lgr.debug('sharedSyscall exit_info retval_addr is None for recv call with nonzero eax')
+                    trace_msg = ('\treturn from socketcall %s pid:%d  eax nonzero retval_addr: None' % (socket_callname, pid))
+                    return trace_msg
+                if exit_info.old_fd is None:
+                    self.lgr.error('sharedSyscall exit_info old_fd is None for recv call with nonzero eax')
+                    exit_info.call_params = None
+                    trace_msg = ('\treturn from socketcall %s pid:%d  eax nonzeroFD: None' % (socket_callname, pid))
+                    return trace_msg
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d into 0x%x\n' % (socket_callname, pid, exit_info.old_fd, eax, exit_info.retval_addr))
                 exit_info.call_params = None
 
@@ -440,7 +460,7 @@ class SharedSyscall():
         else:
             did_exit = self.handleExit(None, pid, comm)
         if did_exit:
-            #self.lgr.debug('exitHap remove exitHap for %d' % pid)
+            self.lgr.debug('exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
 
     def fcntl(self, pid, eax, exit_info):

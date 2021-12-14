@@ -33,6 +33,7 @@ import sys
 import errno
 import struct
 import resim_utils
+from resim_utils import rprint
 import memUtils
 import taskUtils
 import genContextMgr
@@ -802,6 +803,7 @@ class GenMonitor():
                         self.lgr.debug('Coverage is None!')
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
+            rprint('Now debugging %s' % prog_name)
         else:
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
@@ -2466,7 +2468,7 @@ class GenMonitor():
                    self.lgr.debug('kept frames for pid %d' % pid)
             if len(frames) > 0:
                 self.lgr.debug('runToIO, call to setExits')
-                the_syscall.setExits(frames, reset=reset) 
+                the_syscall.setExits(frames, reset=reset, context_override=self.context_manager[self.target].getRESimContext()) 
         else:
             self.trace_all[self.target].addCallParams([call_params])
             self.lgr.debug('runToIO added parameters rather than new syscall')
@@ -2516,7 +2518,7 @@ class GenMonitor():
                del frames[pid]
         if len(frames) > 0:
             self.lgr.debug('runToIO, call to setExits')
-            the_syscall.setExits(frames) 
+            the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
        
         
         SIM_run_command('c')
@@ -2981,6 +2983,7 @@ class GenMonitor():
         if self.binders is not None:
             binder_file = os.path.join('./', name, 'binder.json')
             self.binders.dumpJson(binder_file)
+        self.lgr.debug('writeConfig done to %s' % name)
 
     def showCycle(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -3885,6 +3888,7 @@ class GenMonitor():
                         break
     def quitAlone(self, dumb): 
         sys.stderr.write('user requested quit')
+        self.lgr.debug('quitAlone')
         SIM_run_command('q')
    
     def quit(self, cycles=None):
@@ -4017,6 +4021,9 @@ class GenMonitor():
 
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)
+
+    def log(self, string):
+        rprint(string)
     
 
 if __name__=="__main__":        

@@ -1932,7 +1932,8 @@ class Syscall():
                 retval = True
         return retval
            
-    def setExits(self, frames, reset=False):
+    def setExits(self, frames, reset=False, context_override=None):
+        ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
         for pid in frames:
             self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
             if frames[pid] is None:
@@ -1950,9 +1951,16 @@ class Syscall():
             if callname == 'socketcall' or callname.upper() in net.callname:
                 ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
                 self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+                exit_info.old_fd = frames[pid]['param1']
+            if exit_info.old_fd is None:
+                self.lgr.warning('syscall setExits pid %d has old_fd of None')
+                continue
             exit_info.origin_reset = reset
-            self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
-            self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.name)
+            if exit_info.retval_addr is not None:
+                self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
+            else:
+                self.lgr.debug('setExits almost done for pid %d call %d retval_addr is None' % (pid, callnum))
+            self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.name, context_override=context_override)
 
     def addCallParams(self, call_params):
         for call in call_params:
