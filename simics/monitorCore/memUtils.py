@@ -491,7 +491,7 @@ class memUtils():
         retval = ''
         retbytes = ()
         #print 'in getBytes for 0x%x bytes' % (num_bytes)
-        while not done and bytes_to_go > 0:
+        while not done and bytes_to_go > 0 and curr_addr is not None:
             bytes_to_read = bytes_to_go
             remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
             #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
