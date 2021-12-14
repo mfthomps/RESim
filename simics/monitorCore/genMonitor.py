@@ -3126,7 +3126,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3142,7 +3142,7 @@ class GenMonitor():
 
         if self.coverage is not None:
             self.coverage.doCoverage()
-        self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun)
+        self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun, count=count)
 
     def stopTrackIO(self):
         self.lgr.debug('stopTrackIO')
