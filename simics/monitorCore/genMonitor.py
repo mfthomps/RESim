@@ -565,11 +565,7 @@ class GenMonitor():
         if self.run_from_snap is not None:
             self.snapInit()
             return
-        #SIM_run_command('pselect cpu-name = %s' % cpu.name)
-        #run_cycles = 90000000
-        #run_cycles =  9000000
         run_cycles = self.getBootCycleChunk()
-        #run_cycles = 900000
         done = False
         while not done:
             done = True
@@ -639,7 +635,7 @@ class GenMonitor():
                 dumb, ret = cli.quiet_run_command(cmd)
                 cmd = 'c %s cycles' % run_cycles
                 dumb, ret = cli.quiet_run_command(cmd)
-                #SIM_continue(run_cycles)
+                #self.lgr.debug('back from continue')
        
     def getDbgFrames(self):
         retval = {}
