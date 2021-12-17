@@ -252,8 +252,8 @@ class InjectIO():
             packet_num = self.write_data.getCurrentPacket() - 1
             self.saveJson(packet=packet_num)
             self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
-        self.resetOrigin(None)
-        self.dataWatch.clearWatchMarks()
+            self.resetOrigin(None)
+            self.dataWatch.clearWatchMarks()
         if count != 0:
             self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
             ''' special case'''
