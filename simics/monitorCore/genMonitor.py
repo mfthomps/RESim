@@ -2428,7 +2428,10 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
 
         if self.target not in self.trace_all or self.trace_all[self.target] is None:
+            accept_call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
             calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+            for c in accept_call:
+                calls.append(c)
             # note hack for identifying old arm kernel
             if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
                 calls.remove('socketcall')
@@ -2441,6 +2444,8 @@ class GenMonitor():
                 calls.append('lseek')
                 calls.remove('send')
                 calls.remove('recv')
+                for c in accept_call:
+                    calls.remove(c)
             skip_and_mail = True
             if flist_in is not None:
                 ''' Given callback functions, use those instead of skip_and_mail '''

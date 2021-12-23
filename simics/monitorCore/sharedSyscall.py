@@ -292,6 +292,9 @@ class SharedSyscall():
                         #self.dataWatch.watch(break_simulation=False)
                         self.lgr.debug('sharedSyscall accept call dataWatch watch')
                         self.dataWatch.watch(break_simulation=exit_info.call_params.break_simulation)
+                if exit_info.call_params is not None and my_syscall.name == 'runToIO' and exit_info.call_params.match_param == exit_info.sock_struct.fd:
+                    self.lgr.debug('sharedSyscall for runToIO, change param fd to %d' % new_fd)
+                    exit_info.call_params.match_param = new_fd
                 if socket_syscall is not None:
                     binders = socket_syscall.getBinders()
                     if binders is not None:
