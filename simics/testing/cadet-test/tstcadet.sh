@@ -14,7 +14,7 @@ cd cadet-tst
 resim-ws.sh
 export WS=$RESIM_DIR/simics/workspace
 echo "ws is $WS"
-cp $WS/cadet01 $WS/cadet01.funs $WS/ubuntu_driver.ini $WS/ubuntu.param $WS/driver-script.sh $WS/mapdriver.simics $WS/client.py .
+cp $WS/cadet01 $WS/cadet01.funs $WS/ubuntu_driver.ini $WS/ubuntu.param $WS/driver-script.sh $WS/mapdriver.simics $WS/client.py $WS/authorized_keys .
 
 #sed -i '/OS_TYPE=LINUX32/a INIT_SCRIPT=cadet.simics' ubuntu_driver.ini
 sed -i 's/mapdriver.simics/cadet.simics/' ubuntu_driver.ini
