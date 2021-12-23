@@ -297,8 +297,8 @@ a port number will be translated to the pattern {\tt .*:N} where N is the port n
 
 \item {\tt runToAccept(FD)} – Continue execution until a return from a socket accept to the given file descriptor.
 
-\item {\tt runToIO(fd, nth=1)} – Continue execution until a read or write to the given file descriptor.  If nth is greater than 1, will run until
-the nth recv call.
+\item {\tt runToIO(fd, nth=1)} – Continue execution until a read, write, select, ioctl, accept or close with the given file descriptor.  
+If nth is greater than 1, will run until the nth recv call.  
 
 \item {\tt runToInput(fd)} -- Like runToIO, but only finds reads, receives, etc.
 
@@ -349,6 +349,7 @@ Useful if you are in some library called by some other library, and you want to 
 
 \item {\tt trackIO(FD, reset=False, count=1)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generated a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
+If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
 FD, RESim will ensure that call is tracked.  The count parameter can be used to track the Nth read or recv.   Data watches persist after the
 call, e.g., to support {\tt retrack} described below.  Each use of trackIO will reset all data watches, but does not clear watch marks, i.e., you can still skip to those simulation cycles.  Also see 
