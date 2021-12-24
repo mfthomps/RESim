@@ -1,6 +1,16 @@
 import os
 import glob
 import json
+def getHost():
+    hostname = os.getenv('HOSTNAME')
+    if hostname is None:
+        print('HOSTNAME env not set')
+        return None
+    #print('hostname is %s' % hostname)
+    if len(hostname) > 8:
+        hostname = hostname[-8:]
+        #print('hostname truncated to %s' % hostname)
+    return hostname
 def getAFLOutput():
     afl_dir = os.getenv('AFL_OUTPUT')
     if afl_dir is None:
@@ -13,25 +23,31 @@ def getAFLOutput():
 
 def getGlobMask(target, index, instance, which, host=None, sync=False):
     retval = None
-    this_host = os.getenv('HOST')
+    this_host = getHost()
     afl_dir = getAFLOutput()
     resim_instance = 'resim_%d' % instance
     if host is None:
+        if target is None:
+            print('aflPath getGlobMask target is None, must exit')
+            exit(1)
         ''' Look if there are host prefixes, otherwise assume legacy '''
-        tglob_mask = os.path.join('afl_dir', target, this_host)+'*'
+        glob_mask = os.path.join(afl_dir, target, this_host)+'*'
+        print('glob_mask is %s' % glob_mask)
         glist = glob.glob(glob_mask)
         if len(glist) == 0:
+            print('legacy')
             ''' assume legacy '''
             if not sync:
                 retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, resim_instance, which, index)
             else:
                 retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, resim_instance, which, index)
         else:
-            fuzzid = '%s_%s' (this_host, resim_instance)
+            print('has host?')
+            fuzzid = '%s_%s' % (this_host, resim_instance)
             if not sync:
-                retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+                retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzzid, which, index)
             else:
-                retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, fuzz_id, which, index)
+                retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, fuzzid, which, index)
     else:
         parts = this_host.rsplit('-',1)
         if len(parts) != 2:
@@ -39,9 +55,9 @@ def getGlobMask(target, index, instance, which, host=None, sync=False):
             return None
         fuzzid = '%s-%s_%s' % (parts[0], host, resim_instance)
         if not sync:
-            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzzid, which, index)
         else:
-            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzz_id, which, index)
+            retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzzid, which, index)
     return retval
         
 
