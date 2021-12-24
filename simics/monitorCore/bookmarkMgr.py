@@ -238,7 +238,7 @@ class bookmarkMgr():
             return
         sys.stderr = open('err.txt', 'w')
         dum, cpu = self.context_mgr.getDebugPid() 
-        self.context_mgr.clearExitBreaks()
+        self.context_mgr.clearExitBreaksAlone(None)
         start_cycle = self.getCycle('_start+1')
         done = False
         if self.top.SIMICS_BUG:

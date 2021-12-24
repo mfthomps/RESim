@@ -2141,7 +2141,7 @@ class GenMonitor():
             del self.exit_group_syscall[self.target]
         if self.target in self.ropCop:
             self.ropCop[self.target].clearHap()
-        self.context_manager[self.target].clearExitBreaks()
+        self.context_manager[self.target].clearExitBreaksAlone(None)
         self.debug_breaks_set = False
         if self.coverage is not None and not keep_coverage:
             self.coverage.stopCover(keep_hits=True)
