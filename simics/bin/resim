@@ -35,6 +35,8 @@ export RESIM_INI=$1
 export RESIM_TARGET=$1
 export SIMICS_WORKSPACE=`pwd`
 export SIMICS=$SIMDIR
+
+export HOSTNAME=$HOSTNAME
 #
 #  For use with driver components
 #
