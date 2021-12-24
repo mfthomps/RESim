@@ -18,6 +18,7 @@ import time
 import glob
 import threading
 import select
+import aflPath
 def ioHandler(read_array, stop):
     log = '/tmp/resim.log'
     with open(log, 'wb') as fh:
@@ -80,8 +81,8 @@ def main():
         print('missing RESIM_DIR envrionment variable')
         exit(1)
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
-    hostname = os.getenv('HOSTNAME')
-    print('hostname is %s' % hostname)
+    hostname = aflPath.getHost()
+
     
     here = os.getcwd()
     afl_name = os.path.basename(here)
