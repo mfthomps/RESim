@@ -983,13 +983,14 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d FD is None?' % (callname, socket_callname, pid)
                 self.lgr.debug('syscall acccept with ss.fd of none?')
              
-            #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
-            for call_param in syscall_info.call_params:
-                self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
-                if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                    self.lgr.debug('did accept match')
-                    exit_info.call_params = call_param
-                    break
+            if ss.fd is not None:
+                #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
+                    if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                        self.lgr.debug('did accept match')
+                        exit_info.call_params = call_param
+                        break
 
         elif socket_callname == 'getsockname':
             ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
@@ -1952,12 +1953,31 @@ class Syscall():
             exit_info.old_fd = frames[pid]['param1']
 
             if callname == 'socketcall' or callname.upper() in net.callname:
-                ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
-                self.lgr.debug('setExits socket parsed: %s' % ida_msg)
-                exit_info.old_fd = frames[pid]['param1']
+                if 'ss' in frames[pid]:
+                    ss = frames[pid]['ss']
+                    #ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
+                    exit_info.old_fd = ss.fd
+                    exit_info.sock_struct = ss
+                    socket_callnum = frames[pid]['param1']
+                    exit_info.socket_callname = net.callname[socket_callnum].lower()
+                    ida_msg = 'syscall socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
+                    self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+                    callname = exit_info.socket_callname
+                else:
+                    self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frames[pid]['param1'])
+                    exit_info.old_fd = frames[pid]['param1']
             if exit_info.old_fd is None:
                 self.lgr.warning('syscall setExits pid %d has old_fd of None')
                 continue
+
+            if callname == 'accept':
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('setExits syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
+                    if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                        self.lgr.debug('did accept match')
+                        exit_info.call_params = call_param
+                        break
+
             exit_info.origin_reset = reset
             if exit_info.retval_addr is not None:
                 self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
