@@ -977,8 +977,11 @@ class Syscall():
             phys = self.mem_utils.v2p(self.cpu, ss.addr)
             if ss.addr is not None and ss.addr != 0:
                 ida_msg = '%s - %s pid:%d FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, pid, ss.fd, ss.addr, ss.length, phys)
-            else:
+            elif ss.fd is not None:
                 ida_msg = '%s - %s pid:%d FD: %d' % (callname, socket_callname, pid, ss.fd)
+            else:
+                ida_msg = '%s - %s pid:%d FD is None?' % (callname, socket_callname, pid)
+                self.lgr.debug('syscall acccept with ss.fd of none?')
              
             #exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)
             for call_param in syscall_info.call_params:
