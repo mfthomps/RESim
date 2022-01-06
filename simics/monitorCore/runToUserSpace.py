@@ -31,7 +31,7 @@ import pageUtils
 import decode
 import memUtils
 import logging
-import resim_utils
+import resimUtils
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -47,7 +47,7 @@ class runToUserSpace():
             sys.stderr = open('err.txt', 'w')
             self.top = top 
             #self.lgr = lgr
-            self.lgr = resim_utils.getLogger(name, log_dir)
+            self.lgr = resimUtils.getLogger(name, log_dir)
             self.page_size = page_size
             self.lgr.debug('runToUserSpace, in init')
             self.__param = param
