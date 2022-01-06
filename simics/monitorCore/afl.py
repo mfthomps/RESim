@@ -1,4 +1,3 @@
-import backStop
 import os
 import shutil
 import time
@@ -15,7 +14,7 @@ import imp
 from simics import *
 RESIM_MSG_SIZE=80
 class AFL():
-    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, lgr,
+    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, page_faults, lgr,
                  packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, 
                  one_done=False):
         pad_env = os.getenv('AFL_PAD') 
@@ -77,6 +76,7 @@ class AFL():
         self.backstop.setCallback(self.whenDone)
         self.port = port
         self.one_done = one_done
+        self.page_faults = page_faults
         sor = os.getenv('STOP_ON_READ')
         if sor is not None and sor.lower() == 'true':
             self.stop_on_read = True
@@ -188,6 +188,16 @@ class AFL():
                 struct._clearcache()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
+            if status == 0:
+                pid_list = self.context_manager.getWatchPids()
+                if len(pid_list) == 0:
+                    self.lgr.error('afl no pids from getThreadPids')
+                for pid in pid_list:
+                    if self.page_faults.hasPendingPageFault(pid):
+                        self.lgr.debug('afl finishUp found pending page fault for pid %d' % pid)
+                        status = 1
+                        break
+            self.page_faults.stopWatchPageFaults()
             if status == 1:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
                 with open('/tmp/icrashed', 'wb') as fh:
@@ -238,7 +248,7 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        #self.lgr.debug('afl stopHap')
+        self.lgr.debug('afl stopHap')
         if self.stop_hap is None:
             return
         self.finishUp()
@@ -306,12 +316,12 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
+        self.page_faults.watchPageFaults()
         #self.lgr.debug('afl goN context %s' % self.cpu.current_context)
         cli.quiet_run_command('c') 
 
     def whenDone(self):
-        #self.lgr.debug('afl whenDone callback')
-        pass
+        self.lgr.debug('afl whenDone callback')
 
     def synchAFL(self):
         
