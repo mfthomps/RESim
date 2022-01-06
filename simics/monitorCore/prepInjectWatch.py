@@ -5,6 +5,7 @@ import watchMarks
 from simics import *
 import decode
 import decodeArm
+import resimUtils
 '''
 Create a snapshot from a given watch mark index value, intended to
 be an ioctl.  The snapshot will preceed the ioctl call, and
@@ -43,7 +44,7 @@ class PrepInjectWatch():
         self.snap_name = snap_name
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
-        self.lgr.debug('doInject got mark %s' % mark.mark.getMsg())
+
         if type(mark.mark) is watchMarks.CallMark:
             self.lgr.debug('doInject is call mark')
             if 'ioctl' in mark.mark.getMsg():
@@ -113,21 +114,26 @@ class PrepInjectWatch():
         # go to return from a read of interest.
         self.dataWatch.goToMark(self.read_mark)
         mark = self.dataWatch.getMarkFromIndex(self.read_mark)
-        self.lgr.debug('doInject got mark %s' % mark.mark.getMsg())
+        self.lgr.debug('prepInjectWatch handleReadBuffer got mark %s' % mark.mark.getMsg())
 
         ''' go forward one to user space and record the return IP '''
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')
         self.ret_ip = self.top.getEIP(self.cpu)
         ''' now record the call '''
-        frame, cycle = self.top.getRecentEnterCycle()
+        frame, cycle = self.top.getPreviousEnterCycle()
+        frame_s = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
+            frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
+        self.lgr.debug('prepInjectWatch handleReadBuffer got recent cycle 0x%x frame %s' % (cycle, frame_s))
         previous = cycle - 1
-        SIM_run_command('skip-to cycle=%d' % previous)
+        if not resimUtils.skipToTest(self.cpu, previous, self.lgr):
+            return
         self.call_ip = self.top.getEIP(self.cpu)
+        self.lgr.debug('prepInjectWatch handleReadbuffer got call_ip 0x%x  ret_ip 0x%x' % (self.call_ip, self.ret_ip))
 
         self.dataWatch.goToMark(self.read_mark)
         if type(mark.mark) is watchMarks.CallMark:
-            self.lgr.debug('doInject 2nd is call mark')
+            self.lgr.debug('prepInjectWatch 2nd is call mark')
             if 'read' in mark.mark.getMsg():
                 self.lgr.debug('is read, jump to prior to the call')
                 self.fd = mark.mark.fd
