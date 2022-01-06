@@ -470,6 +470,13 @@ class TaskUtils():
                return ts
         #self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
         return None
+
+    def getCommFromPid(self, pid):
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+           if ts_list[ts].pid == pid:
+               return ts_list[ts].comm
+        return None
  
     def getTaskListPtr(self, rec=None):
         ''' return address of the task list "next" entry that points to the current task '''
