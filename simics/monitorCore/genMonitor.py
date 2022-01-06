@@ -32,8 +32,8 @@ import os
 import sys
 import errno
 import struct
-import resim_utils
-from resim_utils import rprint
+import resimUtils
+from resimUtils import rprint
 import memUtils
 import taskUtils
 import genContextMgr
@@ -226,7 +226,7 @@ class GenMonitor():
         '''
         remove all previous breakpoints.  
         '''
-        self.lgr = resim_utils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
+        self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
         SIM_run_command("delete -all")
         self.target = os.getenv('RESIM_TARGET')
@@ -660,6 +660,12 @@ class GenMonitor():
         frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
         return frame, cycles
 
+    def getPreviousEnterCycle(self):
+        ''' return most recent cycle in which the kernel was entered for this PID '''
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(pid)
+        return frame, cycles
+
     def tasksDBG(self):
         plist = {}
         pid_list = self.context_manager[self.target].getThreadPids()
@@ -675,8 +681,8 @@ class GenMonitor():
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
-                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
-                     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
+                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
+                     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
             else:
                 print('pid: %d in user space?' % pid)
 
@@ -714,8 +720,6 @@ class GenMonitor():
                 self.lgr.debug('cmd: %s' % cmd)
                 SIM_run_command(cmd)
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
-                if not self.disable_reverse:
-                    self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
             return pid
 
 
@@ -724,6 +728,8 @@ class GenMonitor():
         #self.stopTrace()    
         cell = self.cell_config.cell_context[self.target]
         cpu = self.cell_config.cpuFromCell(self.target)
+        if not self.disable_reverse:
+            self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
         if not self.did_debug:
             ''' Our first debug '''
             pid = self.doDebugCmd()
@@ -1878,7 +1884,7 @@ class GenMonitor():
         for call in dup_traces:
             syscall_trace = dup_traces[call]
             if syscall is None or syscall_trace == syscall: 
-                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
+                self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
                 syscall_trace.stopTrace(immediate=True)
                 self.rmCallTrace(cell_name, call)
 
@@ -2100,7 +2106,7 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
-            #self.lgr.debug('restoreDebugBreaks')
+            self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2457,6 +2463,7 @@ class GenMonitor():
                                    skip_and_mail=skip_and_mail, name='runToIO')
             for call in calls:
                 self.call_traces[self.target][call] = the_syscall
+            self.call_traces[self.target]['runToIO'] = the_syscall
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
             skip_calls = ['select', 'pselect6', '_newselect']
@@ -2480,6 +2487,7 @@ class GenMonitor():
 
         if run_fun is not None:
             SIM_run_alone(run_fun, None) 
+        self.lgr.debug('runToIO now run')
         SIM_run_command('c')
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
@@ -3130,7 +3138,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3141,7 +3149,7 @@ class GenMonitor():
         else:
             done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watchs')
-        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks)
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
 
         if self.coverage is not None:
@@ -3149,8 +3157,15 @@ class GenMonitor():
         self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun, count=count)
 
     def stopTrackIO(self):
-        self.lgr.debug('stopTrackIO')
-        self.stopTrace()
+        thread_pids = self.context_manager[self.target].getThreadPids()
+        self.lgr.debug('stopTrackIO got %d thread_pids' % len(thread_pids))
+        for pid in thread_pids:
+            if self.page_faults[self.target].hasPendingPageFault(pid):
+                comm = self.task_utils[self.target].getCommFromPid(pid)
+                print('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+                self.lgr.debug('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+        if 'runToIO' in self.call_traces[self.target]:
+            self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         self.stopDataWatch()
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
@@ -3405,6 +3420,9 @@ class GenMonitor():
         cell_name = self.getTopComponentName(cpu)
         if max_marks is not None:
             self.dataWatch[self.target].setMaxMarks(max_marks) 
+        self.dataWatch[self.target].resetWatch()
+        self.page_faults[self.target].stopWatchPageFaults()
+        self.watchPageFaults(pid)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
@@ -3725,7 +3743,7 @@ class GenMonitor():
         else: 
             full_path=fname
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
-            self.run_from_snap, self.context_manager[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
+            self.run_from_snap, self.context_manager[self.target], self.page_faults[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target=target, create_dead_zone=dead, port=port, one_done=one_done)
         if target is None:
             self.noWatchSysEnter()
@@ -3757,6 +3775,7 @@ class GenMonitor():
         if self.reverseEnabled():
             cpu = self.cell_config.cpuFromCell(self.target)
             cell_name = self.getTopComponentName(cpu)
+            self.lgr.debug('prepInjectWatch')
             prep_inject = prepInjectWatch.PrepInjectWatch(self, cpu, cell_name, self.mem_utils[self.target], self.dataWatch[self.target], self.lgr) 
             prep_inject.doInject(snap_name, watch_mark)
 
