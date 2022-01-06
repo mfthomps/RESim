@@ -991,7 +991,7 @@ class GenContextMgr():
     def watchExit(self, rec=None, pid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
-        self.lgr.debug('contextManager watchExit')
+        #self.lgr.debug('contextManager watchExit')
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
