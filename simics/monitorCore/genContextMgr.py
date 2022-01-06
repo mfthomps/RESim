@@ -357,7 +357,7 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             pid = self.watch_rec_list[rec]
-            self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
+            #self.lgr.debug('genContextManager getThreadPids append %d to returned thread pid list' % (pid))
             retval.append(pid)
         return retval
 
@@ -672,7 +672,7 @@ class GenContextMgr():
     def watchingThis(self):
         ctask = self.task_utils.getCurTaskRec()
         dumb, comm, cur_pid  = self.task_utils.curProc()
-        if cur_pid in self.pid_cache or ctask in self.watch_rec_list:
+        if cur_pid in self.pid_cache or ctask in self.watch_rec_list or cur_pid in self.task_rec_hap or cur_pid in self.demise_cache:
             #self.lgr.debug('am watching pid:%d' % cur_pid)
             return True
         else:
@@ -771,6 +771,7 @@ class GenContextMgr():
         if not self.watch_only_this:
             ctask = self.task_utils.getCurTaskRec()
             pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
+            self.lgr.debug('resetWatchTasks pid %d' % pid)
             if pid == 1:
                 self.lgr.debug('resetWatchTasks got leader pid of 1, skip')
                 return
@@ -990,7 +991,7 @@ class GenContextMgr():
     def watchExit(self, rec=None, pid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
-        #self.lgr.debug('contextManager watchExit')
+        self.lgr.debug('contextManager watchExit')
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
@@ -1100,4 +1101,8 @@ class GenContextMgr():
 
     def callMe(self, pageFaultGen):
         self.pageFaultGen = pageFaultGen
+
+    def getWatchPids(self):
+        return self.task_rec_bp.keys()
+
 
