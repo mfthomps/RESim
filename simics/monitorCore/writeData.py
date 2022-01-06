@@ -49,6 +49,8 @@ class WriteData():
         self.call_break = None
         self.select_hap = None
         self.select_break = None
+        self.ret_hap = None
+        self.ret_break = None
         # see in_data
         if sys.version_info[0] > 2 and type(udp_header) == str:
             self.udp_header = bytes(udp_header, encoding='utf8')
@@ -94,6 +96,9 @@ class WriteData():
             self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
             self.max_len = int(env_max_len)
 
+        self.total_read = 0
+        self.read_limit = None
+
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
         self.addr = addr
@@ -102,7 +107,7 @@ class WriteData():
 
     
     def write(self, record=False):
-        self.lgr.debug('writeData write, addr is 0x%x' % self.addr)
+        #self.lgr.debug('writeData write, addr is 0x%x' % self.addr)
         if self.k_start_ptr is not None:
             ''' we have buffer start/end info from tracing ioctl '''
             this_len = len(self.in_data)
@@ -117,12 +122,19 @@ class WriteData():
             ''' not done, no control over size. prep must use maximum buffer'''
             self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
             retval = len(self.in_data)
-            self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
+            #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             if self.dataWatch is not None:
+                ''' Limit reads to buffer size '''
                 self.dataWatch.setReadLimit(retval, self.readLimitCallback)
+            else:
+                ''' Limit reads to buffer size using a hap on the read return '''
+                self.setRetHap()
+                self.read_limit = retval
+                self.total_read = 0
             self.in_data = ''
+           
         else:
-            self.lgr.debug('writeData wirte is to user buffer')
+            #self.lgr.debug('writeData write is to user buffer')
             retval = self.userBufWrite(record)
         return retval
 
@@ -219,6 +231,12 @@ class WriteData():
                 self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
                 self.select_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
 
+    def setRetHap(self):
+        if self.ret_hap is None: 
+            self.lgr.debug('writeData set retHap on return_ip 0x%x, cell is %s' % (self.return_ip, str(self.cell)))
+            self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
+            self.ret_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
+
     def selectHap(self, dumb, third, break_num, memory):
         ''' Hit a call to select'''
         if self.select_hap is None:
@@ -227,6 +245,7 @@ class WriteData():
             #self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
+
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''
         if self.call_hap is None:
@@ -278,6 +297,24 @@ class WriteData():
                     SIM_run_alone(self.write_callback, count)
                 
 
+    def retHap(self, dumb, third, break_num, memory):
+        ''' Hit a return from read'''
+        if self.callHap is None:
+            return
+        eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+        eax = self.mem_utils.getSigned(eax)
+        if eax <= 0: 
+            self.lgr.error('writeData retHap got count of %d' % eax)
+            return
+        self.total_read = self.total_read + eax
+        if self.total_read > self.read_limit:
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            if self.write_callback is not None:
+                 SIM_run_alone(self.write_callback, count)
+            else:
+                 SIM_break_simulation('Over read limit')
+        
+
     def delCallHap(self, dumb):
         #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
@@ -290,6 +327,11 @@ class WriteData():
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
             self.select_hap = None
             self.select_break = None
+        if self.ret_hap is not None:
+            SIM_delete_breakpoint(self.ret_break)
+            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
+            self.ret_hap = None
+            self.ret_break = None
 
     def getCurrentPacket(self):
         return self.current_packet
