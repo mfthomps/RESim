@@ -306,7 +306,7 @@ class Coverage():
                         self.lgr.debug('tableHap value is zero, break_num %d' % break_num)
                         return
                    
-                    self.lgr.debug('tableHap break %d value is 0x%x, add pageHap' % (break_num, value))
+                    #self.lgr.debug('tableHap break %d value is 0x%x, add pageHap' % (break_num, value))
                     bb_index = len(self.bp_list) 
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
