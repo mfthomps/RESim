@@ -296,7 +296,7 @@ class SOMap():
         else:
             pid_list = self.context_manager.getThreadPids()
             if pid not in pid_list:
-                self.lgr.debug('SOMap getThreadPid requested unknown pid %d %s  -- not debugging?' % (pid, str(pid_list)))
+                #self.lgr.debug('SOMap getThreadPid requested unknown pid %d %s  -- not debugging?' % (pid, str(pid_list)))
                 return None
             else:
                 for p in pid_list:
