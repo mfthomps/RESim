@@ -33,7 +33,7 @@ import decode
 import decodeArm
 import memUtils
 import pageUtils
-import resim_utils
+import resimUtils
 import armCond
 import net
 import syscall
@@ -83,7 +83,7 @@ class reverseToCall():
                  is_monitor_running, bookmarks, logdir, compat32, run_from_snap):
             #print('call getLogger')
             logname = '%s-%s' % (name, cell_name)
-            self.lgr = resim_utils.getLogger(logname, logdir)
+            self.lgr = resimUtils.getLogger(logname, logdir)
             self.context_manager = context_manager 
             #sys.stderr = open('err.txt', 'w')
             self.top = top 
@@ -189,6 +189,7 @@ class reverseToCall():
                     self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sys_entry')
 
     def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
+        if self.cpu is None:
             self.cpu = cpu
             self.start_cycles = self.cpu.cycles & 0xFFFFFFFFFFFFFFFF
             self.x_pages = x_pages
@@ -211,6 +212,8 @@ class reverseToCall():
                 self.lgr.debug('setup using arm decoder')
             else:
                 self.decode = decode
+        else:
+            self.lgr.debug('setup already called')
 
 
     def doBreaks(self, pcell, range_start, page_count, call_ret):
@@ -1338,7 +1341,7 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    self.lgr.debug('sysenterHap frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                    self.lgr.debug('sysenterHap pid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (pid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
                     #self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
@@ -1378,6 +1381,7 @@ class reverseToCall():
         return retval
 
     def clearEnterCycles(self):
+        self.lgr.debug('clearEnterCycles')
         self.sysenter_cycles.clear()
 
     def getRecentCycleFrame(self, pid):
@@ -1408,6 +1412,32 @@ class reverseToCall():
                 retval = self.sysenter_cycles[pid][cycles] 
                 ret_cycles = cycles
         '''
+        return retval, ret_cycles
+
+    def getPreviousCycleFrame(self, pid):
+        ''' NOTE these frames do not reflect socket call decoding '''
+        retval = None
+        ret_cycles = None
+        cur_cycles = self.cpu.cycles
+        self.lgr.debug('getPreviousCycleFrame pid %d cur_cycles 0x%x' % (pid, cur_cycles))
+        if pid in self.sysenter_cycles:
+            got_it = None
+            for cycles in sorted(self.sysenter_cycles[pid]):
+                if cycles > cur_cycles:
+                    self.lgr.debug('getPreviousCycleFrame found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                    got_it = prev_cycles
+                    break
+                else:
+                    prev_cycles = cycles
+
+            if got_it is not None:
+                retval = self.sysenter_cycles[pid][got_it] 
+                ret_cycles = got_it
+            else:
+                retval = self.sysenter_cycles[pid][cycles] 
+                ret_cycles = cycles
+        else:
+            self.lgr.debug('getPreviousCycleFrame pid not in sysenter_cycles')
         return retval, ret_cycles
 
     def satisfyCondition(self, pc):
