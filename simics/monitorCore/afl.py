@@ -248,7 +248,7 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        self.lgr.debug('afl stopHap')
+        #self.lgr.debug('afl stopHap')
         if self.stop_hap is None:
             return
         self.finishUp()
