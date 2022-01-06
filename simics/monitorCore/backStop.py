@@ -24,6 +24,7 @@
 '''
 
 from simics import *
+from resimUtils import rprint
 import logging
 '''
 Manage cycle events to limit how far a session can run without some intervening event.
@@ -40,6 +41,8 @@ class BackStop():
             SIM_break_simulation('hit final cycle')
             if self.callback is not None:
                 self.callback()
+            if self.report_backstop:
+                rprint('Backstop hit.')
         else: 
             self.lgr.debug('backStop cycle_handler lingering after cpu set to None, ignore')
             SIM_continue(0)
@@ -60,6 +63,7 @@ class BackStop():
         self.callback = None
         self.hang_callback = None
         self.hang_cycles = None
+        self.report_backstop = False
         self.lgr.debug('backStop init cpu %s' % self.cpu.name)
 
     def setCallback(self, callback):
@@ -114,6 +118,9 @@ class BackStop():
         if self.hang_event is None:
             self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
         SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
+
+    def reportBackstop(self, report):
+        self.report_backstop = report
 
 if __name__ == "__main__":
     bs = backStop()
