@@ -2,6 +2,7 @@ from simics import *
 import memUtils
 import pageUtils
 import hapCleaner
+import resimUtils
 '''
 Watch page faults for indications of a SEGV exception
 '''
@@ -63,7 +64,7 @@ class PageFaultGen():
             del self.exit_hap2[pid]
         self.context_manager.watchPageFaults(False)
         if pid in self.pending_faults:
-            #self.lgr.debug('pageFaultGen rmExit remove pending for %d %s' % (pid, str(self.pending_faults[pid])))
+            self.lgr.debug('pageFaultGen rmExit remove pending for %d %s' % (pid, str(self.pending_faults[pid])))
             del self.pending_faults[pid]
         
     def pdirWriteHap(self, prec, third, forth, memory):
@@ -72,7 +73,7 @@ class PageFaultGen():
         #self.lgr.debug('ppageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
-            #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
+            self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
             SIM_delete_breakpoint(self.pdir_break)
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
@@ -93,7 +94,7 @@ class PageFaultGen():
         #self.lgr.debug('pageFaultGen tableWriteHap, %d (%s) new entry value 0x%x was set for pid: %d' % (pid, comm, ptable_entry, prec.pid))
         if self.ptable_break is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.ptable_hap)
-            #self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
+            self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
             SIM_delete_breakpoint(self.ptable_break)
             #self.context_manager.genDeleteHap(self.ptable_hap)
             self.ptable_break = None
@@ -130,6 +131,9 @@ class PageFaultGen():
         #if self.debugging_pid is not None:
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
+        if not self.context_manager.watchingThis():
+            self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
+            return
         eip = self.exception_eip
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         access_type = None
@@ -168,16 +172,18 @@ class PageFaultGen():
         prec = Prec(self.cpu, comm, pid, cr2, eip)
         if pid not in self.pending_faults:
             self.pending_faults[pid] = prec
-            #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+            self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x cycle 0x%x' % (pid, prec.cr2, prec.cycles))
             if self.mode_hap is None:
+                self.lgr.debug('pageFaultGen adding mode hap')
                 self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
         hack_rec = (compat32, page_info, prec)
         SIM_run_alone(self.pageFaultHapAlone, hack_rec)
 
     def rmModeHapAlone(self, dumb):
-                #self.lgr.debug('last fault, remove hap')
+                self.lgr.debug('last fault, remove hap')
                 SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
                 self.mode_hap = None
+
     def modeChanged(self, want_pid, one, old, new):
         if self.mode_hap is None:
             return
@@ -186,7 +192,7 @@ class PageFaultGen():
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if pid in self.pending_faults:
-                #self.lgr.debug('removing pending fault')
+                self.lgr.debug('removing pending fault')
                 del self.pending_faults[pid]
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
@@ -196,9 +202,11 @@ class PageFaultGen():
         compat32, page_info, prec = hack_rec 
 
         if self.debugging_pid is None:
-            SIM_run_alone(self.watchExit, compat32)
+            #SIM_run_alone(self.watchExit, compat32)
+            self.watchExit(compat32)
             ''' Rely on ContextManager to watch for task kills if debugging -- and not '''
-            self.context_manager.watchExit()
+            # TBD fix for ability to watch full system for segv
+            #self.context_manager.watchExit()
         if not page_info.page_exists:
 
             if not page_info.ptable_exists:
@@ -235,7 +243,7 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, 0, max_intr) 
             self.lgr.debug('pageFaultGen watching Core_Exception faults')
         else:
-            #self.lgr.debug('watchPageFaults not arm set break at 0x%x' % self.param.page_fault)
+            self.lgr.debug('watchPageFaults not arm set break at 0x%x pid %s' % (self.param.page_fault, pid))
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             ''' TBD catch illegal instruction '''
@@ -246,6 +254,9 @@ class PageFaultGen():
                  self.faultCallback, self.cpu, 15, max_intr) 
 
     def faultCallback(self, cpu, one, exception_number):
+        if not self.context_manager.watchingThis():
+            self.lgr.debug('faultCallback, contextManager says not watching')
+            return
         cell_name = self.top.getTopComponentName(cpu)
         cpu, comm, pid = self.task_utils.curProc() 
         name = cpu.iface.exception.get_name(exception_number)
@@ -289,11 +300,11 @@ class PageFaultGen():
                 #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
                 return
             self.faulted_pages[pid].append(cr2)
-            #self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
+            self.lgr.debug('faultCallback %s  (%d)  pid:%d (%s)  eip: 0x%x %s' % (name, exception_number, pid, comm, eip, instruct[1]))
             prec = Prec(self.cpu, comm, pid, cr2, eip)
             if pid not in self.pending_faults:
                 self.pending_faults[pid] = prec
-                #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
+                self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
                 if self.mode_hap is None:
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
 
@@ -331,11 +342,12 @@ class PageFaultGen():
                 del self.exit_break[pid]
                 del self.exit_hap[pid]
                 del self.exit_hap2[pid]
-        #self.lgr.debug('pageFaultGen stopWatchPageFaults before clear len is %s' % len(self.pending_faults))
+        self.lgr.debug('pageFaultGen stopWatchPageFaults before clear len is %s' % len(self.pending_faults))
         self.faulted_pages.clear()
         #self.faulting_cycles.clear()
         self.pending_faults.clear()
         if self.mode_hap is not None:
+            self.lgr.debug('pageFaultGen stopWatchPageFaults remove mode hap')
             SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
@@ -350,10 +362,10 @@ class PageFaultGen():
         #if cpu != prec.cpu:
         #    self.lgr.debug('exitHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
         #    return
-        #self.lgr.debug('pageFaultGen exitHap')
+        self.lgr.debug('pageFaultGen exitHap')
         cpu, comm, pid = self.task_utils.curProc() 
         if pid != prec.pid and prec.pid in self.exit_break:
-            #self.lgr.debug('exitHap wrong pid %d expected %d' % (pid, prec.pid))
+            self.lgr.debug('exitHap wrong pid %d expected %d' % (pid, prec.pid))
             return
         self.rmExit(pid)
 
@@ -375,10 +387,11 @@ class PageFaultGen():
     def skipAlone(self, prec):
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
+        self.lgr.debug('pageFaultGen skipAlone') 
         if self.top.hasBookmarks():
             target_cycles = prec.cycles
-            self.lgr.debug('skipAlone skip to 0x%x' % target_cycles)
-            SIM_run_command('skip-to cycle = 0x%x' % target_cycles)
+            if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                return
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
@@ -494,3 +507,9 @@ class PageFaultGen():
                 self.stopWatchPageFaults()
                 retval = True
         return retval
+
+    def hasPendingPageFault(self, pid):
+        if pid in self.pending_faults:
+            return True
+        else:
+            return False
