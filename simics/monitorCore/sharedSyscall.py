@@ -291,7 +291,7 @@ class SharedSyscall():
                         self.dataWatch.stopWatch() 
                         #self.dataWatch.watch(break_simulation=False)
                         self.lgr.debug('sharedSyscall accept call dataWatch watch')
-                        self.dataWatch.watch(break_simulation=exit_info.call_params.break_simulation)
+                        self.dataWatch.watch(break_simulation=exit_info.call_params.break_simulation, i_am_alone=True)
                 if exit_info.call_params is not None and my_syscall.name == 'runToIO' and exit_info.call_params.match_param == exit_info.sock_struct.fd:
                     self.lgr.debug('sharedSyscall for runToIO, change param fd to %d' % new_fd)
                     exit_info.call_params.match_param = new_fd
@@ -374,7 +374,7 @@ class SharedSyscall():
                         self.dataWatch.setRange(exit_info.fname_addr, count, msg)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False)
+                        self.dataWatch.watch(break_simulation=False, i_am_alone=True)
             
                     if exit_info.origin_reset:
                         self.lgr.debug('sharedSyscall found origin reset, do it')
@@ -468,7 +468,7 @@ class SharedSyscall():
         else:
             did_exit = self.handleExit(None, pid, comm)
         if did_exit:
-            self.lgr.debug('exitHap remove exitHap for %d' % pid)
+            self.lgr.debug('sharedSyscall exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
 
     def fcntl(self, pid, eax, exit_info):
@@ -644,8 +644,8 @@ class SharedSyscall():
                     s = ''.join(map(chr,byte_array))
                 else:
                     s = '<<NOT MAPPED>>'
-                trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x given length: %d \n\t%s\n' % (pid, comm, exit_info.old_fd, 
-                              eax, exit_info.retval_addr, exit_info.count, s))
+                trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x given length: %d cycle: 0x%x \n\t%s\n' % (pid, comm, exit_info.old_fd, 
+                              eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None \
                    and type(exit_info.call_params.match_param) is int:
@@ -655,7 +655,7 @@ class SharedSyscall():
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False)
+                        self.dataWatch.watch(break_simulation=False, i_am_alone=True)
                     if exit_info.origin_reset:
                         self.lgr.debug('sharedSyscall found origin reset, do it')
                         SIM_run_alone(self.stopAlone, None)
@@ -726,7 +726,7 @@ class SharedSyscall():
                     self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
                     if exit_info.syscall_instance.linger: 
                         self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False, no_backstop=True)
+                        self.dataWatch.watch(break_simulation=False, no_backstop=True, i_am_alone=True)
             else:
                 trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
 
