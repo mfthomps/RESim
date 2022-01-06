@@ -373,10 +373,7 @@ class WatchMarks():
     def markCall(self, msg, max_len, recv_addr=None, length=None, fd=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cm = CallMark(msg, max_len, recv_addr, length, fd)
-        ''' HACK to account for recv recorded while  about to leave kernel '''
         cycles = self.cpu.cycles
-        if recv_addr is not None:
-            cycles=cycles+1
         self.addWatchMark(cm, cycles=cycles)
         if recv_addr is None:
             self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s' % (ip, cycles, msg))
@@ -440,6 +437,20 @@ class WatchMarks():
         for mark in self.mark_list:
             retval.append(mark.getJson(origin))
         return retval        
+
+    def isCall(self, index):
+        self.lgr.debug('watchMarks isCall type of index %d is %s' % (index, type(self.mark_list[index].mark)))
+        if isinstance(self.mark_list[index].mark, CallMark):
+            return True
+        else:
+            return False
+
+    def getIP(self, index):
+        if index < len(self.mark_list):
+            #self.lgr.debug('watchMarks getCycle index %d len %s cycle: 0x%x' % (index, len(self.mark_list), self.mark_list[index].cycle))
+            return self.mark_list[index].ip
+        else:
+            return None
 
     def getCycle(self, index):
         if index < len(self.mark_list):
