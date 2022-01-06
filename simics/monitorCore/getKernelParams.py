@@ -31,7 +31,7 @@
 from simics import *
 import memUtils
 import taskUtils
-import resim_utils
+import resimUtils
 import kParams
 import cellConfig
 import pickle
@@ -50,7 +50,7 @@ class GetKernelParams():
             word_size = 8
         print('using target of %s' % self.target)
         self.log_dir = '/tmp'
-        self.lgr = resim_utils.getLogger('getKernelParams', self.log_dir)
+        self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
         self.param = kParams.Kparams(self.cpu, word_size, comp_dict[self.target]['PLATFORM'])
 
 

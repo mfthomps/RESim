@@ -20,12 +20,12 @@ import json
 import select
 import shlex
 import aflPath
-import resim_utils
+import resimUtils
 '''
 '''
 
 def main():
-    lgr = resim_utils.getLogger('runTrack', '/tmp/', level=None)
+    lgr = resimUtils.getLogger('runTrack', '/tmp/', level=None)
     here= os.path.dirname(os.path.realpath(__file__))
     parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')

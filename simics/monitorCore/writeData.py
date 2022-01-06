@@ -3,7 +3,7 @@ import sys
 import os
 import pickle
 import taskUtils
-from resim_utils import rprint
+from resimUtils import rprint
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
