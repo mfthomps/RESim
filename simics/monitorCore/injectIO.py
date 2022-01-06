@@ -146,6 +146,7 @@ class InjectIO():
             ''' We assume we are in user space in the target process and thus will not move.'''
             self.top.stopDebug()
             self.top.debugPidGroup(self.pid) 
+            self.top.watchPageFaults()
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
@@ -207,6 +208,8 @@ class InjectIO():
                     ''' Injected into kernel buffer '''
                     self.top.stopTrackIO()
                     self.dataWatch.clearWatches()
+                    self.dataWatch.setCallback(self.callback)
+                    self.context_manager.watchTasks()
                     self.top.runToIO(self.fd, linger=True, break_simulation=False)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
@@ -227,9 +230,9 @@ class InjectIO():
         self.context_manager.watchGroupExits()
         self.bookmarks = self.top.getBookmarksInstance()
         if self.save_json is not None:
-            self.top.trackIO(self.targetFD, callback=self.saveJson)
+            self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
         else:
-            self.top.trackIO(self.targetFD)
+            self.top.trackIO(self.targetFD, quiet=True)
 
     def delCallHap(self):
         if self.write_data is not None:
