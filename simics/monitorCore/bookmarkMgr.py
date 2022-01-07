@@ -26,6 +26,7 @@
 Manage bookmarks.  the __bookmarks key is the text of the bookmark
 '''
 from simics import *
+import cli
 from collections import OrderedDict
 import memUtils
 import sys
@@ -263,18 +264,18 @@ class bookmarkMgr():
                 done = True
         else:
             cycle = self.__bookmarks[mark].cycles
-            self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
-            SIM_run_command('pselect %s' % cpu.name)
+            #self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
+            cli.quiet_run_command('pselect %s' % cpu.name)
             try:
-                SIM_run_command('skip-to cycle=%d' % cycle)
+                cli.quiet_run_command('skip-to cycle=%d' % cycle)
             except:
                 print('reverse disabled')
                 return 'reverse disabled'
             eip = self.top.getEIP(cpu)
             current = SIM_cycle_count(cpu)
             step = SIM_step_count(cpu)
-            if cycle is not None and self.__bookmarks[mark].steps is not None:
-                self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
+            #if cycle is not None and self.__bookmarks[mark].steps is not None:
+            #    self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
             if current != cycle or eip != self.__bookmarks[mark].eip:
                 self.lgr.error('goToDebugBookmark, simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
             
@@ -282,7 +283,7 @@ class bookmarkMgr():
         self.context_mgr.setExitBreaks()
         self.context_mgr.resetBackStop()
         self.top.gdbMailbox('0x%x' % eip)
-        self.lgr.debug('goToDebugBookmark set mbox to %x' % eip)
+        #self.lgr.debug('goToDebugBookmark set mbox to %x' % eip)
         return self.__mark_msg[mark]
 
     def goToOrigin(self):
