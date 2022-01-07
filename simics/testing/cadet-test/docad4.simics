@@ -5,6 +5,8 @@
 #  ONLY use for 4.8
 #
 @cgc.debugProc('cadet01')
+c 900000000
+@cgc.writeConfig('cadet')
 @cgc.watchROP()
 !./findWindow.sh ".*driver.mb.sb.com.0..*"
 

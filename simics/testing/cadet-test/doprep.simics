@@ -1,0 +1,15 @@
+#
+#  Run the trackIO command.  Use script branch to run the prepInjectWatch
+#  after trackIO finishes.  Use xdotool or the prepInject tries to run
+#  while Simics is still running.
+#
+script-branch "trackIO" {
+   local $ob = Nil
+   bp.log.wait-for RESim_log "Backstop hit."
+   echo "doprep.simics found backstop hit"
+   !./findWindow.sh "cadet01-tst"
+   !xdotool type "@cgc.prepInjectWatch(0, 'cadetread')"
+   !xdotool key Return
+}
+@cgc.trackIO(4)
+

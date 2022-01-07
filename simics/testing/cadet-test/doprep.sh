@@ -1,11 +1,10 @@
 sleep 8
 ./findWindow.sh "cadet01-tst"
-xdotool type "@cgc.debugIfNot()"
+xdotool type "@cgc.debugSnap()"
 xdotool key Return
-xdotool type "@cgc.trackIO(4)"
+xdotool type "run-command-file doprep.simics"
 xdotool key Return
-xdotool type "@cgc.prepInjectWatch(0, 'cadetread')"
-xdotool key Return
+
 ./findWindow.sh "Simics Target Consoles"
 xdotool key Down
 xdotool key Return

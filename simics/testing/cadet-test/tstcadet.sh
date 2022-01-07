@@ -27,4 +27,5 @@ $HOME/bin/set-title "cadet01-tst"
 
 resim ubuntu_driver.ini
 ./checkROP.sh || exit
-./testTrack.sh
+./testTrack.sh || exit
+./testAFL.sh
