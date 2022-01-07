@@ -12,6 +12,7 @@ import ConfigParser
 import threading
 import time
 import argparse
+import aflPath
 '''
 Create crash reports for a given AFL target.
 This is an example of a script that repeatedly starts
@@ -79,29 +80,10 @@ def main():
         ''' single file to report on '''
         flist = [target]
     else:
-        ''' path to AFL output directory '''
-        afl_output = os.getenv('AFL_OUTPUT')
-        if afl_output is None:
-            afl_output = os.getenv('AFL_DATA')
-            afl_dir = os.path.join(afl_output, 'output', target)
-        else:
-            afl_dir = os.path.join(afl_output, target)
-        if not os.path.isdir(afl_dir):
-           print('No afl directory found at %s' % afl_dir)
-           exit
-        
-        
-        ''' Get all crash files '''
-        gmask = afl_dir+'/resim_*/crashes/*'
-        glist = glob.glob(gmask)
-        if len(glist) == 0:
-            ''' not parallel '''
-            crashes_dir = os.path.join(afl_dir, 'crashes*')
-            gmask = '%s/*' % crashes_dir
-            print("ReportCrash gmask: %s" % gmask)
-            glist = glob.glob(gmask)
+
+        crash_list = aflPath.getTargetCrashes(target)
         flist=[]
-        for g in glist:
+        for g in crash_list:
             if os.path.basename(g).startswith('id:'):
                 flist.append(g)
     
