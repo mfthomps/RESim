@@ -142,7 +142,7 @@ def getTargetQueue(target, get_all=False, host=None):
     else:
         if not get_all:
             print('No unique paths from %s, use all.' % unique_path)
-        gpath = os.path.join(afl_dir, 'resim_*', 'queue', 'id:*')
+        gpath = os.path.join(afl_dir, '*_resim_*', 'queue', 'id:*')
         glist = glob.glob(gpath)
         if len(glist) > 0:
             #for path in sorted(glist):
@@ -159,7 +159,7 @@ def getTargetCrashes(target):
     afl_list = []
     afl_output = getAFLOutput()
     afl_dir = os.path.join(afl_output, target)
-    cpath = os.path.join(afl_dir, 'resim_*', 'crashes', 'id:*')
+    cpath = os.path.join(afl_dir, '*_resim_*', 'crashes', 'id:*')
     glist = glob.glob(cpath)
     if len(glist) > 0:
         #for path in sorted(glist):
