@@ -26,10 +26,32 @@ def ioHandler(read_array, stop):
             if stop():
                 print('ioHandler sees stop, exiting.')
                 return
-            r, w, e = select.select(read_array, [], [], 10) 
+            try:
+                r, w, e = select.select(read_array, [], [], 10) 
+            except ValueError:
+                print('select error, must be closed.')
+                return
             for item in r:
                     data = os.read(item.fileno(), 800)
                     fh.write(data+b'\n')
+
+def handleClose(resim_procs, read_array, duration):
+    stop_threads = False
+    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
+    io_handler.start()
+
+    if duration is None:
+        print('any key to quit')
+    else:
+        print('any key to quit, or will exit in %d seconds' % duration)
+    i, o, e = select.select( [sys.stdin], [], [], duration )
+    for ps in resim_procs:
+        ps.stdin.write(b'quit\n')
+    print('did quit')
+    print('done')
+    stop_threads = True
+    for fd in read_array:
+        fd.close()
 
 def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path):
     afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
@@ -47,19 +69,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
-
-    stop_threads = False
-    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
-    io_handler.start()
-
-    my_in = input('any key to quit')
-    for ps in resim_procs:
-        ps.stdin.write(b'quit\n')
-    print('did quit')
-    print('done')
-    stop_threads = True
-    for fd in read_array:
-        fd.close()
+    handleClose(resim_procs, read_array)
 
     return resim_ps
     
@@ -73,6 +83,7 @@ def main():
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
     parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR.')
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
+    parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -177,9 +188,12 @@ def main():
             os.chdir(here)
             master_slave = '-S'
             port = port + 1
+        handleClose(resim_procs, read_array, args.seconds)
     else:
         print('Running single instance')
-        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path)
+        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds)
+
+    ''' 
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
     io_handler.start()
@@ -192,6 +206,7 @@ def main():
     for fd in read_array:
         fd.close()
     #output = resim_ps.communicate()
+    ''' 
   
 if __name__ == '__main__':
     sys.exit(main())
