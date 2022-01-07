@@ -180,8 +180,6 @@ and then update your ini file to begin at that checkpoint using the {\tt RUN\_FR
 run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
 see network ports being listened to. 
 
-
-
 \subsection{Analyze a process}
 When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
 
@@ -191,6 +189,7 @@ RESim extends IDA Pro debugger functions and the analyst accesses these function
 \item Set and run to breakpoints in either direction
 \item Run to the next (or previous) system call of a specified type, e.g., open.
 \item Run to system calls with qualifying parameters, e.g., run until a socket connect address matches a given regular expression.
+\item Track references to data read in via a given FD, as well as refererences to copies of that data, e.g., via {\tt memcpy}.
 \item Reverse-trace the source of data at a memory address or register.
 \item Modify a register or memory content
 \item Switch threads of a multithreaded application
@@ -206,7 +205,6 @@ it continually augments based on feedback that RESim generates reflecting code p
 A set of RESim functions can then be used to replay AFL sessions to automatically identify and display unexplored code paths within
 the IDA client.  This allows the analyst to identify and generate inputs for additional code paths, and feed these inputs back into 
 new AFL sessions.  See section \ref{fuzz} for information on the use of AFL.
-
 
 See \ref{example-workflows} for detailed examples of RESim workflows.
 
@@ -264,7 +262,12 @@ See section \ref{maze}.
 
 \subsection{Process Analysis}
 These functions support interactive analysis of the threads of a process, e.g., to run until some system call is made.  Also see the \textit{Tracking data} functions
-in the following subsection.
+in the following subsection.  Analysis functions depend on data gathered while the target process is being loaded and initialized.  In general, you
+must use the {\tt debugProc} function to capture that information.  You may then create a checkpoint.  Subsequent sessions started from that checkpoint,
+or subsequent checkpoints, can then use alternate functions to select debugging, e.g., the {\tt debugPidGroup} function. RESim gathers information on
+all processes started while processing the {\tt debugProc} command, so it is possible to create checkpoints from which multiple processes can be selectively
+debugged.  To put this another way, you cannot choose to debug some process that is already running on the simulated system unless you took steps to
+gather its data prior to the process being loaded.
 
 \begin{itemize}
 
@@ -278,8 +281,12 @@ detect and report mem operations, e.g., memcpy -- and then refresh the IDA Data 
 
 If you prefix the given process name with {\tt sh }, (sh followed by a space), RESim will look for a shell invocation of the script name that follows the sh.
 
-\item {\tt debugPidGroup(pid} -- Initiate the debugger server for a given PID.  Intended for use after starting a session from a checkpoint created using
+\item {\tt debugPidGroup(pid)} -- Initiate the debugger server for a given PID.  Intended for use after starting a session from a checkpoint created using
 {\tt writeConfig}.  This assumes process information had been generated in a previous session that was saved.  
+
+\item {\tt debugSnap} -- Assumes the current session was loaded from a snapshot, it use debugPidGroup to debug the process being debugged when the snapshot was made.
+
+\item {\tt debugIfNot} -- Will call debugPidGroup for the currently scheduled process.
 
 \item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
 uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
@@ -699,7 +706,7 @@ in {\tt simics/ida/cfg}.  Backup the original xmls first.
 
 \subsection{Getting started}
 \label{getting-started}
-Steps to define and run a RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
+Steps to define and run an example RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
 computer upon which Simics is installed with a x86-x58-ich10 platform.
 \begin{enumerate}
 \item Create a Simics workspace using the {\tt resim\_ws.sh} script:
@@ -708,7 +715,8 @@ mkdir mywork; cd mywork
 resim_ws.sh
 \end{verbatim}
 
-\item Copy any desired files from {\tt \$RESIM/simics/workspace} into the new workspace.
+\item Copy any desired files from {\tt \$RESIM/simics/workspace} or other workspaces into the new workspace.  You may also create links
+to checkpoint directories in other workspaces.
 \item Modify the mytarget.ini as follows:
 \begin{itemize}
 \item Set the {\tt disk\_image} entry to name paths to your target disk image.
@@ -1014,9 +1022,20 @@ checkpoint used with AFL.  However the other functions that use trackIO could ru
 that checkpoint might be from early on in the process's life, e.g., to identify the sources of state values that do not seem to result from
 the input data.
 
-
 Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
 which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
+
+\subsection{Selecting checkpoints}
+Use of checkpoints can significantly simplify and speed up analysis, e.g., by not having to wait for simulated systems to boot each time.
+The performance and ease of analysis can depend on the state of the simulated system when a checkpoint is made.  Assume you wish to analyze 
+a particular service. After using the {\tt debugProc} command to select it and gather its information, consider running the simulation
+forward for a while until you see that other system initialization has completed.  Creating a snapshot after initialization may speed up
+subsequent analysis by reducing the amount of extraneous execution.  
+
+Watching the log at {\tt logs/monitors/resim.log} can let you know when initialization has largely completed.
+While you are waiting for initialization to complete, the target process may be waiting in a kernel call, e.g., an accept or a read.
+RESim retains that information in its checkpoint.  For example, when running from such a checkpoint, a {\tt trackIO} function on the bound FD 
+will catch the return from accept and alter the tracked FD to the new FD returned by the kernel.
 
 \section{Example workflows}
 \label{example-workflows}
@@ -1120,7 +1139,7 @@ Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  B
 test a single fuzzing instance as described below.
 
 \begin{itemize}
-\item Clone the AFL repo (\url{git@github.com:mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
+\item Clone the AFL repo (\url{https://github.com/mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
 \item Create a RESim workspace for the fuzzing session.  The name of the workspace will be used
 to name fuzzing artifcats, so make it meaningful.
 \item Confirm your {\.bashrc} file defines the AFL paths per section \ref{installation}.
@@ -1131,9 +1150,10 @@ to name fuzzing artifcats, so make it meaningful.
 Typically, start the system from scratch and use {\tt debugProc} to debug the desired process.  Then issue the {\tt prepInject} command and
 send the service some data (or wait for some other component to do so.)  The data does not matter -- though make it large enough
 to map any page that might be referenced by the maximum read length.  Update your ini file to reflect
-the snapshot name.  See section \ref{partal-reads} if injection into kernel memory is needed.
+the snapshot name.  See section \ref{partial-reads} if injection into kernel memory is needed.
 \item Assuming you've created a set of input files that follow different paths through the service of interest, 
-reduce them to the minimal number of bytes needed to function.
+reduce them to the minimal number of bytes needed to function -- or skip this step if you think your input files are
+as small as they need to be.
 Use the {\tt fuzz} command for each of your input files to create a minimal set of seeds for AFL. Prior to using the fuzz command,
 Each run of the fuzz command creates an output file in {\tt /tmp/trimmer}.  You can run the fuzz command multiple times from the same 
 RESim session (it returns to the original IO state.) 
@@ -1452,6 +1472,15 @@ to avoid redefinitions of the origin that would occur if trackIO were used multi
 \item dedupeCoverage -- Identify AFL sessions that resulted in unique sets of hit basic blocks.
 \item dataDiff -- Experimental, compare trackio output generated from post-AFL processing.
 \end{itemize}
+
+\section{Testing}
+Many of the RESim functions are exercised by automated tests found in the {\tt simics/testing/cadet-test} directory.
+These include trackIO, injectIO and fuzzing with AFL.  The tests create a new RESim workspace relative to
+the directory from which the tests are run.  Use the
+\begin{verbatim}
+   $RESIM_DIR/simics/testing/cadet-test/tstcadet.sh
+\end{verbatim}
+\noindent command to initiate the testing.  The tests require the xdotool package.
 
 \pagebreak
 \begin{appendices}
