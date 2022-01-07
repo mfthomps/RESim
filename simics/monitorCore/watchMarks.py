@@ -763,10 +763,12 @@ class WatchMarks():
     def readCount(self):
         ''' get count of read/recv, i.e., CallMarks having recv_addr values '''
         retval = 0
+        prev_cycle = 0
         for mark in self.mark_list:
            if isinstance(mark.mark, CallMark):
-               if mark.mark.recv_addr is not None:
+               if mark.mark.recv_addr is not None and mark.call_cycle != prev_cycle:
                    retval += 1
+                   prev_cycle = mark.call_cycle
         return retval
 
     def whichRead(self):
