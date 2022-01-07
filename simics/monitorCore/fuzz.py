@@ -25,7 +25,7 @@ class Fuzz():
         else:
             self.lgr.warning('no BACK_STOP_CYCLES defined, using default of 100000')
             self.backstop_cycles =   100000
-        self.coverage.enableCoverage(pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, fname=fname)
+        self.coverage.enableCoverage(pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, fname=fname, no_save=True)
         self.shrinking = True
         self.orig_hits = None
         ''' number of bytes to subtract from file if number of hits is not changed '''
@@ -40,6 +40,7 @@ class Fuzz():
         self.max_len = None
         self.call_ip = None
         self.return_ip = None
+        self.snap_name = snap_name
         self.loadPickle(snap_name)
         ''' iterate until delta below this '''
         self.threshold = None
@@ -170,9 +171,9 @@ class Fuzz():
     def writeData(self):    
         with open(self.path, 'rb') as fh:
             in_data = fh.read()
-        self.write_data = writeData.WriteData(self.top, self.cpu, in_data, self.packet_count, self.addr,  
-                 self.max_len, self.call_ip, self.return_ip, self.mem_utils, self.backstop, self.lgr, udp_header=None, 
-                 pad_to_size=None, filter=None, backstop_cycles=self.backstop_cycles)
+        self.write_data = writeData.WriteData(self.top, self.cpu, in_data, self.packet_count, 
+                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=None, 
+                 backstop_cycles=self.backstop_cycles)
         num_bytes = self.write_data.write()
         #self.mem_utils.writeString(self.cpu, self.addr, in_data) 
         #self.cpu.iface.int_register.write(self.len_reg_num, len(in_data))
