@@ -252,7 +252,7 @@ class WriteData():
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
-            #self.lgr.debug('writeData stop on read')
+            self.lgr.debug('writeData stop on read')
             SIM_break_simulation('writeData stop on read')
             return
         if pid != self.pid:
@@ -266,13 +266,14 @@ class WriteData():
             '''
             if self.write_callback is not None:
                 if self.mem_utils.isKernel(self.addr):
-                    rprint('kernel buffer data consumed')
+                    #rprint('kernel buffer data consumed')
                     SIM_break_simulation('kernel buffer data consumed.')
+                    #self.lgr.debug('writeData callHap current packet %d no data left, kernel buffer, stop simulation' % self.current_packet)
                 else:
                     SIM_run_alone(self.write_callback, 0)
-            #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
             else:
                 SIM_break_simulation('writeData out of data')
+                #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
             #SIM_run_alone(self.delCallHap, None)
         else:
             frame = self.top.frameFromRegs(self.cpu)
