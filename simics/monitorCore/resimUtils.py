@@ -1,5 +1,6 @@
 import os
 import time
+import cli
 import logging
 from simics import *
 def getLogger(name, logdir, level=None):
@@ -34,14 +35,14 @@ def skipToTest(cpu, cycle, lgr):
             lgr.error('skipToTest but simics running')
             time.sleep(1)
         retval = True
-        SIM_run_command('pselect %s' % cpu.name)
+        cli.quiet_run_command('pselect %s' % cpu.name)
         cmd = 'skip-to cycle = %d ' % cycle
-        SIM_run_command(cmd)
+        cli.quiet_run_command(cmd)
         now = cpu.cycles
         if now != cycle:
             lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
             time.sleep(1)
-            SIM_run_command(cmd)
+            cli.quiet_run_command(cmd)
             now = cpu.cycles
             if now != cycle:
                 lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
