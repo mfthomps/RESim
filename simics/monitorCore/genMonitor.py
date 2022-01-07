@@ -1376,10 +1376,10 @@ class GenMonitor():
             self.removeDebugBreaks()
             self.stopTrackIO()
         cpu, comm, pid  = self.task_utils[self.target].curProc()
-        self.lgr.debug('goToOrigin pid was is %d' % pid)
+        #self.lgr.debug('goToOrigin pid was is %d' % pid)
         msg = self.bookmarks.goToOrigin()
         cpu, comm, pid  = self.task_utils[self.target].curProc()
-        self.lgr.debug('goToOrigin pid now is %d' % pid)
+        #self.lgr.debug('goToOrigin pid now is %d' % pid)
         if debugging:
             self.context_manager[self.target].setIdaMessage(msg)
             self.restoreDebugBreaks(was_watching=True)
@@ -2106,7 +2106,7 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
-            self.lgr.debug('restoreDebugBreaks')
+            #self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
