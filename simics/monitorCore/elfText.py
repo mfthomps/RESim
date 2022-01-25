@@ -3,6 +3,7 @@ import sys
 import shlex
 import subprocess
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
+sys.path.append('/usr/lib/python2.7/dist-packages')
 sys.path.append('/usr/local/lib/python3.6/dist-packages')
 import magic
 class Text():
