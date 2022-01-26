@@ -29,14 +29,14 @@ END_COMMENT
 here=`pwd`
 # simics lmgrd has path issues, make sure we are not in a workspace
 cd /tmp
-if [ -z "$SIMICS" ]
+if [ -z "$SIMDIR" ]
 then
-    export SIMICS=/mnt/simics/simics-4.8/simics-4.8.125
-    echo SIMICS environment variable not defined
-    echo use $SIMICS
+    export SIMDIR=/mnt/simics/simics-4.8/simics-4.8.170
+    echo SIMDIR environment variable not defined
+    echo use $SIMDIR
 
 fi
-myLicenses=/mnt/simics/simics-4.8/simics-4.8.75/licenses
+myLicenses=/mnt/re_images/licenses
 myMAC=`/sbin/ifconfig | grep eth0 | awk '{print $5;}' | tr : _`
 echo myMAC is $myMAC
 myFile=ConsolidatedLicenseFile-$myMAC.lic
@@ -71,6 +71,6 @@ sudo mkdir -p /usr/tmp/.flexlm
 sudo chmod a+rw -R /usr/tmp/.flexlm
 export PATH=$PATH:/mnt/simics/simics-4.8/simics-4.8.125/flexnet/linux64/bin
 echo "path is $PATH"
-$SIMICS/flexnet/linux64/bin/lmgrd -c $myLicenses/$myFile
-echo "$SIMICS/flexnet/linux64/bin/lmgrd -c $myLicenses/$myFile"
+$SIMDIR/flexnet/linux64/bin/lmgrd -c $myLicenses/$myFile
+echo "$SIMDIR/flexnet/linux64/bin/lmgrd -c $myLicenses/$myFile"
 
