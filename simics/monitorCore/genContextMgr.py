@@ -242,7 +242,7 @@ class GenContextMgr():
             #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
-        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s' % (handle, len(self.breakpoints), prefix))
+        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s context %s' % (handle, len(self.breakpoints), prefix, cell))
         return handle
 
     def genDeleteBreakpoint(self, handle):
@@ -518,18 +518,19 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        ''' 
+        '''
         self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
             prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        '''
        
-        ''' 
+
         pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
                 We don't have the process rec until it is ready to schedule. '''
             if pid in self.pending_watch_pids:
-                self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
+                #self.lgr.debug('changedThread, pending add pid %d to watched processes' % pid)
                 self.watch_rec_list[new_addr] = pid
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
@@ -919,6 +920,8 @@ class GenContextMgr():
             self.lgr.debug('contextManager deadParrot pid:%d rec no longer found removed task' % (pid))
         if self.exit_callback is not None:
             self.exit_callback()
+        self.task_utils.setExitPid(pid)
+        print('Process %d exited.' % pid)
 
     def resetAlone(self, pid):
         self.lgr.debug('contextManager resetAlone')
