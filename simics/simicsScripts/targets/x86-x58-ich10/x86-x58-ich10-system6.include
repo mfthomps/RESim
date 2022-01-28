@@ -333,34 +333,6 @@ if $create_cdrom == "sata" {
     connect $southbridge.sata_slot[1] $cdrom.sata_slot
 }
 
-### Second disk
-$disk1 = NIL
-if $create_disk1 == "ide" {
-    if $disk1_image != NIL and $disk1_size != NIL {
-        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image
-                                                     size = $disk1_size)
-    } else if $disk1_image != NIL {
-        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image)
-    } else if $disk1_size != NIL {
-        $disk1 = (create-ide-disk-comp $system.disk1 size = $disk1_size)
-    }
-    if $disk1 {
-        connect $southbridge.ide_slot[2] $disk1.ide_slot
-    }
-}
-if $create_disk1 == "sata" {
-    if $disk1_image != NIL and $disk1_size != NIL {
-        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image
-                                                      size = $disk1_size)
-    } else if $disk1_image != NIL {
-        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image)
-    } else if $disk1_size != NIL {
-        $disk1 = (create-sata-disk-comp $system.disk1 size = $disk1_size)
-    }
-    if $disk1 != NIL {
-            connect $southbridge.sata_slot[2] $disk1.sata_slot
-    }
-}
 
 ### process tracker
 #create-os-awareness name = $system + ".software"
