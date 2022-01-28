@@ -73,7 +73,7 @@ class PageFaultGen():
         #self.lgr.debug('ppageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
-            self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
+            #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
             SIM_delete_breakpoint(self.pdir_break)
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
