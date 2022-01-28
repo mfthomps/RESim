@@ -1,10 +1,16 @@
 # RESim
 ## Reverse engineering using a full system simulator.
 
+* Dynamic analysis by instrumenting simulated hardware using Simics
+* Trace process trees, system calls and individual programs
+* Reverse execution to selected breakpoints and events
+* Integrated with IDA Pro(tm) debugging client
+* Fuzz with a customized AFL, injecting directly into simulated memory
+
 RESim is a dynamic system analysis tool that provides detailed insight into processes, programs and data flow within networked computers.  RESim simulates networks of computers through use of the Simics'[1] 
 platform’s high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from images extracted from the physical systems being modeled.
 
-Broadly, RESim aids reverse engineering and vulnerability analysis of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of kernel hosting the processes.
+Broadly, RESim aids reverse engineering and vulnerability analysis of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is documented through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of the kernel hosting the processes.
 
 RESim also provides interactive visibility into individual executing programs through use of a 
 custom plug-in to the IDA Pro disassembler/debugger.  The disassembler/debugger
@@ -28,4 +34,31 @@ RESim is based on a software vetting and forensic analysis platform created for 
 https://github.com/mfthomps/cgc-monitor.  A paper describing that work is at https://www.sciencedirect.com/science/article/pii/S1742287618301920
 And a fine summary of the use of Simics in the CGC Monitor is at https://software.intel.com/content/www/us/en/develop/blogs/simics-software-automates-cyber-grand-challenge-validation.html
 
-[1]Simics is a full system simulator sold by Intel/Wind River, which holds all relevant trademarks.
+## License
+```
+This software was created by United States Government employees
+and may not be copyrighted.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+```
+
+
+[1]Simics is a full system simulator sold by Wind River, which holds all relevant trademarks.
