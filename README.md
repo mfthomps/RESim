@@ -34,6 +34,7 @@ RESim is based on a software vetting and forensic analysis platform created for 
 https://github.com/mfthomps/cgc-monitor.  A paper describing that work is at https://www.sciencedirect.com/science/article/pii/S1742287618301920
 And a fine summary of the use of Simics in the CGC Monitor is at https://software.intel.com/content/www/us/en/develop/blogs/simics-software-automates-cyber-grand-challenge-validation.html
 
+[1]Simics is a full system simulator sold by Wind River, which holds all relevant trademarks.
 ## License
 ```
 This software was created by United States Government employees
@@ -59,6 +60,3 @@ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
-
-
-[1]Simics is a full system simulator sold by Wind River, which holds all relevant trademarks.
