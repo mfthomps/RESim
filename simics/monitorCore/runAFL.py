@@ -53,7 +53,7 @@ def handleClose(resim_procs, read_array, duration):
     for fd in read_array:
         fd.close()
 
-def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path):
+def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout):
     afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
     print('afl_cmd %s' % afl_cmd) 
 
@@ -69,7 +69,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
-    handleClose(resim_procs, read_array)
+    handleClose(resim_procs, read_array, timeout)
 
     return resim_ps
     
