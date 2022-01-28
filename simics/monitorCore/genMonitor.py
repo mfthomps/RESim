@@ -218,6 +218,8 @@ class GenMonitor():
 
         self.did_debug = False
 
+        self.quit_when_done = False
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
 
@@ -1051,7 +1053,7 @@ class GenMonitor():
             self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
         '''
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, watch_others=False):
         if type(proc) is not str:
             print('Need a proc name as a string')
             return
@@ -1073,6 +1075,11 @@ class GenMonitor():
             if pre_fun is not None:
                 fp = stopFunction.StopFunction(pre_fun, [], nest=False)
                 flist.insert(0, fp)
+            ''' If not yet loaded SO files, e.g., we just did a toProc, then execToText ''' 
+            if self.soMap[self.target].getSOPid(plist[0]) is None:
+                self.lgr.debug('debugProc, no so yet, run to text.')
+                rtt = stopFunction.StopFunction(self.execToText, [], nest=True)
+                flist.insert(1, rtt)
             self.toRunningProc(proc, plist, flist)
         else:
             self.lgr.debug('debugProc no process %s found, run until execve' % proc)
@@ -1085,6 +1092,7 @@ class GenMonitor():
             f4 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3, f4]
             self.toExecve(proc, flist=flist, binary=True)
+       
 
     def listHasDebug(self, flist):
         for f in flist:
@@ -1343,6 +1351,8 @@ class GenMonitor():
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMail")
             return
+        if self.quit_when_done:
+            self.quit()
         #current = SIM_cycle_count(cpu)
         eip = self.getEIP(cpu)
         #instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -1994,6 +2004,7 @@ class GenMonitor():
             self.track_threads[cell_name].startTrack()
         
     def stopThreadTrack(self):
+        self.lgr.debug('stopThreadTrack ')
         for cell_name in self.track_threads:
             self.lgr.debug('stopThreadTrack for %s' % cell_name)
             self.track_threads[cell_name].stopTrack()
@@ -3917,6 +3928,9 @@ class GenMonitor():
     def quit(self, cycles=None):
         SIM_run_alone(self.quitAlone, cycles)
 
+    def quitWhenDone(self):
+        self.quit_when_done = True
+
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()
 
@@ -4027,6 +4041,11 @@ class GenMonitor():
         self.context_manager[self.target].watchTasks(set_debug_pid=True)
         ''' flist of other than None causes watch of open/mmap for SO tracking '''
         self.execToText(flist=[])
+    def watchExit(self):
+        self.context_manager[self.target].watchExit()
+        self.context_manager[self.target].setExitCallback(self.procExitCallback)
+    def procExitCallback(self):
+        SIM_break_simulation('proc exit')
 
     def ni(self):
         eip = self.getEIP()
