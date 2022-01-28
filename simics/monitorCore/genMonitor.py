@@ -1011,7 +1011,7 @@ class GenMonitor():
             '''
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
-            self.toExecve(proc, [])
+            self.toExecve(proc, [], binary=True)
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
