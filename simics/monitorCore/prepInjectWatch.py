@@ -45,7 +45,8 @@ class PrepInjectWatch():
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
-        if type(mark.mark) is watchMarks.CallMark:
+        #if type(mark.mark) is watchMarks.CallMark:
+        if isinstance(mark.mark, watchMarks.CallMark):
             self.lgr.debug('doInject is call mark')
             if 'ioctl' in mark.mark.getMsg():
                 self.len_buf = mark.mark.recv_addr
@@ -60,6 +61,8 @@ class PrepInjectWatch():
                 self.lgr.debug('prepInjectWatch watch mark is not an ioctl call.')
                 self.read_mark = watch_mark
                 self.handleReadBuffer(callback=self.instrumentRead)
+        else:
+            self.lgr.debug('doInject not a CallMark')
                
     def handleDelta(self, buf_addr_list): 
         ''' Assume backtrace stopped at something like rsb r6, r3, r6 
@@ -132,7 +135,7 @@ class PrepInjectWatch():
         self.lgr.debug('prepInjectWatch handleReadbuffer got call_ip 0x%x  ret_ip 0x%x' % (self.call_ip, self.ret_ip))
 
         self.dataWatch.goToMark(self.read_mark)
-        if type(mark.mark) is watchMarks.CallMark:
+        if isinstance(mark.mark, watchMarks.CallMark):
             self.lgr.debug('prepInjectWatch 2nd is call mark')
             if 'read' in mark.mark.getMsg():
                 self.lgr.debug('is read, jump to prior to the call')
