@@ -15,7 +15,7 @@ run-command-file mapdriver.simics
 # the following buffers until simics stops, e.g., the ROP.
 # TBD, if it fails it hangs?
 #
-!xdotool type "@cgc.revTaintSP()"
+!xdotool type "@cgc.quitWhenDone()"
 !xdotool key Return
-!xdotool type quit
+!xdotool type "@cgc.revTaintSP()"
 !xdotool key Return

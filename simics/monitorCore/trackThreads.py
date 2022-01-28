@@ -7,6 +7,7 @@ class TrackThreads():
         self.parent_pid = pid
         self.pid_list = [pid]
         self.cpu = cpu
+        ''' tbd, cell not used.  future ability to watch multiple task SO? '''
         self.cell = cell
         self.cell_name = cell_name
         self.param = param
@@ -152,7 +153,8 @@ class TrackThreads():
         call_list = ['open', 'mmap']
         if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
             call_list.append('mmap2')
-        self.open_syscall = syscall.Syscall(None, self.cell_name, self.cell, self.param, self.mem_utils, self.task_utils, 
+        ''' Use cell of None so only our threads get tracked '''
+        self.open_syscall = syscall.Syscall(None, self.cell_name, None, self.param, self.mem_utils, self.task_utils, 
                            self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=call_list,
                            soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32, name='trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
