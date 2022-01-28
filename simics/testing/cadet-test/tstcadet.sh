@@ -25,7 +25,7 @@ cp $TD/*.sh .
 # use ~/bin/set-title
 $HOME/bin/set-title "cadet01-tst"
 
-resim ubuntu_driver.ini
+resim ubuntu_driver.ini || exit
 ./checkROP.sh || exit
 ./testTrack.sh || exit
 ./testAFL.sh
