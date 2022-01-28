@@ -94,7 +94,7 @@ class PageFaultGen():
         #self.lgr.debug('pageFaultGen tableWriteHap, %d (%s) new entry value 0x%x was set for pid: %d' % (pid, comm, ptable_entry, prec.pid))
         if self.ptable_break is not None:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.ptable_hap)
-            self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
+            #self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
             SIM_delete_breakpoint(self.ptable_break)
             #self.context_manager.genDeleteHap(self.ptable_hap)
             self.ptable_break = None
