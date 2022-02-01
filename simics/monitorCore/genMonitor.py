@@ -811,7 +811,7 @@ class GenMonitor():
         else:
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
-            pass
+            self.context_manager[self.target].setDebugPid()
         self.task_utils[self.target].clearExitPid()
         ''' Otherwise not cleared when pageFaultGen is stopped/started '''
         self.page_faults[self.target].clearFaultingCycles()
@@ -1393,6 +1393,7 @@ class GenMonitor():
         if debugging:
             self.context_manager[self.target].setIdaMessage(msg)
             self.restoreDebugBreaks(was_watching=True)
+            self.context_manager[self.target].stopWatchTasks()
             self.context_manager[self.target].watchTasks()
 
     def goToDebugBookmark(self, mark):
@@ -1615,9 +1616,9 @@ class GenMonitor():
 
     def watchPageFaults(self, pid=None):
 
-        self.lgr.debug('genMonitor watchPageFaults')
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
+        self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         #self.page_faults[self.target].recordPageFaults()
 
