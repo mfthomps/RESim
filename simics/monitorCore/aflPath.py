@@ -181,3 +181,12 @@ def getRelativePath(f, target):
     target_path = os.path.join(afl_output, target)
     retval = f[len(target_path)+1:]
     return retval
+
+def getSyncDirs(target):
+    target_path = getTargetPath(target)
+    glob_mask = '%s/*resim_*/' % (target_path)
+    glist = glob.glob(glob_mask)
+    if len(glist) == 0:
+        return list(target_path)
+    else:
+        return glist
