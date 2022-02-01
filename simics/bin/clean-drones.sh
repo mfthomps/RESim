@@ -12,4 +12,5 @@ echo "aflout is $aflseed"
 for f in $flist; do
     echo $f
     ssh $USER@$f rm -fr $aflout
+    ssh $USER@$f rm -fr $here
 done

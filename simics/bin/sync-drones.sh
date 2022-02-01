@@ -11,7 +11,7 @@ aflseed=$AFL_DATA/seeds/$base
 echo "aflseed is $aflseed"
 for f in $flist; do
     echo $f
-    rsync -a $here/ $USER@$f:$here/
+    rsync -a --exclude 'logs' $here/ $USER@$f:$here/
     ssh $USER@$f mkdir -p $aflseed
     rsync -a $aflseed/ $USER@$f:$aflseed/
 done
