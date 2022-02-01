@@ -35,16 +35,22 @@ def ioHandler(read_array, stop):
                     data = os.read(item.fileno(), 800)
                     fh.write(data+b'\n')
 
-def handleClose(resim_procs, read_array, duration):
+def handleClose(resim_procs, read_array, duration, remote):
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
     io_handler.start()
-
-    if duration is None:
-        print('any key to quit')
+    if remote:
+        while True:
+            if os.path.isfile('/tmp/resimdie.txt'): 
+                break
+            else:
+                time.sleep(4)
     else:
-        print('any key to quit, or will exit in %d seconds' % duration)
-    i, o, e = select.select( [sys.stdin], [], [], duration )
+        if duration is None:
+            print('any key to quit')
+        else:
+            print('any key to quit, or will exit in %d seconds' % duration)
+        i, o, e = select.select( [sys.stdin], [], [], duration )
     for ps in resim_procs:
         ps.stdin.write(b'quit\n')
     print('did quit')
@@ -69,7 +75,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
-    handleClose(resim_procs, read_array, timeout)
+    handleClose(resim_procs, read_array, timeout, False)
 
     return resim_ps
     
@@ -84,6 +90,7 @@ def main():
     parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR.')
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
+    parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     args = parser.parse_args()
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -169,10 +176,18 @@ def main():
                 continue
             afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                   master_slave, fuzzid, port, dict_path, afl_name)
-            print('afl_cmd %s' % afl_cmd) 
+            #print('afl_cmd %s' % afl_cmd) 
             os.chdir(instance)
         
-            cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+            if args.remote:
+                afllog = '/tmp/%s.log' % fuzzid 
+                fh = open(afllog, 'w')
+                cmd = '%s &' % (afl_cmd)
+                afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
+            else:
+                cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+                afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            print('cmd %s' % cmd) 
             afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             print('created afl')
     
@@ -188,25 +203,11 @@ def main():
             os.chdir(here)
             master_slave = '-S'
             port = port + 1
-        handleClose(resim_procs, read_array, args.seconds)
+        handleClose(resim_procs, read_array, args.seconds, args.remote)
     else:
         print('Running single instance')
         resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds)
 
-    ''' 
-    stop_threads = False
-    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads))
-    io_handler.start()
-    my_in = input('any key to quit')
-    for ps in resim_procs:
-        ps.stdin.write(b'quit\n')
-    print('did quit')
-    print('done')
-    stop_threads = True
-    for fd in read_array:
-        fd.close()
-    #output = resim_ps.communicate()
-    ''' 
   
 if __name__ == '__main__':
     sys.exit(main())
