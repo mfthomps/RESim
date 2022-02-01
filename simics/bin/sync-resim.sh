@@ -1,0 +1,21 @@
+#!/bin/bash
+if [ ! -f drones.txt ]; then
+   echo "No drones.txt file found"
+   exit
+fi
+flist=$(cat drones.txt)
+echo $flist
+here=$(pwd)
+base=$(basename $here)
+aflseed=$AFL_DATA/seeds/$base
+echo "aflseed is $aflseed"
+for f in $flist; do
+    echo $f
+    rsync -a $RESIM_DIR/ $USER@$f:$RESIM_DIR/
+    rsync -a $AFL_DIR/ $USER@$f:$AFL_DIR/
+    rsync -a $HOME/.resimrc $USER@$f:$HOME/.resimrc
+    # start the license manager
+    ssh $USER@$f /bin/bash -c /usr/bin/lmgrdFix &
+    # make sure the VMP kernel module is loaded
+    ssh -t $USER@$f /bin/bash -ic "SIMICS_BASE_PACKAGE=\"/mnt/simics/simics-4.8/simics-4.8.170\";export SIMICS_BASE_PACKAGE;exec /mnt/simics/simics-4.8/simics-4.8.170/bin/vmp-kernel-load"
+done
