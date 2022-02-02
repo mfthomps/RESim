@@ -1,8 +1,12 @@
 import os
 import time
-import cli
 import logging
-from simics import *
+try:
+    import cli
+    from simics import *
+except:
+    ''' Not always called from simics context '''
+    pass
 def getLogger(name, logdir, level=None):
     os.umask(000)
     try:
