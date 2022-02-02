@@ -265,9 +265,13 @@ class InjectIO():
             if self.addr_addr is not None:
                 self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
 
+        self.lgr.debug('injectIO resetReverseAlone delete stop hap')
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
-        SIM_run_command('c')
+        if count > 0:
+            SIM_run_command('c')
+        else:
+            self.lgr.debug('resetReverseAlone no more data, do not continue')
         
 
     def stopHap(self, count, one, exception, error_string):
