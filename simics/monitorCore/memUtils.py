@@ -243,21 +243,21 @@ class memUtils():
             if ps is not None:
                 remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
                 if remain_in_page < count:
-                    self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
+                    #self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
                     first_read = readPhysBytes(cpu, ps, remain_in_page)
                     if first_read is not None and len(first_read) == remain_in_page:
                         ''' get the rest ''' 
                         ps = self.v2p(cpu, start+remain_in_page)
-                        self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
+                        #self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
                         second_read = readPhysBytes(cpu, ps, count - remain_in_page)
-                        self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
+                        #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
                         retval = retval+first_read+second_read
                     else:
                         retval = retval+first_read
                 else: 
                     retval = retval+readPhysBytes(cpu, ps, count)
                     #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
-            self.lgr.debug('readBytes got %d' % len(retval))
+            #self.lgr.debug('readBytes got %d' % len(retval))
             start = start+count
             remain = remain - count
         retval = bytearray(retval)

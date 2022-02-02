@@ -1747,14 +1747,14 @@ class DataWatch():
                 else:
                     prev_fun = fun
                 
-                if fun in local_mem_funs or self.user_iterators.isIterator(frame.fun_addr):
+                if fun in local_mem_funs or (self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr)):
                     if fun in local_mem_funs:
                         self.lgr.debug('fun in local_mem_funs %s' % fun)
                         fun_precidence = self.funPrecidence(fun)
                         if fun_precidence == 0 and i > 3:
                             #self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                             continue
-                    if self.user_iterators.isIterator(frame.fun_addr):
+                    if self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr):
                         #self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
                         fun_precidence = 999
                     self.lgr.debug('dataWatch memsomething, is %s, frame: %s' % (fun, frame.dumpString()))

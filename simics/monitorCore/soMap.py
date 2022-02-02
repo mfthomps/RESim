@@ -138,7 +138,7 @@ class SOMap():
             pid = pid_in
         if pid in self.prog_start:
             self.lgr.debug('soMap addText pid %d already in map len of so_addr_map %d' % (pid, len(self.so_file_map)))
-        else:
+        elif elf_info is not None:
             self.lgr.debug('soMap addText, prog %s pid:%d' % (prog, pid))
             self.prog_start[pid] = elf_info.address
             self.prog_end[pid] = elf_info.address+elf_info.size
