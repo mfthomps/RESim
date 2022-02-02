@@ -17,5 +17,6 @@ cp $RESIM_DIR/simics/workspace/mytarget.ini .
 cp $RESIM_DIR/simics/workspace/driver-script.sh .
 cp $RESIM_DIR/simics/workspace/ubuntu.param .
 cp $RESIM_DIR/simics/workspace/ubuntu.ini .
+cp $RESIM_DIR/simics/workspace/authorized_keys .
 here=`pwd`
 echo "Workspace setup at $here."
