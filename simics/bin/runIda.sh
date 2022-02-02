@@ -24,6 +24,10 @@ if [[ ! -f "$IDA_DIR/idc/runRESim.idc" ]]; then
     echo "Copying runRESim.idc to the IDA directory at $IDA_DIR/idc"
     cp $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
 fi
+if [ $# -eq 0 ] || [ $1 = "-h" ]; then
+    echo "runIda.sh <target> [color/reset] [server]"
+    exit
+fi
 idacmd=$IDA_DIR/ida
 target=$1
 target_base="$(basename -- $target)"
