@@ -8,6 +8,6 @@ here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
 for f in $flist; do
-    echo $f
+    echo "AFL Status from $f"
     ssh -t $USER@$f bash -ic "cd $here;cd $here;pwd;source ~/.resimrc;$RESIM_DIR/simics/bin/fuzzhappening.py"
 done

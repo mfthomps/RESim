@@ -8,9 +8,11 @@ echo $flist
 here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
+seeds=$AFL_DATA/seeds/$base
 echo "aflout is $aflseed"
 for f in $flist; do
     echo $f
     ssh $USER@$f rm -fr $aflout
+    ssh $USER@$f rm -fr $seeds
     ssh $USER@$f rm -fr $here
 done

@@ -4,13 +4,11 @@ if [ ! -f drones.txt ]; then
    exit
 fi
 flist=$(cat drones.txt)
-echo $flist
 here=$(pwd)
 base=$(basename $here)
 aflseed=$AFL_DATA/seeds/$base
-echo "aflseed is $aflseed"
 for f in $flist; do
-    echo $f
+    echo "Syncing RESim code with $f"
     rsync -a $RESIM_DIR/ $USER@$f:$RESIM_DIR/
     rsync -a $AFL_DIR/ $USER@$f:$AFL_DIR/
     rsync -a $HOME/.resimrc $USER@$f:$HOME/.resimrc

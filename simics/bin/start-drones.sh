@@ -24,4 +24,4 @@ runAFL $target
 echo "Back from runAFL"
 touch /tmp/resimdie.txt
 stop-drones.sh
-pkill $(which get-tars.sh)
+kill $(ps aux | grep '[g]et-tars.sh' | awk '{print $2}')

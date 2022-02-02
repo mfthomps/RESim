@@ -11,13 +11,12 @@ fi
 timeout=$1
 flist=$(cat drones.txt)
 flist=$flist" "$HOSTNAME
-echo $flist
 here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
 while [ ! -f /tmp/resimdie.txt ]; do 
     for f in $flist; do
-        echo $f
+        echo "Get sync dir from $f"
         ssh $USER@$f -o StrictHostKeyChecking=no bash -c "cd .;cd $aflout;tar -czf - $f_resim*/[qf]*" >host_$f.tgz
     done
     for s in $flist; do
