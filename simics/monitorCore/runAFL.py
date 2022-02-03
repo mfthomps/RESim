@@ -175,7 +175,6 @@ def runAFL(args):
                   master_slave, fuzzid, port, dict_path, afl_name)
             #print('afl_cmd %s' % afl_cmd) 
             os.chdir(instance)
-        
             if args.remote:
                 afllog = '/tmp/%s.log' % fuzzid 
                 fh = open(afllog, 'w')
@@ -185,8 +184,7 @@ def runAFL(args):
                 cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
                 afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             lgr.debug('cmd %s' % cmd) 
-            afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            lgr.debug('created afl')
+            lgr.debug('created afl in dir %s' % instance)
     
             resim_ini = args.ini
             cmd = '%s %s -n' % (resim_path, resim_ini)
