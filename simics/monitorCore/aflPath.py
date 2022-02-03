@@ -1,11 +1,12 @@
 import os
 import glob
 import json
+import socket
 def getHost():
     hostname = os.getenv('HOSTNAME')
     if hostname is None:
-        print('HOSTNAME env not set')
-        return None
+        hostname = socket.gethostname()
+        print('HOSTNAME env not set, use socket got %s' % hostname)
     #print('hostname is %s' % hostname)
     if len(hostname) > 8:
         hostname = hostname[-8:]
