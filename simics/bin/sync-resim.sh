@@ -13,7 +13,7 @@ for f in $flist; do
     rsync -a $AFL_DIR/ $USER@$f:$AFL_DIR/
     rsync -a $HOME/.resimrc $USER@$f:$HOME/.resimrc
     # start the license manager
-    ssh -t $USER@rb8 bash -ic "'cd /tmp/';nohup /usr/bin/lmgrdFix"
+    ssh -t $USER@$f bash -ic "'cd /tmp/';nohup /usr/bin/lmgrdFix"
     # make sure the VMP kernel module is loaded
     ssh -t $USER@$f /bin/bash -ic "SIMICS_BASE_PACKAGE=\"/mnt/simics/simics-4.8/simics-4.8.170\";export SIMICS_BASE_PACKAGE;exec /mnt/simics/simics-4.8/simics-4.8.170/bin/vmp-kernel-load"
 done
