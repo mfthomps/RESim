@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import subprocess
 try:
     import cli
     from simics import *
@@ -52,3 +53,17 @@ def skipToTest(cpu, cycle, lgr):
                 lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
                 retval = False
         return retval
+
+def getFree():
+    cmd = "free"
+    ps = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = ps.communicate()
+    for line in output[0].decode("utf-8").splitlines():
+         if line.startswith('Mem:'):
+             parts = line.split()
+             tot = int(parts[1])
+             free = int(parts[3])
+             #print('tot %s   free %s' % (tot, free))             
+             percent = (free / tot) * 100
+             return int(percent)
+    return None
