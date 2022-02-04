@@ -57,7 +57,7 @@ def main():
             docmd(cmd)
 
     get_path = os.path.join(resim_dir,'simics','bin','get-tars.sh')
-    cmd = '%s 30 &'
+    cmd = '%s 30 &' % get_path
     os.system(cmd)
     print('Now call runAFL')
     runAFL.runAFL(args)
