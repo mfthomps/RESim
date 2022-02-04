@@ -45,7 +45,7 @@ def main():
     resim_dir = os.getenv('RESIM_DIR')
     remote_afl = os.path.join(resim_dir, 'simics', 'bin', 'remoteAFL.sh')
     try:
-        os.rm('/tmp/resimdie.txt')
+        os.remove('/tmp/resimdie.txt')
     except:
         pass
     if not os.path.isfile('drones.txt'):
@@ -59,10 +59,10 @@ def main():
                 print('The drones list includes this host?  skipping')
                 continue
             cmd = 'ssh %s@%s rm -f /tmp/resimdie.txt' % (user, drone)
-            print('do command: %s' % cmd)
+            #print('do command: %s' % cmd)
             docmd(cmd)
             cmd = 'ssh -o LogLevel=QUIET -t %s@%s bash -ic "\'source ~/.resimrc\';/usr/bin/nohup %s %s %s"' % (user, drone, remote_afl, here, args.ini)
-            print('do command: %s' % cmd)
+            #print('do command: %s' % cmd)
             docmd(cmd)
 
     get_path = os.path.join(resim_dir,'simics','bin','get-tars.sh')

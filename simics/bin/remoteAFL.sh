@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# Run the runAFL program locally.  Intended to be started as an ssh command.
+# Pass in the workspace path and the target ini file.
+#
 echo $@
 if [ "$#" -ne 2 ] || [ "$1" = "-h" ]; then
     echo "remoteAFL <workspace> <target ini>"
@@ -9,6 +13,10 @@ target=$1
 shift 1
 ini=$1
 shift 1
+if [ ! -d $target ]; then
+    echo "No directory at $target, exiting."
+    exit 1
+fi
 cd $target
 source $HOME/.resimrc
 PATH=$RESIM_DIR/simics/bin:$PATH

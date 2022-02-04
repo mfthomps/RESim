@@ -5,12 +5,11 @@ if [ ! -f drones.txt ]; then
 fi
 target=$1
 flist=$(cat drones.txt)
-echo $flist
 here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
 echo "aflout is $aflseed"
 for f in $flist; do
-    echo $f
+    echo Stopping RESim on $f
     ssh  $USER@$f touch /tmp/resimdie.txt
 done
