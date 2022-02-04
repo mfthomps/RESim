@@ -113,7 +113,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     return resim_ps
     
 
-def runAFL(args):
+def runAFL(args, lgr):
     os.environ['AFL_SKIP_CPUFREQ']='True'
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -206,11 +206,16 @@ def runAFL(args):
                 afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                       master_slave, fuzzid, port, dict_path, afl_name)
                 #print('afl_cmd %s' % afl_cmd) 
-                if args.remote:
+                if args.remote or (args.quiet and master_slave == '-S'):
                     afllog = '/tmp/%s.log' % fuzzid 
                     fh = open(afllog, 'w')
                     cmd = '%s &' % (afl_cmd)
                     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
+                elif args.quiet and master_slave == '-M':
+                    afllog = '../master-%s.log' % fuzzid 
+                    fh = open(afllog, 'w')
+                    cmd = '%s &' % (afl_cmd)
+                    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
                 else:
                     cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
                     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -252,6 +257,7 @@ def runAFL(args):
     return do_restart
 
 def main():
+    lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
@@ -264,22 +270,22 @@ def main():
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')
+    parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Redirect afl output to file in workspace directory')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
         pass
     args = parser.parse_args()
-    do_restart = runAFL(args)
+    do_restart = runAFL(args, lgr)
     time.sleep(20)
     if do_restart:
         print('restarting resim in 10')
         os.remove('/tmp/resim_restart.txt')
         time.sleep(10)
         args.no_afl = True
-        do_restart = runAFL(args)
+        do_restart = runAFL(args, lgr)
   
 if __name__ == '__main__':
-    lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
     sys.exit(main())
 
 
