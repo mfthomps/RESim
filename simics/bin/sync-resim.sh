@@ -8,6 +8,10 @@ here=$(pwd)
 base=$(basename $here)
 aflseed=$AFL_DATA/seeds/$base
 for f in $flist; do
+    if [ $f = $HOSTNAME ]; then
+        echo "Um, your host is in the drones file?, skipping"
+        continue
+    fi
     echo "Syncing RESim code with $f"
     rsync -a $RESIM_DIR/ $USER@$f:$RESIM_DIR/
     rsync -a $AFL_DIR/ $USER@$f:$AFL_DIR/

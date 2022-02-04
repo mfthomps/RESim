@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import socket
 import sys
 import subprocess
 import argparse
@@ -7,6 +8,7 @@ import shlex
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir,'simics', 'monitorCore'))
 import runAFL
+import resimUtils
 def docmd(cmd):
     ok = True
     #ssh_ps = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -21,6 +23,7 @@ def docmd(cmd):
         sys.exit(1)
 
 def main():
+    ''' *** these arguments must match those of runAFL *** tbd, use common file '''
     parser = argparse.ArgumentParser(prog='start-drones.py', description='Start drones listed in the drones.txt file.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('-c', '--continue_run', action='store_true', help='Do not use seeds, continue previous sessions.')
@@ -32,6 +35,8 @@ def main():
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     parser.add_argument('-r', '--remote', action='store_true', help='DONT use this, only passed because runAFL needs it.')
+    parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')
+    parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Redirect afl output to file in workspace directory')
     args = parser.parse_args()
     here = os.getcwd()
     base = os.path.basename(here)
@@ -46,9 +51,13 @@ def main():
     if not os.path.isfile('drones.txt'):
         print('No drones.txt file found.')
         sys.exit(1)
+    hostname = socket.gethostname()
     with open('drones.txt') as fh:
         for line in fh:
             drone = line.strip()
+            if drone == hostname:
+                print('The drones list includes this host?  skipping')
+                continue
             cmd = 'ssh %s@%s rm -f /tmp/resimdie.txt' % (user, drone)
             print('do command: %s' % cmd)
             docmd(cmd)
@@ -60,7 +69,8 @@ def main():
     cmd = '%s 30 &' % get_path
     os.system(cmd)
     print('Now call runAFL')
-    runAFL.runAFL(args)
+    lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
+    runAFL.runAFL(args, lgr)
     print("Back from runAFL")
     with open('/tmp/resimdie.txt', 'w') as fh:
         fh.write('die')
