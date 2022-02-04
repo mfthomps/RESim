@@ -10,6 +10,7 @@ Each AFL/RESim pair is given a unique port number over which to communicate.
 
 '''
 import os
+import stat
 import sys
 import subprocess
 import argparse
@@ -35,33 +36,61 @@ def ioHandler(read_array, stop, lgr):
                 lgr.debug('select error, must be closed.')
                 return
             for item in r:
+                try:
                     data = os.read(item.fileno(), 800)
-                    fh.write(data+b'\n')
+                except:
+                    lgr.debug('read error, must be closed.')
+                    return
+                fh.write(data+b'\n')
+                   
 
-def handleClose(resim_procs, read_array, duration, remote, lgr):
+def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads, lgr))
     io_handler.start()
-    if remote:
-        while True:
-            if os.path.isfile('/tmp/resimdie.txt'): 
-                break
-            else:
-                time.sleep(4)
+    total_time = 0
+    sleep_time = 4
+    do_restart = False
+    if duration is None:
+        print('any key to quit')
     else:
-        if duration is None:
-            print('any key to quit')
+        print('any key to quit, or will exit in %d seconds' % duration)
+    while duration is None or (total_time < duration) and not os.path.isfile('/tmp/resimdie.txt'):
+        if remote:
+            time.sleep(sleep_time)
         else:
-            print('any key to quit, or will exit in %d seconds' % duration)
-        i, o, e = select.select( [sys.stdin], [], [], duration )
-    for ps in resim_procs:
-        ps.stdin.write(b'quit\n')
-    print('did quit')
-    print('done')
-    lgr.debug('done')
+            i, o, e = select.select( [sys.stdin], [], [], sleep_time )
+            if len(i) > 0:
+                print('got input key')
+                break
+        total_time = total_time + sleep_time
+        if os.path.isfile('/tmp/resim_restart.txt'):
+            do_restart = True
+            break
+        free = resimUtils.getFree()
+        if free < 30:
+            lgr.debug('found memory only at %d, must be leaking, restart simics')
+            do_restart = True
+            break
+
+    if not do_restart:
+        print('did quit')
+        lgr.debug('handleClose must have gotten quit')
+        for fifo in fifo_list:
+            os.write(fifo, bytes('quit\n', 'UTF-8'))
+            lgr.debug('wrote quit to fifo') 
+    else:
+        for fifo in fifo_list:
+            os.write(fifo, bytes('restart\n', 'UTF-8'))
+            lgr.debug('wrote restart to fifo')
+    for proc in resim_procs:
+        proc.wait()
+        lgr.debug('proc exited')
+
     stop_threads = True
     for fd in read_array:
         fd.close()
+    return do_restart
 
 def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, lgr):
     afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
@@ -79,12 +108,13 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
-    handleClose(resim_procs, read_array, timeout, False, lgr)
+    handleClose(resim_procs, read_array, timeout, False, [], lgr)
 
     return resim_ps
     
 
 def runAFL(args):
+    os.environ['AFL_SKIP_CPUFREQ']='True'
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
     resim_dir = os.getenv('RESIM_DIR')
@@ -93,9 +123,8 @@ def runAFL(args):
         exit(1)
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
     hostname = aflPath.getHost()
-    lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
 
-    
+    do_restart = False 
     here = os.getcwd()
     afl_name = os.path.basename(here)
     try:
@@ -165,27 +194,37 @@ def runAFL(args):
         
     port = 8700
     read_array = []
+    fifo_list = []
     if len(glist) > 0:
         lgr.debug('Parallel, doing %d instances' % len(glist))
         for instance in glist:
             fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
                 continue
-            afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
-                  master_slave, fuzzid, port, dict_path, afl_name)
-            #print('afl_cmd %s' % afl_cmd) 
             os.chdir(instance)
-            if args.remote:
-                afllog = '/tmp/%s.log' % fuzzid 
-                fh = open(afllog, 'w')
-                cmd = '%s &' % (afl_cmd)
-                afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
-            else:
-                cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
-                afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            lgr.debug('cmd %s' % cmd) 
-            lgr.debug('created afl in dir %s' % instance)
-    
+            if not args.no_afl:
+                afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
+                      master_slave, fuzzid, port, dict_path, afl_name)
+                #print('afl_cmd %s' % afl_cmd) 
+                if args.remote:
+                    afllog = '/tmp/%s.log' % fuzzid 
+                    fh = open(afllog, 'w')
+                    cmd = '%s &' % (afl_cmd)
+                    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
+                else:
+                    cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+                    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                lgr.debug('cmd %s' % cmd) 
+                lgr.debug('created afl in dir %s' % instance)
+
+            try:
+                os.remove('resim_ctl.fifo')
+            except:
+                pass
+            try:
+                os.mkfifo('resim_ctl.fifo')
+            except OSError as e:
+                lgr.debug('fifo create failed %s' % e)    
             resim_ini = args.ini
             cmd = '%s %s -n' % (resim_path, resim_ini)
             os.environ['ONE_DONE_PARAM'] = str(port)
@@ -194,14 +233,23 @@ def runAFL(args):
             resim_procs.append(resim_ps)
             read_array.append(resim_ps.stdout)
             read_array.append(resim_ps.stderr)
+            if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+                lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
+                fh = os.open('resim_ctl.fifo', os.O_WRONLY)
+                lgr.debug('back from open fifo')
+                fifo_list.append(fh)
+            else:
+                lgr.debug('no fifo found')
             lgr.debug('created resim port %d' % port)
             os.chdir(here)
             master_slave = '-S'
             port = port + 1
-        handleClose(resim_procs, read_array, args.seconds, args.remote, lgr)
+
+        do_restart = handleClose(resim_procs, read_array, args.seconds, args.remote, fifo_list, lgr)
     else:
         lgr.debug('Running single instance')
-        resim_ps = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
+        doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
+    return do_restart
 
 def main():
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
@@ -215,10 +263,23 @@ def main():
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
+    parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')
+    try:
+        os.remove('/tmp/resim_restart.txt')
+    except:
+        pass
     args = parser.parse_args()
-    runAFL(args)
+    do_restart = runAFL(args)
+    time.sleep(20)
+    if do_restart:
+        print('restarting resim in 10')
+        os.remove('/tmp/resim_restart.txt')
+        time.sleep(10)
+        args.no_afl = True
+        do_restart = runAFL(args)
   
 if __name__ == '__main__':
+    lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
     sys.exit(main())
 
 

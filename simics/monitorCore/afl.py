@@ -1,4 +1,5 @@
 import os
+import stat
 import shutil
 import time
 import socket
@@ -100,6 +101,7 @@ class AFL():
         self.bad_trick = False
         self.trace_snap1 = None
         self.empty_trace_bits = None
+        self.restart = 0
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -117,6 +119,15 @@ class AFL():
 
         self.snap_name = snap_name
         self.loadPickle(snap_name)
+
+        self.resim_ctl = None
+        if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+            self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
+            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
+            self.lgr.debug('afl back from open')
+        else: 
+            self.lgr.debug('afl did NOT find resim_ctl.fifo')
+          
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
             if self.orig_buffer is not None:
@@ -215,8 +226,24 @@ class AFL():
                 self.lgr.debug('afl one and done, removed coverage breaks')
                 return
 
+            fifo_read = None
+            if self.resim_ctl is not None:
+                try:
+                    fifo_read = os.read(self.resim_ctl, 10)
+                except OSError as err:
+                    pass
+            do_quit = False
+            if fifo_read is not None:
+                if fifo_read.startswith('restart'):
+                    self.lgr.debug('afl fifo_read got %s, do restart' % fifo_read)
+                    self.restart = True
+                elif fifo_read.startswith('quit'):
+                    do_quit = True
+            
             ''' Send the status message '''
-            self.sendMsg('resim_done iteration: %d status: %d size: %d' % (self.iteration, status, self.orig_data_length))
+            if self.restart:
+                self.lgr.debug('afl telling AFL we will restart')
+            self.sendMsg('resim_done iteration: %d status: %d size: %d restart: %d' % (self.iteration, status, self.orig_data_length, self.restart))
             try: 
                 self.sock.sendall(trace_bits)
                 pass
@@ -237,13 +264,20 @@ class AFL():
                     self.lgr.debug(stat)
                 SIM_run_command('q')
             '''
-            self.iteration += 1 
-            self.in_data = self.getMsg()
-            if self.in_data is None:
-                self.lgr.error('Got None from afl')
-                self.rmStopHap()
-                return
-            SIM_run_alone(self.goN, status)
+            if self.restart == 0:
+                if do_quit:
+                    self.lgr.debug('afl was told to quit, bye')
+                    self.top.quit()
+                self.iteration += 1 
+                self.in_data = self.getMsg()
+                if self.in_data is None:
+                    self.lgr.error('Got None from afl')
+                    self.rmStopHap()
+                    return
+                SIM_run_alone(self.goN, status)
+            else:
+                self.lgr.debug('afl was told to restart, bye')
+                self.top.quit()
 
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
@@ -331,7 +365,8 @@ class AFL():
         self.sock.connect(server_address)
         self.sendMsg('hi from resim')
         reply = self.getMsg()
-        self.lgr.debug('afl synchAFL reply from afl: %s' % reply)
+        self.iteration = int(reply.split()[-1].strip())+1
+        self.lgr.debug('afl synchAFL reply from afl: %s start with given iteration plus 1 %d' % (reply, self.iteration))
 
     def sendMsg(self, msg):
         msg_size = len(msg)
@@ -356,7 +391,11 @@ class AFL():
         #self.lgr.debug('sent to AFL len %d: %s' % (msg_size, msg))
 
     def getMsg(self):
-        data = self.sock.recv(4)
+        try:
+            data = self.sock.recv(4)
+        except socket.error as e:
+            self.lgr.error('afl recv error %s' % e)
+            self.top.quit()
         #self.lgr.debug('got data len %d %s' % (len(data), data))
         if data is None or len(data) == 0:
             self.sock.close()
