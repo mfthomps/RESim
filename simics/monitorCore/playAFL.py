@@ -10,7 +10,8 @@ import json
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
-             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, create_dead_zone=False, afl_mode=False, crashes=False):
+             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -30,6 +31,8 @@ class PlayAFL():
         self.target = target
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
+        ''' If parallel, the all_hits will not be tracked or written.  TBD to that separately.'''
+        self.parallel = parallel
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
             try:
@@ -153,18 +156,20 @@ class PlayAFL():
         self.index += 1
         done = False
         if self.target != 'oneplay':
-            ''' skip files if already have coverage '''
+            ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
-                if not os.path.isfile(fname):
+                try:
+                    os.open(fname, os.O_CREAT | os.O_EXCL)
                     done = True
-                else:
-                    hits_json = json.load(open(fname))
-                    for hit in hits_json:
-                        hit = int(hit)
-                        if hit not in self.all_hits:
-                            self.all_hits.append(hit)
-                    self.index += 1
+                except FileExistsError as e:
+                    if not self.parallel:
+                        hits_json = json.load(open(fname))
+                        for hit in hits_json:
+                            hit = int(hit)
+                            if hit not in self.all_hits:
+                                self.all_hits.append(hit)
+                        self.index += 1
         if self.index < len(self.afl_list):
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
