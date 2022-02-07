@@ -25,6 +25,17 @@
 '''
 Use Simics to monitor processes.  The is the top level module for RESim,
 derived from cgcMonitor, which was developed for the DARPA Cyber Grand Challenge.
+
+Initialization of RESim proceeds as follows:
+    The launchRESim program
+    The standard python __init__ defines a set of module data and calls self.genInit(comp_dict), passing
+    in the dictionary provided by launcheRESim
+    genInit initializes a set of modules.
+    The launchRESim then calls doInit, whose functions depend on whether a snapshot is run or not.
+    If not a snapshot, the doInit runs the simulation until it finds the current task record.
+    Finally, the runScripts function runs the INIT_SCRIPT from the ini, if any, and the onedone
+    script if defined in the environment variables, e.g., for runAFL.
+
 '''
 from simics import *
 import cli
@@ -189,6 +200,7 @@ class GenMonitor():
         self.find_kernel_write = None
 
         self.one_done_module = None
+        self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
         one_done_script = os.getenv('ONE_DONE_SCRIPT')
         if one_done_script is not None:
             if one_done_script.startswith('/'):
@@ -200,8 +212,11 @@ class GenMonitor():
 
             if os.path.isfile(abs_path):
                 self.one_done_module = imp.load_source(one_done_script, abs_path)
+                self.lgr.debug('onedone found at %s' % abs_path)
             else:
                 self.lgr.error('no onedone found for %s' % one_done_script)
+        else:
+            self.lgr.debug('No ONE_DONE_SCRIPT, must be interactive session.')
 
         self.injectIOInstance = None
         ''' retrieved from snapshot pickle, not necessarily current '''
@@ -228,7 +243,6 @@ class GenMonitor():
         '''
         remove all previous breakpoints.  
         '''
-        self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
         SIM_run_command("delete -all")
         self.target = os.getenv('RESIM_TARGET')
@@ -320,6 +334,9 @@ class GenMonitor():
                 if os.path.isfile(net_file):
                     self.netInfo[cell_name].loadfile(net_file)
 
+
+    def runScripts(self):
+        ''' run the INIT_SCRIPT and the one_done module, if iany '''
         init_script = os.getenv('INIT_SCRIPT')
         if init_script is not None:
             cmd = 'run-command-file %s' % init_script
@@ -327,7 +344,9 @@ class GenMonitor():
             self.lgr.debug('ran INIT_SCRIPT %s' % init_script)
         if self.one_done_module is not None:
             #self.one_done_module.onedone(self)
-            SIM_run_alone(self.one_done_module.onedone, self)
+            self.lgr.debug('one_done_module defined, call it')
+            self.one_done_module.onedone(self)
+            #SIM_run_alone(self.one_done_module.onedone, self)
 
     def getTopComponentName(self, cpu):
          if cpu is not None:
@@ -530,6 +549,7 @@ class GenMonitor():
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.traceProcs[cell_name], self.traceFiles[cell_name], 
                   self.soMap[cell_name], self.dataWatch[cell_name], self.traceMgr[cell_name], self.lgr)
+            self.lgr.debug('finishInit is done for cell %s' % cell_name)
 
     def getBootCycleChunk(self):
         run_cycles =  900000000
@@ -566,6 +586,7 @@ class GenMonitor():
         self.lgr.debug('genMonitor doInit')
         if self.run_from_snap is not None:
             self.snapInit()
+            self.runScripts()
             return
         run_cycles = self.getBootCycleChunk()
         done = False
@@ -638,6 +659,7 @@ class GenMonitor():
                 cmd = 'c %s cycles' % run_cycles
                 dumb, ret = cli.quiet_run_command(cmd)
                 #self.lgr.debug('back from continue')
+        self.runScripts()
        
     def getDbgFrames(self):
         retval = {}
@@ -3738,6 +3760,7 @@ class GenMonitor():
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
+        self.lgr.debug('genMonitor afl')
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
