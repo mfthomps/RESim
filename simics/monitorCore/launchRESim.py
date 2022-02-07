@@ -10,6 +10,7 @@ if CORE not in sys.path:
     sys.path.append(CORE)
 import genMonitor
 import getKernelParams
+import resimUtils
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -170,7 +171,9 @@ class LaunchRESim():
     def __init__(self):
         global cgc, gkp, cfg_file
         print('Launch RESim')
+        lgr = resimUtils.getLogger('launchResim', './logs', level=None)
         SIMICS_WORKSPACE = os.getenv('SIMICS_WORKSPACE')
+        lgr.debug('Start of log from LaunchRESim workspace %s  ONE_DONE_SCRIPT: %s' % (SIMICS_WORKSPACE, os.getenv('ONE_DONE_SCRIPT')))
         RESIM_INI = os.getenv('RESIM_INI')
         self.config = ConfigParser.ConfigParser()
         #self.config = ConfigParser.RawConfigParser()
@@ -187,6 +190,7 @@ class LaunchRESim():
         SIMICS_BASE = os.getenv('SIMICS')
         parent = os.path.dirname(SIMICS_BASE)
         print('SIMICS dir is %s' % parent) 
+        lgr.debug('SIMICS dir is %s' % parent) 
         run_command('add-directory -prepend %s/simics-qsp-arm-6.02' % parent)        
         run_command('add-directory -prepend %s/simics-x86-x58-ich10-6.0.30/targets/x58-ich10/images' % parent)        
         run_command('add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO)
@@ -196,6 +200,7 @@ class LaunchRESim():
         RESIM_TARGET = 'NONE'
         DRIVER_WAIT = False
         print('assign ENV variables')
+        lgr.debug('assign ENV variables')
         for name, value in self.config.items('ENV'):
             os.environ[name] = value
             if name == 'RESIM_TARGET':
@@ -239,6 +244,7 @@ class LaunchRESim():
         
                 driver_script = self.getSimicsScript('driver')
                 print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 done = False
@@ -285,6 +291,7 @@ class LaunchRESim():
                     gkp = getKernelParams.GetKernelParams(self.comp_dict)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
+                    lgr.debug('genMonitor for target %s' % RESIM_TARGET)
                     cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file)
                     cgc.doInit()
     
