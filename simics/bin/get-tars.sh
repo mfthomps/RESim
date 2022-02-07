@@ -16,6 +16,7 @@ base=$(basename $here)
 aflout=$AFL_DATA/output/$base
 echo "Starting get-tars.sh"
 while [ ! -f /tmp/resimdie.txt ]; do 
+    sleep "$timeout"m
     for f in $flist; do
         echo "Get sync dir from $f"
         ssh $USER@$f -o StrictHostKeyChecking=no bash -c "cd .;cd $aflout && tar -czf - $f_resim*/[qf]*" >host_$f.tgz
@@ -26,7 +27,6 @@ while [ ! -f /tmp/resimdie.txt ]; do
             ssh $USER@$d -o StrictHostKeyChecking=no bash -c "cd .;cd $aflout && tar --skip-old-files -xzf -" <host_$s.tgz
         done
     done
-    sleep "$timeout"m
 done
 
 echo "Exiting get-tars.sh"

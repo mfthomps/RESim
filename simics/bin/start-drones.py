@@ -51,6 +51,7 @@ def main():
     if not os.path.isfile('drones.txt'):
         print('No drones.txt file found.')
         sys.exit(1)
+    os.system("kill $(ps aux | grep '[g]et-tars.sh' | awk '{print $2}') >/dev/null 2>&1")
     hostname = socket.gethostname()
     with open('drones.txt') as fh:
         for line in fh:

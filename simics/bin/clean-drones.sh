@@ -4,7 +4,6 @@ if [ ! -f drones.txt ]; then
    exit
 fi
 flist=$(cat drones.txt)
-echo $flist
 here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
@@ -15,8 +14,6 @@ for f in $flist; do
         echo "Um, your host is in the drones file?, skipping"
         continue
     fi
-    echo $f
-    ssh $USER@$f rm -fr $aflout
-    ssh $USER@$f rm -fr $seeds
-    ssh $USER@$f rm -fr $here
+    echo "deleting afl output, seeds and logs on $f"
+    ssh $USER@$f "rm -fr $aflout; rm -fr $seeds; rm -fr share; rm -f /tmp/resim.log; rm  -f /tmp/runAFL.log"
 done
