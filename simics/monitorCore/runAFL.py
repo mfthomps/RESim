@@ -41,7 +41,8 @@ def ioHandler(read_array, stop, lgr):
                 except:
                     lgr.debug('read error, must be closed.')
                     return
-                fh.write(data+b'\n')
+                if len(data.decode().strip()) > 0:
+                    fh.write(data+b'\n')
                    
 
 def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
@@ -249,8 +250,7 @@ def runAFL(args, lgr):
             cmd = '%s %s -n' % (resim_path, resim_ini)
             os.environ['ONE_DONE_PARAM'] = str(port)
             lgr.debug('cmd is %s' % cmd)
-            #resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            resim_ps = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             resim_procs.append(resim_ps)
             read_array.append(resim_ps.stdout)
             read_array.append(resim_ps.stderr)
