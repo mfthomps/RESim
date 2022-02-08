@@ -121,7 +121,8 @@ class AFL():
         self.loadPickle(snap_name)
 
         self.resim_ctl = None
-        if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+        #if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+        if os.path.exists('resim_ctl.fifo'):
             self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
             self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
             self.lgr.debug('afl back from open')
@@ -234,10 +235,10 @@ class AFL():
                     pass
             do_quit = False
             if fifo_read is not None:
-                if fifo_read.startswith('restart'):
+                if fifo_read.startswith(b'restart'):
                     self.lgr.debug('afl fifo_read got %s, do restart' % fifo_read)
                     self.restart = True
-                elif fifo_read.startswith('quit'):
+                elif fifo_read.startswith(b'quit'):
                     do_quit = True
             
             ''' Send the status message '''
