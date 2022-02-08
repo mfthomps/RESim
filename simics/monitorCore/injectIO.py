@@ -1,5 +1,6 @@
 from simics import *
 import writeData
+import memUtils
 import cli
 import os
 import sys
@@ -144,6 +145,16 @@ class InjectIO():
         if self.target is None and not self.trace_all:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
+            cpl = memUtils.getCPL(self.cpu)
+            if cpl == 0:
+                self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
+                SIM_run_command('pselect %s' % self.cpu.name)
+                SIM_run_command('si')
+                cpl = memUtils.getCPL(self.cpu)
+                if cpl == 0:
+                    self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                    return 
+
             self.top.stopDebug()
             self.top.debugPidGroup(self.pid) 
             self.top.watchPageFaults()

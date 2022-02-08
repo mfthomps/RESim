@@ -435,7 +435,7 @@ class GenMonitor():
             self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_pid %r' % (self.is_compat32, stop_action.listFuns(), wrong_pid))
             stop_action.run(wrong_pid=wrong_pid)
             self.is_monitor_running.setRunning(False)
-            self.lgr.debug('back from stop_action.run')
+            self.lgr.debug('stopAlone back from stop_action.run')
 
         if stop_action.pid is not None and pid != stop_action.pid:
             self.lgr.debug('stopHap wrong pid %d expected %d reverse til we find pid ' % (pid, stop_action.pid))
@@ -816,6 +816,7 @@ class GenMonitor():
                         self.dataWatch[self.target].setUserIterators(self.user_iterators)
                         self.bookmarks.setIdaFuns(self.ida_funs)
                         self.dataWatch[self.target].setRelocatables(self.relocate_funs)
+                        self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
                              elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
@@ -3565,6 +3566,9 @@ class GenMonitor():
             self.mode_hap = None
 
     def watchROP(self, watching=True):
+        self.lgr.debug('watchROP wtf?')
+        for t in self.ropCop:
+            self.lgr.debug('ropcop instance %s' % t)
         self.ropCop[self.target].watchROP(watching=watching)
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
@@ -3766,6 +3770,15 @@ class GenMonitor():
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
         if target is None:
+            cpl = memUtils.getCPL(cpu)
+            if cpl == 0:
+                self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
+                SIM_run_command('pselect %s' % cpu.name)
+                SIM_run_command('si')
+                cpl = memUtils.getCPL(cpu)
+                if cpl == 0:
+                    self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                    return 
             # keep gdb 9123 port free
             self.gdb_port = 9124
             self.debugPidGroup(pid)
