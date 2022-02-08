@@ -93,6 +93,17 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
     return do_restart
 
 def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, lgr):
+    try:
+        os.remove('resim_ctl.fifo')
+    except:
+        pass
+    try:
+        os.mkfifo('resim_ctl.fifo')
+    except OSError as e:
+        lgr.debug('fifo create failed %s' % e)    
+        return
+
+    fifo_list = []
     afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
     print('afl_cmd %s' % afl_cmd) 
 
@@ -108,7 +119,11 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
     print('created resim port %d' % port)
-    handleClose(resim_procs, read_array, timeout, False, [], lgr)
+    lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
+    fh = os.open('resim_ctl.fifo', os.O_WRONLY)
+    lgr.debug('back from open fifo')
+    fifo_list.append(fh)
+    handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
 
     return resim_ps
     
@@ -281,7 +296,10 @@ def main():
     time.sleep(20)
     if do_restart:
         print('restarting resim in 10')
-        os.remove('/tmp/resim_restart.txt')
+        try:
+            os.remove('/tmp/resim_restart.txt')
+        except:
+            pass
         time.sleep(10)
         args.no_afl = True
         do_restart = runAFL(args, lgr)
