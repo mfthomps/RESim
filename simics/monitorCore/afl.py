@@ -10,6 +10,7 @@ import json
 import cli
 import stopFunction
 import writeData
+import resimUtils
 import imp 
 #import tracemalloc
 from simics import *
@@ -122,12 +123,12 @@ class AFL():
 
         self.resim_ctl = None
         #if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
-        if os.path.exists('resim_ctl.fifo'):
+        if resimUtils.isParallel():
             self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
             self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
             self.lgr.debug('afl back from open')
         else: 
-            self.lgr.debug('afl did NOT find resim_ctl.fifo')
+            self.lgr.debug('Not a parallel run, or afl did NOT find resim_ctl.fifo')
           
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
@@ -274,6 +275,8 @@ class AFL():
                 if self.in_data is None:
                     self.lgr.error('Got None from afl')
                     self.rmStopHap()
+                    if self.resim_ctl is not None:
+                        self.top.quit()
                     return
                 SIM_run_alone(self.goN, status)
             else:

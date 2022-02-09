@@ -26,8 +26,8 @@ def ioHandler(read_array, stop, lgr):
     with open(log, 'wb') as fh:
         while(True):
             if stop():
-                print('ioHandler sees stop, exiting.')
-                lgr.debug('ioHandler sees stop, exiting.')
+                print('ioHandler sees stop, return.')
+                lgr.debug('ioHandler sees stop, return.')
                 return
             try:
                 r, w, e = select.select(read_array, [], [], 10) 
@@ -129,7 +129,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     return resim_ps
     
 
-def runAFL(args, lgr):
+def runAFLTilRestart(args, lgr):
     os.environ['AFL_SKIP_CPUFREQ']='True'
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneAFL.py')
@@ -226,7 +226,8 @@ def runAFL(args, lgr):
                     afllog = '/tmp/%s.log' % fuzzid 
                     fh = open(afllog, 'w')
                     cmd = '%s &' % (afl_cmd)
-                    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
+                    #afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
+                    afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
                 elif args.quiet and master_slave == '-M':
                     afllog = '../master-%s.log' % fuzzid 
                     fh = open(afllog, 'w')
@@ -272,6 +273,18 @@ def runAFL(args, lgr):
         doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
     return do_restart
 
+def runAFL(args, lgr):
+    while runAFLTilRestart(args, lgr):
+        print('restarting resim in 10')
+        lgr.debug('restarting resim in 10')
+        try:
+            os.remove('/tmp/resim_restart.txt')
+        except:
+            pass
+        time.sleep(10)
+        args.no_afl = True
+    lgr.debug('runAFL out of runAFL loop')
+
 def main():
     lgr = resimUtils.getLogger('runAFL', '/tmp/', level=None)
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
@@ -293,16 +306,6 @@ def main():
         pass
     args = parser.parse_args()
     do_restart = runAFL(args, lgr)
-    time.sleep(20)
-    if do_restart:
-        print('restarting resim in 10')
-        try:
-            os.remove('/tmp/resim_restart.txt')
-        except:
-            pass
-        time.sleep(10)
-        args.no_afl = True
-        do_restart = runAFL(args, lgr)
   
 if __name__ == '__main__':
     sys.exit(main())

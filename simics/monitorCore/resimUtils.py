@@ -73,3 +73,12 @@ def getFree():
              percent = (free / tot) * 100
              return int(percent)
     return None
+
+def isParallel():
+    ''' Determine if the current workspace is a parallel clone '''
+    here = os.getcwd()
+    ws = os.path.basename(here)
+    if ws.startswith('resim_') and os.path.exists('resim_ctl.fifo'):
+        return True
+    else:
+        return False

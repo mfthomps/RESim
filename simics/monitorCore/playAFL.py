@@ -1,6 +1,7 @@
 from simics import *
 import writeData
 import aflPath
+import resimUtils
 import cli
 import sys
 import os
@@ -95,12 +96,12 @@ class PlayAFL():
         
         self.snap_name = snap_name
         self.resim_ctl = None
-        if os.path.exists('resim_ctl.fifo'):
+        if resimUtils.isParallel():
             self.lgr.debug('playAFL found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
             self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
             self.lgr.debug('playAFL back from open')
         else: 
-            self.lgr.debug('afl did NOT find resim_ctl.fifo')
+            self.lgr.debug('playAFL: Not a parallel run, or playAFL did NOT find resim_ctl.fifo')
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
