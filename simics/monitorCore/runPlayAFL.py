@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+'''
+Executable python script to run multiple parallel instances of RESim to play previous
+AFL sessions as found in queue files.
+
+
+'''
+import os
+import stat
+import sys
+import subprocess
+import argparse
+import shlex
+import time
+import glob
+import threading
+import select
+import aflPath
+import resimUtils
+def ioHandler(read_array, stop, lgr):
+    log = '/tmp/resim.log'
+    with open(log, 'wb') as fh:
+        while(True):
+            if stop():
+                print('ioHandler sees stop, exiting.')
+                lgr.debug('ioHandler sees stop, exiting.')
+                return
+            try:
+                r, w, e = select.select(read_array, [], [], 10) 
+            except ValueError:
+                print('select error, must be closed.')
+                lgr.debug('select error, must be closed.')
+                return
+            for item in r:
+                try:
+                    data = os.read(item.fileno(), 800)
+                except:
+                    lgr.debug('read error, must be closed.')
+                    return
+                fh.write(data+b'\n')
+                   
+
+def handleClose(resim_procs, read_array, remote, fifo_list, lgr):
+    stop_threads = False
+    io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads, lgr))
+    io_handler.start()
+    total_time = 0
+    sleep_time = 4
+    do_restart = False
+    lgr.debug('handleClose, wait for all procs')
+    for proc in resim_procs:
+        proc.wait()
+        lgr.debug('proc exited')
+
+    stop_threads = True
+    for fd in read_array:
+        fd.close()
+    return do_restart
+
+def doOne(afl_path, afl_out, afl_name, resim_ini, read_array, resim_path, resim_procs,  lgr):
+
+    cmd = '%s %s -n' % (resim_path, resim_ini)
+    print('cmd is %s' % cmd)
+    resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    resim_procs.append(resim_ps)
+    read_array.append(resim_ps.stdout)
+    read_array.append(resim_ps.stderr)
+    handleClose(resim_procs, read_array, timeout, False, [], lgr)
+
+    return resim_ps
+    
+
+def runPlay(args, lgr):
+    here= os.path.dirname(os.path.realpath(__file__))
+    os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
+    resim_dir = os.getenv('RESIM_DIR')
+    if resim_dir is None:
+        print('missing RESIM_DIR envrionment variable')
+        exit(1)
+    resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
+    hostname = aflPath.getHost()
+
+    do_restart = False 
+    here = os.getcwd()
+    afl_name = os.path.basename(here)
+    try:
+        afl_path = os.path.join(os.getenv('AFL_DIR'), 'afl-fuzz')
+    except:
+        lgr.error('missing AFL_DIR envrionment variable')
+        exit(1)
+    resim_procs = []
+    try:
+        afl_data = os.getenv('AFL_DATA')
+    except:
+        lgr.error('missing AFL_DATA envrionment variable')
+        exit(1)
+
+    if not args.ini.endswith('.ini'):
+        args.ini = args.ini+'.ini'
+    if not os.path.isfile(args.ini):
+        lgr.error('Ini file %s not found.' % args.ini)
+        exit(1)
+    afl_out = os.path.join(afl_data, 'output', afl_name)
+
+    glist = glob.glob('resim_*/')
+
+    if args.tcp:
+        os.environ['ONE_DONE_PARAM']='tcp'
+    else:
+        os.environ['ONE_DONE_PARAM']='udp'
+
+    read_array = []
+    fifo_list = []
+    if len(glist) > 0:
+        lgr.debug('Parallel, doing %d instances' % len(glist))
+        for instance in glist:
+            fuzzid = '%s_%s' % (hostname, instance[:-1])
+            if not os.path.isdir(instance):
+                continue
+            os.chdir(instance)
+
+            try:
+                os.remove('resim_ctl.fifo')
+            except:
+                pass
+            try:
+                os.mkfifo('resim_ctl.fifo')
+            except OSError as e:
+                lgr.debug('fifo create failed %s' % e)    
+            resim_ini = args.ini
+            cmd = '%s %s -n' % (resim_path, resim_ini)
+            lgr.debug('cmd is %s' % cmd)
+            resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            resim_procs.append(resim_ps)
+            read_array.append(resim_ps.stdout)
+            read_array.append(resim_ps.stderr)
+            if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+                lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
+                fh = os.open('resim_ctl.fifo', os.O_WRONLY)
+                lgr.debug('back from open fifo')
+                fifo_list.append(fh)
+            else:
+                lgr.debug('no fifo found')
+            lgr.debug('created resim')
+            os.chdir(here)
+
+        do_restart = handleClose(resim_procs, read_array, args.remote, fifo_list, lgr)
+    else:
+        lgr.debug('Running single instance')
+        doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, lgr)
+    return do_restart
+
+def main():
+    lgr = resimUtils.getLogger('runPlayAFL', '/tmp/', level=None)
+    parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
+    parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
+    parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
+    try:
+        os.remove('/tmp/resim_restart.txt')
+    except:
+        pass
+    args = parser.parse_args()
+    do_restart = runPlay(args, lgr)
+    time.sleep(20)
+    if do_restart:
+        print('restarting resim in 10')
+        os.remove('/tmp/resim_restart.txt')
+        time.sleep(10)
+        args.no_afl = True
+        do_restart = runPlay(args, lgr)
+  
+if __name__ == '__main__':
+    sys.exit(main())
+
+
