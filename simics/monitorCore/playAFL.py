@@ -59,6 +59,8 @@ class PlayAFL():
             self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
         else:
             if not crashes:
+                print('get target queue')
+                self.lgr.debug('playAFL get queue for target %s' % target)
                 self.afl_list = aflPath.getTargetQueue(target, get_all=True)
             else:
                 self.afl_list = aflPath.getTargetCrashes(target)
@@ -92,6 +94,13 @@ class PlayAFL():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         
         self.snap_name = snap_name
+        self.resim_ctl = None
+        if os.path.exists('resim_ctl.fifo'):
+            self.lgr.debug('playAFL found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
+            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
+            self.lgr.debug('playAFL back from open')
+        else: 
+            self.lgr.debug('afl did NOT find resim_ctl.fifo')
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
@@ -138,7 +147,7 @@ class PlayAFL():
             self.lgr.debug('No call IP, refuse to go.')
             print('No call IP, refuse to go.')
             return
-
+        self.lgr.debug('playAFL go')
         self.bnt_list = []
         self.index = -1
         self.hit_total = 0
@@ -152,6 +161,7 @@ class PlayAFL():
         SIM_break_simulation('hang')
 
     def goAlone(self, clear_hits):
+        self.lgr.debug('playAFL goAlone')
         self.current_packet=1
         self.index += 1
         done = False
@@ -159,18 +169,24 @@ class PlayAFL():
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
+                #self.lgr.debug('playAFL goAlone file %s' % fname)
                 try:
                     os.open(fname, os.O_CREAT | os.O_EXCL)
                     done = True
                 except FileExistsError as e:
                     if not self.parallel:
-                        hits_json = json.load(open(fname))
+                        try:
+                            hits_json = json.load(open(fname))
+                        except json.decoder.JSONDecodeError as e:
+                            done = True
+                            continue
                         for hit in hits_json:
                             hit = int(hit)
                             if hit not in self.all_hits:
                                 self.all_hits.append(hit)
-                        self.index += 1
+                    self.index += 1
         if self.index < len(self.afl_list):
+            self.lgr.debug('playAFL goAlone index %d' % self.index)
             cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
                 if clear_hits:
@@ -213,7 +229,7 @@ class PlayAFL():
             SIM_run_command('c')
         else:
             ''' did all sessions '''
-            if self.coverage is not None and self.findbb is None and not self.afl_mode:
+            if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
                 hits = self.coverage.getHitCount()
                 self.lgr.debug('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
                 hits_path = self.coverage.getHitsPath()
@@ -228,6 +244,8 @@ class PlayAFL():
                     fh.write(s)
                     fh.flush()
                 print('%d Hits file written to %s' % (len(self.all_hits), save_name))
+            elif self.parallel:
+                self.top.quit()
             self.delStopHap(None)               
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
