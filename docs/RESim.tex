@@ -488,6 +488,8 @@ Each file in the target's {\tt queue} subdirectory(ies) will be played with code
 This also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB} command to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
 If {\tt target} is a full path, then only that files will be played.  \textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
+The {\tt runPlay} stand-alone command launches parallel instances of RESim running the playAFL, for use in replaying sessions created by parallel fuzzing.  Note however this 
+does not generate a new total hits file, it only creates coverage files.
 
 \item{\tt aflBNT(target)} -- List branches not taken as found in a hits file named by the current process and the given target.  The target name can be ``all'' to
 name the combined hits file, e.g., someproc.all.hits. 
@@ -1162,6 +1164,8 @@ RESim session (it returns to the original IO state.)
 backstop cycles that determine how long an AFL session will contiue to run after hitting the the most recent basic block. 
 \item Use the {\tt runAFL} command, naming the target (e.g., your workspace name).
 \item You should see AFL run some initial sessions for calibration and then begin its fuzzing.
+\item Output from the Simics command line is redirected to /tmp/resim.log, check that for errors if AFL hangs.  Also look at resim\_db.log
+in the workspace.
 \end{itemize}
 
 Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
@@ -1360,8 +1364,8 @@ help identify such inputs, it may be simpler to simply break on them and feedbac
 \subsection{Parallel fuzzing}
 \label{parallel-fuzzing}
 AFL includes support for parallel fuzzing in which multiple instances of AFL all fuzz the same binary.
-RESim builds on this support and currently supports parallel fuzzing on a single computer.  Support for
-multiple computers is in process.
+RESim builds on AFL's parallel fuzzing, and supports deployments having multiple computers, each running
+several instances of AFL/RESim pairs.
 
 Assuming you have (and are currently in) a RESim workspace directory that contains an ini file and checkpoint, use the {\tt clonewd.sh}
 command to create some number of copies of the workspace.  For example:
@@ -1373,13 +1377,38 @@ having its own {\tt logs/} subdirectory,  all other files are simply links.
 
 Then use the {\tt runAFL} command, naming the ini file to be used in the fuzzing sessions.  The system will spawn multiple pairs of
 AFL and RESim, and create an AFL xterm for each to display the AFL status screen.  Simics is started without the gui or windows.
-Pressing {\tt Enter} will terminate all sessions, (the AFL screens will linger for ten seconds.)
+Pressing {\tt Enter} will terminate all sessions, (the AFL Xterminals will linger for ten seconds.)
 
-AFL results are stored relative to your {\tt AFL\_OUTPUT} environment variable in subdirectories named by the workspace and the instances, e.g.,
+AFL results are stored relative to your {\tt AFL\_OUTPUT} environment variable in subdirectories named by the workspace, the hostname and the instances, e.g.,
 \begin{verbatim}
-    $AFL_OUTPUT/myworkspace/resim_1
+    $AFL_OUTPUT/myworkspace/rb9_resim_1
 \end{verbatim}
 The stdout and stderr from each of the Simics sessions is currently dumped to a file at {\tt /tmp/resim.log}.
+Logs from the runAFL command are found in /tmp/runAFL.log
+
+Use the {\tt runPlay} command to replay the inputs found by AFL in parallel.
+
+\subsubsection{Fuzzing with multiple computers}
+Multi-computer fuzzing is achieved using sripts that copy your local RESim workspace to a set of \textit{drone} computers,
+and execute {\tt runAFL} on each drone.  This is initiated and managed from the {\tt master} RESim instance, i.e., where your 
+workspace is located.  Results from each drone are periodcally retrieved and distributed to each other drone.
+
+Create a {\tt drones.txt} file within the workspace directory, containing a list of drone computer host names.  Each must be reachable
+via SSH without passwords, e.g., by use of an SSH Agent.  Each drone must be provisioned with Simics and have an account with the user ID used
+on the master, which must be the host containing the RESim workspace. 
+\begin{itemize}
+\item Use the {\tt sync-resim.sh} command to push the local copies of RESim and AFL to the drones and ensure their license managers are running.
+\item Push copies of your workspace to the drones using the {\tt sync-drones.sh} script.
+\item Start the multi-computer fuzzing session with {\tt start-drones.py}, passing in the ini file name.
+\item Pressing {\tt Enter} will stop all fuzzing sessions.
+\item Get status using {\tt status-drones.sh}
+\item Kill all Simics and AFL processes with {\tt sync-kill.sh} (usually not needed, but stuff happens.)
+\item Remove all output data and seeds (for this workspace) from drones with {\tt clean-drones.sh}
+\end{itemize}
+
+The {\tt runAFL} command monitors free memory on each computer and will restart RESim if memory gets too low due to
+memory leaks in Simics.  The AFL sessions persist during these restarts so that they do not lose context.  \textbf{NOTE:} restarts of RESim
+inherit the current python scripts.  Those should not be edited on hosts having long-running fuzzing sessions.
 
 \subsection{False paths}
 Use the dedupCoverage.py utility to identify unique coverage sets.  If you find massive reductions, e.g., AFL finds 200 paths and
