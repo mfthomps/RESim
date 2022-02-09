@@ -171,14 +171,15 @@ class PlayAFL():
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
                 #self.lgr.debug('playAFL goAlone file %s' % fname)
+                ''' python 2 does not have FileExistsError,fly blind '''
                 try:
                     os.open(fname, os.O_CREAT | os.O_EXCL)
                     done = True
-                except FileExistsError as e:
+                except:
                     if not self.parallel:
                         try:
                             hits_json = json.load(open(fname))
-                        except json.decoder.JSONDecodeError as e:
+                        except:
                             done = True
                             continue
                         for hit in hits_json:
