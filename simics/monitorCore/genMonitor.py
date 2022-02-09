@@ -3756,6 +3756,19 @@ class GenMonitor():
         fuzz_it = fuzz.Fuzz(self, cpu, cell_name, path, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.run_from_snap, self.lgr, n, full_path)
         fuzz_it.trim()
 
+    def checkUserSpace(self, cpu):
+        retval = True
+        cpl = memUtils.getCPL(cpu)
+        if cpl == 0:
+            self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
+            SIM_run_command('pselect %s' % cpu.name)
+            SIM_run_command('si')
+            cpl = memUtils.getCPL(cpu)
+            if cpl == 0:
+                self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                retval = False
+        return retval
+
     def aflTCP(self, sor=False, fname=None, linear=False, port=8765):
         ''' not hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port)
@@ -3770,15 +3783,8 @@ class GenMonitor():
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
         if target is None:
-            cpl = memUtils.getCPL(cpu)
-            if cpl == 0:
-                self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
-                SIM_run_command('pselect %s' % cpu.name)
-                SIM_run_command('si')
-                cpl = memUtils.getCPL(cpu)
-                if cpl == 0:
-                    self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
-                    return 
+            if not self.checkUserSpace(cpu):
+                return
             # keep gdb 9123 port free
             self.gdb_port = 9124
             self.debugPidGroup(pid)
@@ -3830,13 +3836,15 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False):
-        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes)
+    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False):
+        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, parallel=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
+        if not self.checkUserSpace(cpu):
+            return
         self.debugPidGroup(pid)
         bb_coverage = self.coverage
         if no_cover:
@@ -3844,8 +3852,9 @@ class GenMonitor():
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, 
-              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes)
+              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel)
         if play is not None:
+            self.lgr.debug('playAFL now go')
             play.go()
         else:
             print('playAFL failed?')
