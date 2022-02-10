@@ -82,3 +82,14 @@ def isParallel():
         return True
     else:
         return False
+
+def getIdaData(full_path):
+    retval = None
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('ERROR: RESIM_IDA_DATA not defined')
+    else: 
+        base = os.path.basename(full_path)
+        retval = os.path.join(resim_ida_data, base, base)
+    return retval
+

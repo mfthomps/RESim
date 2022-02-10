@@ -6,6 +6,7 @@ AFL sessions as found in queue files.
 
 '''
 import os
+import json
 import stat
 import sys
 import subprocess
@@ -145,6 +146,22 @@ def runPlay(args, lgr):
             os.chdir(here)
 
         do_restart = handleClose(resim_procs, read_array, args.remote, fifo_list, lgr)
+        cover_list = aflPath.getAFLCoverageList(afl_name)
+        all_hits = []
+        for hit_file in cover_list:
+            coverage = json.load(open(hit_file))
+            for hit in coverage:
+                hit_i = int(hit)
+                if hit_i not in all_hits:
+                    all_hits.append(hit_i)
+        ida_data = os.getenv('RESIM_IDA_DATA')
+        hits_file = '%s.%s.hits' % (args.program, afl_name)
+        hits_path = os.path.join(ida_data, args.program, hits_file)
+        s = json.dumps(all_hits)
+        with open(hits_path, 'w') as fh:
+            fh.write(s)
+        
+        print('all hits total %d' % len(all_hits))
     else:
         lgr.debug('Running single instance')
         doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, lgr)
@@ -154,6 +171,7 @@ def main():
     lgr = resimUtils.getLogger('runPlayAFL', '/tmp/', level=None)
     parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
+    parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     try:

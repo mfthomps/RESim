@@ -6,6 +6,7 @@ from collections import OrderedDict
 import time
 from simics import *
 import pageUtils
+import resimUtils
 '''
 Manage code coverage tracking, maintaining two hits files per coverage unit.
 
@@ -744,9 +745,9 @@ class Coverage():
         self.no_save = no_save
         if fname is not None:
             self.full_path = fname
-            self.hits_path = self.top.getIdaData(fname)
+            self.hits_path = resimUtils.getIdaData(fname)
         
-        ida_path = self.top.getIdaData(self.full_path)
+        ida_path = resimUtils.getIdaData(self.full_path)
         # dynamically alter control flow, e.g., to avoid CRC checks
         self.loadJumpers(ida_path)
 

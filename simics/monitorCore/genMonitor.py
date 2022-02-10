@@ -822,7 +822,7 @@ class GenMonitor():
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.lgr.debug('create coverage module')
-                    ida_path = self.getIdaData(full_path)
+                    ida_path = resimUtils.getIdaData(full_path)
                     if ida_path is not None:
                         self.coverage = coverage.Coverage(self, full_path, ida_path, self.context_manager[self.target], 
                            cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
@@ -840,16 +840,6 @@ class GenMonitor():
         self.page_faults[self.target].clearFaultingCycles()
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
-
-    def getIdaData(self, full_path):
-        retval = None
-        resim_ida_data = os.getenv('RESIM_IDA_DATA')
-        if resim_ida_data is None:
-            self.lgr.error('RESIM_IDA_DATA not defined')
-        else: 
-            base = os.path.basename(full_path)
-            retval = os.path.join(resim_ida_data, base, base)
-        return retval
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3947,7 +3937,7 @@ class GenMonitor():
                             print('function: %s branch 0x%x from 0x%x not in hits' % (fun_blocks['name'], branch, bb_hit))
 
     def aflBNT(self, target, fun_name=None):
-        ida_path = self.getIdaData(self.full_path)
+        ida_path = resimUtils.getIdaData(self.full_path)
         if ida_path is not None:
             if target is None:
                 fname = '%s.hits' % ida_path
@@ -4002,7 +3992,7 @@ class GenMonitor():
 
     def addJumper(self, from_bb, to_bb):
         ''' Add a jumper for use in code coverage and AFL, e.g., to skip a CRC '''
-        ida_path = self.getIdaData(self.full_path)
+        ida_path = resimUtils.getIdaData(self.full_path)
         jname = ida_path+'.jumpers'
         if os.path.isfile(jname):
             with open(jname) as fh:
