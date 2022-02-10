@@ -36,13 +36,27 @@ if [ $# -gt 1 ];then
     echo "more than 1"
     remote=$2
     if [ $1 == color ]; then
-       remote_ida=$( ssh $remote "echo \$RESIM_IDA_DATA" )
+       remote_ida=$( ssh $remote "source $HOME/.resimrc;echo \$RESIM_IDA_DATA" )
+       if [ -z "$remote_ida" ];then
+           echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
+           exit 1 
+       fi
        rsync -avh $remote:$remote_ida/$target_base/*.hits $RESIM_IDA_DATA/$target_base/
     fi
     tunnel=$( ps -aux | grep [9]123 )
     if [[ -z "$tunnel" ]];then
         echo "No tunnel found for $remote, create one."
         ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null $remote
+    else
+       if [[ "$tunnel" == *"$remote"* ]]; then
+           echo "Tunnel to $remote found."
+       else
+           pid=$(echo $tunnel | awk '{print $2}')
+           echo "Tunnel to wrong server found."
+           echo "Will kill $pid and start new tunnel to $remote"
+           kill $pid
+           ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null $remote
+       fi
     fi
 fi
 

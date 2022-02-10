@@ -486,20 +486,10 @@ path is defined as AFL\_OUTPUT
 in the ENV section of your ini file (or the target will be appended to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
 This also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
-Those individual coverage files are intended to be read by the {\tt findBB} command to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
+Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
 If {\tt target} is a full path, then only that files will be played.  \textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 The {\tt runPlay} stand-alone command launches parallel instances of RESim running the playAFL, for use in replaying sessions created by parallel fuzzing.  Note however this 
 does not generate a new total hits file, it only creates coverage files.
-
-\item{\tt aflBNT(target)} -- List branches not taken as found in a hits file named by the current process and the given target.  The target name can be ``all'' to
-name the combined hits file, e.g., someproc.all.hits. 
-
-\item{\tt bbAFL(target, bb)} -- Replay all execution paths in a named AFL output directory and list those that hit a given address.  Intended to find input files that
-lead to a basic block having a branch not take (BNT), e.g., as found using the {\tt aflBNT} command.  While this function can be invoked
-multiple times, RESim must be restarted prior to use of other debug features, e.g., trackIO or injectIO.  Also see the {\tt findBB} command, which simply refers
-to the per-session hits files stored with the {\tt AFL\_DATA}.
-
-\item{\tt findBB(target, bb)} -- List the AFL session files that hit the given basic block address.
 
 \item{\tt crashReport(target)} Generate crash reports for each crash discovred by AFL.  The given {\tt target} is as defined in the {\tt playAFL} command, except you can optionally provide the
 full path to a file, in which case only that file will be reported on.  NOTE: when handling multi-packet data sets, use the {\tt crashReport.py} utility (see section \ref{utilities} to launch RESim multiple times,
@@ -518,7 +508,7 @@ in the AFL output directory.  Only the first packet is tracked.  If the AFL sess
 start new Simics sessions for each queue file.
 \textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 
-\item Also see utilties listed in section \ref{utilities}.
+\item Also see utilties listed in section \ref{utilities}, e.g., to find branches not taken and AFL sessions that reach a given basic block.
 
 \end{itemize}
 
@@ -670,11 +660,15 @@ An example driver is described in Appendix \ref{driver}.
 RESim sessions are started from the Simics workspace using the {\tt resim} command (the path to which should be in your PATH
 environment variable).
 
+RESim is controlled either through the simics command line, or using IDA Pro as described below.  Interaction with the simulated
+computers, e.g., ssh'ing to a driver computer, requires that the simulation be running and not paused.
+
 \subsection{Installation}
 \label{installation}
 RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8, 5 and 6 are supported.
 It also assumes you have IDA Pro. See the \textit{RESim Remote Access Guide} for information on remote access to RESim
-servers.
+servers.  RESim can be used without IDA Pro, though you are limited to the command line and don't benefit from
+function analysis provided by IDA.
 
 The IDA Pro installation should be configured to use Python 2.7.
 
@@ -1015,11 +1009,11 @@ is not altered.)  The following is a notional code coverage workflow.
 \item Start IDA and use the {\tt resetBlocks} script to clear block coloring; then use {\tt Color blocks} to color all blocks hit
 during the AFL session.
 \item Find an interesting BNT in the BNT window.
-\item Use the bbAFL function to search for all AFL data files that hit the source block.
+\item Use the findBB.py utility to search for all AFL data files that hit the source block.
 \item Restart RESim and use the {\tt injectIO}, {\tt aflInject}, {\tt aflTrack} or {aflReplay} functions to play the data file identified above.
 \item Run to the source block of interest and investigate whether an altered input could result in a branch to the BNT.
 \end{itemize}
-Note in the above workflow, you may wish to use 2 different checkpoints.  The {\tt playAFL} and {\tt bbAFL} functions must run from the
+Note in the above workflow, you may wish to use 2 different checkpoints.  The {\tt playAFL} function must run from the
 checkpoint used with AFL.  However the other functions that use trackIO could run from checkpoints that include a driver component.  And 
 that checkpoint might be from early on in the process's life, e.g., to identify the sources of state values that do not seem to result from
 the input data.
