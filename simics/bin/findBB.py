@@ -6,6 +6,10 @@ import os
 import glob
 import json
 import argparse
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
+import aflPath
+
 def getAFLOutput():
     afl_output = os.getenv('AFL_OUTPUT')
     if afl_output is None:
@@ -16,47 +20,14 @@ def getAFLOutput():
         else:
             afl_output = os.path.join(afl_output, 'output')
     return afl_output
+
 def findBB(target, bb):
-    afl_output = getAFLOutput()
-    target_dir = os.path.join(afl_output, target)
-    #flist = os.listdir(target_dir)
-    gmask = target_dir+'/resim_*/'
-    flist = glob.glob(gmask)
-    print('%d entries in %s' % (len(flist), gmask))
-    #print('flist is %s' % str(flist))
-    if len(flist) == 0:
-        ''' is not parallel fuzzing '''
-        coverage_dir = os.path.join(target_dir, 'coverage')
-        queue_dir = os.path.join(target_dir, 'queue')
-        hit_files = os.listdir(coverage_dir)
-        
-        for f in hit_files:
-            path = os.path.join(coverage_dir, f)
-            hit_list = json.load(open(path))
-            if bb in hit_list:
-                qfile = os.path.join(queue_dir, f)
-                print('found 0x%x in %s' % (bb, qfile))
-                found_count += 1
-    else: 
-        ''' is parallel fuzzing '''
-        print('is parallel, %d files' % len(flist))
-        found_count = 0
-        for drone in flist:
-            coverage_dir = os.path.join(drone, 'coverage')
-            queue_dir = os.path.join(drone, 'queue')
-            hit_files = os.listdir(coverage_dir)
-            #print('got %d hits files for %s' % (len(hit_files), drone))
-            for f in hit_files:
-                path = os.path.join(coverage_dir, f)
-                hit_list = json.load(open(path))
-                #print('look for 0x%x in hit_list of len %d file: %s' % (bb, len(hit_list), f))
-                #for hit in hit_list:
-                #    print('\t\thit: 0x%x' % hit)
-                if str(bb) in hit_list:
-                    qfile = os.path.join(queue_dir, f)
-                    print('found 0x%x in %s' % (bb, qfile))
-                    found_count += 1
-    print('Found %d sessions that hit 0x%x' % (found_count, bb))
+    cover_list = aflPath.getAFLCoverageList(target)
+    for cover in cover_list:
+        hit_list = json.load(open(cover))
+        if str(bb) in hit_list:
+            queue = cover.replace('coverage', 'queue')
+            print('0x%x in %s' % (bb, queue))
         
 
 def main():
