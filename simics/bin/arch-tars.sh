@@ -17,15 +17,26 @@ flist=$(cat drones.txt)
 flist=$flist" "$HOSTNAME
 here=$(pwd)
 base=$(basename $here)
+aflout=$AFL_DATA/output/$base
 fuzz_archive=/mnt/resim_archive/fuzz/$1/$base
 destination=$fuzz_archive/afl/output
 mkdir -p $destination
 aflout=$AFL_DATA/output/$base
+#
+#  Sync each drone's queues into this master queue.
+#
 for f in $flist; do
     echo "Get sync dir from $f"
-    ssh $USER@$f -o StrictHostKeyChecking=no bash -c "cd .;cd $aflout;tar -czf - $f_resim*/[qf]*" >$destination/host_$f.tgz
+    ssh $USER@$f -o StrictHostKeyChecking=no bash -c "cd .;cd $aflout && tar -czf - $f_resim*/[qf]*" >/tmp/host_$f.tgz
+    tar -C $aflout -xf /tmp/host_$f.tgz 
 done
-
+#
+#  Then tar all the local queues to the archive
+#
+here=$(pwd)
+cd $aflout
+tar -czf $destination/sync_dirs.tgz *_resim_* 
+cd $here
 aflseed=$AFL_DATA/seeds/$base
 seed_dest=$fuzz_archive/afl/seeds
 mkdir -p $seed_dest
