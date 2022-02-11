@@ -283,6 +283,8 @@ class InjectIO():
             SIM_run_command('c')
         else:
             self.lgr.debug('resetReverseAlone no more data, do not continue')
+            if self.callback is not None:
+                self.callback()
         
 
     def stopHap(self, count, one, exception, error_string):
