@@ -9,6 +9,8 @@ import sys
 import glob
 import subprocess
 import shutil
+import threading
+import signal
 try:
     import ConfigParser
 except:
@@ -23,8 +25,49 @@ import aflPath
 import resimUtils
 '''
 '''
+global stop_threads
+def handler(signum, frame):
+    global stop_threads
+    print('sig handler with %d' % signum)
+    stop_threads = True
+
+def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
+    here = os.getcwd()
+    workspace = os.path.basename(here)
+    log = '/tmp/resim-%s.log' % workspace
+    with open(log, 'wb') as fh:
+        for f in afl_list:
+            os.environ['ONE_DONE_PATH'] = f
+            base = os.path.basename(f)
+            tdir = os.path.dirname(os.path.dirname(f))
+            trackdir = os.path.join(tdir, 'trackio')
+            try:
+                os.mkdir(trackdir)
+            except:
+                pass
+            trackoutput = os.path.join(tdir, 'trackio', base)
+            try:
+                os.open(trackoutput, os.O_CREAT | os.O_EXCL)
+            except:
+                continue
+            lgr.debug('path for %s is %s' % (workspace, f))
+    
+            os.environ['ONE_DONE_PARAM'] = trackoutput
+            #result = os.system('%s %s -n' % (resim_path, resim_ini))
+            cmd = '%s %s -n' % (resim_path, resim_ini)
+            print("starting monitor without UI cmd: %s" % cmd)
+            lgr.debug("%s starting monitor without UI cmd: %s" % (workspace, cmd))
+            resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
+            resim_ps.wait()
+            if stop_threads():
+                print('oneTrack sees stop, exiting.')
+                lgr.debug('oneTrack %s sees stop, exiting.' % workspace)
+                return
+        
+        print('done')
 
 def main():
+    global stop_threads
     lgr = resimUtils.getLogger('runTrack', '/tmp/', level=None)
     here= os.path.dirname(os.path.realpath(__file__))
     parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
@@ -49,41 +92,30 @@ def main():
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneTrack.py')
     resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
-    
-    for f in afl_list:
-        os.environ['ONE_DONE_PATH'] = f
-        base = os.path.basename(f)
-        tdir = os.path.dirname(os.path.dirname(f))
-        trackdir = os.path.join(tdir, 'trackio')
-        try:
-            os.mkdir(trackdir)
-        except:
-            pass
-        trackoutput = os.path.join(tdir, 'trackio', base)
-        if not os.path.isfile(trackoutput):
-            os.environ['ONE_DONE_PARAM'] = trackoutput
-            #result = os.system('%s %s -n' % (resim_path, resim_ini))
-            cmd = '%s %s -n' % (resim_path, resim_ini)
-            print("starting monitor without UI cmd: %s" % cmd)
-            resim_ps = subprocess.Popen(shlex.split(cmd), stderr=subprocess.PIPE)
-            err=resim_ps.communicate()
-            print("Back from simics")
-            #result = os.system('%s %s -n' % (resim_path, resim_ini))
-            i, o, e = select.select( [sys.stdin], [], [], 1)
-            if len(i) > 0:
-                data = sys.stdin.read()
-                print('got keyboard %s' % data)
-                exit(0)
-
-            if err is not None and 'quit' in err:
-                print('got err')
-                print(err)
-                exit(0)
-            else:
-                print(err)
-                print('Monitor exited, try next')
-    
-    print('done')
+    glist = glob.glob('resim_*/')
+    thread_list = []
+    stop_threads=False
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+    here = os.getcwd()
+    if len(glist) > 0: 
+        for instance in glist:
+            if not os.path.isdir(instance):
+                continue
+            os.chdir(instance)
+            lgr.debug('start oneTrack from workspace %s' % instance)
+            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+            thread_list.append(track_thread)
+            track_thread.start()
+            os.chdir(here)
+    else:
+        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+        thread_list.append(track_thread)
+        track_thread.start()
+   
+    lgr.debug('Wait for threads to finish')
+    for thread in thread_list:
+        thread.join()     
 
 if __name__ == '__main__':
     sys.exit(main())
