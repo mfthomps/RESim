@@ -115,7 +115,6 @@ def runPlay(args, lgr):
     if len(glist) > 0:
         lgr.debug('Parallel, doing %d instances' % len(glist))
         for instance in glist:
-            fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
                 continue
             os.chdir(instance)
