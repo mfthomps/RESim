@@ -1099,6 +1099,7 @@ class DataWatch():
             self.op_type = op_type 
 
     def checkMove(self, addr, length, eip, instruct):
+        ''' Does this look like a move from memA=>reg=>memB ? '''
         retval = False
         if instruct[1].startswith('mov'):
             op2, op1 = self.decode.getOperands(instruct[1])
