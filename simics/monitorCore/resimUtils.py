@@ -93,3 +93,11 @@ def getIdaData(full_path):
         retval = os.path.join(resim_ida_data, base, base)
     return retval
 
+def getProgPath(prog):
+    ida_path = getIdaData(prog)
+    data_path = ida_path+'.prog'
+    prog_file = None
+    with open(data_path) as fh:
+        lines = fh.read().strip().splitlines()
+        prog_file = lines[0].strip()
+    return prog_file
