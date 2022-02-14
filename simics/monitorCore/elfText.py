@@ -89,7 +89,7 @@ def getRelocate(path, lgr):
             #lgr.debug('getRelocate not 5 %s' % line)
     return retval
 
-def getTextOfText(path, lgr):
+def getTextOfText(path, lgr=None):
     if not os.path.isfile(path):
         return None
     retval = None
@@ -110,10 +110,11 @@ def getTextOfText(path, lgr):
     parts = hack.split()
     if len(parts) < 5:
         ftype = magic.from_file(path)
-        if 'elf' in ftype.lower():
-            lgr.debug('elfText getText, no sections return none')
-        else:
-            lgr.debug('elfText getText not elf at %s' % path)
+        if lgr is not None:
+            if 'elf' in ftype.lower():
+                lgr.debug('elfText getText, no sections return none')
+            else:
+                lgr.debug('elfText getText not elf at %s' % path)
     else: 
         addr = int(parts[2], 16)
         offset = int(parts[3], 16)

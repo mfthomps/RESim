@@ -10,24 +10,18 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 
-def getAFLOutput():
-    afl_output = os.getenv('AFL_OUTPUT')
-    if afl_output is None:
-        afl_output = os.getenv('AFL_DATA')
-        if afl_output is None:
-            afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-            print('Using default AFL_OUPUT directory of %s' % afl_output)
-        else:
-            afl_output = os.path.join(afl_output, 'output')
-    return afl_output
-
-def findBB(target, bb):
+def findBB(target, bb, quiet=False):
+    retval = []
     cover_list = aflPath.getAFLCoverageList(target)
     for cover in cover_list:
-        hit_list = json.load(open(cover))
-        if str(bb) in hit_list:
-            queue = cover.replace('coverage', 'queue')
-            print('0x%x in %s' % (bb, queue))
+        with open(cover) as fh:
+            hit_list = json.load(fh)
+            if str(bb) in hit_list:
+                queue = cover.replace('coverage', 'queue')
+                retval.append(queue)
+                if not quiet:
+                    print('0x%x in %s' % (bb, queue))
+    return retval
         
 
 def main():
