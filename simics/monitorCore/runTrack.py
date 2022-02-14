@@ -89,6 +89,17 @@ def main():
     else:
         afl_list = aflPath.getTargetQueue(target)
 
+    ''' remove any empty or corrupt track jsons '''
+    track_list = aflPath.getAFLTrackList(target)
+    for track_file in track_list:
+        if os.path.isfile(track_file):
+            with open(track_file) as fh:
+                try:
+                    jfile = json.load(fh)
+                except:
+                    print('removing empty or corrupt file %s' % track_file)
+                    os.remove(track_file) 
+
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneTrack.py')
     resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
