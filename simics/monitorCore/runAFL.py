@@ -94,6 +94,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
     return do_restart
 
 def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, lgr):
+
     try:
         os.remove('resim_ctl.fifo')
     except:
@@ -104,13 +105,16 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
         lgr.debug('fifo create failed %s' % e)    
         return
 
+
     fifo_list = []
     afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
     print('afl_cmd %s' % afl_cmd) 
+    lgr.debug('afl_cmd %s' % afl_cmd) 
 
     cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     print('created afl')
+    lgr.debug('created afl')
 
     cmd = '%s %s -n' % (resim_path, resim_ini)
     os.environ['ONE_DONE_PARAM'] = str(port)
@@ -119,7 +123,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     resim_procs.append(resim_ps)
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
-    print('created resim port %d' % port)
+    lgr.debug('created resim port %d' % port)
     lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
     fh = os.open('resim_ctl.fifo', os.O_WRONLY)
     lgr.debug('back from open fifo')
