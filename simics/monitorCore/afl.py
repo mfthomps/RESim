@@ -122,13 +122,13 @@ class AFL():
         self.loadPickle(snap_name)
 
         self.resim_ctl = None
-        #if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
-        if resimUtils.isParallel():
+        #if resimUtils.isParallel():
+        if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
             self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
             self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
             self.lgr.debug('afl back from open')
         else: 
-            self.lgr.debug('Not a parallel run, or afl did NOT find resim_ctl.fifo')
+            self.lgr.debug('AFL did NOT find resim_ctl.fifo')
           
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
@@ -359,7 +359,8 @@ class AFL():
         cli.quiet_run_command('c') 
 
     def whenDone(self):
-        self.lgr.debug('afl whenDone callback')
+        #self.lgr.debug('afl whenDone callback')
+        pass
 
     def synchAFL(self):
         
