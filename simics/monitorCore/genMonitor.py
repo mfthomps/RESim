@@ -4103,6 +4103,20 @@ class GenMonitor():
         	     self.stopHap, stop_action)
         SIM_run_command('c')
 
+    def stopAndGo(self, callback):
+        ''' Will stop simulation and invoke the given callback once stopped.'''
+        SIM_run_alone(self.stopAndGoAlone, callback)
+
+    def stopAndGoAlone(self, callback):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        f1 = stopFunction.StopFunction(callback, [], nest=False)
+        flist = [f1]
+        hap_clean = hapCleaner.HapCleaner(cpu)
+        stop_action = hapCleaner.StopAction(hap_clean, None, flist)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        SIM_break_simulation('stopAndGo')
+
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)
 
@@ -4110,7 +4124,7 @@ class GenMonitor():
         rprint(string)
 
     def injectToBB(self, bb):
-        ibb = injectToBB.InjectToBB(self, bb)
+        ibb = injectToBB.InjectToBB(self, bb, self.lgr)
     
 
 if __name__=="__main__":        

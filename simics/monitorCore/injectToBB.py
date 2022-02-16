@@ -28,16 +28,28 @@ binpath = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin')
 sys.path.append(binpath)
 import findBB
 class InjectToBB():
-    def __init__(self, top, bb):
+    def __init__(self, top, bb, lgr):
         self.bb = bb
         self.top = top
+        self.lgr = lgr
         here = os.getcwd()
         target = os.path.basename(here)
         print('target is %s' % target)
+        self.lgr.debug('InjectToBB target is %s' % target)
         flist = findBB.findBB(target, bb, quiet=True)
         if len(flist) > 0:
             first = flist[0]
-            self.top.injectIO(first, callback=self.gobb)
+            self.lgr.debug('InjectToBB inject %s' % first)
+            self.top.injectIO(first, callback=self.doStop)
+        else:
+            print('No input files found to get to bb 0x%x' % bb)
+
+    def doStop(self):
+        self.lgr.debug('InjectToBB doStop')
+        self.top.stopAndGo(self.gobb)
+
     def gobb(self):
+        self.lgr.debug('InjectToBB gobb, go to data mark 0')
         self.top.goToDataMark(0)
+        self.lgr.debug('InjectToBB gobb, go to addr 0x%x' % self.bb)
         self.top.goAddr(self.bb) 
