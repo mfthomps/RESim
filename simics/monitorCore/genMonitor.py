@@ -98,6 +98,7 @@ import aflPath
 import trackAFL
 import prepInject
 import prepInjectWatch
+import injectToBB
 
 import json
 import pickle
@@ -4089,9 +4090,13 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         next_ip = eip + instruct[0]
+        self.goAddr(next_ip)
+
+    def goAddr(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
         cell = cpu.current_context
-        bp = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, next_ip, self.mem_utils[self.target].WORD_SIZE, 0)
-        self.lgr.debug('ni eip 0x%x break set on 0x%x cell %s' % (eip, next_ip, cell))
+        bp = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, addr, self.mem_utils[self.target].WORD_SIZE, 0)
+        self.lgr.debug('goAddr break set on 0x%x cell %s' % (addr, cell))
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, [bp])
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -4103,6 +4108,9 @@ class GenMonitor():
 
     def log(self, string):
         rprint(string)
+
+    def injectToBB(self, bb):
+        ibb = injectToBB.InjectToBB(self, bb)
     
 
 if __name__=="__main__":        

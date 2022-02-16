@@ -126,18 +126,17 @@ def getAFLCoverageList(target, get_all=False, host=None):
     return glist
 
 def getAFLTrackList(target, get_all=False, host=None):
-    glist = None
+    glist = []
     afl_path = getAFLOutput()
     afl_dir = os.path.join(afl_path, target)
     unique_path = os.path.join(afl_dir, target+'.unique')
     if os.path.isfile(unique_path):
         ulist = json.load(open(unique_path))
-        glist = []
         for path in ulist:
             path = path.replace('coverage', 'trackio')
             glist.append(os.path.join(afl_dir, path)) 
     else:
-        print('No file at %d' % unique_path)
+        print('No file at %s' % unique_path)
     return glist
 
 def getTargetQueue(target, get_all=False, host=None):
