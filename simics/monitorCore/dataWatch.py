@@ -994,6 +994,9 @@ class DataWatch():
         self.lgr.debug('dataWatch revAlone')
         self.top.removeDebugBreaks(immediate=True)
         self.stopWatch(immediate=True)
+        if self.mem_something is None:
+            self.lgr.error('dataWatch revAlone with mem_something of None')
+            return
         phys_block = self.cpu.iface.processor_info.logical_to_physical(self.mem_something.called_from_ip, Sim_Access_Read)
         #if self.mem_something.called_from_ip == 0xb6e41430:
         #if self.mem_something.called_from_ip == 0xb6e736fc:
