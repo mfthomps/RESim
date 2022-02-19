@@ -131,6 +131,7 @@ def armSTM(cpu, instruct, addr, lgr):
         regset = op1[1:-1]
         xregs = regset.split(',')
         regs = map(str.strip, xregs)
+        regs = list(regs)
         if op0.endswith('!'):
             op0 = op0[:-1]
         mul = 1
@@ -142,7 +143,7 @@ def armSTM(cpu, instruct, addr, lgr):
         reg_addr = getRegValue(cpu, op0)
         offset = (addr - reg_addr) * mul
         ''' TBD 64-bit '''
-        count = (offset/4 - before)
+        count = int((offset/4 - before))
         lgr.debug('armSTM addr 0x%x reg_addr 0x%x offset %d count %d mul %d before %d' % (addr, reg_addr, offset, count, mul, before))
         if count < 0 or count > len(regs)-1:
             lgr.error('count %d out of range with regs %s' % (count, str(regs)))
