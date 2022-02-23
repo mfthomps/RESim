@@ -327,6 +327,7 @@ class Syscall():
         self.record_fd = record_fd
         self.traceall_syscall_info = None
         self.alt_syscall_info = None
+
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
         if trace is None and self.traceMgr is not None:
@@ -480,6 +481,7 @@ class Syscall():
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
+        self.sharedSyscall.rmExitBySyscallName(self.name)
         #self.lgr.debug('stopTraceAlone done')
 
 
@@ -1569,12 +1571,12 @@ class Syscall():
         elif break_eip == self.param.sys_entry:
             if frame is None:
                 frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
-            ''' fix up regs based on eip and esp found on stack '''
-            reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
-            esp = self.cpu.iface.int_register.read(reg_num)
-            frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
-            frame['esp'] = self.mem_utils.readPtr(self.cpu, esp+12)
-            frame_string = taskUtils.stringFromFrame(frame)
+                ''' fix up regs based on eip and esp found on stack '''
+                reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
+                esp = self.cpu.iface.int_register.read(reg_num)
+                frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
+                frame['esp'] = self.mem_utils.readPtr(self.cpu, esp+12)
+                frame_string = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('sys_entry frame %s' % frame_string)
             exit_eip1 = self.param.iretd
         elif break_eip == self.param.arm_entry:
@@ -1946,12 +1948,15 @@ class Syscall():
             callnum = frames[pid]['syscall_num']
             syscall_info = SyscallInfo(self.cpu, None, callnum, pc, self.trace, self.call_params)
             callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
+
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[pid])
+
             exit_info = ExitInfo(self, self.cpu, pid, callnum, syscall_info.compat32, frame)
             ''' TBD why does direct setting of the ret_addr value fail? '''
             exit_info.setValue(frames[pid]['param2'])
             exit_info.old_fd = frames[pid]['param1']
 
+            the_callname = callname
             if callname == 'socketcall' or callname.upper() in net.callname:
                 if 'ss' in frames[pid]:
                     ss = frames[pid]['ss']
@@ -1962,7 +1967,11 @@ class Syscall():
                     exit_info.socket_callname = net.callname[socket_callnum].lower()
                     ida_msg = 'syscall socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
                     self.lgr.debug('setExits socket parsed: %s' % ida_msg)
-                    callname = exit_info.socket_callname
+                    the_callname = exit_info.socket_callname
+                    if ss.addr is not None:
+                        self.lgr.debug('ss addr is 0x%x' % ss.addr)
+                        exit_info.setValue(ss.addr)
+
                 else:
                     self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frames[pid]['param1'])
                     exit_info.old_fd = frames[pid]['param1']
@@ -1970,7 +1979,7 @@ class Syscall():
                 self.lgr.warning('syscall setExits pid %d has old_fd of None')
                 continue
 
-            if callname == 'accept':
+            if the_callname == 'accept':
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('setExits syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
                     if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
@@ -1983,7 +1992,8 @@ class Syscall():
                 self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
             else:
                 self.lgr.debug('setExits almost done for pid %d call %d retval_addr is None' % (pid, callnum))
-            self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, self.name, context_override=context_override)
+            exit_info_name = '%s-%s-exit' % (the_callname, self.name)
+            self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
 
     def addCallParams(self, call_params):
         for call in call_params:
@@ -2002,3 +2012,4 @@ class Syscall():
 
     def getContext(self):
         return self.cell
+
