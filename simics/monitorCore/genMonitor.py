@@ -235,6 +235,7 @@ class GenMonitor():
         self.did_debug = False
 
         self.quit_when_done = False
+        self.snap_start_cycle = {}
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -574,6 +575,7 @@ class GenMonitor():
                     ''' already got taskUtils for this cell '''
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
+                self.snap_start_cycle[cpu] = cpu.cycles
                 unistd32 = None
                 if cell_name in self.unistd32:
                     unistd32 = self.unistd32[cell_name]
@@ -789,6 +791,8 @@ class GenMonitor():
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.is_compat32, self.lgr)
 
+            ''' By default, no longer watch for new SO files '''
+            self.track_threads[self.target].stopSOTrack()
 
             self.watchPageFaults(pid)
 
@@ -1067,7 +1071,7 @@ class GenMonitor():
             self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
         '''
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None, watch_others=False):
+    def debugProc(self, proc, final_fun=None, pre_fun=None):
         if type(proc) is not str:
             print('Need a proc name as a string')
             return
@@ -1634,7 +1638,8 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
-        #self.page_faults[self.target].recordPageFaults()
+        ''' TBD why not record them?  performance? '''
+        self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
         self.lgr.debug('genMonitor stopWatchPageFaults')
@@ -1737,7 +1742,8 @@ class GenMonitor():
         reg = reg.lower()
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         value = self.mem_utils[self.target].getRegValue(cpu, reg)
-        self.lgr.debug('revTaintReg for %s value 0x%x' % (reg, value))
+        self.lgr.debug('revTaintReg pid:%d for %s value 0x%x' % (pid, reg, value))
+        self.lgr.debug('pageExceptionHap')
         if self.reverseEnabled():
             self.removeDebugBreaks()
             cell_name = self.getTopComponentName(cpu)
@@ -1977,7 +1983,8 @@ class GenMonitor():
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
                            name='traceAll', linger=True)
 
-            if self.run_from_snap is not None:
+            if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
+                ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
                 p_file = os.path.join('./', self.run_from_snap, target, 'sharedSyscall.pickle')
                 if os.path.isfile(p_file):
                     exit_info_list = pickle.load(open(p_file, 'rb'))
@@ -1986,6 +1993,11 @@ class GenMonitor():
                     else:
                         ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
                         self.trace_all[target].setExits(exit_info_list, context_override = context)
+
+            frames = self.getDbgFrames()
+            self.lgr.debug('traceAll, call to setExits')
+            self.trace_all[target].setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
+            ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
 
     def noDebug(self, dumb=None):
         self.lgr.debug('noDebug')
@@ -2132,7 +2144,7 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, dumb=None, was_watching=False):
         if not self.debug_breaks_set:
-            #self.lgr.debug('restoreDebugBreaks')
+            self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -3193,6 +3205,7 @@ class GenMonitor():
                 self.lgr.debug('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
         if 'runToIO' in self.call_traces[self.target]:
             self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
+            
         self.stopDataWatch()
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
