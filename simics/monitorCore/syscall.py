@@ -1971,6 +1971,11 @@ class Syscall():
                     if ss.addr is not None:
                         self.lgr.debug('ss addr is 0x%x' % ss.addr)
                         exit_info.setValue(ss.addr)
+                    if the_callname == 'recvfrom' and callname == 'socketcall':        
+                        src_addr = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+16)
+                        src_addr_len = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+20)
+                        exit_info.fname_addr = src_addr
+                        exit_info.count = src_addr_len
 
                 else:
                     self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frames[pid]['param1'])
@@ -1979,7 +1984,7 @@ class Syscall():
                 self.lgr.warning('syscall setExits pid %d has old_fd of None')
                 continue
 
-            if the_callname == 'accept':
+            if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('setExits syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
                     if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
