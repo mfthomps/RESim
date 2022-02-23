@@ -908,3 +908,19 @@ class SharedSyscall():
             eax = eax -1
             self.mem_utils.setRegValue(self.cpu, 'syscall_ret', eax)
             self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)
+
+    def rmExitBySyscallName(self, name):
+        self.lgr.debug('rmExitBySyscallName %s' % name)
+        exit_name = '%s-exit' % name
+        rmlist = []
+        for pid in self.exit_names:
+            the_name = self.exit_names[pid]
+            if the_name.endswith(exit_name):
+                rmlist.append(pid)
+                self.lgr.debug('sharedSyscall rmExitBySyscallName %d %s' % (pid, name)) 
+                self.rmExitHap(pid)
+                if pid in self.exit_info and the_name in self.exit_info[pid]:
+                    del self.exit_info[pid][the_name]
+        for pid in rmlist:
+            del self.exit_names[pid]
+
