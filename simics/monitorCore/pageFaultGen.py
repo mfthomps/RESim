@@ -440,7 +440,7 @@ class PageFaultGen():
 
     def stopPageFaults(self):
         if self.exception_hap is not None:
-            #self.lgr.debug('stopPageFaults delete excption_hap')
+            self.lgr.debug('stopPageFaults delete excption_hap')
             SIM_hap_delete_callback_id("Core_Exception", self.exception_hap)
             self.exception_hap = None
         if self.exception_hap2 is not None:
@@ -449,7 +449,7 @@ class PageFaultGen():
             self.exception_hap2 = None
 
     def pageExceptionHap(self, cpu, one, exception_number):
-        self.lgr.debug('pageExceptionHap')
+        ''' used by recordPageFaults '''
         if self.exception_hap is None:
             return
         eip = self.mem_utils.getRegValue(cpu, 'eip')
@@ -460,7 +460,9 @@ class PageFaultGen():
             if eip not in self.faulting_cycles[pid]:
                 self.faulting_cycles[pid][eip] = []
             self.faulting_cycles[pid][eip].append(cpu.cycles)
+            self.lgr.debug('pageExceptionHap pid %d eip 0x%x cycles 0x%x' % (pid, eip, cpu.cycles))
         self.exception_eip = eip
+        '''
         if cpu.architecture == 'arm':
             #reg_num = cpu.iface.int_register.get_number("combined_data_far")
             #dfar = cpu.iface.int_register.read(reg_num)
@@ -477,6 +479,7 @@ class PageFaultGen():
         else:
             cpu, comm, pid = self.task_utils.curProc() 
             #self.lgr.debug('pageExceptionHap pid:%d (%s) eip 0x%x' % (pid, comm, eip))
+        '''
 
     def getFaultingCycles(self, pid):
         if pid in self.faulting_cycles:
