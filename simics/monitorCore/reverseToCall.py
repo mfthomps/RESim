@@ -366,6 +366,8 @@ class reverseToCall():
             #if eip == self.param.arm_ret or (instruct.startswith('mov') and instruct.endswith('lr') and lr < self.param.kernel_base):
             if eip == self.param.arm_ret:
                 return True
+            else:
+                self.lgr.debug('isExit, NOT.  eip 0x%x arm_ret 0x%x' % (eip, self.param.arm_ret))
         else: 
             if instruct == 'sysexit' or instruct == 'iretd' or instruct.startswith('sysret'):
                 return True
