@@ -650,7 +650,11 @@ class DataWatch():
         elif self.mem_fun_entries[fun].ret_addr_offset is not None:
                 addr_of_ret_addr = sp - self.mem_fun_entries[fun].ret_addr_offset
                 ret_addr = self.mem_utils.readPtr(self.cpu, addr_of_ret_addr)
-                self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x' % (addr_of_ret_addr, ret_addr))
+                if ret_addr == 0:
+                    ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                    self.lgr.warning('dataWatch memSomethingEntry got zero for ret_addr.  addr_of_addr: 0x%x.  Assume arm and use lr of 0x%x instead' % (addr_of_ret_addr, ret_addr))
+                else:
+                    self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x' % (addr_of_ret_addr, ret_addr))
         else: 
             ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
             self.lgr.debug('memSomthingEntry ARM ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
@@ -674,6 +678,8 @@ class DataWatch():
         return retval1, retval2, retval3
 
     def getMemParams(self, data_hit):
+            ''' data_hit is true if a read hap led to this call.  otherwise we simply broke on entry to 
+                the memcpy-ish routine '''
             self.watchMarks.registerCallCycle();
             ''' assuming we are a the call to a memsomething, get its parameters '''
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
@@ -874,8 +880,11 @@ class DataWatch():
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                 else:
                     self.mem_something.op_type = Sim_Trans_Load
-                    self.lgr.debug('datgaWatch getMemParams got buf_start of 0x%x' % buf_start)
+                    self.lgr.debug('dataWatch getMemParams got buf_start of 0x%x' % buf_start)
             if not skip_fun:
+                if self.mem_something.ret_ip == 0:
+                    self.lgr.error('dataWatch getMemParams ret_ip is zero, bail')
+                    return
                 #self.stopWatch(leave_fun_entries = True)
                 self.stopWatch(immediate=True)
                 resim_context = self.context_manager.getRESimContext()
