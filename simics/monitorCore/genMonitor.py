@@ -1638,8 +1638,6 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
-        ''' TBD why not record them?  performance? '''
-        self.page_faults[self.target].recordPageFaults()
 
     def stopWatchPageFaults(self, pid=None):
         self.lgr.debug('genMonitor stopWatchPageFaults')
@@ -1743,7 +1741,6 @@ class GenMonitor():
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         value = self.mem_utils[self.target].getRegValue(cpu, reg)
         self.lgr.debug('revTaintReg pid:%d for %s value 0x%x' % (pid, reg, value))
-        self.lgr.debug('pageExceptionHap')
         if self.reverseEnabled():
             self.removeDebugBreaks()
             cell_name = self.getTopComponentName(cpu)

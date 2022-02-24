@@ -52,7 +52,8 @@ class ReverseToUser():
         breaks = [break_num]
         '''
         hap_clean = hapCleaner.HapCleaner(cpu)
-        stop_action = hapCleaner.StopAction(hap_clean, [break_num])
+        #stop_action = hapCleaner.StopAction(hap_clean, [break_num])
+        stop_action = hapCleaner.StopAction(hap_clean, breaks)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         SIM_run_command('reverse') 

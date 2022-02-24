@@ -253,6 +253,15 @@ class PageFaultGen():
             self.fault_hap2 = SIM_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
                  self.faultCallback, self.cpu, 15, max_intr) 
 
+    def recordFault(self, cpu, pid, eip):
+        if pid not in self.faulting_cycles:
+            self.faulting_cycles[pid] = {} 
+        if eip not in self.faulting_cycles[pid]:
+            self.faulting_cycles[pid][eip] = []
+        self.faulting_cycles[pid][eip].append(cpu.cycles)
+        self.lgr.debug('pageExceptionHap pid %d eip 0x%x cycles 0x%x' % (pid, eip, cpu.cycles))
+
+
     def faultCallback(self, cpu, one, exception_number):
         if not self.context_manager.watchingThis():
             #self.lgr.debug('faultCallback, contextManager says not watching')
@@ -287,6 +296,8 @@ class PageFaultGen():
                     #self.lgr.debug('faultCallback add pending fault for %d addr 0x%x  fsr: %s eip: 0x%x cycle 0x%x' % (pid, prec.cr2, str(prec.fsr), eip, prec.cycles))
                     if self.mode_hap is None:
                         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+
+                self.recordFault(cpu, pid, eip)
             
             #if (exception_number == 4 or exception_number == 1)and pid == 875:
             #    SIM_break_simulation('how?')
@@ -307,6 +318,7 @@ class PageFaultGen():
                 #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x eip: 0x%x cycle 0x%x' % (pid, prec.cr2, eip, prec.cycles))
                 if self.mode_hap is None:
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+            self.recordFault(cpu, pid, eip)
 
     '''
     def faultReturnCallback(self, cpu, one, exception_number):
@@ -425,6 +437,7 @@ class PageFaultGen():
 
 
     def recordPageFaults(self):
+        ''' REPLACED by moving logic into fault callback '''
         self.lgr.debug('recordPageFaults')
         if self.cpu.architecture == 'arm':
             prefetch_fault = 4
@@ -450,9 +463,10 @@ class PageFaultGen():
 
     def pageExceptionHap(self, cpu, one, exception_number):
         ''' used by recordPageFaults '''
+        eip = self.mem_utils.getRegValue(cpu, 'eip')
+        self.lgr.debug('pageExceptionHap eip 0x%x cycles 0x%x' % (eip, cpu.cycles))
         if self.exception_hap is None:
             return
-        eip = self.mem_utils.getRegValue(cpu, 'eip')
         if self.debugging_pid is not None:
             cpu, comm, pid = self.task_utils.curProc() 
             if pid not in self.faulting_cycles:
