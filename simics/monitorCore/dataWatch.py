@@ -644,7 +644,7 @@ class DataWatch():
             self.lgr.debug('memSomethingEntry, fun %s not in mem_fun_entries haps' % fun)
             return
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        if not self.cpu.architecture == 'arm':
+        if self.cpu.architecture != 'arm':
             ret_addr = self.mem_utils.readPtr(self.cpu, sp)
             self.lgr.debug('memSomethingEntry, ret_addr 0x%x' % (ret_addr))
         elif self.mem_fun_entries[fun].ret_addr_offset is not None:
@@ -654,7 +654,8 @@ class DataWatch():
                     ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
                     self.lgr.warning('dataWatch memSomethingEntry got zero for ret_addr.  addr_of_addr: 0x%x.  Assume arm and use lr of 0x%x instead' % (addr_of_ret_addr, ret_addr))
                 else:
-                    self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x' % (addr_of_ret_addr, ret_addr))
+                    lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                    self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x, but lr is 0x%x' % (addr_of_ret_addr, ret_addr, lr))
         else: 
             ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
             self.lgr.debug('memSomthingEntry ARM ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
@@ -694,9 +695,12 @@ class DataWatch():
                     ret_addr_offset = None
                     if self.mem_something.ret_addr_addr is not None:
                         ret = self.mem_utils.readPtr(self.cpu, self.mem_something.ret_addr_addr)
-                        ret_addr_offset = sp - self.mem_something.ret_addr_addr 
-                        self.lgr.debug('getmemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x ret 0x%x' % (self.mem_something.fun, eip, ret_addr_offset,
-                           self.mem_something.ret_addr_addr, ret))
+                        if self.mem_something.ret_ip is not None and ret != self.mem_something.ret_ip:
+                            ''' do not believe we have an address of ret_addr '''
+                            pass
+                        else:
+                            ret_addr_offset = sp - self.mem_something.ret_addr_addr 
+                            self.lgr.debug('getmemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomthing ret_ip 0x%x' % (self.mem_something.fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
                     else:
                         self.lgr.debug('getmemParam did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (self.mem_something.fun, eip))
                     self.mem_fun_entries[self.mem_something.fun] = self.MemCallRec(None, ret_addr_offset, eip)
@@ -1780,7 +1784,7 @@ class DataWatch():
                     elif frame.sp > 0 and i != 0:
                         ''' TBD poor assumption about sp pointing to the return address?  have we made this so, arm exceptions? '''
                         ret_addr = self.mem_utils.readPtr(self.cpu, frame.sp)
-                        #self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
+                        self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
                     else:
                         #self.lgr.error('memsomething sp is zero and no ret_addr?')
                         ret_addr = None
@@ -1790,10 +1794,10 @@ class DataWatch():
                             addr_of_ret_addr = None
                         elif frame.ret_to_addr is not None:
                             addr_of_ret_addr = frame.ret_to_addr
-                            #self.lgr.debug('datawatch memsomething using ret_to_addr from frame of 0x%x' % frame.ret_to_addr)
+                            self.lgr.debug('datawatch memsomething using ret_to_addr from frame of 0x%x' % frame.ret_to_addr)
                         else:
                             addr_of_ret_addr = frame.sp
-                            #self.lgr.debug('datawatch memsomething using ret_to_addr from SP of 0x%x' % frame.sp)
+                            self.lgr.debug('datawatch memsomething using ret_to_addr from SP of 0x%x' % frame.sp)
                         retval = self.MemStuff(ret_addr, fun, frame.ip, addr_of_ret_addr)
                         break 
                 else:

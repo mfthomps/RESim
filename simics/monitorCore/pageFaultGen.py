@@ -259,7 +259,7 @@ class PageFaultGen():
         if eip not in self.faulting_cycles[pid]:
             self.faulting_cycles[pid][eip] = []
         self.faulting_cycles[pid][eip].append(cpu.cycles)
-        self.lgr.debug('pageExceptionHap pid %d eip 0x%x cycles 0x%x' % (pid, eip, cpu.cycles))
+        #self.lgr.debug('pageExceptionHap pid %d eip 0x%x cycles 0x%x' % (pid, eip, cpu.cycles))
 
 
     def faultCallback(self, cpu, one, exception_number):
