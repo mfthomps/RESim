@@ -715,7 +715,7 @@ class IdaSIM():
             print('doStepOver in kernel run to user space')
             self.runToUserSpace()
         else:
-            print('doStepOver signal client')
+            #print('doStepOver signal client')
             self.signalClient()
         
     
