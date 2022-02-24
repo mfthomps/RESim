@@ -698,12 +698,12 @@ class IdaSIM():
             print('doStepInto run to user space')
             self.runToUserSpace()
    
-    def doStepOver(self):
+    def doStepOverXXX(self):
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.ni()");')
         eip = gdbProt.getEIPWhenStopped(delay=0.5)
         self.signalClient()
  
-    def doStepOverXXX(self):
+    def doStepOver(self):
         #print('in doStepOver')
         idaapi.step_over()
         #print('back from step over')
