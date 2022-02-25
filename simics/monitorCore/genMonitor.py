@@ -1654,6 +1654,9 @@ class GenMonitor():
     def getCell(self):
         return self.cell_config.cell_context[self.target]
 
+    def getTarget(self):
+        return self.target
+
     def getCPU(self):
         return self.cell_config.cpuFromCell(self.target)
 
@@ -2322,7 +2325,9 @@ class GenMonitor():
                 return True
         return False
 
-    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, ignore_running=False, name=None, flist=None):
+    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, 
+              ignore_running=False, name=None, flist=None, callback = None):
+        retval = None
         ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
@@ -2335,21 +2340,27 @@ class GenMonitor():
         if name is not None:
             call_name = '%s-%s' % (call[0], name)
         self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
+        if call_params is None:
+            call_params_list = []
+        else:
+            call_params_list = [call_params]
 
         if cell_name not in self.trace_all or self.trace_all[cell_name] is None:
-            self.call_traces[cell_name][call_name] = syscall.Syscall(self, cell_name, None, self.param[cell_name], self.mem_utils[cell_name], 
+            retval = syscall.Syscall(self, cell_name, None, self.param[cell_name], self.mem_utils[cell_name], 
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
-                               call_list=call, call_params=[call_params], targetFS=self.targetFS[cell_name], linger=linger, 
-                               background=background, name=name, flist_in=flist)
+                               call_list=call, call_params=call_params_list, targetFS=self.targetFS[cell_name], linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback)
                                #compat32=self.is_compat32, background=background)
+            self.call_traces[cell_name][call_name] = retval
         else:
             ''' stuff the call params into existing traceall syscall module '''
-            self.trace_all[cell_name].addCallParams([call_params])
+            self.trace_all[cell_name].addCallParams(call_params_list)
             self.lgr.debug('runTo added parameters rather than new syscall')
         if run:
             self.is_monitor_running.setRunning(True)
             SIM_run_command('c')
+        return retval
 
     def runToClone(self, nth=1):
         self.lgr.debug('runToClone to %s' % str(nth))
@@ -4138,6 +4149,12 @@ class GenMonitor():
 
     def injectToBB(self, bb):
         ibb = injectToBB.InjectToBB(self, bb, self.lgr)
+
+    def getParam(self):
+        return self.param[self.target]
+
+    def syscallName(self, callnum):
+        return self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
     
 
 if __name__=="__main__":        
