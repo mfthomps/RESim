@@ -271,7 +271,7 @@ class Syscall():
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
-                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False): 
+                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -309,7 +309,10 @@ class Syscall():
         self.timeofday_start_cycle = {}
         self.call_list = call_list
         self.trace = trace
-        self.call_params = call_params
+        if call_params is None:
+            self.call_params = []
+        else:
+            self.call_params = call_params
         self.stop_action = None
         self.netInfo = netInfo
         self.bang_you_are_dead = False
@@ -327,6 +330,7 @@ class Syscall():
         self.record_fd = record_fd
         self.traceall_syscall_info = None
         self.alt_syscall_info = None
+        self.callback = callback
 
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
@@ -367,7 +371,7 @@ class Syscall():
 
     def breakOnExecve(self):
         for call in self.call_params:
-            if call.subcall == 'execve' and call.break_simulation:
+            if call is not None and call.subcall == 'execve' and call.break_simulation:
                 return True
         return False
 
@@ -832,7 +836,7 @@ class Syscall():
             got_bad = False 
             if self.name != 'traceAll':
                 for call_param in syscall_info.call_params:
-                    if call_param.subcall is not None:
+                    if call_param is not None and call_param.subcall is not None:
                         #self.lgr.debug('syscall socketParse subcall in call_param of %s' % call_param.subcall)
                         if call_param.subcall == socket_callname:
                             got_good = True
@@ -1789,17 +1793,21 @@ class Syscall():
                         tracing_all = False 
                         if self.top is not None:
                             tracing_all = self.top.tracingAll(self.cell_name, pid)
-                        if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all:
-                            if self.stop_on_call:
-                                cp = CallParams(None, None, break_simulation=True)
-                                exit_info.call_params = cp
-                            #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                            self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
-                               len(syscall_info.call_params), tracing_all))
-                            self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                        if self.callback is None:
+                            if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all:
+                                if self.stop_on_call:
+                                    cp = CallParams(None, None, break_simulation=True)
+                                    exit_info.call_params = cp
+                                #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
+                                self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
+                                   len(syscall_info.call_params), tracing_all))
+                                self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                            else:
+                                self.lgr.debug('did not add exitHap')
+                                pass
                         else:
-                            self.lgr.debug('did not add exitHap')
-                            pass
+                            self.lgr.debug('syscall invoking callback')
+                            self.callback()
                 else:
                     self.lgr.debug('syscallHap skipping tar %s, no exit' % comm)
                 
@@ -1984,13 +1992,16 @@ class Syscall():
                 self.lgr.warning('syscall setExits pid %d has old_fd of None')
                 continue
 
+            self.lgr.debug('syscall setExists callname %s' % the_callname)
             if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
                 for call_param in syscall_info.call_params:
-                    if call_param.subcall == the_callname:
+                    self.lgr.debug('syscall setExists subcall %s' % call_param.subcall)
+                    if call_param.subcall is None or call_param.subcall == the_callname:
                         self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), ss.fd))
                         ''' TBD why not do for any and all?'''
-                        if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                            self.lgr.debug('did accept match')
+                        #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                        if (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                            self.lgr.debug('setExits set the call_params')
                             exit_info.call_params = call_param
                             break
 
