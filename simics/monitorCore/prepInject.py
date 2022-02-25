@@ -52,7 +52,7 @@ class PrepInject():
         self.prepInject()
 
     def instrumentAlone(self, dumb): 
-        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
+        self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
         ''' go forward one to user space and record the return IP '''
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')
@@ -61,20 +61,25 @@ class PrepInject():
         pid = self.top.getPID()
         self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, pid, self.cpu.cycles))
         ''' return to the call to record that IP and original data in the buffer'''
-        frame, cycle = self.top.getRecentEnterCycle()
         exit_info = self.top.getMatchingExitInfo()
-        previous = cycle - 1
-        SIM_run_command('skip-to cycle=%d' % previous)
-        self.call_ip = self.top.getEIP(self.cpu)
+        frame, cycle = self.top.getRecentEnterCycle()
+        origin = self.top.getFirstCycle()
+        self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
+        if cycle <= origin:
+            self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
+        else: 
+            previous = cycle - 1
+            SIM_run_command('skip-to cycle=%d' % previous)
+            self.call_ip = self.top.getEIP(self.cpu)
+            self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
+            ''' skip back to return so the snapshot is ready to inject input '''
+            SIM_run_command('skip-to cycle=%d' % ret_cycle)
         pid = self.top.getPID()
         if exit_info.sock_struct is not None:
             length = exit_info.sock_struct.length
         else:
             length = exit_info.count
         orig_buffer = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, length) 
-        self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
-        ''' skip back to return so the snapshot is ready to inject input '''
-        SIM_run_command('skip-to cycle=%d' % ret_cycle)
         self.pickleit(self.snap_name, exit_info, orig_buffer)
 
     def instrumentIO(self, callname):
@@ -110,5 +115,8 @@ class PrepInject():
         pickDict['orig_buffer'] = orig_buffer
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
-        self.lgr.debug('call_ip 0x%x return_ip 0x%x' % (self.call_ip, self.return_ip))
+        if self.call_ip is not None:
+            self.lgr.debug('call_ip 0x%x return_ip 0x%x' % (self.call_ip, self.return_ip))
+        else:
+            self.lgr.debug('call_ip NONE return_ip 0x%x' % (self.return_ip))
         print('Configuration file saved, ok to quit.')
