@@ -40,10 +40,10 @@ class WriteData():
         self.select_return_ip = None
         self.k_start_ptr = None
         self.k_end_ptr = None
-        ''' NOT USED '''
+
         self.fd = None
-
-
+        self.callnum = None
+        self.socket_callname = None
 
         self.call_hap = None
         self.call_break = None
@@ -139,7 +139,7 @@ class WriteData():
         return retval
 
     def readLimitCallback(self):
-        ''' Called by dataWatch when kernel buffer sized is consumed '''
+        ''' Called by dataWatch when kernel buffer size is consumed '''
         if self.call_hap is None and self.call_ip is not None:
             self.lgr.debug('writeData readLimitCallback, add callHap')
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
@@ -193,12 +193,13 @@ class WriteData():
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 
                 # TBD add handling of padding with udp header                
                 retval = len(first_data)
-                #self.lgr.debug('writeData wrote packet %d %d bytes  %s' % (self.current_packet, len(first_data), first_data[:50]))
-                #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('writeData wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
+                self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
             else:
                 ''' no next udp header found'''
                 data = self.in_data[:self.max_len]
-                #self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d max_len %d in_data len %d' % (self.udp_header, self.current_packet, len(data), self.max_len, len(self.in_data)))
+                self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d max_len %d in_data len %d' % (self.udp_header, self.current_packet, len(data), self.max_len, len(self.in_data)))
                 if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
                     #self.lgr.debug('writeData failed filter, wrote nulls')
@@ -222,14 +223,15 @@ class WriteData():
 
     def setCallHap(self):
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
-        if self.call_hap is None and self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
-            ''' NOTE stop on read will miss processing performed by other threads. '''
-            self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
-            self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
-            if self.select_call_ip is not None:
-                self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
-                self.select_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
+        if self.call_hap is None:
+            if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
+                ''' NOTE stop on read will miss processing performed by other threads. '''
+                self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+                self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
+                self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
+                if self.select_call_ip is not None:
+                    self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
+                    self.select_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
 
     def setRetHap(self):
         if self.ret_hap is None: 
@@ -250,6 +252,9 @@ class WriteData():
         ''' Hit a call to recv '''
         if self.call_hap is None:
             return
+        self.handleCall()
+
+    def handleCall(self):
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
             self.lgr.debug('writeData stop on read')
@@ -276,14 +281,17 @@ class WriteData():
                 #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
             #SIM_run_alone(self.delCallHap, None)
         else:
+            
             frame = self.top.frameFromRegs(self.cpu)
             frame_s = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('callHap writeData frame: %s' % frame_s)
+            self.lgr.debug('callHap writeData frame: %s' % frame_s)
+
             if self.limit_one:
                 self.lgr.warning('writeData callHap, would write more data, but limit_one')
                 #self.lgr.debug(frame_s)
             
             else:
+                ''' Skip over kernel to the return ip '''
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
                 self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
@@ -368,12 +376,18 @@ class WriteData():
         cell_name = self.top.getTopComponentName(self.cpu)
         afl_file = os.path.join('./', name, cell_name, 'afl.pickle')
         if os.path.isfile(afl_file):
-            self.lgr.debug('afl pickle from %s' % afl_file)
+            self.lgr.debug('writeData pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
             if 'call_ip' in so_pickle:
                 self.call_ip = so_pickle['call_ip']
                 self.return_ip = so_pickle['return_ip']
+            if self.call_ip is None and self.return_ip is not None:
+                if self.cpu.architecture == 'arm':
+                    self.call_ip = self.return_ip - 4
+                    self.lgr.debug('writeData pickle, no call_ip, hack to 4 before ret, 0x%x' % self.call_ip)
+                else:
+                    self.lgr.warning("writeData pickle, no call_ip, FIX for non-arm")
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 if self.addr is None:
@@ -392,3 +406,8 @@ class WriteData():
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectiO load orig_buffer from pickle')
+            if 'callnum' in so_pickle:
+                self.callnum = so_pickle['callnum']
+                self.socket_callname = so_pickle['socket_callname']
+                self.lgr.debug('loadPickle callnum %d socket_callname %s' % (self.callnum, self.socket_callname))
+                
