@@ -3022,6 +3022,9 @@ class GenMonitor():
         if debug_pid is not None:
             debug_info['pid'] = debug_pid
             debug_info['cpu'] = debug_cpu.name
+            self.lgr.debug('writeConfig debug_pid %d cpu %s' % (debug_pid, debug_cpu.name))
+        else:
+            self.lgr.debug('writeConfig no debug_pid found from context manager')
         pickle.dump( debug_info, open(debug_info_file, "wb" ) )
 
 
