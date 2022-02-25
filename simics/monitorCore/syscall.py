@@ -1986,11 +1986,13 @@ class Syscall():
 
             if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
                 for call_param in syscall_info.call_params:
-                    self.lgr.debug('setExits syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
-                    if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                        self.lgr.debug('did accept match')
-                        exit_info.call_params = call_param
-                        break
+                    if call_param.subcall == the_callname:
+                        self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), ss.fd))
+                        ''' TBD why not do for any and all?'''
+                        if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                            self.lgr.debug('did accept match')
+                            exit_info.call_params = call_param
+                            break
 
             exit_info.origin_reset = reset
             if exit_info.retval_addr is not None:
