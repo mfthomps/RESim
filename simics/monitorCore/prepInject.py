@@ -100,6 +100,9 @@ class PrepInject():
         pickDict['select_call_ip'] = self.select_call_ip
         pickDict['select_return_ip'] = self.select_return_ip
         pickDict['addr'] = exit_info.retval_addr
+        pickDict['fd'] = exit_info.old_fd
+        pickDict['callnum'] = exit_info.callnum
+        pickDict['socket_callname'] = exit_info.socket_callname
         if exit_info.sock_struct is not None:
             pickDict['size'] = exit_info.sock_struct.length
         else:
