@@ -93,6 +93,7 @@ class InjectIO():
             self.lgr.debug('injectIO stop_on_read is true')
 
         self.dataWatch.enable()
+        self.dataWatch.clearWatchMarks(record_old=True)
 
     def go(self, no_go_receive=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
@@ -178,7 +179,7 @@ class InjectIO():
             return
         eip = self.top.getEIP(self.cpu)
         if self.target is None:
-            self.dataWatch.clearWatchMarks()
+            self.dataWatch.clearWatchMarks(record_old=True)
             self.dataWatch.clearWatches()
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
@@ -267,7 +268,7 @@ class InjectIO():
             self.saveJson(packet=packet_num)
             self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
             self.resetOrigin(None)
-            self.dataWatch.clearWatchMarks()
+            self.dataWatch.clearWatchMarks(record_old=True)
         if count != 0:
             self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
             ''' special case'''

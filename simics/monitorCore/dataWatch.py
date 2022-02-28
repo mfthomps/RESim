@@ -1152,7 +1152,7 @@ class DataWatch():
                 #    self.stopWatch()
                 self.lgr.debug('dataWatch finishReadHap, read in kernel, set kernelReturn hap')
                 #self.return_hap = 'eh'
-                #SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
+                SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
                 return
             else:
                 #self.lgr.debug('finishReadHap Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
@@ -1446,8 +1446,8 @@ class DataWatch():
            self.lgr.error('No data mark with index %d' % index)
         return retval
 
-    def clearWatchMarks(self): 
-        self.watchMarks.clearWatchMarks()
+    def clearWatchMarks(self, record_old=False): 
+        self.watchMarks.clearWatchMarks(record_old=record_old)
 
     def clearWatches(self, cycle=None):
         if cycle is None:
@@ -1513,8 +1513,8 @@ class DataWatch():
         self.lgr.debug('dataWatch setCallback, call to backstop to set callback')
         self.back_stop.setCallback(callback)
 
-    def showWatchMarks(self):
-        self.watchMarks.showMarks()
+    def showWatchMarks(self, old=False):
+        self.watchMarks.showMarks(old=old)
 
     def saveWatchMarks(self, fpath):
         self.watchMarks.saveMarks(fpath)

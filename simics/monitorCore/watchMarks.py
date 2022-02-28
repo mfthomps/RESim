@@ -323,6 +323,8 @@ class ReturnInt():
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
+        ''' Previous marks that are no longer reachable due to origin resets '''
+        self.stale_marks = []
         self.mem_utils = mem_utils
         self.cpu = cpu
         self.top = top
@@ -343,25 +345,35 @@ class WatchMarks():
                 fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
                 i += 1
 
-    def showMarks(self):
+    def showMarks(self, old=False):
+        i = 0
+        if old:
+            for mark in self.stale_marks:
+                print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
+                i += 1
+            print('Begin active watch marks.')
+        elif len(self.stale_marks)>0:
+            print('%d stale marks not displayed.  use old=True to see them.' % len(self.stale_marks))
         i = 0
         for mark in self.mark_list:
-            print('%d %s  ip:0x%x' % (i, mark.mark.getMsg(), mark.ip))
+            print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, mark):
+        def __init__(self, return_cycle, call_cycle, ip, pid, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
+            self.pid = pid
             self.mark = mark
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
             retval['ip'] = self.ip
+            retval['pid'] = self.pid
             retval['msg'] = self.mark.getMsg()
             return retval
 
@@ -502,9 +514,10 @@ class WatchMarks():
                 
     def addWatchMark(self, mark, cycles=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        pid = self.top.getPID()
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, mark)
+        wm = self.WatchMark(cycles, self.call_cycle, ip, pid, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -684,8 +697,10 @@ class WatchMarks():
         fm = ReturnInt(fun, count)
         self.addWatchMark(fm)
 
-    def clearWatchMarks(self): 
+    def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')
+        if record_old:
+            self.stale_marks.extend(self.mark_list)
         del self.mark_list[:] 
         self.prev_ip = []
 

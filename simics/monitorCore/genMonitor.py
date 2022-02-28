@@ -3226,8 +3226,8 @@ class GenMonitor():
     def clearWatches(self):
         self.dataWatch[self.target].clearWatches()
 
-    def showWatchMarks(self):
-        self.dataWatch[self.target].showWatchMarks()
+    def showWatchMarks(self, old=False):
+        self.dataWatch[self.target].showWatchMarks(old=old)
 
     def saveWatchMarks(self, fpath):
         self.dataWatch[self.target].saveWatchMarks(fpath)
