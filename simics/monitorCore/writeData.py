@@ -198,8 +198,10 @@ class WriteData():
                 self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
             else:
                 ''' no next udp header found'''
+                eip = self.top.getEIP(self.cpu)
                 data = self.in_data[:self.max_len]
-                self.lgr.debug('writeData next UDP header %s not found packet %d  write remaining packet len %d max_len %d in_data len %d' % (self.udp_header, self.current_packet, len(data), self.max_len, len(self.in_data)))
+                self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
+                self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
                 if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
                     #self.lgr.debug('writeData failed filter, wrote nulls')
