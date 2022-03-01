@@ -19,7 +19,7 @@ This is an example of a script that repeatedly starts
 RESim (and thus Simics) to handle multi-packet udp crash
 analysis.  
 '''
-def feedDriver(ip, port, header):
+def feedDriver(ip, port, header, client_path):
     result = 1
     cmd = 'scp -P 4022 /tmp/sendudp localhost:/tmp/sendudp'
     while result != 0:
@@ -97,7 +97,7 @@ def main():
         os.environ['ONE_DONE_PARAM'] = str(index)
         if trackFD is not None:
             shutil.copyfile(f, '/tmp/sendudp')
-            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, ))
+            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, client_path))
             driver.start()
             #os.system('./tmpdrive.sh &')
         print("starting monitor without UI")
