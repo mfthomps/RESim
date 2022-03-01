@@ -246,8 +246,6 @@ class ExitInfo():
         self.syscall_instance = syscall_instance
         ''' stop and reset reversing origin if set '''
         self.origin_reset = False
-    def setValue(self, addr):
-        self.retval_addr = addr
 
 EXTERNAL = 1
 AF_INET = 2
@@ -331,6 +329,7 @@ class Syscall():
         self.traceall_syscall_info = None
         self.alt_syscall_info = None
         self.callback = callback
+        self.orig_buffer = {}
 
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
@@ -1960,9 +1959,10 @@ class Syscall():
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[pid])
 
             exit_info = ExitInfo(self, self.cpu, pid, callnum, syscall_info.compat32, frame)
-            ''' TBD why does direct setting of the ret_addr value fail? '''
-            exit_info.setValue(frames[pid]['param2'])
+            exit_info.retval_addr = frames[pid]['param2']
+            exit_info.count = frames[pid]['param3']
             exit_info.old_fd = frames[pid]['param1']
+            self.lgr.debug('setExits set count to parm3 now 0x%x' % exit_info.count)
 
             the_callname = callname
             if callname == 'socketcall' or callname.upper() in net.callname:
@@ -1977,8 +1977,8 @@ class Syscall():
                     self.lgr.debug('setExits socket parsed: %s' % ida_msg)
                     the_callname = exit_info.socket_callname
                     if ss.addr is not None:
-                        self.lgr.debug('ss addr is 0x%x' % ss.addr)
-                        exit_info.setValue(ss.addr)
+                        exit_info.retval_addr = ss.addr
+                        self.lgr.debug('ss addr is 0x%x len is %d' % (ss.addr, ss.length))
                     if the_callname == 'recvfrom' and callname == 'socketcall':        
                         src_addr = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+16)
                         src_addr_len = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+20)
@@ -2003,6 +2003,19 @@ class Syscall():
                         if (call_param.match_param < 0 or call_param.match_param == ss.fd):
                             self.lgr.debug('setExits set the call_params')
                             exit_info.call_params = call_param
+                            if call_param.match_param == ss.fd:
+                                this_pid = self.top.getPID()
+                                watch_pids = self.context_manager.getWatchPids()
+                                self.lgr.debug('syscall setExits found fd %d, this pid %d' % (ss.fd, this_pid))
+                                ''' TBD poor assumption about all pids having same context? '''
+                                if this_pid in watch_pids and exit_info.retval_addr is not None:
+                                    self.lgr.debug('syscall setExits will stash away initial buffer content for use by prepInject/InjectIO')
+                                    self.lgr.debug('addr is 0x%x count %d' % (exit_info.retval_addr, exit_info.count))
+                                    if exit_info.sock_struct is not None:
+                                        length = exit_info.sock_struct.length
+                                    else:
+                                        length = exit_info.count
+                                    self.orig_buffer[exit_info.old_fd] = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, length)
                             break
 
             exit_info.origin_reset = reset
@@ -2031,3 +2044,8 @@ class Syscall():
     def getContext(self):
         return self.cell
 
+    def getOrigBuffer(self,fd):
+        if fd in self.orig_buffer:   
+            return self.orig_buffer[fd]
+        else:
+            return None
