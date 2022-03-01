@@ -566,8 +566,7 @@ class WatchMarks():
         self.addWatchMark(sm)
         self.lgr.debug('watchMarks memset %s' % (sm.getMsg()))
 
-    def kernel(self, addr, count, frame):
-        callnum = self.mem_utils.getCallNum(self.cpu)
+    def kernel(self, addr, count, frame, callnum):
         fd = frame['param1']
         km = KernelMark(addr, count, callnum, fd)
         self.addWatchMark(km)
