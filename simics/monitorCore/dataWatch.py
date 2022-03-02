@@ -22,7 +22,7 @@ no_stop_funs = ['xml_element_free']
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
-    def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, back_stop, lgr):
+    def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, back_stop, compat32, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.rev_to_call = rev_to_call
         self.top = top
@@ -33,6 +33,7 @@ class DataWatch():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.lgr = lgr
+        self.compat32 = compat32
         self.page_size = page_size
         self.back_stop = back_stop
         self.watchMarks = watchMarks.WatchMarks(top, mem_utils, cpu, cell_name, run_from_snap, lgr)
@@ -362,6 +363,34 @@ class DataWatch():
         self.stopWatch(immediate=True)
         self.resetState()
 
+    def getPipeReader(self, write_fd):
+        retval = None
+        full_path = self.top.getFullPath()
+        base = os.path.basename(full_path)
+        if os.path.isfile('pipes.txt'):
+            self.lgr.debug('dataWatch gt pipeReader file')
+            with open('pipes.txt') as fh:
+                for line in fh:
+                    parts = line.split()
+                    path  = parts[0]
+                    name  = parts[1]
+                    self.lgr.debug('parts2 is %s' % parts[2])
+                    if parts[2].startswith('W'):
+                        writes = parts[2][3:-2]
+                        reads = parts[3][3:-2]
+                    else:
+                        self.lgr.debug('parts3 is %s' % parts[3])
+                        writes = parts[3][3:-2]
+                        self.lgr.debug('writes is %s' % writes)
+                        reads = parts[2][3:-2]
+                    if writes == write_fd:
+                        retval = int(reads)
+                        break
+        return retval
+
+    def runToIOAlone(self, fd):
+        self.top.runToIO(fd, linger=True, break_simulation=False, run=False)
+
     def kernelReturnHap(self, kernel_return_info, third, forth, memory):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x context: %s' % (eax, 
@@ -370,7 +399,16 @@ class DataWatch():
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
         if kernel_return_info.op_type == Sim_Trans_Load:
-            self.watchMarks.kernel(kernel_return_info.addr, eax, frame)
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            call = self.task_utils.syscallName(callnum, self.compat32)
+            self.watchMarks.kernel(kernel_return_info.addr, eax, frame, callnum)
+            write_fd = frame['param1']
+            read_fd = self.getPipeReader(str(write_fd))
+            if read_fd is not None:
+                self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
+                SIM_run_alone(self.runToIOAlone, read_fd)
+            else:
+                self.lgr.debug('dataWatch no pipe reader found for fd %d' % write_fd)
         else:
             self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame)
  
@@ -737,7 +775,7 @@ class DataWatch():
                 self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp)
                 self.mem_something.src = self.mem_something.dest
             elif self.mem_something.fun == 'strdup':
-                self.mem_something.src, dumb1, dubm2, self.getCallParams(sp)
+                self.mem_something.src, dumb1, dubm2 = self.getCallParams(sp)
                 self.mem_something.count = self.getStrLen(self.mem_something.src)        
             elif self.mem_something.fun == 'strcpy' or self.mem_something.fun == 'strncpy':
                 if self.cpu.architecture == 'arm':
