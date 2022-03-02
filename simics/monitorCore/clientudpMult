@@ -31,7 +31,11 @@ with open (infile) as fh:
         parts = s.split(header)
         print('num messages is %d' % len(parts))
         index = 1
-        for p in parts[1:]:
+        if add_header:
+            iter_list = parts[1:]
+        else:
+            iter_list = parts
+        for p in iter_list:
             if add_header:
                 packet = 'RrUdP'+p
             else:
