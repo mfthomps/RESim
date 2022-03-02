@@ -109,8 +109,11 @@ class InjectIO():
             if self.save_json is not None:
                 self.callback = self.saveJson
                 self.lgr.debug('injectIO set callback to %s' % str(self.callback))
-            else:
+            elif self.mem_utils.isKernel(self.addr):
+                self.lgr.debug('injectIO set callback to stopTrackIO, no better plan when modifying kernel buffer')
                 self.callback = self.top.stopTrackIO
+            else:
+                self.lgr.debug('injectIO no callback set for when we are out of data.  Assume program knows best, e.g., will block on read')
         if not os.path.isfile(self.dfile):
             print('File not found at %s\n\n' % self.dfile)
             return
@@ -283,9 +286,12 @@ class InjectIO():
         if count > 0:
             SIM_run_command('c')
         else:
-            self.lgr.debug('resetReverseAlone no more data, do not continue')
             if self.callback is not None:
+                self.lgr.debug('resetReverseAlone no more data, do not continue')
                 self.callback()
+            else:
+                self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
+                SIM_run_command('c')
         
 
     def stopHap(self, count, one, exception, error_string):
