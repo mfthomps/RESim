@@ -542,7 +542,8 @@ class GenMonitor():
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.back_stop[cell_name], self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.back_stop[cell_name], 
+                  self.compat32, self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -1412,7 +1413,7 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage(msg)
             self.restoreDebugBreaks(was_watching=True)
             self.context_manager[self.target].stopWatchTasks()
-            self.context_manager[self.target].watchTasks()
+            self.context_manager[self.target].watchTasks(set_debug_pid=True)
 
     def goToDebugBookmark(self, mark):
         self.lgr.debug('goToDebugBookmark %s' % mark)
@@ -2441,10 +2442,9 @@ class GenMonitor():
         self.runTo(call, call_params, name='recv')
 
     def runToRead(self, substring):
-        call = self.task_utils[self.target].socketCallName('read', self.is_compat32)
         call_params = syscall.CallParams('read', substring, break_simulation=True)        
         self.lgr.debug('runToRead to %s' % substring)
-        self.runTo(call, call_params, name='read')
+        self.runTo('read', call_params, name='read')
 
     def runToAccept(self, fd, flist=None, proc=None):
         call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
@@ -2470,71 +2470,76 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params, name='bind')
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False, run_fun=None, proc=None):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False, run_fun=None, proc=None, run=True):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation, proc=proc)        
         call_params.nth = count
-        cell = self.cell_config.cell_context[self.target]
-        self.lgr.debug('runToIO on FD %d' % fd)
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        if pid is None:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
-
-        if self.target not in self.trace_all or self.trace_all[self.target] is None:
-            accept_call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
-            calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
-            for c in accept_call:
-                calls.append(c)
-            # note hack for identifying old arm kernel
-            if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
-                calls.remove('socketcall')
-                for scall in net.callname[1:]:
-                    #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
-                    calls.append(scall.lower())
-            if self.mem_utils[self.target].WORD_SIZE == 8:
-                calls.remove('_llseek')
-                calls.remove('_newselect')
-                calls.append('lseek')
-                calls.remove('send')
-                calls.remove('recv')
-                for c in accept_call:
-                    calls.remove(c)
-            skip_and_mail = True
-            if flist_in is not None:
-                ''' Given callback functions, use those instead of skip_and_mail '''
-                skip_and_mail = False
-    
-            the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
-                                   self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                                   calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
-                                   skip_and_mail=skip_and_mail, name='runToIO')
-            for call in calls:
-                self.call_traces[self.target][call] = the_syscall
-            self.call_traces[self.target]['runToIO'] = the_syscall
-            ''' find processes that are in the kernel on IO calls '''
-            frames = self.getDbgFrames()
-            skip_calls = ['select', 'pselect6', '_newselect']
-            for pid in list(frames):
-                if frames[pid] is None:
-                    self.lgr.error('frames[%d] is None' % pid)
-                    continue
-                call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-                self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
-                if call not in calls or call in skip_calls:
-                   del frames[pid]
-                else:
-                   self.lgr.debug('kept frames for pid %d' % pid)
-            if len(frames) > 0:
-                self.lgr.debug('runToIO, call to setExits')
-                the_syscall.setExits(frames, reset=reset, context_override=self.context_manager[self.target].getRESimContext()) 
+       
+        if 'runToIO' in self.call_traces[self.target]:
+            self.call_traces[self.target]['runToIO'].addCallParams([call_params])
         else:
-            self.trace_all[self.target].addCallParams([call_params])
-            self.lgr.debug('runToIO added parameters rather than new syscall')
-
-
-        if run_fun is not None:
-            SIM_run_alone(run_fun, None) 
-        self.lgr.debug('runToIO now run')
-        SIM_run_command('c')
+            cell = self.cell_config.cell_context[self.target]
+            self.lgr.debug('runToIO on FD %d' % fd)
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
+            if pid is None:
+                cpu, comm, pid = self.task_utils[self.target].curProc() 
+    
+            if self.target not in self.trace_all or self.trace_all[self.target] is None:
+                accept_call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
+                calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+                for c in accept_call:
+                    calls.append(c)
+                # note hack for identifying old arm kernel
+                if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
+                    calls.remove('socketcall')
+                    for scall in net.callname[1:]:
+                        #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
+                        calls.append(scall.lower())
+                if self.mem_utils[self.target].WORD_SIZE == 8:
+                    calls.remove('_llseek')
+                    calls.remove('_newselect')
+                    calls.append('lseek')
+                    calls.remove('send')
+                    calls.remove('recv')
+                    for c in accept_call:
+                        calls.remove(c)
+                skip_and_mail = True
+                if flist_in is not None:
+                    ''' Given callback functions, use those instead of skip_and_mail '''
+                    skip_and_mail = False
+        
+                the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
+                                       self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
+                                       calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                                       skip_and_mail=skip_and_mail, name='runToIO')
+                for call in calls:
+                    self.call_traces[self.target][call] = the_syscall
+                self.call_traces[self.target]['runToIO'] = the_syscall
+                ''' find processes that are in the kernel on IO calls '''
+                frames = self.getDbgFrames()
+                skip_calls = ['select', 'pselect6', '_newselect']
+                for pid in list(frames):
+                    if frames[pid] is None:
+                        self.lgr.error('frames[%d] is None' % pid)
+                        continue
+                    call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
+                    self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
+                    if call not in calls or call in skip_calls:
+                       del frames[pid]
+                    else:
+                       self.lgr.debug('kept frames for pid %d' % pid)
+                if len(frames) > 0:
+                    self.lgr.debug('runToIO, call to setExits')
+                    the_syscall.setExits(frames, reset=reset, context_override=self.context_manager[self.target].getRESimContext()) 
+            else:
+                self.trace_all[self.target].addCallParams([call_params])
+                self.lgr.debug('runToIO added parameters rather than new syscall')
+    
+    
+            if run_fun is not None:
+                SIM_run_alone(run_fun, None) 
+            if run:
+                self.lgr.debug('runToIO now run')
+                SIM_run_command('c')
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
         call_params1 = syscall.CallParams('read', fd, break_simulation=break_simulation)        
@@ -2567,8 +2572,9 @@ class GenMonitor():
                                skip_and_mail=skip_and_mail, name='runToInput')
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
+        self.call_traces[self.target]['runToInput'] = the_syscall
+
         ''' find processes that are in the kernel on IO calls '''
-      
         frames = self.getDbgFrames()
         for pid in list(frames):
             call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
@@ -2581,7 +2587,6 @@ class GenMonitor():
        
         
         SIM_run_command('c')
-
 
     def getCurrentSO(self):
         cpu, comm, pid = self[self.target].task_utils[self.target].curProc() 
