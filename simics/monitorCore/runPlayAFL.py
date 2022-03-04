@@ -114,6 +114,7 @@ def runPlay(args, lgr):
     fifo_list = []
     if len(glist) > 0:
         lgr.debug('Parallel, doing %d instances' % len(glist))
+        print('Parallel, doing %d instances' % len(glist))
         for instance in glist:
             if not os.path.isdir(instance):
                 continue
@@ -168,7 +169,7 @@ def runPlay(args, lgr):
 
 def main():
     lgr = resimUtils.getLogger('runPlayAFL', '/tmp/', level=None)
-    parser = argparse.ArgumentParser(prog='runAFL', description='Run AFL.')
+    parser = argparse.ArgumentParser(prog='runPlayAFL', description='Run AFL sessions in parallel to collect coverage data.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
