@@ -15,6 +15,9 @@ import imp
 #import tracemalloc
 from simics import *
 RESIM_MSG_SIZE=80
+AFL_OK=0
+AFL_CRASH=1
+AFL_HANG=2
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, page_faults, lgr,
                  packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, 
@@ -201,22 +204,22 @@ class AFL():
                 struct._clearcache()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
-            if status == 0:
+            if status == AFL_OK:
                 pid_list = self.context_manager.getWatchPids()
                 if len(pid_list) == 0:
                     self.lgr.error('afl no pids from getThreadPids')
                 for pid in pid_list:
                     if self.page_faults.hasPendingPageFault(pid):
                         self.lgr.debug('afl finishUp found pending page fault for pid %d' % pid)
-                        status = 1
+                        status = AFL_CRASH
                         break
             self.page_faults.stopWatchPageFaults()
-            if status == 1:
+            if status == AFL_CRASH:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
                 with open('/tmp/icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
-            elif status == 2:
+            elif status == AFL_HANG:
                 self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to /tmp/ihung' %(status, self.iteration)) 
                 with open('/tmp/ihung', 'wb') as fh:
                     fh.write(self.orig_in_data)
@@ -245,6 +248,7 @@ class AFL():
             ''' Send the status message '''
             if self.restart:
                 self.lgr.debug('afl telling AFL we will restart')
+            #self.lgr.debug('resim_done iteration: %d status: %d size: %d restart: %d' % (self.iteration, status, self.orig_data_length, self.restart))
             self.sendMsg('resim_done iteration: %d status: %d size: %d restart: %d' % (self.iteration, status, self.orig_data_length, self.restart))
             try: 
                 self.sock.sendall(trace_bits)
@@ -253,7 +257,7 @@ class AFL():
                 self.lgr.debug('AFL went away while we were sending trace_bits')
                 self.rmStopHap()
                 return
-            if status != 0:
+            if status != AFL_OK:
                 self.lgr.debug('afl stopHap status back from sendall trace_bits')
             '''
             if self.iteration == 1:
@@ -292,8 +296,8 @@ class AFL():
         self.finishUp()
 
     def goN(self, status):
-        if status != 0:
-            self.lgr.debug('afl goN after crash. Call getMsg')
+        if status != AFL_OK:
+            self.lgr.debug('afl goN after crash or hang')
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 0
         self.bad_trick = False
@@ -311,7 +315,7 @@ class AFL():
 
         #self.lgr.debug('got %d of data from afl iteration %d' % (len(self.in_data), self.iteration))
         if status != 0:
-            self.lgr.debug('afl goN after crash. restored snapshot after getting %d bytes from afl' % len(self.in_data))
+            self.lgr.debug('afl goN after crash or hang. restored snapshot after getting %d bytes from afl' % len(self.in_data))
        
         current_length = len(self.in_data)
         self.afl_packet_count = self.packet_count
@@ -341,8 +345,8 @@ class AFL():
         if self.stop_hap is None:
             #self.lgr.debug('afl added stop hap')
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
-        if status != 0:
-            self.lgr.debug('afl goN call continue, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
+        if status != AFL_OK:
+            self.lgr.debug('afl goN after crash or hang, watch exits, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
             self.coverage.watchExits(pid=self.pid)
 
         if self.write_data is None:
