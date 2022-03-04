@@ -679,7 +679,8 @@ class GenMonitor():
             t = plist[pid]
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
-                retval[pid] = frame
+                if frame is not None:
+                    retval[pid] = frame
         return retval 
 
     def getRecentEnterCycle(self):
@@ -708,9 +709,22 @@ class GenMonitor():
             t = plist[pid]
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+                if frame is None:
+                    print('frame for %d was none' % pid)
+                    continue
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
-                print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
-                     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
+                if call == 'socketcall' or call.upper() in net.callname:
+                    if 'ss' in frame:
+                        ss = frame['ss']
+                        socket_callnum = frame['param1']
+                        socket_callname = net.callname[socket_callnum].lower()
+                        print('pid: %d syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
+                             call, socket_callname, ss.fd, tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
+                    else:
+                        print('pid: %d socketcall but no ss in frame?' % pid)
+                else:
+                    print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
+                         call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
             else:
                 print('pid: %d in user space?' % pid)
 
@@ -2577,6 +2591,9 @@ class GenMonitor():
         ''' find processes that are in the kernel on IO calls '''
         frames = self.getDbgFrames()
         for pid in list(frames):
+            if frames[pid] is None:
+                self.lgr.error('frame for pid %d is none?' % pid)
+                continue
             call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
             self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
             if call not in calls:
@@ -3350,9 +3367,6 @@ class GenMonitor():
         print('list head next 0x%x  list head prev 0x%x' % (lh.next, lh.prev))
         '''
         
-    def mftx(self):
-        SIM_run_command('disconnect $highlander_eth0 $highlander_switch0') 
-
     def mft2(self, pid):
         ts_next = self.param[self.target].ts_next
         ts_prev = self.param[self.target].ts_prev
@@ -4160,6 +4174,12 @@ class GenMonitor():
 
     def syscallName(self, callnum):
         return self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
+
+    def showLinks(self):
+        for computer in self.net_links:
+            print('computer %s' % computer)
+            for link in self.net_links[computer]:
+                print('\tlink %s  %s' % (link, self.net_links[computer][link].name))
     
 
 if __name__=="__main__":        
