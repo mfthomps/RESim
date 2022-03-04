@@ -63,6 +63,9 @@ class WriteData():
         self.write_callback = write_callback
         self.lgr = lgr
         self.limit_one = limit_one
+        self.max_packets = os.getenv('AFL_MAX_PACKETS')
+        if self.max_packets is not None:
+            self.max_packets = int(self.max_packets)
 
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
@@ -194,14 +197,14 @@ class WriteData():
                 # TBD add handling of padding with udp header                
                 retval = len(first_data)
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('writeData wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
-                self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
+                #self.lgr.debug('writeData wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
+                #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
             else:
                 ''' no next udp header found'''
                 eip = self.top.getEIP(self.cpu)
                 data = self.in_data[:self.max_len]
-                self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
-                self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
+                #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
+                #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
                 if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
                     #self.lgr.debug('writeData failed filter, wrote nulls')
@@ -246,7 +249,7 @@ class WriteData():
         if self.select_hap is None:
             return
         if self.stop_on_read:
-            #self.lgr.debug('writeData selectHap stop on read')
+            self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
 
@@ -263,9 +266,9 @@ class WriteData():
             SIM_break_simulation('writeData stop on read')
             return
         if pid != self.pid:
-            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
-        if len(self.in_data) == 0:
+        if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             '''
             self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
@@ -279,14 +282,18 @@ class WriteData():
                 else:
                     SIM_run_alone(self.write_callback, 0)
             else:
-                SIM_break_simulation('writeData out of data')
-                #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
+                if self.mem_utils.isKernel(self.addr):
+                    SIM_break_simulation('writeData out of data')
+                    #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
+                else:
+                    #self.lgr.debug('writeData callHap current packet %d no data left, continue and trust in backstop' % self.current_packet)
+                    pass
             #SIM_run_alone(self.delCallHap, None)
         else:
             
             frame = self.top.frameFromRegs(self.cpu)
             frame_s = taskUtils.stringFromFrame(frame)
-            self.lgr.debug('callHap writeData frame: %s' % frame_s)
+            #self.lgr.debug('callHap writeData frame: %s' % frame_s)
 
             if self.limit_one:
                 self.lgr.warning('writeData callHap, would write more data, but limit_one')
@@ -296,7 +303,7 @@ class WriteData():
                 ''' Skip over kernel to the return ip '''
                 self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
                 count = self.write()
-                self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                #self.lgr.debug('writeData callHap, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
                 #print('did write')
                 if self.current_packet >= self.expected_packet_count:
                     # set backstop if needed, we are on the last (or only) packet.
@@ -319,7 +326,7 @@ class WriteData():
             return
         self.total_read = self.total_read + eax
         if self.total_read > self.read_limit:
-            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.write_callback is not None:
                  SIM_run_alone(self.write_callback, count)
             else:
