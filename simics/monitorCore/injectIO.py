@@ -287,7 +287,7 @@ class InjectIO():
             SIM_run_command('c')
         else:
             if self.callback is not None:
-                self.lgr.debug('resetReverseAlone no more data, do not continue')
+                self.lgr.debug('resetReverseAlone no more data, invoke the given callback')
                 self.callback()
             else:
                 self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
