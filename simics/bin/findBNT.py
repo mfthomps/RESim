@@ -20,7 +20,9 @@ def findBNT(hits, fun_blocks, quiet, prog_elf):
         for bb_hit in hits:
             if bb_hit == bb['start_ea']:
                 if bb_hit < prog_elf.address or bb_hit > (prog_elf.address + prog_elf.size):
+                    #print('bb_hit 0x%x not in program text' % bb_hit)
                     continue
+                #print('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
                     if branch not in hits:
                         if not quiet:
@@ -29,6 +31,8 @@ def findBNT(hits, fun_blocks, quiet, prog_elf):
                         entry['bnt'] = branch
                         entry['source'] = bb_hit
                         retval.append(entry)
+                    #else:
+                    #    print('branch 0x%x in hits' % branch)
     return retval
 
 def aflBNT(prog, target, fun_name=None, quiet=False):
@@ -47,10 +51,18 @@ def aflBNT(prog, target, fun_name=None, quiet=False):
     prog_elf = elfText.getTextOfText(prog_file)
     print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
     block_file = prog_file+'.blocks'
+    print('block file is %s' % block_file)
+    if not os.path.isfile(block_file):
+        print('block file not found %s' % block_file)
+        return
     with open(block_file) as fh:
         blocks = json.load(fh)
     if not quiet:
-        print('aflBNT found %d hits and %d blocks' % (len(hits), len(blocks)))
+        num_blocks = 0
+        num_funs = len(blocks)
+        for f in blocks:
+            num_blocks = num_blocks + len(blocks[f]['blocks']) 
+        print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in blocks:
             this_list = findBNT(hits, blocks[fun], quiet, prog_elf)
