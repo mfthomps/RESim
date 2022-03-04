@@ -144,10 +144,6 @@ class PlayAFL():
 
 
     def go(self, findbb=None):
-        if self.call_ip is None and self.k_start_ptr is None:
-            self.lgr.debug('No call IP, refuse to go.')
-            print('No call IP, refuse to go.')
-            return
         self.lgr.debug('playAFL go')
         self.bnt_list = []
         self.index = -1
