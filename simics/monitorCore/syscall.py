@@ -2011,11 +2011,11 @@ class Syscall():
                                 ''' TBD poor assumption about all pids having same context? '''
                                 if this_pid in watch_pids and exit_info.retval_addr is not None:
                                     self.lgr.debug('syscall setExits will stash away initial buffer content for use by prepInject/InjectIO')
-                                    self.lgr.debug('addr is 0x%x count %d' % (exit_info.retval_addr, exit_info.count))
                                     if exit_info.sock_struct is not None:
                                         length = exit_info.sock_struct.length
                                     else:
                                         length = exit_info.count
+                                    #self.lgr.debug('addr is 0x%x length %d' % (exit_info.retval_addr, length))
                                     self.orig_buffer[exit_info.old_fd] = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, length)
                             break
             if exit_info.call_params is not None:
