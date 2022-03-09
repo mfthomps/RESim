@@ -99,6 +99,7 @@ import trackAFL
 import prepInject
 import prepInjectWatch
 import injectToBB
+import traceMarks
 
 import json
 import pickle
@@ -236,6 +237,7 @@ class GenMonitor():
 
         self.quit_when_done = False
         self.snap_start_cycle = {}
+        self.instruct_trace = None
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -492,7 +494,7 @@ class GenMonitor():
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             self.lgr.debug('run2User pid %d in kernel space (%d), set mode hap %d' % (pid, cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
-            # fails when deleted? wtf?
+            # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -1945,6 +1947,9 @@ class GenMonitor():
                 exit.rmAllBreaks()
         if cell_name not in self.trace_all and len(self.call_traces[cell_name]) == 0:
             self.traceMgr[cell_name].close()
+
+        #if self.instruct_trace is not None:
+        #    self.stopInstructTrace()
 
     def rmCallTrace(self, cell_name, callname):
         #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
@@ -3476,7 +3481,7 @@ class GenMonitor():
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
-            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None):
+            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if type(save_json) is bool:
@@ -3493,6 +3498,11 @@ class GenMonitor():
         self.dataWatch[self.target].resetWatch()
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
+        if instruct_trace:
+            base = os.path.basename(dfile)
+            print('base is %s' % base)
+            trace_file = base+'.trace'
+            self.instructTrace(trace_file, watch_threads=True)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
@@ -3601,7 +3611,7 @@ class GenMonitor():
             self.mode_hap = None
 
     def watchROP(self, watching=True):
-        self.lgr.debug('watchROP wtf?')
+        self.lgr.debug('watchROP')
         for t in self.ropCop:
             self.lgr.debug('ropcop instance %s' % t)
         self.ropCop[self.target].watchROP(watching=watching)
@@ -4067,13 +4077,17 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname, all_proc=False, kernel=False):
-        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel)
+    def instructTrace(self, fname, all_proc=False, kernel=False, watch_threads=False):
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel, watch_threads=watch_threads)
         pid = self.getPID()
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
             self.instruct_trace.start() 
+
+    def stopInstructTrace(self):
+        self.instruct_trace.endTrace()
+        self.instruct_trace = None
 
     def debugIfNot(self):
         ''' warning, assumes current pid is the one to be debugged. '''
@@ -4151,6 +4165,7 @@ class GenMonitor():
         SIM_run_alone(self.stopAndGoAlone, callback)
 
     def stopAndGoAlone(self, callback):
+        self.lgr.debug('stopAndGoAlone')
         cpu = self.cell_config.cpuFromCell(self.target)
         f1 = stopFunction.StopFunction(callback, [], nest=False)
         flist = [f1]
@@ -4158,6 +4173,7 @@ class GenMonitor():
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
+        self.lgr.debug('stopAndGoAlone, hap set now stop it')
         SIM_break_simulation('stopAndGo')
 
     def foolSelect(self, fd):
@@ -4180,7 +4196,39 @@ class GenMonitor():
             print('computer %s' % computer)
             for link in self.net_links[computer]:
                 print('\tlink %s  %s' % (link, self.net_links[computer][link].name))
-    
+
+    def backtraceAddr(self, addr, cycles):
+        ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
+        tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        orig, offset = tm.getOrigRead(addr, cycles)
+        if orig is None:
+            ''' not an original read buffer, find the original via the refs '''
+            ref = tm.findRef(addr, cycles)
+            if ref is not None:     
+                self.lgr.debug('backtraceAddr addr 0x%x found in ref %s' % (addr, ref.toString()))
+                offset = ref.getOffset(addr) 
+                tot_offset = offset + ref.orig_read.prior_bytes_read
+                msg = 'The value at 0x%x originated at offset %d into origin within %s' % (addr, offset, ref.toString())
+                msg = msg+('\nTotal offset into file is %d (0x%x)' % (tot_offset, tot_offset))
+                print(msg)
+                self.context_manager[self.target].setIdaMessage(msg)
+                self.lgr.debug(msg)
+            else:
+                msg = 'Orig buffer not found for addr 0x%x' % addr
+                self.lgr.debug(msg)
+                self.context_manager[self.target].setIdaMessage(msg)
+        else:
+            offset = orig.offset(addr)
+            tot_offset = offset + orig.prior_bytes_read
+            msg = 'The value at 0x%x is in an original read, offset %d into %s'  % (addr, offset, orig.toString())
+            msg = msg+('\nTotal offset into file is %d (0x%x)' % (tot_offset, tot_offset))
+            print(msg)
+            self.context_manager[self.target].setIdaMessage(msg)
+            self.lgr.debug(msg)
+
+    def amWatching(self, pid):
+        return self.context_manager[self.target].amWatching(pid)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
