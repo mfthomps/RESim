@@ -219,6 +219,7 @@ class InjectIO():
                     print('retracking IO') 
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
+                    self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
                     self.top.stopTrackIO()
@@ -249,7 +250,7 @@ class InjectIO():
         else:
             self.top.trackIO(self.targetFD, quiet=True)
 
-    def delCallHap(self):
+    def delCallHap(self, dumb=None):
         if self.write_data is not None:
             self.write_data.delCallHap(None)
 
@@ -287,7 +288,8 @@ class InjectIO():
             SIM_run_command('c')
         else:
             if self.callback is not None:
-                self.lgr.debug('resetReverseAlone no more data, invoke the given callback')
+                self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback')
+                self.write_data.delCallHap(None)
                 self.callback()
             else:
                 self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
@@ -301,6 +303,7 @@ class InjectIO():
         SIM_run_alone(self.resetReverseAlone, count)
         
     def writeCallback(self, count):
+        self.lgr.debug('injectIO writeCallback')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, count)
         SIM_break_simulation('writeCallback')
