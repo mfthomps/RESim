@@ -24,6 +24,8 @@
 '''
 import os
 import sys
+import shutil
+from simics import *
 binpath = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin')
 sys.path.append(binpath)
 import findBB
@@ -35,21 +37,32 @@ class InjectToBB():
         here = os.getcwd()
         target = os.path.basename(here)
         print('target is %s' % target)
-        self.lgr.debug('InjectToBB target is %s' % target)
+        self.lgr.debug('InjectToBB bb: 0x%x target is %s' % (bb, target))
         flist = findBB.findBB(target, bb, quiet=True)
         if len(flist) > 0:
             first = flist[0]
             self.lgr.debug('InjectToBB inject %s' % first)
-            self.top.injectIO(first, callback=self.doStop)
+            dest = os.path.join('/tmp', 'bb.io')
+            shutil.copy(first, dest)
+            self.top.setCommandCallback(self.doStop)
+            self.inject_io = self.top.injectIO(first, callback=self.doStop)
         else:
             print('No input files found to get to bb 0x%x' % bb)
 
-    def doStop(self):
+    def doStop(self, dumb=None):
         self.lgr.debug('InjectToBB doStop')
-        self.top.stopAndGo(self.gobb)
+        self.top.stopDataWatch()
+        SIM_run_alone(self.inject_io.delCallHap, None)
+        status = SIM_simics_is_running()
+        if status:
+            self.top.stopAndGo(self.gobb)
+        else:
+            self.gobb()
 
     def gobb(self):
+        self.top.setCommandCallback(None)
         self.lgr.debug('InjectToBB gobb, go to data mark 0')
         self.top.goToDataMark(0)
         self.lgr.debug('InjectToBB gobb, go to addr 0x%x' % self.bb)
         self.top.goAddr(self.bb) 
+        print('Data file copied to /tmp/bb.io')
