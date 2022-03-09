@@ -481,21 +481,26 @@ class WatchMarks():
                     del self.mark_list[-1]
 
     def getMarkCopyOffset(self, address):
-        ''' Intended for reverse data tracking. If a CopyMark is found encompassing the given cycle, return the 
+        ''' Intended for reverse data tracking. If a CopyMark is found encompassing the given address, return the 
             source address that corresponds to the given destination address. '''
         retval = None
+        offset = None
         ret_mark = None
         cycle = self.cpu.cycles
         for mark in self.mark_list:
             if mark.call_cycle is not None and mark.cycle is not None and cycle >= mark.call_cycle and cycle <= mark.cycle:
                 if mark.mark.__class__.__name__ == 'CopyMark':
-                    offset = address - mark.mark.dest
-                    retval = mark.mark.src+offset
-                    ret_mark = mark
+                    if address >= mark.mark.dest and address <= (mark.mark.dest+mark.mark.length):
+                        #math = mark.mark.dest+mark.mark.length
+                        #self.lgr.debug('getMarkCopyOffset found that address 0x%x is between 0x%x len %d (0x%x)' % (address, mark.mark.dest, mark.mark.length, math))
+                        offset = address - mark.mark.dest
+                        retval = mark.mark.src+offset
+                        #self.lgr.debug('and... the offset from dest is %d.  The src was 0x%x, plus the offset gives 0x%x' % (offset, mark.mark.src, retval))
+                        ret_mark = mark
                 else:
                     self.lgr.debug('watchMarks getMarkCopyOffset found cycle, but not a copy, is type %s. %s' % (mark.mark.__class__.__name__, mark.mark.getMsg()))
                 break
-        return retval, ret_mark
+        return retval, offset, ret_mark
 
     def getCopyMark(self):
         ''' If currently in a copy function, return the associated mark '''
@@ -830,7 +835,22 @@ class WatchMarks():
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
-        for mark in self.mark_list:
+        new_marks = self.getJson(self.mark_list, packet=packet)
+        my_marks.extend(new_marks)
+        with open(fname, 'w') as fh:
+            json.dump(my_marks, fh) 
+
+    def getAllJson(self):
+        self.lgr.debug('getAllJson %d stale and %d new marks' % (len(self.stale_marks), len(self.mark_list)))
+        all_marks = self.getJson(self.stale_marks)
+        new_marks = self.getJson(self.mark_list)
+        all_marks.extend(new_marks)
+        self.lgr.debug('getAllJson returning %d marks' % len(all_marks))
+        return all_marks
+
+    def getJson(self, mark_list, packet=1):
+        my_marks = []
+        for mark in mark_list:
             entry = {}
             entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
@@ -842,7 +862,7 @@ class WatchMarks():
                 entry['dest'] = mark.mark.dest 
                 entry['length'] = mark.mark.length 
                 entry['reference_buffer'] = mark.mark.buf_start 
-            if isinstance(mark.mark, ScanMark):
+            elif isinstance(mark.mark, ScanMark):
                 entry['mark_type'] = 'scan' 
                 entry['src'] = mark.mark.src 
                 entry['dest'] = mark.mark.dest 
@@ -858,6 +878,7 @@ class WatchMarks():
                 entry['mark_type'] = 'call' 
                 entry['recv_addr'] = mark.mark.recv_addr
                 entry['length'] = mark.mark.len
+                entry['fd'] = mark.mark.fd
             elif isinstance(mark.mark, DataMark) and not mark.mark.modify:
                 entry['mark_type'] = 'read' 
                 entry['addr'] = mark.mark.addr
@@ -887,7 +908,7 @@ class WatchMarks():
                 entry['theirs'] = mark.mark.theirs
                 entry['count'] = mark.mark.count
             else:
+                self.lgr.debug('unknown mark type? %s' % str(mark.mark))
                 continue
             my_marks.append(entry)
-        with open(fname, 'w') as fh:
-            json.dump(my_marks, fh) 
+        return my_marks
