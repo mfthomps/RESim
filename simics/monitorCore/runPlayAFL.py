@@ -58,18 +58,6 @@ def handleClose(resim_procs, read_array, remote, fifo_list, lgr):
         fd.close()
     return do_restart
 
-def doOne(afl_path, afl_out, afl_name, resim_ini, read_array, resim_path, resim_procs,  lgr):
-
-    cmd = '%s %s -n' % (resim_path, resim_ini)
-    print('cmd is %s' % cmd)
-    resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    resim_procs.append(resim_ps)
-    read_array.append(resim_ps.stdout)
-    read_array.append(resim_ps.stderr)
-    handleClose(resim_procs, read_array, timeout, False, [], lgr)
-
-    return resim_ps
-    
 
 def runPlay(args, lgr):
     here= os.path.dirname(os.path.realpath(__file__))
@@ -84,24 +72,13 @@ def runPlay(args, lgr):
     do_restart = False 
     here = os.getcwd()
     afl_name = os.path.basename(here)
-    try:
-        afl_path = os.path.join(os.getenv('AFL_DIR'), 'afl-fuzz')
-    except:
-        lgr.error('missing AFL_DIR envrionment variable')
-        exit(1)
     resim_procs = []
-    try:
-        afl_data = os.getenv('AFL_DATA')
-    except:
-        lgr.error('missing AFL_DATA envrionment variable')
-        exit(1)
 
     if not args.ini.endswith('.ini'):
         args.ini = args.ini+'.ini'
     if not os.path.isfile(args.ini):
         lgr.error('Ini file %s not found.' % args.ini)
         exit(1)
-    afl_out = os.path.join(afl_data, 'output', afl_name)
 
     glist = glob.glob('resim_*/')
 
@@ -162,9 +139,6 @@ def runPlay(args, lgr):
             fh.write(s)
         
         print('all hits total %d' % len(all_hits))
-    else:
-        lgr.debug('Running single instance')
-        doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, lgr)
     return do_restart
 
 def main():
