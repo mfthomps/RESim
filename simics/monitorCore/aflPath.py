@@ -106,8 +106,8 @@ def getAFLCoveragePath(target, instance, index, host=None):
 def getAFLCoverageList(target, get_all=False, host=None):
     glist = None
     afl_path = getAFLOutput()
+    afl_dir = os.path.join(afl_path, target)
     if not get_all:
-        afl_dir = os.path.join(afl_path, target)
         unique_path = os.path.join(afl_dir, target+'.unique')
         if os.path.isfile(unique_path):
             ulist = json.load(open(unique_path))
@@ -121,8 +121,15 @@ def getAFLCoverageList(target, get_all=False, host=None):
         glist = glob.glob(glob_mask)
         if len(glist) == 0:
             ''' single instance '''
-            glob_mask = '%s/%s/coverage/id:*,src*' % (afl_path, target)
+            glob_mask = '%s/coverage/id:*,src*' % (afl_dir)
             glist = glob.glob(glob_mask)
+        else:
+            ''' this is where manual adds store their coverage '''
+            manual = os.path.join(afl_dir, 'coverage')
+            if os.path.isdir(manual):
+                manual_list = os.listdir(manual)
+                for f in manual_list:
+                    glist.append(os.path.join(manual, f))
     return glist
 
 def getAFLTrackList(target, get_all=False, host=None):
@@ -168,6 +175,11 @@ def getTargetQueue(target, get_all=False, host=None):
             qdir = os.path.join(afl_dir, 'queue')
             if os.path.isdir(qdir):
                 afl_list = [f for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
+        manual = os.path.join(afl_dir, 'manual')
+        if os.path.isdir(manual):
+            manual_list = os.listdir(manual)
+            for f in manual_list:
+                afl_list.append(os.path.join(manual, f))
     return afl_list
 
 def getTargetCrashes(target):
