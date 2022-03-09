@@ -1890,3 +1890,6 @@ class DataWatch():
         self.read_limit_trigger = limit
         self.read_limit_callback = callback
         self.lgr.debug('dataWatch setReadLimit to %d callback %s' % (limit, self.read_limit_callback))
+
+    def getAllJson(self):
+        return self.watchMarks.getAllJson()
