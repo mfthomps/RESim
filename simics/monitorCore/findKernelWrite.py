@@ -114,7 +114,7 @@ class findKernelWrite():
         #SIM_run_command('list-breakpoints')
 
         self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.brokenHap, addr)
+		    self.brokenHap, self.cpu.cycles)
 
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         #self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
@@ -231,19 +231,20 @@ class findKernelWrite():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.broken_hap)
             self.broken_hap = None
   
-    def brokenHap(self, address, one, exception, error_string):
+    def brokenHap(self, cycles, one, exception, error_string):
         if self.broken_hap is None:
             return
-        self.lgr.debug('brokenHap, address is 0x%x' % address)
+        self.lgr.debug('brokenHap, address is 0x%x' % self.addr)
         SIM_run_alone(self.deleteBroken, None)
         orig_cycle = self.bookmarks.getFirstCycle()
         eip = self.top.getEIP(self.cpu)
         if self.cpu.cycles == orig_cycle:
             self.lgr.debug('findKernelWrite brokenHap at origin')
-            if not self.checkInitialBuffer(address):
-                self.lgr.debug('findKernelWrite brokenHap not initial buffer?  eh?')
+            if not self.checkInitialBuffer(self.addr):
+                self.lgr.debug('findKernelWrite brokenHap not initial buffer, likely prior to current origin')
                 bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
                 self.bookmarks.setBacktrackBookmark(bm)
+                self.top.backtraceAddr(self.addr, cycles)
           
         else:
             self.lgr.debug('findKernelWrite brokenHap NOT at origin')
@@ -541,13 +542,13 @@ class findKernelWrite():
                 SIM_run_alone(self.cleanup, False)
                 self.top.skipAndMail(cycles=2)
             else:
-                copy_addr, mark = self.dataWatch.getMarkCopyOffset(self.addr)
+                copy_addr, offset, mark = self.dataWatch.getMarkCopyOffset(self.addr)
                 if copy_addr is not None:
                     if not self.rev_to_call.skipToTest(mark.call_cycle):
                         return
                     eip = self.top.getEIP(self.cpu)
-                    ida_message = "Content of 0x%x came resulted from a memory copy from 0x%x" % (self.addr, copy_addr)
-                    bm = "eip:0x%x content of memory:0x%x from memory copy from 0x%x. %s" % (eip, self.addr, copy_addr, mark.mark.getMsg())
+                    ida_message = "Content of 0x%x came resulted from a memory copy from 0x%x, offset %d bytes from start of copy" % (self.addr, copy_addr, offset)
+                    bm = "eip:0x%x content of memory:0x%x from memory copy from 0x%x, offset %d bytes from start of copy. %s" % (eip, self.addr, copy_addr, offset, mark.mark.getMsg())
                     self.bookmarks.setBacktrackBookmark(bm)
                     self.context_manager.setIdaMessage(ida_message)
                     value = self.mem_utils.readWord32(self.cpu, copy_addr)
@@ -561,8 +562,8 @@ class findKernelWrite():
                     SIM_run_alone(self.cleanup, False)
                     self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
                 else:
-                    self.lgr.debug('thinkWeWrote, call backOneAlone')
-                    SIM_run_alone(self.backOneAlone, offset)
+                    self.lgr.debug('findKernelWrite thinkWeWrote, call backOneAlone with offset zero?')
+                    SIM_run_alone(self.backOneAlone, 0)
             
             self.context_manager.setExitBreaks()
 
