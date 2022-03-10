@@ -77,8 +77,12 @@ def main():
         instance = os.path.dirname(parent)
         queue = os.path.join(instance, 'queue', base)
         if not os.path.isfile(queue):
-            print('No file at %s' % queue)
-            continue
+            queue = os.path.join(instance, 'manual', base)
+            if not os.path.isfile(queue):
+                realqueue = os.path.join(instance, 'queue', base)
+                print('No file at %s' % queue)
+                print('or at %s' % realqueue)
+                continue
         queue_len = os.path.getsize(queue)
         hits = json.load(open(f))
         numhits = len(hits)
