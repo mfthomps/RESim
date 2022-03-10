@@ -38,7 +38,7 @@ echo "done sync"
 echo "create tar"
 here=$(pwd)
 cd $aflout
-tar -czf $destination/sync_dirs.tgz *_resim_* 
+tar -czf $destination/sync_dirs.tgz *_resim_* manual coverage 
 echo "finished tar"
 cd $here
 aflseed=$AFL_DATA/seeds/$base
