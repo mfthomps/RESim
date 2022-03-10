@@ -18,6 +18,13 @@ def findBB(target, bb, quiet=False):
             hit_list = json.load(fh)
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
+                if not os.path.isfile(queue):
+                    queue = cover.replace('coverage', 'manual')
+                    if not os.path.isfile(queue):
+                        queuereal = cover.replace('coverage', 'queue')
+                        print('Could not find file at %s' % queue)
+                        print('or at %s' % queuereal)
+                
                 retval.append(queue)
                 if not quiet:
                     print('0x%x in %s' % (bb, queue))
