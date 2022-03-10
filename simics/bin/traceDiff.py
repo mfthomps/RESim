@@ -34,8 +34,11 @@ class getter():
     def nextLine(self):
 
         line = self.lines[self.index]
-        while self.getCPU(line) == 'Device' or self.getCPU(line) is None:
+        while self.getCPU(line) == 'Device' or self.getCPU(line) is None or (' object ' in line):
             self.index = self.index+1
+            if self.index >= len(self.lines):
+                print('Out of lines at index %d' % self.index)
+                return None
             line = self.lines[self.index]
      
         if line.startswith('data'):
@@ -64,6 +67,7 @@ def main():
     parser.add_argument('trace1', action='store', help='The first trace file.')
     parser.add_argument('trace2', action='store', help='The second trace file.')
     parser.add_argument('-i', '--ignore', action='store', type=int, default=0, help='Number of differences to ignore.')
+    parser.add_argument('-d', '--divergence', action='store_true', help='Only look for instruction difference.')
     args = parser.parse_args()
 
     get1 = getter(args.trace1)
@@ -80,8 +84,9 @@ def main():
     rest1 = line1[16:]
     rest2 = line2[16:]
     diffs = 0
+    last_match_ins = None
     while diffs <= args.ignore: 
-        while rest1 == rest2:
+        while rest1 == rest2 or (args.divergence and not ('ins' in line1 or 'ins' in line2)):
             #print('get1')
             line1 = get1.nextLine()
             #print('\tline1 %s' % line1)
@@ -90,11 +95,15 @@ def main():
             #print('\tline2 %s' % line2)
             rest1 = line1[16:]
             rest2 = line2[16:]
+            if args.divergence and 'ins' in line1 and rest1 == rest2:
+                last_match_ins = line1
         diffs += 1
         rest1 = 'ok'
         rest2 = 'ok'
     print('line1 line number %d %s' % (get1.getIndex(), line1))
     print('line2  line number %d %s' % (get2.getIndex(), line2))
+    if args.divergence:
+        print('Last matching instruction: %s'  % last_match_ins)
 
 if __name__ == '__main__':
     sys.exit(main())
