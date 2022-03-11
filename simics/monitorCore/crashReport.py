@@ -27,7 +27,7 @@ def feedDriver(ip, port, header, client_path):
         if result != 0:
             print('driver not responding')
             time.sleep(1)
-    
+    print('scp of sendup OK')    
     cmd = 'scp -P 4022 %s localhost:/tmp/' % client_path
     result = os.system(cmd)
     cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
@@ -43,6 +43,7 @@ def main():
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
     parser.add_argument('-f', '--fd', action='store', help='FD read by target process.  Needed for driver-based systems, e.g., for multipacket  sessions.')
+    parser.add_argument('-d', '--report_dir', action='store', default='/tmp/crash_reports', help='Directory to place crash reports.  Defaults to /tmp/crash_reports.')
 
     args = parser.parse_args()
     resim_ini = args.ini
@@ -90,9 +91,25 @@ def main():
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneCrash.py')
     resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
+    os.environ['ONE_DONE_PARAM3'] = args.report_dir
+    already_done = []
+    if os.path.isdir(args.report_dir):
+        done_list = os.listdir(args.report_dir)
+        for f in done_list:
+            path = os.path.join(args.report_dir, f)
+            if os.path.isfile(path):
+                with open(path) as fh:
+                    for line in fh:
+                        if 'Crash report for' in line:
+                            qfile = line.split()[-1]
+                            already_done.append(qfile)
+        
     
-    index=0
+    index = len(already_done)
     for f in sorted(flist):
+        if f in already_done:
+            print('Already ran %s, skipping' % f)
+            continue
         os.environ['ONE_DONE_PATH'] = f
         os.environ['ONE_DONE_PARAM'] = str(index)
         if trackFD is not None:
