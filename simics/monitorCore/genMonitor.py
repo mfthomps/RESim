@@ -238,6 +238,7 @@ class GenMonitor():
         self.quit_when_done = False
         self.snap_start_cycle = {}
         self.instruct_trace = None
+        self.user_break_hap = None
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -3249,6 +3250,8 @@ class GenMonitor():
         self.dataWatch[self.target].setRetrack(False)
         if self.coverage is not None:
             self.coverage.saveCoverage()
+        if self.injectIOInstance is not None:
+            SIM_run_alone(self.injectIOInstance.delCallHap, None)
 
     def clearWatches(self):
         self.dataWatch[self.target].clearWatches()
@@ -3498,16 +3501,11 @@ class GenMonitor():
         self.dataWatch[self.target].resetWatch()
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
-        if instruct_trace:
-            base = os.path.basename(dfile)
-            print('base is %s' % base)
-            trace_file = base+'.trace'
-            self.instructTrace(trace_file, watch_threads=True)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop)
+                  no_rop=no_rop, instruct_trace=instruct_trace)
         if go:
             self.injectIOInstance.go()
         return self.injectIOInstance
@@ -3955,12 +3953,12 @@ class GenMonitor():
     def replayAFLTCP(self, target, index, targetFD, instance=None, cover=False, trace=False): 
         self.replay_instance = replayAFL.ReplayAFL(self, target, index, targetFD, self.lgr, instance=instance, tcp=True, cover=cover, trace=trace) 
 
-    def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None, trackFD=None):
+    def crashReport(self, fname, n=1, one_done=False, report_index=None, target=None, targetFD=None, trackFD=None, report_dir=None):
         ''' generate crash reports for all crashes in a given AFL target diretory -- or a given specific file '''
         self.lgr.debug('crashReport %s' % fname)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         rc = reportCrash.ReportCrash(self, cpu, pid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
-              target=target, targetFD=targetFD, trackFD=trackFD)
+              target=target, targetFD=targetFD, trackFD=trackFD, report_dir=report_dir)
         rc.go()
 
     def trackAFL(self, target):
@@ -4229,6 +4227,15 @@ class GenMonitor():
 
     def amWatching(self, pid):
         return self.context_manager[self.target].amWatching(pid)
+
+    def userBreakHap(self, dumb, third, forth, memory):
+        self.lgr.debug('userBreakHap')
+        self.stopAndGo(self.stopTrackIO) 
+
+    def doBreak(self, addr):
+        user_break = self.context_manager[self.target].genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 4, 0)
+        self.user_break_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.userBreakHap, None, user_break, 'user_break')
+        self.lgr.debug('doBreak set break on 0x%x' % addr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
