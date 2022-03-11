@@ -126,6 +126,9 @@ def runPlay(args, lgr):
         cover_list = aflPath.getAFLCoverageList(afl_name)
         all_hits = []
         for hit_file in cover_list:
+            if not os.path.isfile(hit_file):
+                print('did not find %s, old unique file?' % hit_file)
+                continue
             coverage = json.load(open(hit_file))
             for hit in coverage:
                 hit_i = int(hit)
