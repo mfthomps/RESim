@@ -42,7 +42,7 @@ class DataWatch():
             self.back_stop_cycles = 5000000
         else:
             self.back_stop_cycles = int(back_stop_string)
-        lgr.debug('DataWatch init with back_stop_cycles %d' % self.back_stop_cycles)
+        lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
         if cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
@@ -393,8 +393,8 @@ class DataWatch():
 
     def kernelReturnHap(self, kernel_return_info, third, forth, memory):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-        self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x context: %s' % (eax, 
-            kernel_return_info.addr, str(self.cpu.current_context)))
+        self.lgr.debug('kernelReturnHap, retval 0x%x  addr: 0x%x context: %s compat32: %r' % (eax, 
+            kernel_return_info.addr, str(self.cpu.current_context), self.compat32))
         #self.top.showHaps()
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
