@@ -12,6 +12,7 @@ def getHost():
         hostname = hostname[-8:]
         #print('hostname truncated to %s' % hostname)
     return hostname
+
 def getAFLOutput():
     afl_dir = os.getenv('AFL_OUTPUT')
     if afl_dir is None:
@@ -20,6 +21,12 @@ def getAFLOutput():
         print('Using AFL_OUTPUT from ini file, overrides bashrc')
     if afl_dir is None:
         print('No AFL_DATA or AFL_OUTPUT')
+    return afl_dir
+
+def getAFLSeeds():
+    afl_dir = os.path.join(os.getenv('AFL_DATA'), 'seeds')
+    if afl_dir is None:
+        print('No AFL_DATA') 
     return afl_dir
 
 def getGlobMask(target, index, instance, which, host=None, sync=False):
@@ -159,6 +166,12 @@ def getTargetQueue(target, get_all=False, host=None):
             base = os.path.basename(full)
             grand = os.path.dirname(os.path.dirname(full))
             new = os.path.join(grand, 'queue', base)
+            if not os.path.isfile(new):
+                new = os.path.join(grand, 'manual', base)
+                if not os.path.isfile(new):
+                    print('ERROR: %s not found' % base)
+                    continue
+                
             afl_list.append(new)
         print('trackAFL found unique file at %s, %d entries' % (unique_path, len(afl_list)))
     else:
@@ -201,6 +214,11 @@ def getTargetCrashes(target):
 def getTargetPath(target):
     afl_output = getAFLOutput()
     target_path = os.path.join(afl_output, target)
+    return target_path
+
+def getTargetSeedsPath(target):
+    afl_seeds = getAFLSeeds()
+    target_path = os.path.join(afl_seeds, target)
     return target_path
 
 def getRelativePath(f, target):
