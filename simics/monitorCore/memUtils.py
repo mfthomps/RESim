@@ -141,6 +141,8 @@ class memUtils():
     def isReg(self, reg):
         if reg.upper() in self.regs:
             return True
+        elif reg.lower() in self.regs:
+            return True
         else:
             self.lgr.debug('reg not in %s' % self.regs)
             return False    
