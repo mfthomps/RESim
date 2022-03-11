@@ -9,7 +9,7 @@ class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
-           limit_one=False, no_rop=False):
+           limit_one=False, no_rop=False, instruct_trace=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -86,6 +86,7 @@ class InjectIO():
 
         self.stop_hap = None
         self.no_rop = no_rop
+        self.instruct_trace = instruct_trace
         sor = os.getenv('STOP_ON_READ')
         self.lgr.debug('sor is %s' % sor)
         if sor is not None and sor.lower() == 'true':
@@ -146,7 +147,7 @@ class InjectIO():
             self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        if self.target is None and not self.trace_all:
+        if self.target is None and not self.trace_all and not self.instruct_trace:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
@@ -165,6 +166,11 @@ class InjectIO():
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
+        elif self.instruct_trace:
+            base = os.path.basename(self.dfile)
+            print('base is %s' % base)
+            trace_file = base+'.trace'
+            self.top.instructTrace(trace_file, watch_threads=True)
 
         self.bookmarks = self.top.getBookmarksInstance()
         force_default_context = False
@@ -189,7 +195,7 @@ class InjectIO():
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             if not self.stay:
-                if not self.trace_all:
+                if not self.trace_all and not self.instruct_trace:
                     self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.bookmarks.setOrigin(self.cpu)
                     cli.quiet_run_command('disable-reverse-execution')
@@ -212,8 +218,8 @@ class InjectIO():
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
-                if self.trace_all:
-                    self.lgr.debug('injectIO trace_all requested.  Context is %s' % self.cpu.current_context)
+                if self.trace_all or self.instruct_trace:
+                    self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     cli.quiet_run_command('c')
                 elif not self.mem_utils.isKernel(self.addr):
                     print('retracking IO') 
