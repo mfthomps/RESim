@@ -9,7 +9,8 @@ import decodeArm
 import pageUtils
 
 class ReportCrash():
-    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, target=None, targetFD=None, trackFD=None):
+    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, 
+                    target=None, targetFD=None, trackFD=None, report_dir=None):
         self.top = top
         self.cpu = cpu
         self.pid = pid
@@ -41,7 +42,10 @@ class ReportCrash():
             for g in glist:
                 if os.path.basename(g).startswith('id:'):
                     self.flist.append(g)
-        self.report_dir = '/tmp/crash_reports'
+        if report_dir is None:
+            self.report_dir = '/tmp/crash_reports'
+        else:
+            self.report_dir = report_dir
         try:
             os.makedirs(self.report_dir)
         except:
@@ -242,7 +246,9 @@ class ReportCrash():
                         self.crash_report.write('\nPage boundary.\n')
                         self.doneBackward(None)
                     else:
-                        self.lgr.debug('reportCrash, not a strcpy not handled.') 
+                        self.lgr.debug('reportCrash, a strcpy not handled.') 
+                        self.crash_report.write('\nUnknown cause.\n')
+                        self.doneBackward(None)
             elif bad_addr % pageUtils.PAGE_SIZE == 0:
                 self.lgr.debug('reportCrash thinks it is a page boundary')
                 self.reportStack()
