@@ -1038,6 +1038,9 @@ class reverseToCall():
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
+            else:
+                self.lgr.debug('folowTrainArm, no plan, bailing')
+                self.cleanup(None)
                  
     def followTaint(self, reg_mod_type):
         if self.cpu.architecture == 'arm':
@@ -1187,6 +1190,15 @@ class reverseToCall():
                 self.callback = None
                 self.buf_addrs = []
                 tmp_callback(tmp_buf_addrs)
+        elif self.callback is not None:
+            tmp_callback = self.callback
+            self.callback = None
+            self.buf_addrs = []
+            tmp_buf_addrs = list(self.buf_addrs)
+            tmp_callback(tmp_buf_addrs)
+        else:
+            self.context_manager.setIdaMessage('As far as we can go back.')
+            self.top.skipAndMail()
         self.lgr.debug('cleanup complete')
 
     def isSyscall(self, instruct):
