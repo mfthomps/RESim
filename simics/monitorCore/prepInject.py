@@ -78,21 +78,21 @@ class PrepInject():
         self.top.restoreDebugBreaks()
         self.prepInject()
 
-    def finishNoCall(self):
+    def finishNoCall(self, read_original=True):
         syscall = self.top.getSyscall(self.cell_name, 'runToInput')
         if syscall is not None:
-            if self.exit_info.sock_struct is not None:
-                length = self.exit_info.sock_struct.length
-            else:
-                length = self.exit_info.count
-            orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length)
-            #orig_buffer, dumb = self.mem_utils.getBytes(self.cpu, length, retval_addr_phys, phys_in=True)
-            if orig_buffer is not None:
-                self.lgr.debug('prepInject instrumentAlone got orig buffer from phys memory len %d syscall len was %d' % (len(orig_buffer), length))
-            else:
-                self.lgr.error('prepInject instrumentAlone failed to get orig buffer from syscall') 
- 
-            resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+            if read_original:
+                if self.exit_info.sock_struct is not None:
+                    length = self.exit_info.sock_struct.length
+                else:
+                    length = self.exit_info.count
+                orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length)
+                #orig_buffer, dumb = self.mem_utils.getBytes(self.cpu, length, retval_addr_phys, phys_in=True)
+                if orig_buffer is not None:
+                    self.lgr.debug('prepInject instrumentAlone got orig buffer from phys memory len %d syscall len was %d' % (len(orig_buffer), length))
+                else:
+                    self.lgr.error('prepInject instrumentAlone failed to get orig buffer from syscall') 
+                resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
         else:
             self.lgr.error('prepInject finishNoCall falled to get syscall ?')
@@ -127,9 +127,13 @@ class PrepInject():
         self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
         if cycle <= origin:
             self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
-            resimUtils.skipToTest(self.cpu, self.new_origin, self.lgr)
-            self.top.toPid(pid, callback = self.pidScheduled)
-                  
+            if self.new_origin is not None:
+                resimUtils.skipToTest(self.cpu, self.new_origin, self.lgr)
+                self.top.toPid(pid, callback = self.pidScheduled)
+            else:
+                print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
+                print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
+                self.finishNoCall(read_original=False)          
         else: 
             ''' return to the call to record that IP and original data in the buffer'''
             previous = cycle - 1
