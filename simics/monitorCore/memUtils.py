@@ -32,10 +32,33 @@ MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
     pass
 def readPhysBytes(cpu, paddr, count):
-    try:
-        return cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, paddr, count, 0)
-    except:
-        raise ValueError('failed to read %d bytes from 0x%x' % (count, paddr))
+    tot_read = 0
+    retval = ()
+    cur_addr = paddr
+    while tot_read < count:
+        remain = count - tot_read
+        remain = min(remain, 1024)
+        try:
+            bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 0)
+        except:
+            raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+        retval = retval + bytes_read
+        tot_read = tot_read + remain
+        cur_addr = cur_addr + remain
+    return retval
+
+def writePhysBytes(cpu, paddr, data):
+    count = len(data)
+    cur_addr = paddr
+    tot_wrote = 0
+    while tot_wrote < count:
+        remain = count - tot_wrote
+        remain = min(remain, 4)
+        print('cur_addr 0x%x  remain %d')
+        SIM_write_phys_memory(cpu, cur_addr, data[tot_wrote], remain)
+        tot_wrote = tot_wrote + remain
+        cur_addr = cur_addr + remain
+
 
 def getCPL(cpu):
     #print('arch %s' % cpu.architecture)
@@ -483,7 +506,7 @@ class memUtils():
                 return None
         return ret_ptr
 
-    def getBytes(self, cpu, num_bytes, addr):
+    def getBytes(self, cpu, num_bytes, addr, phys_in=False):
         '''
         Get a hex string of num_bytes from the given address using Simics physical memory reads, which return tuples.
         '''
@@ -502,12 +525,15 @@ class memUtils():
             if bytes_to_read > 1024:
                 bytes_to_read = 1024
             #phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
-            phys = self.v2p(cpu, curr_addr)
+            if phys_in:
+                phys = curr_addr
+            else:
+                phys = self.v2p(cpu, curr_addr)
             if phys is None:
                 self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
-            #print 'read (bytes_to_read) 0x%x bytes from 0x%x phys:%x ' % (bytes_to_read, curr_addr, phys_block.address)
+            #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
@@ -548,31 +574,16 @@ class memUtils():
         phys = self.v2p(cpu, address)
         SIM_write_phys_memory(cpu, phys, value, 4)
 
-    def writeBytes(self, cpu, address, bstring):
-        ''' TBD remove? just just use writestring? '''
-        if len(bstring) == 0:
-            self.lgr.error('memUtils writeBytes got empty bstring')
+    def writeBytes(self, cpu, address, byte_tuple):
+        ''' TBD functionally different from writeString? '''
+        if len(byte_tuple) == 0:
+            self.lgr.error('memUtils writeBytes got empty byte_tuple')
             return
-        lcount = len(bstring)/4
-        carry = len(bstring) % 4
-        if carry != 0:
-            lcount += 1
-        
-        sindex = 0
-        for i in range(lcount):
-            eindex = min(sindex+4, len(bstring))
-            value = bstring[sindex:eindex] 
-            print('value is %d' % int(value))
-            count = len(value)
-            sindex +=4
-            #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-            phys = self.v2p(cpu, address)
-            if phys is None:
-                self.lgr.error('memUtils writeBytes no translation for address 0x%x' % address)
-                return
-            #SIM_write_phys_memory(cpu, phys_block.address, value, count)
-            SIM_write_phys_memory(cpu, phys, value, count)
-            address += 4
+        cur_addr = address
+        for b in byte_tuple:
+            phys = self.v2p(cpu, cur_addr)
+            SIM_write_phys_memory(cpu, phys, b, 1)
+            cur_addr = cur_addr + 1
 
     def getGSCurrent_task_offset(self, cpu):
         gs_base = cpu.ia32_gs_base
