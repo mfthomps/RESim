@@ -329,7 +329,6 @@ class Syscall():
         self.syscall_info = None
         self.alt_syscall_info = None
         self.callback = callback
-        self.orig_buffer = {}
 
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
@@ -2006,17 +2005,7 @@ class Syscall():
                             exit_info.call_params = call_param
                             if call_param.match_param == ss.fd:
                                 this_pid = self.top.getPID()
-                                watch_pids = self.context_manager.getWatchPids()
                                 self.lgr.debug('syscall setExits found fd %d, this pid %d' % (ss.fd, this_pid))
-                                ''' TBD poor assumption about all pids having same context? '''
-                                if this_pid in watch_pids and exit_info.retval_addr is not None:
-                                    self.lgr.debug('syscall setExits will stash away initial buffer content for use by prepInject/InjectIO')
-                                    if exit_info.sock_struct is not None:
-                                        length = exit_info.sock_struct.length
-                                    else:
-                                        length = exit_info.count
-                                    #self.lgr.debug('addr is 0x%x length %d' % (exit_info.retval_addr, length))
-                                    self.orig_buffer[exit_info.old_fd] = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, length)
                             break
             if exit_info.call_params is not None:
                 exit_info.origin_reset = reset
@@ -2045,8 +2034,3 @@ class Syscall():
     def getContext(self):
         return self.cell
 
-    def getOrigBuffer(self,fd):
-        if fd in self.orig_buffer:   
-            return self.orig_buffer[fd]
-        else:
-            return None
