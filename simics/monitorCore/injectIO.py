@@ -144,7 +144,8 @@ class InjectIO():
         if self.orig_buffer is not None:
             ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                 references data past the end of what is received. '''
-            self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+            #self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+            self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
         if self.target is None and not self.trace_all and not self.instruct_trace:
@@ -325,7 +326,8 @@ class InjectIO():
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-                self.lgr.debug('injectiO load orig_buffer from pickle')
+                if self.orig_buffer is not None:
+                    self.lgr.debug('injectiO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
             if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
             if 'addr_addr' in so_pickle:
