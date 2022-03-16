@@ -179,8 +179,10 @@ class TraceMarks():
             remaining_bytes = mark['length']
             pipe_index = 0
             while remaining_bytes > 0 and pipe_index < len(pipe_refs):
-                while pipe_refs[pipe_index].remaining == 0:
+                while pipe_index < len(pipe_refs) and pipe_refs[pipe_index].remaining == 0:
                     pipe_index += 1
+                if pipe_index >= len(pipe_refs):
+                    break
                 pipe_ref = pipe_refs[pipe_index]
                 if remaining_bytes > pipe_ref.remaining:
                     ref_len = pipe_ref.remaining
@@ -206,6 +208,7 @@ class TraceMarks():
                 ref = self.findRef(src, mark['cycle'])
                 if ref is None:
                     self.lgr.debug('kernel write, COULD NOT FIND original buffer for 0x%x' % src)
+                    break
                 else:
                     if remaining_bytes > ref.length:
                         ref_len = ref.length
@@ -243,6 +246,7 @@ class TraceMarks():
                 ref = self.findRef(src, mark['cycle'])
                 if ref is None:
                     self.lgr.debug('copy, COULD NOT FIND original buffer for 0x%x' % src)
+                    break
                 else:
                     if remaining_bytes > ref.length:
                         ref_len = ref.length
@@ -309,6 +313,11 @@ class TraceMarks():
                     continue
                 self.handlePipeWrite(mark, read_fd)
 
-            elif mark['mark_type'] in ['copy', 'scan', 'sprint']:
+            elif mark['mark_type'] in ['copy', 'scan'] and mark['length'] is not None:
+
+                self.handleCopy(mark) 
+            elif mark['mark_type'] in ['sprint'] and mark['count'] is not None:
+                ''' TBD ugly '''
+                mark['length'] = mark['count']
                 self.handleCopy(mark) 
         return retval 
