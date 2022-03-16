@@ -4083,12 +4083,11 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname, all_proc=False, kernel=False, watch_threads=False):
-        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel, watch_threads=watch_threads)
-        pid = self.getPID()
+    def instructTrace(self, fname, all_proc=False, kernel=False, watch_threads=False, just_pid=None):
+        self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel, watch_threads=watch_threads, just_pid=just_pid)
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
-        if cpl != 0:
+        if cpl != 0 or kernel:
             self.instruct_trace.start() 
 
     def stopInstructTrace(self):

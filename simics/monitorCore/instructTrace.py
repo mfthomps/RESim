@@ -1,10 +1,13 @@
 from simics import *
 import cli
 class InstructTrace():
-    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False):
+    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_pid=None):
         self.top = top
         self.lgr = lgr
-        pid = self.top.getPID()
+        if just_pid is None:
+            pid = self.top.getPID()
+        else:
+            pid = just_pid
         cpu = self.top.getCPU()
         cell_name = self.top.getTopComponentName(cpu)+'.cell'
         cmd = 'pselect %s' % cpu.name
@@ -16,6 +19,7 @@ class InstructTrace():
         self.all_proc = all_proc
         self.kernel = kernel
         self.watch_threads = watch_threads
+        self.just_pid = just_pid
         print('tracer is %s' % tracer_name)
         tfile = '/tmp/%s' % fname
         #cmd = 'output-file-start %s' % tfile
