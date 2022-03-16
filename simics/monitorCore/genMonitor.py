@@ -2818,8 +2818,10 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
+        self.lgr.debug('reset Origin rev ex disabled')
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
+        self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
         if self.bookmarks is not None:
             self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
@@ -3589,17 +3591,23 @@ class GenMonitor():
         with open(fname, 'wb') as fh:
             fh.write(byte_array)
 
-    def pageInfo(self, addr):
+    def pageInfo(self, addr, quiet=False):
         cpu = self.cell_config.cpuFromCell(self.target)
         ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr)
-        print(ptable_info.valueString())
+        if not quiet:
+            print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
-        pei = pageUtils.PageEntryInfo(ptable_info.entry, cpu.architecture)
-        print('writable? %r' % pei.writable)
+        if ptable_info.entry is not None:
+            pei = pageUtils.PageEntryInfo(ptable_info.entry, cpu.architecture)
+            if not quiet:
+                print('writable? %r' % pei.writable)
+        return ptable_info
 
-    def toPid(self, pid):
+    def toPid(self, pid, callback = None):
         self.lgr.debug('genMonitor toPid')
-        self.context_manager[self.target].catchPid(pid, self.toUser)
+        if callback is None:
+            callback = self.toUser
+        self.context_manager[self.target].catchPid(pid, callback)
         SIM_run_command('c')
 
     def cleanMode(self):
@@ -3866,7 +3874,7 @@ class GenMonitor():
             #   self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd, count=count)
             prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr) 
         else:
-            print('Reverse execution must be enabled to run aflFD')
+            print('Reverse execution must be enabled to run prepInject')
 
     def prepInjectWatch(self, watch_mark, snap_name):
         if self.reverseEnabled():
@@ -4197,6 +4205,7 @@ class GenMonitor():
 
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
+        self.lgr.debug('backtraceAddr %x' % addr)
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
         orig, offset = tm.getOrigRead(addr, cycles)
