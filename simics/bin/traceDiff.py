@@ -3,13 +3,7 @@ import os
 import sys
 import argparse
 
-class getter():
-    def __init__(self, fname):
-        fh = open(fname)
-        self.lines = fh.readlines()
-        self.index = 0
-
-    def getVP(self, line):
+def getVP(line):
         parts = line[16:].split()
         if len(parts) < 5:
             print('failed in getVP for line %s' % line)
@@ -18,7 +12,7 @@ class getter():
         p = parts[4]
         return v, p
 
-    def getCPU(self, line):
+def getCPU(line):
         parts = line[17:].split()
         try:
             stuff = parts[0].strip()
@@ -30,11 +24,17 @@ class getter():
             #print('could not get cpu from line %s' % line)
             #print('tried parts from %s' % line[17:])
             return None
+class getter():
+    def __init__(self, fname):
+        fh = open(fname)
+        self.lines = fh.readlines()
+        self.index = 0
+
         
     def nextLine(self):
 
         line = self.lines[self.index]
-        while self.getCPU(line) == 'Device' or self.getCPU(line) is None or (' object ' in line):
+        while getCPU(line) == 'Device' or getCPU(line) is None or (' object ' in line):
             self.index = self.index+1
             if self.index >= len(self.lines):
                 print('Out of lines at index %d' % self.index)
@@ -44,12 +44,12 @@ class getter():
         if line.startswith('data'):
             ok = False
             while not ok:
-                v, p = self.getVP(line)
+                v, p = getVP(line)
                 next_line = self.lines[self.index+1]
                 if len(next_line.strip()) == 0:
                     self.index = self.index+1
                     continue
-                vn, pn = self.getVP(next_line)
+                vn, pn = getVP(next_line)
                 if next_line.startswith('data') and v == vn and p != pn:
                     #print('skipping %s' % line)
                     self.index = self.index+1
@@ -85,6 +85,7 @@ def main():
     rest2 = line2[16:]
     diffs = 0
     last_match_ins = None
+    instruct_list = []
     while diffs <= args.ignore: 
         while rest1 == rest2 or (args.divergence and not ('ins' in line1 or 'ins' in line2)):
             #print('get1')
@@ -95,15 +96,19 @@ def main():
             #print('\tline2 %s' % line2)
             rest1 = line1[16:]
             rest2 = line2[16:]
-            if args.divergence and 'ins' in line1 and rest1 == rest2:
+            if 'inst:' in line1 and rest1 == rest2:
                 last_match_ins = line1
+                v, p = getVP(line1)
+                instruct_list.append(v)
         diffs += 1
         rest1 = 'ok'
         rest2 = 'ok'
     print('line1 line number %d %s' % (get1.getIndex(), line1))
     print('line2  line number %d %s' % (get2.getIndex(), line2))
-    if args.divergence:
-        print('Last matching instruction: %s'  % last_match_ins)
+    if last_match_ins is not None:
+        v, p = getVP(last_match_ins)    
+        count = instruct_list.count(v)
+        print('Last matching instruction: %s, executed %d times'  % (last_match_ins.strip(), count))
 
 if __name__ == '__main__':
     sys.exit(main())
