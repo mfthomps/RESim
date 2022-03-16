@@ -137,7 +137,7 @@ class AFL():
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
             if self.orig_buffer is not None:
                 self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
-                self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
+                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
             cli.quiet_run_command('disable-reverse-execution')

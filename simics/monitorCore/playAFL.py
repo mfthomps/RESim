@@ -192,7 +192,7 @@ class PlayAFL():
                     self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             if self.orig_buffer is not None:
                 #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
-                self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer)
+                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
             with open(full, 'rb') as fh:
                 if sys.version_info[0] == 2:
@@ -205,7 +205,7 @@ class PlayAFL():
             if self.orig_buffer is not None:
                 ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                     references data past the end of what is received. '''
-                self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
                 self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()

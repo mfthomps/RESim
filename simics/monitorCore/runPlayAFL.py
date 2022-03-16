@@ -123,13 +123,14 @@ def runPlay(args, lgr):
             os.chdir(here)
 
         do_restart = handleClose(resim_procs, read_array, args.remote, fifo_list, lgr)
-        cover_list = aflPath.getAFLCoverageList(afl_name)
+        cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
         all_hits = []
         for hit_file in cover_list:
             if not os.path.isfile(hit_file):
                 print('did not find %s, old unique file?' % hit_file)
                 continue
             coverage = json.load(open(hit_file))
+            print('do hit file %s' % hit_file)
             for hit in coverage:
                 hit_i = int(hit)
                 if hit_i not in all_hits:
