@@ -123,9 +123,11 @@ def getAFLCoverageList(target, get_all=False, host=None):
                 glist.append(os.path.join(afl_dir, path)) 
 
     if glist is None:
-        glob_mask = '%s/%s/*resim_*/coverage/id:*,src*' % (afl_path, target)
-
-        glist = glob.glob(glob_mask)
+        #glob_mask = '%s/%s/*resim_*/coverage/id:*,src*' % (afl_path, target)
+        glob_mask = '%s/%s/*resim_*/coverage/id:*' % (afl_path, target)
+        glist = [f for f in glob.glob(glob_mask) if 'src' in f or 'orig' in f]
+        #print('got %d coverage entries so far' % len(glist))
+        #glist = glob.glob(glob_mask)
         if len(glist) == 0:
             ''' single instance '''
             glob_mask = '%s/coverage/id:*,src*' % (afl_dir)
@@ -136,6 +138,7 @@ def getAFLCoverageList(target, get_all=False, host=None):
             if os.path.isdir(manual):
                 manual_list = os.listdir(manual)
                 for f in manual_list:
+                    #print('adding %s to glist' % f)
                     glist.append(os.path.join(manual, f))
     return glist
 
