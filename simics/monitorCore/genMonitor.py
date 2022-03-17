@@ -100,6 +100,8 @@ import prepInject
 import prepInjectWatch
 import injectToBB
 import traceMarks
+import userBreak
+import magicOrigin
 
 import json
 import pickle
@@ -238,7 +240,9 @@ class GenMonitor():
         self.quit_when_done = False
         self.snap_start_cycle = {}
         self.instruct_trace = None
-        self.user_break_hap = None
+        self.user_break = None
+        ''' Manage reset of origin based on execution of magic instruction 99 '''
+        self.magic_origin = {}
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -784,7 +788,7 @@ class GenMonitor():
                 cmd = 'enable-reverse-execution'
                 SIM_run_command(cmd)
                 self.rev_execution_enabled = True
-                self.setDebugBookmark('origin', cpu)
+                #self.setDebugBookmark('origin', cpu)
                 self.bookmarks.setOrigin(cpu)
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
@@ -863,6 +867,7 @@ class GenMonitor():
         self.page_faults[self.target].clearFaultingCycles()
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
+        self.magic_origin[self.target] = magicOrigin.MagicOrigin(cpu, self.bookmarks, self.lgr)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1187,7 +1192,7 @@ class GenMonitor():
         self.rev_execution_enabled = True
         self.doDebugCmd()
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.setDebugBookmark('origin', cpu)
+        #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)
 
         self.toRunningProc(None, pid_list, flist, debug_group=True, final_fun=final_fun)
@@ -2186,6 +2191,10 @@ class GenMonitor():
                 self.trace_malloc.setBreaks()
             if self.injectIOInstance is not None:
                 self.injectIOInstance.setCallHap()
+            if self.user_break is not None:
+                self.user_break.doBreak()
+            if self.target in self.magic_origin:
+                self.magic_origin[self.target].setMagicHap()
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
@@ -2214,6 +2223,10 @@ class GenMonitor():
             self.trace_malloc.stopTrace()
         if self.injectIOInstance is not None:
             self.injectIOInstance.delCallHap()
+        if self.user_break is not None:
+            self.user_break.stopBreak()
+        if self.target in self.magic_origin:
+            self.magic_origin[self.target].deleteMagicHap()
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -4240,11 +4253,18 @@ class GenMonitor():
         self.lgr.debug('userBreakHap')
         self.stopAndGo(self.stopTrackIO) 
 
-    def doBreak(self, addr):
-        user_break = self.context_manager[self.target].genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 4, 0)
-        self.user_break_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.userBreakHap, None, user_break, 'user_break')
-        self.lgr.debug('doBreak set break on 0x%x' % addr)
+    def doBreak(self, addr, count=1):
+        ''' Set a breakpoint and optional count and stop when it is reached.  The stopTrack function will be invoked.'''
+        self.user_break = userBreak.UserBreak(self, addr, count, self.context_manager[self.target], self.lgr)
+    def delUserBreak(self):
+        self.user_break = None
 
+    def didMagicOrigin(self):
+        ''' Was the origin ever reset due to executing a magic instruction?'''
+        retval = False
+        if self.target in self.magic_origin:
+            retval = self.magic_origin[self.target].didMagic()
+        return retval
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
