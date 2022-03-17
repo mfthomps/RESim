@@ -365,6 +365,7 @@ class findKernelWrite():
                 self.bookmarks.setBacktrackBookmark(bm)
             self.lgr.debug('set ida msg to %s' % ida_message)
             self.context_manager.setIdaMessage(ida_message)
+            self.top.backtraceAddr(self.addr, self.cpu.cycles)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
         else:
