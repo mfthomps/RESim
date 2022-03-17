@@ -799,7 +799,7 @@ class WatchMarks():
            if isinstance(mark.mark, CallMark):
                if mark.mark.recv_addr is not None:
                    num_reads += 1
-                   if mark.call_cycle >= self.cpu.cycles:
+                   if mark.call_cycle is not None and mark.call_cycle >= self.cpu.cycles:
                        found = num_reads
         if found is None:
             retval = None
