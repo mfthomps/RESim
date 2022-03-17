@@ -14,11 +14,13 @@ print('port %d' % port)
 header = None
 if len(sys.argv) > 3:
     header = sys.argv[3]
+infile = '/tmp/sendudp'
+if len(sys.argv) > 4:
+    infile = sys.argv[4]
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 server_addr = (host, port)
 #server_addr = ('localhost', port)
-infile = '/tmp/sendudp'
 
 with open (infile) as fh:
     s = fh.read()
@@ -43,7 +45,7 @@ with open (infile) as fh:
                 add_header = True
             print('len packet is %d' % len(packet))
             sock.sendto(packet, server_addr)
-            time.sleep(.01)
+            #time.sleep(.01)
     else:
         print('no UDP header, just send file')
         sock.sendto(s, server_addr)
