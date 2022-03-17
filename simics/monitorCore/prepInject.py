@@ -41,22 +41,7 @@ class PrepInject():
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
-        self.magic_hap = SIM_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
         self.top.runToInput(self.fd, flist_in=flist, count=self.count)
-
-    def deleteMagicHapAlone(self, dumb):
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.magic_hap)
-        self.magic_hap = None
-
-    def magicHap(self, dumb, one, exception):
-        ''' invoked when driver executes a magic instruction, indicating save to  
-            establish a new origin '''
-        if self.magic_hap is not None:
-            #print('in magic hap one: %s  exc: %s' % (str(one), str(exception)))
-            if exception == 99:
-                #print('in magic hap 99    one: %s  exc: %s' % (str(one), str(exception)))
-                self.new_origin = self.cpu.cycles
-                SIM_run_alone(self.deleteMagicHapAlone, None)
 
     def instrumentSelect(self, dumb):
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
@@ -127,8 +112,8 @@ class PrepInject():
         self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
         if cycle <= origin:
             self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
-            if self.new_origin is not None:
-                resimUtils.skipToTest(self.cpu, self.new_origin, self.lgr)
+            if self.top.didMagicOrigin():
+                self.top.goToOrigin()
                 self.top.toPid(pid, callback = self.pidScheduled)
             else:
                 print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
