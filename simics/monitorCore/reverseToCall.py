@@ -1399,6 +1399,10 @@ class reverseToCall():
         self.sysenter_cycles.clear()
 
     def getRecentCycleFrame(self, pid):
+        ''' TBD sort out use of this and getPreviousCycleFrame.  Seems latter 
+            is better if skipping around.  This just returns the most recent entry,
+            whose cycle is not related to the current cycle.
+        '''
         ''' NOTE these frames do not reflect socket call decoding '''
         retval = None
         ret_cycles = None
@@ -1408,24 +1412,6 @@ class reverseToCall():
             ret_cycles, retval = self.recent_cycle[pid]
         else:
             self.lgr.debug('getRecentCycleFrame pid %d not there')
-        '''
-        if pid in self.sysenter_cycles:
-            got_it = None
-            for cycles in sorted(self.sysenter_cycles[pid]):
-                if cycles > cur_cycles:
-                    self.lgr.debug('getRecentCycleFrame found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
-                    got_it = prev_cycles
-                    break
-                else:
-                    prev_cycles = cycles
-
-            if got_it is not None:
-                retval = self.sysenter_cycles[pid][got_it] 
-                ret_cycles = got_it
-            else:
-                retval = self.sysenter_cycles[pid][cycles] 
-                ret_cycles = cycles
-        '''
         return retval, ret_cycles
 
     def getPreviousCycleFrame(self, pid):
