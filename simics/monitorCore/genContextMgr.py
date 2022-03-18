@@ -109,8 +109,8 @@ class GenHap():
         if self.hap_num is not None:
             for bp in self.breakpoint_list:
                 bp.clear()
+            #self.lgr.debug('GenHap clear hap %s %d handle %d' % (self.name, self.hap_num, self.handle))
             SIM_hap_delete_callback_id(self.hap_type, self.hap_num)
-            #self.lgr.debug('GenHap clear hap %d handle %d' % (self.hap_num, self.handle))
             self.hap_num = None
 
     def getContext(self):
