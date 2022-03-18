@@ -238,6 +238,8 @@ class ReportCrash():
                             self.top.revTaintAddr(copy_mark.mark.src)
                         else:
                             self.lgr.debug('reportCrash: Is strcpy, but not an overlap')
+                            self.crash_report.write('\nUnknown cause. Was strcpy but not an overlap?\n')
+                            self.doneBackward(None)
                     else:
                         self.lgr.debug('reportCrash: Is strcpy, src > dest')
                 else:
