@@ -1233,11 +1233,13 @@ class Syscall():
 
             for call_param in syscall_info.call_params:
                 if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
-                    self.lgr.debug('closed fd %d, stop trace' % fd)
-                    self.stopTrace()
-                    ida_msg = 'Closed FD %d' % fd
-                    exit_info.call_params = call_param
-                    break 
+                    if not self.linger:
+                        self.lgr.debug('closed fd %d, stop trace' % fd)
+                        self.stopTrace()
+                        ida_msg = 'Closed FD %d' % fd
+                        exit_info.call_params = call_param
+                        break 
+                
 
         elif callname == 'dup':        
             exit_info.old_fd = frame['param1']
