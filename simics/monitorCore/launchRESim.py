@@ -263,6 +263,7 @@ class LaunchRESim():
                     #print(count)
                 self.link_dict['driver'] = assignLinkNames('driver', self.comp_dict['driver'])
                 switch_map = linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'])
+                addSwitchLinkNames('driver', self.comp_dict['driver'], self.link_dict['driver'], switch_map)
                 if DRIVER_WAIT:
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
                     return
