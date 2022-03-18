@@ -24,6 +24,7 @@
 '''
 
 from simics import *
+import resimUtils
 class reverseToAddr():
     def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, lgr, extra_back=0):
         self.top = top
@@ -36,6 +37,11 @@ class reverseToAddr():
         cpu, comm, pid  = task_utils.curProc()
         self.cpu = cpu
         self.pid = pid
+        #resim = self.top.getRESimContext()
+        #default = self.top.getDefaultContext()
+        #self.the_break = SIM_breakpoint(default, Sim_Break_Linear, Sim_Access_Execute, 
+        #            address, 1, 0)
+        
         mode = Sim_Access_Execute
         phys_block = cpu.iface.processor_info.logical_to_physical(address, mode)
         if phys_block.address != 0:
@@ -46,6 +52,7 @@ class reverseToAddr():
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
             return
         self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
+       
         self.one_stop_hap = None
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 	     self.stopHap, cpu)
@@ -53,16 +60,22 @@ class reverseToAddr():
 
     def goBackAlone(self, dumb):
         backone = self.cpu.cycles - 1 
-        cmd = 'skip-to cycle = %d ' % backone
-        SIM_run_command(cmd)
-        SIM_run_command('rev')
+        #cmd = 'skip-to cycle = %d ' % backone
+        #SIM_run_command(cmd)
+        if not resimUtils.skipToTest(self.cpu, backone, self.lgr):
+            first = self.top.getFirstCycle()
+            self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
+        else:
+            SIM_run_command('rev')
 
     def stopHap(self, cpu, one, exception, error_string):
         if self.stop_hap is None:
             return
         cpu, comm, pid  = self.task_utils.curProc()
+        eip = self.top.getEIP()
         if pid != self.pid:
-            self.lgr.debug('reverseToAddr stopHap wrong pid got %d wanted %d cycles: 0x%x' % (pid, self.pid, cpu.cycles))
+            self.lgr.debug('reverseToAddr stopHap at 0x%x wrong pid got %d wanted %d cycles: 0x%x excpt: %s  errorstring %s' % (eip, pid, 
+                 self.pid, cpu.cycles, str(exception), str(error_string)))
             SIM_run_alone(self.goBackAlone, None)
             return
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
@@ -70,7 +83,6 @@ class reverseToAddr():
         SIM_delete_breakpoint(self.the_break)
         self.the_break = None
  
-        eip = self.top.getEIP()
         self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
         #self.top.gdbMailbox('0x%x' % eip)
         if self.extra_back > 0:
@@ -83,6 +95,7 @@ class reverseToAddr():
             # ignore cycles, unless new ida refresh strategy fails
             self.is_monitor_running.setRunning(False)
             cycles = 1 + self.extra_back
+            self.lgr.debug('reverseToAddr stopHap eip: %x skip nd mail to 0x%x' % (eip, cycles))
             self.top.skipAndMail(cycles)
 
     def backOneStopped(self, cpu, one, exception, error_string):
