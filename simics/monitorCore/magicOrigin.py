@@ -29,9 +29,10 @@ from simics import *
     it is safe to reverse to that point without real world leakage.
 '''
 class MagicOrigin():
-    def __init__(self, cpu, bookmarks, lgr):
+    def __init__(self, top, cpu, bookmarks, lgr):
         self.bookmarks = bookmarks
         self.cpu = cpu
+        self.top = top
         self.lgr = lgr
         self.did_magic = False
         self.setMagicHap()
@@ -47,14 +48,25 @@ class MagicOrigin():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.magic_hap)
             self.magic_hap = None
 
+    def setOrigin(self):
+        cmd = 'disconnect-real-network'
+        SIM_run_command(cmd)
+        self.lgr.debug('MagicOrigin driver disconnected, set origin')
+        cmd = 'disable-reverse-execution'
+        SIM_run_command(cmd)
+        cmd = 'enable-reverse-execution'
+        SIM_run_command(cmd)
+        self.bookmarks.setOrigin(self.cpu)
+        self.did_magic = True
+        SIM_run_command('c')
+
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
             establish a new origin '''
         if self.magic_hap is not None:
             if magic_number == 99:
                 self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
-                self.bookmarks.setOrigin(self.cpu)
-                self.did_magic = True
+                self.top.stopAndGo(self.setOrigin)
                 #SIM_run_alone(self.deleteMagicHapAlone, None)
     def didMagic(self):
         return self.did_magic
