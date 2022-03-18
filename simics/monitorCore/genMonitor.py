@@ -266,10 +266,10 @@ class GenMonitor():
             ''' Restore link naming for convenient connect / disconnect '''
             net_link_file = os.path.join('./', self.run_from_snap, 'net_link.pickle')
             if os.path.isfile(net_link_file):
-                self.net_links = pickle.load( open(net_link_file, 'rb') )
-                for target in self.net_links:
-                    for link in self.net_links[target]:
-                        cmd = '%s = %s' % (self.net_links[target][link].name, self.net_links[target][link].obj)
+                self.link_dict = pickle.load( open(net_link_file, 'rb') )
+                for target in self.link_dict:
+                    for link in self.link_dict[target]:
+                        cmd = '%s = %s' % (self.link_dict[target][link].name, self.link_dict[target][link].obj)
                         self.lgr.debug('genInit link cmd is %s' % cmd)
                         SIM_run_command(cmd)
             stack_base_file = os.path.join('./', self.run_from_snap, 'stack_base.pickle')
@@ -691,16 +691,39 @@ class GenMonitor():
         return retval 
 
     def getRecentEnterCycle(self):
-        ''' return most recent cycle in which the kernel was entered for this PID '''
+        ''' return latest cycle in which the kernel was entered for this PID 
+            regardless of the current cycle.  '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
         return frame, cycles
 
     def getPreviousEnterCycle(self):
-        ''' return most recent cycle in which the kernel was entered for this PID '''
+        ''' return most recent cycle in which the kernel was entered for this PID 
+            relative to the current cycle.  '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(pid)
         return frame, cycles
+
+    def revToSyscall(self):
+        frame, cycles = self.getPreviousEnterCycle()
+        self.lgr.debug('revToSyscal got cycles 0x%x' % cycles)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        prev = cycles-1
+        resimUtils.skipToTest(cpu, prev, self.lgr)
+        print('Reversed to previous syscall:') 
+        call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+        if call == 'socketcall' or call.upper() in net.callname:
+            if 'ss' in frame:
+                ss = frame['ss']
+                socket_callnum = frame['param1']
+                socket_callname = net.callname[socket_callnum].lower()
+                print('\tpid: %d syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
+                     call, socket_callname, ss.fd, frame['sp'], frame['pc'], cycles))
+            else:
+                print('\tpid: %d socketcall but no ss in frame?' % pid)
+        else:
+            print('\tpid: %d syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
+                 call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
 
     def tasksDBG(self):
         plist = {}
@@ -867,7 +890,7 @@ class GenMonitor():
         self.page_faults[self.target].clearFaultingCycles()
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
-        self.magic_origin[self.target] = magicOrigin.MagicOrigin(cpu, self.bookmarks, self.lgr)
+        self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -2518,7 +2541,7 @@ class GenMonitor():
     
             if self.target not in self.trace_all or self.trace_all[self.target] is None:
                 accept_call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
-                calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+                calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'bind']
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
@@ -4044,6 +4067,9 @@ class GenMonitor():
     def getMatchingExitInfo(self):
         return self.sharedSyscall[self.target].getMatchingExitInfo()
 
+    def getDefaultContext(self):
+        return self.context_manager[self.target].getDefaultContext()
+
     def getRESimContext(self):
         return self.context_manager[self.target].getRESimContext()
 
@@ -4210,10 +4236,10 @@ class GenMonitor():
         return self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
 
     def showLinks(self):
-        for computer in self.net_links:
+        for computer in self.link_dict:
             print('computer %s' % computer)
-            for link in self.net_links[computer]:
-                print('\tlink %s  %s' % (link, self.net_links[computer][link].name))
+            for link in self.link_dict[computer]:
+                print('\tlink %s  %s' % (link, self.link_dict[computer][link].name))
 
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
