@@ -19,7 +19,7 @@ This is an example of a script that repeatedly starts
 RESim (and thus Simics) to handle multi-packet udp crash
 analysis.  
 '''
-def feedDriver(ip, port, header, client_path):
+def feedDriver(ip, port, header, client_path, magic_path):
     result = 1
     cmd = 'scp -P 4022 /tmp/sendudp localhost:/tmp/sendudp'
     while result != 0:
@@ -28,11 +28,17 @@ def feedDriver(ip, port, header, client_path):
             print('driver not responding')
             time.sleep(1)
     print('scp of sendup OK')    
-    cmd = 'scp -P 4022 %s localhost:/tmp/' % client_path
+    cmd = 'scp -P 4022 %s %s localhost:/tmp/' % (client_path, magic_path)
+    #print(cmd)
     result = os.system(cmd)
+    cmd = 'ssh -p 4022 mike@localhost ls -l /tmp/'
+    result = os.system(cmd)
+
     cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
+    #print(cmd)
     result = os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost /tmp/clientudpMult %s %d %s' % (ip, port, header)
+    cmd = "ssh -p 4022 mike@localhost '/tmp/simics-magic && /tmp/clientudpMult %s %d %s'" % (ip, port, header)
+    #print(cmd)
     result = os.system(cmd)
 
 def main():
@@ -104,7 +110,8 @@ def main():
                             qfile = line.split()[-1]
                             already_done.append(qfile)
         
-    
+    resim_dir = os.getenv('RESIM_DIR')
+    magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
     index = len(already_done)
     for f in sorted(flist):
         if f in already_done:
@@ -114,7 +121,7 @@ def main():
         os.environ['ONE_DONE_PARAM'] = str(index)
         if trackFD is not None:
             shutil.copyfile(f, '/tmp/sendudp')
-            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, client_path))
+            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, client_path, magic_path))
             driver.start()
             #os.system('./tmpdrive.sh &')
         print("starting monitor without UI")
