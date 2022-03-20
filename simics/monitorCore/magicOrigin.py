@@ -1,4 +1,5 @@
 from simics import *
+from resimHaps import *
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -35,17 +36,18 @@ class MagicOrigin():
         self.top = top
         self.lgr = lgr
         self.did_magic = False
+        self.magic_hap = None
         self.setMagicHap()
 
     def setMagicHap(self):
-        self.magic_hap = SIM_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
+        self.magic_hap = RES_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
 
     def deleteMagicHap(self):
         SIM_run_alone(self.deleteMagicHapAlone, None)
 
     def deleteMagicHapAlone(self, dumb):
         if self.magic_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.magic_hap)
+            RES_hap_delete_callback_id("Core_Magic_Instruction", self.magic_hap)
             self.magic_hap = None
 
     def setOrigin(self):
