@@ -27,6 +27,7 @@ from simics import *
 import decode
 import logging
 import procInfo
+from resimHaps import *
 '''
     Use page faults to monitor changes in mapping of pages in process address space
     Updates NoX and RoP Haps as virtual addresses get mapped to physical pages, which
@@ -74,7 +75,7 @@ class pageFaults():
             proclist = SIM_run_command(cmd)
             cpu = SIM_get_object(proclist[0])
             self.haps_added += 1
-            self.page_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
+            self.page_hap = RES_hap_add_callback_obj_index("Core_Exception", cpu, 0,
                  self.page_fault_callback, cpu, 14)
             self.lgr.debug("pageFaults added exception hap %d" % self.page_hap)
         else:
@@ -178,7 +179,7 @@ class pageFaults():
         # delete the hap that brought us here
         self.haps_removed += 1
         #self.lgr.debug('will delete hap %d' % self.page_break_cb[cell_name][pid])
-        SIM_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, self.page_break_cb[cell_name][pid])
+        RES_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, self.page_break_cb[cell_name][pid])
         SIM_delete_breakpoint(self.page_break_breakpoint[cell_name][pid])
         del self.page_break_cb[cell_name][pid]
         del self.page_break_breakpoint[cell_name][pid]
@@ -219,7 +220,7 @@ class pageFaults():
             hap = self.cr2_read_hap[cell_name][pid]
             #self.lgr.debug('cr2_read_callback for pid %s:%d read cr2 value of %x remove hap %d' % (cell_name, pid, cr2, hap))
             self.haps_removed += 1
-            SIM_hap_delete_callback_id("Core_Control_Register_Read", hap)
+            RES_hap_delete_callback_id("Core_Control_Register_Read", hap)
             del self.cr2_read_hap[cell_name][pid]
         else:
             self.lgr.info('cr2_read_callback unexpected pid, got %s:%d  expected %s:%d' % \
@@ -236,7 +237,7 @@ class pageFaults():
             bk = self.page_break_breakpoint[cell_name][pid]
             SIM_delete_breakpoint(bk)
             self.lgr.debug('pageFault cleanPid removed break %d, hap %d' % (bk, cb))
-            SIM_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, cb)
+            RES_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, cb)
             del self.page_break_cb[cell_name][pid]
             del self.page_break_breakpoint[cell_name][pid]
 
@@ -244,7 +245,7 @@ class pageFaults():
             self.haps_removed += 1
             hap =  self.cr2_read_hap[cell_name][pid]
             self.lgr.debug('pageFault cleanPid removed reg read hap %d' % (hap))
-            SIM_hap_delete_callback_id("Core_Control_Register_Read", hap)
+            RES_hap_delete_callback_id("Core_Control_Register_Read", hap)
             del self.cr2_read_hap[cell_name][pid]
   
     def getFaultCount(self, cell_name, pid):
@@ -267,7 +268,7 @@ class pageFaults():
             self.cr2_read_values[cell_name] = {}
         if self.page_hap is not None:
             self.lgr.debug('pageFaults remove page hap %d' % self.page_hap)
-            SIM_hap_delete_callback_id('Core_Exception', self.page_hap)
+            RES_hap_delete_callback_id('Core_Exception', self.page_hap)
             self.haps_removed += 1
             self.page_hap = None
         self.lgr.debug('pageFaults cleanAll, haps added: %d, removed: %d' % (self.haps_added, self.haps_removed))
@@ -287,7 +288,7 @@ class pageFaults():
        reg_num = cpu.iface.int_register.get_number("cr2")
 
        self.haps_added += 1
-       self.cr2_read_hap[cell_name][pid] = SIM_hap_add_callback_obj_index("Core_Control_Register_Read", 
+       self.cr2_read_hap[cell_name][pid] = RES_hap_add_callback_obj_index("Core_Control_Register_Read", 
            cpu, 0, self.cr2_read_callback, my_args, reg_num)
 
        ''' set a hap on the current eip so we hit it when the OS is done fixing the page table.'''
@@ -298,10 +299,10 @@ class pageFaults():
        #self.lgr.debug('in useCR2 for page_fault_callback pid: %s:%d, set code break %d at %x' % \
        #         (cell_name, pid, self.page_break_breakpoint[cell_name][pid], phys_block.address))
        #print 'setting hap for pid %d cell_name %s' % (pid, cell_name)
-       #self.page_break_cb[cell_name][pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", 
+       #self.page_break_cb[cell_name][pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", 
        # self.postFixupCallback, my_args, self.page_break_breakpoint[cell_name][pid])
        self.haps_added += 1
-       self.page_break_cb[cell_name][pid] = SIM_hap_add_callback_obj_index("Core_Breakpoint_Memop", 
+       self.page_break_cb[cell_name][pid] = RES_hap_add_callback_obj_index("Core_Breakpoint_Memop", 
                     cell, 0, self.postFixupCallback, my_args, self.page_break_breakpoint[cell_name][pid])
 
 
@@ -341,7 +342,7 @@ class pageFaults():
                if address == 2:
                    SIM_break_simulation('why 2 for %s:%d ' % (cell_name, pid))
                self.haps_added += 1
-               self.page_break_cb[cell_name][pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", 
+               self.page_break_cb[cell_name][pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", 
                    self.postFixupCallback, my_args, self.page_break_breakpoint[cell_name][pid])
            else:
                SIM_break_simulation('why not caught at start for %s:%d ' % (cell_name, pid))

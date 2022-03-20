@@ -1,6 +1,7 @@
 from simics import *
 import decode
 import decodeArm
+from resimHaps import *
 class RopCop():
     def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
         self.context_manager = context_manager
@@ -120,14 +121,14 @@ class RopCop():
                 SIM_run_alone(self.stopAlone, ret_addr)
 
     def stopAlone(self, ret_addr):
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
         print('Possible ROP')
         SIM_break_simulation('ROP ?')
 
     def stopHap(self, ret_addr, one, exception, error_string):
         if self.stop_hap is None:  
             return
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')

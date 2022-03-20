@@ -102,7 +102,7 @@ import injectToBB
 import traceMarks
 import userBreak
 import magicOrigin
-
+from resimHaps import *
 import json
 import pickle
 import re
@@ -430,11 +430,11 @@ class GenMonitor():
                     self.context_manager[self.target].genDeleteHap(hc.hap)
                 else:
                     self.lgr.debug('genMonitor stopHap stopAction will delete hap %s type %s' % (str(hc.hap), str(hc.htype)))
-                    SIM_hap_delete_callback_id(hc.htype, hc.hap)
+                    RES_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
         if self.stop_hap is not None:
             self.lgr.debug('genMonitor stopHap will delete hap %s' % str(self.stop_hap))
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:
                 SIM_delete_breakpoint(bp)
@@ -463,7 +463,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         ''' when we stop, rev 1 to revert the current task value '''
         stop_action = hapCleaner.StopAction(hap_clean, [self.proc_break], pid=pid, prelude=self.rev1NoMail)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, stop_action)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, stop_action)
         self.lgr.debug('revToPid hap set, break on 0x%x now reverse' % phys_current_task)
         SIM_run_command('rev')
 
@@ -472,11 +472,11 @@ class GenMonitor():
         if cpl != 0:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
-            self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None)
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             SIM_continue(0)
         else:
@@ -496,13 +496,13 @@ class GenMonitor():
                         ''' stick with original debug pid '''
                         pid = debug_pid
                     
-            self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             self.lgr.debug('run2User pid %d in kernel space (%d), set mode hap %d' % (pid, cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             simics_status = SIM_simics_is_running()
@@ -945,12 +945,12 @@ class GenMonitor():
     def runToSyscall80(self):
         cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('runToSyscall80') 
-        self.scall_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
+        self.scall_hap = RES_hap_add_callback_obj_index("Core_Exception", cpu, 0,
                  self.int80Hap, cpu, 0x180) 
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", self.scall_hap)
         stop_action = hapCleaner.StopAction(hap_clean, [])
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
@@ -964,16 +964,16 @@ class GenMonitor():
         #max_intr = 31
         max_intr = 1028
         if signal is None:
-            sig_hap = SIM_hap_add_callback_obj_range("Core_Exception", cpu, 0,
+            sig_hap = RES_hap_add_callback_obj_range("Core_Exception", cpu, 0,
                      self.signalHap, sig_info, 0, max_intr) 
         else:
-            sig_hap = SIM_hap_add_callback_obj_index("Core_Exception", cpu, 0,
+            sig_hap = RES_hap_add_callback_obj_index("Core_Exception", cpu, 0,
                      self.signalHap, sig_info, signal) 
 
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", sig_hap)
         stop_action = hapCleaner.StopAction(hap_clean, [])
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
@@ -1051,7 +1051,7 @@ class GenMonitor():
         if self.cur_task_break is not None:
             SIM_delete_breakpoint(self.cur_task_break)
         if self.cur_task_hap is not None:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
+            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None
 
     def toProc(self, proc):
@@ -1071,7 +1071,7 @@ class GenMonitor():
             self.proc_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
             self.lgr.debug('toProc  set break at 0x%x' % (phys_current_task))
-            self.proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.proc_break)
+            self.proc_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.proc_break)
             '''
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
@@ -1091,7 +1091,7 @@ class GenMonitor():
             return
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('modeChangeForStack pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
-        SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+        RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
         self.mode_hap = None
         
         if new != Sim_CPU_Mode_Supervisor:
@@ -1104,7 +1104,7 @@ class GenMonitor():
     def recordStackClone(self, pid, parent):
         self.lgr.debug('recordStackClone pid: %d parent: %d' % (pid, parent))
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeForStack, pid)
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeForStack, pid)
         '''
         if self.target not in self.track_threads:
             self.lgr.error('recordStackClone without track_threads loaded')
@@ -1311,7 +1311,7 @@ class GenMonitor():
         phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
         self.cur_task_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
-        self.cur_task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.cur_task_break)
+        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.cur_task_break)
         self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x hap %d' % (str(want_pid_list), self.cur_task_break, phys_current_task,
             self.cur_task_hap))
         
@@ -1319,7 +1319,7 @@ class GenMonitor():
         #hap_clean.add("Core_Breakpoint_Memop", self.cur_task_hap)
         #stop_action = hapCleaner.StopAction(hap_clean, [self.cur_task_break], flist)
         stop_action = hapCleaner.StopAction(hap_clean, [], flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
 
         status = self.is_monitor_running.isRunning()
@@ -1522,7 +1522,7 @@ class GenMonitor():
         eip = self.getEIP()
         self.lgr.debug('reservseStepInstruction starting at %x' % eip)
         my_args = procInfo.procInfo(comm, cpu, pid, None, False)
-        self.stopped_reverse_instruction_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stopped_reverse_instruction_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 		    self.stoppedReverseInstruction, my_args)
         self.lgr.debug('reverseStepInstruction, added stop hap')
         SIM_run_alone(SIM_run_command, 'reverse-step-instruction %d' % num)
@@ -1535,7 +1535,7 @@ class GenMonitor():
             self.lgr.debug('stoppedReverseInstruction at %x' % eip)
             print('stoppedReverseInstruction stopped at ip:%x' % eip)
             self.gdbMailbox('0x%x' % eip)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stopped_reverse_instruction_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stopped_reverse_instruction_hap)
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong pid (%d), try again' % pid)
             SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
@@ -2243,12 +2243,15 @@ class GenMonitor():
         if self.coverage is not None and not keep_coverage:
             self.coverage.stopCover(keep_hits=True)
         if self.trace_malloc is not None:
+            self.lgr.debug('genMon removeDebugBreaks trace_malloc')
             self.trace_malloc.stopTrace()
         if self.injectIOInstance is not None:
+            self.lgr.debug('genMon removeDebugBreaks inject delcallhap')
             self.injectIOInstance.delCallHap()
         if self.user_break is not None:
             self.user_break.stopBreak()
         if self.target in self.magic_origin:
+            self.lgr.debug('genMon removeDebugBreaks magic')
             self.magic_origin[self.target].deleteMagicHap()
 
     def revToText(self):
@@ -2269,7 +2272,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         ''' if we land in the wrong pid, rev to the right pid and then revToText again...'''
         stop_action = hapCleaner.StopAction(hap_clean, None, flist, pid=pid, wrong_pid_action=self.revToText)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
           self.stopHap, stop_action)
         self.lgr.debug('hap set, now reverse')
         SIM_run_command('rev')
@@ -2353,7 +2356,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("GenContext", self.proc_hap)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
           self.stopHap, stop_action)
 
         self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
@@ -2362,14 +2365,14 @@ class GenMonitor():
     def undoDebug(self, dumb):
         self.lgr.debug('undoDebug')
         if self.cur_task_hap is not None:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
+            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             SIM_delete_breakpoint(self.cur_task_break)
             self.cur_task_hap = None
         if self.proc_hap is not None:
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
             self.proc_hap = None
         if self.stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
         self.lgr.debug('undoDebug done')
             
@@ -3169,8 +3172,8 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
         
         self.lgr.debug('reportMode for pid %d' % pid)
-        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, pid)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopModeChanged, None)
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, pid)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopModeChanged, None)
 
     def setTarget(self, target):
         if target not in self.cell_config.cell_context:
@@ -3649,7 +3652,7 @@ class GenMonitor():
     def cleanMode(self):
         if self.mode_hap is not None:
             print('mode_hap was lingering, delete it')
-            SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
     def watchROP(self, watching=True):
@@ -3708,7 +3711,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("GenContext", self.proc_hap)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
           self.stopHap, stop_action)
 
         self.context_manager[self.target].watchTasks()
@@ -4200,7 +4203,7 @@ class GenMonitor():
         self.lgr.debug('goAddr break set on 0x%x cell %s' % (addr, cell))
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, [bp])
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         SIM_run_command('c')
 
@@ -4215,7 +4218,7 @@ class GenMonitor():
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         self.lgr.debug('stopAndGoAlone, hap set now stop it')
         SIM_break_simulation('stopAndGo')

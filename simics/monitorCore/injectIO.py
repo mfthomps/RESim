@@ -5,6 +5,7 @@ import cli
 import os
 import sys
 import pickle
+from resimHaps import *
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
@@ -289,7 +290,7 @@ class InjectIO():
                 self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
 
         self.lgr.debug('injectIO resetReverseAlone delete stop hap')
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
         if count > 0:
             SIM_run_command('c')
@@ -311,7 +312,7 @@ class InjectIO():
         
     def writeCallback(self, count):
         self.lgr.debug('injectIO writeCallback')
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, count)
         SIM_break_simulation('writeCallback')
 

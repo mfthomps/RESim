@@ -37,6 +37,7 @@ import resimUtils
 import armCond
 import net
 import syscall
+import resimHaps
 import time
 import pickle
 '''
@@ -307,7 +308,7 @@ class reverseToCall():
         self.pid = pid
         self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
         my_args = procInfo.procInfo(comm, self.cpu, pid)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	        self.stoppedReverseToCall, my_args)
         self.lgr.debug('doUncall, added stop hap')
         self.need_calls = 1
@@ -322,7 +323,7 @@ class reverseToCall():
 
     def tryBackOne(self, my_args):
         
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	        self.tryOneStopped, my_args)
         self.lgr.debug('tryBackOne from cycle 0x%x' % my_args.cpu.cycles)
         SIM_run_command('rev 1')
@@ -330,12 +331,12 @@ class reverseToCall():
     def jumpStopped(self, my_args, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('jumpStopped at 0x%x' % eip)
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.jump_stop_hap)
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.jump_stop_hap)
         self.top.skipAndMail()
 
     def jumpCycle(self, cycle):
         self.lgr.debug('would jump to 0x%x' % cycle)
-        #self.jump_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        #self.jump_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	#        self.jumpStopped, None)
         cmd = 'skip-to cycle = %d ' % cycle
         SIM_run_command(cmd)
@@ -430,7 +431,8 @@ class reverseToCall():
         if self.stop_hap is None:
             self.lgr.error('stoppedReverseToCall invoked though hap is none')
             return
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.lgr.debug('tryoneStopped delete stop hap')
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None
         #cmd = 'reverse-step-instruction'
         if self.tooFarBack():
@@ -487,7 +489,7 @@ class reverseToCall():
 
         if not done:
             self.lgr.debug('tryOneStopped, back one did not work, starting at %x' % eip)
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
     	        self.stoppedReverseToCall, my_args)
             self.lgr.debug('tryOneStopped, added stop hap')
             if self.previous_eip is not None and eip != self.previous_eip and cpl > 0:
@@ -615,7 +617,7 @@ class reverseToCall():
             else:
                 cell = self.top.getCell()
                 self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
-                self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
+                self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
                 self.lgr.debug('jumpOverKernel, NOT syscall or page fault, try runnning backwards to eip-4, ug.  break %d set at 0x%x now do rev' % (self.uncall_break, rev_to-4))
                 self.top.removeDebugBreaks()
                 self.context_manager.showHaps()
@@ -654,7 +656,7 @@ class reverseToCall():
             return
         if pid == self.pid:
             SIM_delete_breakpoint(self.uncall_break)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             if self.reg_val is not None:
                 val = self.top.getReg(self.reg, self.cpu) 
@@ -722,7 +724,7 @@ class reverseToCall():
                     else:
                         ''' TBD use cheesy jumpOverKernel instead ?? '''
                         my_args = procInfo.procInfo(comm, self.cpu, self.pid)
-                        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+                        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
                     	     self.stoppedReverseModReg, my_args)
                         dum_cpu, cur_addr, ncomm, npid = self.task_utils.currentProcessInfo(self.cpu)
                         self.lgr.debug('doRevToModReg, added stop hap pid %d' % npid)
@@ -938,7 +940,7 @@ class reverseToCall():
                                     cell = self.top.getCell()
                                     pre_call = pc - 4
                                     self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, pre_call, 1, 0)
-                                    self.uncall_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.uncallHap, None)
+                                    self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.uncallHap, None)
                                     retval = RegisterModType(None, RegisterModType.BAIL)
                                     self.lgr.debug('cycleRegisterMod set break number %d stop hap, now rev to 0x%x' % (self.uncall_break, pre_call))
                                     self.save_cycle = self.cpu.cycles
@@ -979,7 +981,7 @@ class reverseToCall():
               pid, self.pid, self.reg, self.reg_val))
         if pid == self.pid:
             SIM_delete_breakpoint(self.uncall_break)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             val = self.top.getReg(self.reg, self.cpu) 
             if val == self.reg_val:
@@ -1173,7 +1175,7 @@ class reverseToCall():
         self.lgr.debug('reverseToCall cleanup')
         self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
         self.rmBreaks()
         self.is_monitor_running.setRunning(False)

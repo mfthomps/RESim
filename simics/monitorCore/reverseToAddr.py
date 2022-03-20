@@ -24,6 +24,7 @@
 '''
 
 from simics import *
+from resimHaps import *
 import resimUtils
 class reverseToAddr():
     def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, lgr, extra_back=0):
@@ -54,7 +55,7 @@ class reverseToAddr():
         self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
        
         self.one_stop_hap = None
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	     self.stopHap, cpu)
         SIM_run_command('reverse')
 
@@ -78,7 +79,7 @@ class reverseToAddr():
                  self.pid, cpu.cycles, str(exception), str(error_string)))
             SIM_run_alone(self.goBackAlone, None)
             return
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None 
         SIM_delete_breakpoint(self.the_break)
         self.the_break = None
@@ -87,7 +88,7 @@ class reverseToAddr():
         #self.top.gdbMailbox('0x%x' % eip)
         if self.extra_back > 0:
             self.lgr.debug('stopHap asked to go back extra %d' % self.extra_back)
-            self.one_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            self.one_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	        self.backOneStopped, cpu)
             cmd = 'rev 1'
             SIM_run_alone(SIM_run_command, cmd)
@@ -105,7 +106,7 @@ class reverseToAddr():
         if self.one_stop_hap is None:
             self.lgr.error('backOneStopped invoked though hap is none')
             return
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.one_stop_hap)
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.one_stop_hap)
         self.one_stop_hap = None
         eip = self.top.getEIP()
         self.lgr.debug('reverseToAddr backOneStopped eip: %x' % eip)

@@ -2,6 +2,8 @@ from simics import *
 import os
 import pickle
 import elfText
+
+from resimHaps import *
 '''
 Manage maps of shared object libraries
 Also track text segment.
@@ -456,12 +458,12 @@ class SOMap():
             eip = self.top.getEIP(cpu)
             self.lgr.debug('soMap stopHap ip: 0x%x' % eip)
             self.top.skipAndMail()
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
     def stopAlone(self, cpu):
         if len(self.hap_list) > 0:
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, cpu)
             self.lgr.debug('soMap stopAlone')
             for hap in self.hap_list:

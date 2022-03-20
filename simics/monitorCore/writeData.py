@@ -4,6 +4,7 @@ import os
 import pickle
 import taskUtils
 from resimUtils import rprint
+from resimHaps import *
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
@@ -146,7 +147,7 @@ class WriteData():
         if self.call_hap is None and self.call_ip is not None:
             self.lgr.debug('writeData readLimitCallback, add callHap')
             self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-            self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
+            self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
     def userBufWrite(self, record=False):
         retval = None
@@ -233,16 +234,16 @@ class WriteData():
                 ''' NOTE stop on read will miss processing performed by other threads. '''
                 self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
                 self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
-                self.call_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
+                self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
                 if self.select_call_ip is not None:
                     self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
-                    self.select_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
+                    self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
 
     def setRetHap(self):
         if self.ret_hap is None: 
             self.lgr.debug('writeData set retHap on return_ip 0x%x, cell is %s' % (self.return_ip, str(self.cell)))
             self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
-            self.ret_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
+            self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
 
     def selectHap(self, dumb, third, break_num, memory):
         ''' Hit a call to select'''
@@ -337,17 +338,17 @@ class WriteData():
         #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
             SIM_delete_breakpoint(self.call_break)
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
+            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
             self.call_hap = None
             self.call_break = None
         if self.select_hap is not None:
             SIM_delete_breakpoint(self.select_break)
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
+            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
             self.select_hap = None
             self.select_break = None
         if self.ret_hap is not None:
             SIM_delete_breakpoint(self.ret_break)
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
+            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
             self.ret_hap = None
             self.ret_break = None
 

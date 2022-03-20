@@ -1,6 +1,7 @@
 from simics import *
 import syscall
 import elfText
+from resimHaps import *
 class TrackThreads():
     def __init__(self, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, compat32, lgr):
         self.traceProcs = traceProcs
@@ -112,7 +113,7 @@ class TrackThreads():
         #self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
         self.traceProcs.setName(pid, prog_string, None)
         self.addSO(prog_string, pid)
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
+        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
         SIM_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
@@ -140,7 +141,7 @@ class TrackThreads():
                 self.lgr.error('trackThreads parseExecve zero prog_addr pid %d' % pid)
                 SIM_break_simulation('trackThreads parseExecve zero prog_addr pid %d' % pid)
             self.finish_break[pid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
-            self.finish_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
+            self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
             return
         else:
             self.traceProcs.setName(pid, prog_string, None)

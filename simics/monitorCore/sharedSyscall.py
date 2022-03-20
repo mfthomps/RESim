@@ -5,6 +5,7 @@ import net
 import ipc
 import allWrite
 import syscall
+from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for matched parameters
 are handled by the stopHap in the syscall module that handled the call.
@@ -90,13 +91,13 @@ class SharedSyscall():
             return
         my_exit_pids = self.exit_pids[self.cpu.current_context]
         if pid is not None:
-            #self.lgr.debug('rmExitHap for pid %d' % pid)
+            self.lgr.debug('rmExitHap for pid %d' % pid)
             for eip in my_exit_pids:
                 if pid in my_exit_pids[eip]:
                     my_exit_pids[eip].remove(pid)
-                    #self.lgr.debug('rmExitHap removed pid %d for eip 0x%x' % (pid, eip))
+                    self.lgr.debug('rmExitHap removed pid %d for eip 0x%x' % (pid, eip))
                     if len(my_exit_pids[eip]) == 0:
-                        #self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
+                        self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
                         self.context_manager.genDeleteHap(self.exit_hap[eip])
             self.exit_info[pid] = {}     
 
@@ -871,13 +872,13 @@ class SharedSyscall():
         return self.matching_exit_info 
 
     def stopAlone(self, Dumb):
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapReset, None)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHapReset, None)
         self.lgr.debug('sharedSyscall stopAlone for origin reset, added hap, now stop')
         SIM_break_simulation('origin reset')
 
     def delStopAlone(self, dumb):
         if self.stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
     def stopHapReset(self, stop_action, one, exception, error_string):
@@ -913,6 +914,9 @@ class SharedSyscall():
         self.lgr.debug('rmExitBySyscallName %s' % name)
         exit_name = '%s-exit' % name
         rmlist = []
+        if name is None or name == 'None':
+            self.lgr.debug('rmExitBySyscall name is none, experiment, ug')
+            return
         for pid in self.exit_names:
             the_name = self.exit_names[pid]
             if the_name.endswith(exit_name):
