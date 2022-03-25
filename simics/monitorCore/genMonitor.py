@@ -4294,6 +4294,9 @@ class GenMonitor():
         if self.target in self.magic_origin:
             retval = self.magic_origin[self.target].didMagic()
         return retval
+
+    def blackListPid(self, pid):
+        self.context_manager[self.target].noWatch(pid)
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
