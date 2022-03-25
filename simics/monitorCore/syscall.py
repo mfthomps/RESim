@@ -1463,7 +1463,7 @@ class Syscall():
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
 
-        elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':        
+        elif callname in ['select','_newselect', 'pselect6']:        
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
@@ -1947,7 +1947,68 @@ class Syscall():
                 ''' debugging some process, and we are background.  thus we are in a different context than the process being debugged. '''
                 retval = True
         return retval
-           
+
+    def handleReadOrSocket(self, callname, frame, exit_info, syscall_info):
+        retval = None
+        the_callname = callname
+        if 'ss' in frame:
+            ss = frame['ss']
+            #ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
+            exit_info.old_fd = ss.fd
+            exit_info.sock_struct = ss
+            socket_callnum = frame['param1']
+            exit_info.socket_callname = net.callname[socket_callnum].lower()
+            ida_msg = 'syscall socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
+            self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+            the_callname = exit_info.socket_callname
+            if ss.addr is not None:
+                exit_info.retval_addr = ss.addr
+                self.lgr.debug('ss addr is 0x%x len is %d' % (ss.addr, ss.length))
+            if the_callname == 'recvfrom' and callname == 'socketcall':        
+                src_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+16)
+                src_addr_len = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
+                exit_info.fname_addr = src_addr
+                exit_info.count = src_addr_len
+
+        else:
+            self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frame['param1'])
+            exit_info.old_fd = frame['param1']
+
+        if exit_info.old_fd is not None:
+    
+            retval = the_callname
+            self.lgr.debug('syscall setExists callname %s' % the_callname)
+            if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('syscall setExists subcall %s' % call_param.subcall)
+                    if call_param.subcall is None or call_param.subcall == the_callname:
+                        self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), exit_info.old_fd))
+                        ''' TBD why not do for any and all?'''
+                        #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                        if (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
+                            self.lgr.debug('setExits set the call_params')
+                            exit_info.call_params = call_param
+                            if call_param.match_param == exit_info.old_fd:
+                                this_pid = self.top.getPID()
+                                self.lgr.debug('syscall setExits found fd %d, this pid %d' % (exit_info.old_fd, this_pid))
+                            break
+       
+        else:
+            self.lgr.warning('syscall setExits pid %d has old_fd of None')
+            retval = None
+        return retval
+
+    def handleSelect(self, callname, pid, frame, exit_info, syscall_info):
+            exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
+                 self.cpu, self.mem_utils, self.lgr)
+
+            ida_msg = '%s pid:%d %s\n' % (callname, pid, exit_info.select_info.getString())
+            for call_param in syscall_info.call_params:
+                if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                    self.lgr.debug('handleSelect call param found %d' % (call_param.match_param))
+                    exit_info.call_params = call_param
+                    break
+
     def setExits(self, frames, reset=False, context_override=None):
         ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
         for pid in frames:
@@ -1969,47 +2030,10 @@ class Syscall():
 
             the_callname = callname
             if callname == 'socketcall' or callname.upper() in net.callname:
-                if 'ss' in frames[pid]:
-                    ss = frames[pid]['ss']
-                    #ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, pid)
-                    exit_info.old_fd = ss.fd
-                    exit_info.sock_struct = ss
-                    socket_callnum = frames[pid]['param1']
-                    exit_info.socket_callname = net.callname[socket_callnum].lower()
-                    ida_msg = 'syscall socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
-                    self.lgr.debug('setExits socket parsed: %s' % ida_msg)
-                    the_callname = exit_info.socket_callname
-                    if ss.addr is not None:
-                        exit_info.retval_addr = ss.addr
-                        self.lgr.debug('ss addr is 0x%x len is %d' % (ss.addr, ss.length))
-                    if the_callname == 'recvfrom' and callname == 'socketcall':        
-                        src_addr = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+16)
-                        src_addr_len = self.mem_utils.readWord32(self.cpu, frames[pid]['param2']+20)
-                        exit_info.fname_addr = src_addr
-                        exit_info.count = src_addr_len
+                the_callname = self.handleReadOrSocket(callname, frames[pid], exit_info, syscall_info)
+            elif callname in ['select','_newselect', 'pselect6']:        
+                self.handleSelect(callname, pid, frames[pid], exit_info, syscall_info)
 
-                else:
-                    self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frames[pid]['param1'])
-                    exit_info.old_fd = frames[pid]['param1']
-            if exit_info.old_fd is None:
-                self.lgr.warning('syscall setExits pid %d has old_fd of None')
-                continue
-
-            self.lgr.debug('syscall setExists callname %s' % the_callname)
-            if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
-                for call_param in syscall_info.call_params:
-                    self.lgr.debug('syscall setExists subcall %s' % call_param.subcall)
-                    if call_param.subcall is None or call_param.subcall == the_callname:
-                        self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), ss.fd))
-                        ''' TBD why not do for any and all?'''
-                        #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                        if (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                            self.lgr.debug('setExits set the call_params')
-                            exit_info.call_params = call_param
-                            if call_param.match_param == ss.fd:
-                                this_pid = self.top.getPID()
-                                self.lgr.debug('syscall setExits found fd %d, this pid %d' % (ss.fd, this_pid))
-                            break
             if exit_info.call_params is not None:
                 exit_info.origin_reset = reset
                 if exit_info.retval_addr is not None:

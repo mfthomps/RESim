@@ -238,6 +238,7 @@ class WriteData():
                 if self.select_call_ip is not None:
                     self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
                     self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
+                    self.lgr.debug('writeData set selectHap on select_call_ip 0x%x, cell is %s' % (self.select_call_ip, str(self.cell)))
 
     def setRetHap(self):
         if self.ret_hap is None: 
@@ -249,10 +250,32 @@ class WriteData():
         ''' Hit a call to select'''
         if self.select_hap is None:
             return
+        #self.lgr.debug('writeData selectHap ')
         if self.stop_on_read:
             self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
+        pid = self.top.getPID()
+        if self.stop_on_read and len(self.in_data) == 0:
+            self.lgr.debug('writeData selectHap stop on read')
+            SIM_break_simulation('writeData selectHap stop on read')
+            return
+        if pid != self.pid:
+            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            return
+        if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
+            self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+        else:
+            if self.limit_one:
+                self.lgr.warning('writeData selectHap, would write more data, but limit_one')
+                #self.lgr.debug(frame_s)
+            
+            else:
+                ''' Skip over kernel to the return ip '''
+                self.cpu.iface.int_register.write(self.pc_reg, self.select_return_ip)
+                self.lgr.debug('writeData selectHap, skipped over kernel')
+
+
 
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''
@@ -270,8 +293,8 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
+            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             '''
-            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             '''
@@ -398,6 +421,15 @@ class WriteData():
                     self.lgr.debug('writeData pickle, no call_ip, hack to 4 before ret, 0x%x' % self.call_ip)
                 else:
                     self.lgr.warning("writeData pickle, no call_ip, FIX for non-arm")
+            if 'select_call_ip' in so_pickle:
+                self.select_call_ip = so_pickle['select_call_ip']
+                self.select_return_ip = so_pickle['select_return_ip']
+            if self.select_call_ip is None and self.select_return_ip is not None:
+                if self.cpu.architecture == 'arm':
+                    self.select_call_ip = self.select_return_ip - 4
+                    self.lgr.debug('writeData pickle, no select_call_ip, hack to 4 before ret, 0x%x' % self.select_call_ip)
+                else:
+                    self.lgr.warning("writeData pickle, no select_call_ip, FIX for non-arm")
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
                 if self.addr is None:
