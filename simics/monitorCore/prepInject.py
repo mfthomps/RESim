@@ -37,7 +37,7 @@ class PrepInject():
 
     def prepInject(self):
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
-        self.lgr.debug('afl prepInject snap %s' % self.snap_name)
+        self.lgr.debug('prepInject snap %s' % self.snap_name)
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
@@ -54,12 +54,17 @@ class PrepInject():
         self.lgr.debug('instrumentSelect stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.select_return_ip, pid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
-        previous = cycle - 1
-        resimUtils.skipToTest(self.cpu, previous, self.lgr)
-        self.select_call_ip = self.top.getEIP(self.cpu)
-        self.lgr.debug('instrumentSelect skipped to call: 0x%x pid:%d cycle is 0x%x' % (self.select_call_ip, pid, self.cpu.cycles))
-        ''' now back to return '''
-        resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+        origin = self.top.getFirstCycle()
+        self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
+        if cycle <= origin:
+            self.lgr.debug('prepInject instrumentSelect Entry into kernel is prior to first cycle, cannot record select_ip')
+        else:
+            previous = cycle - 1
+            resimUtils.skipToTest(self.cpu, previous, self.lgr)
+            self.select_call_ip = self.top.getEIP(self.cpu)
+            self.lgr.debug('instrumentSelect skipped to call: 0x%x pid:%d cycle is 0x%x' % (self.select_call_ip, pid, self.cpu.cycles))
+            ''' now back to return '''
+            resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
         self.top.restoreDebugBreaks()
         self.prepInject()
 
@@ -140,7 +145,7 @@ class PrepInject():
             self.lgr.error('preInject instrumentIO could not handle callname %s' % callname)
 
     def pickleit(self, name, exit_info, orig_buffer):
-        self.lgr.debug('afl pickleit, begin')
+        self.lgr.debug('prepInject pickleit, begin')
         self.top.writeConfig(name)
         pickDict = {}
         pickDict['call_ip'] = self.call_ip
@@ -155,7 +160,7 @@ class PrepInject():
             pickDict['size'] = exit_info.sock_struct.length
         else:
             pickDict['size'] = exit_info.count
-        self.lgr.debug('afl pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
+        self.lgr.debug('prepInject pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
         ''' Otherwise console has no indiation of when done. '''
 
         if exit_info.fname_addr is not None:
