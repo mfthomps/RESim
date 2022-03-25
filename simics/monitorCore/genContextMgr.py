@@ -190,6 +190,9 @@ class GenContextMgr():
         ''' used by pageFaultGen to supress breaking on apparent kills '''
         self.watching_page_faults = False
 
+        ''' Do not watch these pids '''
+        self.no_watch = []
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -525,8 +528,6 @@ class GenContextMgr():
             prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
         '''
        
-
-        pid = self.mem_utils.readWord32(cpu, new_addr + self.param.ts_pid)
        
         if len(self.pending_watch_pids) > 0:
             ''' Are we waiting to watch pids that have not yet been scheduled?
@@ -536,7 +537,7 @@ class GenContextMgr():
                 self.watch_rec_list[new_addr] = pid
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
-        if pid not in self.pid_cache and comm in self.debugging_comm:
+        if pid not in self.pid_cache and comm in self.debugging_comm and pid not in self.no_watch:
            group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
            add_it = False
@@ -1114,4 +1115,9 @@ class GenContextMgr():
     def getWatchPids(self):
         return self.task_rec_bp.keys()
 
-
+    def noWatch(self, pid):
+        self.no_watch.append(pid)
+        if pid in self.pid_cache:
+            self.pid_cache.remove(pid)
+        self.rmTask(pid)
+        self.lgr.debug('contectManager noWatch pid:%d' % pid)
