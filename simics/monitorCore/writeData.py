@@ -264,7 +264,8 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            #self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            pass
         else:
             if self.limit_one:
                 self.lgr.warning('writeData selectHap, would write more data, but limit_one')
@@ -273,7 +274,7 @@ class WriteData():
             else:
                 ''' Skip over kernel to the return ip '''
                 self.cpu.iface.int_register.write(self.pc_reg, self.select_return_ip)
-                self.lgr.debug('writeData selectHap, skipped over kernel')
+                #self.lgr.debug('writeData selectHap, skipped over kernel')
 
 
 
