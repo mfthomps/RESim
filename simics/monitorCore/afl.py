@@ -370,8 +370,10 @@ class AFL():
         
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = ('localhost', self.port)
-        self.lgr.debug('afl conect to port %d' % self.port)
+        self.lgr.debug('afl connect to port %d' % self.port)
+        time.sleep(30)
         self.sock.connect(server_address)
+        self.lgr.debug('afl back from connect')
         self.sendMsg('hi from resim')
         reply = self.getMsg()
         self.iteration = int(reply.split()[-1].strip())+1
