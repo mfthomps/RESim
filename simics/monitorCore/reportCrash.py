@@ -102,7 +102,11 @@ class ReportCrash():
         self.top.trackIO(self.trackFD, reset=True, callback=self.doneForward)
 
     def doneBackward(self, dumb):
-        self.crash_report.write("\n\nBacktrace:\n")
+        try:
+            self.crash_report.write("\n\nBacktrace:\n")
+        except:
+            self.lgr.debug('tbd fix this race in reportCrash')
+            return
         orig_stdout = sys.stdout
         sys.stdout = self.crash_report
         self.top.listBookmarks()
