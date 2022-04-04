@@ -31,8 +31,6 @@ def feedDriver(ip, port, header, client_path, magic_path):
     cmd = 'scp -P 4022 %s %s localhost:/tmp/' % (client_path, magic_path)
     #print(cmd)
     result = os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost ls -l /tmp/'
-    result = os.system(cmd)
 
     cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
     #print(cmd)
@@ -113,6 +111,7 @@ def main():
     resim_dir = os.getenv('RESIM_DIR')
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
     index = len(already_done)
+    print('Found %d crashes to analyze, and %d already done' % (len(flist), len(already_done)))
     for f in sorted(flist):
         if f in already_done:
             print('Already ran %s, skipping' % f)
