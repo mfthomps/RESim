@@ -128,9 +128,9 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     fh = os.open('resim_ctl.fifo', os.O_WRONLY)
     lgr.debug('back from open fifo')
     fifo_list.append(fh)
-    handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
+    do_restart = handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
 
-    return resim_ps
+    return do_restart
     
 
 def runAFLTilRestart(args, lgr):
@@ -274,7 +274,7 @@ def runAFLTilRestart(args, lgr):
         do_restart = handleClose(resim_procs, read_array, args.seconds, args.remote, fifo_list, lgr)
     else:
         lgr.debug('Running single instance')
-        doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
+        do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
     return do_restart
 
 def runAFL(args, lgr):
