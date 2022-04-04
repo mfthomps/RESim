@@ -486,6 +486,10 @@ class DataWatch():
            self.mem_something.fun == 'j_memcpy' or self.mem_something.fun == 'memmove':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
+            if self.mem_something.count == 0:
+                self.lgr.error('got zero count for memcpy')
+                SIM_break_simulation('mempcpy')
+                return
             
             if self.mem_something.op_type == Sim_Trans_Load:
                 buf_start = self.findRange(self.mem_something.src)
@@ -719,6 +723,7 @@ class DataWatch():
     def getMemParams(self, data_hit):
             ''' data_hit is true if a read hap led to this call.  otherwise we simply broke on entry to 
                 the memcpy-ish routine '''
+            skip_fun = False
             self.watchMarks.registerCallCycle();
             ''' assuming we are a the call to a memsomething, get its parameters '''
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
@@ -766,8 +771,13 @@ class DataWatch():
                             self.lgr.debug('mempcy but not libc, so file %s  count %d' % (so_file, self.mem_something.count))
                     else:
                         self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
-                self.lgr.debug('getMemParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, 
-                    self.mem_something.count))
+                if self.mem_something.count == 0:
+                    self.lgr.debug('dataWatch getMemParams sees 0 count for copy, skip this function.')
+                    self.pending_call = False
+                    skip_fun = True
+                else:
+                    self.lgr.debug('getMemParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, 
+                        self.mem_something.count))
             elif self.mem_something.fun == 'memset':
                 self.mem_something.dest, dumb, self.mem_something.count = self.getCallParams(sp)
                 self.mem_something.src = self.mem_something.dest
@@ -904,8 +914,7 @@ class DataWatch():
             self.top.restoreDebugBreaks(was_watching=True)
 
             #self.context_manager.restoreDefaultContext()
-            skip_fun = False
-            if not data_hit:
+            if not data_hit and not skip_fun:
                 self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
                 buf_start = self.findRange(self.mem_something.src)
@@ -926,6 +935,7 @@ class DataWatch():
             if not skip_fun:
                 if self.mem_something.ret_ip == 0:
                     self.lgr.error('dataWatch getMemParams ret_ip is zero, bail')
+                    self.pending_call = False
                     return
                 #self.stopWatch(leave_fun_entries = True)
                 self.stopWatch(immediate=True)
@@ -938,6 +948,8 @@ class DataWatch():
                      str(self.cpu.current_context)))
                 if data_hit:
                     SIM_run_command('c')
+            else:
+                self.pending_call = False
 
     def runToReturnAlone(self, dumb):
         cell = self.top.getCell()
