@@ -40,6 +40,7 @@ import syscall
 import resimHaps
 import time
 import pickle
+from resimHaps import *
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -605,7 +606,7 @@ class reverseToCall():
                     return None
                 #skip_to = page_faults[rev_to] - 1
                 skip_ok = self.skipToTest(skip_to)
-                self.lgr.debug('jumpOverKernel found page fault for 0x%x, skip back to 0x%x' % (eip, skip_to))
+                self.lgr.debug('jumpOverKernel found page fault for 0x%x, skipped back to 0x%x' % (rev_to, skip_to))
                 if not skip_ok:
                     return None
                 rval = self.top.getReg(self.reg, self.cpu) 
@@ -613,7 +614,8 @@ class reverseToCall():
                     retval = True
                 else:
                     retval = False
-                    self.lgr.debug('jumpOverKernel pagefault register changed -- assume kernel did it, return to user space')
+                    self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
+                       rval))
             else:
                 cell = self.top.getCell()
                 self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
@@ -633,7 +635,7 @@ class reverseToCall():
                 if best is None:
                     best = cycle 
                 else:
-                    if (now-cycle) < (best-cycle):
+                    if (now-cycle) < (now-best):
                         best = cycle
         return best
         
@@ -697,6 +699,7 @@ class reverseToCall():
         self.lgr.debug('doRevToModReg starting at PC %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         done = False
         self.save_reg_mod = RegisterModType(reg, RegisterModType.REG)
+        rval = None
         while not done:
             reg_mod_type = self.cycleRegisterMod()
             if reg_mod_type is None:
