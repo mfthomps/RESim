@@ -267,8 +267,11 @@ class IteratorMark():
     def __init__(self, fun, addr, buf_start): 
         self.fun = fun
         self.addr = addr
-        offset = addr - buf_start
-        self.msg = 'iterator %s %x (%d bytes into buffer at 0x%x)' % (fun, addr, offset, buf_start)
+        if buf_start is None:        
+            self.msg = 'iterator %s %x No buffer start found?)' % (fun, addr)
+        else:
+            offset = addr - buf_start
+            self.msg = 'iterator %s %x (%d bytes into buffer at 0x%x)' % (fun, addr, offset, buf_start)
     def getMsg(self):
         return self.msg
 
