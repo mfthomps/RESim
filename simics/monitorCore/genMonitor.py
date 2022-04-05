@@ -103,6 +103,7 @@ import traceMarks
 import userBreak
 import magicOrigin
 from resimHaps import *
+import reverseTrack
 import json
 import pickle
 import re
@@ -160,6 +161,7 @@ class GenMonitor():
         self.sharedSyscall = {}
         self.ropCop = {}
         self.back_stop = {}
+        self.reverseTrack = {}
 
 
 
@@ -559,6 +561,9 @@ class GenMonitor():
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.traceProcs[cell_name], self.traceFiles[cell_name], 
                   self.soMap[cell_name], self.dataWatch[cell_name], self.traceMgr[cell_name], self.lgr)
+
+            self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
+                  self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
 
     def getBootCycleChunk(self):
@@ -1786,26 +1791,7 @@ class GenMonitor():
 
     def revTaintReg(self, reg, kernel=False):
         ''' back track the value in a given register '''
-        reg = reg.lower()
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        value = self.mem_utils[self.target].getRegValue(cpu, reg)
-        self.lgr.debug('revTaintReg pid:%d for %s value 0x%x' % (pid, reg, value))
-        if self.reverseEnabled():
-            self.removeDebugBreaks()
-            cell_name = self.getTopComponentName(cpu)
-            eip = self.getEIP(cpu)
-            instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-            reg_num = cpu.iface.int_register.get_number(reg)
-            value = cpu.iface.int_register.read(reg_num)
-            self.lgr.debug('revTaintReg for reg value %x' % value)
-            track_num = self.bookmarks.setTrackNum()
-            bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
-            self.bookmarks.setDebugBookmark(bm)
-            self.context_manager[self.target].setIdaMessage('')
-            self.rev_to_call[self.target].doRevToModReg(reg, taint=True, kernel=kernel)
-        else:
-            print('reverse execution disabled')
-            self.skipAndMail()
+        self.reverseTrack[self.target].revTaintReg(reg, self.bookmarks, kernel=kernel)
 
     def satisfyCondition(self, pc):
         ''' Assess a simple condition, modify input data to satisfy it '''
