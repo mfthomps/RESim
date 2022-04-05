@@ -85,4 +85,5 @@ class ReverseTrack():
         else:
             self.lgr.warning('reverseTrack not handling function %s' % self.mem_something.fun)
         if self.top_command_callback is not None:
-            self.top_command_callback(None)
+            self.top.setCommandCallback(self.top_command_callback)
+            self.top.skipAndMail()
