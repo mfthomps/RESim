@@ -19,6 +19,26 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 no_stop_funs = ['xml_element_free']
+class MemSomething():
+    def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None):
+            self.fun = fun
+            self.addr = addr
+            self.ret_ip = ret_ip
+            self.src = src
+            self.dest = dest
+            self.the_string = None
+            self.count = count
+            self.called_from_ip = called_from_ip
+            self.trans_size = trans_size
+            self.ret_addr_addr = ret_addr_addr
+            ''' used for finishReadHap '''
+            self.op_type = op_type
+            self.length = length
+            self.start = start
+            self.dest_list = []
+            ''' used for file tracking, e.g., if xmlParse '''
+            self.run = run
+
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
@@ -119,7 +139,7 @@ class DataWatch():
             if f.fun_name == 'fread':
                 ret_addr = f.ret_addr
                 called_from = f.ip
-                self.mem_something = self.MemSomething(f.fun_name, start, f.ret_addr, start, None, None, 
+                self.mem_something = MemSomething(f.fun_name, start, f.ret_addr, start, None, None, 
                       f.ip, None, length, start)
                 self.lgr.debug('checkFread got fread')
                 SIM_run_alone(self.addFreadAlone, None)
@@ -438,25 +458,6 @@ class DataWatch():
                  kernel_return_info, proc_break, 'memcpy_return_hap')
        
        
-    class MemSomething():
-        def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None):
-            self.fun = fun
-            self.addr = addr
-            self.ret_ip = ret_ip
-            self.src = src
-            self.dest = dest
-            self.the_string = None
-            self.count = count
-            self.called_from_ip = called_from_ip
-            self.trans_size = trans_size
-            self.ret_addr_addr = ret_addr_addr
-            ''' used for finishReadHap '''
-            self.op_type = op_type
-            self.length = length
-            self.start = start
-            self.dest_list = []
-            ''' used for file tracking, e.g., if xmlParse '''
-            self.run = run
      
     def startUndoAlone(self, dumb):
         self.undo_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.undoHap, self.mem_something)
@@ -701,7 +702,7 @@ class DataWatch():
         else: 
             ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
             self.lgr.debug('memSomthingEntry ARM ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
-        self.mem_something = self.MemSomething(fun, None, ret_addr, None, None, None, None, None, None, None)
+        self.mem_something = MemSomething(fun, None, ret_addr, None, None, None, None, None, None, None)
         #                                     (fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None): 
         SIM_run_alone(self.getMemParams, False)
 
@@ -1367,7 +1368,7 @@ class DataWatch():
                 if op_type != Sim_Trans_Load:
                     src = None
                     dest = addr
-                self.mem_something = self.MemSomething(mem_stuff.fun, addr, mem_stuff.ret_addr, src, dest, None, 
+                self.mem_something = MemSomething(mem_stuff.fun, addr, mem_stuff.ret_addr, src, dest, None, 
                       mem_stuff.called_from_ip, op_type, length, start, ret_addr_addr = mem_stuff.ret_addr_addr, trans_size=memory.size)
                 SIM_run_alone(self.handleMemStuff, None)
                 return
@@ -1616,7 +1617,7 @@ class DataWatch():
         mem_stuff = self.memsomething(frames, my_mem_funs, st)
         if mem_stuff is not None:
             self.lgr.debug('mem_stuff function %s, ret_ip is 0x%x' % (mem_stuff.fun, mem_stuff.ret_addr))
-            self.mem_something = self.MemSomething(mem_stuff.fun, None, mem_stuff.ret_addr, None, None, None, 
+            self.mem_something = MemSomething(mem_stuff.fun, None, mem_stuff.ret_addr, None, None, None, 
                 mem_stuff.called_from_ip, None, None, None, run=True)
             self.break_simulation=False
             self.me_trace_malloc = True
