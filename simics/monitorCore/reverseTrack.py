@@ -12,9 +12,11 @@ class ReverseTrack():
         self.memsomething = None
         self.reg = None
         self.value = None
+        self.top_command_callback = None
 
     def revTaintReg(self, reg, bookmarks, kernel=False):
         ''' back track the value in a given register '''
+        self.top_command_callback = self.top.getCommandCallback()
         self.bookmarks = bookmarks
         reg = reg.lower()
         self.reg = reg
@@ -82,3 +84,5 @@ class ReverseTrack():
             self.bookmarks.setDebugBookmark(bm)
         else:
             self.lgr.warning('reverseTrack not handling function %s' % self.mem_something.fun)
+        if self.top_command_callback is not None:
+            self.top_command_callback(None)

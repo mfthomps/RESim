@@ -4013,6 +4013,8 @@ class GenMonitor():
     def setCommandCallback(self, callback):
         self.command_callback = callback 
 
+    def getCommandCallback(self):
+        return self.command_callback 
 
     def findBNT(self, hits, fun_blocks):
         for bb in fun_blocks['blocks']:
