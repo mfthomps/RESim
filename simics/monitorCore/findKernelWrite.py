@@ -29,6 +29,7 @@ import memUtils
 import decode
 import decodeArm
 import procInfo
+import resimUtils
 import time
 '''
     Catch the kernel writing to a memory breakpoint and bring the eip to the return from the syscall.
@@ -592,15 +593,13 @@ class findKernelWrite():
                value, self.addr, current, eip, offset))
         if not self.forward:
             previous = current - 1
-            SIM_run_command('pselect %s' % self.cpu.name)
             if SIM_simics_is_running():
                 self.lgr.error('backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
-            SIM_run_command('skip-to cycle=%d' % previous)
-            new = SIM_cycle_count(self.cpu) 
-            self.lgr.debug('backOne back to 0x%x got 0x%x' % (previous, new))
+            resimUtils.skipToTest(self.cpu, previous, self.lgr)
             eip = self.top.getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
             self.lgr.debug('backOneAlone, was going forward')
         if self.forward_break is not None:
