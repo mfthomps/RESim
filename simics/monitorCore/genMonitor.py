@@ -1971,6 +1971,9 @@ class GenMonitor():
         if callname in self.call_traces[cell_name]:
             #self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
+        else:
+            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            pass
 
     def traceFile(self, path):
         self.lgr.debug('traceFile %s' % path)
@@ -2363,12 +2366,16 @@ class GenMonitor():
         self.lgr.debug('undoDebug done')
             
 
-    def remainingCallTraces(self):
+    def remainingCallTraces(self, exception=None):
         for cell_name in self.call_traces:
             if len(self.call_traces[cell_name]) > 0:
                 #for ct in self.call_traces[cell_name]:
                 #    self.lgr.debug('remainingCallTraces found remain for cell %s call %s' % (cell_name, ct))
-                return True
+                if len(self.call_traces[cell_name]) == 1 and exception in self.call_traces[cell_name]:
+                    self.lgr.debug('remainingCallTraces ignoring exception %s' % exception)
+                    pass
+                else:
+                    return True
         return False
 
     def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, 
@@ -2848,6 +2855,7 @@ class GenMonitor():
         SIM_run_command(cmd)
         self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
+        self.clearBookmarks()
         if self.bookmarks is not None:
             self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
         else:
@@ -2862,10 +2870,10 @@ class GenMonitor():
             return False
         self.bookmarks.clearMarks()
         self.resetOrigin(cpu)
-        self.dataWatch[self.target].clearWatchMarks()
+        self.dataWatch[self.target].resetOrigin(cpu.cycles)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.stopTrackIO()
-        self.dataWatch[self.target].clearWatches(cpu.cycles)
+        self.lgr.debug('genMonitor clearBookmarks call clearWatches')
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
@@ -3248,7 +3256,8 @@ class GenMonitor():
             self.lgr.error('trackIO called but no debugging session exists.')
             return
         self.stopTrackIO()
-        self.clearWatches()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.clearWatches(cycle=cpu.cycles)
         if callback is None:
             done_callback = self.stopTrackIO
         else:
@@ -3280,8 +3289,8 @@ class GenMonitor():
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
 
-    def clearWatches(self):
-        self.dataWatch[self.target].clearWatches()
+    def clearWatches(self, cycle=None):
+        self.dataWatch[self.target].clearWatches(cycle=cycle)
 
     def showWatchMarks(self, old=False):
         self.dataWatch[self.target].showWatchMarks(old=old)
