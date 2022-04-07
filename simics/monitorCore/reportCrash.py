@@ -7,6 +7,7 @@ import re
 import decode
 import decodeArm
 import pageUtils
+import aflPath
 
 class ReportCrash():
     def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, 
@@ -28,20 +29,7 @@ class ReportCrash():
         if os.path.isfile(fname):
             self.flist.append(fname)
         else:
-            afl_output = os.getenv('AFL_OUTPUT')
-            if afl_output is None:
-                afl_output = os.path.join(os.getenv('HOME'), 'SEED','afl','afl-output')
-            afl_dir = os.path.join(afl_output, fname)
-            if not os.path.isdir(afl_dir):
-               print('No afl directory found at %s' % afl_dir)
-               return
-            crashes_dir = os.path.join(afl_dir, 'crashes*')
-            gmask = '%s/*' % crashes_dir
-            self.lgr.debug("ReportCrash gmask: %s" % gmask)
-            glist = glob.glob(gmask)
-            for g in glist:
-                if os.path.basename(g).startswith('id:'):
-                    self.flist.append(g)
+            self.flist = aflPath.getTargetCrashes(fname)
         if report_dir is None:
             self.report_dir = '/tmp/crash_reports'
         else:
@@ -238,7 +226,7 @@ class ReportCrash():
                         if copy_mark.mark.length > delta:
                             self.crash_report.write('A strcpy buffer overlap.')
                             self.top.setCommandCallback(self.doneBackward)
-                            self.lgr.debug('reportCrash overlap, rev to find r1')
+                            self.lgr.debug('reportCrash overlap, rev to find src address')
                             self.top.revTaintAddr(copy_mark.mark.src)
                         else:
                             self.lgr.debug('reportCrash: Is strcpy, but not an overlap')
@@ -257,9 +245,11 @@ class ReportCrash():
                         self.doneBackward(None)
             elif bad_addr % pageUtils.PAGE_SIZE == 0:
                 self.lgr.debug('reportCrash thinks it is a page boundary')
+                self.top.setCommandCallback(self.doneBackward)
                 self.reportStack()
                 self.crash_report.write('\nPage boundary.\n')
-                self.doneBackward(None)
+                self.tryCorruptRef(instruct)
+                #self.doneBackward(None)
             else:
                 self.lgr.debug('reportCrash not a copy mark, look for bad reference.')
                 self.top.setCommandCallback(self.doneBackward)
