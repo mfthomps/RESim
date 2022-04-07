@@ -31,6 +31,7 @@ Return value
 eax
 
 '''
+exec_skip_list = ['/bin/sleep']
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
@@ -490,7 +491,7 @@ class Syscall():
 
 
     def stopTrace(self, immediate=False):
-        #self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -686,6 +687,13 @@ class Syscall():
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('finishParseExecve progstring None, arm fu?')
             return
+        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
+        SIM_delete_breakpoint(self.finish_break[pid])
+        del self.finish_hap[pid]
+        del self.finish_break[pid]
+        if prog_string in exec_skip_list:
+            self.lgr.debug('finishParseExecve pid:%d skipping (%s)' % (pid, prog_string))
+            return
         self.lgr.debug('finishParseExecve pid:%d progstring (%s)' % (pid, prog_string))
         nargs = min(4, len(arg_string_list))
         arg_string = ''
@@ -704,10 +712,6 @@ class Syscall():
 
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
-        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
-        SIM_delete_breakpoint(self.finish_break[pid])
-        del self.finish_hap[pid]
-        del self.finish_break[pid]
         self.checkExecve(prog_string, arg_string_list, call_info.pid)
 
 
@@ -794,7 +798,8 @@ class Syscall():
                 SIM_break_simulation('parseExecve zero prog_addr pid %d' % pid)
             self.finish_break[pid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
             self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
-            
+            return
+        elif prog_string in exec_skip_list:
             return
         nargs = min(4, len(arg_string_list))
         arg_string = ''
@@ -816,7 +821,7 @@ class Syscall():
             self.netInfo.checkNet(prog_string, arg_string)
         self.checkExecve(prog_string, arg_string_list, pid)
 
-        return prog_string
+        return 
 
 
     def socketParse(self, callname, syscall_info, frame, exit_info, pid):
