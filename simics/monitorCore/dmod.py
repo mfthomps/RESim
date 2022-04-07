@@ -159,9 +159,10 @@ class Dmod():
                 self.mem_utils.writeString(cpu, addr, new_string)
                 new_line = re.sub(fiddle.was, fiddle.becomes, checkline)
                 if len(checkline) != len(new_line):
+                    ''' Adjust future _lseek calls, which are caught in syscall.py '''
                     delta = len(checkline) - len(new_line)
                     diddle_lseek = DmodSeek(delta, pid, fd)
-                    operation = '_llseek'
+                    operation = ['_llseek', 'close']
                     call_params = syscall.CallParams(operation, diddle_lseek)        
                     self.top.runTo(operation, call_params, run=False, ignore_running=True)
                     self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
