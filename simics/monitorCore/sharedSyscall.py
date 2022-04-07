@@ -668,7 +668,7 @@ class SharedSyscall():
                             self.lgr.debug('sharedSyscall read found final dmod')
                             self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                             self.stopTrace()
-                            if not self.top.remainingCallTraces() and SIM_simics_is_running():
+                            if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
                                 self.top.notRunning(quiet=True)
                                 SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                             else:
