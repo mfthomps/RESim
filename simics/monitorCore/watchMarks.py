@@ -63,7 +63,8 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, modify=False, ad_hoc=False, dest=None):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None):
+        self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
         if addr is not None:
@@ -78,6 +79,7 @@ class DataMark():
         ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
+            self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
         self.loop_count = 0
@@ -97,7 +99,8 @@ class DataMark():
         elif self.end_addr is None:
             mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
         elif self.ad_hoc:
-            length = self.end_addr - self.addr + 1
+            length = (self.end_addr - self.addr) + 1
+            self.lgr.debug('DataMark getMsg ad-hoc length is %d' % length)
             if self.start is not None:
                 offset = self.addr - self.start
                 mark_msg = 'Copy %d bytes from 0x%x to 0x%x. Ad-hoc (from offset %d into buffer at 0x%x)' % (length, self.addr, self.dest, offset, self.start)
@@ -112,6 +115,9 @@ class DataMark():
     def addrRange(self, addr):
         self.end_addr = addr
         self.loop_count += 1
+        self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
+    def noAdHoc(self):
+        self.ad_hoc = False
 
 class KernelMark():
     def __init__(self, addr, count, callnum, fd):
@@ -323,6 +329,13 @@ class ReturnInt():
     def getMsg(self):
         return self.msg
 
+class ResetOrigin():
+    def __init__(self, origin_watches):
+        self.msg = 'Reset origin with %d data watches' % len(origin_watches)
+        self.origin_watches = origin_watches
+    def getMsg(self):
+        return self.msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -398,10 +411,16 @@ class WatchMarks():
                 self.recent_buf_address = recv_addr
                 self.recent_buf_max_len = max_len
         self.recordIP(ip)
-  
+ 
+    def resetOrigin(self, origin_watches): 
+        self.clearWatchMarks()
+        ro = ResetOrigin(origin_watches)
+        self.addWatchMark(ro)
+        self.lgr.debug('watchMarks resetOrigin')
+
     def memoryMod(self, start, length, trans_size, addr=None):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        dm = DataMark(addr, start, length, None, trans_size, modify=True)
+        dm = DataMark(addr, start, length, None, trans_size, self.lgr, modify=True)
         self.addWatchMark(dm)
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
@@ -409,7 +428,7 @@ class WatchMarks():
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc:
-            dm = DataMark(addr, start, length, cmp_ins, trans_size)
+            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
             self.addWatchMark(dm)
             self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
@@ -423,20 +442,23 @@ class WatchMarks():
                     self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    self.lgr.debug('watchMarks create new data mark for 0x%x, start 0x%x, len %d' % (addr, start, length))
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size, ad_hoc=True, dest=dest)
+                    self.lgr.debug('watchMarks create new ad hoc data mark for 0x%x, ref buffer start 0x%x, len %d dest 0x%x' % (addr, start, length, dest))
+                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest)
                     self.addWatchMark(dm)
             else:
-                self.lgr.warning('watchMarks dataRead, ad_hoc bu not mark list')
+                self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, DataMark):
                     pm.mark.addrRange(addr)
+                    if pm.mark.ad_hoc:
+                        self.lgr.debug('dataRead was add-hoc, but this is not, so reset it')
+                        pm.mark.noAdHoc()
                     #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size)
+                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
                     self.addWatchMark(dm)
                     self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
@@ -814,6 +836,9 @@ class WatchMarks():
     def markCount(self):
         return len(self.mark_list) 
 
+    def getMarks(self):
+        return self.mark.list
+
     def loadPickle(self, name):
         mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
         if os.path.isfile(mark_file):
@@ -842,6 +867,41 @@ class WatchMarks():
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
             json.dump(my_marks, fh) 
+
+    def getDataWatchList(self):
+        ''' get list intended for use in recontructing data watches '''
+        my_marks = []
+        for mark in self.mark_list:
+            if isinstance(mark.mark, ResetOrigin):
+                for origin_watch in mark.mark.origin_watches:
+                    entry = {}
+                    entry['cycle'] = mark.cycle
+                    entry['start'] = origin_watch['start']
+                    entry['length'] = origin_watch['length']
+                my_marks.append(entry)
+            else:
+                entry = {}
+                entry['cycle'] = mark.cycle
+                if isinstance(mark.mark, CopyMark):
+                    entry['start'] = mark.mark.dest 
+                    entry['length'] = mark.mark.length 
+                elif isinstance(mark.mark, ScanMark):
+                    entry['start'] = mark.mark.dest 
+                    entry['length'] = mark.mark.count 
+                elif isinstance(mark.mark, SprintfMark):
+                    entry['start'] = mark.mark.dest
+                    entry['length'] = mark.mark.count
+                elif isinstance(mark.mark, CallMark):
+                    entry['start'] = mark.mark.recv_addr
+                    entry['length'] = mark.mark.len
+                elif isinstance(mark.mark, DataMark) and not mark.mark.modify:
+                    entry['start'] = mark.mark.addr
+                    entry['length'] = mark.mark.trans_size
+                elif isinstance(mark.mark, DataMark) and mark.mark.modify:
+                    entry['start'] = mark.mark.addr
+                    entry['length'] = mark.mark.trans_size
+                my_marks.append(entry)
+        return my_marks
 
     def getAllJson(self):
         self.lgr.debug('getAllJson %d stale and %d new marks' % (len(self.stale_marks), len(self.mark_list)))
