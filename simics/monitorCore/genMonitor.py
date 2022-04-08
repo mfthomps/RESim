@@ -1473,8 +1473,8 @@ class GenMonitor():
             print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
             self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
             self.showHaps()
-            #for call in self.call_traces[self.target]:
-            #    self.lgr.debug('remaining trace %s' % call)
+            for call in self.call_traces[self.target]:
+                self.lgr.debug('remaining trace %s' % call)
             return
         if type(mark) != int:
             mark = mark.replace('|','"')
@@ -1967,12 +1967,21 @@ class GenMonitor():
         #    self.stopInstructTrace()
 
     def rmCallTrace(self, cell_name, callname):
+        ''' remove a call trace and all of its aliases '''
         #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
+            the_call = self.call_traces[cell_name][callname]
+            rm_list = []
             #self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
+            for call in self.call_traces[cell_name]:
+                if self.call_traces[cell_name][call] == the_call:
+                    rm_list.append(call)
+            for call in rm_list:
+                del self.call_traces[cell_name][call]
+
         else:
-            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
             pass
 
     def traceFile(self, path):
@@ -2527,6 +2536,7 @@ class GenMonitor():
         call_params.nth = count
        
         if 'runToIO' in self.call_traces[self.target]:
+            self.lgr.debug('runToIO already in call_traces, add param')
             self.call_traces[self.target]['runToIO'].addCallParams([call_params])
         else:
             cell = self.cell_config.cell_context[self.target]
@@ -2558,7 +2568,7 @@ class GenMonitor():
                 if flist_in is not None:
                     ''' Given callback functions, use those instead of skip_and_mail '''
                     skip_and_mail = False
-        
+                self.lgr.debug('runToIO, add new syscall')
                 the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
                                        calls, call_params=[call_params], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
@@ -2855,7 +2865,6 @@ class GenMonitor():
         SIM_run_command(cmd)
         self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
-        self.clearBookmarks()
         if self.bookmarks is not None:
             self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
         else:

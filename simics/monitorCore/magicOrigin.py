@@ -1,3 +1,4 @@
+import cli
 from simics import *
 from resimHaps import *
 '''
@@ -41,8 +42,10 @@ class MagicOrigin():
 
     def setMagicHap(self):
         self.magic_hap = RES_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
+        self.lgr.debug('magicOrigin setMagicHap')
 
     def deleteMagicHap(self):
+        self.lgr.debug('magicOrigin deleteMagicHap')
         SIM_run_alone(self.deleteMagicHapAlone, None)
 
     def deleteMagicHapAlone(self, dumb):
@@ -53,7 +56,29 @@ class MagicOrigin():
     def setOrigin(self):
         cmd = 'disconnect-real-network'
         SIM_run_command(cmd)
-        self.lgr.debug('MagicOrigin driver disconnected, set origin')
+        cmd = 'default_service_node0.status'
+        dumb,result = cli.quiet_run_command(cmd)
+       
+        ok = False 
+        for line in result.splitlines():
+            if 'connector_link0' in line:
+                parts = line.split(':')
+                node_connect = parts[0].strip()
+                switch = parts[1].strip()
+                cmd = '%s.status' % switch
+                dumb,result = cli.quiet_run_command(cmd)
+                for line in result.splitlines():
+                    if 'default_service_node0' in line:
+                        switch_device = line.split(':')[0].strip()
+                        cmd = 'disconnect default_service_node0.%s %s.%s' % (node_connect, switch, switch_device)
+                        dumb,result = cli.quiet_run_command(cmd)
+                        ok = True
+                        break
+                break
+        if ok:
+            self.lgr.debug('MagicOrigin real network disconnected along with connection to switch, set origin')
+        else:
+            self.lgr.debug('Did not find a service node to disconnect.')
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
