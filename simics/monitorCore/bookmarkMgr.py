@@ -233,10 +233,16 @@ class bookmarkMgr():
                 if i == mark:
                     self.goToDebugBookmark(the_mark)
                     return 
+        elif mark not in self.__bookmarks:
+            for bm in self.__bookmarks:
+                parts = bm.split()
+                if mark == parts[0]:
+                    mark = bm
+                    break
+            if mark not in self.__bookmarks:
+                self.lgr.error('goToDebugBookmark could not find cycle for mark %s' % mark)
+                return
         self.lgr.debug('goToDebugBookmark skip to debug bookmark: %s' % mark)
-        if mark not in self.__bookmarks:
-            self.lgr.error('goToDebugBookmark could not find cycle for mark %s' % mark)
-            return
         sys.stderr = open('err.txt', 'w')
         dum, cpu = self.context_mgr.getDebugPid() 
         self.context_mgr.clearExitBreaksAlone(None)
@@ -264,7 +270,7 @@ class bookmarkMgr():
                 done = True
         else:
             cycle = self.__bookmarks[mark].cycles
-            #self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
+            self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
             cli.quiet_run_command('pselect %s' % cpu.name)
             try:
                 cli.quiet_run_command('skip-to cycle=%d' % cycle)
