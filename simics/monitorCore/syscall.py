@@ -486,7 +486,7 @@ class Syscall():
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
-        self.sharedSyscall.rmExitBySyscallName(self.name)
+        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
         #self.lgr.debug('stopTraceAlone done')
 
 
@@ -1554,7 +1554,8 @@ class Syscall():
 
                 if self.call_list is not None:
                     for callname in self.call_list:
-                        self.top.rmCallTrace(self.cell_name, callname)
+                        #self.top.rmCallTrace(self.cell_name, callname)
+                        self.top.rmCallTrace(self.cell_name, self.name)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
