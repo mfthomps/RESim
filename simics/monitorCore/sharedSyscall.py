@@ -64,11 +64,11 @@ class SharedSyscall():
 
     def stopTrace(self):
         for context in self.exit_pids:
-            my_exit_pids = self.exit_pids[context]
-            self.lgr.debug('sharedSyscall stopTrace')
+            self.lgr.debug('sharedSyscall stopTrace context %s' % str(context))
             for eip in self.exit_hap:
                 self.context_manager.genDeleteHap(self.exit_hap[eip])
-            my_exit_pids = {}
+                self.lgr.debug('sharedSyscall stopTrace removed exit hap for eip 0x%x context %s' % (eip, str(context)))
+            self.exit_pids[context] = {}
         for eip in self.exit_hap:
             self.exit_info[eip] = {}
 
@@ -86,10 +86,15 @@ class SharedSyscall():
                 else:
                     print('\t%d' % (pid))
 
-    def rmExitHap(self, pid):
-        if self.cpu.current_context not in self.exit_pids:
+    def rmExitHap(self, pid, context=None):
+        if context is not None:
+            use_context = context
+        else:
+            use_context = self.cpu.current_context
+        if use_context not in self.exit_pids:
+            self.lgr.debug('rmExitHap context %s not in exit_pids, do nothing?' % str(use_context))
             return
-        my_exit_pids = self.exit_pids[self.cpu.current_context]
+        my_exit_pids = self.exit_pids[use_context]
         if pid is not None:
             self.lgr.debug('rmExitHap for pid %d' % pid)
             for eip in my_exit_pids:
@@ -118,7 +123,6 @@ class SharedSyscall():
         if pid not in self.exit_info:
             self.exit_info[pid] = {}
         self.exit_info[pid][name] = exit_info
-        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s' % (pid, name))
         if self.traceProcs is not None:
             self.trace_procs.append(pid)
         self.exit_names[pid] = name
@@ -126,6 +130,7 @@ class SharedSyscall():
             current_context = self.cpu.current_context
         else:
             current_context = context_override
+        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s current_context %s' % (pid, name, str(current_context)))
         if current_context not in self.exit_pids:
             self.exit_pids[current_context] = {}
         my_exit_pids = self.exit_pids[current_context]
@@ -143,6 +148,8 @@ class SharedSyscall():
                 self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
             my_exit_pids[exit_eip1].append(pid)
             self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
+        else:
+            self.lgr.debug('sharedSyscall addExitHap exit_eip1 is None')
 
         if exit_eip2 is not None:
             if exit_eip2 not in my_exit_pids:
@@ -155,7 +162,13 @@ class SharedSyscall():
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap2')
                 self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
+            else:
+                self.lgr.debug('sharedSyscall has exit pid for EIP2, len is %d' % len(my_exit_pids[exit_eip2]))
+                for pid in my_exit_pids[exit_eip2]:
+                    self.lgr.debug('\t got pid %d in exit_pids for exit_eip2' % pid)
             my_exit_pids[exit_eip2].append(pid)
+        else:
+            self.lgr.debug('sharedSyscall addExitHap exit_eip2 is None')
 
         if exit_eip3 is not None:
             if exit_eip3 not in my_exit_pids:
@@ -910,7 +923,7 @@ class SharedSyscall():
             self.mem_utils.setRegValue(self.cpu, 'syscall_ret', eax)
             self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)
 
-    def rmExitBySyscallName(self, name):
+    def rmExitBySyscallName(self, name, cell):
         self.lgr.debug('rmExitBySyscallName %s' % name)
         exit_name = '%s-exit' % name
         rmlist = []
@@ -921,8 +934,8 @@ class SharedSyscall():
             the_name = self.exit_names[pid]
             if the_name.endswith(exit_name):
                 rmlist.append(pid)
-                self.lgr.debug('sharedSyscall rmExitBySyscallName %d %s' % (pid, name)) 
-                self.rmExitHap(pid)
+                self.lgr.debug('sharedSyscall rmExitBySyscallName pid:%d removing: %s context %s' % (pid, name, str(cell))) 
+                self.rmExitHap(pid, context=cell)
                 if pid in self.exit_info and the_name in self.exit_info[pid]:
                     del self.exit_info[pid][the_name]
         for pid in rmlist:
