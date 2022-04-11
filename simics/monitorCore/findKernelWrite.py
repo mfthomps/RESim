@@ -148,6 +148,7 @@ class findKernelWrite():
                     bm = "eip:0x%x Offset 0x%x into the Initial dataWatch buffer starting  0x%x" % (eip, offset, buf_start)
                     self.bookmarks.setBacktrackBookmark(bm)
                     ida_message = 'Data traced back to address 0x%x at offset 0x%x into initial data watch buffer' % (addr, offset)
+                    self.context_manager.setIdaMessage(ida_message)
                     return True
         return False
 
