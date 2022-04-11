@@ -18,13 +18,15 @@ class GenBreakpoint():
         self.lgr = lgr
         self.handle = handle
         self.prefix = prefix
+        if addr is None:
+            lgr.error('GenBreakpoint called with addr of None.')
 
     def show(self):
         print('\tbreak_handle: %s num: %s  add:0x%x' % (str(self.handle), str(self.break_num), self.addr))
 
     def clear(self):
         if self.break_num is not None:
-            #self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             SIM_delete_breakpoint(self.break_num)
             self.break_num = None
 
@@ -35,6 +37,9 @@ class GenHap():
         self.callback = callback
         ''' used with afl '''
         self.parameter = parameter
+        for bp in breakpoint_list:
+            if bp.addr is None:
+                lgr.error('GenHap %s found breakpoint with addr of None' % name)
         self.breakpoint_list = breakpoint_list
         self.lgr = lgr
         self.hap_num = None
@@ -58,7 +63,7 @@ class GenHap():
         #self.lgr.debug('GenHap alone set hap_handle %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
         #          self.name, str(bs.break_num), str(be.break_num), 
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
-        self.hap_num = RES_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
+        self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
         #self.lgr.debug('GenHap alone set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
         #          str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
@@ -81,7 +86,7 @@ class GenHap():
                 #self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           self.name, str(bs.break_num), str(be.break_num), 
                 #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
-                self.hap_num = RES_hap_add_callback_range(self.hap_type, self.callback, self.parameter, bs.break_num, be.break_num)
+                self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
                 #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
                 #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
@@ -91,7 +96,7 @@ class GenHap():
             bp = self.breakpoint_list[0]
             #self.lgr.debug('bp.cell is %s addr %s' % (str(bp.cell), str(bp.addr)))
             if bp.addr is None:
-                self.lgr.error('contextManager, set bp.addr is none')
+                self.lgr.error('contextManager, set bp.addr is none within HAP %s' % self.name)
                 return
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             if bp.prefix is not None:
