@@ -29,7 +29,18 @@ from simics import *
 import cli
 from collections import OrderedDict
 import memUtils
+import resimUtils
 import sys
+class CycleRecord():
+        def __init__(self, cycles, steps, eip):
+            self.cycles = cycles
+            self.steps = steps
+            self.eip = eip
+        def toString(self):
+            if self.steps is not None:
+                return 'cycles: 0x%x steps: 0x%x eip: 0x%x' % (self.cycles, self.steps, self.eip)
+            else:
+                return 'cycles: 0x%x (no steps recorded) eip: 0x%x' % (self.cycles, self.eip)
 class bookmarkMgr():
     __bookmarks = OrderedDict()
     __kernel_marks = []
@@ -115,7 +126,7 @@ class bookmarkMgr():
                 self.lgr.debug('setDebugBookmark %s already exists, do nothing' % mark)
                 return
          
-        self.__bookmarks[mark] = self.top.cycleRecord(current, steps, eip)
+        self.__bookmarks[mark] = CycleRecord(current, steps, eip)
         self.__mark_msg[mark] = msg
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         if not mark.startswith('protected_memory'):
@@ -271,20 +282,27 @@ class bookmarkMgr():
         else:
             cycle = self.__bookmarks[mark].cycles
             self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
-            cli.quiet_run_command('pselect %s' % cpu.name)
-            try:
-                cli.quiet_run_command('skip-to cycle=%d' % cycle)
-            except:
-                print('reverse disabled')
-                return 'reverse disabled'
-            eip = self.top.getEIP(cpu)
-            current = SIM_cycle_count(cpu)
-            step = SIM_step_count(cpu)
-            #if cycle is not None and self.__bookmarks[mark].steps is not None:
-            #    self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
-            if current != cycle or eip != self.__bookmarks[mark].eip:
-                self.lgr.error('goToDebugBookmark, simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
+            if resimUtils.skipToTest(cpu, cycle, self.lgr):
+                eip = self.top.getEIP(cpu)
+                current = SIM_cycle_count(cpu)
+                step = SIM_step_count(cpu)
+                #if cycle is not None and self.__bookmarks[mark].steps is not None:
+                #    self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
+                if current != cycle or eip != self.__bookmarks[mark].eip:
+                    self.lgr.warning('goToDebugBookmark, simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
+                    ''' try hack to fix broken simics'''
+                    cli.quiet_run_command('rev 1')
+                    if resimUtils.skipToTest(cpu, cycle, self.lgr):
+                        eip = self.top.getEIP(cpu)
+                        current = SIM_cycle_count(cpu)
+                        step = SIM_step_count(cpu)
+                        #if cycle is not None and self.__bookmarks[mark].steps is not None:
+                        #    self.lgr.debug('goToDebugBookmark skipped to cycle %x step: %x eip: %x, wanted cycle: %x step: %x eip: %x' % (current, step, eip, cycle, self.__bookmarks[mark].steps, self.__bookmarks[mark].eip))
             
+                        if current != cycle or eip != self.__bookmarks[mark].eip:
+                            self.lgr.error('goToDebugBookmark, 2nd simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
+            else:
+                self.lgr.error('goToDebugBookmark failed skipToTest')
 
         self.context_mgr.setExitBreaks()
         self.context_mgr.resetBackStop()
