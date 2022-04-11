@@ -41,12 +41,15 @@ class MagicOrigin():
         self.setMagicHap()
 
     def setMagicHap(self):
+        if self.did_magic:
+            return
         self.magic_hap = RES_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
         self.lgr.debug('magicOrigin setMagicHap')
 
     def deleteMagicHap(self):
-        self.lgr.debug('magicOrigin deleteMagicHap')
-        SIM_run_alone(self.deleteMagicHapAlone, None)
+        if self.magic_hap is not None:
+            self.lgr.debug('magicOrigin deleteMagicHap')
+            SIM_run_alone(self.deleteMagicHapAlone, None)
 
     def deleteMagicHapAlone(self, dumb):
         if self.magic_hap is not None:
@@ -72,6 +75,10 @@ class MagicOrigin():
                         switch_device = line.split(':')[0].strip()
                         cmd = 'disconnect default_service_node0.%s %s.%s' % (node_connect, switch, switch_device)
                         dumb,result = cli.quiet_run_command(cmd)
+                        cmd = 'default_service_node0.disable-service -all'
+                        dumb,result = cli.quiet_run_command(cmd)
+                        #cmd = 'default_service_node0.delete' 
+                        #dumb,result = cli.quiet_run_command(cmd)
                         ok = True
                         break
                 break
@@ -85,6 +92,7 @@ class MagicOrigin():
         SIM_run_command(cmd)
         self.bookmarks.setOrigin(self.cpu)
         self.did_magic = True
+        self.deleteMagicHap()
         SIM_run_command('c')
 
     def magicHap(self, dumb, cell, magic_number):
