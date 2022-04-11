@@ -900,7 +900,8 @@ class WatchMarks():
                 elif isinstance(mark.mark, DataMark) and mark.mark.modify:
                     entry['start'] = mark.mark.addr
                     entry['length'] = mark.mark.trans_size
-                my_marks.append(entry)
+                if 'start' in entry:
+                    my_marks.append(entry)
         return my_marks
 
     def getAllJson(self):
