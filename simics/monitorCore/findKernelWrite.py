@@ -24,6 +24,7 @@
 '''
 
 import simics
+import cli
 from simics import *
 import memUtils
 import decode
@@ -93,6 +94,8 @@ class findKernelWrite():
 
 
     def go(self, addr):
+        ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
+        cli.quiet_run_command('si')
         self.addr = addr
         phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
@@ -257,7 +260,7 @@ class findKernelWrite():
 
     def stopToCheckWriteCallback(self, offset, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('stopToCheckWriteCallback, eip: 0x%x params %s %s %s' % (eip, one, exception, error_string))
+        self.lgr.debug('stopToCheckWriteCallback, eip: 0x%x params %s %s %s  cycle: 0x%x' % (eip, one, exception, error_string, self.cpu.cycles))
         if self.rev_write_hap is not None:
             self.lgr.warning('stopToCheckWrite hit but rev_write_hap set, ignore')
             return
@@ -596,8 +599,20 @@ class findKernelWrite():
             if SIM_simics_is_running():
                 self.lgr.error('backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
+            orig_eip = eip
+            self.lgr.debug('wtf, current cycle 0x%x eip 0x%x   skip to previous 0x%x' % (self.cpu.cycles, eip, previous))
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
             eip = self.top.getEIP(self.cpu)
+            self.lgr.debug('wtf, after skip current cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
+            eip = self.top.getEIP(self.cpu)
+            if eip == orig_eip:
+                self.lgr.warning('Simics 2 step fu, go forward then reskip...')
+                cli.quiet_run_command('rev 1')
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('wtf, after rev 1 cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
+                resimUtils.skipToTest(self.cpu, previous, self.lgr)
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('wtf, after skip current cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
