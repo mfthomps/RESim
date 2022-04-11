@@ -137,7 +137,7 @@ class PrepInjectWatch():
         self.dataWatch.goToMark(self.read_mark)
         if isinstance(mark.mark, watchMarks.CallMark):
             self.lgr.debug('prepInjectWatch 2nd is call mark')
-            if 'read' in mark.mark.getMsg():
+            if 'read' in mark.mark.getMsg() or 'recv' in mark.mark.getMsg():
                 self.lgr.debug('is read, jump to prior to the call')
                 self.fd = mark.mark.fd
                 buf_addr = mark.mark.recv_addr
