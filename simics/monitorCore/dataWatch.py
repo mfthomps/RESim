@@ -1,4 +1,5 @@
 from simics import *
+import cli
 import pageUtils
 import taskUtils
 import stopFunction
@@ -453,7 +454,14 @@ class DataWatch():
             #self.lgr.debug('Only ARM kernel return handled for now') 
             #self.watch()
             cell = self.top.getCell()
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+            if self.param.sysexit is not None:
+                exit_addr = self.param.sysexit
+            elif self.param.iretd is not None:
+                exit_addr = self.param.iretd
+            else:
+                self.lgr.error('dataWatch kernelReturn could not find kernel exit address')
+                return
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, exit_addr, 1, 0)
             self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, 
                  kernel_return_info, proc_break, 'memcpy_return_hap')
        
@@ -1486,8 +1494,13 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             mark_ip = self.watchMarks.getIP(index)
             if eip != mark_ip:
-                self.lgr.error('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x' % (index, eip, mark_ip))
-                retval = None
+                self.lgr.warning('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x' % (index, eip, mark_ip))
+                cli.quiet_run_command('rev 1')
+                resimUtils.skipToTest(self.cpu, cycle, self.lgr)
+                eip = self.top.getEIP(self.cpu)
+                if eip != mark_ip:
+                    self.lgr.error('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x Second attempt' % (index, eip, mark_ip))
+                    retval = None
             else:
                 if self.watchMarks.isCall(index):
                     cycle = self.cpu.cycles+1
