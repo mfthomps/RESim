@@ -344,6 +344,7 @@ class GenMonitor():
                 net_file = os.path.join('./', self.run_from_snap, cell_name, 'net_list.pickle')
                 if os.path.isfile(net_file):
                     self.netInfo[cell_name].loadfile(net_file)
+                    self.lgr.debug('loaded net_list from %s' % net_file)
 
 
     def runScripts(self):
@@ -1356,17 +1357,6 @@ class GenMonitor():
         #self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
         return value
 
-    class cycleRecord():
-        def __init__(self, cycles, steps, eip):
-            self.cycles = cycles
-            self.steps = steps
-            self.eip = eip
-        def toString(self):
-            if self.steps is not None:
-                return 'cycles: 0x%x steps: 0x%x eip: 0x%x' % (self.cycles, self.steps, self.eip)
-            else:
-                return 'cycles: 0x%x (no steps recorded) eip: 0x%x' % (self.cycles, self.eip)
-
     def gdbMailbox(self, msg):
         self.gdb_mailbox = msg
         #self.lgr.debug('in gdbMailbox msg set to <%s>' % msg)
@@ -1777,6 +1767,10 @@ class GenMonitor():
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
             value = self.mem_utils[self.target].readWord32(cpu, addr)
+            if value is None:
+                print('Could not get value from address 0x%x' % addr)
+                self.skipAndMail()
+                return
             track_num = self.bookmarks.setTrackNum()
             bm='backtrack START:%d 0x%x inst:"%s" track_addr:0x%x track_value:0x%x' % (track_num, eip, instruct[1], addr, value)
             self.bookmarks.setDebugBookmark(bm)
@@ -3133,6 +3127,8 @@ class GenMonitor():
         net_commands = self.netInfo[self.target].getCommands()
         if len(net_commands) > 0:
            print('Network definition commands:')
+        else:
+           print('No exec of ip addr or ifconfig found')
         for c in net_commands:
             print(c)
 
