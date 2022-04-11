@@ -35,14 +35,38 @@ def rprint(string):
     rl = SIM_get_object('RESim_log')
     SIM_log_info(1, rl, 0, string)
 
+def reverseEnabled():
+        cmd = 'sim.status'
+        #cmd = 'sim.info.status'
+        dumb, ret = cli.quiet_run_command(cmd)
+        rev = ret.find('Reverse Execution')
+        after = ret[rev:]
+        parts = after.split(':', 1)
+        if parts[1].strip().startswith('Enabled'):
+            return True
+        else:
+            return False
+
 def skipToTest(cpu, cycle, lgr):
-        while SIM_simics_is_running():
+        limit=100
+        count = 0
+        while SIM_simics_is_running() and count<limit:
             lgr.error('skipToTest but simics running')
             time.sleep(1)
+            count = count+1
+                
+        if count >= limit:
+            return False
+        if not reverseEnabled():
+            lgr.error('Reverse execution is disabled.')
+            return False
         retval = True
         cli.quiet_run_command('pselect %s' % cpu.name)
         cmd = 'skip-to cycle = %d ' % cycle
         cli.quiet_run_command(cmd)
+        #cli.quiet_run_command('si')
+        #cli.quiet_run_command(cmd)
+        
         now = cpu.cycles
         if now != cycle:
             lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
