@@ -14,6 +14,7 @@ import resimUtils
 import net
 import os
 import sys
+MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
@@ -119,6 +120,8 @@ class DataWatch():
         self.read_limit_callback = None
         ''' skip hit on ad_hoc buffer that was just added, and likely not yet executed.'''
         self.last_ad_hoc = 0
+        ''' sanitiy check for programs run amuck '''
+        self.index_hits = {}
 
         self.disabled = True
 
@@ -362,7 +365,8 @@ class DataWatch():
                     #self.lgr.debug('dataWatch stopWatch delete hap %d' % self.read_hap[index])
                     self.context_manager.genDeleteHap(self.read_hap[index], immediate=immediate)
             else:
-                self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
+                #self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
+                pass
         #self.lgr.debug('DataWatch stopWatch removed read haps')
         del self.read_hap[:]
         if break_simulation is not None: 
@@ -1282,6 +1286,15 @@ class DataWatch():
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             SIM_break_simulation('max marks exceeded')
             return
+        ''' ad hoc sanitity check for wayward programs, fuzzed, etc.'''
+        if index in self.length and self.length[index]<10:
+            if index not in self.index_hits:
+                self.index_hits[index] = 0
+            self.index_hits[index] = self.index_hits[index]+1
+            if self.index_hits[index] > 1000:
+                self.lgr.error('dataWatch readHap over 1000 hits on index %d, stopping watch' % index)
+                self.stopWatch()
+                return
         addr = memory.logical_address
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
@@ -1414,10 +1427,10 @@ class DataWatch():
             break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d  alone? %r' % (eip, break_num, self.start[index], end, 
-                self.length[index], index, len(self.read_hap), i_am_alone))
+            #self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d  alone? %r' % (eip, break_num, self.start[index], end, 
+            #    self.length[index], index, len(self.read_hap), i_am_alone))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
-            self.lgr.debug('DataWatch back from st break range')
+            #self.lgr.debug('DataWatch back from st break range')
             
 
         #if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
