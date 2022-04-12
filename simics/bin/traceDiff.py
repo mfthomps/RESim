@@ -34,7 +34,7 @@ class getter():
     def nextLine(self):
 
         line = self.lines[self.index]
-        while getCPU(line) == 'Device' or getCPU(line) is None or (' object ' in line):
+        while getCPU(line) == 'Device' or getCPU(line) is None or (' object ' in line) or ' Pt ' in line or ' Pd ' in line:
             self.index = self.index+1
             if self.index >= len(self.lines):
                 print('Out of lines at index %d' % self.index)
