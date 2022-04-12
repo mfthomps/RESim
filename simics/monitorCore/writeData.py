@@ -124,6 +124,8 @@ class WriteData():
             #self.setCallHap()
         elif self.mem_utils.isKernel(self.addr):
             ''' not done, no control over size. prep must use maximum buffer'''
+            if len(self.in_data) > self.max_len:
+                self.in_data = self.in_data[:self.max_len]
             self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
             retval = len(self.in_data)
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
