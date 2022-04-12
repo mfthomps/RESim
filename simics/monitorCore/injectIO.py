@@ -94,7 +94,8 @@ class InjectIO():
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
 
-        self.dataWatch.enable()
+        if not self.coverage:
+            self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
 
     def go(self, no_go_receive=False):
