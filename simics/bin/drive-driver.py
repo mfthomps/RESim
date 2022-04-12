@@ -18,11 +18,16 @@ def main():
     parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-n', '--no_magic', action='store_true', help='Do not execute magic instruction.')
+    parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
     args = parser.parse_args()
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
         exit(1)
-    client_mult_path = os.path.join(core_path, 'clientudpMult')
+    if args.tcp:
+        client_cmd = 'clientTCP'
+    else:
+        client_cmd = 'clientudpMult'
+    client_mult_path = os.path.join(core_path, client_cmd)
 
     cmd = 'scp -P 4022 %s  localhost:/tmp/' % client_mult_path
     os.system(cmd)
@@ -40,10 +45,16 @@ def main():
         for line in fh:
             if line.strip().startswith('#'):
                 continue
+            if len(line.strip()) == 0:
+                continue
             parts = line.split()
             if len(parts) == 2 and parts[0] == 'sleep':
                 driver_file.write(line)
-            elif len(parts) != 4:
+            if args.tcp and len(parts) != 3:
+                print('Invalid TCP driver directive: %s' % line)
+                print('    iofile ip port')
+                exit(1)
+            elif not args.tcp and len(parts) != 4:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')
                 exit(1)
@@ -51,9 +62,12 @@ def main():
                 iofile = parts[0]
                 ip = parts[1]
                 port = parts[2]
-                header = parts[3]
+                if not args.tcp:
+                    header = parts[3]
+                else:
+                    header = ''
                 base = os.path.basename(iofile)
-                directive = '/tmp/clientudpMult  %s %s %s /tmp/%s' % (ip, port, header, base)
+                directive = '/tmp/%s  %s %s %s /tmp/%s' % (client_cmd, ip, port, header, base)
                 driver_file.write(directive+'\n')
                 cmd = 'scp -P 4022 %s  localhost:/tmp/' % iofile
                 os.system(cmd)
