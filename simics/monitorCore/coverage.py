@@ -313,7 +313,7 @@ class Coverage():
                     for bb in self.missing_tables[physical]:
                         pt = pageUtils.findPageTable(self.cpu, bb, self.lgr, use_sld=value)
                         if pt.page_addr is None or pt.page_addr == 0:
-                            self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
+                            #self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
                         got_one = True
                         addr = pt.page_addr | (bb & 0x00000fff)
