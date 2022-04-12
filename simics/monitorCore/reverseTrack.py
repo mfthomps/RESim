@@ -1,4 +1,5 @@
 import dataWatch
+from simics import *
 class ReverseTrack():
     def __init__(self, top, dataWatch, context_manager, mem_utils, reverse_to_call, lgr):
         self.dataWatch = dataWatch
@@ -40,9 +41,9 @@ class ReverseTrack():
                 self.top.setCommandCallback(self.handleCall)
                 self.top.revToAddr(call_ip)
             else:
-                self.removeDebugBreaks()
-                cell_name = self.getTopComponentName(cpu)
-                eip = self.getEIP(cpu)
+                self.top.removeDebugBreaks()
+                cell_name = self.top.getTopComponentName(cpu)
+                eip = self.top.getEIP(cpu)
                 instruct = SIM_disassemble_address(cpu, eip, 1, 0)
                 reg_num = cpu.iface.int_register.get_number(reg)
                 value = cpu.iface.int_register.read(reg_num)
@@ -51,7 +52,7 @@ class ReverseTrack():
                 bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
                 self.bookmarks.setDebugBookmark(bm)
                 self.context_manager.setIdaMessage('')
-                self.rev_to_call.doRevToModReg(reg, taint=True, kernel=kernel)
+                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel)
         else:
             print('reverse execution disabled')
             self.top.skipAndMail()
