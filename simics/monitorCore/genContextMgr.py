@@ -26,7 +26,7 @@ class GenBreakpoint():
 
     def clear(self):
         if self.break_num is not None:
-            self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            #self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             SIM_delete_breakpoint(self.break_num)
             self.break_num = None
 
