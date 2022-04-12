@@ -1755,7 +1755,7 @@ class Syscall():
             exit_info_name = '%s-%s-exit' % (callname, self.name)
 
         pending_call = self.sharedSyscall.getPendingCall(pid, exit_info_name)
-        if pending_call is not None:
+        if pending_call is not None and not self.swapper_ok:
             if callname == 'sigreturn':
                 return
             else:
