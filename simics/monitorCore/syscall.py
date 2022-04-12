@@ -271,7 +271,7 @@ class Syscall():
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
-                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None): 
+                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -331,6 +331,8 @@ class Syscall():
         self.syscall_info = None
         self.alt_syscall_info = None
         self.callback = callback
+        ''' normally ignore syscalls made by swapper '''
+        self.swapper_ok = swapper_ok
 
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
@@ -1687,7 +1689,7 @@ class Syscall():
         self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
             pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
-        if comm == 'swapper/0' and pid == 1:
+        if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
             return
 

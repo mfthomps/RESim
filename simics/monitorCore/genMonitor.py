@@ -1890,7 +1890,7 @@ class GenMonitor():
                  None, stop_on_call=True, targetFS=self.targetFS[self.target])
         SIM_run_command('c')
 
-    def traceSyscall(self, callname=None, soMap=None, call_params=[], trace_procs = False):
+    def traceSyscall(self, callname=None, soMap=None, call_params=[], trace_procs = False, swapper_ok=False):
         cell = self.cell_config.cell_context[self.target]
         # TBD only set if debugging?
         self.is_monitor_running.setRunning(True)
@@ -1902,10 +1902,10 @@ class GenMonitor():
         my_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                            self.context_manager[self.target], tp, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
                            trace=True, soMap=soMap, call_params=call_params, 
-                           binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[self.target])
+                           binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[self.target], swapper_ok=swapper_ok)
         return my_syscall
 
-    def traceProcesses(self, new_log=True):
+    def traceProcesses(self, new_log=True, swapper_ok=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
                      'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
@@ -1927,7 +1927,7 @@ class GenMonitor():
             self.traceMgr[self.target].open('/tmp/syscall_trace.txt', cpu)
         for call in call_list: 
             #TBD fix 32-bit compat
-            self.call_traces[self.target][call] = self.traceSyscall(callname=call, trace_procs=True, soMap=self.soMap[self.target])
+            self.call_traces[self.target][call] = self.traceSyscall(callname=call, trace_procs=True, soMap=self.soMap[self.target], swapper_ok=swapper_ok)
 
     def stopTrace(self, cell_name=None, syscall=None):
         if cell_name is None:
