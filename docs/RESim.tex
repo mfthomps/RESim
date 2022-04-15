@@ -507,9 +507,8 @@ a return from a read (e.g., using prepInject), set basic block coverage and iter
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an afl-output directory whose 
-path is defined as AFL\_OUTPUT
-in the ENV section of your ini file (or the target will be appended to the {\tt AFL\_DATA} environment variable).  
+\item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory 
+relative to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
 This also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
@@ -593,7 +592,7 @@ particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed 
 .py extension.  The file must be relative to the Simics workspace and it must have a boolean {\tt filter(data, packet\_num)} method that returns
 False if the packet is to be rejected.  Note that AFL replay function, e.g., {\tt playAFL} do not apply the filter and thus may diverge from the AFL session.
 (TBD, apply the filter for all replays?).
-\item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Otherwise the value in the {\tt .bashrc} is used.
+\item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
 \item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
 \item {\tt TARGET\_PORT} -- Port to use on driver fuctions such as {\tt replayAFL}
 \item {\tt STOP\_ON\_READ} -- Cause AFL and replays to stop once the original read/recv call (or select) is hit.
@@ -1416,7 +1415,7 @@ Then use the {\tt runAFL} command, naming the ini file to be used in the fuzzing
 AFL and RESim, and create an AFL xterm for each to display the AFL status screen.  Simics is started without the gui or windows.
 Pressing {\tt Enter} will terminate all sessions, (the AFL Xterminals will linger for ten seconds.)
 
-AFL results are stored relative to your {\tt AFL\_OUTPUT} environment variable in subdirectories named by the workspace, the hostname and the instances, e.g.,
+AFL results are stored relative to your {\tt AFL\_DATA} environment variable (defined in the .bashrc) in subdirectories named by the workspace, the hostname and the instances, e.g.,
 \begin{verbatim}
     $AFL_OUTPUT/myworkspace/rb9_resim_1
 \end{verbatim}
@@ -1941,6 +1940,9 @@ optimization schemes should not try to reduce breakpoint counts on the fly.
 
 \section{ToDo}
 \subsection {Msc}
+Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
+break on this like we do for execve.
+
 Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
 process whose record is watched is killed.  Need to also watch "prev" on the subject process?
 
