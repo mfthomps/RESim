@@ -45,8 +45,10 @@ public class GdbMonitor extends GhidraScript {
 	@Override
 	protected void run() throws Exception {
                 impl = getGdbManager();
-                refreshEndian();
-                CompletableFuture<Void> so = getSO();
+                String cmd = "monitor @cgc.getSOMap()";
+                CompletableFuture<String> future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
+                String so_json = future.get();
+                parseSO(so_json);
 
 	}
         protected void doMapping(Long start, Long end) throws Exception{
@@ -129,34 +131,6 @@ public class GdbMonitor extends GhidraScript {
                 println("returning obj from getJson len of objs is ");
                 return obj;
         }     
-	protected CompletableFuture<Void> getSO() {
-		return CompletableFuture.supplyAsync(() -> null).thenCompose(__ -> {
-			return impl.consoleCapture("monitor @cgc.getSOMap()", CompletesWithRunning.CANNOT);
-		}).thenAccept(out -> {
-                        println("in getSO, out is "+out);
-                        parseSO(out);
-		}).exceptionally(e -> {
-			return null;
-		});
-	} 
-	protected CompletableFuture<Void> refreshEndian() {
-		// TODO: This duplicates GdbInferiorImpl.syncEndianness....
-		return CompletableFuture.supplyAsync(() -> null).thenCompose(__ -> {
-			return impl.consoleCapture("show endian", CompletesWithRunning.CANNOT);
-		}).thenAccept(out -> {
-			if (out.toLowerCase().contains("little endian")) {
-				println("is little\n");
-			}
-			else if (out.toLowerCase().contains("big endian")) {
-				println("is big\n");
-			}
-			else {
-				println("is unknown\n");
-			}
-		}).exceptionally(e -> {
-			return null;
-		});
-	} 
 
         private GdbManagerImpl getGdbManager() throws Exception {
             DebuggerObjectsPlugin objects =
