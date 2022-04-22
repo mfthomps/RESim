@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+//
+// Connect to Simics and get the SOMap from RESim and use it to sync static and dynamic listings
+//
+//@category RESim
 import com.google.common.collect.Range;
 import java.util.concurrent.CompletableFuture;
 
@@ -29,6 +33,7 @@ import agent.gdb.model.impl.GdbModelImpl;
 import agent.gdb.manager.impl.cmd.GdbConsoleExecCommand.CompletesWithRunning;
 
 import java.lang.reflect.Field;
+import java.lang.Thread;
 
 import ghidra.app.plugin.core.debug.gui.objects.DebuggerObjectsPlugin;
 import ghidra.app.plugin.core.debug.gui.objects.ObjectUpdateService;
@@ -44,9 +49,22 @@ public class GdbMonitor extends GhidraScript {
         protected GdbManagerImpl impl;
 	@Override
 	protected void run() throws Exception {
+                String cmd;
+                CompletableFuture<String> future;
                 impl = getGdbManager();
-                String cmd = "monitor @cgc.getSOMap()";
-                CompletableFuture<String> future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
+                if(impl == null){
+                    println("Failed to get gdbManager.");
+                    return;
+                }
+
+                String remote = askString("Remote server?", "Enter host of remote server:");
+                cmd = "target remote "+remote+":9123";
+                future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
+                String result = future.get();
+                println("Result of target command is "+result);
+
+                cmd = "monitor @cgc.getSOMap()";
+                future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
                 String so_json = future.get();
                 parseSO(so_json);
 
@@ -58,7 +76,15 @@ public class GdbMonitor extends GhidraScript {
 			state.getTool().getService(DebuggerStaticMappingService.class);
 		DebuggerTraceManagerService traces =
 			state.getTool().getService(DebuggerTraceManagerService.class);
-		Trace currentTrace = traces.getCurrentTrace();
+                
+		Trace currentTrace = null;
+                while(currentTrace == null){
+		    currentTrace = traces.getCurrentTrace();
+                    if(currentTrace == null){
+                        println("no current trace, wait a sec");
+                        Thread.sleep(1000);
+                    } 
+                }
 		AddressSpace dynRam = currentTrace.getBaseAddressFactory().getDefaultAddressSpace();
 		AddressSpace statRam = currentProgram.getAddressFactory().getDefaultAddressSpace();
 
@@ -75,6 +101,10 @@ public class GdbMonitor extends GhidraScript {
         protected void parseSO(String all_string){
             println("in parseSO\n");
             Object obj = getJson(all_string);
+            if(obj == null){
+                println("Error getting json of somap");
+                return;
+            }
             java.util.HashMap<Object, Object> somap = (java.util.HashMap<Object, Object>) obj;
              
             println("did hash parseSO\n");
@@ -94,6 +124,10 @@ public class GdbMonitor extends GhidraScript {
         }
         protected Object getJson(String all_string){
             int start = all_string.indexOf('{'); 
+            if(start < 0){
+                println("Error, failed to get SO json");
+                return null;
+            }
             int end = all_string.lastIndexOf('}')+1;
             String jstring = all_string.substring(start, end);
             //println("in getJson string "+jstring);
@@ -149,93 +183,5 @@ public class GdbMonitor extends GhidraScript {
             f.setAccessible(true);
             return (GdbManagerImpl) f.get(model);
         }
-	protected Object convert(char [] s, List<JSONToken> t)
-	{
-		Object rv = null, k, v;
-		int i;
-		JSONToken tp;
-	
-		if (ndx == t.size()) {
-			System.out.println("array overflow in JSON parser");
-		}
-		tp = t.get(ndx++);
-		String tstr = new String(s, tp.start, tp.end-tp.start);
-		
-		switch(tp.type){
-		case JSMN_OBJECT:
-			HashMap<Object, Object> tab = new HashMap<Object, Object>();
-			if(tp.size%2 != 0) {
-				println( "invalid json object");
-				return null;
-			}
-			for(i = 0; i < tp.size/2; i++){
-				k = convert(s, t);
-				v = convert(s, t);
-				tab.put(k, v);
-			}
-			rv = tab;
-			break;
-		case JSMN_ARRAY:
-			List<Object> l = new ArrayList<Object>();
-			for(i = 0; i < tp.size; i++)
-				l.add(convert(s, t));
-			rv = l;
-			break;
-		case JSMN_PRIMITIVE:
-			i = tp.start;
-			switch(s[tp.start]){
-			case 't':
-				println( "what is this? "+tstr);
-				//rv = mkvalcval2(cval1);
-				break;
-			case 'f':
-				println( "what is this? "+tstr);
-				//rv = mkvalcval2(cval0);
-				break;
-			case 'n':
-				//rv = null;
-				break;
-			case '-':
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-				rv = NumericUtilities.parseLong(tstr);
-				break;
-			default:
-				println( "invalid json primitive: "+tstr);
-				return null;
-			}
-			break;
-		case JSMN_STRING:
-			//rv = expands(tstr);
-			rv = tstr;
-			if (rv == null){
-				println( "invalid json string: "+tstr);
-			}
-			break;
-		default:
-			throw new RuntimeException("invalid json type: "+tp.type);
-		}
-		return rv;
-	}
-
-	private static boolean isxdigit(char b) {
-		switch (b) {
-			case '0': case '1' : case '2': case '3' : case '4':
-			case '5': case '6': case '7' : case '8': case '9':
-			case 'A': case 'B': case 'C' : case 'D': case 'E' : case 'F':
-			case 'a': case 'b': case 'c' : case 'd': case 'e' : case 'f':
-				return true;
-			default:
-				return false;
-		}
-	}
 }
 
