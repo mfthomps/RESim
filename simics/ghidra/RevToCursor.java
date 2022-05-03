@@ -44,13 +44,15 @@ import ghidra.program.model.address.Address;
 
 import generic.json.*;
 import java.util.*;
+import resim.utils.RESimUtils;
 
 public class RevToCursor extends GhidraScript {
         protected int ndx=0; 
         protected GdbManagerImpl impl;
 	@Override
 	protected void run() throws Exception {
-                impl = getGdbManager();
+                RESimUtils ru = new RESimUtils(state.getTool(), currentProgram);
+                impl = ru.getGdbManager();
                 if(impl == null){
                     println("Failed to get gdbManager.");
                     return;
@@ -62,49 +64,7 @@ public class RevToCursor extends GhidraScript {
                 CompletableFuture<String> future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
                 String result = future.get();
                 println("result is "+result);
-                DebuggerObjectModel object_model = getObjectModel();
-                object_model.invalidateAllLocalCaches();
-                DebuggerObjectsProvider dbo = getDebuggerObjectsProvider();
-                dbo.refresh();
 
-	}
-
-        private GdbManagerImpl getGdbManager() throws Exception {
-            DebuggerObjectsPlugin objects =
-                (DebuggerObjectsPlugin) state.getTool().getService(ObjectUpdateService.class);
-            DebuggerModelService models = objects.modelService;
-            GdbModelImpl model = models.getModels()
-                .stream()
-                .filter(GdbModelImpl.class::isInstance)
-                .map(GdbModelImpl.class::cast)
-                .findFirst()
-                .orElse(null);
-            if (model == null) {
-                return null;
-            }
-            Field f = GdbModelImpl.class.getDeclaredField("gdb");
-            f.setAccessible(true);
-            return (GdbManagerImpl) f.get(model);
-        }
-        private DebuggerObjectModel getObjectModel() throws Exception {
-            DebuggerObjectsPlugin objects =
-                (DebuggerObjectsPlugin) state.getTool().getService(ObjectUpdateService.class);
-            DebuggerModelService models = objects.modelService;
-            DebuggerObjectModel model = models.getModels()
-                .stream()
-                .filter(DebuggerObjectModel.class::isInstance)
-                .map(DebuggerObjectModel.class::cast)
-                .findFirst()
-                .orElse(null);
-            if (model == null) {
-                return null;
-            }
-            return model;
-        }
-        private DebuggerObjectsProvider getDebuggerObjectsProvider() throws Exception {
-            DebuggerObjectsPlugin objects =
-                (DebuggerObjectsPlugin) state.getTool().getService(ObjectUpdateService.class);
-            return objects.getProvider(0);
+                ru.refreshClient();
         }
 }
-
