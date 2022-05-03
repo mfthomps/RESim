@@ -21,29 +21,13 @@ import com.google.common.collect.Range;
 import java.util.concurrent.CompletableFuture;
 
 import ghidra.app.script.GhidraScript; 
-import ghidra.app.services.DebuggerStaticMappingService;
-import ghidra.app.services.DebuggerTraceManagerService;
-import ghidra.program.model.address.AddressSpace;
-import ghidra.program.util.ProgramLocation;
-import ghidra.trace.model.DefaultTraceLocation;
-import ghidra.trace.model.Trace;
-import ghidra.util.database.UndoableTransaction;
 import agent.gdb.manager.impl.GdbManagerImpl;
-import agent.gdb.model.impl.GdbModelImpl;
 import agent.gdb.manager.impl.cmd.GdbConsoleExecCommand.CompletesWithRunning;
 
-import java.lang.reflect.Field;
-import java.lang.Thread;
-
-import ghidra.app.plugin.core.debug.gui.objects.DebuggerObjectsPlugin;
-import ghidra.app.plugin.core.debug.gui.objects.ObjectUpdateService;
 import ghidra.app.script.GhidraScript;
-import ghidra.app.services.DebuggerModelService;
-import ghidra.util.NumericUtilities;
 
 import java.util.*;
 import resim.utils.RESimUtils;
-import resim.utils.Json;
 
 public class GdbMonitor extends GhidraScript {
         protected int ndx=0; 
@@ -52,6 +36,7 @@ public class GdbMonitor extends GhidraScript {
 	protected void run() throws Exception {
                 String cmd;
                 CompletableFuture<String> future;
+                String result=null;
                 RESimUtils ru = new RESimUtils(state.getTool(), currentProgram);
                 impl = ru.getGdbManager();
                 if(impl == null){
@@ -61,74 +46,17 @@ public class GdbMonitor extends GhidraScript {
 
                 String remote = askString("Remote server?", "Enter host of remote server:");
                 cmd = "target remote "+remote+":9123";
-                future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
-                String result = future.get();
+                try{
+                    future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
+                    result = future.get();
+                }catch(Exception e){
+                    println("Error connecting to "+remote);
+                    return;
+                }
                 println("Result of target command is "+result);
-
-                cmd = "monitor @cgc.getSOMap()";
-                future = impl.consoleCapture(cmd, CompletesWithRunning.CANNOT);
-                String so_json = future.get();
-                parseSO(so_json);
+                ru.doMapping();
 
 	}
-        protected void doMapping(Long start, Long end) throws Exception{
-                println("in doMapping\n");
-                Long length = end - start;
-		DebuggerStaticMappingService mappings =
-			state.getTool().getService(DebuggerStaticMappingService.class);
-		DebuggerTraceManagerService traces =
-			state.getTool().getService(DebuggerTraceManagerService.class);
-                
-		Trace currentTrace = null;
-                int failcount = 0;
-                while(currentTrace == null){
-		    currentTrace = traces.getCurrentTrace();
-                    if(currentTrace == null){
-                        println("no current trace, wait a sec");
-                        Thread.sleep(1000);
-                        failcount++;
-                        if(failcount > 10){
-                            return;
-                        }
-                    } 
-                }
-		AddressSpace dynRam = currentTrace.getBaseAddressFactory().getDefaultAddressSpace();
-		AddressSpace statRam = currentProgram.getAddressFactory().getDefaultAddressSpace();
-
-		try (UndoableTransaction tid =
-			UndoableTransaction.start(currentTrace, "Add Mapping", true)) {
-			mappings.addMapping(
-				new DefaultTraceLocation(currentTrace, null, Range.atLeast(0L),
-					dynRam.getAddress(start)),
-				new ProgramLocation(currentProgram, statRam.getAddress(start)),
-				length, false);
-		}
-                println("did mapping for start "+String.format("0x%08X", start)+" length "+length);
-        }
-        protected void parseSO(String all_string){
-            println("in parseSO\n");
-            Object obj = Json.getJson(all_string);
-            if(obj == null){
-                println("Error getting json of somap");
-                return;
-            }
-            java.util.HashMap<Object, Object> somap = (java.util.HashMap<Object, Object>) obj;
-             
-            println("did hash parseSO\n");
-            println("size of hashmap is "+ somap.size());
-
-            Long pid_o = (Long) somap.get("group_leader"); 
-            println("in parseSO pid_o is "+pid_o);
-            Long start = (Long) somap.get("prog_start");
-            Long end = (Long) somap.get("prog_end");
-            try{
-                doMapping(start, end);
-                println("did call doMapping");
-            }catch(java.lang.Exception e){
-                println("Error thrown by doMapping\n"+e.toString());
-                e.printStackTrace();
-            }
-        }
 
 }
 
