@@ -361,6 +361,8 @@ class InjectIO():
     def recordHang(self, cycles):
         self.lgr.debug('Hang')
         print('Hang')
+        if self.coverage:
+            self.top.saveCoverage()
         SIM_break_simulation('hang')
 
             
