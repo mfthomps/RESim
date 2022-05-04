@@ -3538,9 +3538,9 @@ class GenMonitor():
             cpu = this_cpu
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
+        self.dataWatch[self.target].resetWatch()
         if max_marks is not None:
             self.dataWatch[self.target].setMaxMarks(max_marks) 
-        self.dataWatch[self.target].resetWatch()
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
