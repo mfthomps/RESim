@@ -41,8 +41,9 @@ import ghidra.app.script.GhidraScript;
 import ghidra.app.services.DebuggerModelService;
 import ghidra.util.NumericUtilities;
 
-import generic.json.*;
 import java.util.*;
+import resim.utils.RESimUtils;
+import resim.utils.Json;
 
 public class GdbMonitor extends GhidraScript {
         protected int ndx=0; 
@@ -51,7 +52,8 @@ public class GdbMonitor extends GhidraScript {
 	protected void run() throws Exception {
                 String cmd;
                 CompletableFuture<String> future;
-                impl = getGdbManager();
+                RESimUtils ru = new RESimUtils(state.getTool(), currentProgram);
+                impl = ru.getGdbManager();
                 if(impl == null){
                     println("Failed to get gdbManager.");
                     return;
@@ -78,11 +80,16 @@ public class GdbMonitor extends GhidraScript {
 			state.getTool().getService(DebuggerTraceManagerService.class);
                 
 		Trace currentTrace = null;
+                int failcount = 0;
                 while(currentTrace == null){
 		    currentTrace = traces.getCurrentTrace();
                     if(currentTrace == null){
                         println("no current trace, wait a sec");
                         Thread.sleep(1000);
+                        failcount++;
+                        if(failcount > 10){
+                            return;
+                        }
                     } 
                 }
 		AddressSpace dynRam = currentTrace.getBaseAddressFactory().getDefaultAddressSpace();
@@ -96,11 +103,11 @@ public class GdbMonitor extends GhidraScript {
 				new ProgramLocation(currentProgram, statRam.getAddress(start)),
 				length, false);
 		}
-                println("did mapping for start "+start+" length "+length);
+                println("did mapping for start "+String.format("0x%08X", start)+" length "+length);
         }
         protected void parseSO(String all_string){
             println("in parseSO\n");
-            Object obj = getJson(all_string);
+            Object obj = Json.getJson(all_string);
             if(obj == null){
                 println("Error getting json of somap");
                 return;
@@ -122,66 +129,6 @@ public class GdbMonitor extends GhidraScript {
                 e.printStackTrace();
             }
         }
-        protected Object getJson(String all_string){
-            int start = all_string.indexOf('{'); 
-            if(start < 0){
-                println("Error, failed to get SO json");
-                return null;
-            }
-            int end = all_string.lastIndexOf('}')+1;
-            String jstring = all_string.substring(start, end);
-            //println("in getJson string "+jstring);
-            char[] console_char = jstring.toCharArray();
-                JSONParser parser = new JSONParser();
-		List<Object> objs = new ArrayList<Object>();
-		List<JSONToken> tokens = new ArrayList<JSONToken>();
-	
-		JSONError r = parser.parse(console_char, tokens);
-  		switch(r){
-  		case JSMN_SUCCESS:
-  			break;
-  		case JSMN_ERROR_NOMEM:
-  			println("out of memory");
-  			return null;
-  		case JSMN_ERROR_INVAL:
-  			println("invalid json input");
-  			return null;
-  		case JSMN_ERROR_PART:
-  			println("incomplete json input");
-  			return null;
-  		default:
-  			println("json parser returned undefined status");
-  			return null;
-  		}
-  		if(tokens.get(0).start == -1){
-  			println("invalid json input");
-  			return null;
-  		}
-                println("len of tokens is "+tokens.size());
-                ndx = 0;
-                JSONParser parser2 = new JSONParser();
-                // Ghidra json parser does not let you reset internal ndx value; so hack is to create a 2nd parser.
-  		Object obj = parser2.convert(console_char, tokens);
-                println("returning obj from getJson len of objs is ");
-                return obj;
-        }     
 
-        private GdbManagerImpl getGdbManager() throws Exception {
-            DebuggerObjectsPlugin objects =
-                (DebuggerObjectsPlugin) state.getTool().getService(ObjectUpdateService.class);
-            DebuggerModelService models = objects.modelService;
-            GdbModelImpl model = models.getModels()
-                .stream()
-                .filter(GdbModelImpl.class::isInstance)
-                .map(GdbModelImpl.class::cast)
-                .findFirst()
-                .orElse(null);
-            if (model == null) {
-                return null;
-            }
-            Field f = GdbModelImpl.class.getDeclaredField("gdb");
-            f.setAccessible(true);
-            return (GdbManagerImpl) f.get(model);
-        }
 }
 
