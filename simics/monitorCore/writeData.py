@@ -353,7 +353,7 @@ class WriteData():
             return
         self.total_read = self.total_read + eax
         if self.total_read > self.read_limit:
-            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.write_callback is not None:
                  SIM_run_alone(self.write_callback, count)
             else:
