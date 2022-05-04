@@ -14,6 +14,7 @@ import resimUtils
 import net
 import os
 import sys
+import traceback
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
@@ -549,10 +550,13 @@ class DataWatch():
                    self.mem_something.dest, self.mem_something.count))
             buf_start = self.findRange(self.mem_something.src)
             if buf_start is None:
-                self.lgr.error('dataWatch buf_start for 0x%x is none in strcpy?' % (self.mem_something.src))
+                ''' strcpy into the buffer? TBD, reused buffer?'''
+                self.lgr.debug('dataWatch buf_start for 0x%x is none in strcpy?' % (self.mem_something.src))
+                pass
             mark = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type, 
                        strcpy=True)
-            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark = mark) 
+            if buf_start is not None:
+                self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark = mark) 
         elif self.mem_something.fun == 'memset':
             self.setRange(0, 0, None) 
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (self.mem_something.dest, self.mem_something.count))
@@ -593,8 +597,8 @@ class DataWatch():
         elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf']:
             if self.mem_something.dest is None:
                 self.lgr.debug('dataWatch %s dest is None' % self.mem_something.fun)
-            buf_start = self.findRange(self.mem_something.src)
             self.mem_something.src = self.mem_something.addr
+            buf_start = self.findRange(self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
             mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
@@ -1469,6 +1473,7 @@ class DataWatch():
         retval = None
         if addr is None:
             self.lgr.error('dataWatch findRange called with addr of None')
+            raise Exception('addr is none')
         else:
             for index in range(len(self.start)):
                 if self.start[index] != 0:
