@@ -1357,9 +1357,13 @@ class GenMonitor():
         #self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
         return value
 
+    def is_ascii(s):
+        return all(ord(c) < 128 for c in s)
+
     def gdbMailbox(self, msg):
         self.gdb_mailbox = msg
-        #self.lgr.debug('in gdbMailbox msg set to <%s>' % msg)
+        self.lgr.debug('in gdbMailbox msg set to <%s>' % msg)
+        #amsg = msg.encode("ascii", "ignore")
         print('gdbMailbox:%s' % msg)
 
     def emptyMailbox(self):
@@ -2708,6 +2712,9 @@ class GenMonitor():
 
     def listSOMap(self):
         self.soMap[self.target].listSO()
+
+    def getSOMap(self):
+        self.soMap[self.target].getSO()
 
     def getSOFile(self, addr):
         fname = self.soMap[self.target].getSOFile(addr)
