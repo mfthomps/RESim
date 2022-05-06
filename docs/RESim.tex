@@ -110,6 +110,7 @@ A key property that distinguishes RESim from other RE strategies is that analysi
 RESim analyzes Linux-based systems for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
 extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
+See section \ref{divergence} for information on potential divergence of simulations from real systems.
 
 \subsection{Development and Availability}
 In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
@@ -221,6 +222,8 @@ The following RESim commands are issued at the Simics command prompt, naming the
 e.g., "{\tt @cgc.tasks()}".  Interfaces for all of these commands are implemented in the python script at {\tt simics/monitorCore/genMonitor.py}
 If this documentation falls out of sync, or you need to fix broken stuff, refer to that file (and the dependent python classes, which are all in that directory.)
 
+There are also a set of utility commands that run from a bash prompt (rather than from Simics).  See section \ref{utilities} for a list of those.
+
 \label{commands}
 \subsection{General display}
 \begin{itemize}
@@ -247,7 +250,9 @@ See the scripts in {\tt RESim/postscripts} to parse system call logs and create 
 
 \item {\tt showConnectors} – Display programs that use connect to open sockets – intended for use during process tracing to identify processes that connect to externally accessible sockets.
 
-\item {\tt traceFile(logname)} – Copy all writes that occur to the given filename.  Intended for use with log files.  Output is in /tmp/[basename(logname)]
+\item {\tt traceFile(logname)} – Copy all writes that occur to the given filename.  Intended for use with log files.  Output is in /tmp/[basename(logname)].
+The {\tt trackIO} command can be directed to include traced file output in the watch marks, e.g., to see where log messages occur within the
+time line of watch marks.
 
 \item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log  
 
@@ -370,7 +375,7 @@ might interfere with your subsequent analysis.
 Also see \ref{tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False, count=1)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -384,6 +389,8 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
 to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  That program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
+Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
+within your watch mark list as parsing encounters errors.
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -462,6 +469,8 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 \item {\tt showLinks} - Display symbolic names of network connections.  These may then be used in DMOD directives, or manually using Simics {\tt connect}
 and {\tt disconnect} commands.
 
+\item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.
+
 \end{itemize}
 \subsection{Code coverage}
 \begin{itemize}
@@ -510,7 +519,10 @@ if the program insists on reading a minimum number of bytes.  Intended for use i
 \item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory 
 relative to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
-This also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
+\textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
+Tail the log if you suspect it has hung.
+
+The {\tt playAFL} command also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
 If {\tt target} is a full path, then only that files will be played.  \textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 The {\tt runPlay} stand-alone command launches parallel instances of RESim running the playAFL, for use in replaying sessions created by parallel fuzzing.  Note however this 
@@ -524,6 +536,8 @@ one for each data file.  The reports are written to /tmp/crash\_reports.
 a client program to the target using an address and port per the ini file {\tt TARGET\_IP} and {\tt TARGET\_PORT} values.  For UDP sessions, RESim will use the trackIO function on the given FD.  Use this to analyze multipacket processing.  For TCP, use {\tt replayAFLTCP} and the FD will be used to catch an {\tt accept} system call.  RESim will then use the returned FD for trackIO.  Set {\tt cover} to True to generate a coverage hits file.  You can then start IDA with the {\tt color} option, which
 will read that hits file.   You can then double click on entries in the IDA {\tt BNT} window to skip execution to the first hit of the selected BNT source block.
 Set {\tt afl\_mode} to report on blocks hit over 256 times in a session.
+
+Note that function uses a driver to send data, and this it should not be used with a {\tt prepInject} snapshot.
 
 \item{\tt aflInject(target, index} -- Replay an AFL session, similar to {\tt replayAFL}, except the {\tt injectIO} function is used without
 a driver component.  Thus, only single-packet processing can be analyzed.  Use {\tt aflInjectTCP} for TCP sessions.
@@ -939,6 +953,18 @@ into the simulation and resulting corruption of reverse execution.
 ability to send your own data to those ports.
 \end{itemize}
 
+\subsection{Sending data}
+There are a variety of ways to send data to a target.  The quick and easy way is to use the Simics real networks, which utilizes
+port forwarding.  For example, if the target network is connected to switch0 and the target port is 62226 and the IP is
+172.16.8.100, the following will forward traffic from the localhost port 62226 to the target: 
+\begin{verbatim}
+    connect-real-network-port-in target-port = 62226 host-port = 62226 \
+       ethernet-link = switch0 target-ip = 172.16.8.200
+\end{verbatim}
+The use of real networks has limitations described in \ref{real-networks}.
+
+It is often preferable to send data from a driver component as described in \ref{driver}.  If you use the default RESim driver, then the
+{\tt drive-driver.py} script provides a convenient way to send data from a driver to the target.
 
 \subsection{Tracking data}
 \label{tracking}
@@ -1307,6 +1333,9 @@ A {\tt Packet filter} as described above might mitigate such a problem, however 
 have effects beyond the iteration count.  Review of the iterated code should identify whether use of a jumper might affect program
 execution.
 
+These jumpers are only intended for use with code coverage and/or fuzzing are different than those used with the {\tt jumper} command,
+which provides more general alterations to execution control flow.
+
 \subsection{Fuzz another library}
 Use the optional {\tt fname} parameter to name a shared library file (relative to the RESIM\_ROOT\_PREFIX).  You must have first
 opened that file with IDA and used the findBlocks.py script to save a database of its basic blocks.
@@ -1336,6 +1365,9 @@ data tracking and indications of ROP or SEGV occurances.  A single command will 
 directory.  If the fuzzing inputs potentially include multiple packets, use the {\tt crashReport} utility (not from the Simics prompt) and provide
 the target FD in the {\tt -f} option.  This will use a driver that is assumed to be listening on local port 4022.  The ini file must identify the target IP
 address and port number in the {\tt TARGET\_IP} and {\tt TARGET\_PORT} ENV variables.
+
+\textbf{Note:} Crash analysis and fuzzing have different criteria for handing BACK\_STOP\_CYCLES.  It may be necessary to increase this 
+value to allow time for the crash analysis to encounter the crash.
 
 
 \subsection{Update code coverage}
@@ -1666,6 +1698,8 @@ to avoid redefinitions of the origin that would occur if trackIO were used multi
 \item idaDiff -- Compare two coverage hits files in IDA, using basic block coloring to highlight differences
 \item cycleSeeds -- Populate the AFL seed directory with queue files and manually added files identified in the results of the {\tt dedupeCoverge} utility.
 \item kill-simics -- Sometimes it is the only way.
+\item drive-driver.py -- Send data from a driver computer to a target IP/PORT.  A real network is used to push the data and scripts
+to the driver.  There are many ways to send data to a target computer, and this is an example.
 \item 
 \end{itemize}
 
@@ -1801,7 +1835,7 @@ Setting a "read" breakpoint on the virtual address of the observed file name wou
 on 64-bit Linux, while it would have caught the open on 32-bit Linux.
 
 \section{Divergence Between Physical Systems and RESim Simulations}
-
+\label{divergence}
 \subsection{Overview}
 This appendix identifies potential sources of divergence between RESim models and
 real world systems and presents some strategies for mitigating divergence.  
@@ -1837,6 +1871,12 @@ While Simics has support for VLAN switches, the network interface models do not 
 VLAN defintions in which the VLAN subnet differs from that of the parent interface, and the model
 requires the parent interface to be define.  Wind River considers this common configuration
 of VLANs (with differing subnets) to be a "use case" beyond their intended features.
+
+\subsubsection{File descriptors}
+File descriptors (FDs) can diverge between boots of some systems in ways that seem non-deterministic.
+Additionally, divergence between modeled hardware and real hardware can contribute to FD divergence.
+For example, if a model lacks a peripheral device cause an {\tt open} to fail, subsequent FD assignments
+on the model will not match those used on the physical system.  
 
 \section{What FD is this?}
 You have created a input stimulus and would like to understand the resulting behavior of a specific process
