@@ -1364,7 +1364,9 @@ If AFL finds crashes, use the {\tt crashReport} command to generate reports on e
 data tracking and indications of ROP or SEGV occurances.  A single command will generate reports on all crashes under a afl-output target
 directory.  If the fuzzing inputs potentially include multiple packets, use the {\tt crashReport} utility (not from the Simics prompt) and provide
 the target FD in the {\tt -f} option.  This will use a driver that is assumed to be listening on local port 4022.  The ini file must identify the target IP
-address and port number in the {\tt TARGET\_IP} and {\tt TARGET\_PORT} ENV variables.
+address and port number in the {\tt TARGET\_IP} and {\tt TARGET\_PORT} ENV variables.  The init file should not name the snapshot created with {\tt prepInject},
+it should name a snapshot reflecting state prior to receipt of test data because the driver will send the data rather than having data injected directly into 
+memory.
 
 \textbf{Note:} Crash analysis and fuzzing have different criteria for handing BACK\_STOP\_CYCLES.  It may be necessary to increase this 
 value to allow time for the crash analysis to encounter the crash.
