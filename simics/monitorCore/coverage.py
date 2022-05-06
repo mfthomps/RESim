@@ -466,7 +466,7 @@ class Coverage():
                 #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
                 prejump_addr = this_addr
             if not self.afl:
-                #self.lgr.debug('this_addr is 0x%x' % this_addr) 
+                #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
                 if this_addr not in self.blocks_hit:
                     self.blocks_hit[this_addr] = self.cpu.cycles
                     self.latest_hit = this_addr
@@ -660,8 +660,8 @@ class Coverage():
 
             
     def restoreBreaks(self):
-        ''' TBD any need for this?  '''
-        return
+        ''' TBD any need for this?  YES used after pre-hits are stored, i.e., hits up until the first data reference'''
+        #return
         ''' Restore the hits found in self.blocks_hit '''
         tmp_list = []
         prev_break = None
@@ -734,7 +734,7 @@ class Coverage():
             self.cover(physical=physical)
             self.did_cover = True
         else:
-            self.restoreBreaks()
+            #self.restoreBreaks()
             #self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
             if self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
@@ -798,7 +798,10 @@ class Coverage():
 
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
-        self.lgr.debug('cover enableCoverage fname is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
+        if self.backstop_cycles is not None:
+            self.lgr.debug('cover enableCoverage fname is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
+        else:
+            self.lgr.debug('cover enableCoverage fname is %s linear: %r no backstop given' % (self.hits_path, linear))
         # force use of linear breakpoints vice physical memory
         self.linear = linear
         self.afl = afl
@@ -851,7 +854,7 @@ class Coverage():
         return self.blocks_hit
 
     def clearHits(self):
-        self.restoreBreaks()
+        #self.restoreBreaks()
         self.funs_hit = []
         self.blocks_hit = OrderedDict()
         if True:
