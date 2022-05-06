@@ -1970,3 +1970,7 @@ class DataWatch():
 
     def getAllJson(self):
         return self.watchMarks.getAllJson()
+
+    def markLog(self, s):
+        self.lgr.debug('dataWatch markLog')
+        self.watchMarks.logMark(s)

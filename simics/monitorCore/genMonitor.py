@@ -247,6 +247,9 @@ class GenMonitor():
         ''' Manage reset of origin based on execution of magic instruction 99 '''
         self.magic_origin = {}
 
+        ''' Control flow jumpers '''
+        self.jumper_dict = {}
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
 
@@ -1984,6 +1987,9 @@ class GenMonitor():
         self.lgr.debug('traceFile %s' % path)
         outfile = os.path.join('/tmp', os.path.basename(path))
         self.traceFiles[self.target].watchFile(path, outfile)
+        ''' TBD reduce to only track open/write/close? '''
+        if self.target not in self.trace_all:
+            self.traceAll()
 
     def traceFD(self, fd):
         self.lgr.debug('traceFD %d' % fd)
@@ -3262,7 +3268,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3279,6 +3285,10 @@ class GenMonitor():
 
         if self.coverage is not None:
             self.coverage.doCoverage()
+
+        if mark_logs:
+            self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
+
         self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun, count=count)
 
     def stopTrackIO(self):
@@ -3531,7 +3541,7 @@ class GenMonitor():
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
-            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False):
+            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if type(save_json) is bool:
@@ -3548,11 +3558,14 @@ class GenMonitor():
             self.dataWatch[self.target].setMaxMarks(max_marks) 
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
+        if mark_logs:
+            self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
                   no_rop=no_rop, instruct_trace=instruct_trace)
+
         if go:
             self.injectIOInstance.go()
         return self.injectIOInstance
@@ -3833,11 +3846,12 @@ class GenMonitor():
         self.trace_malloc = None
 
     def trackFile(self, substring):
+        ''' track access to XML file access '''
         self.stopTrackIO()
         self.clearWatches()
         self.lgr.debug('trackFile stopped track and cleared watchs')
         self.dataWatch[self.target].trackFile(self.stopTrackIO, self.is_compat32)
-        self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        self.lgr.debug('trackFile back from dataWatch, now run to IO')
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.runToOpen(substring)    
@@ -4310,9 +4324,14 @@ class GenMonitor():
         self.context_manager[self.target].noWatch(pid)
 
     def jumper(self, from_addr, to_addr):
-        j = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
-        j.setJumper(from_addr, to_addr)
+        ''' Set a control flow jumper '''
+        if self.target not in self.jummper_dict:
+            self.jumper_dict[self.taget] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+        self.jumper_dict[self.taget].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
+
+    def jumperStop(self):
+        self.jumper_dict[self.target].removeBreaks()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -336,6 +336,12 @@ class ResetOrigin():
     def getMsg(self):
         return self.msg
 
+class LogMark():
+    def __init__(self, s):
+        self.msg = 'LOG: %s' % s
+    def getMsg(self):
+        return self.msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -725,6 +731,10 @@ class WatchMarks():
     def returnInt(self, count, fun):
         fm = ReturnInt(fun, count)
         self.addWatchMark(fm)
+
+    def logMark(self, s):
+        lm = LogMark(s)
+        self.addWatchMark(lm)
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')
