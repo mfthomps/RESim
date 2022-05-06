@@ -9,14 +9,16 @@ class Jumpers():
 
     def setJumper(self, from_addr, to_addr):
         self.fromto[from_addr] = to_addr
-        self.setBreaks()
+        self.setOneBreak(from_addr)
+
+    def setOneBreak(self, addr):
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+            self.hap[f] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, None, proc_break, 'jumper')
+            self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
 
     def setBreaks(self):
         for f in self.fromto:
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, f, 1, 0)
-            self.hap[f] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, None, proc_break, 'jumper')
-            self.lgr.debug('jumper setBreaks set break on addr 0x%x' % f)
-
+            self.setOneBreak(f)
     
     def doJump(self, dumb, third, forth, memory):
         print('doJump')
@@ -29,3 +31,11 @@ class Jumpers():
             return
         self.top.writeRegValue('eip', self.fromto[curr_addr], alone=True)
         self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (curr_addr, self.fromto[curr_addr]))
+
+    def clearBreaks(self):
+        for f in self.fromto:
+            self.context_manager[self.target].genDeleteHap(hap[f])
+
+    def removeBreaks(self):
+        self.clearBreak()
+        self.hap = {}
