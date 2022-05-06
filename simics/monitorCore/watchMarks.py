@@ -471,6 +471,7 @@ class WatchMarks():
 
     def getWatchMarks(self, origin=0):
         retval = []
+        self.lgr.debug('watchMarks getWatchMarks len is %d' % len(self.mark_list))
         for mark in self.mark_list:
             retval.append(mark.getJson(origin))
         return retval        
