@@ -565,21 +565,22 @@ class reverseToCall():
                 self.lgr.error('jumpOverKernel found simics running prior to skip to')
                 return None
             skip_ok = self.skipToTest(got_it)
-            dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-            rval = self.top.getReg(self.reg, self.cpu) 
-            self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
             if not skip_ok:
                 self.lgr.error('jumpOverKernel skip-to failed')
                 return None
-            if rval == self.reg_val:
-                retval = True
-            else:
-                retval = False
-                self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
-                user_cycles = cur_cycles+1
-                skip_ok = self.skipToTest(user_cycles)
-                if not skip_ok:
-                    return None
+            if self.reg is not None:
+                dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+                rval = self.top.getReg(self.reg, self.cpu) 
+                self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
+                if rval == self.reg_val:
+                    retval = True
+                else:
+                    retval = False
+                    self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
+                    user_cycles = cur_cycles+1
+                    skip_ok = self.skipToTest(user_cycles)
+                    if not skip_ok:
+                        return None
         else:
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''

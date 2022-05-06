@@ -104,6 +104,7 @@ import userBreak
 import magicOrigin
 from resimHaps import *
 import reverseTrack
+import jumpers
 import json
 import pickle
 import re
@@ -552,8 +553,8 @@ class GenMonitor():
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.back_stop[cell_name], 
-                  self.compat32, self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
+                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -1138,7 +1139,7 @@ class GenMonitor():
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
             f3 = stopFunction.StopFunction(self.debug, [], nest=False)
-            flist = [f1, f2, f3]
+            flist = [f1, f3, f2]
             if final_fun is not None:
                 f4 = stopFunction.StopFunction(final_fun, [], nest=False)
                 flist.append(f4)
@@ -1205,9 +1206,9 @@ class GenMonitor():
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
         f3 = stopFunction.StopFunction(debug_function, [], nest=False)
         if to_user:
-            flist = [f1, f2, f3]
+            flist = [f1, f3, f2]
         else:
-            flist = [f2, f3]
+            flist = [f3, f2]
         if final_fun is not None:
             f4 = stopFunction.StopFunction(final_fun, [], nest=False)
             flist.append(f4)
@@ -1297,7 +1298,7 @@ class GenMonitor():
                     self.lgr.debug('toRunningProc Already at proc %s, done' % proc)
                     f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
-                    self.toUser([f1, f2])
+                    self.toUser([f2, f1])
                     #self.debug()
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
@@ -1307,9 +1308,9 @@ class GenMonitor():
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
                     if final_fun is not None:
                         f3 = stopFunction.StopFunction(final_fun, [], nest=False)
-                        self.toUser([f1, f2, f3])
+                        self.toUser([f2, f1, f3])
                     else:
-                        self.toUser([f1, f2])
+                        self.toUser([f2, f1])
                     #self.debugGroup()
                     return
         ''' Set breakpoint on current_task to watch task switches '''
@@ -1464,12 +1465,13 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.stopTrackIO()
         if len(self.call_traces[self.target]) > 0: 
-            print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
-            self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
-            self.showHaps()
-            for call in self.call_traces[self.target]:
-                self.lgr.debug('remaining trace %s' % call)
-            return
+            print('\n\n*** Syscall traces are active -- they will be deleted before jumping to bookmarks ***')
+            self.stopTrace()
+            self.lgr.debug('Syscall traces are active -- they will be deleted before jumping to bookmarks ')
+            #self.showHaps()
+            #for call in self.call_traces[self.target]:
+            #    self.lgr.debug('remaining trace %s' % call)
+            #return
         if type(mark) != int:
             mark = mark.replace('|','"')
         msg = self.bookmarks.goToDebugBookmark(mark)
@@ -2150,7 +2152,6 @@ class GenMonitor():
 
     def debugExitHap(self, flist=None): 
         ''' intended to stop simultion if the threads we are debugging all exit '''
-        cell = self.cell_config.cell_context[self.target]
         somap = None
         if self.target in self.soMap:
             somap = self.soMap[self.target]
@@ -2160,8 +2161,10 @@ class GenMonitor():
         self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                        self.mem_utils[self.target], self.task_utils[self.target], 
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
-                       call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32)
-        self.lgr.debug('debugExitHap compat32: %r syscall is %s' % (self.is_compat32, str(self.exit_group_syscall[self.target])))
+                       call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32, name="debugExitHap")
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
+               cpu.current_context))
 
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
@@ -2871,7 +2874,7 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
-    def clearBookmarks(self):
+    def clearBookmarks(self, dumb=None):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
@@ -2887,12 +2890,15 @@ class GenMonitor():
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
-    def writeRegValue(self, reg, value):
+    def writeRegValue(self, reg, value, alone=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         reg_num = cpu.iface.int_register.get_number(reg)
         cpu.iface.int_register.write(reg_num, value)
         self.lgr.debug('writeRegValue %s, %x regnum %d' % (reg, value, reg_num))
-        self.clearBookmarks()
+        if alone:
+            SIM_run_alone(self.clearBookmarks, None) 
+        else:
+            self.clearBookmarks()
 
     def writeWord(self, address, value):
         ''' NOTE: wipes out bookmarks! '''
@@ -3544,9 +3550,9 @@ class GenMonitor():
             cpu = this_cpu
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
+        self.dataWatch[self.target].resetWatch()
         if max_marks is not None:
             self.dataWatch[self.target].setMaxMarks(max_marks) 
-        self.dataWatch[self.target].resetWatch()
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
@@ -3694,6 +3700,9 @@ class GenMonitor():
 
     def showCoverage(self):
         self.coverage.showCoverage()
+        self.coverage.saveCoverage()
+
+    def saveCoverage(self):
         self.coverage.saveCoverage()
 
     def stopCoverage(self):
@@ -4306,6 +4315,12 @@ class GenMonitor():
 
     def blackListPid(self, pid):
         self.context_manager[self.target].noWatch(pid)
+
+    def jumper(self, from_addr, to_addr):
+        j = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+        j.setJumper(from_addr, to_addr)
+        self.lgr.debug('jumper set')
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
