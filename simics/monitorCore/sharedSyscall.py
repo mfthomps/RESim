@@ -484,7 +484,7 @@ class SharedSyscall():
         else:
             did_exit = self.handleExit(None, pid, comm)
         if did_exit:
-            self.lgr.debug('sharedSyscall exitHap remove exitHap for %d' % pid)
+            #self.lgr.debug('sharedSyscall exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
 
     def fcntl(self, pid, eax, exit_info):
@@ -721,6 +721,7 @@ class SharedSyscall():
                     if self.all_write:
                         self.allWrite.write(comm, pid, exit_info.old_fd, s)
             else:
+                trace_msg = ('\treturn from write pid:%d FD: %d exception %d\n' % (pid, exit_info.old_fd, eax))
                 exit_info.call_params = None
 
         elif callname == '_llseek':
