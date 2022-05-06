@@ -14,11 +14,13 @@ class TraceFiles():
         self.traceProcs = traceProcs
         ''' for tracing of only FD, e.g., to ignore close '''
         self.tracing_fd = []
+        ''' for including file traces in watch marks '''
+        self.dataWatch = None
 
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
         if path not in self.watched_files:
-            self.lgr.debug('open and close %s' % outfile)
+            self.lgr.debug('traceFiles open and close %s' % outfile)
             with open(outfile, 'w') as fh:
                 fh.write('start of RESim copy of %s\n' % outfile) 
             self.watched_files.append(path)
@@ -61,6 +63,8 @@ class TraceFiles():
                     self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                     fh.write(s)
                     fh.flush()
+                    if self.dataWatch is not None:
+                        self.dataWatch.markLog(s)
         
                  
         elif fd in self.open_files:
@@ -70,3 +74,7 @@ class TraceFiles():
                 self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                 fh.write(s)
             
+
+    def markLogs(self, dataWatch):
+        self.dataWatch = dataWatch
+        self.lgr.debug('TraceFiles markLogs')
