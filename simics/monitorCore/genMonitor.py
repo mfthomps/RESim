@@ -104,6 +104,7 @@ import userBreak
 import magicOrigin
 from resimHaps import *
 import reverseTrack
+import jumpers
 import json
 import pickle
 import re
@@ -1460,12 +1461,13 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.stopTrackIO()
         if len(self.call_traces[self.target]) > 0: 
-            print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
-            self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
-            self.showHaps()
-            for call in self.call_traces[self.target]:
-                self.lgr.debug('remaining trace %s' % call)
-            return
+            print('\n\n*** Syscall traces are active -- they will be deleted before jumping to bookmarks ***')
+            self.stopTrace()
+            self.lgr.debug('Syscall traces are active -- they will be deleted before jumping to bookmarks ')
+            #self.showHaps()
+            #for call in self.call_traces[self.target]:
+            #    self.lgr.debug('remaining trace %s' % call)
+            #return
         if type(mark) != int:
             mark = mark.replace('|','"')
         msg = self.bookmarks.goToDebugBookmark(mark)
@@ -2865,7 +2867,7 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
-    def clearBookmarks(self):
+    def clearBookmarks(self, dumb=None):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
@@ -2881,12 +2883,15 @@ class GenMonitor():
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
-    def writeRegValue(self, reg, value):
+    def writeRegValue(self, reg, value, alone=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         reg_num = cpu.iface.int_register.get_number(reg)
         cpu.iface.int_register.write(reg_num, value)
         self.lgr.debug('writeRegValue %s, %x regnum %d' % (reg, value, reg_num))
-        self.clearBookmarks()
+        if alone:
+            SIM_run_alone(self.clearBookmarks, None) 
+        else:
+            self.clearBookmarks()
 
     def writeWord(self, address, value):
         ''' NOTE: wipes out bookmarks! '''
@@ -4303,6 +4308,12 @@ class GenMonitor():
 
     def blackListPid(self, pid):
         self.context_manager[self.target].noWatch(pid)
+
+    def jumper(self, from_addr, to_addr):
+        j = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+        j.setJumper(from_addr, to_addr)
+        self.lgr.debug('jumper set')
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
