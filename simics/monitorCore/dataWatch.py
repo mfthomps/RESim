@@ -1594,6 +1594,8 @@ class DataWatch():
 
     def resetOrigin(self, cycle):
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
+        if len(self.start) == 0:
+            return
         del self.start[:]
         del self.length[:]
         del self.hack_reuse[:]
