@@ -444,7 +444,7 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:
-                SIM_delete_breakpoint(bp)
+                RES_delete_breakpoint(bp)
             del stop_action.breakpoints[:]
             self.is_compat32 = self.compat32()
             ''' check functions in list '''
@@ -1059,7 +1059,7 @@ class GenMonitor():
     def cleanToProcHaps(self, dumb):
         self.lgr.debug('cleantoProcHaps')
         if self.cur_task_break is not None:
-            SIM_delete_breakpoint(self.cur_task_break)
+            RES_delete_breakpoint(self.cur_task_break)
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None
@@ -1736,7 +1736,11 @@ class GenMonitor():
         Runs backwards until a write to the given address is found.
         '''
         if self.reverseEnabled():
+            self.context_manager[self.target].showHaps();
             self.removeDebugBreaks()
+            if addr == 0x9e87200:
+                SIM_break_simulation('wtf')
+                return
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             value = self.mem_utils[self.target].readMemory(cpu, addr, num_bytes)
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d' % (value, addr, num_bytes))
@@ -2367,7 +2371,7 @@ class GenMonitor():
         self.lgr.debug('undoDebug')
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
-            SIM_delete_breakpoint(self.cur_task_break)
+            RES_delete_breakpoint(self.cur_task_break)
             self.cur_task_hap = None
         if self.proc_hap is not None:
             self.context_manager[self.target].genDeleteHap(self.proc_hap)

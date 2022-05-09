@@ -1,5 +1,5 @@
 from simics import *
-#import inspect
+import inspect
 def RES_hap_delete_callback_id(hap_type, hap_num):
     #curframe = inspect.currentframe()
     #calframe = inspect.getouterframes(curframe, 2)
@@ -27,3 +27,27 @@ def RES_hap_add_callback_obj_range(hap_type, cell, val, callback, val2, val3, ma
 def RES_hap_add_callback_index(hap_type, callback, param, breaknum):
     retval = SIM_hap_add_callback_index(hap_type, callback, param, breaknum)
     return retval
+
+def RES_delete_breakpoint(bp):
+    '''
+    print('RES_delete_breakpoint %d' % bp)
+    curframe = inspect.currentframe()
+    calframe = inspect.getouterframes(curframe, 3)
+    #print('delete hap %d' % hap_num)
+    print('caller name:', calframe[1][3])
+    '''
+
+    print('RES_delete_breakpoint %d' % bp)
+    '''
+    currentframe = inspect.currentframe()
+    callgraph=inspect.getouterframes(currentframe)
+    print('Call Graph for {0:s}'.format(RES_delete_breakpoint.__name__))
+    for record in callgraph:
+        frameinfo = inspect.getframeinfo(record[0])
+        print(frameinfo.function)
+    '''
+    try:
+        SIM_delete_breakpoint(bp)
+    except:
+        pass
+    print('done')

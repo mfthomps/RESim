@@ -2,6 +2,7 @@ from simics import *
 import pageUtils
 import memUtils
 import hapCleaner
+from resimHaps import *
 class ReverseToUser():
     '''
     set breakpoints for entire user space and reverse
@@ -70,7 +71,7 @@ class ReverseToUser():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:
-                SIM_delete_breakpoint(bp)
+                RES_delete_breakpoint(bp)
             ''' check functions in list '''
             if len(stop_action.flist) > 0:
                 fun = stop_action.flist.pop(0)
@@ -78,6 +79,6 @@ class ReverseToUser():
 
     def cleanup(self, breaks):
         for bp in breaks:
-            SIM_delete_breakpoint(bp)
+            RES_delete_breakpoint(bp)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.user_hap)
 

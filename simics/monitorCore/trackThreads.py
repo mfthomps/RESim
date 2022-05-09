@@ -114,7 +114,7 @@ class TrackThreads():
         self.traceProcs.setName(pid, prog_string, None)
         self.addSO(prog_string, pid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
-        SIM_delete_breakpoint(self.finish_break[pid])
+        RES_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
 

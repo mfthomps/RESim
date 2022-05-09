@@ -15,6 +15,7 @@ import net
 import os
 import sys
 import traceback
+from resimHaps import *
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
@@ -74,6 +75,7 @@ class DataWatch():
         self.resetState()
 
     def resetState(self):
+        self.lgr.debug('resetState')
         self.start = []
         self.length = []
         self.hack_reuse = []
@@ -158,7 +160,7 @@ class DataWatch():
             cycle_dif = self.cycles_was - self.cpu.cycles
             #self.lgr.debug('hitCallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
-            SIM_delete_breakpoint(self.call_break)
+            RES_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.call_hap)
             self.call_stop_hap = None
             self.call_hap = None
@@ -1012,7 +1014,7 @@ class DataWatch():
             cycle_dif = self.cycles_was - self.cpu.cycles
             #self.lgr.debug('hitCallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
-            SIM_delete_breakpoint(self.call_break)
+            RES_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.call_hap)
             self.call_stop_hap = None
             self.call_hap = None
@@ -1288,17 +1290,18 @@ class DataWatch():
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
             return
-        #self.lgr.debug('dataWatch readHap marks: %s max: %s' % (str(self.watchMarks.markCount()), str(self.max_marks)))
+        self.lgr.debug('dataWatch readHap marks: %s max: %s' % (str(self.watchMarks.markCount()), str(self.max_marks)))
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
             self.stopWatch()
             SIM_break_simulation('max marks exceeded')
             return
         ''' ad hoc sanitity check for wayward programs, fuzzed, etc.'''
-        if index in self.length and self.length[index]<10:
+        if index not in self.length or (index in self.length and self.length[index]<10):
             if index not in self.index_hits:
                 self.index_hits[index] = 0
             self.index_hits[index] = self.index_hits[index]+1
+            #self.lgr.error('dataWatch readHap %d hits on  index %d, ' % (self.index_hits[index], index))
             if self.index_hits[index] > 1000:
                 self.lgr.error('dataWatch readHap over 1000 hits on index %d, stopping watch' % index)
                 self.stopWatch()

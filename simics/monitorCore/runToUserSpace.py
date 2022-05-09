@@ -32,6 +32,7 @@ import decode
 import memUtils
 import logging
 import resimUtils
+from resimHaps import *
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
 '''
@@ -150,7 +151,7 @@ class runToUserSpace():
 
     def rmBreaks(self):
         for breakpt in self.the_breaks:
-            SIM_delete_breakpoint(breakpt)
+            RES_delete_breakpoint(breakpt)
         self.the_breaks = []
         self.stop_in_user_hap = None
 

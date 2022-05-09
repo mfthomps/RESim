@@ -7,6 +7,7 @@ import time
 from simics import *
 import pageUtils
 import resimUtils
+from resimHaps import *
 '''
 Manage code coverage tracking, maintaining two hits files per coverage unit.
 
@@ -98,7 +99,7 @@ class Coverage():
         self.lgr.debug('coverage, stopCover')
         for bp in self.bp_list:
             try:
-                SIM_delete_breakpoint(bp)
+                RES_delete_breakpoint(bp)
             except:
                 self.lgr.debug('coverage, stopCover bp %d does not exist?' % bp)
         self.bp_list = []
@@ -110,7 +111,7 @@ class Coverage():
             self.blocks_hit = OrderedDict()
 
         for addr in self.missing_breaks:
-            SIM_delete_breakpoint(self.missing_breaks[addr])
+            RES_delete_breakpoint(self.missing_breaks[addr])
         for bp in self.missing_haps:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.missing_haps[bp])
         
@@ -307,8 +308,9 @@ class Coverage():
                 self.value = None
         
     def delModeAlone(self, dumb):
-        SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-        self.mode_hap = None
+        if self.mode_hap is not None:
+            SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
 
     def modeChanged(self, mem_trans, one, old, new):
         if self.mode_hap is None:
@@ -738,7 +740,7 @@ class Coverage():
             #self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
             if self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
-                    SIM_delete_breakpoint(bp)
+                    RES_delete_breakpoint(bp)
                 for hap in self.bb_hap[self.begin_tmp_hap:]:
                     #self.lgr.debug('coverage doCoverage delete tmp_bp hap %d' % hap)
                     SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
@@ -859,7 +861,7 @@ class Coverage():
             if self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
                     #self.lgr.debug('try to delete bp %d' % bp)
-                    SIM_delete_breakpoint(bp)
+                    RES_delete_breakpoint(bp)
                 for hap in self.bb_hap[self.begin_tmp_hap:]:
                     #self.lgr.debug('coverage doCoverage delete tmp_bp hap %d' % hap)
                     SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)

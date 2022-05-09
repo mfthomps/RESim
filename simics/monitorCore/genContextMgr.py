@@ -26,8 +26,11 @@ class GenBreakpoint():
 
     def clear(self):
         if self.break_num is not None:
-            #self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
-            SIM_delete_breakpoint(self.break_num)
+            self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            print('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            RES_delete_breakpoint(self.break_num)
+            print('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            self.lgr.debug('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             self.break_num = None
 
 class GenHap():
@@ -83,9 +86,9 @@ class GenHap():
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
             if immediate:
-                #self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                #           self.name, str(bs.break_num), str(be.break_num), 
-                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+                self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                           self.name, str(bs.break_num), str(be.break_num), 
+                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
                 self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
                 #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
@@ -103,8 +106,8 @@ class GenHap():
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
-            #self.lgr.debug('GenHap set hap_handle %s name: %s on break %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
-            #              self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
+            self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
+                          self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
             self.hap_num = RES_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -115,7 +118,7 @@ class GenHap():
         if self.hap_num is not None:
             for bp in self.breakpoint_list:
                 bp.clear()
-            #self.lgr.debug('GenHap clear hap %s %d handle %d' % (self.name, self.hap_num, self.handle))
+            self.lgr.debug('GenHap clear hap %s %d handle %d' % (self.name, self.hap_num, self.handle))
             RES_hap_delete_callback_id(self.hap_type, self.hap_num)
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
@@ -272,7 +275,7 @@ class GenContextMgr():
         if isinstance(hap_handle, str):
             self.lgr.error('contextManager genDeleteHap hap_handle is string? %s' % hap_handle)
             return 
-        #self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
+        self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
         hap_copy = list(self.haps)
         for hap in hap_copy:
             if hap.handle == hap_handle:
@@ -596,7 +599,7 @@ class GenContextMgr():
         self.watch_only_this = True
 
     def delPidRecAlone(self, pid):
-        SIM_delete_breakpoint(self.task_rec_bp[pid])
+        RES_delete_breakpoint(self.task_rec_bp[pid])
         self.lgr.debug('contextManger rmTask pid %d' % pid)
         if pid in self.task_rec_hap and self.task_rec_hap[pid] is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
@@ -725,7 +728,7 @@ class GenContextMgr():
         if pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
                 #self.lgr.debug('stopWatchPid delete bp %d' % self.task_rec_bp[pid])
-                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                RES_delete_breakpoint(self.task_rec_bp[pid])
                 RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
             del self.task_rec_bp[pid]
             del self.task_rec_hap[pid]
@@ -748,7 +751,7 @@ class GenContextMgr():
             self.lgr.debug('stopWatchTasks already stopped')
             return
         self.lgr.debug('stopWatchTasks delete hap')
-        SIM_delete_breakpoint(self.task_break)
+        RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
         self.task_hap = None
@@ -763,7 +766,7 @@ class GenContextMgr():
         for pid in self.task_rec_bp:    
             if self.task_rec_bp[pid] is not None:
                 #self.lgr.debug('stopWatchTasks delete bp %d' % self.task_rec_bp[pid])
-                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                RES_delete_breakpoint(self.task_rec_bp[pid])
                 if pid in self.task_rec_hap and self.task_rec_hap[pid] is not None:
                     RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
         self.task_rec_bp = {}
@@ -944,7 +947,7 @@ class GenContextMgr():
                 self.lgr.debug('contextMgr resetAlone rec 0x%x of pid %d still found though written by maybe not dead after all? new list_addr is 0x%x' % (dead_rec, 
                     pid, list_addr))
 
-                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                RES_delete_breakpoint(self.task_rec_bp[pid])
                 del self.task_rec_bp[pid] 
                 RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_rec_hap[pid])
                 del self.task_rec_hap[pid] 
@@ -1080,7 +1083,7 @@ class GenContextMgr():
         self.lgr.debug('contextManager clearExitBreaks')
         for pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
-                SIM_delete_breakpoint(self.task_rec_bp[pid])
+                RES_delete_breakpoint(self.task_rec_bp[pid])
                 self.task_rec_bp[pid] = None
                 #self.lgr.debug('contextManager clearExitBreaks pid:%d' % pid)
         for pid in self.task_rec_hap:

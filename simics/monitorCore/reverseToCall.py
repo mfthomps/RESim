@@ -658,7 +658,7 @@ class reverseToCall():
             self.lgr.error('kernInterruptHap pid is None')    
             return
         if pid == self.pid:
-            SIM_delete_breakpoint(self.uncall_break)
+            RES_delete_breakpoint(self.uncall_break)
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             if self.reg_val is not None:
@@ -787,7 +787,7 @@ class reverseToCall():
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
         for breakpt in self.the_breaks:
-            SIM_delete_breakpoint(breakpt)
+            RES_delete_breakpoint(breakpt)
         self.the_breaks = []
 
     def conditionalMet(self, mn):
@@ -984,7 +984,7 @@ class reverseToCall():
         self.lgr.debug('uncallHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
               pid, self.pid, self.reg, self.reg_val))
         if pid == self.pid:
-            SIM_delete_breakpoint(self.uncall_break)
+            RES_delete_breakpoint(self.uncall_break)
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             val = self.top.getReg(self.reg, self.cpu) 

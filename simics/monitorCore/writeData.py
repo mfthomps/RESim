@@ -364,19 +364,22 @@ class WriteData():
         
 
     def delCallHap(self, dumb):
-        #self.lgr.debug('writeData delCallHap')
+        self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
-            SIM_delete_breakpoint(self.call_break)
+            self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
+            RES_delete_breakpoint(self.call_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
             self.call_hap = None
             self.call_break = None
         if self.select_hap is not None:
-            SIM_delete_breakpoint(self.select_break)
+            self.lgr.debug('writeData delCallHap select_break %d' % self.select_break)
+            RES_delete_breakpoint(self.select_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
             self.select_hap = None
             self.select_break = None
         if self.ret_hap is not None:
-            SIM_delete_breakpoint(self.ret_break)
+            self.lgr.debug('writeData delCallHap re_break %d' % self.ret_break)
+            RES_delete_breakpoint(self.ret_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
             self.ret_hap = None
             self.ret_break = None

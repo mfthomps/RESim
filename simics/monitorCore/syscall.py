@@ -484,12 +484,13 @@ class Syscall():
 
         #self.lgr.debug('stopTraceAlone2')
         if self.background_break is not None:
-            SIM_delete_breakpoint(self.background_break)
+            self.lgr.debug('stopTraceAlone delete background_break %d' % self.background_break)
+            RES_delete_breakpoint(self.background_break)
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
-        #self.lgr.debug('stopTraceAlone done')
+        self.lgr.debug('stopTraceAlone done')
 
 
     def stopTrace(self, immediate=False):
@@ -564,7 +565,8 @@ class Syscall():
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.finish_hap_table:
             return
-        SIM_delete_breakpoint(self.finish_break[pid])
+        self.lgr.debug('fnameTable delete finish_break')
+        RES_delete_breakpoint(self.finish_break[pid])
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap_table[pid])
         del self.finish_hap_table[pid]
         length = memory.size
@@ -597,7 +599,8 @@ class Syscall():
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.finish_hap_page:
             return
-        SIM_delete_breakpoint(self.finish_break[pid])
+        self.lgr.debug('fnamePage delete finish_break')
+        RES_delete_breakpoint(self.finish_break[pid])
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap_page[pid])
         del self.finish_hap_page[pid]
 
@@ -641,7 +644,8 @@ class Syscall():
         if exit_info.fname is not None:
             #self.lgr.debug('finishParseOpen pid %d got fid %s' % (pid, exit_info.fname))
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
-            SIM_delete_breakpoint(self.finish_break[pid])
+            self.lgr.debug('finishParseOpen delete finish_break')
+            RES_delete_breakpoint(self.finish_break[pid])
             del self.finish_hap[pid]
             del self.finish_break[pid]
         else:
@@ -690,7 +694,8 @@ class Syscall():
             self.lgr.debug('finishParseExecve progstring None, arm fu?')
             return
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
-        SIM_delete_breakpoint(self.finish_break[pid])
+        self.lgr.debug('finishParseExec delete finish_break')
+        RES_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
         if prog_string in exec_skip_list:

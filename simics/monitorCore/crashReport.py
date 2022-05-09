@@ -19,35 +19,31 @@ This is an example of a script that repeatedly starts
 RESim (and thus Simics) to handle multi-packet udp crash
 analysis.  
 '''
-def feedDriver(ip, port, header, client_path, magic_path):
-    result = 1
-    cmd = 'scp -P 4022 /tmp/sendudp localhost:/tmp/sendudp'
-    while result != 0:
-        result = os.system(cmd)
-        if result != 0:
-            print('driver not responding')
-            time.sleep(1)
-    print('scp of sendup OK')    
-    cmd = 'scp -P 4022 %s %s localhost:/tmp/' % (client_path, magic_path)
-    #print(cmd)
-    result = os.system(cmd)
+def feedDriver(ip, port, header, client_path, magic_path, tcp):
+    ''' Use the given script (assume drive_driver) to send data found in /tmp/sendfile'''
+    print('feedDriver')
 
-    cmd = 'ssh -p 4022 mike@localhost chmod a+x /tmp/clientudpMult'
-    #print(cmd)
-    result = os.system(cmd)
-    cmd = "ssh -p 4022 mike@localhost '/tmp/simics-magic && /tmp/clientudpMult %s %d %s'" % (ip, port, header)
-    #print(cmd)
+    tcp_flag = ''
+    if tcp:
+        tcp_flag = '-t'
+    if header is None:
+        header = ''
+    line = '/tmp/sendfile %s %d %s' % (ip, port, header)
+    cmd = '%s %s /tmp/directive' % (client_path, tcp_flag)
+    print('cmd is %s' % cmd)
     result = os.system(cmd)
 
 def main():
     here= os.path.dirname(os.path.realpath(__file__))
-    client_path = os.path.join(here, 'clientudpMult')
+    client_path = os.path.join(os.path.dirname(here),'bin', 'drive-driver.py')
     print('Client path is %s' % client_path)
     parser = argparse.ArgumentParser(prog='crashReport', description='Generate reports on crashes found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
     parser.add_argument('-f', '--fd', action='store', help='FD read by target process.  Needed for driver-based systems, e.g., for multipacket  sessions.')
     parser.add_argument('-d', '--report_dir', action='store', default='/tmp/crash_reports', help='Directory to place crash reports.  Defaults to /tmp/crash_reports.')
+    parser.add_argument('-m', '--max_sessions', action='store', type=int, default=-1, help='Stop after this number of sessoins')
+    parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions (only needed if fd is given, i.e., multi-packet')
 
     args = parser.parse_args()
     resim_ini = args.ini
@@ -80,6 +76,9 @@ def main():
         header = ''
         if config.has_option('ENV', 'AFL_UDP_HEADER'):
             header = config.get('ENV', 'AFL_UDP_HEADER')
+            if args.tcp:
+                self.lgr.error('TCP switch conflicts with having a UDP header.')
+                sys.exit(1)
     
     if os.path.isfile(target):
         ''' single file to report on '''
@@ -111,6 +110,7 @@ def main():
     resim_dir = os.getenv('RESIM_DIR')
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
     index = len(already_done)
+    count = 0
     print('Found %d crashes to analyze, and %d already done' % (len(flist), len(already_done)))
     for f in sorted(flist):
         if f in already_done:
@@ -119,8 +119,8 @@ def main():
         os.environ['ONE_DONE_PATH'] = f
         os.environ['ONE_DONE_PARAM'] = str(index)
         if trackFD is not None:
-            shutil.copyfile(f, '/tmp/sendudp')
-            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, client_path, magic_path))
+            shutil.copyfile(f, '/tmp/sendfile')
+            driver = threading.Thread(target=feedDriver, args=(target_ip, target_port, header, client_path, magic_path, args.tcp))
             driver.start()
             #os.system('./tmpdrive.sh &')
         print("starting monitor without UI")
@@ -130,6 +130,13 @@ def main():
             exit
     
         index += 1
+        count += 1
+        print('count is %d  max_sessions %d' % (count, args.max_sessions))
+        if args.max_sessions > 0 and count >= args.max_sessions:
+            print('Hit max sessions.')
+            exit
+            break
+        
     print('done')
 
 if __name__ == '__main__':

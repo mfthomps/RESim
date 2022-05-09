@@ -24,6 +24,7 @@
 '''
 
 from simics import *
+from resimHaps import *
 class runToSyscall():
     def __init__(self, top, os_utils, cpu, pid, forward, syscall_address, cell, is_monitor_running, lgr):
         self.forward = forward
@@ -77,6 +78,6 @@ class runToSyscall():
             self.lgr.debug('runToSyscall, stoppedExecution at 0x%x, expect client to run/rev to user space' % eip)
             print('runToSyscall, stoppedExecution, expect client to run/rev to user space')
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            SIM_delete_breakpoint(self.syscall_break)
+            RES_delete_breakpoint(self.syscall_break)
             self.is_monitor_running.setRunning(False)
             self.top.skipAndMail(cycles=0)
