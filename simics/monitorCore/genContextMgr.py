@@ -26,11 +26,9 @@ class GenBreakpoint():
 
     def clear(self):
         if self.break_num is not None:
-            self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
-            print('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            #self.lgr.debug('GenBreakpoint clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             RES_delete_breakpoint(self.break_num)
-            print('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
-            self.lgr.debug('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
+            #self.lgr.debug('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             self.break_num = None
 
 class GenHap():
@@ -86,9 +84,9 @@ class GenHap():
             be = self.breakpoint_list[-1]
             #self.lgr.debug('GenHap callback range')
             if immediate:
-                self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
-                           self.name, str(bs.break_num), str(be.break_num), 
-                           bs.addr, be.addr, str(bs.handle), str(be.handle)))
+                #self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
+                #           self.name, str(bs.break_num), str(be.break_num), 
+                #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
                 self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
                 #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
@@ -106,8 +104,8 @@ class GenHap():
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
-            self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
-                          self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
+            #self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
+            #              self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
             self.hap_num = RES_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -118,7 +116,7 @@ class GenHap():
         if self.hap_num is not None:
             for bp in self.breakpoint_list:
                 bp.clear()
-            self.lgr.debug('GenHap clear hap %s %d handle %d' % (self.name, self.hap_num, self.handle))
+            #self.lgr.debug('GenHap clear hap %s %d handle %d' % (self.name, self.hap_num, self.handle))
             RES_hap_delete_callback_id(self.hap_type, self.hap_num)
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
