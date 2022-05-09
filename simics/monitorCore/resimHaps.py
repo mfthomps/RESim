@@ -30,15 +30,6 @@ def RES_hap_add_callback_index(hap_type, callback, param, breaknum):
 
 def RES_delete_breakpoint(bp):
     '''
-    print('RES_delete_breakpoint %d' % bp)
-    curframe = inspect.currentframe()
-    calframe = inspect.getouterframes(curframe, 3)
-    #print('delete hap %d' % hap_num)
-    print('caller name:', calframe[1][3])
-    '''
-
-    print('RES_delete_breakpoint %d' % bp)
-    '''
     currentframe = inspect.currentframe()
     callgraph=inspect.getouterframes(currentframe)
     print('Call Graph for {0:s}'.format(RES_delete_breakpoint.__name__))
@@ -46,8 +37,4 @@ def RES_delete_breakpoint(bp):
         frameinfo = inspect.getframeinfo(record[0])
         print(frameinfo.function)
     '''
-    try:
-        SIM_delete_breakpoint(bp)
-    except:
-        pass
-    print('done')
+    SIM_delete_breakpoint(bp)
