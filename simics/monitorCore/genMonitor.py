@@ -1546,7 +1546,7 @@ class GenMonitor():
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
-            self.context_manager[self.target].showHaps()
+            #self.context_manager[self.target].showHaps()
             if prev is not None:
                 instruct = SIM_disassemble_address(cpu, prev, 1, 0)
                 self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
@@ -1736,11 +1736,8 @@ class GenMonitor():
         Runs backwards until a write to the given address is found.
         '''
         if self.reverseEnabled():
-            self.context_manager[self.target].showHaps();
+            #self.context_manager[self.target].showHaps();
             self.removeDebugBreaks()
-            if addr == 0x9e87200:
-                SIM_break_simulation('wtf')
-                return
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             value = self.mem_utils[self.target].readMemory(cpu, addr, num_bytes)
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d' % (value, addr, num_bytes))
