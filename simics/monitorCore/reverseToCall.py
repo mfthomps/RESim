@@ -1038,7 +1038,7 @@ class reverseToCall():
                  
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(None)
+                #self.cleanup(None)
                 self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
@@ -1125,7 +1125,7 @@ class reverseToCall():
                 else:
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(None)
+                #self.cleanup(None)
                 self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
