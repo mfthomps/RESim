@@ -10,7 +10,7 @@ class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
-           limit_one=False, no_rop=False, instruct_trace=False):
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -25,6 +25,7 @@ class InjectIO():
         self.mem_utils = mem_utils
         self.context_manager = context_manager
         self.top = top
+        self.break_on = break_on
         self.lgr = lgr
         self.in_data = None
         self.backstop_cycles =   9000000
@@ -93,10 +94,22 @@ class InjectIO():
         if sor is not None and sor.lower() == 'true':
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
-
+        self.break_on_hap = None
         if not self.coverage:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
+
+    def breakCleanup(self, dumb):
+        if self.break_on_hap is not None:
+            self.context_manager.genDeleteHap(self.break_on_hap)
+        self.lgr.debug('breakCleanup do stopandgo')
+        self.top.stopAndGo(self.callback)
+
+    def breakOnHap(self, prec, third, forth, memory):
+        self.lgr.debug('injectIO breakOnHap')
+        if self.break_on_hap is None:
+            return
+        SIM_run_alone(self.breakCleanup, None)
 
     def go(self, no_go_receive=False):
         ''' Go to the first data receive watch mark (or the origin if the watch mark does not exist),
@@ -216,6 +229,10 @@ class InjectIO():
                             self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
                     if not self.no_rop:
                         self.top.watchROP()
+                    if self.break_on is not None:
+                        self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
+                        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
+                        self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
                 else:
                     self.top.traceAll()
                 use_backstop=True
