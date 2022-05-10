@@ -45,8 +45,15 @@ class AFL():
                 self.filter_module = imp.load_source(self.packet_filter, abs_path)
                 self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
             else:
-                self.lgr.error('failed to find filter at %s' % self.packet_filter)
-                return
+                file_path = './%s' % self.packet_filter
+                abs_path = os.path.abspath(file_path)
+                if os.path.isfile(abs_path):
+                    self.filter_module = imp.load_source(self.packet_filter, abs_path)
+                    self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
+                else:
+                    self.lgr.error('failed to find filter at %s' % self.packet_filter)
+                    raise Exception('failed to find filter at %s' % self.packet_filter)
+                    return
             '''
             module_name = self.packet_filter
             spec = importlib.util.spec_from_file_location(module_name, file_path)
