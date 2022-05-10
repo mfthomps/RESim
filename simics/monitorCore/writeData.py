@@ -159,7 +159,11 @@ class WriteData():
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
-                self.mem_utils.writeString(self.cpu, self.addr, next_data) 
+                if self.filter is not None and not self.filter.filter(next_data, self.current_packet):
+                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(next_data))) 
+                    #self.lgr.debug('writeData first_data failed filter, wrote nulls')
+                else: 
+                    self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 #self.lgr.debug('%s' % next_data)
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
@@ -362,7 +366,7 @@ class WriteData():
                  SIM_run_alone(self.write_callback, count)
             else:
                  SIM_break_simulation('Over read limit')
-                 self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         
 
     def delCallHap(self, dumb):
