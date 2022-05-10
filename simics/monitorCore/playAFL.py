@@ -149,8 +149,6 @@ class PlayAFL():
         self.index = -1
         self.hit_total = 0
         self.findbb = findbb
-        if self.stop_hap is None:
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_run_alone(self.goAlone, False)
 
     def hangCallback(self, cycles):
@@ -209,9 +207,12 @@ class PlayAFL():
                 self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
-            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
-                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read)
+            if self.write_data is None:
+                self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
+                         self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                     pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read)
+            else:
+                self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
@@ -224,6 +225,9 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
+            if self.stop_hap is None:
+                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            self.lgr.debug('playAFL goAlone now continue')
             SIM_run_command('c')
         else:
             ''' did all sessions '''
