@@ -108,6 +108,7 @@ class WriteData():
         self.addr = addr
         self.expected_packet_count = expected_packet_count
         self.current_packet = 0
+        self.total_read = 0
 
     
     def write(self, record=False):
@@ -361,6 +362,7 @@ class WriteData():
                  SIM_run_alone(self.write_callback, count)
             else:
                  SIM_break_simulation('Over read limit')
+                 self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         
 
     def delCallHap(self, dumb):
