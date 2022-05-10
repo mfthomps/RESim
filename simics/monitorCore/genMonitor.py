@@ -3542,7 +3542,8 @@ class GenMonitor():
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
-            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False):
+            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
+            break_on=None):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if 'coverage/id' in dfile:
@@ -3570,7 +3571,7 @@ class GenMonitor():
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop, instruct_trace=instruct_trace)
+                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on)
 
         if go:
             self.injectIOInstance.go()
