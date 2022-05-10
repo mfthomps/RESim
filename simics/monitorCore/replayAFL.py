@@ -108,3 +108,5 @@ class ReplayAFL():
             self.send_driver.kill()
             self.lgr.debug('replayAFL killed driver')
             self.send_driver = None
+        if self.cover:
+            self.top.saveCoverage()

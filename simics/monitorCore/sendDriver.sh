@@ -24,6 +24,7 @@ fname=/tmp/sendudp
 #
 ssh_port=$1
 i="0"
+echo "sendDriver port $ssh_port" >/tmp/sendDriver.log
 while !  scp -o "StrictHostKeyChecking=no" -P $ssh_port $fname mike@localhost:/tmp/sendudp
 do
     sleep 1
@@ -32,9 +33,10 @@ do
         exit
     fi
 done
+echo "sendDriver did sendudp" >>/tmp/sendDriver.log
 scp -o "StrictHostKeyChecking=no" -P $ssh_port $2 mike@localhost:/tmp/
 base=$(basename -- $2)
 ssh -o "StrictHostKeyChecking=no" -p $ssh_port mike@localhost chmod a+x /tmp/$base
-echo "now run it"
+echo "now run it" >>/tmp/sendDriver.log
 ssh -o "StrictHostKeyChecking=no" -p $ssh_port mike@localhost /tmp/$base $3 $4 $5
-echo "back from run"
+echo "back from run" >>/tmp/sendDriver.log
