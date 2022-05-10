@@ -273,7 +273,7 @@ class GenContextMgr():
         if isinstance(hap_handle, str):
             self.lgr.error('contextManager genDeleteHap hap_handle is string? %s' % hap_handle)
             return 
-        self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
+        #self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
         hap_copy = list(self.haps)
         for hap in hap_copy:
             if hap.handle == hap_handle:
