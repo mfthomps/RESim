@@ -1296,6 +1296,9 @@ class DataWatch():
             self.stopWatch()
             SIM_break_simulation('max marks exceeded')
             return
+        addr = memory.logical_address
+        op_type = SIM_get_mem_op_type(memory)
+        eip = self.top.getEIP(self.cpu)
         ''' ad hoc sanitity check for wayward programs, fuzzed, etc.'''
         if index not in self.length or (index in self.length and self.length[index]<10):
             if index not in self.index_hits:
@@ -1303,12 +1306,9 @@ class DataWatch():
             self.index_hits[index] = self.index_hits[index]+1
             #self.lgr.error('dataWatch readHap %d hits on  index %d, ' % (self.index_hits[index], index))
             if self.index_hits[index] > 1000:
-                self.lgr.error('dataWatch readHap over 1000 hits on index %d, stopping watch' % index)
+                self.lgr.error('dataWatch readHap over 1000 hits on index %d eip 0x%x, stopping watch' % (index, eip))
                 self.stopWatch()
                 return
-        addr = memory.logical_address
-        op_type = SIM_get_mem_op_type(memory)
-        eip = self.top.getEIP(self.cpu)
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
         #self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s bytes: %d cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), 
         #    memory.size, self.cpu.cycles))
