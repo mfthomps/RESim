@@ -7,7 +7,8 @@ def dumpFuns(fname=None):
     #ea = get_screen_ea()
     #print 'ea is %x' % ea
     if fname is None:
-        fname = idaversion.get_root_file_name()
+        #fname = idaversion.get_root_file_name()
+        fname = idaversion.get_input_file_path()
     print('dumpFuns inputfile %s' % fname)
     for ea in idautils.Segments():
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
@@ -25,3 +26,4 @@ def dumpFuns(fname=None):
     
     with open(fname+'.funs', "w") as fh:
         json.dump(funs, fh)
+        print('Wrote functions to %s.funs' % fname)
