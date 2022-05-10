@@ -3545,6 +3545,11 @@ class GenMonitor():
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
+        if 'coverage/id' in dfile:
+            print('Refusing to inject a coverage file into application memory')
+            fixed = dfile.replace('coverage', 'queue')
+            print('You may have meant to inject this instead: %s' % fixed)
+            return
         if type(save_json) is bool:
             save_json = '/tmp/track.json'
         if self.bookmarks is not None:
