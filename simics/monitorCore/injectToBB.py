@@ -45,7 +45,7 @@ class InjectToBB():
             dest = os.path.join('/tmp', 'bb.io')
             shutil.copy(first, dest)
             self.top.setCommandCallback(self.doStop)
-            self.inject_io = self.top.injectIO(first, callback=self.doStop)
+            self.inject_io = self.top.injectIO(first, callback=self.doStop, break_on=bb)
         else:
             print('No input files found to get to bb 0x%x' % bb)
 
@@ -61,8 +61,4 @@ class InjectToBB():
 
     def gobb(self):
         self.top.setCommandCallback(None)
-        self.lgr.debug('InjectToBB gobb, go to data mark 0')
-        self.top.goToDataMark(0)
-        self.lgr.debug('InjectToBB gobb, go to addr 0x%x' % self.bb)
-        self.top.goAddr(self.bb) 
         print('Data file copied to /tmp/bb.io')
