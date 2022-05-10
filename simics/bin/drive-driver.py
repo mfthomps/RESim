@@ -4,6 +4,7 @@ Send data files to the driver and from there, send them to one or more target IP
 Executes magic instruction 99 just prior to sending data to reset RESim origin.
 '''
 import os
+import time
 import socket
 import sys
 import subprocess
@@ -20,6 +21,7 @@ def main():
     parser.add_argument('-n', '--no_magic', action='store_true', help='Do not execute magic instruction.')
     parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
     args = parser.parse_args()
+    print('Drive driver')
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
         exit(1)
@@ -30,8 +32,19 @@ def main():
     client_mult_path = os.path.join(core_path, client_cmd)
 
     cmd = 'scp -P 4022 %s  localhost:/tmp/' % client_mult_path
-    os.system(cmd)
-
+    result = -1
+    count = 0
+    while result != 0:
+        result = os.system(cmd)
+        #print('result is %s' % result)
+        if result != 0:
+            print('scp of %s failed, wait a bit' % client_mult_path)
+            time.sleep(3)
+            count += 1
+            if count > 10:
+                print('Time out, more than 10 failures trying to scp to driver.')
+                sys.exit(1)
+    exit
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
     cmd = 'scp -P 4022 %s  localhost:/tmp/' % magic_path
     os.system(cmd)
