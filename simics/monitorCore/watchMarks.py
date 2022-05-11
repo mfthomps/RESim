@@ -937,6 +937,14 @@ class WatchMarks():
                 entry['dest'] = mark.mark.dest 
                 entry['length'] = mark.mark.length 
                 entry['reference_buffer'] = mark.mark.buf_start 
+
+            elif isinstance(mark.mark, DataMark) and mark.mark.ad_hoc and mark.mark.start is not None:
+                entry['mark_type'] = 'copy' 
+                entry['src'] = mark.mark.addr
+                entry['dest'] = mark.mark.dest 
+                entry['length'] = (mark.mark.end_addr - mark.mark.addr)+1
+                entry['reference_buffer'] = mark.mark.start 
+
             elif isinstance(mark.mark, ScanMark):
                 entry['mark_type'] = 'scan' 
                 entry['src'] = mark.mark.src 
@@ -954,7 +962,7 @@ class WatchMarks():
                 entry['recv_addr'] = mark.mark.recv_addr
                 entry['length'] = mark.mark.len
                 entry['fd'] = mark.mark.fd
-            elif isinstance(mark.mark, DataMark) and not mark.mark.modify:
+            elif isinstance(mark.mark, DataMark) and not mark.mark.modify and not mark.mark.ad_hoc:
                 entry['mark_type'] = 'read' 
                 entry['addr'] = mark.mark.addr
                 entry['reference_buffer'] = mark.mark.start
