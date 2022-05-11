@@ -119,7 +119,11 @@ class WriteData():
             orig_len = self.getOrigLen()
             if this_len > orig_len:
                 self.lgr.warning('writeData kernel buffer writing %d bytes' % (this_len))
-            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+            if self.filter is not None: 
+                result = self.filter.filter(self.in_data, self.current_packet)
+                self.mem_utils.writeString(self.cpu, self.addr, result) 
+            else:
+                self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
             retval = this_len
             self.modKernBufSize(this_len)
             #self.setCallHap()
@@ -127,7 +131,11 @@ class WriteData():
             ''' not done, no control over size. prep must use maximum buffer'''
             if len(self.in_data) > self.max_len:
                 self.in_data = self.in_data[:self.max_len]
-            self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+            if self.filter is not None: 
+                result = self.filter.filter(self.in_data, self.current_packet)
+                self.mem_utils.writeString(self.cpu, self.addr, result) 
+            else:
+                self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
             retval = len(self.in_data)
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             if self.dataWatch is not None:
@@ -159,8 +167,9 @@ class WriteData():
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
-                if self.filter is not None and not self.filter.filter(next_data, self.current_packet):
-                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(next_data))) 
+                if self.filter is not None:
+                    result = self.filter.filter(next_data, self.current_packet)
+                    self.mem_utils.writeString(self.cpu, self.addr, result) 
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
@@ -198,8 +207,9 @@ class WriteData():
                 if len(first_data) > self.max_len:
                     #self.lgr.debug('writeData, udp, trimmed first data to max_len')
                     first_data = first_data[:self.max_len]
-                if self.filter is not None and not self.filter.filter(first_data, self.current_packet):
-                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(first_data))) 
+                if self.filter is not None: 
+                    result = self.filter.filter(first_data, self.current_packet)
+                    self.mem_utils.writeString(self.cpu, self.addr, result) 
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 

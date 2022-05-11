@@ -1744,6 +1744,10 @@ class GenMonitor():
             self.removeDebugBreaks()
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             value = self.mem_utils[self.target].readMemory(cpu, addr, num_bytes)
+            if value is None:
+                self.lgr.error('stopAtKernelWrite failed to read from addr 0x%x' % addr)
+                self.skipAndMail()
+                return
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d' % (value, addr, num_bytes))
             cell = self.cell_config.cell_context[self.target]
             if self.find_kernel_write is None:
@@ -3578,7 +3582,7 @@ class GenMonitor():
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on)
+                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs)
 
         if go:
             self.injectIOInstance.go()

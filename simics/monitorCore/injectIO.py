@@ -6,11 +6,12 @@ import os
 import sys
 import pickle
 from resimHaps import *
+import resimUtils
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
-           limit_one=False, no_rop=False, instruct_trace=False, break_on=None):
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -98,6 +99,11 @@ class InjectIO():
         if not self.coverage:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
+        self.mark_logs = mark_logs
+        self.filter_module = None
+        packet_filter = os.getenv('AFL_PACKET_FILTER')
+        if packet_filter is not None:
+            self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -195,7 +201,7 @@ class InjectIO():
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch)
+                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch, filter=self.filter_module)
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
@@ -243,6 +249,9 @@ class InjectIO():
                     cli.quiet_run_command('c')
                 elif not self.mem_utils.isKernel(self.addr):
                     print('retracking IO') 
+                    if self.mark_logs:
+                        self.lgr.debug('injectIO call traceAll for mark_logs')
+                        self.top.traceAll()
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
                     self.callback = None
@@ -252,6 +261,9 @@ class InjectIO():
                     self.dataWatch.clearWatches()
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
+                    if self.mark_logs:
+                        self.lgr.debug('injectIO call traceAll for mark_logs')
+                        self.top.traceAll()
                     self.top.runToIO(self.fd, linger=True, break_simulation=False)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''

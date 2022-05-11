@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import subprocess
+import imp 
 try:
     import cli
     from simics import *
@@ -125,3 +126,22 @@ def getProgPath(prog):
         lines = fh.read().strip().splitlines()
         prog_file = lines[0].strip()
     return prog_file
+
+def getPacketFilter(packet_filter, lgr):
+    retval = None
+    if packet_filter is not None:
+        file_path = './%s.py' % packet_filter
+        abs_path = os.path.abspath(file_path)
+        if os.path.isfile(abs_path):
+            retval = imp.load_source(packet_filter, abs_path)
+            lgr.debug('afl using AFL_PACKET_FILTER %s' % packet_filter)
+        else:
+            file_path = './%s' % packet_filter
+            abs_path = os.path.abspath(file_path)
+            if os.path.isfile(abs_path):
+                retval = imp.load_source(packet_filter, abs_path)
+                lgr.debug('afl using AFL_PACKET_FILTER %s' % packet_filter)
+            else:
+                lgr.error('failed to find filter at %s' % packet_filter)
+                raise Exception('failed to find filter at %s' % packet_filter)
+    return retval

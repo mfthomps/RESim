@@ -11,7 +11,6 @@ import cli
 import stopFunction
 import writeData
 import resimUtils
-import imp 
 #import tracemalloc
 from simics import *
 RESIM_MSG_SIZE=80
@@ -37,29 +36,9 @@ class AFL():
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return
         self.filter_module = None
-        self.packet_filter = os.getenv('AFL_PACKET_FILTER')
-        if self.packet_filter is not None:
-            file_path = './%s.py' % self.packet_filter
-            abs_path = os.path.abspath(file_path)
-            if os.path.isfile(abs_path):
-                self.filter_module = imp.load_source(self.packet_filter, abs_path)
-                self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
-            else:
-                file_path = './%s' % self.packet_filter
-                abs_path = os.path.abspath(file_path)
-                if os.path.isfile(abs_path):
-                    self.filter_module = imp.load_source(self.packet_filter, abs_path)
-                    self.lgr.debug('afl using AFL_PACKET_FILTER %s' % self.packet_filter)
-                else:
-                    self.lgr.error('failed to find filter at %s' % self.packet_filter)
-                    raise Exception('failed to find filter at %s' % self.packet_filter)
-                    return
-            '''
-            module_name = self.packet_filter
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            filter_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(flter_module)
-            '''
+        packet_filter = os.getenv('AFL_PACKET_FILTER')
+        if packet_filter is not None:
+            self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
 
         self.pad_char = chr(0)
         self.cpu = cpu
