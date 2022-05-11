@@ -4292,11 +4292,14 @@ class GenMonitor():
         self.lgr.debug('backtraceAddr %x' % addr)
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
+        if cycles is None:
+            cycles = cpu.cycles
         orig, offset = tm.getOrigRead(addr, cycles)
         if orig is None:
             ''' not an original read buffer, find the original via the refs '''
             ref = tm.findRef(addr, cycles)
             if ref is not None:     
+                
                 self.lgr.debug('backtraceAddr addr 0x%x found in ref %s' % (addr, ref.toString()))
                 offset = ref.getOffset(addr) 
                 tot_offset = offset + ref.orig_read.prior_bytes_read
