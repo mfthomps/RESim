@@ -348,7 +348,7 @@ class Coverage():
                 if op_type is Sim_Trans_Store:
                     value = mem_trans.value
                     if value == 0:
-                        self.lgr.debug('tableHap value is zero')
+                        #self.lgr.debug('tableHap value is zero')
                         return
                    
                     bb_index = len(self.bp_list) 

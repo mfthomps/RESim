@@ -31,7 +31,7 @@ def main():
         client_cmd = 'clientudpMult'
     client_mult_path = os.path.join(core_path, client_cmd)
 
-    cmd = 'scp -P 4022 %s  localhost:/tmp/' % client_mult_path
+    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % client_mult_path
     result = -1
     count = 0
     while result != 0:
@@ -46,7 +46,7 @@ def main():
                 sys.exit(1)
     exit
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
-    cmd = 'scp -P 4022 %s  localhost:/tmp/' % magic_path
+    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % magic_path
     os.system(cmd)
 
     remote_directives_file = '/tmp/directives.sh'
@@ -82,7 +82,7 @@ def main():
                 base = os.path.basename(iofile)
                 directive = '/tmp/%s  %s %s %s /tmp/%s' % (client_cmd, ip, port, header, base)
                 driver_file.write(directive+'\n')
-                cmd = 'scp -P 4022 %s  localhost:/tmp/' % iofile
+                cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % iofile
                 os.system(cmd)
 
     driver_file.close()
@@ -90,7 +90,7 @@ def main():
     cmd = 'chmod a+x %s' % remote_directives_file
     os.system(cmd)
 
-    cmd = 'scp -P 4022 %s  localhost:/tmp/' % remote_directives_file
+    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % remote_directives_file
     os.system(cmd)
     cmd = 'ssh -p 4022 mike@localhost "nohup %s > /dev/null 2>&1 &"' % remote_directives_file
     os.system(cmd)

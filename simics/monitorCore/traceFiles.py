@@ -52,14 +52,28 @@ class TraceFiles():
             with open(self.open_files[fd].outfile, 'a') as fh:
                 fh.write('\nFile closed.\n')
 
+    def nonull(self, the_bytes):
+        retval = the_bytes
+        index = 0
+        #hx = ''.join('{:02x}'.format(x) for x in the_bytes)
+        #print('the bytes is %s' % hx)
+        for i in the_bytes:
+            if i != 0:
+                #print('got nonzero at %d' % index)
+                retval = the_bytes[index:]
+                break
+            index += 1
+        return retval 
+
     def write(self, pid, fd, the_bytes):
+        stripped = self.nonull(the_bytes)
         if self.traceProcs is not None and len(self.path_list) > 0:
             fname = self.traceProcs.getFileName(pid, fd)
             self.lgr.debug('TraceFiles write got fname %s' % fname)
             if fname is not None and fname in self.path_list:
                 file_watch = self.path_list[fname]
                 with open(self.path_list[fname].outfile, 'a') as fh:
-                    s = ''.join(map(chr,the_bytes))
+                    s = ''.join(map(chr,stripped))
                     self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                     fh.write(s)
                     fh.flush()
@@ -70,9 +84,11 @@ class TraceFiles():
         elif fd in self.open_files:
             ''' tracing fd '''
             with open(self.open_files[fd].outfile, 'a') as fh:
-                s = ''.join(map(chr,the_bytes))
+                s = ''.join(map(chr,stripped))
                 self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                 fh.write(s)
+                if self.dataWatch is not None:
+                    self.dataWatch.markLog(s)
             
 
     def markLogs(self, dataWatch):
