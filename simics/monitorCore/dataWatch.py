@@ -1307,6 +1307,9 @@ class DataWatch():
             #self.lgr.error('dataWatch readHap %d hits on  index %d, ' % (self.index_hits[index], index))
             if self.index_hits[index] > 1000:
                 self.lgr.error('dataWatch readHap over 1000 hits on index %d eip 0x%x, stopping watch' % (index, eip))
+                read_loop = os.getenv('READ_LOOP')
+                if read_loop is not None and read_loop.lower() == 'quit':
+                    self.top.quit()
                 self.stopWatch()
                 return
         #break_handle = self.context_manager.getBreakHandle(breakpoint)
