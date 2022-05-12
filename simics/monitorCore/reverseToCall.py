@@ -535,7 +535,7 @@ class reverseToCall():
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('jumpOverKernel kernel space pid %d eip:0x%x %s' % (pid, eip, instruct[1]))
+        self.lgr.debug('jumpOverKernel kernel space pid %d eip:0x%x %s cycle: 0x%x' % (pid, eip, instruct[1], self.cpu.cycles))
         is_exit = self.isExit(instruct[1], eip)
         if pid in self.sysenter_cycles and is_exit:
             self.lgr.debug('jumpOverKernel is sysexit, cur_cycles is 0x%x' % cur_cycles)
@@ -617,6 +617,8 @@ class reverseToCall():
                     retval = False
                     self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
                        rval))
+            elif self.tryRecentCycle(page_faults, pid):
+                self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
             else:
                 cell = self.top.getCell()
                 self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
@@ -626,6 +628,29 @@ class reverseToCall():
                 self.context_manager.showHaps()
                 SIM_run_alone(SIM_run_command, 'rev')
                 retval = None
+        return retval
+
+    def tryRecentCycle(self, page_faults, pid):
+        retval = False
+        all_faults = self.expandFaultList(page_faults)
+        closest_fault = self.getClosestFault(all_faults)
+        frame, closest_call = self.getPreviousCycleFrame(pid)
+        if closest_fault is None or closest_call > closest_fault:
+            self.lgr.debug('tryRecentCycle skipping to recent call')
+            self.skipToTest(closest_call)
+            retval = True
+        elif closet_fault is not None: 
+            self.lgr.debug('tryRecentCycle skipping to recent fault')
+            self.skipToTest(closest_fault)
+            retval = True
+        return retval
+        
+
+    def expandFaultList(self, page_faults):
+        retval = []
+        for eip in page_faults:
+            for cycle in page_faults[eip]:
+                retval.append(cycle) 
         return retval
 
     def getClosestFault(self, fault_list):
