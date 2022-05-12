@@ -1,4 +1,5 @@
 from simics import *
+import os
 class Jumpers():
     def __init__(self, top, context_manager, lgr):
         self.top = top
@@ -13,7 +14,7 @@ class Jumpers():
 
     def setOneBreak(self, addr):
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-            self.hap[f] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, None, proc_break, 'jumper')
+            self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, None, proc_break, 'jumper')
             self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
 
     def setBreaks(self):
@@ -39,3 +40,22 @@ class Jumpers():
     def removeBreaks(self):
         self.clearBreak()
         self.hap = {}
+
+    def loadJumpers(self, fname):
+        from_addr = None
+        to_addr = None
+        if not os.path.isfile(fname):
+            self.lgr.error('No jumper file found at %s' % fname)
+        else:
+            with open(fname) as fh:
+                for line in fh:
+                    if line.strip().startswith('#'):
+                        continue
+                    try:
+                        from_addr, to_addr = line.strip().split()
+                        from_addr = int(from_addr, 16)
+                        to_addr = int(to_addr, 16)
+                    except:
+                        raise Exception("Error reading %s from %s, bad jumper" % (line, fname))
+                        return
+                    self.setJumper(from_addr, to_addr) 
