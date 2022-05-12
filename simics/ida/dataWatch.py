@@ -69,15 +69,7 @@ class DataWatch(simplecustviewer_t):
                 self.updateDataWatch()
 
     def getOffset(self):
-        highlighted = idaversion.getHighlight()
-        addr = resimUtils.getHex(highlighted)
-        if addr is None:
-            print('Highlighted is not an address')
-            return
-        command = '@cgc.backtraceAddr(0x%x, None)' % (addr)
-        print('cmd: %s' % command)
-        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        print(simicsString)
+        self.isim.getBacktraceAddr()
 
     def nextWatchMark(self):
         command = '@cgc.nextWatchMark()'
