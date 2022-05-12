@@ -901,6 +901,11 @@ class GenMonitor():
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
         self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
+        jumper_file = os.getenv('EXECUTION_JUMPERS')
+        if jumper_file is not None:
+            if self.target not in self.jumper_dict:
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+            self.jumper_dict[self.target].loadJumpers(jumper_file)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1719,6 +1724,7 @@ class GenMonitor():
         cpl = memUtils.getCPL(cpu)
 
     def skipBackToUser(self):
+        self.lgr.debug('skipBackToUser')
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.rev_to_call[self.target].jumpOverKernel(pid)
 
@@ -4312,6 +4318,7 @@ class GenMonitor():
                 msg = 'Orig buffer not found for addr 0x%x' % addr
                 self.lgr.debug(msg)
                 self.context_manager[self.target].setIdaMessage(msg)
+                print(msg)
         else:
             offset = orig.offset(addr)
             tot_offset = offset + orig.prior_bytes_read
