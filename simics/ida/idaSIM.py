@@ -7,6 +7,7 @@ import idaversion
 import bpUtils
 import gdbProt
 import origAnalysis
+import resimUtils
 import regFu
 import ida_kernwin
 no_rev = 'reverse execution disabled'
@@ -856,3 +857,14 @@ class IdaSIM():
         eip = gdbProt.getEIPWhenStopped()
         self.signalClient()
         self.updateDataWatch()
+
+    def getBacktraceAddr(self):
+        highlighted = idaversion.getHighlight()
+        addr = resimUtils.getHex(highlighted)
+        if addr is None:
+            print('Highlighted is not an address')
+            return
+        command = '@cgc.backtraceAddr(0x%x, None)' % (addr)
+        print('cmd: %s' % command)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print(simicsString)

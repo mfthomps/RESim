@@ -63,3 +63,14 @@ def dumpBlocks():
         fh.write(s)
     funs_fh.close()
     print('Wrote blocks to %s.blocks' % fname)
+
+def getHex(s):
+    retval = None
+    hs = s
+    if not hs.startswith('0x'):
+        hs = '0x'+s
+    try:
+        retval = int(hs, 16)
+    except:
+        pass
+    return retval

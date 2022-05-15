@@ -259,9 +259,21 @@ class RevDataHandler(idaapi.action_handler_t):
             idaapi.action_handler_t.__init__(self)
             self.isim = isim
 
-        # reverse to cursor
         def activate(self, ctx):
             self.isim.trackAddressPrompt()
+            return 1
+
+        # This action is always available.
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
+class BacktraceDataHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        def activate(self, ctx):
+            self.isim.getBacktraceAddr()
             return 1
 
         # This action is always available.
@@ -446,6 +458,11 @@ def register(isim):
        'reverse track data',
        RevDataHandler(isim)
        )
+    backtrace_data_action_desc = idaapi.action_desc_t(
+       'backtraceData:action',
+       'Was data input?',
+       BacktraceDataHandler(isim)
+       )
     mod_memory_action_desc = idaapi.action_desc_t(
        'modMemory:action',
        'modify memory',
@@ -468,6 +485,7 @@ def register(isim):
     idaapi.register_action(data_watch_action_desc)
     idaapi.register_action(add_data_watch_action_desc)
     idaapi.register_action(rev_addr_action_desc)
+    idaapi.register_action(backtrace_data_action_desc)
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
@@ -510,6 +528,7 @@ class Hooks(UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "revData:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "stringMemory:action", 'RESim/')
+                            idaapi.attach_action_to_popup(form, popup, "backtraceData:action", 'RESim/')
                 opnum = idaapi.get_opnum()
                 if opnum >= 0:
                     idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/')
