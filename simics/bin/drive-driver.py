@@ -20,7 +20,9 @@ def main():
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-n', '--no_magic', action='store_true', help='Do not execute magic instruction.')
     parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
+    parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     args = parser.parse_args()
+    sshport = args.port
     print('Drive driver')
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
@@ -31,7 +33,7 @@ def main():
         client_cmd = 'clientudpMult'
     client_mult_path = os.path.join(core_path, client_cmd)
 
-    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % client_mult_path
+    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, client_mult_path)
     result = -1
     count = 0
     while result != 0:
@@ -46,7 +48,7 @@ def main():
                 sys.exit(1)
     exit
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
-    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % magic_path
+    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
     os.system(cmd)
 
     remote_directives_file = '/tmp/directives.sh'
@@ -82,7 +84,7 @@ def main():
                 base = os.path.basename(iofile)
                 directive = '/tmp/%s  %s %s %s /tmp/%s' % (client_cmd, ip, port, header, base)
                 driver_file.write(directive+'\n')
-                cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % iofile
+                cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
 
     driver_file.close()
@@ -90,9 +92,9 @@ def main():
     cmd = 'chmod a+x %s' % remote_directives_file
     os.system(cmd)
 
-    cmd = 'scp -P 4022 %s  mike@localhost:/tmp/' % remote_directives_file
+    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, remote_directives_file)
     os.system(cmd)
-    cmd = 'ssh -p 4022 mike@localhost "nohup %s > /dev/null 2>&1 &"' % remote_directives_file
+    cmd = 'ssh -p %d mike@localhost "nohup %s > /dev/null 2>&1 &"' % (sshport, remote_directives_file)
     os.system(cmd)
 
 if __name__ == '__main__':
