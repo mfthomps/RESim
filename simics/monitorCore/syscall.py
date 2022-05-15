@@ -117,7 +117,10 @@ class SelectInfo():
             return "NULL"
         else:
             low, high = self.readit(addr)
-            return '0x%x (0x%x:0x%x)' % (addr, low, high)
+            if low is None:
+                return 'unable to read from 0x%x' % addr
+            else:
+                return '0x%x (0x%x:0x%x)' % (addr, low, high)
 
     def getAllFDString(self):
         read_list = self.getFDString(self.readfds)     
