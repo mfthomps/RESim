@@ -39,13 +39,15 @@ class InjectToBB():
         print('target is %s' % target)
         self.lgr.debug('InjectToBB bb: 0x%x target is %s' % (bb, target))
         flist = findBB.findBB(target, bb, quiet=True)
+        self.inject_io = None
         if len(flist) > 0:
             first = flist[0]
             self.lgr.debug('InjectToBB inject %s' % first)
             dest = os.path.join('/tmp', 'bb.io')
             shutil.copy(first, dest)
             self.top.setCommandCallback(self.doStop)
-            self.inject_io = self.top.injectIO(first, callback=self.doStop, break_on=bb)
+            self.inject_io = self.top.injectIO(first, callback=self.doStop, break_on=bb, go=False)
+            self.inject_io.go()
         else:
             print('No input files found to get to bb 0x%x' % bb)
 
@@ -60,5 +62,7 @@ class InjectToBB():
             self.gobb()
 
     def gobb(self):
+        if self.inject_io is None:
+            return
         self.top.setCommandCallback(None)
         print('Data file copied to /tmp/bb.io')
