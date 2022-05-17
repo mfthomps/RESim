@@ -3346,6 +3346,14 @@ class GenMonitor():
         except Exception as e:
             self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
+            with open('/tmp/badjson.txt', 'w') as fh:
+                fh.write(str(watch_marks))
+                #print(str(watch_marks))
+            for bad in watch_marks:
+                try:
+                    badstring = json .dumps(bad)
+                except Exception as e:
+                    self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(bad))
         self.lgr.debug('getWatchMarks done')
 
     def getWriteMarks(self):
