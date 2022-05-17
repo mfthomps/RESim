@@ -29,6 +29,7 @@ from simics import *
 binpath = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin')
 sys.path.append(binpath)
 import findBB
+import applyFilter
 class InjectToBB():
     def __init__(self, top, bb, lgr):
         self.bb = bb
@@ -44,10 +45,18 @@ class InjectToBB():
             first = flist[0]
             self.lgr.debug('InjectToBB inject %s' % first)
             dest = os.path.join('/tmp', 'bb.io')
-            shutil.copy(first, dest)
             self.top.setCommandCallback(self.doStop)
             self.inject_io = self.top.injectIO(first, callback=self.doStop, break_on=bb, go=False)
-            self.inject_io.go()
+            afl_filter = self.inject_io.getFilter()
+            if afl_filter is not None:
+                data = None
+                with open(first, 'rb') as fh:
+                    data = bytearray(fh.read())
+                new_data = afl_filter.filter(data, None)
+                with open(dest, 'wb') as fh:
+                    fh.write(new_data)
+                self.inject_io.go()
+       
         else:
             print('No input files found to get to bb 0x%x' % bb)
 
@@ -65,4 +74,4 @@ class InjectToBB():
         if self.inject_io is None:
             return
         self.top.setCommandCallback(None)
-        print('Data file copied to /tmp/bb.io')
+        print('Data file copied to /tmp/bb.io (and filtered if there was one).')

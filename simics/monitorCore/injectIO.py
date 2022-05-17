@@ -394,4 +394,6 @@ class InjectIO():
             self.top.saveCoverage()
         SIM_break_simulation('hang')
 
-            
+           
+    def getFilter(self):
+        return self.filter_module 
