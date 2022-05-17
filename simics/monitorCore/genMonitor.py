@@ -4270,7 +4270,7 @@ class GenMonitor():
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         self.lgr.debug('stopAndGoAlone, hap set now stop it')
-        SIM_break_simulation('stopAndGo')
+        SIM_break_simulation('Stopping simulation')
 
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)

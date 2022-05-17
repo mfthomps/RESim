@@ -29,7 +29,9 @@ class StopFunction():
 
         
     def run(self, flist, wrong_pid=False, cb_param=None):
-        if self.nest:
+        if self.fun is None:
+            print('Error in stopFunction, no function defined')
+        elif self.nest:
             self.fun(flist) 
         else:
             ''' TBD assume remaining functions are not hap-related'''
