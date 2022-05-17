@@ -1977,6 +1977,6 @@ class DataWatch():
     def getAllJson(self):
         return self.watchMarks.getAllJson()
 
-    def markLog(self, s):
+    def markLog(self, s, prefix):
         self.lgr.debug('dataWatch markLog')
-        self.watchMarks.logMark(s)
+        self.watchMarks.logMark(s, prefix)

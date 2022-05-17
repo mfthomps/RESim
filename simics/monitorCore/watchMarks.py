@@ -337,8 +337,8 @@ class ResetOrigin():
         return self.msg
 
 class LogMark():
-    def __init__(self, s):
-        self.msg = 'LOG: %s' % s
+    def __init__(self, s, prefix):
+        self.msg = '%s : %s' % (prefix, s)
     def getMsg(self):
         return self.msg
 
@@ -621,10 +621,12 @@ class WatchMarks():
             dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
                 if (sys.version_info < (3,0)):
+                    self.lgr.debug('watchMarks compare, do decode')
                     dst_str = dst_str.decode('ascii', 'replace')
             src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
                 if (sys.version_info < (3,0)):
+                    self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
         else:
             dst_str = ''
@@ -733,8 +735,8 @@ class WatchMarks():
         fm = ReturnInt(fun, count)
         self.addWatchMark(fm)
 
-    def logMark(self, s):
-        lm = LogMark(s)
+    def logMark(self, s, prefix):
+        lm = LogMark(s, prefix)
         self.addWatchMark(lm)
 
     def clearWatchMarks(self, record_old=False): 

@@ -53,15 +53,14 @@ class TraceFiles():
                 fh.write('\nFile closed.\n')
 
     def nonull(self, the_bytes):
-        retval = the_bytes
+        retval = []
         index = 0
         #hx = ''.join('{:02x}'.format(x) for x in the_bytes)
         #print('the bytes is %s' % hx)
         for i in the_bytes:
-            if i != 0:
+            if i != 0 and i<=128:
                 #print('got nonzero at %d' % index)
-                retval = the_bytes[index:]
-                break
+                retval.append(i)
             index += 1
         return retval 
 
@@ -78,7 +77,7 @@ class TraceFiles():
                     fh.write(s)
                     fh.flush()
                     if self.dataWatch is not None:
-                        self.dataWatch.markLog(s)
+                        self.dataWatch.markLog(s, fname)
         
                  
         elif fd in self.open_files:
@@ -88,7 +87,8 @@ class TraceFiles():
                 self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                 fh.write(s)
                 if self.dataWatch is not None:
-                    self.dataWatch.markLog(s)
+                    prefix = 'FD:%d' % fd
+                    self.dataWatch.markLog(s, prefix)
             
 
     def markLogs(self, dataWatch):
