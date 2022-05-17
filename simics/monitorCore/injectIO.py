@@ -109,7 +109,10 @@ class InjectIO():
         if self.break_on_hap is not None:
             self.context_manager.genDeleteHap(self.break_on_hap)
         self.lgr.debug('breakCleanup do stopandgo')
-        self.top.stopAndGo(self.callback)
+        if self.callback is not None:
+            self.top.stopAndGo(self.callback)
+        else:
+            self.top.stopAndGo(self.top.skipAndMail)
 
     def breakOnHap(self, prec, third, forth, memory):
         self.lgr.debug('injectIO breakOnHap')
