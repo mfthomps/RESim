@@ -497,7 +497,8 @@ class DataWatch():
         self.context_manager.genDeleteHap(self.return_hap)
         self.return_hap = None
         self.pending_call = False
-        self.top.restoreDebugBreaks(was_watching=True)
+        SIM_run_alone(self.top.restoreDebugBreaks, True)
+        #self.top.restoreDebugBreaks(was_watching=True)
         if self.mem_something.fun == 'memcpy' or self.mem_something.fun == 'mempcpy' or \
            self.mem_something.fun == 'j_memcpy' or self.mem_something.fun == 'memmove':
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
