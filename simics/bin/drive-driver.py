@@ -2,6 +2,14 @@
 '''
 Send data files to the driver and from there, send them to one or more target IP/ports.
 Executes magic instruction 99 just prior to sending data to reset RESim origin.
+
+
+directive file example:
+    some.io 171.10.0.1  29121
+
+Or, multiwrite TCP (with read between them):
+    first.io
+    second.io  171.10.0.1 29121
 '''
 import os
 import time
@@ -56,6 +64,7 @@ def main():
     driver_file.write('sleep 2\n')
     if not args.no_magic:
         driver_file.write('/tmp/simics-magic\n')
+    file_list = []
     with open(args.directives) as fh:
         for line in fh:
             if line.strip().startswith('#'):
@@ -65,27 +74,36 @@ def main():
             parts = line.split()
             if len(parts) == 2 and parts[0] == 'sleep':
                 driver_file.write(line)
-            if args.tcp and len(parts) != 3:
-                print('Invalid TCP driver directive: %s' % line)
-                print('    iofile ip port')
-                exit(1)
+            #if args.tcp and len(parts) != 3:
+            #    print('Invalid TCP driver directive: %s' % line)
+            #    print('    iofile ip port')
+            #    exit(1)
             elif not args.tcp and len(parts) != 4:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')
                 exit(1)
+            elif len(parts) == 1:
+                iofile = parts[0].strip()
+                file_list.append(iofile)
+                cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
             else:
                 iofile = parts[0]
+                file_list.append(iofile)
                 ip = parts[1]
                 port = parts[2]
                 if not args.tcp:
                     header = parts[3]
                 else:
                     header = ''
-                base = os.path.basename(iofile)
-                directive = '/tmp/%s  %s %s %s /tmp/%s' % (client_cmd, ip, port, header, base)
+                flist = ''
+                for f in file_list:
+                    full = '/tmp/%s' % os.path.basename(f)
+                    flist = flist + full + ' '
+                directive = '/tmp/%s  %s %s %s %s' % (client_cmd, ip, port, header, flist)
                 driver_file.write(directive+'\n')
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
+                file_list = []
 
     driver_file.close()
 
