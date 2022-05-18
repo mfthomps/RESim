@@ -25,9 +25,9 @@ host = sys.argv[1].strip()
 port = int(sys.argv[2].strip())
 lgr.debug('ip %s' % host)
 lgr.debug('port %d' % port)
-infile = '/tmp/sendudp'
+infile_list = ['/tmp/sendudp']
 if len(sys.argv) > 3:
-    infile = sys.argv[3]
+    infile_list = sys.argv[3:]
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 server_addr = (host, port)
@@ -41,11 +41,11 @@ while True:
         lgr.debug('connect fail %s' % e)
         time.sleep(1)
         
-    
-with open (infile) as fh:
-    s = fh.read()
-    sock.sendall(s) 
-    lgr.debug('sent %d bytes' % len(s))
-    got = sock.recv(1024)
-    lgr.debug('got %s' % got)
-    time.sleep(13)
+for infile in infile_list:    
+    with open (infile) as fh:
+        s = fh.read()
+        sock.sendall(s) 
+        lgr.debug('sent %d bytes' % len(s))
+        got = sock.recv(1024)
+        lgr.debug('got %s' % got)
+        time.sleep(1)
