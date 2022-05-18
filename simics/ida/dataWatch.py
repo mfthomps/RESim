@@ -6,6 +6,7 @@ import gdbProt
 import json
 import os
 import time
+import resimUtils
 class DataWatch(simplecustviewer_t):
     def __init__(self):
         self.isim = None
@@ -45,6 +46,10 @@ class DataWatch(simplecustviewer_t):
         watch_name = "next_watch_mark"
         idaapi.register_action(idaapi.action_desc_t(watch_name, "Next watch mark", self.datawatch_handler(self.nextWatchMark)))
         idaapi.attach_action_to_popup(form, None, watch_name)
+
+        offset_name = "get_offset"
+        idaapi.register_action(idaapi.action_desc_t(offset_name, "Get offset from original buffer", self.datawatch_handler(self.getOffset)))
+        idaapi.attach_action_to_popup(form, None, offset_name)
         #self.Show()
 
     def tagIterator(self):
@@ -62,6 +67,9 @@ class DataWatch(simplecustviewer_t):
                 simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
                 time.sleep(1)
                 self.updateDataWatch()
+
+    def getOffset(self):
+        self.isim.getBacktraceAddr()
 
     def nextWatchMark(self):
         command = '@cgc.nextWatchMark()'
@@ -98,7 +106,7 @@ class DataWatch(simplecustviewer_t):
         index = 0
         for entry in data_json:
             instruct = idc.GetDisasm(entry['ip'])
-            uline = '%3d 0x%08x 0x%08x %s' % (index, entry['ip'], entry['cycle'], entry['msg'])
+            uline = '%3d 0x%08x 0x%08x %s pid:%d' % (index, entry['ip'], entry['cycle'], entry['msg'], entry['pid'])
             line = uline.encode('ascii', 'replace')
             #print('do %s' % line)
             if 'return from' in str(line):

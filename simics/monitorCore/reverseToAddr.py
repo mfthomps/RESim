@@ -81,7 +81,7 @@ class reverseToAddr():
             return
         RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.stop_hap = None 
-        SIM_delete_breakpoint(self.the_break)
+        RES_delete_breakpoint(self.the_break)
         self.the_break = None
  
         self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))

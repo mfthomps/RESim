@@ -14,11 +14,13 @@ class TraceFiles():
         self.traceProcs = traceProcs
         ''' for tracing of only FD, e.g., to ignore close '''
         self.tracing_fd = []
+        ''' for including file traces in watch marks '''
+        self.dataWatch = None
 
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
         if path not in self.watched_files:
-            self.lgr.debug('open and close %s' % outfile)
+            self.lgr.debug('traceFiles open and close %s' % outfile)
             with open(outfile, 'w') as fh:
                 fh.write('start of RESim copy of %s\n' % outfile) 
             self.watched_files.append(path)
@@ -50,23 +52,45 @@ class TraceFiles():
             with open(self.open_files[fd].outfile, 'a') as fh:
                 fh.write('\nFile closed.\n')
 
+    def nonull(self, the_bytes):
+        retval = []
+        index = 0
+        #hx = ''.join('{:02x}'.format(x) for x in the_bytes)
+        #print('the bytes is %s' % hx)
+        for i in the_bytes:
+            if i >= 32 and i<128:
+                #print('got nonzero at %d' % index)
+                retval.append(i)
+            index += 1
+        return retval 
+
     def write(self, pid, fd, the_bytes):
+        stripped = self.nonull(the_bytes)
         if self.traceProcs is not None and len(self.path_list) > 0:
             fname = self.traceProcs.getFileName(pid, fd)
             self.lgr.debug('TraceFiles write got fname %s' % fname)
             if fname is not None and fname in self.path_list:
                 file_watch = self.path_list[fname]
                 with open(self.path_list[fname].outfile, 'a') as fh:
-                    s = ''.join(map(chr,the_bytes))
+                    s = ''.join(map(chr,stripped))
                     self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                     fh.write(s)
                     fh.flush()
+                    if self.dataWatch is not None:
+                        self.dataWatch.markLog(s, fname)
         
                  
         elif fd in self.open_files:
             ''' tracing fd '''
             with open(self.open_files[fd].outfile, 'a') as fh:
-                s = ''.join(map(chr,the_bytes))
+                s = ''.join(map(chr,stripped))
                 self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                 fh.write(s)
+                if self.dataWatch is not None:
+                    prefix = 'FD:%d' % fd
+                    self.dataWatch.markLog(s, prefix)
             
+
+    def markLogs(self, dataWatch):
+        self.dataWatch = dataWatch
+        self.lgr.debug('TraceFiles markLogs')

@@ -14,6 +14,10 @@ import argparse
 import readMarks
 import hashlib
 import pickle
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
+import aflPath
+
 splits = {}
 class SplitInfo():
     def __init__(self, index, hit, cycle):
@@ -142,11 +146,13 @@ def main():
     parser = argparse.ArgumentParser(prog='dataDiff', description='look for a pony')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     args = parser.parse_args()
-
+    '''
     afl_path = os.getenv('AFL_DATA')
     target_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
     expaths = json.load(open(target_path))
     print('got %d paths' % len(expaths))
+    '''
+    expaths = aflPath.getAFLCoverageList(args.target)
    
     for index in range(len(expaths)):
         for inner in range(index+1, len(expaths)):

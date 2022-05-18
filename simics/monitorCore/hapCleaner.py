@@ -38,11 +38,17 @@ class StopAction():
 
     def run(self, wrong_pid=False, cb_param=None):
         ''' Process the functions in the flist, these are the stopFunction class'''
+        retval = True
         if len(self.flist) > 0:
             fun = self.flist.pop(0)
             #print('stop action %s wrong pid %r  match %r' % (str(fun.fun), wrong_pid, fun.match_pid))
-            if not (wrong_pid and fun.match_pid):
-                fun.run(self.flist, wrong_pid=wrong_pid, cb_param=cb_param)
+            if fun.getFun() is None:
+                print('StopAction has function is None')
+                retval = False
+            else:
+                if not (wrong_pid and fun.match_pid):
+                    fun.run(self.flist, wrong_pid=wrong_pid, cb_param=cb_param)
+        return retval
 
     def getBreaks(self):
         return self.break_addrs

@@ -535,7 +535,7 @@ class reverseToCall():
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('jumpOverKernel kernel space pid %d eip:0x%x %s' % (pid, eip, instruct[1]))
+        self.lgr.debug('jumpOverKernel kernel space pid %d eip:0x%x %s cycle: 0x%x' % (pid, eip, instruct[1], self.cpu.cycles))
         is_exit = self.isExit(instruct[1], eip)
         if pid in self.sysenter_cycles and is_exit:
             self.lgr.debug('jumpOverKernel is sysexit, cur_cycles is 0x%x' % cur_cycles)
@@ -565,21 +565,22 @@ class reverseToCall():
                 self.lgr.error('jumpOverKernel found simics running prior to skip to')
                 return None
             skip_ok = self.skipToTest(got_it)
-            dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-            rval = self.top.getReg(self.reg, self.cpu) 
-            self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
             if not skip_ok:
                 self.lgr.error('jumpOverKernel skip-to failed')
                 return None
-            if rval == self.reg_val:
-                retval = True
-            else:
-                retval = False
-                self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
-                user_cycles = cur_cycles+1
-                skip_ok = self.skipToTest(user_cycles)
-                if not skip_ok:
-                    return None
+            if self.reg is not None:
+                dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+                rval = self.top.getReg(self.reg, self.cpu) 
+                self.lgr.debug('jumpOverKernel pid:%d did skip to 0x%x landed at 0x%x rval 0x%x' % (pid, got_it, self.cpu.cycles, rval))
+                if rval == self.reg_val:
+                    retval = True
+                else:
+                    retval = False
+                    self.lgr.debug('jumpOverKernel register changed -- assume kernel did it, return to user space')
+                    user_cycles = cur_cycles+1
+                    skip_ok = self.skipToTest(user_cycles)
+                    if not skip_ok:
+                        return None
         else:
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''
@@ -616,6 +617,8 @@ class reverseToCall():
                     retval = False
                     self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
                        rval))
+            elif self.tryRecentCycle(page_faults, pid):
+                self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
             else:
                 cell = self.top.getCell()
                 self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
@@ -625,6 +628,29 @@ class reverseToCall():
                 self.context_manager.showHaps()
                 SIM_run_alone(SIM_run_command, 'rev')
                 retval = None
+        return retval
+
+    def tryRecentCycle(self, page_faults, pid):
+        retval = False
+        all_faults = self.expandFaultList(page_faults)
+        closest_fault = self.getClosestFault(all_faults)
+        frame, closest_call = self.getPreviousCycleFrame(pid)
+        if closest_fault is None or closest_call > closest_fault:
+            self.lgr.debug('tryRecentCycle skipping to recent call')
+            self.skipToTest(closest_call)
+            retval = True
+        elif closet_fault is not None: 
+            self.lgr.debug('tryRecentCycle skipping to recent fault')
+            self.skipToTest(closest_fault)
+            retval = True
+        return retval
+        
+
+    def expandFaultList(self, page_faults):
+        retval = []
+        for eip in page_faults:
+            for cycle in page_faults[eip]:
+                retval.append(cycle) 
         return retval
 
     def getClosestFault(self, fault_list):
@@ -657,7 +683,7 @@ class reverseToCall():
             self.lgr.error('kernInterruptHap pid is None')    
             return
         if pid == self.pid:
-            SIM_delete_breakpoint(self.uncall_break)
+            RES_delete_breakpoint(self.uncall_break)
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             if self.reg_val is not None:
@@ -786,7 +812,7 @@ class reverseToCall():
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
         for breakpt in self.the_breaks:
-            SIM_delete_breakpoint(breakpt)
+            RES_delete_breakpoint(breakpt)
         self.the_breaks = []
 
     def conditionalMet(self, mn):
@@ -983,7 +1009,7 @@ class reverseToCall():
         self.lgr.debug('uncallHap ip: 0x%x uncall_break %d pid: %d expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
               pid, self.pid, self.reg, self.reg_val))
         if pid == self.pid:
-            SIM_delete_breakpoint(self.uncall_break)
+            RES_delete_breakpoint(self.uncall_break)
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
             self.uncall_break = None
             val = self.top.getReg(self.reg, self.cpu) 
@@ -1037,7 +1063,7 @@ class reverseToCall():
                  
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(None)
+                #self.cleanup(None)
                 self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
@@ -1124,7 +1150,7 @@ class reverseToCall():
                 else:
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                self.cleanup(None)
+                #self.cleanup(None)
                 self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)

@@ -2,6 +2,7 @@ from simics import *
 import os
 import pickle
 import elfText
+import json
 
 from resimHaps import *
 '''
@@ -230,8 +231,8 @@ class SOMap():
                 print('pid:%d  0x%x - 0x%x   %s' % (pid, self.prog_start[pid], self.prog_end[pid], self.text_prog[pid]))
             else:
                 print('pid:%d  no text found' % pid)
+    
           
-            
     def showSO(self, pid=None):
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
@@ -257,6 +258,41 @@ class SOMap():
                 print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
         else:
             print('no so map for %d' % pid)
+            
+    def getSO(self, pid=None):
+        retval = {}
+        if pid is None:
+            cpu, comm, pid = self.task_utils.curProc() 
+        pid = self.getSOPid(pid)
+        if pid is None:
+            cpu, comm, pid = self.task_utils.curProc() 
+        retval['group_leader'] = pid
+        if pid in self.so_file_map:
+            if pid in self.prog_start:
+                retval['prog_start'] = self.prog_start[pid]
+                retval['prog_end'] = self.prog_end[pid]
+                retval['prog'] = self.text_prog[pid]
+            else:
+                self.lgr.debug('pid %d not in text sections' % pid)
+            sort_map = {}
+            for text_seg in self.so_file_map[pid]:
+                sort_map[text_seg.locate] = text_seg
+            retval['sections'] = []
+            for locate in sorted(sort_map):
+                section = {}
+                text_seg = sort_map[locate]
+                start = text_seg.locate+text_seg.offset
+                end = locate + text_seg.size
+                section['locate'] = locate
+                section['end'] = end
+                section['offset'] = text_seg.offset
+                section['size'] = text_seg.size
+                section['file'] = self.so_file_map[pid][text_seg]
+                retval['sections'].append(section)
+        else:
+            self.lgr.debug('no so map for %d' % pid)
+        ret_json = json.dumps(retval) 
+        print(ret_json)
  
     def handleExit(self, pid, killed=False):
         ''' when a thread leader exits, clone the so map structures to each child, TBD determine new thread leader? '''

@@ -75,7 +75,7 @@ class PageFaultGen():
         if self.pdir_break is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
             #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
-            SIM_delete_breakpoint(self.pdir_break)
+            RES_delete_breakpoint(self.pdir_break)
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
             self.pdir_hap = None
@@ -96,7 +96,7 @@ class PageFaultGen():
         if self.ptable_break is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ptable_hap)
             #self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
-            SIM_delete_breakpoint(self.ptable_break)
+            RES_delete_breakpoint(self.ptable_break)
             #self.context_manager.genDeleteHap(self.ptable_hap)
             self.ptable_break = None
             self.ptable_hap = None

@@ -180,7 +180,7 @@ class pageFaults():
         self.haps_removed += 1
         #self.lgr.debug('will delete hap %d' % self.page_break_cb[cell_name][pid])
         RES_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, self.page_break_cb[cell_name][pid])
-        SIM_delete_breakpoint(self.page_break_breakpoint[cell_name][pid])
+        RES_delete_breakpoint(self.page_break_breakpoint[cell_name][pid])
         del self.page_break_cb[cell_name][pid]
         del self.page_break_breakpoint[cell_name][pid]
        
@@ -235,7 +235,7 @@ class pageFaults():
             self.haps_removed += 1
             cb = self.page_break_cb[cell_name][pid]
             bk = self.page_break_breakpoint[cell_name][pid]
-            SIM_delete_breakpoint(bk)
+            RES_delete_breakpoint(bk)
             self.lgr.debug('pageFault cleanPid removed break %d, hap %d' % (bk, cb))
             RES_hap_delete_callback_obj_id("Core_Breakpoint_Memop", cell, cb)
             del self.page_break_cb[cell_name][pid]

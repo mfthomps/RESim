@@ -104,6 +104,7 @@ import userBreak
 import magicOrigin
 from resimHaps import *
 import reverseTrack
+import jumpers
 import json
 import pickle
 import re
@@ -245,6 +246,9 @@ class GenMonitor():
         self.user_break = None
         ''' Manage reset of origin based on execution of magic instruction 99 '''
         self.magic_origin = {}
+
+        ''' Control flow jumpers '''
+        self.jumper_dict = {}
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -440,7 +444,7 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             for bp in stop_action.breakpoints:
-                SIM_delete_breakpoint(bp)
+                RES_delete_breakpoint(bp)
             del stop_action.breakpoints[:]
             self.is_compat32 = self.compat32()
             ''' check functions in list '''
@@ -552,8 +556,8 @@ class GenMonitor():
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
-                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], self.run_from_snap, self.back_stop[cell_name], 
-                  self.compat32, self.lgr)
+                  self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
+                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -897,6 +901,11 @@ class GenMonitor():
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
         self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
+        jumper_file = os.getenv('EXECUTION_JUMPERS')
+        if jumper_file is not None:
+            if self.target not in self.jumper_dict:
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+            self.jumper_dict[self.target].loadJumpers(jumper_file)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1055,7 +1064,7 @@ class GenMonitor():
     def cleanToProcHaps(self, dumb):
         self.lgr.debug('cleantoProcHaps')
         if self.cur_task_break is not None:
-            SIM_delete_breakpoint(self.cur_task_break)
+            RES_delete_breakpoint(self.cur_task_break)
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None
@@ -1138,7 +1147,7 @@ class GenMonitor():
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
             f3 = stopFunction.StopFunction(self.debug, [], nest=False)
-            flist = [f1, f2, f3]
+            flist = [f1, f3, f2]
             if final_fun is not None:
                 f4 = stopFunction.StopFunction(final_fun, [], nest=False)
                 flist.append(f4)
@@ -1205,9 +1214,9 @@ class GenMonitor():
         f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
         f3 = stopFunction.StopFunction(debug_function, [], nest=False)
         if to_user:
-            flist = [f1, f2, f3]
+            flist = [f1, f3, f2]
         else:
-            flist = [f2, f3]
+            flist = [f3, f2]
         if final_fun is not None:
             f4 = stopFunction.StopFunction(final_fun, [], nest=False)
             flist.append(f4)
@@ -1297,7 +1306,7 @@ class GenMonitor():
                     self.lgr.debug('toRunningProc Already at proc %s, done' % proc)
                     f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
-                    self.toUser([f1, f2])
+                    self.toUser([f2, f1])
                     #self.debug()
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
@@ -1307,9 +1316,9 @@ class GenMonitor():
                     f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
                     if final_fun is not None:
                         f3 = stopFunction.StopFunction(final_fun, [], nest=False)
-                        self.toUser([f1, f2, f3])
+                        self.toUser([f2, f1, f3])
                     else:
-                        self.toUser([f1, f2])
+                        self.toUser([f2, f1])
                     #self.debugGroup()
                     return
         ''' Set breakpoint on current_task to watch task switches '''
@@ -1357,9 +1366,13 @@ class GenMonitor():
         #self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
         return value
 
+    def is_ascii(s):
+        return all(ord(c) < 128 for c in s)
+
     def gdbMailbox(self, msg):
         self.gdb_mailbox = msg
-        #self.lgr.debug('in gdbMailbox msg set to <%s>' % msg)
+        self.lgr.debug('in gdbMailbox msg set to <%s>' % msg)
+        #amsg = msg.encode("ascii", "ignore")
         print('gdbMailbox:%s' % msg)
 
     def emptyMailbox(self):
@@ -1460,12 +1473,13 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.stopTrackIO()
         if len(self.call_traces[self.target]) > 0: 
-            print('\n\n*** Syscall traces are active -- they must be deleted before jumping to bookmarks ***')
-            self.lgr.debug('Syscall traces are active -- they must be deleted before jumping to bookmarks ')
-            self.showHaps()
-            for call in self.call_traces[self.target]:
-                self.lgr.debug('remaining trace %s' % call)
-            return
+            print('\n\n*** Syscall traces are active -- they will be deleted before jumping to bookmarks ***')
+            self.stopTrace()
+            self.lgr.debug('Syscall traces are active -- they will be deleted before jumping to bookmarks ')
+            #self.showHaps()
+            #for call in self.call_traces[self.target]:
+            #    self.lgr.debug('remaining trace %s' % call)
+            #return
         if type(mark) != int:
             mark = mark.replace('|','"')
         msg = self.bookmarks.goToDebugBookmark(mark)
@@ -1541,7 +1555,7 @@ class GenMonitor():
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
-            self.context_manager[self.target].showHaps()
+            #self.context_manager[self.target].showHaps()
             if prev is not None:
                 instruct = SIM_disassemble_address(cpu, prev, 1, 0)
                 self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
@@ -1710,6 +1724,7 @@ class GenMonitor():
         cpl = memUtils.getCPL(cpu)
 
     def skipBackToUser(self):
+        self.lgr.debug('skipBackToUser')
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.rev_to_call[self.target].jumpOverKernel(pid)
 
@@ -1731,9 +1746,14 @@ class GenMonitor():
         Runs backwards until a write to the given address is found.
         '''
         if self.reverseEnabled():
+            #self.context_manager[self.target].showHaps();
             self.removeDebugBreaks()
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             value = self.mem_utils[self.target].readMemory(cpu, addr, num_bytes)
+            if value is None:
+                self.lgr.error('stopAtKernelWrite failed to read from addr 0x%x' % addr)
+                self.skipAndMail()
+                return
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d' % (value, addr, num_bytes))
             cell = self.cell_config.cell_context[self.target]
             if self.find_kernel_write is None:
@@ -1982,6 +2002,9 @@ class GenMonitor():
         self.lgr.debug('traceFile %s' % path)
         outfile = os.path.join('/tmp', os.path.basename(path))
         self.traceFiles[self.target].watchFile(path, outfile)
+        ''' TBD reduce to only track open/write/close? '''
+        if self.target not in self.trace_all:
+            self.traceAll()
 
     def traceFD(self, fd):
         self.lgr.debug('traceFD %d' % fd)
@@ -2146,7 +2169,6 @@ class GenMonitor():
 
     def debugExitHap(self, flist=None): 
         ''' intended to stop simultion if the threads we are debugging all exit '''
-        cell = self.cell_config.cell_context[self.target]
         somap = None
         if self.target in self.soMap:
             somap = self.soMap[self.target]
@@ -2156,8 +2178,10 @@ class GenMonitor():
         self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                        self.mem_utils[self.target], self.task_utils[self.target], 
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
-                       call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32)
-        self.lgr.debug('debugExitHap compat32: %r syscall is %s' % (self.is_compat32, str(self.exit_group_syscall[self.target])))
+                       call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32, name="debugExitHap")
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
+               cpu.current_context))
 
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
@@ -2358,7 +2382,7 @@ class GenMonitor():
         self.lgr.debug('undoDebug')
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
-            SIM_delete_breakpoint(self.cur_task_break)
+            RES_delete_breakpoint(self.cur_task_break)
             self.cur_task_hap = None
         if self.proc_hap is not None:
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
@@ -2709,6 +2733,9 @@ class GenMonitor():
     def listSOMap(self):
         self.soMap[self.target].listSO()
 
+    def getSOMap(self):
+        self.soMap[self.target].getSO()
+
     def getSOFile(self, addr):
         fname = self.soMap[self.target].getSOFile(addr)
         return fname
@@ -2864,7 +2891,7 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
-    def clearBookmarks(self):
+    def clearBookmarks(self, dumb=None):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
@@ -2880,12 +2907,15 @@ class GenMonitor():
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
-    def writeRegValue(self, reg, value):
+    def writeRegValue(self, reg, value, alone=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         reg_num = cpu.iface.int_register.get_number(reg)
         cpu.iface.int_register.write(reg_num, value)
         self.lgr.debug('writeRegValue %s, %x regnum %d' % (reg, value, reg_num))
-        self.clearBookmarks()
+        if alone:
+            SIM_run_alone(self.clearBookmarks, None) 
+        else:
+            self.clearBookmarks()
 
     def writeWord(self, address, value):
         ''' NOTE: wipes out bookmarks! '''
@@ -3256,7 +3286,7 @@ class GenMonitor():
             else:
                 SIM_run_command('c')
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False):
+    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3273,6 +3303,10 @@ class GenMonitor():
 
         if self.coverage is not None:
             self.coverage.doCoverage()
+
+        if mark_logs:
+            self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
+
         self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun, count=count)
 
     def stopTrackIO(self):
@@ -3312,6 +3346,14 @@ class GenMonitor():
         except Exception as e:
             self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
+            with open('/tmp/badjson.txt', 'w') as fh:
+                fh.write(str(watch_marks))
+                #print(str(watch_marks))
+            for bad in watch_marks:
+                try:
+                    badstring = json .dumps(bad)
+                except Exception as e:
+                    self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(bad))
         self.lgr.debug('getWatchMarks done')
 
     def getWriteMarks(self):
@@ -3525,9 +3567,15 @@ class GenMonitor():
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
-            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False):
+            save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
+            break_on=None):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
+        if 'coverage/id' in dfile:
+            print('Refusing to inject a coverage file into application memory')
+            fixed = dfile.replace('coverage', 'queue')
+            print('You may have meant to inject this instead: %s' % fixed)
+            return
         if type(save_json) is bool:
             save_json = '/tmp/track.json'
         if self.bookmarks is not None:
@@ -3537,16 +3585,19 @@ class GenMonitor():
             cpu = this_cpu
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
+        self.dataWatch[self.target].resetWatch()
         if max_marks is not None:
             self.dataWatch[self.target].setMaxMarks(max_marks) 
-        self.dataWatch[self.target].resetWatch()
         self.page_faults[self.target].stopWatchPageFaults()
         self.watchPageFaults(pid)
+        if mark_logs:
+            self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop, instruct_trace=instruct_trace)
+                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs)
+
         if go:
             self.injectIOInstance.go()
         return self.injectIOInstance
@@ -3689,6 +3740,9 @@ class GenMonitor():
         self.coverage.showCoverage()
         self.coverage.saveCoverage()
 
+    def saveCoverage(self):
+        self.coverage.saveCoverage()
+
     def stopCoverage(self):
         self.lgr.debug('stopCoverage')
         if self.coverage is not None:
@@ -3824,11 +3878,12 @@ class GenMonitor():
         self.trace_malloc = None
 
     def trackFile(self, substring):
+        ''' track access to XML file access '''
         self.stopTrackIO()
         self.clearWatches()
         self.lgr.debug('trackFile stopped track and cleared watchs')
         self.dataWatch[self.target].trackFile(self.stopTrackIO, self.is_compat32)
-        self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        self.lgr.debug('trackFile back from dataWatch, now run to IO')
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.runToOpen(substring)    
@@ -4223,7 +4278,7 @@ class GenMonitor():
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         self.lgr.debug('stopAndGoAlone, hap set now stop it')
-        SIM_break_simulation('stopAndGo')
+        SIM_break_simulation('Stopping simulation')
 
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)
@@ -4251,11 +4306,14 @@ class GenMonitor():
         self.lgr.debug('backtraceAddr %x' % addr)
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
+        if cycles is None:
+            cycles = cpu.cycles
         orig, offset = tm.getOrigRead(addr, cycles)
         if orig is None:
             ''' not an original read buffer, find the original via the refs '''
             ref = tm.findRef(addr, cycles)
             if ref is not None:     
+                
                 self.lgr.debug('backtraceAddr addr 0x%x found in ref %s' % (addr, ref.toString()))
                 offset = ref.getOffset(addr) 
                 tot_offset = offset + ref.orig_read.prior_bytes_read
@@ -4268,6 +4326,7 @@ class GenMonitor():
                 msg = 'Orig buffer not found for addr 0x%x' % addr
                 self.lgr.debug(msg)
                 self.context_manager[self.target].setIdaMessage(msg)
+                print(msg)
         else:
             offset = orig.offset(addr)
             tot_offset = offset + orig.prior_bytes_read
@@ -4299,6 +4358,17 @@ class GenMonitor():
 
     def blackListPid(self, pid):
         self.context_manager[self.target].noWatch(pid)
+
+    def jumper(self, from_addr, to_addr):
+        ''' Set a control flow jumper '''
+        if self.target not in self.jummper_dict:
+            self.jumper_dict[self.taget] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+        self.jumper_dict[self.taget].setJumper(from_addr, to_addr)
+        self.lgr.debug('jumper set')
+
+    def jumperStop(self):
+        self.jumper_dict[self.target].removeBreaks()
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

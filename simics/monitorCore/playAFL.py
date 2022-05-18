@@ -63,8 +63,14 @@ class PlayAFL():
                 print('get target queue')
                 self.lgr.debug('playAFL get queue for target %s' % target)
                 self.afl_list = aflPath.getTargetQueue(target, get_all=True)
+                if len(self.afl_list) == 0:
+                    print('No queue files found for %s' % target)
+                    return
             else:
                 self.afl_list = aflPath.getTargetCrashes(target)
+                if len(self.afl_list) == 0:
+                    print('No crashes found for %s' % target)
+                    return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
         self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
         self.index = -1
@@ -83,6 +89,12 @@ class PlayAFL():
         self.current_packet = 0
         self.call_ip = None
         self.hit_total = 0
+
+        self.filter_module = None
+        packet_filter = os.getenv('AFL_PACKET_FILTER')
+        if packet_filter is not None:
+            self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
+
         ''' replay file names that hit the given bb '''
         self.bnt_list = []
         self.pid = self.top.getPID()
@@ -149,8 +161,6 @@ class PlayAFL():
         self.index = -1
         self.hit_total = 0
         self.findbb = findbb
-        if self.stop_hap is None:
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_run_alone(self.goAlone, False)
 
     def hangCallback(self, cycles):
@@ -209,9 +219,13 @@ class PlayAFL():
                 self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
-            self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
-                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, stop_on_read=self.stop_on_read)
+            if self.write_data is None:
+                self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
+                         self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                         pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, 
+                         filter=self.filter_module, stop_on_read=self.stop_on_read)
+            else:
+                self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
             count = self.write_data.write()
             self.lgr.debug('playAFL goAlone ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s' % (eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context)))
@@ -224,6 +238,9 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
+            if self.stop_hap is None:
+                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            self.lgr.debug('playAFL goAlone now continue')
             SIM_run_command('c')
         else:
             ''' did all sessions '''

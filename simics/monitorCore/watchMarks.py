@@ -336,6 +336,12 @@ class ResetOrigin():
     def getMsg(self):
         return self.msg
 
+class LogMark():
+    def __init__(self, s, prefix):
+        self.msg = '%s : %s' % (prefix, s)
+    def getMsg(self):
+        return self.msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -471,6 +477,7 @@ class WatchMarks():
 
     def getWatchMarks(self, origin=0):
         retval = []
+        self.lgr.debug('watchMarks getWatchMarks len is %d' % len(self.mark_list))
         for mark in self.mark_list:
             retval.append(mark.getJson(origin))
         return retval        
@@ -614,10 +621,12 @@ class WatchMarks():
             dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
                 if (sys.version_info < (3,0)):
+                    self.lgr.debug('watchMarks compare, do decode')
                     dst_str = dst_str.decode('ascii', 'replace')
             src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
                 if (sys.version_info < (3,0)):
+                    self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
         else:
             dst_str = ''
@@ -725,6 +734,10 @@ class WatchMarks():
     def returnInt(self, count, fun):
         fm = ReturnInt(fun, count)
         self.addWatchMark(fm)
+
+    def logMark(self, s, prefix):
+        lm = LogMark(s, prefix)
+        self.addWatchMark(lm)
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')
@@ -926,6 +939,14 @@ class WatchMarks():
                 entry['dest'] = mark.mark.dest 
                 entry['length'] = mark.mark.length 
                 entry['reference_buffer'] = mark.mark.buf_start 
+
+            elif isinstance(mark.mark, DataMark) and mark.mark.ad_hoc and mark.mark.start is not None:
+                entry['mark_type'] = 'copy' 
+                entry['src'] = mark.mark.addr
+                entry['dest'] = mark.mark.dest 
+                entry['length'] = (mark.mark.end_addr - mark.mark.addr)+1
+                entry['reference_buffer'] = mark.mark.start 
+
             elif isinstance(mark.mark, ScanMark):
                 entry['mark_type'] = 'scan' 
                 entry['src'] = mark.mark.src 
@@ -943,7 +964,7 @@ class WatchMarks():
                 entry['recv_addr'] = mark.mark.recv_addr
                 entry['length'] = mark.mark.len
                 entry['fd'] = mark.mark.fd
-            elif isinstance(mark.mark, DataMark) and not mark.mark.modify:
+            elif isinstance(mark.mark, DataMark) and not mark.mark.modify and not mark.mark.ad_hoc:
                 entry['mark_type'] = 'read' 
                 entry['addr'] = mark.mark.addr
                 entry['reference_buffer'] = mark.mark.start

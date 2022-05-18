@@ -26,6 +26,7 @@
 import simics
 import cli
 from simics import *
+from resimHaps import *
 import memUtils
 import decode
 import decodeArm
@@ -167,7 +168,7 @@ class findKernelWrite():
                 offset = memory.logical_address - self.addr
             self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, eip, self.cpu.cycles))
         if self.kernel_write_break is not None: 
-            SIM_delete_breakpoint(self.kernel_write_break)
+            RES_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None 
             self.lgr.debug('vt_handler deleted kernel_write_break')
         if self.rev_write_hap is not None:
@@ -268,13 +269,13 @@ class findKernelWrite():
         if self.forward is not None and eip == self.forward_eip:
             self.lgr.error('stopToCheckWriteCallback going forward hit our original eip')
             if self.stop_write_hap is not None:
-                SIM_delete_breakpoint(self.kernel_write_break)
+                RES_delete_breakpoint(self.kernel_write_break)
                 SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
                 self.stop_write_hap = None
                 self.kernel_write_break = None
                 self.lgr.debug('stopToCheckWriteCallback deleted kernel_write_break')
             if self.forward_break is not None:
-                SIM_delete_breakpoint(self.forward_break)
+                RES_delete_breakpoint(self.forward_break)
                 self.forward_break = None
             return
          
@@ -620,7 +621,7 @@ class findKernelWrite():
             self.lgr.debug('backOneAlone, was going forward')
         if self.forward_break is not None:
             self.lgr.debug('backOne alone delete forward_break')
-            SIM_delete_breakpoint(self.forward_break)
+            RES_delete_breakpoint(self.forward_break)
             self.forward_break = None
         mn = self.decode.getMn(instruct[1])
         self.lgr.debug('backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
@@ -722,7 +723,7 @@ class findKernelWrite():
         self.found_kernel_write = False
         if self.kernel_write_break is not None:
             self.lgr.debug('findKernelWrite cleanup deleting hap and breakpoint %d' % self.kernel_write_break)
-            SIM_delete_breakpoint(self.kernel_write_break)
+            RES_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None
         if self.stop_write_hap is not None:
             self.lgr.debug('findKernelWrite cleanup delete stop_write_hap')
@@ -733,7 +734,7 @@ class findKernelWrite():
             self.mem_hap = None
         if self.forward_break is not None:
             self.lgr.debug('cleanup delete forward break')
-            SIM_delete_breakpoint(self.forward_break)
+            RES_delete_breakpoint(self.forward_break)
             self.forward_break = None
         if self.forward_hap is not None:
             self.lgr.debug('cleanup delete forward_hap %d' % self.forward_hap)

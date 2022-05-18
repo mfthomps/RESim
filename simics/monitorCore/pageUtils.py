@@ -169,6 +169,7 @@ def getPageBasesArm(cpu, lgr, kernel_base):
     kernel_base = 0xc0000000
     for i in range(NUM_FIRST):
         first_addr = base_shifted | first_index*4
+        ''' first level directory '''
         fld = SIM_read_phys_memory(cpu, first_addr, 4)
         if fld != 0:
             pta = memUtils.bitRange(fld, 10, 31)
@@ -180,6 +181,7 @@ def getPageBasesArm(cpu, lgr, kernel_base):
                 if va > kernel_base:
                     break
                 second_addr = pta_shifted | second_index*4
+                ''' second level directory '''
                 sld = SIM_read_phys_memory(cpu, second_addr, 4)
                 db = memUtils.bitRange(sld, 0, 1)
                 if db != 0:
@@ -249,6 +251,9 @@ def getPageEntrySize(cpu):
         return 8
 
 def findPageTableArm(cpu, va, lgr, use_sld=None):
+    ''' sld is 2nd level directory, which we may already know from previous failures '''
+    ''' TBD, seems off... if cannot read sld context may be wrong.  Why not always wait until
+        return to user space? '''
     ptable_info = PtableInfo()
     ttbr = cpu.translation_table_base0
     base = memUtils.bitRange(ttbr, 14,31)
@@ -348,9 +353,9 @@ def findPageTable(cpu, addr, lgr, use_sld=None):
             return ptable_info
         else:
             #lgr.debug('call findPageTableExtend')
-            return findPageTableExtended(cpu, addr, lgr)
+            return findPageTableExtended(cpu, addr, lgr, use_sld)
 
-def findPageTableExtended(cpu, addr, lgr):
+def findPageTableExtended(cpu, addr, lgr, use_sld=None):
         WORD_SIZE = 8
         mask64 = 0x000ffffffffff000
         ptable_info = PtableInfo()
@@ -393,12 +398,15 @@ def findPageTableExtended(cpu, addr, lgr):
             ptable_entry_addr = ptable_base + (WORD_SIZE*ptable)
             #lgr.debug('ptable_entry_addr 0x%x  ptable 0x%x' % (ptable_entry_addr, ptable_base))
             ptable_info.ptable_addr = ptable_entry_addr
-            try:
-                entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
-                #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
-            except:
-                entry = 0
-                lgr.debug('pageUtils nothing mapped for ptable_entry_addr 0x%x' % ptable_entry_addr)
+            if use_sld is not None:
+                entry = use_sld
+            else:
+                try:
+                    entry = SIM_read_phys_memory(cpu, ptable_entry_addr, WORD_SIZE)                
+                    #lgr.debug('ptable_entry_addr is 0x%x,  page table entry contains 0x%x' % (ptable_entry_addr, entry))
+                except:
+                    entry = 0
+                    lgr.debug('pageUtils nothing mapped for ptable_entry_addr 0x%x' % ptable_entry_addr)
             if entry == 0:
                 return ptable_info
             

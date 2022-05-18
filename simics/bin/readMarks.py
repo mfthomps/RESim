@@ -55,7 +55,11 @@ def getReadMarks(jpath):
     if not os.path.isfile(jpath):
         print('Missing file: %s' % jpath)
         return None, None
-    trackdata = json.load(open(jpath))
+    try:
+        trackdata = json.load(open(jpath))
+    except:
+        print('Failed loading json from %s' % jpath)
+        return None, 0
     ''' Support tracking data references back to their original buffer location '''
     refs = {}
     ''' Identify which data offsets have been modified (written to) '''
@@ -69,7 +73,10 @@ def getReadMarks(jpath):
             #print('original addr 0x%x : %d' % (orig_addr, orig_len))
     
         if mark['mark_type'] == 'copy':
-            if mark['reference_buffer'] != orig_addr:
+            if mark['reference_buffer'] is None:
+                print('ref buffer of none in copy %s' % str(mark))
+
+            elif mark['reference_buffer'] != orig_addr:
                 orig = findOrig(mark['reference_buffer'], refs, orig_addr, orig_len)
                 if orig is None:
                     print('copy, COULD NOT FIND original buffer for 0x%x' % mark['reference_buffer'])
