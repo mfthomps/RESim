@@ -58,7 +58,7 @@ class TraceFiles():
         #hx = ''.join('{:02x}'.format(x) for x in the_bytes)
         #print('the bytes is %s' % hx)
         for i in the_bytes:
-            if i != 0 and i<=128:
+            if i >= 32 and i<128:
                 #print('got nonzero at %d' % index)
                 retval.append(i)
             index += 1
