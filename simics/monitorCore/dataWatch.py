@@ -66,6 +66,11 @@ class DataWatch():
             self.back_stop_cycles = 5000000
         else:
             self.back_stop_cycles = int(back_stop_string)
+        read_loop_string = os.getenv('READ_LOOP_MAX')
+        if read_loop_string is None:
+            self.read_loop_max = 10000
+        else:
+            self.read_loop_max = int(read_loop_string)
         lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
         if cpu.architecture == 'arm':
             self.decode = decodeArm
@@ -1306,8 +1311,8 @@ class DataWatch():
                 self.index_hits[index] = 0
             self.index_hits[index] = self.index_hits[index]+1
             #self.lgr.error('dataWatch readHap %d hits on  index %d, ' % (self.index_hits[index], index))
-            if self.index_hits[index] > 1000:
-                self.lgr.error('dataWatch readHap over 1000 hits on index %d eip 0x%x, stopping watch' % (index, eip))
+            if self.index_hits[index] > self.read_loop_max:
+                self.lgr.error('dataWatch readHap over %d hits on index %d eip 0x%x, stopping watch' % (self.read_loop_max, index, eip))
                 read_loop = os.getenv('READ_LOOP')
                 if read_loop is not None and read_loop.lower() == 'quit':
                     self.top.quit()
@@ -1657,6 +1662,7 @@ class DataWatch():
 
     def setUserIterators(self, user_iterators):
         self.user_iterators = user_iterators
+        self.lgr.debug('dataWatch setUesrIterators')
 
     def wouldBreakSimulation(self):
         if self.break_simulation:
