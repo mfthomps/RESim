@@ -11,7 +11,7 @@ class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
-           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False):
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -104,6 +104,7 @@ class InjectIO():
         packet_filter = os.getenv('AFL_PACKET_FILTER')
         if packet_filter is not None:
             self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
+        self.no_iterators = no_iterators
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -201,6 +202,10 @@ class InjectIO():
         force_default_context = False
         if self.bookmarks is None:
             force_default_context = True
+        if self.no_iterators:
+            self.lgr.debug('injectIO dissable user iterators')
+            self.dataWatch.setUserIterators(None)
+
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,

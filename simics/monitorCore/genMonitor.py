@@ -2207,7 +2207,7 @@ class GenMonitor():
             self.rev_to_call[self.target].watchSysenter(prec)
         self.lgr.debug('genMonitor allowReverse')
  
-    def restoreDebugBreaks(self, dumb=None, was_watching=False):
+    def restoreDebugBreaks(self, was_watching=False):
         if not self.debug_breaks_set:
             self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
@@ -3568,7 +3568,7 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None):
+            break_on=None, no_iterators=False):
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if 'coverage/id' in dfile:
@@ -3596,7 +3596,7 @@ class GenMonitor():
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs)
+                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators)
 
         if go:
             self.injectIOInstance.go()

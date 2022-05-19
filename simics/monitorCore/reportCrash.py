@@ -80,7 +80,8 @@ class ReportCrash():
         #self.top.injectIO(self.flist[self.index], keep_size = True)
         ''' Either inject or track '''
         if self.trackFD is None:
-            self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, targetFD=self.targetFD, callback=self.doneForward)
+            self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
+                   targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
             ''' Be sure we are debugging and then do the trackIO '''
             self.top.debugSnap(final_fun = self.doTrack)
