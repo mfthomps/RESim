@@ -992,6 +992,8 @@ class WatchMarks():
                 entry['ours'] = mark.mark.ours
                 entry['theirs'] = mark.mark.theirs
                 entry['count'] = mark.mark.count
+            elif isinstance(mark.mark, IteratorMark) or isinstance(mark.mark, KernelModMark) or isinstance(mark.mark, SetMark):
+                continue
             else:
                 self.lgr.debug('unknown mark type? %s' % str(mark.mark))
                 continue
