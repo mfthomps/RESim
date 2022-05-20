@@ -375,7 +375,7 @@ class PageFaultGen():
         #if cpu != prec.cpu:
         #    self.lgr.debug('exitHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
         #    return
-        self.lgr.debug('pageFaultGen exitHap')
+        #self.lgr.debug('pageFaultGen exitHap')
         cpu, comm, pid = self.task_utils.curProc() 
         if pid != prec.pid and prec.pid in self.exit_break:
             self.lgr.debug('exitHap wrong pid %d expected %d' % (pid, prec.pid))
