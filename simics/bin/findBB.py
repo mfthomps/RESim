@@ -9,7 +9,11 @@ import argparse
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
+import findBB
 
+'''
+Return a list of queue files that hit a given BB start address
+'''
 def findBB(target, bb, quiet=False):
     retval = []
     cover_list = aflPath.getAFLCoverageList(target)
@@ -28,6 +32,26 @@ def findBB(target, bb, quiet=False):
                 retval.append(queue)
                 if not quiet:
                     print('0x%x in %s' % (bb, queue))
+    return retval
+
+def getWatchMark(trackio, bb):
+    retval = None
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    if not os.path.isfile(trackio):
+        print('ERROR: no trackio file at %s' % trackio)
+        return None
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        #print('ERROR: failed reading json from %s' % trackio)
+        return None
+    for mark in tjson:
+        if mark['mark_type'] == 'read':
+            eip = mark['ip']
+            if eip >= bb['start_ea'] and eip <= bb['end_ea']:
+                print('getWatchMarks found read mark at 0x%x' % eip)
+                retval = eip
+                break
     return retval
         
 

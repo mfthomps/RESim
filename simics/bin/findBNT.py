@@ -6,7 +6,7 @@ import os
 import glob
 import json
 import argparse
-import allReadMarks
+import findBB
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
@@ -17,7 +17,9 @@ Will read trackio data from AFL with the -d option and report on
 watch marks that occur within the BB that leads to the BNT.
 '''
 
-def findBNT(hits, fun_blocks, quiet, prog_elf, read_marks):
+
+
+def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
     retval = []
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
@@ -28,17 +30,26 @@ def findBNT(hits, fun_blocks, quiet, prog_elf, read_marks):
                 #print('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
                     if branch not in hits:
+                        read_mark = None
+                        if show_read_marks:
+                            queue_list = findBB.findBB(target, bb_hit, True) 
+                            for q in queue_list:
+                                trackio = q.replace('queue', 'trackio')   
+                                read_mark = findBB.getWatchMark(trackio, bb)
+                                if read_mark is not None:
+                                    if (bb['end_ea'] - read_mark) < 20:
+                                        #print('qfile: %s had readmark at 0x%x' % (q, read_mark))
+                                        break
+
                         if not quiet:
                             mark_info = ''
-                            for addr in read_marks:
-                                #print('compare 0x%x between 0x%x and 0x%x' % (addr, bb['start_ea'], bb['end_ea']))
-                                if addr >= bb['start_ea'] and addr <= bb['end_ea']:
-                                    mark_info = ': read mark at 0x%x' % addr
-                                    break
+                            if read_mark is not None:
+                                mark_info = 'read mark: 0x%x' % read_mark
                             print('function: %s branch 0x%x from 0x%x not in hits %s' % (fun_blocks['name'], branch, bb_hit, mark_info))
                         entry = {}
                         entry['bnt'] = branch
                         entry['source'] = bb_hit
+                        entry['read_mark'] = read_mark
                         retval.append(entry)
                     #else:
                     #    print('branch 0x%x in hits' % branch)
@@ -56,16 +67,9 @@ def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
     ''' hits are now just flat lists without functions '''
     with open(fname) as fh:
         hits = json.load(fh)
-    prog_file = resimUtils.getProgPath(prog)
-    prog_elf = elfText.getTextOfText(prog_file)
-    print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
-    block_file = prog_file+'.blocks'
-    print('block file is %s' % block_file)
-    if not os.path.isfile(block_file):
-        print('block file not found %s' % block_file)
-        return
-    with open(block_file) as fh:
-        blocks = json.load(fh)
+
+    blocks, prog_elf = resimUtils.getBasicBlocks(prog)
+
     if not quiet:
         num_blocks = 0
         num_funs = len(blocks)
@@ -74,7 +78,7 @@ def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
         print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in blocks:
-            this_list = findBNT(hits, blocks[fun], quiet, prog_elf, read_marks)
+            this_list = findBNT(target, hits, blocks[fun], quiet, prog_elf, read_marks)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
@@ -91,11 +95,7 @@ def main():
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     args = parser.parse_args()
-    if args.datamarks and args.target is not None:
-        read_marks = allReadMarks.getMarks(args.target)
-    else:
-        read_marks = []
-    aflBNT(args.prog, args.target, read_marks, fun_name=args.function)
+    aflBNT(args.prog, args.target, args.datamarks, fun_name=args.function)
 
 if __name__ == '__main__':
     sys.exit(main())
