@@ -314,7 +314,7 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            #self.lgr.debug('writeData callHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
@@ -328,11 +328,12 @@ class WriteData():
                     #self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
                     return
                 elif len(self.in_data) > 0:
-                    #self.lgr.debug('writeData callHap current packet %d hit max_packets, stop simulation' % self.current_packet)
-                    SIM_break_simulation('writeData out of data')
+                    #self.lgr.debug('writeData callHap current packet %d hit max_packets, break simulation' % self.current_packet)
+                    SIM_break_simulation('writeData max packets')
                 else:
-                    #self.lgr.debug('writeData callHap current packet %d no data left, do write_callback' % self.current_packet)
-                    SIM_run_alone(self.write_callback, 0)
+                    #self.lgr.debug('writeData callHap current packet %d no data left, break simulation' % self.current_packet)
+                    SIM_break_simulation('writeData out of data')
+                    #SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
                     SIM_break_simulation('writeData out of data')
