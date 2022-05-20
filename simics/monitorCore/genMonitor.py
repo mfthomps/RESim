@@ -252,6 +252,7 @@ class GenMonitor():
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
+        exit_hap = RES_hap_add_callback("Core_At_Exit", self.simicsQuitting, None)
 
 
     def genInit(self, comp_dict):
@@ -4368,6 +4369,10 @@ class GenMonitor():
 
     def jumperStop(self):
         self.jumper_dict[self.target].removeBreaks()
+
+    def simicsQuitting(self, one, two):
+        print('Simics quitting.')
+        self.flushTrace()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

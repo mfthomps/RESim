@@ -327,13 +327,9 @@ class WriteData():
                         The entire data was injected into the kernel, we don't know here when to stop '''
                     #self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
                     return
-                elif len(self.in_data) > 0:
-                    #self.lgr.debug('writeData callHap current packet %d hit max_packets, break simulation' % self.current_packet)
-                    SIM_break_simulation('writeData max packets')
                 else:
                     #self.lgr.debug('writeData callHap current packet %d no data left, break simulation' % self.current_packet)
-                    SIM_break_simulation('writeData out of data')
-                    #SIM_run_alone(self.write_callback, 0)
+                    SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
                     SIM_break_simulation('writeData out of data')
