@@ -3,6 +3,8 @@ import time
 import logging
 import subprocess
 import imp 
+import elfText
+import json
 try:
     import cli
     from simics import *
@@ -144,4 +146,30 @@ def getPacketFilter(packet_filter, lgr):
             else:
                 lgr.error('failed to find filter at %s' % packet_filter)
                 raise Exception('failed to find filter at %s' % packet_filter)
+    return retval
+
+def getBasicBlocks(prog):
+    blocks = None
+    prog_file = getProgPath(prog)
+    prog_elf = elfText.getTextOfText(prog_file)
+    print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+    block_file = prog_file+'.blocks'
+    print('block file is %s' % block_file)
+    if not os.path.isfile(block_file):
+        print('block file not found %s' % block_file)
+        return
+    with open(block_file) as fh:
+        blocks = json.load(fh)
+    return blocks, prog_elf
+
+def getOneBasicBlock(prog, addr):
+    blocks, dumb = getBasicBlocks(prog)
+    retval = None
+    for fun in blocks:
+        for bb in blocks[fun]['blocks']:
+            if bb['start_ea'] == addr:
+                retval = bb
+                break
+        if retval is not None:
+            break    
     return retval
