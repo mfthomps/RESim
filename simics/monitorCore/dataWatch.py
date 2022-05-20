@@ -188,7 +188,13 @@ class DataWatch():
         if max_len is None:
             my_len = length
         else:
-            my_len = max_len
+            # TBD intent to handle applications that reference old buffer data, i.e., past the end of the read count, but what if 
+            # read lenghth is huge?
+            if max_len > 1500:
+                self.lgr.warning('dataWatch setRange large length given %d, setting len of buffer to what we got %s' % (max_len, length)) 
+                my_len = length
+            else:
+                my_len = max_len
 
         #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
         #       my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
@@ -1296,7 +1302,7 @@ class DataWatch():
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
             return
-        self.lgr.debug('dataWatch readHap marks: %s max: %s' % (str(self.watchMarks.markCount()), str(self.max_marks)))
+        #self.lgr.debug('dataWatch readHap marks: %s max: %s' % (str(self.watchMarks.markCount()), str(self.max_marks)))
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
             self.stopWatch()
@@ -1329,7 +1335,7 @@ class DataWatch():
             ''' first data read, start data session if doing coverage '''
             self.top.startDataSessions()
         if self.cpu.cycles == self.prev_cycle:
-            self.lgr.debug('readHap hit twice')
+            #self.lgr.debug('readHap hit twice')
             return
         if len(self.read_hap) == 0:
             return
