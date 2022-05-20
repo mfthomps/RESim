@@ -223,7 +223,7 @@ class WriteData():
                 eip = self.top.getEIP(self.cpu)
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
-                #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
+                self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
                 if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
                     #self.lgr.debug('writeData failed filter, wrote nulls')
@@ -325,9 +325,13 @@ class WriteData():
                     #SIM_break_simulation('kernel buffer data consumed.')
                     ''' Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
                         The entire data was injected into the kernel, we don't know here when to stop '''
-                    self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
+                    #self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
                     return
+                elif len(self.in_data) > 0:
+                    #self.lgr.debug('writeData callHap current packet %d hit max_packets, stop simulation' % self.current_packet)
+                    SIM_break_simulation('writeData out of data')
                 else:
+                    #self.lgr.debug('writeData callHap current packet %d no data left, do write_callback' % self.current_packet)
                     SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
