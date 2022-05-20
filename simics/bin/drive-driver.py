@@ -19,6 +19,7 @@ import subprocess
 import argparse
 import shlex
 resim_dir = os.getenv('RESIM_DIR')
+user_name = os.getenv('RESIM_DIR')
 core_path=os.path.join(resim_dir,'simics', 'monitorCore')
 sys.path.append(core_path)
 import runAFL
@@ -59,7 +60,12 @@ def main():
     cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
     os.system(cmd)
 
-    remote_directives_file = '/tmp/directives.sh'
+    user_dir = os.path.join('tmp', user_name)
+    try:
+        os.mkdir(user_dir)
+    except:
+        pass
+    remote_directives_file = os.path.join(user_dir, 'directives.sh')
     driver_file = open(remote_directives_file, 'w')
     driver_file.write('sleep 2\n')
     if not args.no_magic:
