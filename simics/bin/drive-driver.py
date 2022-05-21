@@ -60,12 +60,13 @@ def main():
     cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
     os.system(cmd)
 
-    user_dir = os.path.join('tmp', user_name)
+    user_dir = os.path.join('/tmp', user_name)
     try:
         os.mkdir(user_dir)
     except:
         pass
     remote_directives_file = os.path.join(user_dir, 'directives.sh')
+    directives_script = '/tmp/directives.sh'
     driver_file = open(remote_directives_file, 'w')
     driver_file.write('sleep 2\n')
     if not args.no_magic:
@@ -118,7 +119,7 @@ def main():
 
     cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, remote_directives_file)
     os.system(cmd)
-    cmd = 'ssh -p %d mike@localhost "nohup %s > /dev/null 2>&1 &"' % (sshport, remote_directives_file)
+    cmd = 'ssh -p %d mike@localhost "nohup %s > /tmp/directive.log 2>&1 &"' % (sshport, directives_script)
     os.system(cmd)
 
 if __name__ == '__main__':
