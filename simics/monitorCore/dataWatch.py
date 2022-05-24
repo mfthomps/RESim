@@ -180,6 +180,21 @@ class DataWatch():
         self.watch()
         SIM_run_alone(SIM_run_command, 'c')
 
+    def isCopyMark(self, watch_mark):
+        retval = False
+        if watch_mark is not None:
+            #self.lgr.debug('dataWatch isCopymark mark is %s' % str(watch_mark.mark))
+            if isinstance(watch_mark.mark, watchMarks.CopyMark):
+                if watch_mark.mark.sp is not None:
+                    retval = True
+            elif isinstance(watch_mark.mark, watchMarks.DataMark):
+                #self.lgr.debug('dataWatch is data, ad hoc?, ')
+                if watch_mark.mark.ad_hoc:
+                    #self.lgr.debug('dataWatch isCopyMark, looks ad hoc depends on sp')
+                    if watch_mark.mark.sp is not None:
+                        retval = True
+        return retval
+
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None, fd=None):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
@@ -236,13 +251,14 @@ class DataWatch():
                     self.stopWatch()
                     self.watch(i_am_alone=True)
                     break
-        if not overlap:
+        if not overlap or self.isCopyMark(watch_mark):
             self.start.append(start)
             self.length.append(my_len)
             self.hack_reuse.append(0)
             self.cycle.append(self.cpu.cycles)
             self.mark.append(watch_mark)
-            if watch_mark is not None and type(watch_mark.mark)==watchMarks.CopyMark and watch_mark.mark.sp is not None:
+            if self.isCopyMark(watch_mark):
+                #self.lgr.debug('dataWatch setRange is copyMark, look for ret_to')
                 ret_to = self.getReturnAddr(watch_mark.mark)
                 if ret_to is not None:
                     #self.lgr.debug('DataWatch setRange stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
@@ -254,9 +270,10 @@ class DataWatch():
                     self.stack_buffers[ret_to].append(index)
                     #self.lgr.debug('added index %d to stack_buffers[0x%x]' % (index, ret_to))
                 else:
+                    pass
                     self.lgr.debug('DataWatch setRange stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
-            #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
+            self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
         if msg is not None:
             if sys.version_info[0] >= 3:
                 fixed = msg
@@ -1197,7 +1214,8 @@ class DataWatch():
 
     def checkMove(self, addr, length, eip, instruct):
         ''' Does this look like a move from memA=>reg=>memB ? '''
-        retval = False
+        ''' If so, return dest '''
+        retval = None
         if instruct[1].startswith('mov'):
             op2, op1 = self.decode.getOperands(instruct[1])
             if self.decode.isReg(op1):
@@ -1215,14 +1233,13 @@ class DataWatch():
                         dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                         if dest_addr is not None:
                             if dest_addr != addr:
-                                self.lgr.debug('dataWatch checkMove might add address 0x%x' % dest_addr)
+                                #self.lgr.debug('dataWatch checkMove might add address 0x%x' % dest_addr)
                                 existing_index = self.findRangeIndex(dest_addr)
                                 if existing_index is None:
                                     ''' TBD may miss some add hocs? not likely '''
-                                    self.lgr.debug('dataWatch checkMove will add address 0x%x' % dest_addr)
-                                    self.setRange(dest_addr, length)
+                                    #self.lgr.debug('dataWatch checkMove will add address 0x%x' % dest_addr)
                                     self.last_ad_hoc=dest_addr
-                                    retval = True
+                                    retval = dest_addr
                             break
         return retval
                     
@@ -1230,7 +1247,7 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
-        self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
+        #self.lgr.debug('finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
         if op_type == Sim_Trans_Load:
             if cpl == 0:
                 #if not self.break_simulation:
@@ -1255,13 +1272,16 @@ class DataWatch():
                     self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
                 else: 
                     ad_hoc = False
-                    if self.checkMove(addr, trans_size, eip, instruct):
+                    dest_addr = self.checkMove(addr, trans_size, eip, instruct)
+                    if dest_addr is not None:
                         ad_hoc = True
-                        self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r, dest 0x%x' % (addr, ad_hoc, self.last_ad_hoc))
+                        wm = self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size, ad_hoc=True, dest=self.last_ad_hoc)
+                        self.setRange(dest_addr, trans_size, watch_mark=wm)
+                        self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r, dest 0x%x' % (addr, ad_hoc, dest_addr))
                         self.setBreakRange()
                     else:
                         self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r' % (addr, ad_hoc))
-                    self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size, ad_hoc=ad_hoc, dest=self.last_ad_hoc)
+                        self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
                 if self.break_simulation:
                     SIM_break_simulation('DataWatch read data')
 
@@ -1365,7 +1385,7 @@ class DataWatch():
         if self.read_hap[index] is None or self.read_hap[index] == 0:
             self.lgr.debug('readHap index %d none or zero' % index)
             return
-        self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x' % (pid, index, addr, eip, self.cpu.cycles))
+        #self.lgr.debug('dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x' % (pid, index, addr, eip, self.cpu.cycles))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -1375,7 +1395,7 @@ class DataWatch():
             SIM_run_alone(self.setStopHap, None)
 
         start, length = self.getStartLength(index, addr) 
-        self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x, len %d' % (index, addr, start, length))
+        #self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x, len %d' % (index, addr, start, length))
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         #start, end = self.context_manager.getText()
@@ -1445,7 +1465,7 @@ class DataWatch():
         num_existing_haps = len(self.read_hap)
         for index in range(num_existing_haps, len(self.start)):
             if self.start[index] == 0:
-                self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
+                #self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
                 self.read_hap.append(None)
                 continue
             ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_pid is not set while
@@ -1891,7 +1911,7 @@ class DataWatch():
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
                 #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
-                if fun is not None and fun == prev_fun:
+                if fun is not None and fun == prev_fun and fun != 'None':
                     self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
                 else:

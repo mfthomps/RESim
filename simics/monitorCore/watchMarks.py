@@ -63,7 +63,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, base=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -87,6 +87,7 @@ class DataMark():
         self.ad_hoc = ad_hoc
         self.trans_size = trans_size
         self.dest = dest
+        self.sp = sp
         #print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
@@ -428,15 +429,16 @@ class WatchMarks():
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         dm = DataMark(addr, start, length, None, trans_size, self.lgr, modify=True)
         self.addWatchMark(dm)
-        self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+        #self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
     def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        wm = None
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
-            self.addWatchMark(dm)
-            self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
+            wm = self.addWatchMark(dm)
+            #self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         if ad_hoc:
             if len(self.mark_list) > 0:
@@ -448,9 +450,11 @@ class WatchMarks():
                     self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    self.lgr.debug('watchMarks create new ad hoc data mark for 0x%x, ref buffer start 0x%x, len %d dest 0x%x' % (addr, start, length, dest))
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest)
-                    self.addWatchMark(dm)
+                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
+                    #      start, length, dest, trans_size))
+                    sp, base = self.getStackBase(dest)
+                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, base=base, sp=sp)
+                    wm = self.addWatchMark(dm)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
         else:
@@ -465,9 +469,10 @@ class WatchMarks():
                     #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
                     dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
-                    self.addWatchMark(dm)
+                    wm = self.addWatchMark(dm)
                     self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
+        return wm
 
     def getMarkFromIndex(self, index):
         if index < len(self.mark_list):
