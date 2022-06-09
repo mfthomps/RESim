@@ -429,7 +429,8 @@ class WatchMarks():
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         dm = DataMark(addr, start, length, None, trans_size, self.lgr, modify=True)
         self.addWatchMark(dm)
-        #self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+        ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
+        self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
     def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -438,7 +439,8 @@ class WatchMarks():
         if ip not in self.prev_ip and not ad_hoc:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
             wm = self.addWatchMark(dm)
-            #self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
+            ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
+            self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         if ad_hoc:
             if len(self.mark_list) > 0:

@@ -3588,6 +3588,8 @@ class GenMonitor():
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False):
+        ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
+            e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if 'coverage/id' in dfile:
