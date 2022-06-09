@@ -916,8 +916,8 @@ class GenMonitor():
         #addr = cur_task_rec+self.param.ts_group_leader
         #val = self.mem_utils.readPtr(cpu, addr)
         #print('current task 0x%x gl_addr 0x%x group_leader 0x%s' % (cur_task_rec, addr, val))
-        print('cpu.name is %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpl, pid, 
-               comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
+        print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpu.current_context, 
+               cpl, pid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
         pfamily = self.pfamily[self.target].getPfamily()
         tabs = ''
         while len(pfamily) > 0:
@@ -1470,6 +1470,7 @@ class GenMonitor():
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
 
     def goToDebugBookmark(self, mark):
+        context_was_watching = self.context_manager[self.target].watchingThis()
         self.lgr.debug('goToDebugBookmark %s' % mark)
         self.removeDebugBreaks()
         self.stopTrackIO()
@@ -1487,6 +1488,8 @@ class GenMonitor():
         self.context_manager[self.target].setIdaMessage(msg)
         self.restoreDebugBreaks(was_watching=True)
         self.context_manager[self.target].watchTasks()
+        if not context_was_watching:
+            self.context_manager[self.target].setAllHap()
 
     def showCallTraces(self):
         for call in self.call_traces[self.target]:
@@ -1506,6 +1509,15 @@ class GenMonitor():
 
     def getBookmarksInstance(self):
         return self.bookmarks
+
+    def getBookmarksJson(self):
+        the_json = self.bookmarks.getBookmarksJson()
+        sorted_list = sorted(the_json)
+        sorted_json = []
+        for delta in sorted_list:
+            the_json[delta]['rel_cycle'] = delta
+            sorted_json.append(the_json[delta])
+        print(json.dumps(sorted_json))
 
     def doReverse(self, extra_back=0):
         if self.reverseEnabled():
@@ -3368,17 +3380,23 @@ class GenMonitor():
             self.lgr.debug('error %s' % str(e))
 
     def goToDataMark(self, index):
+        was_watching = self.context_manager[self.target].watchingThis()
         self.lgr.debug('goToDataMark(%d)' % index)
         self.stopTrackIO()
         cycle = self.dataWatch[self.target].goToMark(index)
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
+            if not was_watching:
+                self.context_manager[self.target].setAllHap()
         return cycle
 
     def goToWriteMark(self, index):
+        was_watching = self.context_manager[self.target].watchingThis()
         cycle = self.trackFunction[self.target].goToMark(index)
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
+            if not was_watching:
+                self.context_manager[self.target].setAllHap()
         return cycle
 
     def goToBasicBlock(self, addr):
@@ -4344,9 +4362,14 @@ class GenMonitor():
         self.lgr.debug('userBreakHap')
         self.stopAndGo(self.stopTrackIO) 
 
-    def doBreak(self, addr, count=1):
+    def doBreak(self, addr, count=1, run=False):
         ''' Set a breakpoint and optional count and stop when it is reached.  The stopTrack function will be invoked.'''
         self.user_break = userBreak.UserBreak(self, addr, count, self.context_manager[self.target], self.lgr)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.lgr.debug('doBreak context %s' % cpu.current_context)
+        if run:
+            SIM_run_command('r')
+
     def delUserBreak(self):
         self.user_break = None
 
