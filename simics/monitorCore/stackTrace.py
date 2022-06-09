@@ -362,6 +362,9 @@ class StackTrace():
             if bp == 0 and len(self.frames)>1:
                 break
             pushed_bp = self.mem_utils.readPtr(self.cpu, bp)
+            if pushed_bp == bp:
+                self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
+                break
             ret_to_addr = bp + self.mem_utils.WORD_SIZE
             ret_to = self.mem_utils.readPtr(self.cpu, ret_to_addr)
             if ret_to is None:
