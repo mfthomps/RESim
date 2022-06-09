@@ -598,14 +598,16 @@ class GenContextMgr():
 
     def delPidRecAlone(self, pid):
         RES_delete_breakpoint(self.task_rec_bp[pid])
-        self.lgr.debug('contextManger rmTask pid %d' % pid)
+        self.lgr.debug('contextManger delPidRecAlone rmTask pid %d' % pid)
         if pid in self.task_rec_hap and self.task_rec_hap[pid] is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
         del self.task_rec_bp[pid]
         del self.task_rec_hap[pid]
         del self.task_rec_watch[pid]
+
     def rmTask(self, pid, killed=False):
         ''' remove a pid from the list of task records being watched.  return True if this is the last thread. '''
+        #self.lgr.debug('contextManager rmTask pid %d' % pid)
         retval = False
         rec = self.task_utils.getRecAddrForPid(pid)
         if rec is None and killed:
@@ -620,8 +622,7 @@ class GenContextMgr():
             #self.lgr.debug('rmTask removing rec 0x%x for pid %d, len now %d' % (rec, pid, len(self.watch_rec_list)))
             if pid in self.pid_cache:
                 self.pid_cache.remove(pid)
-                self.lgr.debug('rmTask remove %d from cache, cache now %s' % (pid, str(self.pid_cache)))
-            
+                #self.lgr.debug('rmTask remove %d from cache, cache now %s' % (pid, str(self.pid_cache)))
             if pid in self.task_rec_bp and self.task_rec_bp[pid] is not None:
                 self.delPidRecAlone(pid)
             if len(self.watch_rec_list) == 0:
@@ -630,7 +631,7 @@ class GenContextMgr():
                
                 if len(self.pending_watch_pids) > 0:
                     self.debugging_pid = self.pending_watch_pids[0]
-                    self.lgr.debug('contextManager rmTask, list empty but found pending watch pid %d, make it the debug pid' % self.debugging_pid)
+                    #self.lgr.debug('contextManager rmTask, list empty but found pending watch pid %d, make it the debug pid' % self.debugging_pid)
                 else:
                     #self.debugging_comm = None
                     #self.debugging_cell = None
@@ -639,13 +640,13 @@ class GenContextMgr():
                         comm_pids = self.task_utils.getPidsForComm(comm) 
                         pids.extend(comm_pids)
                     if len(pids) == 0 or (len(pids)==1 and pids[0]==pid):
-                        self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
-                        self.cpu.current_context = self.default_context
-                        self.stopWatchTasks()
+                        #self.lgr.debug('contextManager rmTask watch_rec_list empty, clear debugging_pid')
+                        SIM_run_alone(self.restoreDefaultContext, None)
+                        #self.cpu.current_context = self.default_context
                         retval = True
                     else:
                         ''' TBD fix to handle multiple comms '''
-                        self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d pids was %s' % (str(self.debugging_comm), pids[-1], str(pids)))
+                        #self.lgr.debug('contextManager rmTask, still pids for comm %s, was fork? set dbg pid to %d pids was %s' % (str(self.debugging_comm), pids[-1], str(pids)))
                         if self.top.swapSOPid(pid, pids[-1]):
                             ''' replace SOMap pid with new one from fork '''
                             self.lgr.debug('Adding task %d and setting debugging pid' % pids[-1])
@@ -653,8 +654,10 @@ class GenContextMgr():
                             self.debugging_pid = pids[-1]
                         else:
                             ''' TBD poor hueristic for deciding it was not a fork '''
-                            self.cpu.current_context = self.default_context
-                            self.stopWatchTasks()
+                            #self.cpu.current_context = self.default_context
+                            SIM_run_alone(self.restoreDefaultContext, None)
+                            #self.stopWatchTasks()
+                            SIM_run_alone(self.stopWatchTasksAlone, None)
                             retval = True
             elif pid == self.debugging_pid:
                 self.debugging_pid = self.pid_cache[0]
@@ -703,11 +706,11 @@ class GenContextMgr():
         else:
             return False
 
-    def restoreDefaultContext(self):
+    def restoreDefaultContext(self, dumb=None):
         self.cpu.current_context = self.default_context
         #self.lgr.debug('contextManager restoreDefaultContext')
 
-    def restoreDebugContext(self):
+    def restoreDebugContext(self, dumb=None):
         self.cpu.current_context = self.resim_context
         #self.lgr.debug('contextManager restoreDebugContext')
 
@@ -725,7 +728,7 @@ class GenContextMgr():
     def stopWatchPidAlone(self, pid):
         if pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
-                #self.lgr.debug('stopWatchPid delete bp %d' % self.task_rec_bp[pid])
+                self.lgr.debug('stopWatchPid delete bp %d' % self.task_rec_bp[pid])
                 RES_delete_breakpoint(self.task_rec_bp[pid])
                 RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[pid])        
             del self.task_rec_bp[pid]
@@ -738,7 +741,7 @@ class GenContextMgr():
             SIM_run_alone(self.clearAllHap, False)
             self.watching_tasks = False
             self.restoreDefaultContext() 
-            self.lgr.debug('No longer watching pid %d' % pid)
+            self.lgr.debug('genContextManager No longer watching pid %d' % pid)
         
     def stopWatchTasks(self):
         self.stopWatchTasksAlone(None)
