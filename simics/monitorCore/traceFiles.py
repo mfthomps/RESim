@@ -66,6 +66,7 @@ class TraceFiles():
 
     def write(self, pid, fd, the_bytes):
         stripped = self.nonull(the_bytes)
+        did_write = False
         if self.traceProcs is not None and len(self.path_list) > 0:
             fname = self.traceProcs.getFileName(pid, fd)
             self.lgr.debug('TraceFiles write got fname %s' % fname)
@@ -78,9 +79,9 @@ class TraceFiles():
                     fh.flush()
                     if self.dataWatch is not None:
                         self.dataWatch.markLog(s, fname)
+                    did_write = True
         
-                 
-        elif fd in self.open_files:
+        if not did_write and fd in self.open_files:
             ''' tracing fd '''
             with open(self.open_files[fd].outfile, 'a') as fh:
                 s = ''.join(map(chr,stripped))
