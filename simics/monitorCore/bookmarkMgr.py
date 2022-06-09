@@ -24,6 +24,8 @@
 '''
 '''
 Manage bookmarks.  the __bookmarks key is the text of the bookmark
+
+Transitioning to json...
 '''
 from simics import *
 import cli
@@ -53,6 +55,7 @@ class bookmarkMgr():
         self.lgr = lgr
         self.track_num = 0
         self.ida_funs = None
+        self.mark_json = {}
 
     def setTrackNum(self):
         self.track_num += 1
@@ -67,6 +70,7 @@ class bookmarkMgr():
         self.__kernel_marks = []
         self.__back_marks = {}
         self.__mark_msg = {}
+        self.mark_json = {}
 
     def hasBookmarkDelta(self, delta):
         for mark in self.__bookmarks:
@@ -99,6 +103,8 @@ class bookmarkMgr():
         if eip is None: 
             eip = self.top.getEIP(cpu)
 
+        delta = 0
+        fun = None
         if not mark.startswith('origin'):
             start_cycle = self.getCycle('origin')
             if start_cycle is None:
@@ -131,6 +137,17 @@ class bookmarkMgr():
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         if not mark.startswith('protected_memory'):
             self.lgr.debug('setDebugBookmark %s cycle on %s is %x step:0x%x eip: %x %s' % (mark, cell_name, current, steps, eip, instruct[1]))
+        self.mark_json[delta] = {}
+        self.mark_json[delta]['mark'] = mark
+        self.mark_json[delta]['msg'] = msg
+        self.mark_json[delta]['cycle'] = current
+        self.mark_json[delta]['ip'] = eip
+        self.mark_json[delta]['instruct'] = instruct[1]
+        pid = self.top.getPID()
+        self.mark_json[delta]['pid'] = pid
+        if fun is not None:
+            self.mark_json[delta]['fun'] = fun
+
         self.lgr.debug('setDebugBookmark return')
         return mark
 
@@ -353,6 +370,13 @@ class bookmarkMgr():
         if im is not None and '[' in im:
             self.__origin_bookmark = im[im.find('[')+1:im.find(']')]        
         self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu=cpu, msg=msg)
+        self.mark_json[0] = {}
+        self.mark_json[0]['mark'] = 'origin'
+        self.mark_json[0]['cycle'] = cpu.cycles
+        eip = self.top.getEIP(cpu)
+        pid = self.top.getPID()
+        self.mark_json[0]['ip'] = eip
+        self.mark_json[0]['pid'] = pid
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:
@@ -389,3 +413,6 @@ class bookmarkMgr():
                 retval =  int(addr_str, 16)
                 break
         return retval 
+
+    def getBookmarksJson(self):
+        return self.mark_json
