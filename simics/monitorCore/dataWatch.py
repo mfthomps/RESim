@@ -11,6 +11,7 @@ import memUtils
 import watchMarks
 import backStop
 import resimUtils
+import readLibTrack
 import net
 import os
 import sys
@@ -60,6 +61,7 @@ class DataWatch():
         self.compat32 = compat32
         self.page_size = page_size
         self.back_stop = back_stop
+        self.finish_check_move_hap = None
         self.watchMarks = watchMarks.WatchMarks(top, mem_utils, cpu, cell_name, run_from_snap, lgr)
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
         if back_stop_string is None:
@@ -76,6 +78,8 @@ class DataWatch():
             self.decode = decodeArm
         else:
             self.decode = decode
+        self.readLib = readLibTrack.ReadLibTrack(cpu, self.mem_utils, 
+                  self.context_manager, self, self.top, self.lgr)
 
         self.resetState()
 
@@ -195,24 +199,28 @@ class DataWatch():
                         retval = True
         return retval
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None, fd=None):
+    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, watch_mark=None, fd=None, is_lib=False):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
         if self.disabled:
             return
+        if fd is not None and self.readLib is not None and self.readLib.inFun():
+            ''' Within a read lib, ignore '''
+            return
+
         if max_len is None:
             my_len = length
         else:
             # TBD intent to handle applications that reference old buffer data, i.e., past the end of the read count, but what if 
-            # read lenghth is huge?
+            # read length is huge?
             if max_len > 1500:
                 self.lgr.warning('dataWatch setRange large length given %d, setting len of buffer to what we got %s' % (max_len, length)) 
                 my_len = length
             else:
                 my_len = max_len
 
-        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
-        #       my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
+        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
+               my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
         if fd is not None:
             self.total_read = self.total_read + length
             if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
@@ -273,7 +281,7 @@ class DataWatch():
                     pass
                     self.lgr.debug('DataWatch setRange stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
-            self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
+            #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
         if msg is not None:
             if sys.version_info[0] >= 3:
                 fixed = msg
@@ -282,7 +290,7 @@ class DataWatch():
             # TBD why max_len and not count???
             if recv_addr is None:
                 recv_addr = start
-            self.watchMarks.markCall(fixed, max_len, recv_addr, length, fd=fd)
+            self.watchMarks.markCall(fixed, max_len, recv_addr, length, fd=fd, is_lib=is_lib)
             if self.prev_cycle is None:
                 ''' first data read, start data session if doing coverage '''
                 self.top.startDataSessions()
@@ -1212,35 +1220,75 @@ class DataWatch():
             self.addr = addr 
             self.op_type = op_type 
 
-    def checkMove(self, addr, length, eip, instruct):
+    def finishCheckMoveHap(self, move_stuff, an_object, breakpoint, memory):
+        ''' Hap invoked when we reach the end of a canidate ad hoc move '''
+        if self.finish_check_move_hap is None:
+            return
+        dest_addr = self.decode.getAddressFromOperand(self.cpu, move_stuff.op1, self.lgr)
+        ad_hoc = False
+        if dest_addr != move_stuff.addr:
+            self.lgr.debug('dataWatch finishCheckMoveHap might add address 0x%x' % dest_addr)
+            existing_index = self.findRangeIndex(dest_addr)
+            if existing_index is None:
+                ''' TBD may miss some add hocs? not likely '''
+                self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
+                self.last_ad_hoc=dest_addr
+                ad_hoc = True
+        else:
+            self.lgr.debug('dest is same as addr')
+
+        if ad_hoc:
+            wm = self.watchMarks.dataRead(move_stuff.addr, move_stuff.start, move_stuff.length, 
+                     self.getCmp(), move_stuff.trans_size, ad_hoc=True, dest=self.last_ad_hoc)
+            self.setRange(dest_addr, move_stuff.trans_size, watch_mark=wm)
+            self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (move_stuff.addr, ad_hoc, dest_addr))
+            self.setBreakRange()
+        else:
+            self.lgr.debug('dataWatch finishCheckMove, not ad_hoc addr 0x%x  ad_hoc %r' % (move_stuff.addr, ad_hoc))
+            self.watchMarks.dataRead(move_stuff.addr, move_stuff.start, move_stuff.length, self.getCmp(), move_stuff.trans_size)
+        self.context_manager.genDeleteHap(self.finish_check_move_hap)
+        self.finish_check_move_hap = None
+
+
+    class CheckMoveStuff():
+        def __init__(self, addr, trans_size, start, length, op1):
+            self.addr = addr
+            self.trans_size = trans_size
+            self.start = start
+            self.length = length
+            self.op1 = op1
+
+    def checkMove(self, addr, trans_size, start, length, eip, instruct):
         ''' Does this look like a move from memA=>reg=>memB ? '''
         ''' If so, return dest '''
         retval = None
         if instruct[1].startswith('mov'):
             op2, op1 = self.decode.getOperands(instruct[1])
             if self.decode.isReg(op1):
-                #self.lgr.debug('dataWatch checkMove is mov to reg %s' % op1)
+                #self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
                 our_reg = op1
                 next_ip = eip
                 next_instruct = instruct
                 for i in range(5):
                     next_ip = next_ip + next_instruct[0]
                     next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                    if decode.isBranch(self.cpu, next_instruct[1]):
+                        break
                     op2, op1 = self.decode.getOperands(next_instruct[1])
-                    #self.lgr.debug('datawatch checkMove, inst is %s' % next_instruct[1])
+                    #self.lgr.debug('datawatch checkMove, next inst at 0x%x is %s' % (next_ip, next_instruct[1]))
                     if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and op2 in our_reg:
                         #self.lgr.debug('dataWatch checkMove, maybe op1 is %s' % op1)
                         dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                        #self.lgr.debug('dest addr found to be %s' % str(dest_addr))
                         if dest_addr is not None:
-                            if dest_addr != addr:
-                                #self.lgr.debug('dataWatch checkMove might add address 0x%x' % dest_addr)
-                                existing_index = self.findRangeIndex(dest_addr)
-                                if existing_index is None:
-                                    ''' TBD may miss some add hocs? not likely '''
-                                    #self.lgr.debug('dataWatch checkMove will add address 0x%x' % dest_addr)
-                                    self.last_ad_hoc=dest_addr
-                                    retval = dest_addr
-                            break
+                            break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
+                            move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, op1)
+                            self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                                     self.finishCheckMoveHap, move_stuff, break_num, 'checkMove')
+                        else:
+                            #self.lgr.debug('dataWatch checkMove, not a dest addr, addr 0x%x  not ad hoc' % (addr))
+                            self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
+                        break
         return retval
                     
     def finishReadHap(self, op_type, trans_size, eip, addr, length, start, pid, index=None):
@@ -1252,7 +1300,7 @@ class DataWatch():
             if cpl == 0:
                 #if not self.break_simulation:
                 #    self.stopWatch()
-                self.lgr.debug('dataWatch finishReadHap, read in kernel, set kernelReturn hap')
+                #self.lgr.debug('dataWatch finishReadHap, read in kernel, set kernelReturn hap')
                 #self.return_hap = 'eh'
                 SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
                 return
@@ -1272,16 +1320,7 @@ class DataWatch():
                     self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
                 else: 
                     ad_hoc = False
-                    dest_addr = self.checkMove(addr, trans_size, eip, instruct)
-                    if dest_addr is not None:
-                        ad_hoc = True
-                        wm = self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size, ad_hoc=True, dest=self.last_ad_hoc)
-                        self.setRange(dest_addr, trans_size, watch_mark=wm)
-                        self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r, dest 0x%x' % (addr, ad_hoc, dest_addr))
-                        self.setBreakRange()
-                    else:
-                        self.lgr.debug('call dataRead addr 0x%x  ad_hoc %r' % (addr, ad_hoc))
-                        self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
+                    self.checkMove(addr, trans_size, start, length, eip, instruct)
                 if self.break_simulation:
                     SIM_break_simulation('DataWatch read data')
 
@@ -1322,7 +1361,7 @@ class DataWatch():
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
             return
-        #self.lgr.debug('dataWatch readHap marks: %s max: %s' % (str(self.watchMarks.markCount()), str(self.max_marks)))
+        #self.lgr.debug('dataWatch readHap addr: 0x%x marks: %s max: %s' % (memory.logical_address, str(self.watchMarks.markCount()), str(self.max_marks)))
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
             self.stopWatch()
@@ -1344,12 +1383,6 @@ class DataWatch():
                     self.top.quit()
                 self.stopWatch()
                 return
-        #break_handle = self.context_manager.getBreakHandle(breakpoint)
-        #self.lgr.debug('readHap eip: 0x%x addr: 0x%x index: %d breakpoint: %d op_tpye: %s bytes: %d cycle: 0x%x' % (eip, addr, index, breakpoint, str(op_type), 
-        #    memory.size, self.cpu.cycles))
-        #if addr == 0xb5f70686:
-        #    SIM_break_simulation('wet')
-        #return
         ''' watched data has been read (or written) '''
         if self.prev_cycle is None:
             ''' first data read, start data session if doing coverage '''
@@ -1364,14 +1397,26 @@ class DataWatch():
                 ''' we just added this add hoc data move, but had not yet executed the instruction '''
                 return
         self.prev_cycle = self.cpu.cycles
-        if op_type != Sim_Trans_Load and addr in self.no_backstop:
-            self.start[index] = 0
-            self.lgr.debug('watchData readHap modified no_backstop memory, remove from watch list')
-            if index < len(self.read_hap):
-                if self.read_hap[index] is not None:
-                    self.lgr.debug('dataWatch readHap  delete hap %d' % self.read_hap[index])
-                    self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
-                    self.read_hap[index] = None
+        if op_type != Sim_Trans_Load:
+            remove_watch = False
+            if addr in self.no_backstop:
+                remove_watch = True
+            elif memory.size == self.length[index]:
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                if self.decode.isDirectMove(instruct[1]):
+                    self.lgr.debug('dataWatch readHap direct move into watch, remove it')
+                    remove_watch = True
+            if remove_watch:
+                self.start[index] = 0
+                self.lgr.debug('watchData readHap modified no_backstop memory, remove from watch list')
+                if index < len(self.read_hap):
+                    if self.read_hap[index] is not None:
+                        self.lgr.debug('dataWatch readHap  delete hap %d' % self.read_hap[index])
+                        self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                        self.read_hap[index] = None
+            return
+
+        ''' NOT RETURNS above '''
 
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
 
@@ -1759,6 +1804,8 @@ class DataWatch():
         self.disabled = False
         report_backstop = not quiet
         self.back_stop.reportBackstop(report_backstop)
+        ida_funs = self.top.getIdaFuns()
+        self.readLib.trackReadLib(ida_funs)
 
     def firstBufferAddress(self):
         return self.watchMarks.firstBufferAddress()
@@ -2013,3 +2060,4 @@ class DataWatch():
     def markLog(self, s, prefix):
         self.lgr.debug('dataWatch markLog')
         self.watchMarks.logMark(s, prefix)
+
