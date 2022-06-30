@@ -71,7 +71,7 @@ class PageFaultGen():
     def pdirWriteHap(self, prec, third, forth, memory):
         pdir_entry = SIM_get_mem_op_value_le(memory)
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('ppageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
+        self.lgr.debug('pageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
             #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
@@ -79,7 +79,10 @@ class PageFaultGen():
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
             self.pdir_hap = None
-            self.rmExit(pid)
+            if pdir_entry != 0xff:
+                self.rmExit(pid)
+            else:
+                self.lgr.debug('pageFaultGen pdirWriteHap assuming entry of 0xff implies a segv')
 
     def watchPdir(self, pdir_addr, prec):
         pcell = self.cpu.physical_memory
