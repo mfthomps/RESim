@@ -3387,7 +3387,7 @@ class GenMonitor():
             if self.page_faults[self.target].hasPendingPageFault(pid):
                 comm = self.task_utils[self.target].getCommFromPid(pid)
                 print('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
-                self.lgr.debug('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+                self.lgr.debug('stopTrackIO Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
         if 'runToIO' in self.call_traces[self.target]:
             self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
             

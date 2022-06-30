@@ -935,6 +935,7 @@ class GenContextMgr():
             self.clearExitBreaks()
             self.lgr.debug('contextManager deadParrot pid:%d rec no longer found removed task' % (pid))
         if self.exit_callback is not None:
+            self.lgr.debug('contextManager deadParrot do exit_callback')
             self.exit_callback()
         self.task_utils.setExitPid(pid)
         print('Process %d exited.' % pid)
