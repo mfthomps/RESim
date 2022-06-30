@@ -1671,7 +1671,7 @@ class Syscall():
                #self.lgr.debug('syscallHap not in record_fd list: %s' % callname)
                return
            syscall_instance = self.top.getSyscall(self.cell_name, callname) 
-           if syscall_instance != self and syscall_instance.isBackground() == self.isBackground() and callname != 'exit_group' and syscall_instance.getContext() == self.cell:
+           if syscall_instance is not None and syscall_instance != self and syscall_instance.isBackground() == self.isBackground() and callname != 'exit_group' and syscall_instance.getContext() == self.cell:
                #self.lgr.debug(str(syscall_instance))
                #self.lgr.debug(str(self))
                self.lgr.debug('syscallHap tracing all pid %d callnum %d name %s found more specific syscall hap, so ignore this one' % (pid, callnum, callname))
