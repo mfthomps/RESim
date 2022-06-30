@@ -4,7 +4,7 @@ import json
 import os
 import sys
 class CallMark():
-    def __init__(self, msg, max_len, recv_addr, length, fd):
+    def __init__(self, msg, max_len, recv_addr, length, fd, is_lib=False):
         if recv_addr is not None:
             if max_len is not None:
                 self.msg = '%s addr: 0x%x  length: %d max_len: %d' % (msg, recv_addr, length, max_len)
@@ -17,6 +17,7 @@ class CallMark():
         self.recv_addr = recv_addr
         self.len = length
         self.fd = fd
+        self.is_lib = is_lib
     def getMsg(self):
         return self.msg
 
@@ -405,9 +406,9 @@ class WatchMarks():
         if len(self.prev_ip) > 4:
             self.prev_ip.pop(0)
 
-    def markCall(self, msg, max_len, recv_addr=None, length=None, fd=None):
+    def markCall(self, msg, max_len, recv_addr=None, length=None, fd=None, is_lib=False):
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cm = CallMark(msg, max_len, recv_addr, length, fd)
+        cm = CallMark(msg, max_len, recv_addr, length, fd, is_lib=is_lib)
         cycles = self.cpu.cycles
         self.addWatchMark(cm, cycles=cycles)
         if recv_addr is None:
@@ -492,7 +493,10 @@ class WatchMarks():
     def isCall(self, index):
         self.lgr.debug('watchMarks isCall type of index %d is %s' % (index, type(self.mark_list[index].mark)))
         if isinstance(self.mark_list[index].mark, CallMark):
-            return True
+            if self.mark_list[index].mark.is_lib:
+                return False
+            else:
+                return True
         else:
             return False
 
