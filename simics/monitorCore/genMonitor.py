@@ -333,10 +333,17 @@ class GenMonitor():
             cpu = self.cell_config.cpuFromCell(cell_name)
             self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
             self.traceMgr[cell_name] = traceMgr.TraceMgr(self.lgr)
-
+            if 'RESIM_UNISTD' not in comp_dict[cell_name]:
+                print('Target is missing RESIM_UNISTD path')
+                self.quit()
+                return
             self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
             if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                 self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
+            if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
+                print('Target missing RESIM_ROOT_PREFIX path')
+                self.quit()
+                return;
             root_prefix = comp_dict[cell_name]['RESIM_ROOT_PREFIX']
             self.targetFS[cell_name] = targetFS.TargetFS(root_prefix)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
@@ -768,6 +775,57 @@ class GenMonitor():
                          call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
             else:
                 print('pid: %d in user space?' % pid)
+
+    def getThreads(self):
+        ''' Return a json rep of tasksDBG '''
+        plist = {}
+        pid_list = self.context_manager[self.target].getThreadPids()
+        tasks = self.task_utils[self.target].getTaskStructs()
+        self.lgr.debug('getThreads, pid_list is %s' % str(pid_list))
+        plist = {}
+        for t in tasks:
+            if tasks[t].pid in pid_list:
+                plist[tasks[t].pid] = t 
+        retval = []
+        for pid in sorted(plist):
+            pid_state = {} 
+            pid_state['pid'] = pid
+            t = plist[pid]
+            if tasks[t].state > 0:
+                frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
+                if frame is None:
+                    #print('frame for %d was none' % pid)
+                    continue
+                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+                if call == 'socketcall' or call.upper() in net.callname:
+                    if 'ss' in frame:
+                        ss = frame['ss']
+                        socket_callnum = frame['param1']
+                        socket_callname = net.callname[socket_callnum].lower()
+                        pid_state['call'] = socket_callname
+                        pid_state['fd'] = ss.fd
+                        pid_state['sp'] = frame['sp']
+                        pid_state['pc'] = frame['pc']
+                        pid_state['cycles'] = cycles
+                        pid_state['state'] = tasks[t].state
+                        #print('pid: %d syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
+                        #     call, socket_callname, ss.fd, tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
+                    else:
+                        print('pid: %d socketcall but no ss in frame?' % pid)
+                else:
+                    #print('pid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (pid, 
+                    #     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
+                    pid_state['call'] = call
+                    pid_state['param1'] = frame['param1']
+                    pid_state['sp'] = frame['sp']
+                    pid_state['pc'] = frame['pc']
+                    pid_state['cycles'] = cycles
+                    pid_state['state'] = tasks[t].state
+            else:
+                pid_state['call'] = None
+                #print('pid: %d in user space?' % pid)
+            retval.append(pid_state)
+        print(json.dumps(retval))
 
     def tasks(self):
         self.lgr.debug('tasks')
@@ -2019,10 +2077,10 @@ class GenMonitor():
         if self.target not in self.trace_all:
             self.traceAll()
 
-    def traceFD(self, fd):
+    def traceFD(self, fd, raw=False):
         self.lgr.debug('traceFD %d' % fd)
         outfile = '/tmp/output-fd-%d.log' % fd
-        self.traceFiles[self.target].watchFD(fd, outfile)
+        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw)
 
     def exceptHap(self, cpu, one, exception_number):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -3687,14 +3745,14 @@ class GenMonitor():
         else:
             self.lgr.error('modFunction, no address found for %s' % (fun))
 
-    def trackFunctionWrite(self, fun):
+    def trackFunctionWrite(self, fun, show_compare=False):
         ''' When the given function is entered, begin tracking memory addresses that are written to.
             Stop on exit of the function. '''
         self.lgr.debug('genMonitor trackFunctionWrite %s' % fun)
         pid, cpu = self.context_manager[self.target].getDebugPid() 
 
         read_watch_marks = self.dataWatch[self.target].getWatchMarks()
-        self.trackFunction[self.target].trackFunction(pid, fun, self.ida_funs, read_watch_marks)
+        self.trackFunction[self.target].trackFunction(pid, fun, self.ida_funs, read_watch_marks, show_compare)
 
     def saveMemory(self, addr, size, fname):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -4398,6 +4456,10 @@ class GenMonitor():
     def simicsQuitting(self, one, two):
         print('Simics quitting.')
         self.flushTrace()
+
+    def getIdaFuns(self):
+        return self.ida_funs
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
