@@ -359,6 +359,8 @@ class SharedSyscall():
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
+                if self.traceFiles is not None:
+                    self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                 if byte_array is not None:
                     s = ''.join(map(chr,byte_array))
                 else:
@@ -657,6 +659,8 @@ class SharedSyscall():
                 limit = min(eax, 80)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, limit, exit_info.retval_addr)
+                if self.traceFiles is not None:
+                    self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                 if byte_array is not None:
                     s = ''.join(map(chr,byte_array))
                 else:
