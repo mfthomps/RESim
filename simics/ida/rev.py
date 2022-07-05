@@ -46,6 +46,7 @@ import reHooks
 import dbgHooks
 import ida_dbg
 import menuMod
+import idbHooks
 
 '''
 idaapi.require("idaSIM")
@@ -441,7 +442,7 @@ class RunToConnectHandler(idaapi.action_handler_t):
 
 
 
-def RESimClient():
+def RESimClient(re_hooks, dbg_hooks, idb_hooks):
     #Wait() 
     ida_dbg.wait_for_next_event(idc.WFNE_ANY, -1)
     print('back from dbg wait')
@@ -509,11 +510,18 @@ def RESimClient():
     write_watch.register()
    
     reHooks.register(isim)
-    re_hooks = reHooks.Hooks()
-    re_hooks.hook()
 
-    dbg_hooks = dbgHooks.DBGHooks(isim)
-    dbg_hooks.hook()
+    dbg_hooks.setRESim(isim)
+    idb_hooks.setRESim(isim)
+    #re_hooks = reHooks.Hooks()
+    #re_hooks.hook()
+
+    # force client sync after operations like step into
+    #dbg_hooks = dbgHooks.DBGHooks(isim)
+    #dbg_hooks.hook()
+
+    #idb_hooks = idbHooks.IDBHooks(isim)
+    #idb_hooks.hook()
     
     #form=idaversion.find_widget("IDA View-EIP")
     #idaversion.activate_widget(form, True)

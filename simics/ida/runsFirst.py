@@ -13,6 +13,8 @@ import resetBlocks
 import rev
 import time
 import reHooks
+import idbHooks
+import dbgHooks
 import subprocess
 
 ok = True
@@ -51,6 +53,10 @@ if arg_count > 2:
         print('  clear -- clear block coloring')
         ok = False
 if ok:
+    idb_hooks = idbHooks.IDBHooks()
+    idb_hooks.hook()
+    dbg_hooks = dbgHooks.DBGHooks()
+    dbg_hooks.hook()
     ida_dbg.set_remote_debugger('127.0.0.1', '9123')
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
@@ -59,4 +65,4 @@ if ok:
         ''' Hooks must be set from __main__, or so it seems '''
         re_hooks = reHooks.Hooks()
         re_hooks.hook()
-        rev.RESimClient()
+        rev.RESimClient(re_hooks, dbg_hooks, idb_hooks)
