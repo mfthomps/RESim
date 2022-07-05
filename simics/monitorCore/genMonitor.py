@@ -3386,8 +3386,12 @@ class GenMonitor():
         for pid in thread_pids:
             if self.page_faults[self.target].hasPendingPageFault(pid):
                 comm = self.task_utils[self.target].getCommFromPid(pid)
-                print('Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+                cycle = self.page_faults[self.target].getPendingFaultCycle(pid)
+                print('Pid %d (%s) has pending page fault, may be crashing. Cycle %s' % (pid, comm, cycle))
                 self.lgr.debug('stopTrackIO Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+                leader = self.task_utils[self.target].getGroupLeaderPid(pid)
+                self.page_faults[self.target].handleExit(pid, leader)
+                
         if 'runToIO' in self.call_traces[self.target]:
             self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
             
