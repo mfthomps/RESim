@@ -164,9 +164,9 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
+        self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
-        #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
+        self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, cr2, self.lgr)
         elif pageUtils.isIA32E(cpu):
@@ -536,3 +536,9 @@ class PageFaultGen():
             return True
         else:
             return False
+
+    def getPendingFaultCycle(self, pid):
+        if pid in self.pending_faults:
+            return self.pending_faults[pid].cycles
+        else:
+            return None
