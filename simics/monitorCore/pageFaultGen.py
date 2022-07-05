@@ -150,7 +150,7 @@ class PageFaultGen():
                 data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
                 fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
+                #self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
@@ -164,9 +164,9 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
+        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
-        self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
+        #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, cr2, self.lgr)
         elif pageUtils.isIA32E(cpu):
@@ -403,16 +403,18 @@ class PageFaultGen():
     def skipAlone(self, prec):
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
-        self.lgr.debug('pageFaultGen skipAlone') 
         if self.top.hasBookmarks():
+            self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
                 return
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
-                SIM_run_command('skip-to cycle = 0x%x' % target_cycles)
-                self.lgr.debug('pageFaultGen skipAlone landed in kernel, backed up one') 
+                if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                    return
+                else:
+                    self.lgr.debug('pageFaultGen skipAlone landed in kernel, backed up one to 0x%x' % target_cycles) 
     
             if prec.fsr is not None and prec.fsr == 2:            
                 self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
