@@ -370,7 +370,7 @@ class WatchMarks():
                 i += 1
 
     def showMarks(self, old=False):
-        i = 0
+        i = 1
         if old:
             for mark in self.stale_marks:
                 print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
@@ -378,7 +378,7 @@ class WatchMarks():
             print('Begin active watch marks.')
         elif len(self.stale_marks)>0:
             print('%d stale marks not displayed.  use old=True to see them.' % len(self.stale_marks))
-        i = 0
+        i = 1
         for mark in self.mark_list:
             print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
             i += 1
@@ -478,6 +478,7 @@ class WatchMarks():
         return wm
 
     def getMarkFromIndex(self, index):
+        index = index -1
         if index < len(self.mark_list):
             return self.mark_list[index]
         else:
@@ -491,6 +492,7 @@ class WatchMarks():
         return retval        
 
     def isCall(self, index):
+        index = index -1
         self.lgr.debug('watchMarks isCall type of index %d is %s' % (index, type(self.mark_list[index].mark)))
         if isinstance(self.mark_list[index].mark, CallMark):
             if self.mark_list[index].mark.is_lib:
@@ -501,6 +503,7 @@ class WatchMarks():
             return False
 
     def getIP(self, index):
+        index = index-1
         if index < len(self.mark_list):
             #self.lgr.debug('watchMarks getCycle index %d len %s cycle: 0x%x' % (index, len(self.mark_list), self.mark_list[index].cycle))
             return self.mark_list[index].ip
@@ -508,6 +511,7 @@ class WatchMarks():
             return None
 
     def getCycle(self, index):
+        index = index-1
         if index < len(self.mark_list):
             #self.lgr.debug('watchMarks getCycle index %d len %s cycle: 0x%x' % (index, len(self.mark_list), self.mark_list[index].cycle))
             return self.mark_list[index].cycle
@@ -788,7 +792,7 @@ class WatchMarks():
 
     def firstBufferIndex(self):
         retval = None
-        index = 0
+        index = 1
         for mark in self.mark_list:
            if isinstance(mark.mark, CallMark) and mark.mark.recv_addr is not None:
                self.lgr.debug('watchMarks firstBufferIndex is CallMark addr 0x%x' % mark.mark.recv_addr)
@@ -804,7 +808,7 @@ class WatchMarks():
     def nextWatchMark(self):
         retval = None
         cur_cycle = self.cpu.cycles
-        index = 0
+        index = 1
         for mark in self.mark_list:
             if mark.cycle > cur_cycle:
                 retval = index
