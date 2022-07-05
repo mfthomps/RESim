@@ -220,7 +220,7 @@ def getAddressFromOperand(cpu, operand, lgr):
     if bracketed is not None:
         address = addressFromExpression(cpu, bracketed, lgr)
         if address is not None:
-            lgr.debug('bracketed value was %x' % address)
+            #lgr.debug('bracketed value was %x' % address)
             offset = 0
             if prefix is not None:
                try:
