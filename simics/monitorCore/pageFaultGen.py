@@ -164,7 +164,7 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
+        self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
@@ -409,12 +409,17 @@ class PageFaultGen():
             if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
                 return
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+            if eip != prec.eip:
+                self.lgr.warning('pageFaultGen skipAlone, wrong eip, skip again')
+                if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                    return
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
                 if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
                     return
                 else:
-                    self.lgr.debug('pageFaultGen skipAlone landed in kernel, backed up one to 0x%x' % target_cycles) 
+                    cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+                    self.lgr.debug('pageFaultGen skipAlone landed in kernel 0x%x, backed up one to 0x%x eip:0x%x' % (eip, target_cycles, cur_eip))
     
             if prec.fsr is not None and prec.fsr == 2:            
                 self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
