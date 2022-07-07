@@ -80,6 +80,7 @@ class bookmarkMgr():
         return False
 
     def setBacktrackBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
+        self.lgr.debug('setBacktrackBookmark %s' % mark)
         mark = 'backtrack %d %s' % (self.track_num, mark)
         return self.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=msg)
 
@@ -137,16 +138,20 @@ class bookmarkMgr():
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         if not mark.startswith('protected_memory'):
             self.lgr.debug('setDebugBookmark %s cycle on %s is %x step:0x%x eip: %x %s' % (mark, cell_name, current, steps, eip, instruct[1]))
-        self.mark_json[delta] = {}
-        self.mark_json[delta]['mark'] = mark
-        self.mark_json[delta]['msg'] = msg
-        self.mark_json[delta]['cycle'] = current
-        self.mark_json[delta]['ip'] = eip
-        self.mark_json[delta]['instruct'] = instruct[1]
+        entry = {}
+        entry['mark'] = mark
+        entry['msg'] = msg
+        entry['cycle'] = current
+        entry['ip'] = eip
+        entry['instruct'] = instruct[1]
         pid = self.top.getPID()
-        self.mark_json[delta]['pid'] = pid
+        entry['pid'] = pid
         if fun is not None:
-            self.mark_json[delta]['fun'] = fun
+            entry['fun'] = fun
+        if delta not in self.mark_json:
+            self.mark_json[delta] = []
+
+        self.mark_json[delta].append(entry)
 
         self.lgr.debug('setDebugBookmark return')
         return mark
@@ -230,9 +235,13 @@ class bookmarkMgr():
         retval = []
         d = OrderedDict()
         for mark in self.__bookmarks:
-            d[self.__bookmarks[mark].cycles] = mark
+            cycles = self.__bookmarks[mark].cycles
+            if cycles not in d:
+                d[cycles] = []
+            d[cycles].append(mark)
         for cycle in sorted(d):
-            retval.append(d[cycle])
+            for mark in d[cycle]:
+                retval.append(mark)
             #print('%s 0x%x' % (d[cycle], cycle))
 
         return retval
@@ -370,13 +379,15 @@ class bookmarkMgr():
         if im is not None and '[' in im:
             self.__origin_bookmark = im[im.find('[')+1:im.find(']')]        
         self.__origin_bookmark = self.setDebugBookmark(self.__origin_bookmark, cpu=cpu, msg=msg)
-        self.mark_json[0] = {}
-        self.mark_json[0]['mark'] = 'origin'
-        self.mark_json[0]['cycle'] = cpu.cycles
+        entry = {}
+        entry['mark'] = 'origin'
+        entry['cycle'] = cpu.cycles
         eip = self.top.getEIP(cpu)
         pid = self.top.getPID()
-        self.mark_json[0]['ip'] = eip
-        self.mark_json[0]['pid'] = pid
+        entry['ip'] = eip
+        entry['pid'] = pid
+        self.mark_json[0] = []
+        self.mark_json[0].append(entry)
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:

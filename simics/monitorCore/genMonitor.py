@@ -1573,9 +1573,10 @@ class GenMonitor():
         sorted_list = sorted(the_json)
         sorted_json = []
         for delta in sorted_list:
-            the_json[delta]['rel_cycle'] = delta
-            sorted_json.append(the_json[delta])
-        print(json.dumps(sorted_json))
+            for entry in the_json[delta]:
+                entry['rel_cycle'] = delta
+                sorted_json.append(entry)
+        print(json.dumps(sorted_json, indent=4))
 
     def doReverse(self, extra_back=0):
         if self.reverseEnabled():
