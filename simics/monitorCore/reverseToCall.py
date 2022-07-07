@@ -799,9 +799,6 @@ class reverseToCall():
                         self.followTaint(reg_mod_type)
                 else:
                     if not self.tooFarBack():
-                        eip = self.top.getEIP(self.cpu)
-                        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                        self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                         self.followTaint(reg_mod_type)
                     else:
                         self.lgr.debug('doRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
