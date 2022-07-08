@@ -140,10 +140,12 @@ class StackTrace():
             sp_string = ''
             if verbose:
                 sp_string = ' sp: 0x%x' % frame.sp
-            fun_addr = self.ida_funs.getFun(frame.ip)
-            fun_of_ip = self.ida_funs.getName(fun_addr)
-            if fun_addr is not None:
-                self.lgr.debug('printTrace fun_addr 0x%x  fun_of_ip %s' % (fun_addr, fun_of_ip))
+            fun_of_ip = None
+            if self.ida_funs is not None:
+                fun_addr = self.ida_funs.getFun(frame.ip)
+                fun_of_ip = self.ida_funs.getName(fun_addr)
+                if fun_addr is not None:
+                    self.lgr.debug('printTrace fun_addr 0x%x  fun_of_ip %s' % (fun_addr, fun_of_ip))
             if frame.instruct.startswith(self.callmn):
                 parts = frame.instruct.split()
                 try:
@@ -161,7 +163,10 @@ class StackTrace():
                     #print('nothing for 0x%x' % faddr)
                     print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
             else:
-                print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
+                if fun_of_ip is not None: 
+                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
+                else:
+                    print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
 
     def funFromAddr(self, addr):
         fun = None
