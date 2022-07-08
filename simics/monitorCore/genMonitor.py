@@ -1765,6 +1765,7 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
+        self.lgr.debug('genMonitor watchPageFaults back')
 
     def stopWatchPageFaults(self, pid=None):
         self.lgr.debug('genMonitor stopWatchPageFaults')
@@ -2153,6 +2154,8 @@ class GenMonitor():
         self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         self.sharedSyscall[self.target].setDebugging(False)
         self.stopTrace()
+        if self.target in self.magic_origin:
+            del self.magic_origin[self.target]
 
     def restartDebug(self):
         cmd = 'enable-reverse-execution'
@@ -2298,14 +2301,20 @@ class GenMonitor():
             self.context_manager[self.target].setExitBreaks()
             self.debug_breaks_set = True
             self.watchPageFaults()
+            self.lgr.debug('restoreDebugBreaks back page')
             if self.trace_malloc is not None:
                 self.trace_malloc.setBreaks()
+            self.lgr.debug('restoreDebugBreaks back  malloc')
             if self.injectIOInstance is not None:
                 self.injectIOInstance.setCallHap()
+            self.lgr.debug('restoreDebugBreaks back  inject')
             if self.user_break is not None:
                 self.user_break.doBreak()
+            self.lgr.debug('restoreDebugBreaks back  break')
             if self.target in self.magic_origin:
+                self.lgr.debug('restoreDebugBreaks set magic?')
                 self.magic_origin[self.target].setMagicHap()
+            self.lgr.debug('restoreDebugBreaks return')
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
@@ -3284,6 +3293,11 @@ class GenMonitor():
         print('Target is now: %s' % target)
         self.lgr.debug('Target is now: %s' % target)
 
+    def showTargets(self):
+        print('Targets:')
+        for target in self.context_manager:
+            print('\t'+target)
+
     def reverseEnabled(self):
         # TBD fix this after WR replies to question
         #return True
@@ -3361,6 +3375,9 @@ class GenMonitor():
     def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
+            return
+        if not self.reverseEnabled():
+            print('Reverse execution must be enabled.')
             return
         self.stopTrackIO()
         cpu = self.cell_config.cpuFromCell(self.target)
