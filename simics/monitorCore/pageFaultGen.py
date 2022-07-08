@@ -164,7 +164,7 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
+        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
