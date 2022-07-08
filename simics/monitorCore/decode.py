@@ -215,7 +215,7 @@ def addressFromExpression(cpu, exp, lgr):
 
 def getAddressFromOperand(cpu, operand, lgr):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
-    lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
+    #lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
         address = addressFromExpression(cpu, bracketed, lgr)
@@ -229,14 +229,15 @@ def getAddressFromOperand(cpu, operand, lgr):
                except:
                   try:
                       offset = getSigned(int(prefix, 16))
-                      lgr.debug("adjusting by offset %d" % offset)
+                      #lgr.debug("adjusting by offset %d" % offset)
                       address = address + offset
                   except:
-                      lgr.debug('did not parse offset %s' % prefix)
+                      #lgr.debug('did not parse offset %s' % prefix)
                       pass
 
         else:
-            lgr.debug('could not get reg number from %s' % bracketed)
+            #lgr.debug('could not get reg number from %s' % bracketed)
+            pass
     else:
         pass
         ''' TBDF Where did this come from?
