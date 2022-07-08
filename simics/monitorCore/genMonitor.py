@@ -1732,6 +1732,9 @@ class GenMonitor():
             retval = 'not stopped'
         return retval
 
+    def reMessage(self):
+        self.context_manager[self.target].showIdaMessage()
+
     def idaMessage(self):
         self.context_manager[self.target].showIdaMessage()
 
@@ -2781,7 +2784,8 @@ class GenMonitor():
             retval = ('%s:0x%x-0x%x' % (fname, start, end))
             print(retval)
         else:
-            print('None')
+            #print('None')
+            pass
         return retval
 
     def getSO(self, eip):
@@ -2802,10 +2806,13 @@ class GenMonitor():
                     end = elf_info.address + elf_info.size
                 retval = ('%s:0x%x-0x%x' % (fname, start, end))
             else:
-                print('None')
+                #print('None')
+                pass
         else:
-            print('None')
+            #print('None')
+            pass
         return retval
+
      
     def showSOMap(self, pid=None):
         self.lgr.debug('showSOMap')
@@ -2822,6 +2829,8 @@ class GenMonitor():
         return fname
 
     def showThreads(self):
+        self.tasksDBG()
+        '''
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             self.lgr.error('showThreads debug pid from context manager is none?')
@@ -2833,6 +2842,7 @@ class GenMonitor():
             state = self.mem_utils[self.target].readWord32(cpu, rec)
             self.lgr.debug('thread pid: %d state: 0x%x rec: 0x%x' % (pid, state, rec)) 
             print('thread pid: %d state: 0x%x rec: 0x%x' % (pid, state, rec)) 
+        '''
             
 
     def traceExternal(self):
