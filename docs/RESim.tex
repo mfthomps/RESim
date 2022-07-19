@@ -56,6 +56,8 @@ In most other systems, the debugger or its agent would run on the target, and th
 would cause the kernel to page
 in the memory containing the referenced code.\footnote{See \ref{external} for another example of the implications}.
 
+\includegraphics{resimfig.eps}
+
 \subsection{This Guide}
 The remainer of this introduction provides an overview of RESim features and its limitations and availability.  Following the introduction:
 \begin{itemize}
@@ -115,9 +117,20 @@ See section \ref{divergence} for information on potential divergence of simulati
 \subsection{Development and Availability}
 In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
-Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
-All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}  A fork of the AFL fuzzer integrated with 
-RESim is availabe at: \url{https://github.com/mfthomps/AFL}.
+Simics “OS Awareness” or Eclipse-based interfaces.   
+\begin{itemize}
+\item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
+\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}
+
+\item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
+\url{https://github.com/mfthomps/RESim/simics/ida}  
+
+\item The Ghidra plugins for RESim are available at: \url{https://github.com/mfthomps/RESimGhidraPlugins}  A fork 
+of gdb needed for use with the Ghidra plugin is at \url{https://github.com/mfthomps/binutils-gdb}.
+
+\item A fork of the AFL fuzzer integrated with 
+RESim is available at: \url{https://github.com/mfthomps/AFL}.
+\end{itemize}
 
 
 \section{Notional Workflow}
@@ -141,7 +154,7 @@ in this guide.  The general steps include:
 \subsection{Workspace directories}
 Simics simulations are run from workspace directories prepared using the {\tt resim-ws.sh} command, which creates a Simics workspace within a new empty
 directory and populates it with selected RESim files.  The workspace is where simulation-specific configuration files and scripts are to reside.  Snapshot
-data is also stored withn workspace directories.  You may share snapshots between workspaces by using symbolic links.  
+data is also stored within workspace directories.  You may share snapshots between workspaces by using symbolic links.  
 
 \subsection{Configuration files}
 Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
@@ -183,7 +196,7 @@ further analyzed using the interactive IDA Pro client.  The {\tt traceAll} comma
 system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
 event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
 IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
-and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directiv.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
+and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directive.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
 run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
 see network ports being listened to. 
 
@@ -227,10 +240,11 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 \label{commands}
 \subsection{General display}
 \begin{itemize}
-\item {\tt show} -- Show current process information.
-\item {\tt tasks} -- List currently executing process names and their PIDs.
-\item {\tt tasksDBG} -- List threads of process currently selected for analysis, e.g., via {\tt debugProc}.
-\item {\tt showThreads} - List the thread PIDs of the process being debugged.  TBD merge these? Difference?
+\item {\tt show} -- Show current process information for the currently monitored target.
+\item {\tt tasks} -- List currently executing process names and their PIDs for the currently monitored target.
+\item {\tt showThreads} -- List threads of process currently selected for analysis, e.g., via {\tt debugProc}.
+\item {\tt showTargets} - List the target cells that may be monitored.
+\item {\tt setTarget} -- Set the currently monitored target.
 \end{itemize}
 
 \subsection{Process tracing}
@@ -402,8 +416,7 @@ xmlParseFile and then tracks its access, e.g., via xmlGetParam, adding watch mar
 \item {\tt showWatchMarks(old=False)} Display a list of watch marks created by watchData or trackIO.  Use the {\tt old} flag to view stale watch marks, i.e., 
 those that occurred prior to the origin (which gets reset on each data injection.)
 
-\item {\tt goToDataMark(watch\_mark)}  Skip to the simulation cycle associated with the given {\tt watch\_mark}, which is an index into the list of
-data watch bookmarks generated by {\tt trackIO}.
+\item {\tt goToDataMark(watch\_mark)}  Skip to the simulation cycle associated with the given {\tt watch\_mark}, which is an index into the list of data watch bookmarks generated by {\tt trackIO} or {\tt injectIO}.
 
 \item {\tt getWatchMarks()} Return a json list of watch marks created by watchData or trackIO, used by the IDA client.
 
@@ -514,10 +527,13 @@ Note that the data you provide for prepInject should not include multiple UDP pa
 subsequent data injections.
 
 \item{\tt prepInjectWatch(watchmark, configfile)} -- For use when injecting data directly into kernel buffers.  Similar to prepInject but takes the index of a watch 
-mark that is assumed to be a call to ioctl. Generate the data marks by using trackIO.   Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
-into a kernel buffer, and the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
+mark that can be a call to ioctl, or a call to read/recieve. Generate the data marks by using trackIO.   
+Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
+into a kernel buffer. If the watch mark was an ioctl call, the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
+It is important that received data all appears within the kernel buffer before the application makes its recv call.  Otherwise, injectIO and AFL sessions
+will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command.
 
 \item{\tt fuzz(IOFile} -- Deprecated, AFL trims data itself just fine.  Trim a data file to the minimum needed to not affect coverage. Assume the simulation is at 
 a return from a read (e.g., using prepInject), set basic block coverage and iteratively execute while reducing the
@@ -837,11 +853,51 @@ There are attempts to catch the termination of the process being debugged.  But 
 return to a known state.  
 
 There are situations where it is most productive, or necessary, to enage with the Simics command line directly.  If you change the execution state
-via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.
-For example, if you are debugging a program,
-and run ahead arbitrarily and stop in some other process/kernel context, the IDA breakpoints will not work until you resynch.
+via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.  Or you can double-click a bookmark
+or watch mark.
 
 RESim commands are available in IDA via the Debugger menu item, and via right clicking on addresses.  
+
+Setting IDA breakpoints requires that the current context be within the thread family being debugged.  For example, if execution is currently 
+stopped in some other process, use \textit{Run to user space} to get execution back into the debugged process.  You may then use IDA breakpoints.
+
+The IDA step-over function will usually handle page faults and return you to the point after which the page is swapped in.  If you find yourself in
+the kernel, use \textit{Run to user space}.
+
+
+\subsubsection{RESim IDA windows}
+The IDA plugin creates several tabs along side of the IDA \textit{Stack view} window.  
+\begin{itemize}
+\item Bookmarks -- List of bookmarks created by the user (e.g., via right click), or created automatically when reverse tracking data.
+Double-clicking on a bookmark will skip execution to the associated cycle.
+\item stack trace -- The stack trace, as determined by RESim.  You may need to right-click / refresh to see this.  Double-clicking on a item
+will take the \textit{IDA View-EIP} to that address, but has no effect on the current execution cycle.  Note, your previous focus must be in
+the \textit{IDA View-EIP} window, otherwise you may end up changing the address of a \textit{Hex View} window.
+\item data watch -- List of watch marks generated by a trackIO or injectIO (which would be run from the Simics command line).  
+Use right-click / refresh to view these.  Double-click will skip the execution to the associated cycle.
+\end{itemize}
+
+\subsection{Ghidra}
+A preliminay RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
+See that repo's README for installation instructions.  It is assumed that the user has experience with the Ghidra platform.
+
+Use of the Ghidra plugin requires a modified version of gdb, available at
+\url{https://github.com/mfthomps/binutils-gdb}.  The modification causes
+gdb to display responses from gdb "monitor" commands using the same FD as used
+for other gdb command results.  This is needed for Ghidra to see the results of monitor commands, which the plugin
+uses to interact with RESim.
+
+Once the RESimGhidraPlugins extension is installed, start the debugger and organize the RESim windows
+as desired, e.g., by dragging them to other tabbed windows.
+
+Use the RESim / Configure menu options to set the path to your customized gdb; the path to
+the file system root of the target binary, the host:port of your Simics host, and to set the ARM architecture if needed.
+
+The windows described for the IDA plugin are duplicated within the Ghidra plugin.
+
+TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
+at the tunnel (or do copy as part of creating tunnel?.  
+
 
 \subsection{Dynamic modifications to memory and topology}
 \label{dmod}
@@ -1188,7 +1244,7 @@ created by {\tt injectToBB} at {\tt /tmp/bb.io}.
 \item Use the arch-tars.sh utility (edit to name your archive path) to archive the AFL results and the workspace.
 \end{itemize}
 
-The {\\tt -d} option of {\tt findBNT.py} will annotate its output with any data watch marks found in the BB leading to the BNT.  This option uses watch mark data generated
+The {\tt -d} option of {\tt findBNT.py} will annotate its output with any data watch marks found in the BB leading to the BNT.  This option uses watch mark data generated
 using the {\tt runTrack} utility, which runs injectIO on all of the AFL sessions and records all of the watch marks.  This option can be useful when there are a large number
 of BNTs and you want to prioritize those with a higher likelihood of being affected by inputs.
 
@@ -1604,6 +1660,11 @@ value to {\tt doBreak} so that it breaks just before the divergence.
 
 \subsection{Branches not taken}
 See \ref{BNT} and \ref{BNT-fuzz} for workflows related to finding branches not taken.
+
+\subsection{Packaged example with public images}
+See {\tt RESim/simics/examples/network\_file\_system} for an example use of RESim, including IO tracking and fuzzing.
+The README.md in that directory provides instructions for running the example, and for obtaining the disk images
+and binary files used within the example.
 
 \section{Implementation strategy}
 \label{implementation}
@@ -2295,6 +2356,15 @@ The latter rquires at least two computers in the simulation.
 When TCP data is injected into kernel buffers, the state of the kernel becomes corrupted, thus preventing running forward, e.g., to a new checkpoint.
 In order to change state of the system, revert to a running snapshot and send the crafted data via a driver.  Again, do not try to move a prepInjectWatch
 checkpoint forward.
+
+\subsection{Your target process is not scheduled in the snapshot}
+Consider debugging a service that loads before you want to create a snapshot, e.g., you wish to wait for other processes to start.
+You wish to debug the target's data consumption and you know it will hang on a select or a read. So after debugProc, 
+you run a while without giving it data and then create a snapshot.  When the snapshot
+is restored, your target process is not scheduled, and thus the debugSnap function will appear to hang until you provide data that causes your
+target to be scheduled.  This is expected.
+
+
 \end{appendices}
 \end{document}
 
