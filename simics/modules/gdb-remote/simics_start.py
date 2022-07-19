@@ -1,8 +1,9 @@
+from __future__ import print_function
 # This Software is part of Wind River Simics. The rights to copy, distribute,
 # modify, or otherwise make use of this Software may be licensed only
-# pursuant to the terms of an applicable Wind River license agreement.
+# pursuant to the terms of an applicable license agreement.
 # 
-# Copyright 2010-2017 Intel Corporation
+# Copyright 2010-2019 Intel Corporation
 
 import cli, cli_impl, simics
 
@@ -13,20 +14,20 @@ gdb_archs = {
     'ppce500-mc': 'ppce500',
     'arc600':     'arc600',
     'arc601':     'arc600',
-    'arc601-csm': 'arc600',
     'arc605':     'arc600',
     'arc710':     'arc700',
+    'nios-ii-r2': 'nios2',
     }
 
 def get_gdb_arch(cpu):
-    if gdb_archs.has_key(cpu.classname):
+    if cpu.classname in gdb_archs:
         return gdb_archs[cpu.classname]
     else:
         return cpu.iface.processor_info.architecture()
 
-def get_all_archs(filter = lambda cpu: True):
+def get_all_archs(f = lambda cpu: True):
     return set(get_gdb_arch(cpu)
-               for cpu in simics.SIM_get_all_processors() if filter(cpu))
+               for cpu in simics.SIM_get_all_processors() if f(cpu))
 
 def get_arch(architecture, cpu, context):
     if architecture:
@@ -45,26 +46,24 @@ def get_arch(architecture, cpu, context):
             return arch
     raise cli.CliError('Cannot guess processor architecture; please specify it')
 
-def new_gdb_remote(name, port, cpu, architecture, context):
+def new_gdb_remote(name, port, cpu, architecture, context, no_rcmd):
     if not any([cpu, context]):
-        print "Neither CPU nor context specified; using current processor."
-        try:
-            cpu = cli.current_processor()
-        except Exception, msg:
-            raise cli.CliError(msg)
+        print("Neither CPU nor context specified; using current processor.")
+        cpu = cli.current_cpu_obj()
     name = cli_impl.new_object_name(name, 'gdb')
     attrs = [['processor', cpu],
              ['context_object', context],
              ['listen', port],
              ['architecture', get_arch(architecture, cpu, context)],
-             ['log_level', 2]]
+             ['log_level', 2],
+             ['allow_remote_commands', not no_rcmd],]
     try:
         simics.SIM_create_object("gdb-remote", name, attrs)
-    except LookupError, msg:
-        print "Failed creating a gdb-remote object: %s" % msg
-        print "Make sure the gdb-remote module is available."
-    except Exception, msg:
-        print "Could not create a gdb-remote object: %s" % msg
+    except LookupError as msg:
+        print("Failed creating a gdb-remote object: %s" % msg)
+        print("Make sure the gdb-remote module is available.")
+    except Exception as msg:
+        print("Could not create a gdb-remote object: %s" % msg)
 
 def arch_expander(s): return cli.get_completions(s, get_all_archs())
 
@@ -75,7 +74,8 @@ cli.new_command(
             cli.arg(cli.obj_t('processor', 'processor_info'), 'cpu', '?', None),
             cli.arg(cli.str_t, 'architecture', '?', None,
                     expander = arch_expander),
-            cli.arg(cli.obj_t('context', 'context'), 'context', '?', None)],
+            cli.arg(cli.obj_t('context', 'context'), 'context', '?', None),
+            cli.arg(cli.flag_t, '-disallow-remote-commands')],
     type = ['Symbolic Debugging', 'Debugging'],
     short = 'create a gdb session',
     doc = """
@@ -84,6 +84,9 @@ Starts listening to incoming connection requests from GDB sessions
 TCP/IP requests on the port specified by <arg>port</arg>, or 9123 by
 default. If <arg>port</arg> is set to zero, an arbitrary free port
 will be selected.
+
+The <class>gdb-remote</class> object will get a name assigned
+automatically unless one is specified using <arg>name</arg>.
 
 You can either attach the GDB session to a particular processor, or to
 a particular context object. If you specify a processor (with the
@@ -111,8 +114,12 @@ If not given, the architecture of the specified
 processor will be used, or the architecture of the processor attached
 to the specified context.
 
-In GDB, use the command <b>target remote <i>host</i>:<i>port</i></b> to
-connect to Simics.
+The <tt>-disallow-remote-commands</tt> argument will prevent the client from
+using the <em>monitor</em> command, which sends a <em>qRcmd</em> message, to
+perform any Simics CLI command over the remote connection.
+
+In GDB, use the command <b>target remote <i>host</i>:<i>port</i></b>
+to connect to Simics.
 Upon connection GDB assumes that the simulation is paused. GDB also assumes
 that it has full 'run control' (continue, step, next, etc.) and will be
 confused if simulation also is controlled by other means, such as using Simics

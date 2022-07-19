@@ -1,8 +1,9 @@
+from __future__ import print_function
 # This Software is part of Wind River Simics. The rights to copy, distribute,
 # modify, or otherwise make use of this Software may be licensed only
-# pursuant to the terms of an applicable Wind River license agreement.
+# pursuant to the terms of an applicable license agreement.
 # 
-# Copyright 2010-2017 Intel Corporation
+# Copyright 2010-2019 Intel Corporation
 
 from cli import *
 from simics import *
@@ -16,9 +17,9 @@ new_command("signal", signal_cmd,
             short = "tell remote gdb we got a signal",
             cls = "gdb-remote",
             doc = """
-Send a signal to the remote GDB. See <cite>Chapter 14 - Using Simics with
-GDB of Hindsight User's Guide</cite> for a longer description of gdb-remote.
-""")
+Send a <arg>signal</arg> to the remote GDB. See <cite>Using Simics with
+GDB</cite> in the <cite>Hindsight User's Guide</cite> for a longer description
+of gdb-remote.""")
 
 def disconnect_cmd(obj):
     SIM_set_attribute(obj, "disconnect", 0)
@@ -37,7 +38,7 @@ def target_cmd(obj, cpu):
     if cpu:
         obj.queue = cpu
         obj.context_object = cpu.iface.context_handler.get_current_context()
-    print "Target for %s: %s" % (obj.name, obj.queue)
+    print("Target for %s: %s" % (obj.name, obj.queue))
 
 new_command("target", target_cmd,
             [arg(obj_t('processor', 'processor_info'), "cpu-name", "?")],
@@ -45,21 +46,21 @@ new_command("target", target_cmd,
             short = "set target CPU for gdb connection",
             cls = "gdb-remote",
             doc = """
-Set the target CPU for this remote GDB connection. One GDB connection
-can only debug instructions on a single CPU at a time.
+Set the target processor for the remote GDB connection to <arg>cpu-name</arg>.
+A GDB connection can only debug instructions on a single CPU at a time.
 """)
 
 def follow_context_cmd(gdb, ctxt):
     if ctxt is None:
         if gdb.follow_context:
-            print "Stopped following %s." % gdb.context_object
+            print("Stopped following %s." % gdb.context_object)
             gdb.follow_context = 0
         else:
-            print "Not following any context."
+            print("Not following any context.")
     else:
         gdb.context_object = ctxt
         gdb.follow_context = 1
-        print "Started following %s." % ctxt
+        print("Started following %s." % ctxt)
 
 new_command("follow-context", follow_context_cmd,
             [arg(obj_t('context', 'context'), "context", "?")],

@@ -1,8 +1,8 @@
 /* This Software is part of Wind River Simics. The rights to copy, distribute,
    modify, or otherwise make use of this Software may be licensed only
-   pursuant to the terms of an applicable Wind River license agreement.
+   pursuant to the terms of an applicable license agreement.
 
-   Copyright 2016-2017 Intel Corporation */
+   Copyright 2016-2019 Intel Corporation */
 
 #include "gdb-remote.h"
 
@@ -41,40 +41,6 @@ static const regspec_t regs[] = {
         {64, "aarch64_sp", regclass_i},
         {64, "aarch64_pc", regclass_i},
         {32, "cpsr",       regclass_i},
-        {64, "v0",         regclass_i_opt},
-        {64, "v1",         regclass_i_opt},
-        {64, "v2",         regclass_i_opt},
-        {64, "v3",         regclass_i_opt},
-        {64, "v4",         regclass_i_opt},
-        {64, "v5",         regclass_i_opt},
-        {64, "v6",         regclass_i_opt},
-        {64, "v7",         regclass_i_opt},
-        {64, "v8",         regclass_i_opt},
-        {64, "v9",         regclass_i_opt},
-        {64, "v10",        regclass_i_opt},
-        {64, "v11",        regclass_i_opt},
-        {64, "v12",        regclass_i_opt},
-        {64, "v13",        regclass_i_opt},
-        {64, "v14",        regclass_i_opt},
-        {64, "v15",        regclass_i_opt},
-        {64, "v16",        regclass_i_opt},
-        {64, "v17",        regclass_i_opt},
-        {64, "v18",        regclass_i_opt},
-        {64, "v19",        regclass_i_opt},
-        {64, "v20",        regclass_i_opt},
-        {64, "v21",        regclass_i_opt},
-        {64, "v22",        regclass_i_opt},
-        {64, "v23",        regclass_i_opt},
-        {64, "v24",        regclass_i_opt},
-        {64, "v25",        regclass_i_opt},
-        {64, "v26",        regclass_i_opt},
-        {64, "v27",        regclass_i_opt},
-        {64, "v28",        regclass_i_opt},
-        {64, "v29",        regclass_i_opt},
-        {64, "v30",        regclass_i_opt},
-        {64, "v31",        regclass_i_opt},
-        {32, "fpsr",       regclass_i},
-        {32, "fpcr",       regclass_i},
 };
 
 const gdb_arch_t gdb_arch_aarch64 = {

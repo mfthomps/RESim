@@ -2075,6 +2075,7 @@ class GenMonitor():
             pass
 
     def traceFile(self, path):
+        ''' Create mirror of reads/write to the given file.'''
         self.lgr.debug('traceFile %s' % path)
         outfile = os.path.join('/tmp', os.path.basename(path))
         self.traceFiles[self.target].watchFile(path, outfile)
@@ -2083,6 +2084,7 @@ class GenMonitor():
             self.traceAll()
 
     def traceFD(self, fd, raw=False):
+        ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
         self.lgr.debug('traceFD %d' % fd)
         outfile = '/tmp/output-fd-%d.log' % fd
         self.traceFiles[self.target].watchFD(fd, outfile, raw=raw)
@@ -3478,6 +3480,8 @@ class GenMonitor():
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
             if not was_watching:
                 self.context_manager[self.target].setAllHap()
+        else:
+            print('Index %d does not have an associated data mark.')
         return cycle
 
     def goToWriteMark(self, index):

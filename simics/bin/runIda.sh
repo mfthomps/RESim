@@ -36,7 +36,7 @@ if [ $# -gt 1 ];then
     echo "more than 1"
     remote=$2
     if [ $1 == color ]; then
-       remote_ida=$( ssh $remote "source $HOME/.resimrc;echo \$RESIM_IDA_DATA" )
+       remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$target_base; echo \$RESIM_IDA_DATA" )
        if [ -z "$remote_ida" ];then
            echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
            exit 1 

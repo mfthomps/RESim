@@ -1,8 +1,8 @@
 /* This Software is part of Wind River Simics. The rights to copy, distribute,
    modify, or otherwise make use of this Software may be licensed only
-   pursuant to the terms of an applicable Wind River license agreement.
+   pursuant to the terms of an applicable license agreement.
  
-   Copyright 2010-2017 Intel Corporation */
+   Copyright 2010-2019 Intel Corporation */
 
 #include "gdb-remote.h"
 #include <simics/model-iface/int-register.h>
@@ -147,15 +147,15 @@ struct v9_data {
 static bool
 v9_init(gdb_remote_t *gdb, conf_object_t *cpu)
 {
-        struct v9_data *arch_data = MM_ZALLOC(1, struct v9_data);
-
-        attr_value_t attr = SIM_get_attribute(cpu, "num_windows");
-        if (!SIM_attr_is_integer(attr)) {
+        attr_value_t attr;
+        if (!read_opt_attr(&gdb->obj, cpu, "num_windows", &attr)
+            || !SIM_attr_is_integer(attr)) {
                 SIM_LOG_ERROR(&gdb->obj, 0,
                               "failed reading number of windows from %s",
                               SIM_object_name(cpu));
                 return false;
         }
+        struct v9_data *arch_data = MM_ZALLOC(1, struct v9_data);
         arch_data->nwindows = SIM_attr_integer(attr);
 
         gdb->arch_data = arch_data;

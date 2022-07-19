@@ -83,6 +83,7 @@ $motherboard = (create-motherboard-x58-ich10 $system.mb
         lan_bios = $lan_bios
 	system_clock = $system_clock
 	system_clock_class = $system_clock_class)
+echo "mac addr 0 (motherboard) is "+$mac_address_0
 $southbridge = $motherboard.sb
 $northbridge = $motherboard.nb
 

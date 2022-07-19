@@ -85,14 +85,15 @@ def main():
             #    print('Invalid TCP driver directive: %s' % line)
             #    print('    iofile ip port')
             #    exit(1)
-            elif not args.tcp and len(parts) != 4:
-                print('Invalid driver directive: %s' % line)
-                print('    iofile ip port header')
-                exit(1)
             elif len(parts) == 1:
                 iofile = parts[0].strip()
                 file_list.append(iofile)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
+                os.system(cmd)
+            elif not args.tcp and len(parts) != 4:
+                print('Invalid driver directive: %s' % line)
+                print('    iofile ip port header')
+                exit(1)
             else:
                 iofile = parts[0]
                 file_list.append(iofile)

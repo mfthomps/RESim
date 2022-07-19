@@ -3,9 +3,9 @@
 
   This Software is part of Wind River Simics. The rights to copy, distribute,
   modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable Wind River license agreement.
+  pursuant to the terms of an applicable license agreement.
   
-  Copyright 2010-2017 Intel Corporation
+  Copyright 2010-2019 Intel Corporation
 
 */
 
@@ -113,6 +113,7 @@ gdb_read_hex ## bits ## _be(const char *_p)                              \
         return res;                                                      \
 }
 
+/* coverity[result_independent_of_operands] */
 GDB_IO_HEX(8)
 GDB_IO_HEX(16)
 GDB_IO_HEX(32)
@@ -169,11 +170,14 @@ gdb_write_hex(strbuf_t *buf, uint64 val, bool is_be, int bits)
 }
 
 static int64
-hexstrtol(const char *adr, char **endp)
+hexstrtoll(const char *adr, const char **endp)
 {
         /* this is not entirely correct; an invalid string that starts
            with "0x" will incorrectly be accepted. */
-        return strtoll(adr, endp, 16);
+
+        /* strtoll does not modify **endp (only *endp) and should really have
+           'const char **' as second argument instead. */
+        return strtoll(adr, (char **)endp, 16);
 }
 
 /* Convert a string containing a hex number into a 64 bit unsigned integer.
@@ -331,17 +335,16 @@ find_cpu_for_active_thread(gdb_remote_t *gdb, int64 thread)
         return result;
 }
 
-/* Call SIM_current_processor(), hiding any Simics exception triggered by the
+/* Call VT_get_current_processor(), hiding any Simics exception triggered by the
    call. */
 static conf_object_t *
 simics_current_processor(void)
 {
-        conf_object_t *cpu = SIM_current_processor();
-        return SIM_clear_exception() == SimExc_No_Exception ? cpu : NULL;
+        return VT_get_current_processor();
 }
 
 /* Find an arbitrary processor that is executing in a context we are interested
-   in. If SIM_current_processor() is in the set of such processors, prefer it. */
+   in. If the current processor is in the set of such processors, prefer it. */
 static conf_object_t *
 gdb_current_processor(gdb_remote_t *gdb)
 {
@@ -533,7 +536,7 @@ lookup_address(gdb_remote_t *gdb, conf_object_t *cpu,
                                           la, &error_flag);
                 if (error_flag) {
                         SIM_LOG_INFO(3, &gdb->obj, 0,
-                                     "Failed looking up address %#llx", la);
+                                     "Failed looking up XXX address %#llx", la);
                         return 1;
                 }
         }
@@ -706,6 +709,7 @@ send_memory(gdb_remote_t *gdb, const char *adr)
                 SIM_LOG_INFO(3, &gdb->obj, 0,
                              "Cannot read memory, because process is"
                              " not active");
+                /* coverity[bad_memset] */
                 memset(p, '0', len * 2);
                 p += len * 2;
                 goto done;
@@ -884,9 +888,9 @@ post_continue2(void *data)
                 } else {
                         if (stopped_by_watchpoint(gdb)) {
                                 pc_step_t count =
-                                       SIM_step_count(SIM_current_processor());
+                                       SIM_step_count(VT_get_current_processor_old());
                                 if (count)
-                                        VT_rewind(SIM_current_processor(),
+                                        VT_rewind(VT_get_current_processor_old(),
                                                   count - 1);
                         }
 
@@ -975,9 +979,9 @@ post_reverse2(void *data)
         } else {
                 if (stopped_by_watchpoint(gdb)) {
                         pc_step_t count =
-                                SIM_step_count(SIM_current_processor());
+                                SIM_step_count(VT_get_current_processor_old());
                         if (count)
-                                VT_rewind(SIM_current_processor(), count - 1);
+                                VT_rewind(VT_get_current_processor_old(), count - 1);
                 }
 
                 do_signal(gdb, Sig_trap);
@@ -1215,7 +1219,7 @@ vcont_parse(gdb_remote_t *gdb, const char *buffer, const char *rest,
                 return NULL;
         }
         *(*c_found ? c_thread : s_thread)
-                = (rest[0] == ':' ? hexstrtoull(rest + 1, &rest, true) : -1);
+                = (rest[0] == ':' ? hexstrtoll(rest + 1, &rest) : -1);
         return rest;
 }
 
@@ -1242,7 +1246,6 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
 
         if (s_found) {
                 gdb->cont_thread = s_thread;
-                //gdb->cont_thread = 0;
                 conf_object_t *cpu = find_cpu_for_active_thread(
                         gdb, gdb->cont_thread);
                 if (cpu) {
@@ -1318,7 +1321,7 @@ gdb_output_handler(void *_gdb, const char *src, size_t length)
         }
         *p = 0;
 
-        send_packet(gdb, buf);
+        send_packet_no_log(gdb, buf);
 }
 
 /* Run a CLI command, and send any output to gdb. */
@@ -1346,6 +1349,10 @@ run_cli_command(gdb_remote_t *gdb, const char *cmd)
 static void
 handle_simics_command(gdb_remote_t *gdb, const char *cmd)
 {
+        if (!gdb->allow_remote_commands) {
+                send_unsupported(gdb);
+                return;
+        }
         char str[strlen(cmd) / 2 + 1];
         int i = 0;
 
@@ -1370,42 +1377,42 @@ target_is_ppc64(gdb_remote_t *gdb)
         return strcmp(gdb->architecture, "ppc64") == 0;
 }
 
-static const char *
+static char *
 gdb_arch_name(gdb_remote_t *gdb)
 {
         attr_value_t attr;
-        if (target_is_ppc64(gdb)) {
-                 attr = SIM_get_attribute(gdb_any_processor(gdb),
-                                          "gdb_remote_architecture_64");
-        } else {
-                attr = SIM_get_attribute(gdb_any_processor(gdb),
-                                         "gdb_remote_architecture");
-        }
-        SIM_clear_exception();
-        if (SIM_attr_is_string(attr)) {
-                const char *ret = SIM_attr_string(attr);
-                SIM_LOG_INFO(3, &gdb->obj, 0, "arch name is %s", ret);
-                return ret;
-
+        const char *attr_name = target_is_ppc64(gdb)
+                ? "gdb_remote_architecture_64" : "gdb_remote_architecture";
+        conf_object_t *cpu = gdb_any_processor(gdb);
+        if (read_opt_attr(&gdb->obj, cpu, attr_name, &attr)) {
+                if (SIM_attr_is_string(attr)) {
+                        return SIM_attr_string_detach(&attr);
+                }
+                SIM_LOG_ERROR(&gdb->obj, 0, "Illegal type for attribute '%s'"
+                              " in object '%s'", attr_name,
+                              SIM_object_name(cpu));
+                SIM_attr_free(&attr);
+                return NULL;
         } else if (gdb->send_target_xml) {
-                SIM_LOG_INFO(3, &gdb->obj, 0, "arch name is %s",
-                             gdb->arch->arch_name );
-                return gdb->arch->arch_name;
+                return MM_STRDUP(gdb->arch->arch_name);
         }
-        SIM_LOG_INFO(3, &gdb->obj, 0, "arch name is NULL");
+
         return NULL;
 }
 
 static char *
 target_xml(gdb_remote_t *gdb)
 {
-        const char *arch_name = gdb_arch_name(gdb);
+        char *arch_name = gdb_arch_name(gdb);
+        SIM_LOG_INFO(3, &gdb->obj, 0, "arch name is %s",
+                     arch_name ? arch_name : "NULL");
         if (arch_name == NULL)
                 return NULL;
 
         strbuf_t desc = sb_newf(
                 "<target version=\"1.0\">\n"
                 "  <architecture>%s</architecture>\n", arch_name);
+        MM_FREE(arch_name);
 
         if (VLEN(gdb->register_descriptions) > 0) {
                 register_section_t *rs;
@@ -1459,10 +1466,9 @@ split_string(const char *str, char split_on) {
 static void
 get_register_descriptions(gdb_remote_t *gdb, conf_object_t *cpu)
 {
-        attr_value_t attr = SIM_get_attribute(cpu, "gdb_remote_registers");
-        if (SIM_attr_is_invalid(attr)) {
-                SIM_clear_exception();
-                goto end;
+        attr_value_t attr;
+        if (!read_opt_attr(&gdb->obj, cpu, "gdb_remote_registers", &attr)) {
+                return;
         }
         if (DBG_check_typing_system("[[s[[siisb]*]]*]", &attr) != Sim_Set_Ok) {
                 SIM_LOG_ERROR(&gdb->obj, 0, "bad gdb_remote_registers value");
@@ -1745,15 +1751,18 @@ create_bookmark(void *arg)
         attr_value_t ret = SIM_run_command(sb_str(&cmd));
         sb_free(&cmd);
 
-        if (SIM_attr_is_string(ret)) {
+        if (SIM_clear_exception()) {
+                SIM_LOG_ERROR(&gdb->obj, 0, "Failed creating bookmark: %s",
+                              SIM_last_error());
+                send_error(gdb, EINVAL);
+        } else if (!SIM_attr_is_string(ret)) {
+                SIM_LOG_ERROR(&gdb->obj, 0, "Non-string value returned from"
+                              " set-bookmark command.");
+                send_error(gdb, EINVAL);
+        } else {
                 strbuf_t buf = sb_newf("QB%s", SIM_attr_string(ret));
                 send_packet(gdb, sb_str(&buf));
                 sb_free(&buf);
-        } else {
-                SIM_clear_exception();
-                SIM_LOG_ERROR(&gdb->obj, 0, "Failed creating bookmark %s",
-                              SIM_last_error());
-                send_error(gdb, EINVAL);
         }
         SIM_attr_free(&ret);
 }
@@ -1839,23 +1848,19 @@ read_single_register(gdb_remote_t *gdb, const char *buffer)
         reg_desc_vect_t *rds = VLEN(gdb->register_descriptions) > 0
                 ? &gdb->register_descriptions
                 : &gdb->default_register_descriptions;
-        // HACK
         if (idx >= VLEN(*rds)) {
-            idx = VLEN(*rds)-1;
-        }
-        //if (idx >= VLEN(*rds)) {
-        //        SIM_LOG_INFO(2, &gdb->obj, 0,
-        //                     "Bad index in single-register read: %zu"
-        //                     " (there are only %d registers)",
-        //                     idx, VLEN(*rds));
+                SIM_LOG_INFO(2, &gdb->obj, 0,
+                             "Bad index in single-register read: %zu"
+                             " (there are only %d registers)",
+                             idx, VLEN(*rds));
 
-         //       /* GDB seems to think we have more registers than we think we
-         //          have, and will ask for them with a 'p' query. Returning
-         //          unsupported seems to be the right thing to do here,
-         //          according to the gdb-serial protocol reference. */
-         //       send_unsupported(gdb);
-         //       return;
-       // }
+                /* GDB seems to think we have more registers than we think we
+                   have, and will ask for them with a 'p' query. Returning
+                   unsupported seems to be the right thing to do here,
+                   according to the gdb-serial protocol reference. */
+                send_unsupported(gdb);
+                return;
+        }
 
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu)
@@ -2073,14 +2078,14 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                                      "Hg = last signal, thread used in"
                                      " other operations");
                         gdb->other_thread =
-                                hexstrtol(cmd + 2, NULL);
+                                hexstrtoll(cmd + 2, NULL);
                         send_ok(gdb);
                         break;
                 case 'c':
                         SIM_LOG_INFO(3, &gdb->obj, 0,
                                      "Hc = last signal, thread used in"
                                      " step/continue");
-                        gdb->cont_thread = hexstrtol(cmd + 2, NULL);
+                        gdb->cont_thread = hexstrtoll(cmd + 2, NULL);
                         send_ok(gdb);
                         break;
                 default:
@@ -2327,7 +2332,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
               const char *name, regclass_t regclass)
 {
         if (SIM_clear_exception()) {
-                SIM_log_error(&gdb->obj, 0, "arch_reg_init() called with"
+                SIM_LOG_ERROR(&gdb->obj, 0, "arch_reg_init() called with"
                               " pending exception: %s",
                               SIM_last_error());
         }
@@ -2335,7 +2340,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
         const int_register_interface_t *const ir =
                 SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
         if (ir == NULL) {
-                SIM_log_error(&gdb->obj, 0,
+                SIM_LOG_ERROR(&gdb->obj, 0,
                               "cannot find %s interface in CPU %s",
                               INT_REGISTER_INTERFACE, SIM_object_name(cpu));
                 return false;
@@ -2351,7 +2356,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
                 rd.regnum = ir->get_number(cpu, name);
                 if (rd.regnum < 0) {
                         if (regclass != regclass_i_opt) {
-                                SIM_log_error(&gdb->obj, 0, "cannot find"
+                                SIM_LOG_ERROR(&gdb->obj, 0, "cannot find"
                                               " register %s in CPU %s",
                                               name, SIM_object_name(cpu));
                                 return false;
@@ -2445,14 +2450,14 @@ setup_architecture(gdb_remote_t *gdb)
                 if (SIM_attr_is_string(attr)) {
                         variant = SIM_attr_string_detach(&attr);
                 } else if (SIM_clear_exception()) {
-                        SIM_log_error(&gdb->obj, 0,
+                        SIM_LOG_ERROR(&gdb->obj, 0,
                                       "Error reading attribute"
                                       " gdb_remote_variant from"
                                       " object %s: %s",
                                       SIM_object_name(gdb_context_object(gdb)),
                                       SIM_last_error());
                 } else if (!SIM_attr_is_nil(attr)) {
-                        SIM_log_error(&gdb->obj, 0,
+                        SIM_LOG_ERROR(&gdb->obj, 0,
                                       "Unexpected type of attribute "
                                       " gdb_remote_variant in"
                                       " object %s",
@@ -2527,7 +2532,13 @@ gdb_connected(void *gdb_ptr)
                 = SIM_hap_add_callback("Core_Continuation",
                                        gdb_continuation_hap, gdb);
 
-        VT_stop_message(&gdb->obj, "Remote GDB connected");
+        if (SIM_simics_is_running()) {
+                VT_stop_message(&gdb->obj, "Remote GDB connected");
+                /*  Just connected, so cannot call stop_simulation(). Still
+                    want to disable sending async stop that may be received by
+                    GDB while waiting for a command reply. */
+                gdb->stop_in_progress = true;
+        }
 }
 
 /* A remote GDB has requested to connect to this GDB stub.  Accept it
@@ -2667,7 +2678,7 @@ set_processor(void *dummy, conf_object_t *obj, attr_value_t *val,
                         &gdb->obj, 0,
                         "Failed getting " PROCESSOR_INFO_INTERFACE " or "
                         CONTEXT_HANDLER_INTERFACE " interface from CPU %s.",
-                        SIM_object_name(gdb->processor));
+                        SIM_object_name(cpu));
                 return Sim_Set_Interface_Not_Found;
         } else {
                 gdb->processor = cpu;
@@ -2960,6 +2971,22 @@ set_inject_serial_command(void *data, conf_object_t *obj, attr_value_t *val,
         return Sim_Set_Ok;
 }
 
+static set_error_t
+set_allow_remote_commands(void *dummy, conf_object_t *obj, attr_value_t *val,
+                          attr_value_t *idx)
+{
+        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb->allow_remote_commands = SIM_attr_boolean(*val);
+        return Sim_Set_Ok;
+}
+
+static attr_value_t
+get_allow_remote_commands(void *dummy, conf_object_t *obj, attr_value_t *idx)
+{
+        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        return SIM_make_attr_boolean(gdb->allow_remote_commands);
+}
+
 static conf_object_t *
 gdb_remote_alloc_object(void *data)
 {
@@ -2980,6 +3007,7 @@ gdb_remote_init_object(conf_object_t *obj, void *data)
         gdb->context_change_hap_handle = gdb->context_updated_hap_handle = -1;
         gdb->sim_stopped_hap_handle = gdb->continuation_hap_handle = -1;
         gdb->segment_linear_base = 0;
+        gdb->allow_remote_commands = true;
         return obj;
 }
 
@@ -3122,11 +3150,40 @@ init_local(void)
                 "Inject a GDB serial command as if the remote gdb"
                 " process had sent it.");
 
+        SIM_register_typed_attribute(
+                gdb_remote_class, "allow_remote_commands",
+                get_allow_remote_commands, NULL,
+                set_allow_remote_commands, NULL,
+                Sim_Attr_Pseudo | Sim_Attr_Internal, "b", NULL,
+                "When set to true, allow qRcmd command which allows any Simics"
+                " commands to be executed from remote connection. This will"
+                " allow a gdb remote client to do anything that can be done"
+                " from Simics CLI.");
+
         step_event = SIM_register_event(
             "singlestep breakpoint", gdb_remote_class, Sim_EC_Notsaved,
             gdb_step_handler, 0, 0, 0, 0);
 
         os_initialize_sockets();
+}
+
+bool
+read_opt_attr(conf_object_t *log_obj, conf_object_t *obj, const char *attr_name,
+              attr_value_t * const attr)
+{
+        if (!SIM_class_has_attribute(SIM_object_class(obj), attr_name))
+                return false;
+
+        attr_value_t local_attr = SIM_get_attribute(obj, attr_name);
+        if (SIM_clear_exception()) {
+                SIM_LOG_ERROR(log_obj, 0, "Error '%s' when reading attribute"
+                              " '%s' from object '%s'.", SIM_last_error(),
+                              attr_name, SIM_object_name(obj));
+                SIM_attr_free(&local_attr);
+                return false;
+        }
+        *attr = local_attr;
+        return true;
 }
 
 uint64
