@@ -27,8 +27,7 @@ If you are running on NPS infrastructure, all images and the binaries named in t
 ubuntu_driver.ini file should be already available through the NFS /mnt/re_images.  
 Otherwise, get the disk images and binary files from 
     https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk
-
-Untar the cgc-fs.tar.
+and untar the cgc-fs.tar.
 And adjust paths in the ubuntu_driver.ini as needed.
 
 You can then run the simulation:
