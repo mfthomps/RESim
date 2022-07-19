@@ -25,8 +25,11 @@ Create a RESim workspace on your Simics host and copy these files into it, e.g.,
    
 If you are running on NPS infrastructure, all images and the binaries named in the
 ubuntu_driver.ini file should be already available through the NFS /mnt/re_images.  
-Otherwise, get the disk images and binary files from [box link].  And adjust paths 
-in the ubuntu_driver.ini as needed.
+Otherwise, get the disk images and binary files from 
+    https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk
+
+Untar the cgc-fs.tar.
+And adjust paths in the ubuntu_driver.ini as needed.
 
 You can then run the simulation:
     resim ubuntu_driver.ini
@@ -82,3 +85,9 @@ Otherwise, the basic Simics licenses will let you clone 2 copies.
 
 Then run the fuzzing session:
     runAFL ubuntu_driver.ini
+
+After you get some crashes, quit the fuzzing session and use crashReport to
+analyze the crashes:
+    crashReport ubuntu_driver.ini network_file_system
+
+Results are in /tmp/crash_reports
