@@ -46,6 +46,9 @@ def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
             except:
                 pass
             trackoutput = os.path.join(tdir, 'trackio', base)
+            if os.path.isfile(trackoutput):
+                lgr.debug('path exists, skip it %s' % trackoutput)
+                continue
             try:
                 os.open(trackoutput, os.O_CREAT | os.O_EXCL)
             except:
