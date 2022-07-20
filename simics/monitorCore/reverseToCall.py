@@ -457,6 +457,18 @@ class reverseToCall():
                 self.cleanup(None)
                 self.top.skipAndMail()
                 self.context_manager.setExitBreaks()
+            elif self.isRet(instruct[1], eip):
+                ''' First step back from a reverse step over got a ret.  Assume previous instruction is a call '''
+                cell = self.top.getCell()
+                self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, my_args.eip-1, 1, 0)
+                self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.uncallHapSimple, None)
+                self.lgr.debug('tryBackOne found ret, try runnning backwards to previous eip-1.  break %d set at 0x%x now do rev' % (self.uncall_break, my_args.eip-1))
+                #self.top.removeDebugBreaks()
+                self.lgr.debug('now rev')
+                SIM_run_alone(SIM_run_command, 'rev')
+                self.lgr.debug('did rev')
+                done = True
+
         elif pid in self.sysenter_cycles and len(self.sysenter_cycles[pid]) > 0:
             cur_cycles = self.cpu.cycles
             self.lgr.debug('tryOneStopped kernel space pid %d expected %d' % (pid, my_args.pid))
@@ -510,7 +522,7 @@ class reverseToCall():
     def doRevToCall(self, step_into, prev=None):
         self.noWatchSysenter()
         '''
-        Run backwards.  If uncall is true, run until the previous call.
+        Run backwards.  
         If step_into is true, and the previous instruction is a return,
         enter the function at its return.
         '''
@@ -522,7 +534,8 @@ class reverseToCall():
         self.first_back = True
         self.lgr.debug('reservseToCall, call get procInfo')
         self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
-        my_args = procInfo.procInfo(comm, self.cpu, self.pid)
+        eip = self.top.getEIP(self.cpu)
+        my_args = procInfo.procInfo(comm, self.cpu, self.pid, eip=eip)
         self.lgr.debug('reservseToCall, got my_args ')
         self.previous_eip = prev
         self.tryBackOne(my_args)
@@ -998,7 +1011,24 @@ class reverseToCall():
                     self.lgr.debug('resumeAlone follow taint')
                     self.followTaint(self.save_reg_mod)
 
+    def uncallHapSimple(self, my_args, one, exception, error_string):
+        ''' Hit when an initial rev 1 from a reverse step over leads to a ret '''
+        if self.uncall_break is None:
+            return
+        eip = self.top.getEIP(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        self.lgr.debug('uncallHapSimple ip: 0x%x uncall_break %d pid: %d expected %d ' % (eip, self.uncall_break, 
+              pid, self.pid))
+        if pid == self.pid:
+            RES_delete_breakpoint(self.uncall_break)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
+            self.uncall_break = None
+            self.cleanup(None)
+            self.top.skipAndMail()
+            self.context_manager.setExitBreaks()
+
     def uncallHap(self, my_args, one, exception, error_string):
+        ''' used in back-tracing registers '''
         if self.uncall_break is None:
             return
         eip = self.top.getEIP(self.cpu)

@@ -1620,7 +1620,13 @@ class GenMonitor():
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong pid (%d), try again' % pid)
             SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
-    
+
+    def revStepOver(self):
+        self.reverseToCallInstruction(False)
+
+    def revStepInto(self):
+        self.reverseToCallInstruction(True)
+ 
     def reverseToCallInstruction(self, step_into, prev=None):
         if self.reverseEnabled():
             dum, cpu = self.context_manager[self.target].getDebugPid() 

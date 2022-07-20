@@ -24,10 +24,11 @@
 '''
 
 class procInfo():
-    def __init__(self, comm, cpu, pid, context_manager=None, enabled_tracking=None, cur_addr=None):
+    def __init__(self, comm, cpu, pid, context_manager=None, enabled_tracking=None, cur_addr=None, eip=None):
         self.cpu = cpu
         self.comm = comm
         self.pid = pid
         self.context_manager = context_manager
         self.enabled_tracking = enabled_tracking
         self.cur_addr=cur_addr
+        self.eip=eip
