@@ -29,8 +29,10 @@ server assigned to you.
 Perform these steps on the computer that you will use to access RESim.  These instructions
 assume a Linux host upon which IDA Pro is installed, e.g., a VM.
 
-Use {\tt ssh-keygen} to create an ssh key pair and send the public key to mfthomps@nps.edu
-along with a requested user ID.  You will then receive an assigned server name and IP address.
+Use {\tt ssh-keygen} to create an ssh key pair, using the {\tt -t ed25519} option to avoid problems with ssh
+clients that reject sha1 keys by default. 
+Send the public key to mfthomps@nps.edu along with a requested user ID. 
+You will then receive an assigned server name and IP address.
 After receiving the reply, do the following:
 
 \begin{itemize}

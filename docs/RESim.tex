@@ -345,7 +345,7 @@ If nth is greater than 1, will run until the nth recv call.
 
 \item {\tt runToText()} – Continue execution until the text segment of the currently debugged process is reached.  This, and revToText, are useful after execution transfers to libraries, or Linux linkage functions, e.g., references to the GOT.
 
-\item {\tt revToText()} – Reverse execute the current process until the text segment is reached.  Also useful when you get lucky and execution is down a nop sled.
+\item {\tt revToText()} – Reverse execute the current process until the text segment is reached.  Also useful when you get lucky and execution is down a nop sled.  This function can be slow, e.g., if there is a kernel system call between you and the text segment.
  
 \item {\tt showSOMap(pid)} – Display the map of shared object library files to their load addresses for the given pid (along with the main text segment).
 
@@ -895,6 +895,9 @@ the file system root of the target binary, the host:port of your Simics host, an
 
 The windows described for the IDA plugin are duplicated within the Ghidra plugin.
 
+Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
+the source of a memory location, put the cursor over the operand and right click...
+
 TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
 at the tunnel (or do copy as part of creating tunnel?.  
 
@@ -1121,7 +1124,8 @@ kernel for data.  The use of ssh and scp can be made safe by executing the {\tt 
 starting {\tt prepInject} but prior to sending data to the target.  That program executes a Simics \textit{magic instruction} that RESim 
 detects and uses to reset the origin for reverse execution during performance of prepInject.  The use of this magic is currently required for all
 cases where the receive call is waiting in the kernel, whether or not ssh is used.  See the {\tt simics/bin/driver-driver.py} program for an example
-of using the magic instruction when sending data from the driver.
+of using the magic instruction when sending data from the driver.  Using the {\tt -d} option will cause it to establish a new origin and will disconnect
+the driver from the network simulation.
 
 
 \subsubsection{Tracking data through pipes}
