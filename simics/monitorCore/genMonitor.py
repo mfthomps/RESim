@@ -1967,8 +1967,6 @@ class GenMonitor():
     def runToSyscall(self, callnum = None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
-        if callnum == 0:
-            callname = None
         if callnum is not None:
             # TBD fix 32-bit compat
             callname = self.task_utils[self.target].syscallName(callnum, False)
@@ -2428,7 +2426,7 @@ class GenMonitor():
         self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
 
         self.context_manager[self.target].watchTasks()
-        if self.listHasDebug(flist):
+        if flist is not None and self.listHasDebug(flist):
             ''' We will be debugging.  Set debugging context now so that any reschedule does not 
                 cause false hits in the text block '''
             self.context_manager[self.target].setDebugPid()
@@ -2464,8 +2462,8 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("GenContext", self.proc_hap)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-          self.stopHap, stop_action)
+        #self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+        #  self.stopHap, stop_action)
 
         self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
         SIM_run_alone(SIM_run_command, 'continue')
@@ -4501,6 +4499,22 @@ class GenMonitor():
 
     def getIdaFuns(self):
         return self.ida_funs
+
+    def stopStepN(self, dumb, one, exception, error_string):
+        if self.stop_hap is not None:
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+            self.lgr.debug('stopStepN call skipAndMail')
+            self.skipAndMail()
+
+    def stepN(self, n):
+        ''' Used by runToSyscall to step out of kernel. '''
+        self.lgr.debug('stepN %d' % n)
+        flist = [self.skipAndMail]
+        f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopStepN, None)
+        cmd = 'c %d' % n
+        SIM_run_alone(SIM_run_command, cmd)
 
 
 if __name__=="__main__":        

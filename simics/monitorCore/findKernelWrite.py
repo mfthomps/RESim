@@ -205,7 +205,8 @@ class findKernelWrite():
         else:
             location = memory.logical_address
             phys = memory.physical_address
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x' % (location, phys, memory.size, self.cpu.cycles))
+            eip = self.top.getEIP(self.cpu)
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             VT_in_time_order(self.vt_handler, my_memory)
 
