@@ -357,10 +357,11 @@ class Syscall():
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
-            f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+            #f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+            f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
             flist = [f1]
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
-            #self.lgr.debug('Syscall cell %s stop action includes skipAndMail in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
+            self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
