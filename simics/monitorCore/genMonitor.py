@@ -2518,17 +2518,22 @@ class GenMonitor():
             call_params_list = [call_params]
 
         if cell_name not in self.trace_all or self.trace_all[cell_name] is None:
-            retval = syscall.Syscall(self, cell_name, None, self.param[cell_name], self.mem_utils[cell_name], 
+            if call_name not in self.call_traces[cell_name]:
+                retval = syscall.Syscall(self, cell_name, None, self.param[cell_name], self.mem_utils[cell_name], 
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
                                call_list=call, call_params=call_params_list, targetFS=self.targetFS[cell_name], linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback)
                                #compat32=self.is_compat32, background=background)
-            self.call_traces[cell_name][call_name] = retval
+                self.call_traces[cell_name][call_name] = retval
+                self.lgr.debug('runTo added sycall for %s', call_name)
+            else:
+                self.call_traces[cell_name][call_name].addCallParams(call_params_list)
+                self.lgr.debug('runTo added parameters to existig %s rather than new syscall', call_name)
         else:
             ''' stuff the call params into existing traceall syscall module '''
             self.trace_all[cell_name].addCallParams(call_params_list)
-            self.lgr.debug('runTo added parameters rather than new syscall')
+            self.lgr.debug('runTo added parameters to trace_all rather than new syscall')
         if run:
             self.is_monitor_running.setRunning(True)
             SIM_run_command('c')
@@ -2573,7 +2578,7 @@ class GenMonitor():
             run = False
         operation = mod.getOperation()
         self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
-        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name=dfile)
+        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name='dmod')
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
 
     def runToWrite(self, substring):

@@ -1436,13 +1436,16 @@ class Syscall():
                         self.lgr.debug('syscall write check dmod count %d' % count)
                         mod = call_param.match_param
                         if mod.checkString(self.cpu, frame['param2'], count):
-                            self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
-                            self.top.stopTrace(cell_name=self.cell_name, syscall=self)
-                            if not self.top.remainingCallTraces() and SIM_simics_is_running():
-                                self.top.notRunning(quiet=True)
-                                SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
-                            else:
-                                print('%s performed' % mod.getPath())
+                            if mod.getCount() == 0:
+                                self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
+                                self.syscall_info.callparams.remove(call_param)
+                                if not self.remainingDmod():
+                                    self.top.stopTrace(cell_name=self.cell_name, syscall=self)
+                                    if not self.top.remainingCallTraces() and SIM_simics_is_running():
+                                        self.top.notRunning(quiet=True)
+                                        SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
+                                    else:
+                                        print('%s performed' % mod.getPath())
                 else:
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  
@@ -2077,3 +2080,16 @@ class Syscall():
     def getContext(self):
         return self.cell
 
+    def rmCallParam(self, call_param):
+        if call_param in self.syscall_info.call_params: 
+            self.syscall_info.call_params.remove(call_param)
+        else: 
+            self.lgr.error('sycall rmCallParam, but param does not exist?')
+
+    def getCallParams(self):
+        return self.syscall_info.call_params
+    def remainingDmod(self):
+        for call_param in self.syscall_info.call_params:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                 return True
+        return False
