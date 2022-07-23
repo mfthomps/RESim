@@ -3,7 +3,9 @@ import os
 import re
 import syscall
 from simics import *
-
+'''
+Manage one Dmod.  
+'''
 def nextLine(fh):
    retval = None
    while retval is None:
@@ -35,13 +37,14 @@ class Dmod():
     def __init__(self, top, path, mem_utils, cell_name, lgr):
         self.top = top
         self.kind = None
-        self.fiddles = [] 
+        self.fiddle = None
         self.mem_utils = mem_utils
         self.lgr = lgr
         self.stop_hap = None
         self.cell_name = cell_name
         self.path = path
         self.operation = None
+        self.count = 1
         if os.path.isfile(path):
             with open(path) as fh:
                done = False
@@ -53,7 +56,13 @@ class Dmod():
                else:
                    self.lgr.error('Dmod command missing operation %s' % kind_line)
                    return
-               self.lgr.debug('Dmod of kind %s  cell is %s' % (self.kind, self.cell_name))
+               if len(parts) > 2:
+                   try:
+                       self.count = int(parts[2])
+                   except:
+                       self.lgr.error('Expected count in kind line: %s' % kind_line)
+                       return
+               self.lgr.debug('Dmod of kind %s  cell is %s count is %d' % (self.kind, self.cell_name, self.count))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
@@ -66,7 +75,7 @@ class Dmod():
                           becomes=line
                       else:
                           becomes=becomes+line
-                   self.fiddles.append(self.Fiddle(match, None, becomes))
+                   self.fiddle = self.Fiddle(match, None, becomes)
                elif self.kind == 'match_cmd':
                    match = nextLine(fh) 
                    was = nextLine(fh) 
@@ -77,7 +86,7 @@ class Dmod():
                           done = True
                           break
                       cmds.append(line)
-                   self.fiddles.append(self.Fiddle(match, was, None, cmds=cmds))
+                   self.fiddle = self.Fiddle(match, was, None, cmds=cmds)
                elif self.kind == 'sub_replace':
                    while not done:
                        match = nextLine(fh) 
@@ -86,7 +95,7 @@ class Dmod():
                            break
                        was = nextLine(fh)
                        becomes = nextLine(fh) 
-                       self.fiddles.append(self.Fiddle(match, was, becomes))
+                       self.fiddle = self.Fiddle(match, was, becomes)
                elif self.kind == 'script_replace':
                    while not done:
                        match = nextLine(fh) 
@@ -95,99 +104,96 @@ class Dmod():
                            break
                        was = nextLine(fh)
                        becomes = nextLine(fh) 
-                       self.fiddles.append(self.Fiddle(match, was, becomes))
+                       self.fiddle = self.Fiddle(match, was, becomes)
                else: 
                    print('Unknown dmod kind: %s' % self.kind)
                    return
-            self.lgr.debug('Dmod loaded %d fiddles of kind %s' % (len(self.fiddles), self.kind))
+            self.lgr.debug('Dmod loaded fiddle of kind %s' % (self.kind))
         else:
             self.lgr.error('Dmod, no file at %s' % path)
 
     def subReplace(self, cpu, s, addr):
-        rm_this = None
-        for fiddle in self.fiddles:
-            #self.lgr.debug('Dmod checkString  %s to  %s' % (fiddle.match, s))
+        rm_this = False
+        #self.lgr.debug('Dmod checkString  %s to  %s' % (fiddle.match, s))
+        try:
+            match = re.search(self.fiddle.match, s, re.M|re.I)
+        except:
+            self.lgr.error('dmod subReplace re.search failed on match: %s, str %s' % (self.fiddle.match, s))
+            return False
+        if match is not None:
             try:
-                match = re.search(fiddle.match, s, re.M|re.I)
+                was = re.search(self.fiddle.was, s, re.M|re.I)
             except:
-                self.lgr.error('dmod subReplace re.search failed on match: %s, str %s' % (fiddle.match, s))
+                self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (self.fiddle.was, s))
                 return
-            if match is not None:
-                try:
-                    was = re.search(fiddle.was, s, re.M|re.I)
-                except:
-                    self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (fiddle.was, s))
-                    return
-                if was is not None:
-                    self.lgr.debug('Dmod replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, s))
-                    new_string = re.sub(fiddle.was, fiddle.becomes, s)
-                    self.mem_utils.writeString(cpu, addr, new_string)
-                else:
-                    #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
-                    pass
-                     
-                rm_this = fiddle
-                break
-        return rm_this
-
-    def scriptReplace(self, cpu, s, addr, pid, fd):
-        rm_this = None
-        checkline = None
-        for fiddle in self.fiddles:
-            lines = s.splitlines()
-            for line in lines:
-                #self.lgr.debug('Dmod check line %s' % (line))
-                line = line.strip()
-                if len(line) == 0 or line.startswith('#'):
-                    continue
-                elif line.startswith(fiddle.match):
-                    checkline = line
-                    break
-                else:
-                    return None
-            if checkline is None:
-                continue
-            self.lgr.debug('Dmod checkString  %s to line %s' % (fiddle.match, checkline))
-            try:
-                was = re.search(fiddle.was, checkline, re.M|re.I)
-            except:
-                self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (fiddle.was, checkline))
-                return None
             if was is not None:
-                self.lgr.debug('Dmod replace %s with %s in \n%s' % (fiddle.was, fiddle.becomes, checkline))
-                new_string = re.sub(fiddle.was, fiddle.becomes, s)
+                self.lgr.debug('Dmod replace %s with %s in \n%s' % (self.fiddle.was, self.fiddle.becomes, s))
+                new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
                 self.mem_utils.writeString(cpu, addr, new_string)
-                new_line = re.sub(fiddle.was, fiddle.becomes, checkline)
-                if len(checkline) != len(new_line):
-                    ''' Adjust future _lseek calls, which are caught in syscall.py '''
-                    delta = len(checkline) - len(new_line)
-                    diddle_lseek = DmodSeek(delta, pid, fd)
-                    operation = ['_llseek', 'close']
-                    call_params = syscall.CallParams(operation, diddle_lseek)        
-                    self.top.runTo(operation, call_params, run=False, ignore_running=True)
-                    self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
-                else:
-                    self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
             else:
                 #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
                 pass
                  
-            rm_this = fiddle
-            break
+            rm_this = True
+        return rm_this
+
+    def scriptReplace(self, cpu, s, addr, pid, fd):
+        rm_this = False
+        checkline = None
+        lines = s.splitlines()
+        for line in lines:
+            #self.lgr.debug('Dmod check line %s' % (line))
+            line = line.strip()
+  
+            if len(line) == 0 or line.startswith('#'):
+                continue
+            elif line.startswith(self.fiddle.match):
+                checkline = line
+                break
+            else:
+                return None
+        if checkline is None:
+            return False
+        #self.lgr.debug('Dmod checkString  %s to line %s' % (self.fiddle.match, checkline))
+        try:
+            was = re.search(self.fiddle.was, checkline, re.M|re.I)
+        except:
+            self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (self.fiddle.was, checkline))
+            return None
+        if was is not None:
+            self.lgr.debug('Dmod replace %s with %s in \n%s' % (self.fiddle.was, self.fiddle.becomes, checkline))
+            new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
+            #self.lgr.debug('newstring is: %s' % new_string)
+            self.mem_utils.writeString(cpu, addr, new_string)
+            new_line = re.sub(self.fiddle.was, self.fiddle.becomes, checkline)
+            if len(checkline) != len(new_line):
+                ''' Adjust future _lseek calls, which are caught in syscall.py '''
+                delta = len(checkline) - len(new_line)
+                diddle_lseek = DmodSeek(delta, pid, fd)
+                operation = ['_llseek', 'close']
+                call_params = syscall.CallParams(operation, diddle_lseek)        
+                self.top.runTo(operation, call_params, run=False, ignore_running=True)
+                self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
+            else:
+                self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
+        else:
+            #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+            pass
+             
+        rm_this = True
         return rm_this
 
     def fullReplace(self, cpu, s, addr):
-        rm_this = None
-        fiddle = self.fiddles[0]
-        if fiddle.match in s:
-            count = len(fiddle.becomes)
-            self.mem_utils.writeString(cpu, addr, fiddle.becomes)
+        rm_this = False
+        if self.fiddle.match in s:
+            count = len(self.fiddle.becomes)
+            self.mem_utils.writeString(cpu, addr, self.fiddle.becomes)
             esp = self.mem_utils.getRegValue(cpu, 'esp')
             count_addr = esp + 3*self.mem_utils.WORD_SIZE
             self.mem_utils.writeWord(cpu, count_addr, count)
             #cpu.iface.int_register.write(reg_num, count)
-            self.lgr.debug('dmod fullReplace %s in %s wrote %d bytes' % (fiddle.match, s, count))
-            rm_this = fiddle
+            self.lgr.debug('dmod fullReplace %s in %s wrote %d bytes' % (self.fiddle.match, s, count))
+            rm_this = True
             #SIM_break_simulation('deeedee')
         return rm_this
 
@@ -199,16 +205,16 @@ class Dmod():
         ''' The match lets us stop looking regardless of whether or not the values are
             bad.  The "was" tells us a bad value, i.e., reason to run commands '''
         rm_this = None
-        fiddle = self.fiddles[0]
         #self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
-        if re.search(fiddle.match, s, re.M|re.I) is not None:
-            #self.lgr.debug('found match of %s in %s' % (fiddle.match, s))
-            rm_this = fiddle
-            if re.search(fiddle.was, s, re.M|re.I) is not None:
-                SIM_run_alone(self.stopAlone, fiddle)
+        if re.search(self.fiddle.match, s, re.M|re.I) is not None:
+            #self.lgr.debug('found match of %s in %s' % (self.fiddle.match, s))
+            rm_this = self.fiddle
+            if re.search(self.fiddle.was, s, re.M|re.I) is not None:
+                SIM_run_alone(self.stopAlone, self.fiddle)
         return rm_this
 
     def checkString(self, cpu, addr, count, pid=None, fd=None):
+        ''' Modify content at the given addr if content meets the Dmod criteria '''
         retval = False
         byte_string, byte_array = self.mem_utils.getBytes(cpu, count, addr)
         if byte_array is None:
@@ -226,12 +232,10 @@ class Dmod():
         else:
             print('Unknown kind %s' % self.kind)
             return
-        if rm_this is not None:
-            self.lgr.debug('Dmod checkString found match cell %s path %s' % (self.cell_name, self.path))
-            self.fiddles.remove(rm_this)
-            if len(self.fiddles) == 0:
-                self.lgr.debug('Dmod checkString removed last fiddle')
-                retval = True
+        if rm_this:
+            self.count = self.count - 1
+            self.lgr.debug('Dmod checkString found match cell %s path %s count now %d' % (self.cell_name, self.path, self.count))
+            retval = True
         return retval
 
     def stopHap(self, fiddle, one, exception, error_string):
@@ -246,6 +250,9 @@ class Dmod():
    
     def getPath(self):
         return self.path 
+
+    def getCount(self):
+        return self.count
                     
         
 if __name__ == '__main__':
