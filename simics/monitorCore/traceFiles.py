@@ -100,6 +100,8 @@ class TraceFiles():
 
     def write(self, pid, fd, the_bytes):
         ''' Note, called for both read and write by sharedSyscall '''
+        if the_bytes is None:
+            return
         if self.raw:
             if fd in self.open_files:
                 with open(self.open_files[fd].outfile, 'ab') as fh:
