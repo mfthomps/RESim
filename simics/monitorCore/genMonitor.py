@@ -2445,7 +2445,6 @@ class GenMonitor():
         if flist is None:
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
             flist = [f1]
-
         else:
             #self.call_traces[self.target]['open'] = self.traceSyscall(callname='open', soMap=self.soMap)
             call_list = ['open', 'mmap']
@@ -2457,15 +2456,15 @@ class GenMonitor():
                            soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.is_compat32)
             self.lgr.debug('debug watching open syscall and mmap')
 
+            hap_clean = hapCleaner.HapCleaner(cpu)
+            hap_clean.add("GenContext", self.proc_hap)
+            stop_action = hapCleaner.StopAction(hap_clean, None, flist)
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+              self.stopHap, stop_action)
+            self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
+
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
 
-        hap_clean = hapCleaner.HapCleaner(cpu)
-        hap_clean.add("GenContext", self.proc_hap)
-        stop_action = hapCleaner.StopAction(hap_clean, None, flist)
-        #self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        #  self.stopHap, stop_action)
-
-        self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
         SIM_run_alone(SIM_run_command, 'continue')
 
     def undoDebug(self, dumb):
