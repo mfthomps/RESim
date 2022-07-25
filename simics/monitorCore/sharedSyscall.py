@@ -266,16 +266,17 @@ class SharedSyscall():
                 if pid in self.trace_procs:
                     self.traceProcs.connect(pid, ss.fd, ss.getName())
                 trace_msg = ('\treturn from socketcall CONNECT pid:%d, %s  addr: 0x%x\n' % (pid, ss.getString(), exit_info.sock_struct.addr))
-                connectors = socket_syscall.getConnectors()
-                if connectors is not None:
-                    if self.traceProcs is not None:
-                        prog = self.traceProcs.getProg(pid)
-                        if ss.port is not None:
-                            self.lgr.debug('adding connector for pid:%d %s %s %s' % (pid, prog, ss.dottedIP(), str(ss.port)))
-                            connectors.add(pid, ss.fd, prog, ss.dottedIP(), ss.port)
-                        else:
-                            self.lgr.debug('adding connector for pid:%d %s %s' % (pid, prog, ss.sa_data))
-                            connectors.add(pid, ss.fd, prog, '', ss.sa_data)
+                if socket_syscall is not None:
+                    connectors = socket_syscall.getConnectors()
+                    if connectors is not None:
+                        if self.traceProcs is not None:
+                            prog = self.traceProcs.getProg(pid)
+                            if ss.port is not None:
+                                self.lgr.debug('adding connector for pid:%d %s %s %s' % (pid, prog, ss.dottedIP(), str(ss.port)))
+                                connectors.add(pid, ss.fd, prog, ss.dottedIP(), ss.port)
+                            else:
+                                self.lgr.debug('adding connector for pid:%d %s %s' % (pid, prog, ss.sa_data))
+                                connectors.add(pid, ss.fd, prog, '', ss.sa_data)
                     
         elif socket_callname == "bind":
             if eax < 0:
