@@ -513,6 +513,15 @@ class StackTrace():
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
                             #self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
                             #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                        elif got_fun_name is not None and cur_is_clib:
+                            retval = ptr
+                            fname = self.soMap.getSOFile(call_ip)
+                            frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=got_fun_name, ret_to_addr=ptr)
+                            frame.ret_addr = call_ip + instruct_of_call[0] 
+                            self.addFrame(frame)
+                            mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
+                            #self.lgr.debug('Found GOT, though current fuction is not called function. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
+                            #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif (fun_name is not None and fun_name.startswith('memcpy')) and (current_instruct is not None and current_instruct.startswith('rep movsd')):
                             # hacks are us
                             retval = ptr
