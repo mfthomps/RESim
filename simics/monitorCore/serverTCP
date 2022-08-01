@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+#
+#  Accept a TCP connection on a given host/port and send a file to
+#  the client once connected.  
+#
+import sys
+import time
+import os
+import socket
+import logging
+import logging.handlers
+def deal_with_client(newsocket, infile):    
+    for infile in infile_list:    
+        with open (infile) as fh:
+            s = fh.read()
+            newsocket.sendall(s) 
+            lgr.debug('sent %d bytes' % len(s))
+            got = newsocket.recv(1024)
+            lgr.debug('got %s' % got)
+        time.sleep(1)
+
+lgr = logging.getLogger('serverTCPlog')
+#lhStdout = lgr.handlers[0]
+lgr.setLevel(logging.DEBUG)
+fh = logging.FileHandler('/tmp/serverTCP.log')
+fh.setLevel(logging.DEBUG)
+frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+fh.setFormatter(frmt)
+lgr.addHandler(fh)
+#lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
+#lgr.removeHandler(lhStdout)
+lgr.info('Start of log from serverTCP')
+
+
+this_host = sys.argv[1].strip()
+port = int(sys.argv[2].strip())
+lgr.debug('ip %s' % this_host)
+lgr.debug('port %d' % port)
+infile_list = ['/tmp/sendudp']
+if len(sys.argv) > 3:
+    infile_list = sys.argv[3:]
+bindsocket = socket.socket()
+bindsocket.bind((this_host, port))
+bindsocket.listen(5)
+lgr.debug('server begin listen on %s:%d\n' % (this_host, port))
+count = 0
+while True:
+    ''' wait for client to open connection '''
+    newsocket, fromaddr = bindsocket.accept()
+    lgr.debug('Connection from %s\n' % str(fromaddr))
+    count += 1
+    deal_with_client(newsocket, count)
+    lgr.debug('close socket\n')
+    try:
+        newsocket.shutdown(socket.SHUT_RDWR)
+        newsocket.close()
+    except:
+        pass
+    
