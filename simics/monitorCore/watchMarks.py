@@ -39,8 +39,11 @@ class CopyMark():
                 self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
         else:
             if buf_start is not None:
-                offset = src - buf_start
-                self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                if dest == buf_start:
+                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
+                else:
+                    offset = dest - buf_start
+                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
                 self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. Buffer unknown!)' % (length, src, dest, )
             else:
