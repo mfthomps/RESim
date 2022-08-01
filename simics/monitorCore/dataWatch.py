@@ -1264,6 +1264,7 @@ class DataWatch():
         ''' Does this look like a move from memA=>reg=>memB ? '''
         ''' If so, return dest '''
         retval = None
+        adhoc = False
         if instruct[1].startswith('mov'):
             op2, op1 = self.decode.getOperands(instruct[1])
             if self.decode.isReg(op1):
@@ -1283,15 +1284,13 @@ class DataWatch():
                         dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                         #self.lgr.debug('dest addr found to be %s' % str(dest_addr))
                         if dest_addr is not None:
+                            adhoc = True
                             break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
                             move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, op1)
                             self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
                                      self.finishCheckMoveHap, move_stuff, break_num, 'checkMove')
-                        else:
-                            #self.lgr.debug('dataWatch checkMove, not a dest addr, addr 0x%x  not ad hoc' % (addr))
-                            self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
                         break
-        else:
+        if not adhoc:
             self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
         return retval
                     
@@ -1314,7 +1313,7 @@ class DataWatch():
                 self.prev_read_cycle = self.cpu.cycles
                 msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
                             offset, length, start, eip))
-                #self.lgr.debug(msg)
+                self.lgr.debug(msg)
                 self.context_manager.setIdaMessage(msg)
                 if instruct[1].startswith('repe cmpsb'):
                     esi = self.mem_utils.getRegValue(self.cpu, 'esi')
