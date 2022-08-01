@@ -2075,7 +2075,7 @@ class GenMonitor():
                 del self.call_traces[cell_name][call]
 
         else:
-            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
             pass
 
     def traceFile(self, path):
@@ -2507,7 +2507,8 @@ class GenMonitor():
         ''' qualify call with name, e.g, for multiple dmod on reads '''
         call_name = call[0]
         if name is not None:
-            call_name = '%s-%s' % (call[0], name)
+            #call_name = '%s-%s' % (call[0], name)
+            call_name = name
         self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
         if call_params is None:
             call_params_list = []
