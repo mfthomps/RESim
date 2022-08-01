@@ -50,7 +50,9 @@ class TraceFiles():
         self.path_list[path] = self.FileWatch(path, outfile)
         if path not in self.watched_files:
             self.lgr.debug('traceFiles open and close %s' % outfile)
-            with open(outfile, 'w') as fh:
+            with open(outfile+'-read', 'w') as fh:
+                fh.write('start of RESim copy of %s\n' % outfile) 
+            with open(outfile+'-write', 'w') as fh:
                 fh.write('start of RESim copy of %s\n' % outfile) 
             self.watched_files.append(path)
 
@@ -62,10 +64,14 @@ class TraceFiles():
         self.open_files[fd] = self.FileWatch(None, outfile)
         self.open_files[fd].fd = fd
         if not self.raw:
-            with open(outfile, 'w') as fh:
+            with open(outfile+'-read', 'w') as fh:
+                    fh.write('start of RESim copy of FD %d\n' % fd) 
+            with open(outfile+'-write', 'w') as fh:
                     fh.write('start of RESim copy of FD %d\n' % fd) 
         else:
-            with open(outfile, 'wb') as fh:
+            with open(outfile+'-read', 'wb') as fh:
+                pass
+            with open(outfile+'-write', 'wb') as fh:
                 pass
         self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
         self.tracing_fd.append(fd)
@@ -82,8 +88,10 @@ class TraceFiles():
                 self.open_files[fd].fd = None
                 del self.open_files[fd]
                 self.lgr.debug('TraceFiles close %d num open files %d'  % (fd, len(self.open_files)))
-        else:
-            with open(self.open_files[fd].outfile, 'a') as fh:
+        elif not self.raw:
+            with open(self.open_files[fd].outfile+'-read', 'a') as fh:
+                fh.write('\nFile closed.\n')
+            with open(self.open_files[fd].outfile+'-write', 'a') as fh:
                 fh.write('\nFile closed.\n')
 
     def nonull(self, the_bytes):
@@ -98,14 +106,25 @@ class TraceFiles():
             index += 1
         return retval 
 
+    def read(self, pid, fd, the_bytes):
+        self.lgr.debug('traceFiles read')
+        self.io(pid, fd, the_bytes, read=True)
+
     def write(self, pid, fd, the_bytes):
-        ''' Note, called for both read and write by sharedSyscall '''
+        self.lgr.debug('traceFiles write')
+        self.io(pid, fd, the_bytes, read=False)
+
+    def io(self, pid, fd, the_bytes, read=False):
+        suf = '-write'
+        if read:
+            suf = '-read'
         if the_bytes is None:
             return
         if self.raw:
             if fd in self.open_files:
-                with open(self.open_files[fd].outfile, 'ab') as fh:
+                with open(self.open_files[fd].outfile+suf, 'ab') as fh:
                     fh.write(bytearray(the_bytes))
+                    self.lgr.debug('traceFiles wrote raw %d bytes' % len(the_bytes))
     
         else:
             stripped = self.nonull(the_bytes)
@@ -115,7 +134,7 @@ class TraceFiles():
                 self.lgr.debug('TraceFiles write got fname %s' % fname)
                 if fname is not None and fname in self.path_list:
                     file_watch = self.path_list[fname]
-                    with open(self.path_list[fname].outfile, 'a') as fh:
+                    with open(self.path_list[fname].outfile+suf, 'a') as fh:
                         s = ''.join(map(chr,stripped))
                         self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                         fh.write(s)
@@ -126,7 +145,7 @@ class TraceFiles():
             
             if not did_write and fd in self.open_files:
                 ''' tracing fd '''
-                with open(self.open_files[fd].outfile, 'a') as fh:
+                with open(self.open_files[fd].outfile+suf, 'a') as fh:
                     s = ''.join(map(chr,stripped))
                     self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                     fh.write(s)
