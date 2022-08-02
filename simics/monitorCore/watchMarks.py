@@ -583,7 +583,7 @@ class WatchMarks():
         if self.cpu.architecture != 'arm':
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             base = self.mem_utils.getRegValue(self.cpu, 'ebp')
-            if dest > sp and dest <= base:
+            if dest is not None and dest > sp and dest <= base:
                   ''' copy is to a stack buffer.  Record so it can be deleted when opportuntity arises '''
                   pass
             else:
