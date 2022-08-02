@@ -907,6 +907,13 @@ class reverseToCall():
                                 if addr is not None:
                                     self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
+                            elif mn.startswith('mov') and '[' in op1:
+                                self.lgr.debug('is mov op1 is %s' % op1)
+                                addr = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = addr & self.task_utils.getMemUtils().SIZE_MASK
+                                if addr is not None:
+                                    self.lgr.debug('cycleRegisterMod, x86 set as addr type for 0x%x' % addr)
+                                    retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('xchg'):
                                 if self.decode.regIsPart(op1, self.reg):
                                     retval = RegisterModType(op0, RegisterModType.REG)
