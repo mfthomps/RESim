@@ -4521,6 +4521,9 @@ class GenMonitor():
         cmd = 'c %d' % n
         SIM_run_alone(SIM_run_command, cmd)
 
+    def getProgName(self, pid):
+        prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
+        return prog_name 
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
