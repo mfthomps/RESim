@@ -126,9 +126,12 @@ def getProgPath(prog):
     ida_path = getIdaData(prog)
     data_path = ida_path+'.prog'
     prog_file = None
-    with open(data_path) as fh:
-        lines = fh.read().strip().splitlines()
-        prog_file = lines[0].strip()
+    if not os.path.isfile(data_path):
+        print('failed to find prog file at %s' % data_path)
+    else:
+        with open(data_path) as fh:
+            lines = fh.read().strip().splitlines()
+            prog_file = lines[0].strip()
     return prog_file
 
 def getPacketFilter(packet_filter, lgr):
@@ -153,15 +156,17 @@ def getPacketFilter(packet_filter, lgr):
 def getBasicBlocks(prog):
     blocks = None
     prog_file = getProgPath(prog)
-    prog_elf = elfText.getTextOfText(prog_file)
-    print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
-    block_file = prog_file+'.blocks'
-    print('block file is %s' % block_file)
-    if not os.path.isfile(block_file):
-        print('block file not found %s' % block_file)
-        return
-    with open(block_file) as fh:
-        blocks = json.load(fh)
+    prog_elf = None
+    if prog_file is not None:
+        prog_elf = elfText.getTextOfText(prog_file)
+        print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+        block_file = prog_file+'.blocks'
+        print('block file is %s' % block_file)
+        if not os.path.isfile(block_file):
+            print('block file not found %s' % block_file)
+            return
+        with open(block_file) as fh:
+            blocks = json.load(fh)
     return blocks, prog_elf
 
 def getOneBasicBlock(prog, addr):
