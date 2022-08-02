@@ -69,6 +69,9 @@ def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
         hits = json.load(fh)
 
     blocks, prog_elf = resimUtils.getBasicBlocks(prog)
+    if blocks is None:
+        print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
+        return bnt_list
 
     if not quiet:
         num_blocks = 0
