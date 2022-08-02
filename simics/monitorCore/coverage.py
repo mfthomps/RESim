@@ -134,7 +134,7 @@ class Coverage():
         else: 
             phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
             if phys_block.address == 0 or phys_block.address is None:
-                self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                 self.unmapped_addrs.append(bb_rel)
             else:
                 if self.afl:
@@ -156,8 +156,11 @@ class Coverage():
         self.loadBlocks(block_file)         
         so_entry = self.so_map.getSOAddr(self.full_path, pid=self.pid)
         if so_entry is None:
-            self.lgr.error('coverage no SO entry for %s' % self.full_path)
-            return
+           
+            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.pid), pid=self.pid)
+            if so_entry is None:
+                self.lgr.error('coverage no SO entry for %s' % self.full_path)
+                return
         self.so_entry = so_entry
         if so_entry.address is not None:
             if so_entry.locate is not None:
@@ -243,7 +246,7 @@ class Coverage():
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
                           None, break_num)
                 self.missing_tables[pt.ptable_addr].append(bb_rel)
-                self.lgr.debug('handleUnmapped bb 0x%x added to missing tables for table addr 0x%x' % (bb_rel, pt.ptable_addr))
+                #self.lgr.debug('handleUnmapped bb 0x%x added to missing tables for table addr 0x%x' % (bb_rel, pt.ptable_addr))
             else:
                 self.lgr.debug('coverage, no page table address for 0x%x ' % (bb_rel))
                 ''' don't report on external jump tables etc.'''
