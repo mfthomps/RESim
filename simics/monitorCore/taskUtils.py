@@ -189,7 +189,6 @@ class TaskUtils():
     def read_list_head(self, cpu, addr, offset, head_addr = None, head_offset = None, other_offset = None):
         addr = self.mem_utils.getUnsigned(addr)
         next = self.mem_utils.readPtr(cpu, addr + offset)
-        #self.lgr.debug('read_list_head addr 0x%x  offset is 0x%x effective 0x%x  read 0x%x' % (addr, offset, (addr+offset), next)) 
         if next is None:
             self.lgr.debug('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
             return None
@@ -294,6 +293,8 @@ class TaskUtils():
                 task.sibling = []
         if self.param.ts_thread_group_list_head not in (None, -1):
             task.thread_group = self.read_list_head(cpu, addr, self.param.ts_thread_group_list_head)
+            ''' TBD why off by 4? '''
+            task.thread_group.next = task.thread_group.next + 4
         return task
 
     def getTaskStructs(self):
@@ -517,7 +518,7 @@ class TaskUtils():
             #     task.pid, task.next, task.thread_group.next, self.param.ts_next))
             if (task.next) == task_rec_addr or task.next == (task_rec_addr+self.param.ts_next):
                 next_addr = task_addr + self.param.ts_next
-                #self.lgr.debug('getTaskListPtr return next 0x%x  pid:%d (%s)' % (next_addr, task.pid, task.comm))
+                #self.lgr.debug('getTaskListPtr return next 0x%x  pid:%d (%s) task.next is 0x%x' % (next_addr, task.pid, task.comm, task.next))
                 return next_addr
             #print 'reading task struct for got comm of %s ' % (task.comm)
             tasks[task_addr] = task
@@ -529,11 +530,14 @@ class TaskUtils():
                 stack.append((task.real_parent, False))
             if self.param.ts_thread_group_list_head != None:
                 if task.thread_group.next:
-                    c = task.thread_group.next + self.mem_utils.WORD_SIZE
+                    #c = task.thread_group.next + self.mem_utils.WORD_SIZE
+                    #self.lgr.debug('getTaskListPtr, has thread_group c is 0x%x' % c) 
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
+                    ''' TBD remove hack of off by 4 once other off by 4 hack sorted out '''
                     if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
                         thread_group_addr = task_addr + self.param.ts_thread_group_list_head
-                        #self.lgr.debug('getTaskListPtr return thread group 0x%x' % thread_group_addr)
+                        #value = self.mem_utils.readPtr(self.cpu, thread_group_addr)
+                        #self.lgr.debug('getTaskListPtr return thread group 0x%x val read is 0x%x' % (thread_group_addr, value))
                         return thread_group_addr
                     stack.append((task.thread_group.next, False))
     
@@ -560,6 +564,16 @@ class TaskUtils():
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_next
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
+        return pid, comm
+
+    def getPidCommFromGroupNext(self, next_addr):
+        pid = None
+        comm = None
+        if next_addr is not None:
+            rec = next_addr - self.param.ts_thread_group_list_head
+            #self.lgr.debug('taskUtils getPidCommFromGroupNext try rec 0x%x' % rec)
             comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
         return pid, comm
