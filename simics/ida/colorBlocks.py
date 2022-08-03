@@ -119,15 +119,22 @@ def colorBlocks(in_path=None):
         fname = os.path.join(resim_ida_data, base, base)
         latest_hits_file = fname+'.hits' 
         if not os.path.isfile(latest_hits_file):
-            ''' maybe a symbolic link, ask monitor for name '''
-            #cmd = '@cgc.getCoverageFile()'
-            #latest_hits_file = gdbProt.Evalx('SendGDBMonitor("%s");' % cmd).strip()
-            #if not os.path.isfile(latest_hits_file):
-            print('No hits file found %s' % latest_hits_file)
-        else:                
+            ida_db_path = os.getenv('IDA_DB_PATH')
+            if ida_db_path is not None:
+                base = os.path.basename(ida_db_path)
+                base = base.rsplit('.',1)[0]
+                fname = os.path.join(resim_ida_data, base, base)
+                latest_hits_file = fname+'.hits' 
+            else:
+                print('no latest hits file at %s, and no IDA_DB_PATH env variable defined' % latest_hits_file)
+                
+            
+        if os.path.isfile(latest_hits_file):
             all_hits_file = fname+'.all.hits'
             pre_hits_file = fname+'.pre.hits'
             doColor(latest_hits_file, all_hits_file, pre_hits_file)
+        else:
+            print('no latest hits file at %s' % latest_hits_file)
 
 fname = idaversion.get_root_file_name()
 colorBlocks(fname)
