@@ -1032,13 +1032,20 @@ class GenContextMgr():
             return False
         
         if pid not in self.task_rec_bp or self.task_rec_bp[pid] is None:
+            cell = self.default_context
             watch_pid, watch_comm = self.task_utils.getPidCommFromNext(list_addr)
+            if watch_pid == 0:
+                self.lgr.debug('genContext watchExit, try group next')
+                watch_pid, watch_comm = self.task_utils.getPidCommFromGroupNext(list_addr)
+                cell = self.resim_context
+            '''
             if watch_pid in self.pid_cache:
                 #cell = self.resim_context
                 cell = self.default_context
             else:
                 cell = self.default_context
                 #cell = self.resim_context
+            '''
             #self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on 0x%x context: %s' % (watch_pid, watch_comm, pid, list_addr, cell))
             self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
