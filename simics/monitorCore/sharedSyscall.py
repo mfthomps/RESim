@@ -65,6 +65,9 @@ class SharedSyscall():
         self.stop_hap = None
         ''' used by writeData to make application think fd has no more data '''
         self.fool_select = None
+        ''' piggyback datawatch kernel returns '''
+        self.callback = None
+        self.callback_param = None
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -124,7 +127,7 @@ class SharedSyscall():
             for eip in my_exit_pids:
                 if pid in my_exit_pids[eip]:
                     my_exit_pids[eip].remove(pid)
-                    self.lgr.debug('rmExitHap removed pid %d for eip 0x%x' % (pid, eip))
+                    self.lgr.debug('rmExitHap removed pid %d for eip 0x%x cycle: 0x%x' % (pid, eip, self.cpu.cycles))
                     if len(my_exit_pids[eip]) == 0:
                         #self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
                         self.context_manager.genDeleteHap(self.exit_hap[eip])
@@ -366,8 +369,9 @@ class SharedSyscall():
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
-                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d from 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, 
-                    eax, exit_info.retval_addr, s))
+                eip = self.getEIP()
+                trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, 
+                    eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
             else:
                 trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
 
@@ -514,6 +518,10 @@ class SharedSyscall():
         if did_exit:
             #self.lgr.debug('sharedSyscall exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
+            if self.callback is not None:
+                self.lgr.debug('sharedSyscall exitHap call callback (dataWatch kernelReturnHap?)')
+                self.callback(self.callback_param, context, break_num, memory)
+                self.callback = None
 
     def fcntl(self, pid, eax, exit_info):
         if net.fcntlCmdIs(exit_info.cmd, 'F_DUPFD'):
@@ -985,3 +993,13 @@ class SharedSyscall():
             del self.exit_names[pid]
 
         self.lgr.debug('rmExitBySyscallName return from %s' % name)
+
+    def setcallback(self, callback, param):
+        self.callback = callback
+        self.callback_param = param
+
+    def callbackPending(self):
+        if self.callback is not None:
+            return True
+        else:
+            return False
