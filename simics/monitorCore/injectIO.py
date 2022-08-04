@@ -11,7 +11,7 @@ class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
-           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_this=False):
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -105,7 +105,7 @@ class InjectIO():
         if packet_filter is not None:
             self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
         self.no_iterators = no_iterators
-        self.only_this = only_this
+        self.only_thread = only_thread
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -189,7 +189,7 @@ class InjectIO():
 
             self.top.stopDebug()
             self.top.debugPidGroup(self.pid) 
-            if self.only_this:
+            if self.only_thread:
                 self.context_manager.watchOnlyThis()
             self.top.watchPageFaults()
             if self.no_rop:
