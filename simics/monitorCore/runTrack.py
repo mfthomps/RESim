@@ -31,10 +31,12 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
     here = os.getcwd()
     workspace = os.path.basename(here)
     log = '/tmp/resim-%s.log' % workspace
+    if only_thread:
+        os.environ['ONE_DONE_PARAM2']='True'
     with open(log, 'wb') as fh:
         for f in afl_list:
             os.environ['ONE_DONE_PATH'] = f
@@ -76,6 +78,7 @@ def main():
     parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
+    parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
     
     args = parser.parse_args()
     resim_ini = args.ini
@@ -118,12 +121,12 @@ def main():
                 continue
             os.chdir(instance)
             lgr.debug('start oneTrack from workspace %s' % instance)
-            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr))
             thread_list.append(track_thread)
             track_thread.start()
             os.chdir(here)
     else:
-        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr))
         thread_list.append(track_thread)
         track_thread.start()
    

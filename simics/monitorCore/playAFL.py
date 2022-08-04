@@ -12,7 +12,7 @@ import json
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -34,6 +34,8 @@ class PlayAFL():
         self.all_hits = []
         ''' If parallel, the all_hits will not be tracked or written.  TBD to that separately.'''
         self.parallel = parallel
+        ''' Only track current thread '''
+        self.only_thread = only_thread
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
             try:
@@ -124,7 +126,7 @@ class PlayAFL():
         self.physical=False
         if self.coverage is not None:
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone)
+               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread)
             self.physical = True
             if linear:
                 self.physical = False

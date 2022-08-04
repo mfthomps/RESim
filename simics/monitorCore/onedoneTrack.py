@@ -22,7 +22,11 @@ def onedone(top):
     mytop=top
     path=os.getenv('ONE_DONE_PATH')
     outpath=os.getenv('ONE_DONE_PARAM')
-    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False)
+    only_thread_s=os.getenv('ONE_DONE_PARAM2')
+    only_thread = False 
+    if only_thread_s is not None and only_thread_s.lower() == 'true':
+        only_thread = True
+    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread)
     myinject.setExitCallback(reportExit)
     myinject.go()
 

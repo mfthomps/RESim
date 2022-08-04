@@ -86,6 +86,9 @@ def runPlay(args, lgr):
         os.environ['ONE_DONE_PARAM']='tcp'
     else:
         os.environ['ONE_DONE_PARAM']='udp'
+    if args.only_thread:
+        os.environ['ONE_DONE_PARAM2']='True'
+         
 
     read_array = []
     fifo_list = []
@@ -152,6 +155,7 @@ def main():
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
+    parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
