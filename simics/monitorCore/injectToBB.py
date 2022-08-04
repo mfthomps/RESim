@@ -78,6 +78,8 @@ class InjectToBB():
                 new_data = afl_filter.filter(data, None)
                 with open(dest, 'wb') as fh:
                     fh.write(new_data)
+            else:
+                shutil.copyfile(qfile, dest)
             self.inject_io.go()
        
         else:
