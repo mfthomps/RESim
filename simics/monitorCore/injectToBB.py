@@ -89,6 +89,7 @@ class InjectToBB():
         self.lgr.debug('InjectToBB doStop')
         self.top.stopDataWatch()
         SIM_run_alone(self.inject_io.delCallHap, None)
+        self.top.setDebugBookmark('injectToBB')
         status = SIM_simics_is_running()
         if status:
             self.top.stopAndGo(self.gobb)
