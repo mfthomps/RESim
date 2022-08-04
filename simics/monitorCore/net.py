@@ -187,16 +187,19 @@ class SockStruct():
 
     def getString(self):
         fd = ''
+        addr = ''
         if self.fd is not None and self.fd >= 0:
             fd = 'FD: %d' % self.fd
+        if self.addr is not None:
+            addr = 'addr: 0x%x' % self.addr
         if self.sa_family is None:
             retval = ('%s sa_family unknown' % (fd))
         elif self.sa_family == 1:
-            retval = ('%s sa_family%d: %s  sa_data: %s' % (fd, self.sa_family, self.famName(), self.sa_data))
+            retval = ('%s sa_family%d: %s %s sa_data: %s' % (fd, self.sa_family, self.famName(), addr, self.sa_data))
         elif self.sa_family == 2 or (self.sa_family == 0 and self.port is not None):
-            retval = ('%s sa_family%d: %s  address: %s:%d' % (fd, self.sa_family, self.famName(), self.dottedIP(), self.port))
+            retval = ('%s sa_family%d: %s %s IP address: %s:%d' % (fd, self.sa_family, self.famName(), addr, self.dottedIP(), self.port))
         else:
-            retval = ('%s sa_family%d: %s  TBD' % (fd, self.sa_family, self.famName()))
+            retval = ('%s sa_family%d: %s %s TBD' % (fd, self.sa_family, self.famName(), addr))
         return retval
 
 class Iovec():
