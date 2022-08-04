@@ -84,6 +84,7 @@ class Coverage():
         self.so_entry = None
         self.no_save = False
         self.mode_hap = None
+        self.only_thread = False
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -434,6 +435,12 @@ class Coverage():
             if pid != self.pid:
                 self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
+
+        if self.only_thread:
+            pid = self.top.getPID()
+            if pid != self.pid:
+                self.lgr.debug('coverage bbHap, wrong thread: %d' % pid)
+                return
         
         if addr == 0:
             self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
@@ -788,11 +795,12 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, create_dead_zone=False, no_save=False):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, create_dead_zone=False, no_save=False, only_thread=False):
         self.enabled = True
         self.pid = pid
         self.create_dead_zone = create_dead_zone
         self.no_save = no_save
+        self.only_thread = only_thread
         if fname is not None:
             self.full_path = fname
             self.hits_path = resimUtils.getIdaData(fname)
