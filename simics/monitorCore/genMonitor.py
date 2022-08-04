@@ -3690,7 +3690,7 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_this=False):
+            break_on=None, no_iterators=False, only_thread=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -3720,7 +3720,7 @@ class GenMonitor():
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one,  
-                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_this=only_this)
+                  no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread)
 
         if go:
             self.injectIOInstance.go()
@@ -4105,10 +4105,10 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False):
-        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel)
+    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False):
+        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, parallel=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, parallel=False, only_thread=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
@@ -4121,7 +4121,7 @@ class GenMonitor():
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, 
-              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel)
+              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread)
         if play is not None:
             self.lgr.debug('playAFL now go')
             play.go()
@@ -4524,6 +4524,9 @@ class GenMonitor():
     def getProgName(self, pid):
         prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
         return prog_name 
+ 
+    def getSharedSyscall(self):
+        return self.sharedSyscall[self.target]
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
