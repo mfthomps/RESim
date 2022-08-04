@@ -561,17 +561,33 @@ class DataWatch():
                 return
             
             if self.mem_something.op_type == Sim_Trans_Load:
-                buf_start = self.findRange(self.mem_something.src)
-                if buf_start is None:
+                #buf_start = self.findRange(self.mem_something.src)
+                buf_index = self.findRangeIndex(self.mem_something.src)
+                if buf_index is None:
                     self.lgr.error('dataWatch buf_start for 0x%x is none in memcpyish?' % (self.mem_something.src))
                     buf_start = 0
                     #SIM_break_simulation('mempcpy')
                     #return
+                else:
+                    buf_start = self.start[buf_index]
+                    if self.length[buf_index] < self.mem_something.count:
+                        self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
+                        self.mem_something.count = self.length[buf_index]
             else:
                 self.lgr.debug('returnHap copy not a Load, first see if src is a buf')
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
-                    buf_start = self.findRange(self.mem_something.dest)
+                    self.lgr.debug('dataWatch returnHap, overwrite buffer with unwatched content.')
+                    buf_index = self.findRangeIndex(self.mem_something.dest)
+                    if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
+                        self.lgr.debug('dataWatch returnHap, overwrite buffer exact match, remove the buffer')
+                        if buf_index in self.read_hap:
+                            self.context_manager.genDeleteHap(self.read_hap[buf_index], immediate=False)
+                            self.read_hap[buf_index] = None
+                        self.start[buf_index] = 0
+                    else:
+                        self.lgr.warning('dataWatch returnHap, TBD, overwrite buffer exact match, but not a match.  start 0x%x len %d' % (self.start[buf_index], 
+                               self.length[buf_index]))
 
             mark = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start, self.mem_something.op_type)
             if self.mem_something.op_type == Sim_Trans_Load:
@@ -613,10 +629,19 @@ class DataWatch():
             if buf_start is not None:
                 self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark = mark) 
         elif self.mem_something.fun == 'memset':
-            self.setRange(0, 0, None) 
             self.lgr.debug('dataWatch returnHap, return from memset dest: 0x%x count %d ' % (self.mem_something.dest, self.mem_something.count))
-            buf_start = self.findRange(self.mem_something.dest)
-            self.watchMarks.memset(self.mem_something.dest, self.mem_something.count, buf_start)
+            buf_index = self.findRangeIndex(self.mem_something.dest)
+            if buf_index is not None:
+                self.lgr.debug('dataWatch returnHap memset on one of our buffers')
+                if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
+                    self.lgr.debug('dataWAtch returnHap memset is exact match, remove buffer')
+                    if buf_index in self.read_hap:
+                        self.context_manager.genDeleteHap(self.read_hap[buf_index], immediate=False)
+                        self.read_hap[buf_index] = None
+                    self.start[buf_index] = 0
+                else:
+                    self.lgr.warning('dataWatch returnHap memset but not match, TBD fix this buf start 0x%x  len %d' % (self.start[buf_index], self.length[buf_index]))
+                self.watchMarks.memset(self.mem_something.dest, self.mem_something.count, self.start[buf_index])
         elif self.mem_something.fun == 'strdup':
             if self.cpu.architecture == 'arm':
                 self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'r0')
@@ -815,9 +840,9 @@ class DataWatch():
                             pass
                         else:
                             ret_addr_offset = sp - self.mem_something.ret_addr_addr 
-                            self.lgr.debug('getmemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomthing ret_ip 0x%x' % (self.mem_something.fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
+                            self.lgr.debug('getMemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomthing ret_ip 0x%x' % (self.mem_something.fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
                     else:
-                        self.lgr.debug('getmemParam did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (self.mem_something.fun, eip))
+                        self.lgr.debug('getMemParam did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (self.mem_something.fun, eip))
                     self.mem_fun_entries[self.mem_something.fun] = self.MemCallRec(None, ret_addr_offset, eip)
             else:
                 ''' adjust  to account for simics not adjusting sp on break on function entry '''
@@ -990,9 +1015,11 @@ class DataWatch():
             if not data_hit and not skip_fun:
                 #self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
-                buf_start = self.findRange(self.mem_something.src)
-                if buf_start is None:
+                #buf_start = self.findRange(self.mem_something.src)
+                buf_index = self.findRangeIndex(self.mem_something.src)
+                if buf_index is None:
                     ''' handle ambigous calls such as strcmp '''
+                    buf_start = None
                     if self.mem_something.dest is not None:
                         buf_start = self.findRange(self.mem_something.dest)
                     if buf_start is None:
@@ -1003,8 +1030,11 @@ class DataWatch():
                         else:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                 else:
+                    if self.length[buf_index] < self.mem_something.count:
+                        self.lgr.debug('dataWatch getMemParams no data hit, copy larger than buffer, truncate to %d' % self.length[buf_index])
+                        self.mem_something.count = self.length[buf_index]
                     self.mem_something.op_type = Sim_Trans_Load
-                    self.lgr.debug('dataWatch getMemParams got buf_start of 0x%x' % buf_start)
+                    self.lgr.debug('dataWatch getMemParams got buf_start of 0x%x' % self.start[buf_index])
             if not skip_fun:
                 if self.mem_something.ret_ip == 0:
                     self.lgr.error('dataWatch getMemParams ret_ip is zero, bail')
@@ -1599,6 +1629,13 @@ class DataWatch():
                 if addr >= self.start[index] and addr <= end:
                     return index
         return None
+
+    def showRange(self, addr):
+        index = self.findRangeIndex(addr)
+        if index is not None:
+            print('Address 0x%x in buffer starting at 0x%x, length %d' % (addr, self.start[index], self.length[index]))
+        else:
+            print('Address 0x%x not in any buffer.' % addr)
 
     def getWatchMarks(self):
         origin = self.top.getFirstCycle()
