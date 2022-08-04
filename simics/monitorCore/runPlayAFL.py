@@ -132,7 +132,12 @@ def runPlay(args, lgr):
             if not os.path.isfile(hit_file):
                 print('did not find %s, old unique file?' % hit_file)
                 continue
-            coverage = json.load(open(hit_file))
+            try:
+                coverage = json.load(open(hit_file))
+            except:
+                with open(hit_file, 'w'):
+                    pass
+                continue 
             print('do hit file %s' % hit_file)
             for hit in coverage:
                 hit_i = int(hit)
