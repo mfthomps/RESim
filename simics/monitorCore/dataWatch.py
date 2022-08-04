@@ -80,7 +80,7 @@ class DataWatch():
             self.decode = decode
         self.readLib = readLibTrack.ReadLibTrack(cpu, self.mem_utils, 
                   self.context_manager, self, self.top, self.lgr)
-
+        self.user_iterators = None
         self.resetState()
 
     def resetState(self):
@@ -100,7 +100,6 @@ class DataWatch():
         self.prev_read_cycle = 0
         self.ida_funs = None
         self.relocatables = None
-        self.user_iterators = None
         self.other_starts = [] # buffer starts that were skipped because they were subranges.
         self.other_lengths = [] 
         self.retrack = False
@@ -457,16 +456,28 @@ class DataWatch():
 
     def kernelReturnHap(self, kernel_return_info, third, forth, memory):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+        eax = self.mem_utils.getSigned(eax)
         #self.top.showHaps()
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-        self.lgr.debug('kernelReturnHap, pid:%d (%s) retval 0x%x  addr: 0x%x context: %s compat32: %r' % (pid, comm, eax, 
-            kernel_return_info.addr, str(self.cpu.current_context), self.compat32))
-        frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
+        #frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
+        frame, cycles = self.rev_to_call.getPreviousCycleFrame(pid)
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('kernelReturnHap, pid:%d (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (pid, comm, eip, eax, 
+            kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
+        self.lgr.debug(taskUtils.stringFromFrame(frame))
         if kernel_return_info.op_type == Sim_Trans_Load:
-            callnum = self.mem_utils.getCallNum(self.cpu)
-            call = self.task_utils.syscallName(callnum, self.compat32)
-            self.watchMarks.kernel(kernel_return_info.addr, eax, frame, callnum)
-            write_fd = frame['param1']
+            if 'ss' in frame:
+                self.lgr.debug('frame has ss: %s' % frame['ss'].getString())
+                callnum = 102
+                call = net.callname[frame['param1']].lower()
+                write_fd = frame['ss'].fd
+                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
+            else:
+                callnum = self.mem_utils.getCallNum(self.cpu)
+                call = self.task_utils.syscallName(callnum, self.compat32)
+                write_fd = frame['param1']
+                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
+
             read_fd = self.getPipeReader(str(write_fd))
             if read_fd is not None:
                 self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
@@ -485,7 +496,12 @@ class DataWatch():
         #cell = self.top.getCell()
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
         #self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, addr, proc_break, 'memcpy_return_hap')
+        if self.top.getSharedSyscall().callbackPending():
+            return
         self.lgr.debug('kernelReturn for addr 0x%x optype %s' % (kernel_return_info.addr, str(kernel_return_info.op_type))) 
+        ''' hack TBD '''
+        self.top.getSharedSyscall().setcallback(self.kernelReturnHap, kernel_return_info)
+        return
         if not self.break_simulation:
             self.stopWatch()
         if self.cpu.architecture == 'arm':
@@ -1736,7 +1752,7 @@ class DataWatch():
 
     def setUserIterators(self, user_iterators):
         self.user_iterators = user_iterators
-        self.lgr.debug('dataWatch setUesrIterators')
+        self.lgr.debug('dataWatch setUserIterators %s' % str(user_iterators))
 
     def wouldBreakSimulation(self):
         if self.break_simulation:
@@ -1923,7 +1939,7 @@ class DataWatch():
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
-        #self.lgr.debug('memsomething begin, max_index %d' % (max_index))
+        self.lgr.debug('memsomething begin, max_index %d' % (max_index))
         outer_index = None
         prev_fun = None
         for i in range(max_index, -1, -1):
@@ -1960,13 +1976,15 @@ class DataWatch():
                             #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                self.lgr.debug('dataWatch memsomething fun is %s' % fun)
                 if fun is not None and fun == prev_fun and fun != 'None':
                     self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
                 else:
+                    self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
                     prev_fun = fun
-                
+                if self.user_iterators is None:
+                    self.lgr.debug('NO user iterators')
                 if fun in local_mem_funs or (self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr)):
                     if fun in local_mem_funs:
                         self.lgr.debug('fun in local_mem_funs %s' % fun)
