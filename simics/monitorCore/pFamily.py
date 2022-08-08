@@ -12,9 +12,9 @@ class Prec():
         self.debugging = False
 
 class Pfamily():
-    def __init__(self, target, param, cell_config, mem_utils, task_utils, lgr):
-        self.cell_config = cell_config
-        self.target = target
+    def __init__(self, cell, param, cpu, mem_utils, task_utils, lgr):
+        self.cpu = cpu
+        self.cell = cell
         self.param = param
         self.mem_utils = mem_utils
         self.task_utils = task_utils
@@ -104,10 +104,8 @@ class Pfamily():
          
 
     def traceExecve(self, comm=None):
-        cpu = self.cell_config.cpuFromCell(self.target)
-        cell = self.cell_config.cell_context[self.target]
-        look4_prec = Prec(cpu, comm, None)
+        look4_prec = Prec(self.cpu, comm, None)
         self.lgr.debug('toExecve set break at 0x%x' % self.param.execve)
-        proc_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.param.execve, self.mem_utils.WORD_SIZE, 0)
+        proc_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.execve, self.mem_utils.WORD_SIZE, 0)
         proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.execveHap, look4_prec, proc_break)
         self.report_fh = open('/tmp/pfamily.txt', 'w')
