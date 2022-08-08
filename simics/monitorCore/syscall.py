@@ -724,7 +724,7 @@ class Syscall():
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
         self.checkExecve(prog_string, arg_string_list, call_info.pid)
-
+        self.context_manager.newProg(prog_string, call_info.pid)
 
 
     def checkExecve(self, prog_string, arg_string_list, pid):
@@ -765,7 +765,7 @@ class Syscall():
                             if full_path is not None and os.path.isfile(full_path):
                                 ftype = magic.from_file(full_path)
                                 if ftype is None:
-                                    self.lgr.error('checkExecve failed to find file type for %s pid %d' % (prog_string, pid))
+                                    self.lgr.error('checkExecve failed to find file type for %s pid:%d' % (prog_string, pid))
                                     return
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
@@ -820,6 +820,7 @@ class Syscall():
             else:
                 break
         ida_msg = 'execve prog: %s %s  pid:%d' % (prog_string, arg_string, pid)
+        self.context_manager.newProg(prog_string, pid)
         self.lgr.debug(ida_msg)
         if self.traceMgr is not None:
             self.traceMgr.write(ida_msg+'\n')
@@ -1780,16 +1781,17 @@ class Syscall():
                  
 
         if callname in self.exit_calls:
+            self.context_manager.pidExit(pid)
             if callname == 'tgkill':
                 tgid = frame['param1']
                 tid = frame['param2']
                 sig = frame['param3']
-                ida_msg = '%s pid %d tgid: %d  tid: %d sig:%d' % (callname, pid, tgid, tid, sig)
+                ida_msg = '%s pid:%d tgid: %d  tid: %d sig:%d' % (callname, pid, tgid, tid, sig)
                 if tid != pid:
                     self.lgr.error('tgkill called from %d for other process %d, fix this TBD!' % (pid, tid))
                     return
             else: 
-                ida_msg = '%s pid %d' % (callname, pid)
+                ida_msg = '%s pid:%d' % (callname, pid)
             self.lgr.debug('syscallHap exit of pid:%d' % pid)
             if callname == 'exit_group':
                 self.handleExit(pid, ida_msg, exit_group=True)
@@ -1872,8 +1874,9 @@ class Syscall():
             else:
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
+            debugging_pid, dumb = self.context_manager.getDebugPid()
             self.lgr.debug('syscallHap handleExit pid %d last_one %r debugging %d retain_so %r' % (pid, last_one, self.debugging, retain_so))
-            if (last_one or exit_group) and self.debugging:
+            if (last_one or (exit_group and pid == debugging_pid)) and self.debugging:
                 if self.debugging_exit:
                     ''' exit before we got to text section '''
                     self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
