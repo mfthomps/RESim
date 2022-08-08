@@ -1405,7 +1405,7 @@ class reverseToCall():
 
     def sysenterHap(self, prec, third, forth, memory):
         #reversing = SIM_run_command('simulation-reversing')
-        self.lgr.debug('sysenterHap')
+        #self.lgr.debug('sysenterHap')
         reversing = False
         if reversing:
             return

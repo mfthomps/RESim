@@ -611,7 +611,7 @@ class SharedSyscall():
             #    return
             self.top.recordStackBase(eax, exit_info.fname_addr)
             if  pid in self.trace_procs and self.traceProcs.addProc(eax, pid, clone=True):
-                trace_msg = ('\treturn from clone (tracing), new pid:%d  calling pid:%d\n' % (eax, pid))
+                trace_msg = ('\treturn from clone (tracing), new pid:%d  calling pid:%d (%s)\n' % (eax, pid, comm))
                 #self.lgr.debug('exitHap clone called addProc for pid:%d parent %d' % (eax, pid))
                 self.traceProcs.copyOpen(pid, eax)
             elif pid not in self.trace_procs:
