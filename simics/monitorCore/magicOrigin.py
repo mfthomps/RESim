@@ -38,6 +38,7 @@ class MagicOrigin():
         self.lgr = lgr
         self.did_magic = False
         self.magic_hap = None
+        self.break_simulation = False
         self.setMagicHap()
 
     def setMagicHap(self):
@@ -100,8 +101,14 @@ class MagicOrigin():
             establish a new origin '''
         if self.magic_hap is not None:
             if magic_number == 99:
-                self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
-                self.top.stopAndGo(self.setOrigin)
-                #SIM_run_alone(self.deleteMagicHapAlone, None)
+                if self.break_simulation:
+                    SIM_break_simulation('magic stop')
+                else:
+                    self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
+                    self.top.stopAndGo(self.setOrigin)
+                    #SIM_run_alone(self.deleteMagicHapAlone, None)
     def didMagic(self):
         return self.did_magic
+
+    def magicStop(self):
+        self.break_simulation = True
