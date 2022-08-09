@@ -650,7 +650,7 @@ class DataWatch():
             else: 
                 self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'eax')
             #self.lgr.debug('dataWatch returnHap, strdup return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
-                   self.mem_something.dest, self.mem_something.count))
+            #       self.mem_something.dest, self.mem_something.count))
             if self.mem_something.op_type == Sim_Trans_Load:
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
