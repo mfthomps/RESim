@@ -274,7 +274,7 @@ class Syscall():
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
-                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False): 
+                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -343,6 +343,8 @@ class Syscall():
             tf = '/tmp/syscall_trace.txt'
             #self.traceMgr.open(tf, cpu, noclose=True)
             self.traceMgr.open(tf, cpu)
+        ''' track kernel buffers '''
+        self.kbuffer = kbuffer
        
         break_list, break_addrs = self.doBreaks(compat32, background)
  
@@ -1412,6 +1414,9 @@ class Syscall():
                     if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                         self.lgr.debug('syscall read add param break_sim is %r' % call_param.break_simulation)
                         exit_info.call_params = call_param
+                        if self.kbuffer is not None:
+                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                         break
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''

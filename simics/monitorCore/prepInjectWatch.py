@@ -13,13 +13,14 @@ will include the address of the kernel buffer, and the kernel pointers
 used ot calculate the ioctl return value.
 '''
 class PrepInjectWatch():
-    def __init__(self, top, cpu, cell_name, mem_utils, dataWatch, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, dataWatch, kbuffer, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
         self.top = top
         self.dataWatch = dataWatch
         self.lgr = lgr
         self.mem_utils = mem_utils
+        self.kbuffer = kbuffer
         self.snap_name = None
         self.len_buf = None
         self.fd = None
@@ -34,6 +35,10 @@ class PrepInjectWatch():
             self.lgr.debug('setup using arm decoder')
         else:
             self.decode = decode
+        if self.kbuffer is not None:
+            self.lgr.debug('PrepInjectWatch got kbuffer')
+        else:
+            self.lgr.debug('PrepInjectWatch NO kbuffer')
 
 
     def doInject(self, snap_name, watch_mark):
@@ -159,8 +164,15 @@ class PrepInjectWatch():
         ''' POOR names, we don't know which one is the start until we read the values from these addresses '''
         pickDict['k_start_ptr'] = self.k_start_ptr
         pickDict['k_end_ptr'] = self.k_end_ptr
+        if self.kbuffer is not None:
+            self.lgr.debug('prepInjectWatch pickleit saving kbufs')
+            ''' TBD extend to dict to also track cycles so we can inject to middle of a stream, e.g., third read '''
+            kbufs = self.kbuffer.getKbuffers()
+            pickDict['k_bufs'] = kbufs
+            pickDict['k_buf_len'] = self.kbuffer.getBufLength()
+
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
-        ''' Otherwise console has no indiation of when done. '''
+        ''' Otherwise console has no indication of when done. '''
         print('Configuration file saved, ok to quit.')
         self.top.quit()

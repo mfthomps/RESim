@@ -68,6 +68,8 @@ class SharedSyscall():
         ''' piggyback datawatch kernel returns '''
         self.callback = None
         self.callback_param = None
+   
+        self.kbuffer = None
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -713,6 +715,8 @@ class SharedSyscall():
                     if exit_info.origin_reset:
                         self.lgr.debug('sharedSyscall found origin reset, do it')
                         SIM_run_alone(self.stopAlone, None)
+                    if self.kbuffer is not None:
+                        self.kbuffer.readReturn(eax)
                 elif exit_info.call_params is not None and exit_info.call_params.match_param.__class__.__name__ == 'Dmod':
                   exit_info.call_params = None
                   if eax < 16000:
@@ -1003,3 +1007,6 @@ class SharedSyscall():
             return True
         else:
             return False
+
+    def setKbuffer(self, kbuffer):
+        self.kbuffer = kbuffer

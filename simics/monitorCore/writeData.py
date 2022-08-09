@@ -81,6 +81,7 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
+        self.k_bufs = None
 
         self.loadPickle(snapshot_name)
 
@@ -110,6 +111,21 @@ class WriteData():
         self.current_packet = 0
         self.total_read = 0
 
+    def writeKdata(self, data):
+        if self.k_bufs is None:
+            self.mem_utils.writeString(self.cpu, self.addr, data) 
+        else:
+            remain = len(data)
+            offset = 0
+            index = 0
+            while remain > 0:
+                 count = min(self.k_buf_len, remain)
+                 end = offset + count
+                 self.lgr.debug('writeKdata to buf[%d] 0x%x data[%d:%d] remain %d' % (index, self.k_bufs[index], offset, end, remain))
+                 self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
+                 index = index + 1
+                 offset = offset + count 
+                 remain = remain - count
     
     def write(self, record=False):
         #self.lgr.debug('writeData write, addr is 0x%x' % self.addr)
@@ -133,9 +149,9 @@ class WriteData():
                 self.in_data = self.in_data[:self.max_len]
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
-                self.mem_utils.writeString(self.cpu, self.addr, result) 
+                self.writeKdata(result)
             else:
-                self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+                self.writeKdata(self.in_data)
             retval = len(self.in_data)
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             if self.dataWatch is not None:
@@ -473,6 +489,11 @@ class WriteData():
             if 'k_start_ptr' in so_pickle:
                 self.k_start_ptr = so_pickle['k_start_ptr']
                 self.k_end_ptr = so_pickle['k_end_ptr']
+
+            if 'k_bufs' in so_pickle:
+                self.lgr.debug('writeData pickle got k_bufs')
+                self.k_bufs = so_pickle['k_bufs']
+                self.k_buf_len = so_pickle['k_buf_len']
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
