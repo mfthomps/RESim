@@ -19,7 +19,11 @@ def findBB(target, bb, quiet=False):
     cover_list = aflPath.getAFLCoverageList(target)
     for cover in cover_list:
         with open(cover) as fh:
-            hit_list = json.load(fh)
+            try:
+                hit_list = json.load(fh)
+            except:
+                print('Failed to open %s' % cover)
+                continue
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
                 if not os.path.isfile(queue):
