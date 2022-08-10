@@ -184,9 +184,10 @@ class GenContextMgr():
         self.resim_context = obj
         self.lgr.debug('context_manager cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
 
-        cmd = 'new-context ignore' 
+        ignore = 'ignore_%s' % cell_name
+        cmd = 'new-context %s' % ignore
         SIM_run_command(cmd)
-        obj = SIM_get_object(context)
+        obj = SIM_get_object(ignore)
         self.ignore_context = obj
         self.lgr.debug('context_manager cell %s ignore_context defined as obj %s' % (self.cell_name, str(obj)))
 
