@@ -1069,6 +1069,9 @@ class Syscall():
                     else:
                         self.lgr.debub('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
+                    if self.kbuffer is not None:
+                        self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                        self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     break
         elif socket_callname == "recvmsg": 
             
@@ -1977,6 +1980,7 @@ class Syscall():
         return retval
 
     def handleReadOrSocket(self, callname, frame, exit_info, syscall_info):
+        ''' TBD not yet used '''
         retval = None
         the_callname = callname
         if 'ss' in frame:
@@ -2019,6 +2023,9 @@ class Syscall():
                             if call_param.match_param == exit_info.old_fd:
                                 this_pid = self.top.getPID()
                                 self.lgr.debug('syscall setExits found fd %d, this pid %d' % (exit_info.old_fd, this_pid))
+                            if self.kbuffer is not None:
+                                self.lgr.debug('syscall recv kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                             break
        
         else:
