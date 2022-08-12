@@ -129,7 +129,7 @@ class SharedSyscall():
             for eip in my_exit_pids:
                 if pid in my_exit_pids[eip]:
                     my_exit_pids[eip].remove(pid)
-                    self.lgr.debug('rmExitHap removed pid %d for eip 0x%x cycle: 0x%x' % (pid, eip, self.cpu.cycles))
+                    #self.lgr.debug('rmExitHap removed pid %d for eip 0x%x cycle: 0x%x' % (pid, eip, self.cpu.cycles))
                     if len(my_exit_pids[eip]) == 0:
                         #self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
                         self.context_manager.genDeleteHap(self.exit_hap[eip])
@@ -143,7 +143,7 @@ class SharedSyscall():
                 #del my_exit_pids[eip][:]
                 my_exit_pids[eip] = []
                 if eip in self.exit_hap:
-                    self.lgr.debug('sharedSyscall rmExitHap, call contextManager to delete exit hap')
+                    #self.lgr.debug('sharedSyscall rmExitHap, call contextManager to delete exit hap')
                     self.context_manager.genDeleteHap(self.exit_hap[eip])
                     del self.exit_hap[eip]
                 self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
