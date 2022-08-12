@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import logging
 import subprocess
@@ -11,6 +12,12 @@ try:
 except:
     ''' Not always called from simics context '''
     pass
+try:
+    import importlib
+except:
+    ''' must be py 2.7 '''
+    pass
+
 def getLogger(name, logdir, level=None):
     os.umask(000)
     try:
@@ -134,19 +141,30 @@ def getProgPath(prog):
             prog_file = lines[0].strip()
     return prog_file
 
+def doLoad(packet_filter, path):
+    #print('version is %d %d' % (sys.version_info[0], sys.version_info[1]))
+    if sys.version_info[0] == 3:
+        spec = importlib.util.spec_from_file_location(packet_filter, path)
+        retval = importlib.util.module_from_spec(spec)
+        sys.modules[packet_filter] = retval
+        spec.loader.exec_module(retval)
+    else: 
+        retval = imp.load_source(packet_filter, path)
+    return retval
+
 def getPacketFilter(packet_filter, lgr):
     retval = None
     if packet_filter is not None:
         file_path = './%s.py' % packet_filter
         abs_path = os.path.abspath(file_path)
         if os.path.isfile(abs_path):
-            retval = imp.load_source(packet_filter, abs_path)
+            retval = doLoad(packet_filter, abs_path)
             lgr.debug('afl using AFL_PACKET_FILTER %s' % packet_filter)
         else:
             file_path = './%s' % packet_filter
             abs_path = os.path.abspath(file_path)
             if os.path.isfile(abs_path):
-                retval = imp.load_source(packet_filter, abs_path)
+                retval = doLoad(packet_filter, abs_path)
                 lgr.debug('afl using AFL_PACKET_FILTER %s' % packet_filter)
             else:
                 lgr.error('failed to find filter at %s' % packet_filter)
