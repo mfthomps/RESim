@@ -2127,6 +2127,7 @@ class GenMonitor():
             self.traceMgr[target].open(tf, cpu)
             if not self.context_manager[self.target].watchingTasks():
                 self.traceProcs[target].watchAllExits()
+            self.lgr.debug('traceAll, create syscall hap')
             self.trace_all[target] = syscall.Syscall(self, target, None, self.param[target], self.mem_utils[target], self.task_utils[target], 
                            self.context_manager[target], self.traceProcs[target], self.sharedSyscall[target], self.lgr, self.traceMgr[target], call_list=None, 
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
@@ -4513,6 +4514,9 @@ class GenMonitor():
         return retval
 
     def magicStop(self):
+        if self.target not in self.magic_origin:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         self.magic_origin[self.target].magicStop()
 
     def blackListPid(self, pid):
@@ -4521,8 +4525,8 @@ class GenMonitor():
     def jumper(self, from_addr, to_addr):
         ''' Set a control flow jumper '''
         if self.target not in self.jummper_dict:
-            self.jumper_dict[self.taget] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
-        self.jumper_dict[self.taget].setJumper(from_addr, to_addr)
+            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+        self.jumper_dict[self.target].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
 
     def jumperStop(self):
