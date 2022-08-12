@@ -1128,7 +1128,7 @@ class Syscall():
                 ida_msg = '%s - %s pid:%d buf: 0x%x %s' % (callname, socket_callname, pid, ss.addr, ss.getString())
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
-                    self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
+                    #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params = call_param
                     break
                 elif DEST_PORT in call_param.param_flags: 
@@ -1707,8 +1707,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-            pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
+        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
