@@ -220,8 +220,8 @@ class DataWatch():
             else:
                 my_len = max_len
 
-        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
-        #       my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
+        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
+               my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
         if fd is not None:
             self.total_read = self.total_read + length
             if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
@@ -267,17 +267,19 @@ class DataWatch():
             self.cycle.append(self.cpu.cycles)
             self.mark.append(watch_mark)
             if self.isCopyMark(watch_mark):
-                #self.lgr.debug('dataWatch setRange is copyMark, look for ret_to')
+                self.lgr.debug('dataWatch setRange is copyMark, look for ret_to')
                 ret_to = self.getReturnAddr(watch_mark.mark)
                 if ret_to is not None:
-                    #self.lgr.debug('DataWatch setRange stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
+                    self.lgr.debug('DataWatch setRange stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
                     if ret_to not in self.stack_buffers:
                         self.stack_buffers[ret_to] = []
                         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
                         self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+                    else:
+                        self.lgr.debug('dataWatch setRange eip 0x%x already in stack_buffers, no hap set' % ret_to)
                     index = len(self.start)-1
                     self.stack_buffers[ret_to].append(index)
-                    #self.lgr.debug('added index %d to stack_buffers[0x%x]' % (index, ret_to))
+                    self.lgr.debug('added index %d to stack_buffers[0x%x]' % (index, ret_to))
                 else:
                     pass
                     self.lgr.debug('DataWatch setRange stack buffer, but return address was NONE, so buffer reuse will cause hits')
@@ -301,10 +303,10 @@ class DataWatch():
 
     def stackBufHap(self, dumb, third, forth, memory):
         eip = memory.logical_address
-        #self.lgr.debug('stackBufHap eip 0x%x' % eip)
+        self.lgr.debug('stackBufHap eip 0x%x' % eip)
         if eip in self.stack_buf_hap:
             self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
-            #self.lgr.debug('stackBufHap eip in stack_buf_hap')
+            self.lgr.debug('stackBufHap eip in stack_buf_hap')
             for range_index in self.stack_buffers[eip]:
                 if range_index < len(self.read_hap):
                     self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
@@ -314,7 +316,9 @@ class DataWatch():
                 else:
                     self.lgr.debug('dataWatch stackBuf range_index %d out of range of read_hap whose len is %d?' % (range_index, len(self.read_hap)))
                     self.lgr.debug('read_hap has %s' % str(self.read_hap))
+            self.lgr.debug('stackBufHap remove entry for 0x%x' % eip)
             del self.stack_buf_hap[eip] 
+            del self.stack_buffers[eip] 
         else:
             self.lgr.debug('stackBufHap eip NOT in stack_buf_hap')
 
@@ -1376,10 +1380,10 @@ class DataWatch():
                 SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
                 return
             else:
-                #self.lgr.debug('finishReadHap Data read from 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
+                #self.lgr.debug('finishReadHap Data read from 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x <%s> cycle:0x%x' % (addr, 
                 #        offset, length, start, pid, eip, instruct[1], self.cpu.cycles))
                 self.prev_read_cycle = self.cpu.cycles
-                msg = ('Data read from 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
+                msg = ('Data read from 0x%x within buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, 
                             offset, length, start, eip))
                 self.lgr.debug(msg)
                 self.context_manager.setIdaMessage(msg)
@@ -1391,6 +1395,7 @@ class DataWatch():
                     self.watchMarks.compare('rep cmpsb', edi, esi, count, buf_start)
                 else: 
                     ad_hoc = False
+                    ''' see if an ad-hoc move. checkMove will update watch marks '''
                     self.checkMove(addr, trans_size, start, length, eip, instruct)
                 if self.break_simulation:
                     SIM_break_simulation('DataWatch read data')
@@ -1398,8 +1403,8 @@ class DataWatch():
 
         elif cpl > 0:
             ''' is a write to a data watch buffer '''
-           # self.lgr.debug('finishReadHap Data written to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
-            self.context_manager.setIdaMessage('Data written to 0x%x within input buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
+           # self.lgr.debug('finishReadHap Data written to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
+            self.context_manager.setIdaMessage('Data written to 0x%x within buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
             
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             ''' TBD git rid of this and depend on catching returns from function '''
@@ -1423,7 +1428,7 @@ class DataWatch():
             self.lgr.debug('dataWatch finishReadHap, modification by kernel, set kernelReturn hap')
             self.return_hap = 'eh'
             SIM_run_alone(self.kernelReturn, self.KernelReturnInfo(addr, op_type))
-            self.lgr.debug('Data written by kernel to 0x%x within input buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here TBD FIX THIS.' % (addr, offset, length, start, pid, eip))
+            self.lgr.debug('Data written by kernel to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x. In retrack, stop here TBD FIX THIS.' % (addr, offset, length, start, pid, eip))
             #self.stopWatch()
         else:
             self.lgr.debug('dataWatch finishReadHap, modification by kernel, set kernelReturn hap')
