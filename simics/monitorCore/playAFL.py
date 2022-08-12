@@ -58,7 +58,10 @@ class PlayAFL():
             ''' single file to play '''
             self.target = 'oneplay'
             relative = target[(len(self.afl_dir)+1):]
-            self.afl_list = [relative]
+            if len(relative.strip()) > 0:
+                self.afl_list = [relative]
+            else:
+                self.afl_list = [target]
             self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
         else:
             if not crashes:
@@ -297,6 +300,10 @@ class PlayAFL():
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
         fname = self.getHitsPath(self.index)
+        if not os.path.isfile(fname):
+            self.lgr.debug('playAFL record hits, assume ad-hoc path')
+            print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
+            fname = '/tmp/playAFL.hits'
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             json.dump(hit_bbs, fh) 
