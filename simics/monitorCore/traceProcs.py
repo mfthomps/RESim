@@ -422,8 +422,9 @@ class TraceProcs():
         if pid not in self.did_that:
             self.did_that.append(pid)
         tabs = tabs+'\t'
-        for child in self.plist[pid].children:
-            self.showFamily(child, tabs)
+        if pid in self.plist:
+            for child in self.plist[pid].children:
+                self.showFamily(child, tabs)
 
     def showAll(self):
         trace_path = '/tmp/procTrace.txt'
