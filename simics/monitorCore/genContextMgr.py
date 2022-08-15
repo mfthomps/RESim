@@ -24,6 +24,7 @@ class GenBreakpoint():
 
     def show(self):
         print('\tbreak_handle: %s num: %s  add:0x%x' % (str(self.handle), str(self.break_num), self.addr))
+        self.lgr.debug('\tbreak_handle: %s num: %s  add:0x%x' % (str(self.handle), str(self.break_num), self.addr))
 
     def clear(self):
         if self.break_num is not None:
@@ -52,7 +53,7 @@ class GenHap():
     def show(self):
         if self.handle is not None and self.hap_num is not None:
             print('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
-            #self.lgr.debug('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
+            self.lgr.debug('hap_handle: %d  num: %d name: %s context: %s' % (self.handle, self.hap_num, self.name, self.getContext()))
             for bp in self.breakpoint_list:
                 bp.show()
         elif self.handle is not None:
