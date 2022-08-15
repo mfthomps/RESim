@@ -80,7 +80,7 @@ class AFL():
                 self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
             else:
                 self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-                self.backstop_cycles =   100000
+                self.backstop_cycles =   1000000
                 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
@@ -185,11 +185,11 @@ class AFL():
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
             self.total_hits += self.coverage.getHitCount() 
-            self.total_cycles = self.total_cyles+(self.cpu.cycles-self.starting_cycle)
+            self.total_cycles = self.total_cycles+(self.cpu.cycles-self.starting_cycle)
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
                 avg_cycles = self.total_cycles/100
-                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles:' % (avg, avg_cycles))
+                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles: 0x%x' % (avg, int(avg_cycles)))
                 self.total_hits = 0
                 self.total_cycles = 0
                 struct._clearcache()
