@@ -35,6 +35,8 @@ def readPhysBytes(cpu, paddr, count):
     tot_read = 0
     retval = ()
     cur_addr = paddr
+    if cur_addr is None:
+        return None
     while tot_read < count:
         remain = count - tot_read
         remain = min(remain, 1024)
@@ -273,10 +275,14 @@ class memUtils():
                     if first_read is not None and len(first_read) == remain_in_page:
                         ''' get the rest ''' 
                         ps = self.v2p(cpu, start+remain_in_page)
-                        #self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
-                        second_read = readPhysBytes(cpu, ps, count - remain_in_page)
-                        #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
-                        retval = retval+first_read+second_read
+                        if ps is None:
+                            self.lgr.debug('readBytes, could not get phys addr of start+remain 0x%x wanted maxlen of %d' % ((start+remain_in_page), maxlen))
+                            retval = retval+first_read
+                        else:
+                            #self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
+                            second_read = readPhysBytes(cpu, ps, count - remain_in_page)
+                            #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
+                            retval = retval+first_read+second_read
                     else:
                         retval = retval+first_read
                 else: 
