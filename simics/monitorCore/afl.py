@@ -118,7 +118,9 @@ class AFL():
             self.lgr.debug('afl back from open')
         else: 
             self.lgr.debug('AFL did NOT find resim_ctl.fifo')
-          
+         
+        self.starting_cycle = cpu.cycles 
+        self.total_cycles = 0
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
             if self.orig_buffer is not None:
@@ -183,11 +185,18 @@ class AFL():
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
             self.total_hits += self.coverage.getHitCount() 
+            self.total_cycles = self.total_cyles+(self.cpu.cycles-self.starting_cycle)
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
-                self.lgr.debug('afl average hits in last 100 iterations is %d' % avg)
+                avg_cycles = self.total_cycles/100
+                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles:' % (avg, avg_cycles))
                 self.total_hits = 0
+                self.total_cycles = 0
                 struct._clearcache()
+                #dog = SIM_run_command('list-breakpoints')
+                #self.lgr.debug(dog)
+                #print(dog)
+                #self.top.showHaps()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
             status = self.coverage.getStatus()
             if status == AFL_OK:
