@@ -254,8 +254,8 @@ class Coverage():
                 if self.so_entry.text_start is not None:
                     end = self.so_entry.text_start + self.so_entry.text_size
                     if bb_rel >= self.so_entry.text_start and bb_rel <= end:
-                        #self.lgr.error('coverage, no page table address for text 0x%x so_entry.text_start 0x%x - 0x%x' % (bb_rel, 
-                        #     self.so_entry.text_start, end))
+                        self.lgr.error('coverage, no page table address for text 0x%x so_entry.text_start 0x%x - 0x%x' % (bb_rel, 
+                             self.so_entry.text_start, end))
                     else:
                         self.lgr.error('coverage, has text_start but no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
                 else:
