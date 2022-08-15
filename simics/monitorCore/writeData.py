@@ -121,20 +121,21 @@ class WriteData():
             while remain > 0:
                  count = min(self.k_buf_len, remain)
                  end = offset + count
-                 self.lgr.debug('writeKdata to buf[%d] 0x%x data[%d:%d] remain %d' % (index, self.k_bufs[index], offset, end, remain))
+                 #self.lgr.debug('writeKdata to buf[%d] 0x%x data[%d:%d] remain %d' % (index, self.k_bufs[index], offset, end, remain))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
     
     def write(self, record=False):
-        #self.lgr.debug('writeData write, addr is 0x%x' % self.addr)
+        #self.lgr.debug('writeData write, addr is 0x%x filter: %s' % (self.addr, str(self.filter)))
         if self.k_start_ptr is not None:
             ''' we have buffer start/end info from tracing ioctl '''
             this_len = len(self.in_data)
             orig_len = self.getOrigLen()
             if this_len > orig_len:
-                self.lgr.warning('writeData kernel buffer writing %d bytes' % (this_len))
+                #self.lgr.warning('writeData kernel buffer writing %d bytes' % (this_len))
+                pass 
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
                 self.mem_utils.writeString(self.cpu, self.addr, result) 
@@ -190,7 +191,7 @@ class WriteData():
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
-                #self.lgr.debug('%s' % next_data)
+               # self.lgr.debug('%s' % next_data)
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
@@ -200,10 +201,14 @@ class WriteData():
             else:
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
-                self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
+                if self.filter is not None:
+                    result = self.filter.filter(self.in_data, self.current_packet)
+                    self.mem_utils.writeString(self.cpu, self.addr, result) 
+                else:
+                    self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 tot_len = len(self.in_data)
                 eip = self.top.getEIP(self.cpu)
-                #self.lgr.debug('writeData TCP last packet, wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
+                #self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
@@ -239,7 +244,7 @@ class WriteData():
                 eip = self.top.getEIP(self.cpu)
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
-                self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
+                #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
                 if self.filter is not None and not self.filter.filter(data, self.current_packet):
                     self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
                     #self.lgr.debug('writeData failed filter, wrote nulls')
@@ -267,7 +272,7 @@ class WriteData():
             #if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             if self.k_start_ptr is None and self.call_ip is not None:
                 ''' NOTE stop on read will miss processing performed by other threads. '''
-                self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+                #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
                 self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
                 self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
                 if self.select_call_ip is not None:
@@ -287,7 +292,7 @@ class WriteData():
             return
         #self.lgr.debug('writeData selectHap ')
         if self.stop_on_read:
-            self.lgr.debug('writeData selectHap stop on read')
+            #self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
         pid = self.top.getPID()
@@ -320,10 +325,10 @@ class WriteData():
         self.handleCall()
 
     def handleCall(self):
-        #self.lgr.debug('writeData handleCall')
         pid = self.top.getPID()
+        #self.lgr.debug('writeData handleCall, pid:%d' % pid)
         if self.stop_on_read and len(self.in_data) == 0:
-            self.lgr.debug('writeData stop on read')
+            #self.lgr.debug('writeData stop on read')
             SIM_break_simulation('writeData stop on read')
             return
         if pid != self.pid:
@@ -337,9 +342,10 @@ class WriteData():
             '''
             if self.write_callback is not None:
                 if self.mem_utils.isKernel(self.addr):
-                    #rprint('kernel buffer data consumed')
-                    #SIM_break_simulation('kernel buffer data consumed.')
-                    ''' Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
+                    rprint('kernel buffer data consumed')
+                    SIM_break_simulation('kernel buffer data consumed.')
+                    ''' errr no, if kernel buffer callhap only is set after dataWatch consumes sees all data consumed'''
+                    ''' ???Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
                         The entire data was injected into the kernel, we don't know here when to stop '''
                     #self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
                     return
@@ -390,6 +396,7 @@ class WriteData():
             self.lgr.error('writeData retHap got count of %d' % eax)
             return
         self.total_read = self.total_read + eax
+        #self.lgr.debug('writeData retHap limit %d total_read %d' % (self.read_limit, self.total_read))
         if self.total_read > self.read_limit:
             #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.write_callback is not None:
@@ -400,7 +407,7 @@ class WriteData():
         
 
     def delCallHap(self, dumb):
-        self.lgr.debug('writeData delCallHap')
+        #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
             self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
             RES_delete_breakpoint(self.call_break)
