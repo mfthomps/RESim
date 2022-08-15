@@ -76,6 +76,7 @@ class PrepInject():
                     length = self.exit_info.sock_struct.length
                 else:
                     length = self.exit_info.count
+                ''' TBD if this falls on a page boundary, cannot get all original bytes?  be sure to run the service first!'''
                 orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length)
                 #orig_buffer, dumb = self.mem_utils.getBytes(self.cpu, length, retval_addr_phys, phys_in=True)
                 if orig_buffer is not None:
@@ -129,6 +130,10 @@ class PrepInject():
             previous = cycle - 1
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
             self.call_ip = self.top.getEIP(self.cpu)
+            if self.exit_info.retval_addr is None:
+                self.lgr.error('instrumentAlone, retval_addr is None')
+                return
+
             orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
             self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
             ''' skip back to return so the snapshot is ready to inject input '''
