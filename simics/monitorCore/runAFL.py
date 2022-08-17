@@ -28,6 +28,7 @@ def ioHandler(read_array, stop, lgr):
             if stop():
                 print('ioHandler sees stop, return.')
                 lgr.debug('ioHandler sees stop, return.')
+                fh.flush()
                 return
             try:
                 r, w, e = select.select(read_array, [], [], 10) 
@@ -43,6 +44,7 @@ def ioHandler(read_array, stop, lgr):
                     return
                 if len(data.decode().strip()) > 0:
                     fh.write(data+b'\n')
+            fh.flush()
                    
 
 def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
@@ -87,7 +89,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
     for proc in resim_procs:
         proc.wait()
         lgr.debug('proc exited')
-
+    lgr.debug('set stop_threads')
     stop_threads = True
     for fd in read_array:
         fd.close()
