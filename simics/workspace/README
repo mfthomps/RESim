@@ -1,3 +1,7 @@
+README for default RESim workspace
+The mytarget.ini is an example RESim ini file that creates and monitors a single ubuntu system.
+
+
 Summary of CADET01 example.
 
 This example requires that you put the id_rsa  and id_rsa.pub files
