@@ -293,7 +293,10 @@ class WriteData():
         #self.lgr.debug('writeData selectHap ')
         if self.stop_on_read:
             #self.lgr.debug('writeData selectHap stop on read')
-            SIM_break_simulation('writeData selectHap stop on read')
+            if self.write_callback is not None:
+                SIM_run_alone(self.write_callback, 0)
+            else:
+                SIM_break_simulation('writeData selectHap stop on read')
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
