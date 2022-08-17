@@ -87,7 +87,8 @@ class StackTrace():
             while retval is None and count < 4*self.mem_utils.WORD_SIZE:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 #self.lgr.debug('stackTrace followCall eip 0x%x instruct %s' % (eip, instruct[1]))
-                if instruct[1].startswith(self.callmn):
+                ''' TBD hack.  Fix this by getting bb start and walking forward '''
+                if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1]:
                     parts = instruct[1].split()
                     if len(parts) == 2:
                         try:
@@ -346,7 +347,7 @@ class StackTrace():
             if cur_fun is not None and cur_fun_name is not None:
                 #self.lgr.debug('doX86, cur_fun 0x%x name %s' % (cur_fun, cur_fun_name))
                 pass
-            quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=8, eip=eip)
+            quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=18, eip=eip)
 
 
         if quick_return is None:
@@ -368,7 +369,7 @@ class StackTrace():
                 break
             pushed_bp = self.mem_utils.readPtr(self.cpu, bp)
             if pushed_bp == bp:
-                self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
+                #self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
                 break
             ret_to_addr = bp + self.mem_utils.WORD_SIZE
             ret_to = self.mem_utils.readPtr(self.cpu, ret_to_addr)
@@ -438,7 +439,7 @@ class StackTrace():
         while retval is None and ptr < limit:
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
-                self.lgr.debug('stackTrace findReturnFromCall, failed to read from 0x%x' % ptr)
+                #self.lgr.debug('stackTrace findReturnFromCall, failed to read from 0x%x' % ptr)
                 ptr = ptr + self.mem_utils.WORD_SIZE
                 done = True
                 continue
@@ -449,8 +450,9 @@ class StackTrace():
             if val == 0:
                 ptr = ptr + self.mem_utils.WORD_SIZE
                 continue
-            #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
+            #self.lgr.debug('ptr 0x%x val 0x%x  limit 0x%x' % (ptr, val, limit))    
             if self.soMap.isCode(val, self.pid):
+                #self.lgr.debug('is conde')
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                     if cur_fun is None and self.ida_funs is not None:
@@ -465,16 +467,23 @@ class StackTrace():
                     instruct = instruct_of_call[1]
                     #self.lgr.debug('got call_ip 0x%x  %s' % (call_ip, instruct))
                     call_addr, fun_name = self.getFunName(instruct)
-                    if call_addr is not None and call_addr != cur_fun:
-                        
+                    if call_addr == cur_fun:
+                        retval = ptr
+                        fname = self.soMap.getSOFile(call_ip)
+                        frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=fun_name, ret_to_addr=ptr)
+                        frame.ret_addr = call_ip + instruct_of_call[0] 
+                        self.addFrame(frame)
+                        mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
+                        #self.lgr.debug('Found call to %s instruct:%s  ret_to_addr 0x%x ret 0x%x' % (cur_fun, instruct, ptr, mft_ret))
+                    elif call_addr is not None:
 
-                        #if cur_fun is not None:
-                        #    self.lgr.debug('call_addr 0x%x  cur_fun 0x%x' % (call_addr, cur_fun))
+                        if cur_fun is not None:
+                            #self.lgr.debug('call_addr 0x%x  cur_fun 0x%x' % (call_addr, cur_fun))
                         first_instruct = SIM_disassemble_address(self.cpu, call_addr, 1, 0)[1]
                         #self.lgr.debug('first_instruct is %s' % first_instruct)
-                        fun_name = None
                         
                         if first_instruct.lower().startswith('jmp dword'):
+                            fun_name = None
                             call_addr, fun_name = self.getFunName(first_instruct)
                             instruct = '%s %s' % (self.callmn, fun_name)
                             if call_addr is not None:
@@ -512,7 +521,7 @@ class StackTrace():
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
                             #self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
-                            #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                                 got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif got_fun_name is not None:
                             retval = ptr
                             fname = self.soMap.getSOFile(call_ip)
@@ -521,7 +530,7 @@ class StackTrace():
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
                             #self.lgr.debug('Found GOT, though current fuction is not called function. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
-                            #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                                 got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif (fun_name is not None and fun_name.startswith('memcpy')) and (current_instruct is not None and current_instruct.startswith('rep movsd')):
                             # hacks are us
                             retval = ptr
@@ -538,6 +547,8 @@ class StackTrace():
                             #    self.lgr.debug('no radio call_addr 0x%x ' % (call_addr))
                             #if cur_fun is not None:
                             #    self.lgr.debug('no radio cur_fun 0x%x ' % (cur_fun))
+                #else:
+                #    self.lgr.debug('call_ip is None')
             ptr = ptr + self.mem_utils.WORD_SIZE
         return retval                
 
