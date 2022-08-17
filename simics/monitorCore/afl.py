@@ -121,6 +121,7 @@ class AFL():
          
         self.starting_cycle = cpu.cycles 
         self.total_cycles = 0
+        self.tmp_time = time.time()
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
             if self.orig_buffer is not None:
@@ -165,6 +166,7 @@ class AFL():
         self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
         self.fault_hap = None
         self.top.noWatchSysEnter()
+        self.tmp_time = time.time()
         self.goN(0) 
 
 
@@ -189,9 +191,12 @@ class AFL():
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
                 avg_cycles = self.total_cycles/100
-                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles: 0x%x' % (avg, int(avg_cycles)))
+                now = time.time()
+                delta = 100/(now - self.tmp_time)
+                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles: 0x%x execs/sec: %.2f' % (avg, int(avg_cycles), delta))
                 self.total_hits = 0
                 self.total_cycles = 0
+                self.tmp_time = time.time()
                 struct._clearcache()
                 #dog = SIM_run_command('list-breakpoints')
                 #self.lgr.debug(dog)
