@@ -1130,7 +1130,7 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None
 
-    def toProc(self, proc):
+    def toProc(self, proc, binary=True):
         plist = self.task_utils[self.target].getPidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitPid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
@@ -1151,7 +1151,7 @@ class GenMonitor():
             '''
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
-            self.toExecve(comm=proc, flist=[], binary=True)
+            self.toExecve(comm=proc, flist=[], binary=binary)
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
@@ -3299,7 +3299,8 @@ class GenMonitor():
         self.mem_utils[self.target].printRegJson(cpu)
 
     def flushTrace(self):
-        self.traceMgr[self.target].flush()
+        if self.target in self.traceMgr:
+            self.traceMgr[self.target].flush()
 
     def getCurrentThreadLeaderPid(self):
         pid = self.task_utils[self.target].getCurrentThreadLeaderPid()
