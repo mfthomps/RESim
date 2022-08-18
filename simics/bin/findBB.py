@@ -38,6 +38,23 @@ def findBB(target, bb, quiet=False):
                     print('0x%x in %s' % (bb, queue))
     return retval
 
+def getFirstReadCycle(trackio):
+    retval = None
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    if not os.path.isfile(trackio):
+        print('ERROR: no trackio file at %s' % trackio)
+        return None
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        #print('ERROR: failed reading json from %s' % trackio)
+        return None
+    for mark in tjson:
+        if mark['mark_type'] == 'read':
+            retval = mark['cycle']
+            break
+    return retval
+
 def getWatchMark(trackio, bb):
     retval = None
     ''' Find a read watch mark within a given watch mark json for a given bb '''
@@ -57,7 +74,25 @@ def getWatchMark(trackio, bb):
                 retval = eip
                 break
     return retval
-        
+       
+def getBBCycle(coverage, bb): 
+    retval = None
+    ''' Find cycle at which a given bb was hit in the coverage json '''
+    if not os.path.isfile(coverage):
+        print('ERROR: no coverage file at %s' % coverage)
+        return None
+    try:
+        tjson = json.load(open(coverage))
+    except:
+        #print('ERROR: failed reading json from %s' % coverage)
+        return None
+
+    bb_str = str(bb)
+    if bb_str in tjson:
+        retval = tjson[bb_str]
+    else:
+        print('Could not find bb 0x%x in json %s' % (bb, coverage))
+    return retval
 
 def main():
     parser = argparse.ArgumentParser(prog='findBBB', description='Show AFL queue entries that lead to a given basic block address.')

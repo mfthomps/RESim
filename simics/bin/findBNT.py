@@ -31,21 +31,28 @@ def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
                 for branch in bb['succs']:
                     if branch not in hits:
                         read_mark = None
+                        before_read = ''
                         if show_read_marks:
                             queue_list = findBB.findBB(target, bb_hit, True) 
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
+                                coverage = q.replace('queue', 'coverage')   
                                 read_mark = findBB.getWatchMark(trackio, bb)
+                                first_read = findBB.getFirstReadCycle(trackio)
+                                bb_cycle = findBB.getBBCycle(coverage, bb_hit)
                                 if read_mark is not None:
                                     if (bb['end_ea'] - read_mark) < 20:
                                         #print('qfile: %s had readmark at 0x%x' % (q, read_mark))
-                                        break
-
+                                        pass
+                                    break
+                                elif bb_cycle < first_read:
+                                    before_read = 'pre-read' 
+ 
                         if not quiet:
                             mark_info = ''
                             if read_mark is not None:
                                 mark_info = 'read mark: 0x%x' % read_mark
-                            print('function: %s branch 0x%x from 0x%x not in hits %s' % (fun_blocks['name'], branch, bb_hit, mark_info))
+                            print('function: %s branch 0x%x from 0x%x not in hits %s %s' % (fun_blocks['name'], branch, bb_hit, mark_info, before_read))
                         entry = {}
                         entry['bnt'] = branch
                         entry['source'] = bb_hit
