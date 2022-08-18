@@ -251,6 +251,7 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 \label{process_tracing}
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
+To limit tracing to the current thread, first issue the {\tt debugThis} command.
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
 Tracing continues until the stopTrace command is issued.  
@@ -268,7 +269,7 @@ See the scripts in {\tt RESim/postscripts} to parse system call logs and create 
 The {\tt trackIO} command can be directed to include traced file output in the watch marks, e.g., to see where log messages occur within the
 time line of watch marks.
 
-\item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log  
+\item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log   Assumes traceAll is set.
 
 \item {\tt flushTrace} - Flush trace output to the trace log files.
 
@@ -315,6 +316,8 @@ If you prefix the given process name with {\tt sh }, (sh followed by a space), R
 \item {\tt debugSnap} -- Assumes the current session was loaded from a snapshot, it use debugPidGroup to debug the process being debugged when the snapshot was made.
 
 \item {\tt debugIfNot} -- Will call debugPidGroup for the currently scheduled process.
+
+\item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
 
 \item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
 uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
@@ -400,7 +403,7 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
     cat foo.io > /dev/udp/127.0.0.1/6060 
 \end{verbatim}
 \noindent Note that sending multiple packets via real networks will cause the origin to reset on each packet, thereby limiting the range of reverse execution.  It is generally simpler
-to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  That program executes the Simics magic instruction to cause RESim to reset
+to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
@@ -616,7 +619,7 @@ generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} c
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
-\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event.
+\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event, or the last code coverage hit.
 \item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
 \item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
@@ -631,6 +634,9 @@ particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed 
 the desired string.  For example, if the packet is to be rejected, return a byte array of zeros.  Filters can also be used to 
 compute and store CRCs within data.  (TBD, apply the filter for all replays?).
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
+\item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers.
+\item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
+
 \item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
 \item {\tt TARGET\_PORT} -- Port to use on driver fuctions such as {\tt replayAFL}
 \item {\tt STOP\_ON\_READ} -- Cause AFL and replays to stop once the original read/recv call (or select) is hit.
@@ -1105,7 +1111,9 @@ RESim includes a suite of related data tracking functions to replay AFL queue fi
 
 \subsection{Preparing for data injection}
 \label{prepInject}
-The {\tt prepInject} and {\tt prepInjectWatch} command is used to put the simulation in a state suitable for injecting data into an application
+Data injection techniques depend on whether the goal is to inject data into the application buffer, or into a kernel buffer.
+
+The {\tt prepInject} command is used to put the simulation in a state suitable for injecting data into an application
 read buffer, i.e., the named by the application when making a syscall such as recv.  For network traffic, the general steps for this include:
 \begin{itemize}
 \item Run the simulation to a desired state after selecting the target process for debugging, e.g., using {\tt debugProc}.  This state may include
@@ -1317,6 +1325,7 @@ in the workspace.
 Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
 value is defined in the {\tt BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
 if the there is not more data to inject into application memory upon hitting the read call address.
+(NOTE: the backstop value is currently shared with the value used with trackIO, and thus may need to change for fuzzing.)
 
 The {\tt HANG\_CYCLES} value determine when a session is considered to be hung, e.g., the program is in an infinite loop.
 Hangs may reflect more than just DoS vulnerabilities, e.g., corruption of a return address might lead to a viable code location
@@ -1839,7 +1848,7 @@ ARM prefetch abort entry for 64-bit cpu is 0xffff0280.  How to find that with ke
 We've subsequently gone back to only relying on Core\_Exception breakpoints.
 
 \section{External tracking of shared object libraries}
-\ref{shared-libraries}
+\label{shared-libraries}
 During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in IDA Pro to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
 synthesizing access to {\tt /proc/$<$pid$>$/map}
 
@@ -2045,6 +2054,9 @@ Haps maintained by the revToCall module.  Programs can be pathological with thei
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
 
+Pay attention to the {\tt BACK\_STOP\_CYCLES} environment variable in the ini.  A large value may be needed during initial testing,
+but that may need to be greatly reduced for fuzzing.
+
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
 the file, and run with realtime enabled.  After the install, use save-persistent-state, and then rename the resulting craff as
@@ -2153,6 +2165,35 @@ once the driver is done interacting with ssh.  The prepInject will then skip to 
 \subsection{Skipping over kernel calls}
 The data injection scheme catches kernel reads and skips over them while injecting data.  This affects timing/scheduling because the kernel never
 blocks.
+
+\subsection{Data Watch ntohl}
+The ntohl function is common in some programs.  Consider treating it results as a data copy if easy to find where in memory it lands. e.g.,
+\begin{verbatim}
+call    _ntohl
+0808A7E0 add     esp, 10h
+0808A7E3 mov     edx, eax
+0808A7E5 mov     eax, [ebp+arg_0]
+0808A7E8 mov     [eax+68h], edx
+\end{verbatim}
+
+\subsection{More on kernel data buffers}
+On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
+This option, kbufs=True, requires drive-driver.sh to send as large a data stream as wish to support for future injectIO or AFL sessions, and this data stream
+must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
+kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
+application memory location that will receive the first byte from the next kernel buffer.
+
+\subsection{Data watch ad-hoc copies}
+Treated as an ad-hoc copy?:
+\begin {verbatim}
+mov x, buf
+push x
+call foo
+mov bar, x
+\end {verbatim}
+
+\subsection{UDP without headers}
+The injectIO and AFL design for UDP relies on their being UDP headers to break data into multiple packets.
 
 \section{Driver platforms}
 \label{driver}
@@ -2271,6 +2312,9 @@ trace0.start
 \end{itemize}
 
 \section{Injecting to kernel buffers}
+TBD integrate all injection sections, and clarify different approaches: ioctl; select / read; x86 buffers
+
+
 The injectIO function is hamstrung if the application makes many single-byte read calls, because writing data into the
 simulation forces a reset of the orgin used for reverse execution.  This may also arise when protocols are implented
 with buffered reads, e.g., 80 bytes at a time.
@@ -2289,9 +2333,10 @@ on the intervening blocking.  Altering kernel buffer pointers avoids some of tho
 for use by AFL or data tracking must then include the address of the kernel buffer, and the addresses of the two pointer
 values that the kernel references when responding to read calls.  Each are found by using reverse data tracking within the
 prepInjectWatch command, which is intended to be used after the analyst does a trackIO and observes the system calls.
-Current support assumes a call to ioctl followed by a read.  The snapshot will be made prior to the call to ioctl.  RESim
+Current support assumes a call to ioctl followed by a read, or use of select prior to a read.  The snapshot will be made prior to the call to ioctl, or
+prior to the read.  RESim
 back traces the return value from ioctl to get the pointer addresses, and it backtraces the read data to get the kernel
-read buffer.  The WriteData module then uses these addresses to modify the kernel for each data injection.
+read buffer.  The WriteData module then uses these addresses to modify the kernel buffer for each data injection.
 
 
 \section{Troubleshooting}
@@ -2342,6 +2387,9 @@ Add a "value" field to the bookmark printout to make it more obvious when a perm
 \subsection{Fork exit}
 A fork followed by an exit may result in the exit occuring before the child is ever scheduled.
 
+\subsection{Fuzzing}
+If the number of paths seems stuck low, look at the cycle backstops.  If the application will loop looking for more data, that will lead to a perceived
+hang.  Use the STOP\_ON\_READ=True to cause the session to stop when the application cycles back to the read.  This has obvious limitations.
 \subsection{Fuzzing TCP}
 Programs may be sensitive to packetizing that occurs under TCP.  All testing and operations may have occurred with
 complete data transfers in which each read call returns all data needed for a transaction.  If the fuzzing session
@@ -2367,7 +2415,6 @@ You wish to debug the target's data consumption and you know it will hang on a s
 you run a while without giving it data and then create a snapshot.  When the snapshot
 is restored, your target process is not scheduled, and thus the debugSnap function will appear to hang until you provide data that causes your
 target to be scheduled.  This is expected.
-
 
 \end{appendices}
 \end{document}
