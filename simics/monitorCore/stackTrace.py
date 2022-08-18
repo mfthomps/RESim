@@ -477,8 +477,8 @@ class StackTrace():
                         #self.lgr.debug('Found call to %s instruct:%s  ret_to_addr 0x%x ret 0x%x' % (cur_fun, instruct, ptr, mft_ret))
                     elif call_addr is not None:
 
-                        if cur_fun is not None:
-                            #self.lgr.debug('call_addr 0x%x  cur_fun 0x%x' % (call_addr, cur_fun))
+                        #if cur_fun is not None:
+                        #    self.lgr.debug('call_addr 0x%x  cur_fun 0x%x' % (call_addr, cur_fun))
                         first_instruct = SIM_disassemble_address(self.cpu, call_addr, 1, 0)[1]
                         #self.lgr.debug('first_instruct is %s' % first_instruct)
                         
@@ -521,7 +521,7 @@ class StackTrace():
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
                             #self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
-                                 got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                            #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif got_fun_name is not None:
                             retval = ptr
                             fname = self.soMap.getSOFile(call_ip)
@@ -530,7 +530,7 @@ class StackTrace():
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
                             #self.lgr.debug('Found GOT, though current fuction is not called function. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
-                                 got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                            #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif (fun_name is not None and fun_name.startswith('memcpy')) and (current_instruct is not None and current_instruct.startswith('rep movsd')):
                             # hacks are us
                             retval = ptr

@@ -3512,7 +3512,7 @@ class GenMonitor():
             if not was_watching:
                 self.context_manager[self.target].setAllHap()
         else:
-            print('Index %d does not have an associated data mark.')
+            print('Index %d does not have an associated data mark.' % index)
         return cycle
 
     def goToWriteMark(self, index):
