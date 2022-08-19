@@ -442,7 +442,7 @@ class RunToConnectHandler(idaapi.action_handler_t):
 
 
 
-def RESimClient(re_hooks, dbg_hooks, idb_hooks):
+def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     #Wait() 
     ida_dbg.wait_for_next_event(idc.WFNE_ANY, -1)
     print('back from dbg wait')
@@ -508,20 +508,22 @@ def RESimClient(re_hooks, dbg_hooks, idb_hooks):
     write_watch.Create(isim, ww_title)
     idaversion.grab_focus(ww_title)
     write_watch.register()
+
+    if re_hooks is None:
+        re_hooks = reHooks.Hooks()
+        re_hooks.hook()
+
+        # force client sync after operations like step into
+        dbg_hooks = dbgHooks.DBGHooks()
+        dbg_hooks.hook()
+
+        idb_hooks = idbHooks.IDBHooks()
+        idb_hooks.hook()
    
     reHooks.register(isim)
 
     dbg_hooks.setRESim(isim)
     idb_hooks.setRESim(isim)
-    #re_hooks = reHooks.Hooks()
-    #re_hooks.hook()
-
-    # force client sync after operations like step into
-    #dbg_hooks = dbgHooks.DBGHooks(isim)
-    #dbg_hooks.hook()
-
-    #idb_hooks = idbHooks.IDBHooks(isim)
-    #idb_hooks.hook()
     
     #form=idaversion.find_widget("IDA View-EIP")
     #idaversion.activate_widget(form, True)
