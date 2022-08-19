@@ -392,7 +392,7 @@ might interfere with your subsequent analysis.
 Also see \ref{tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -408,6 +408,8 @@ its origin just prior to the initial data transmission.  This also causes RESim 
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
+
+The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -755,7 +757,8 @@ It also assumes you have IDA Pro. See the \textit{RESim Remote Access Guide} for
 servers.  RESim can be used without IDA Pro, though you are limited to the command line and don't benefit from
 function analysis provided by IDA.
 
-The IDA Pro installation should be configured to use Python 2.7.
+Note if you are using an NPS-provided RESim server, this RESim installation will have already been done.  But
+see the IDA Pro installation below for information on installing IDA. 
 
 \begin{itemize}
 \item Get RESim from the git repo:
@@ -776,13 +779,35 @@ non-interactive return so they are picked up by ssh):
 \item RESIM\_DIR  Path to your git clone.
 \item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}
 \item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
+\item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
-\item PATH Extend your PATH variable to include {\tt \$RESIM\_DIR/simics/bin}
+\item PATH Extend your PATH variable, e.g., 
+\begin{verbatim}
+   export PATH=$RESIM_DIR/simics/bin:$PATH
+\end{verbatim}
+\noindent And add that PATH line to your {\tt \$HOME/.profile}.
+\end{itemize}
+
+\end{itemize}
+
+\subsubsection{IDA Pro installation}
+The following steps augment a standard IDA installation (which is not covered here.)
+\begin{itemize}
+\item The IDA Pro installation should be configured to use Python 2.7.
+\item If IDA and RESim run on different computers, e.g., remote access to RESim: 
+\begin{itemize}
+\item Clone the RESim git repo onto your local computer (i.e., where IDA will run)
+\item Configure the RESIM\_DIR, RESIM\_IDA\_DIR and
+IDA\_DIR variables as described above.  
+\item Extend your PATH to include the RESIM\_DIR/simics/bin as described above.
 \end{itemize}
 
 \item In your {\tt \$IDA\_DIR/cfg} directory, there are a number of xml files that need to be replaced with those found
-in {\tt simics/ida/cfg}.  Backup the original xmls first.
+in {\tt \$RESIM\_DIR/simics/ida/cfg}.  Backup the original xmls first.
+
+\item Start Ida and configure the debugger to use remote gdb, and configure the Debugger process options to use localhost and port 9123.
+
 \end{itemize}
 
 \subsection{Getting started}
@@ -2178,7 +2203,7 @@ call    _ntohl
 
 \subsection{More on kernel data buffers}
 On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
-This option, kbufs=True, requires drive-driver.sh to send as large a data stream as wish to support for future injectIO or AFL sessions, and this data stream
+This option, kbuf=True, requires drive-driver.sh to send as large a data stream as wish to support for future injectIO or AFL sessions, and this data stream
 must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
 kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
 application memory location that will receive the first byte from the next kernel buffer.

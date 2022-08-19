@@ -80,21 +80,24 @@ your ssh id file):
 \end{itemize}
 
 \subsection{IDA}
-Configure IDA for remote use:
-\begin{itemize}
-\item Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
-IDA Python plugins)
+See the {\tt RESim-UsersGuide.pdf} for information on installing and configuring IDA for use with 
+RESim.  
 
-\item Copy the {\tt simics/ida/cfg/*.xml} files into your ~/idaxx/cfg directory after first
-backing up the originals.
+Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
+IDA Python plugins.)  Set the RESIM\_DIR, RESIM\_IDA\_DIR and IDA\_DIR per the guide.
 
-\item On the computer upon which you'll run IDA, create a ssh tunnel for use by the GDB port:
+When starting IDA with the {\tt runIda.sh} command per the guide, you will provide the
+name of your blade server as the final argument, e.g.,,
+\begin{verbatim}
+    runIda.sh foo bladet9
+\end{verbatim}
+
+The runIda.sh command will create a tunnel to your blade server.  You should be able to see this tunnel
+with the {\tt ps aux | grep ssh} command.  It will look something like:
 \begin{verbatim}
  ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null bladet9
 \end{verbatim}
 
-\item Start Ida and configure the debugger to use gdb, localhost and port 9123
-\end{itemize}
 
 \section{Configure RESim Server}
 See section \ref{section-system} if this RESim server has not yet been configured.
@@ -110,7 +113,7 @@ The following steps are taken for each user on the RESim server.
 \end{verbatim}
 \item Add to your .profile:
 \begin{verbatim}
-   PATH=$RESIM_DIR/simics/bin:$PATH
+   export PATH=$RESIM_DIR/simics/bin:$PATH
 \end{verbatim}
 
 \item Start a new shell to inherit that variable:
