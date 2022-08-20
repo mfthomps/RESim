@@ -186,7 +186,8 @@ class AFL():
                 trace_bits = self.coverage.getTraceBits()
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
-            self.total_hits += self.coverage.getHitCount() 
+            new_hits = self.coverage.getHitCount() 
+            self.total_hits += new_hits
             self.total_cycles = self.total_cycles+(self.cpu.cycles-self.starting_cycle)
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
@@ -202,7 +203,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
+            #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
             status = self.coverage.getStatus()
             if status == AFL_OK:
                 pid_list = self.context_manager.getWatchPids()
@@ -290,7 +291,7 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        #self.lgr.debug('afl stopHap')
+        #self.lgr.debug('afl stopHap %s %s %s %s' % (str(dumb), str(one), str(exception), str(error_string)))
         if self.stop_hap is None:
             return
         self.finishUp()
@@ -359,7 +360,7 @@ class AFL():
 
         self.write_data.write()
         self.page_faults.watchPageFaults()
-        #self.lgr.debug('afl goN context %s' % self.cpu.current_context)
+        #self.lgr.debug('afl goN context %s cycle: 0x%x' % (self.cpu.current_context, self.cpu.cycles))
         cli.quiet_run_command('c') 
 
     def whenDone(self):
