@@ -22,7 +22,7 @@ class CallMark():
         return self.msg
 
 class CopyMark():
-    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, base=None, sp=None):
+    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None):
         self.src = src
         self.dest = dest
         self.length = length
@@ -30,7 +30,6 @@ class CopyMark():
         self.op_type = op_type
         self.strcpy = strcpy
         self.sp = sp
-        self.base = base
         if op_type == Sim_Trans_Load:
             if buf_start is not None:
                 offset = src - buf_start
@@ -67,7 +66,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, base=None):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -180,13 +179,12 @@ class StrtousMark():
         return self.msg
 
 class ScanMark():
-    def __init__(self, src, dest, count, buf_start, sp, base):
+    def __init__(self, src, dest, count, buf_start, sp):
         self.src = src    
         self.dest = dest    
         self.count = count    
         self.buf_start = buf_start    
         self.sp = sp    
-        self.base = base    
         if dest is None:
             self.msg = 'sscanf failed to parse from 0x%x' % src
         else:
@@ -232,14 +230,13 @@ class LenMark():
         return self.msg
 
 class SprintfMark():
-    def __init__(self, fun, src, dest, count, buf_start, sp, base):
+    def __init__(self, fun, src, dest, count, buf_start, sp):
         self.fun = fun    
         self.src = src    
         self.dest = dest    
         self.count = count    
         self.buf_start = buf_start    
         self.sp = sp    
-        self.base = base    
         self.msg = '%s src: 0x%x dest 0x%x len %d' % (fun, src, dest, count)
 
     def getMsg(self):
@@ -456,10 +453,12 @@ class WatchMarks():
                     self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
-                    #      start, length, dest, trans_size))
-                    sp, base = self.getStackBase(dest)
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, base=base, sp=sp)
+                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
+                          start, length, dest, trans_size))
+                    #sp, base = self.getStackBase(dest)
+                    sp = self.isStackBuf(dest)
+                    #self.lgr.debug('sp is %s' % str(sp))
+                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
                     wm = self.addWatchMark(dm)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
@@ -577,6 +576,13 @@ class WatchMarks():
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
 
+    def isStackBuf(self, dest):
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        if dest >= sp:
+            return True
+        else:
+            return False
+
     def getStackBase(self, dest):
         base = None
         sp = None
@@ -608,8 +614,9 @@ class WatchMarks():
 
 
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
-        sp, base = self.getStackBase(dest)
-        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, base=base, sp=sp)
+        #sp, base = self.getStackBase(dest)
+        sp = self.isStackBuf(dest)
+        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp)
         self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
         wm = self.addWatchMark(cm)
@@ -664,8 +671,9 @@ class WatchMarks():
         self.lgr.debug('watchMarks strtous %s' % (cm.getMsg()))
 
     def sscanf(self, src, dest, count, buf_start):
-        sp, base = self.getStackBase(dest)
-        sm = ScanMark(src, dest, count, buf_start, sp, base)        
+        #sp, base = self.getStackBase(dest)
+        sp = self.isStackBuf(dest)
+        sm = ScanMark(src, dest, count, buf_start, sp)        
         wm = self.addWatchMark(sm)
         self.lgr.debug('watchMarks sscanf %s' % (sm.getMsg()))
         return wm
@@ -676,8 +684,9 @@ class WatchMarks():
         self.lgr.debug('watchMarks strlen %s' % (lm.getMsg()))
 
     def sprintf(self, fun, src, dest, count, buf_start):
-        sp, base = self.getStackBase(dest)
-        lm = SprintfMark(fun, src, dest, count, buf_start, sp, base)        
+        #sp, base = self.getStackBase(dest)
+        sp = self.isStackBuf(dest)
+        lm = SprintfMark(fun, src, dest, count, buf_start, sp)        
         wm = self.addWatchMark(lm)
         self.lgr.debug('watchMarks %s %s' % (fun, lm.getMsg()))
         return wm
@@ -850,11 +859,17 @@ class WatchMarks():
             Intended to decorate automated backtrace bookmarks with context.'''
         found = None
         num_reads = 0
+        self.lgr.debug('watchMarks whichRead')
         for mark in reversed(self.mark_list):
+           if mark.call_cycle is not None and mark.call_cycle > self.cpu.cycles:
+               continue
+           self.lgr.debug('watchMarks whichRead mark.mark %s' % str(mark.mark))
            if isinstance(mark.mark, CallMark):
                if mark.mark.recv_addr is not None:
                    num_reads += 1
+                   self.lgr.debug('num_reads now %d' % num_reads)
                    if mark.call_cycle is not None and mark.call_cycle >= self.cpu.cycles:
+                       self.lgr.debug('num_reads found num_reads %d' % num_reads)
                        found = num_reads
         if found is None:
             retval = None
