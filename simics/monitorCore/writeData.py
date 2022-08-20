@@ -160,6 +160,7 @@ class WriteData():
                 self.dataWatch.setReadLimit(retval, self.readLimitCallback)
             else:
                 ''' Limit reads to buffer size using a hap on the read return '''
+                #self.lgr.debug('writeData call setRetHap')
                 self.setRetHap()
                 self.read_limit = retval
                 self.total_read = 0
@@ -296,11 +297,12 @@ class WriteData():
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
             else:
+                #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read')
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
-            self.lgr.debug('writeData selectHap stop on read')
+            #self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
         if pid != self.pid:
@@ -357,6 +359,7 @@ class WriteData():
                     SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
+                    SIM_run_alone(self.delCallHap, None)
                     SIM_break_simulation('writeData out of data')
                     #self.lgr.debug('writeData callHap current packet %d no data left, stop simulation' % self.current_packet)
                 else:
@@ -391,7 +394,7 @@ class WriteData():
 
     def retHap(self, dumb, third, break_num, memory):
         ''' Hit a return from read'''
-        if self.callHap is None:
+        if self.retHap is None:
             return
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         eax = self.mem_utils.getSigned(eax)
@@ -405,26 +408,37 @@ class WriteData():
             if self.write_callback is not None:
                  SIM_run_alone(self.write_callback, count)
             else:
-                 SIM_break_simulation('Over read limit')
-                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+                 if self.mem_utils.isKernel(self.addr):
+                     ''' adjust the return value and continue '''
+                     self.mem_utils.setRegValue(self.cpu, 'syscall_ret', self.read_limit)
+                     self.setCallHap()
+                     SIM_run_alone(self.delRetHap, None)
+                     #self.lgr.debug('writeData retHap read over limit of %d, set eax, setCallHap and let it go' % self.read_limit)
+                 else:
+                     SIM_break_simulation('Over read limit')
+                     #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         
 
     def delCallHap(self, dumb):
         #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
-            self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
+            #self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
             RES_delete_breakpoint(self.call_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
             self.call_hap = None
             self.call_break = None
         if self.select_hap is not None:
-            self.lgr.debug('writeData delCallHap select_break %d' % self.select_break)
+            #self.lgr.debug('writeData delCallHap select_break %d' % self.select_break)
             RES_delete_breakpoint(self.select_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
             self.select_hap = None
             self.select_break = None
+        self.delRetHap(dumb)
+
+    def delRetHap(self, dumb):
         if self.ret_hap is not None:
-            self.lgr.debug('writeData delCallHap re_break %d' % self.ret_break)
+            #self.lgr.debug('writeData delRetHap')
+            #self.lgr.debug('writeData delCallHap re_break %d' % self.ret_break)
             RES_delete_breakpoint(self.ret_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
             self.ret_hap = None
