@@ -19,6 +19,13 @@ def deal_with_client(newsocket, infile):
             lgr.debug('got %s' % got)
         time.sleep(1)
 
+    while True:
+        got = newsocket.recv(1024)
+        if got is None or len(got)==0:
+            lgr.debug('got none, closed?')
+            break 
+        lgr.debug('got %s' % got)
+
 lgr = logging.getLogger('serverTCPlog')
 #lhStdout = lgr.handlers[0]
 lgr.setLevel(logging.DEBUG)
