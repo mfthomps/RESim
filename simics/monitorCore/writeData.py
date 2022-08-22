@@ -121,7 +121,10 @@ class WriteData():
             while remain > 0:
                  count = min(self.k_buf_len, remain)
                  end = offset + count
-                 #self.lgr.debug('writeKdata to buf[%d] 0x%x data[%d:%d] remain %d' % (index, self.k_bufs[index], offset, end, remain))
+                 if index >= len(self.k_bufs):
+                     self.lgr.error('writeKdata index %d out of range' % index)
+                     #self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
+                     break
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -353,6 +356,7 @@ class WriteData():
                     ''' ???Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
                         The entire data was injected into the kernel, we don't know here when to stop '''
                     #self.lgr.debug('writeData callHap current packet %d kernel buffer, just continue ' % self.current_packet)
+                    SIM_run_alone(self.write_callback, 0)
                     return
                 else:
                     #self.lgr.debug('writeData callHap current packet %d no data left, break simulation' % self.current_packet)
