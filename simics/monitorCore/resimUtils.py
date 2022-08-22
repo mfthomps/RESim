@@ -130,6 +130,8 @@ def getIdaData(full_path):
     return retval
 
 def getProgPath(prog):
+    ''' read the .prog file to get the path of the analyzed program, i.e., the program
+        whose basic blocks were watched.'''
     ida_path = getIdaData(prog)
     data_path = ida_path+'.prog'
     prog_file = None
