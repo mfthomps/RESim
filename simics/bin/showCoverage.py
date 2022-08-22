@@ -13,7 +13,6 @@ try:
 except:
     import configparser as ConfigParser
 resim_dir = os.getenv('RESIM_DIR')
-
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 
@@ -100,7 +99,8 @@ def main():
         print('hits: %d  funs: %d   %s' % (num_hits, num_funs, path))
 
     if args.index is None and args.instance is None:
-        flist = getPathList(args.target)
+        flist = aflPath.getAFLCoverageList(args.target)
+        #flist = getPathList(args.target)
         for f in flist:
             base = os.path.basename(f)
             parent = os.path.dirname(f)
