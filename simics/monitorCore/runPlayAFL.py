@@ -88,6 +88,8 @@ def runPlay(args, lgr):
         os.environ['ONE_DONE_PARAM']='udp'
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
+    
+    os.environ['ONE_DONE_PARAM3']=args.program
          
 
     read_array = []
