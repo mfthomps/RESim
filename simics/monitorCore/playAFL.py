@@ -12,7 +12,7 @@ import json
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -128,8 +128,11 @@ class PlayAFL():
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         self.physical=False
         if self.coverage is not None:
+            full_path = None
+            if fname is not None:
+                full_path = self.top.getFullPath(fname)
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread)
+               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=full_path)
             self.physical = True
             if linear:
                 self.physical = False
@@ -138,20 +141,27 @@ class PlayAFL():
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
 
-            full_path = self.coverage.getFullPath()
-            full_path = os.path.abspath(full_path)
+            if True:
+                ''' TBD, multple writers?'''
+                full_path = self.coverage.getFullPath()
+                full_path = os.path.abspath(full_path)
     
-            hits_path = self.coverage.getHitsPath()+'.prog'
-            parent = os.path.dirname(os.path.abspath(hits_path))
-            print('parent is %s' % parent)
-            try:
-                os.makedirs(parent)
-            except:
-                pass
-            with open(hits_path, 'w') as fh:
-                fh.write(full_path+'\n')
-                fh.write(self.cfg_file+'\n')
-            #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
+                hits_path = self.coverage.getHitsPath()+'.prog'
+                self.lgr.debug('create prog file at path: %s' % hits_path)
+                parent = os.path.dirname(os.path.abspath(hits_path))
+                print('parent is %s' % parent)
+                try:
+                    os.makedirs(parent)
+                except:
+                    pass
+                try:
+                    fh = open(hits_path, 'x')
+                    fh.write(full_path+'\n')
+                    fh.write(self.cfg_file+'\n')
+                except:
+                    self.lgr.debug('create failed (already exists?) at path: %s' % hits_path)
+                    pass
+                    #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
         hang_cycles = 90000000
         hang = os.getenv('HANG_CYCLES')

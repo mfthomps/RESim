@@ -4133,10 +4133,11 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
-    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False):
-        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread)
+    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
+        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, parallel=False, only_thread=False):
+    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
+            parallel=False, only_thread=False, fname=None):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
@@ -4148,8 +4149,8 @@ class GenMonitor():
             bb_coverage = None
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
-              self.cfg_file, self.lgr, 
-              packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread)
+              self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
+              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
         if play is not None:
             self.lgr.debug('playAFL now go')
             play.go()
@@ -4320,8 +4321,11 @@ class GenMonitor():
             fh.write(json.dumps(jumpers))
         print('add 0x%x => 0x%x to %s' % (from_bb, to_bb, jname))
     
-    def getFullPath(self):
-        return self.full_path
+    def getFullPath(self, fname=None):
+        retval =  self.full_path
+        if fname is not None:
+            retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
+        return retval 
 
     def frameFromRegs(self, cpu):
         reg_frame = self.task_utils[self.target].frameFromRegs(cpu)

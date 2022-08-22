@@ -6,6 +6,7 @@ import os
 def onedone(top):
     protocol=os.getenv('ONE_DONE_PARAM')
     only_thread_s=os.getenv('ONE_DONE_PARAM2')
+    program=os.getenv('ONE_DONE_PARAM3')
     only_thread = False 
     if only_thread_s is not None and only_thread_s.lower() == 'true':
         only_thread = True
@@ -16,7 +17,7 @@ def onedone(top):
         fh.write('in onedone of onedonePlay\n') 
         if protocol == 'tcp': 
             fh.write('call playAFLTCP target %s only_thread %r\n' % (base, only_thread))
-            top.playAFLTCP(base, parallel=True, only_thread=only_thread)
+            top.playAFLTCP(base, parallel=True, only_thread=only_thread, fname=program)
         else:
             fh.write('call playAFL target %s only_thread %r\n' % (base, only_thread))
-            top.playAFL(base, parallel=True, only_thread=only_thread)
+            top.playAFL(base, parallel=True, only_thread=only_thread, fname=program)
