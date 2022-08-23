@@ -19,6 +19,7 @@ def deal_with_client(newsocket, infile):
             lgr.debug('got %s' % got)
         time.sleep(1)
 
+    newsocket.settimeout(1.0)
     while True:
         got = newsocket.recv(1024)
         if got is None or len(got)==0:
