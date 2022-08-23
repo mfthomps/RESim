@@ -82,6 +82,8 @@ class WriteData():
 
         self.stop_on_read = stop_on_read
         self.k_bufs = None
+        self.user_addr = None
+        self.orig_buffer = None
 
         self.loadPickle(snapshot_name)
 
@@ -115,6 +117,11 @@ class WriteData():
         if self.k_bufs is None:
             self.mem_utils.writeString(self.cpu, self.addr, data) 
         else:
+            if self.user_addr is not None and len(data) < len(self.orig_buffer):
+                 ''' extend data to include what was in the original buffer '''
+                 amount = len(self.orig_buffer) - len(data)
+                 self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
+                 data = data+self.orig_buffer[len(data):]
             remain = len(data)
             offset = 0
             index = 0
@@ -129,6 +136,7 @@ class WriteData():
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
+          
     
     def write(self, record=False):
         #self.lgr.debug('writeData write, addr is 0x%x filter: %s' % (self.addr, str(self.filter)))
@@ -522,6 +530,8 @@ class WriteData():
                 self.lgr.debug('writeData pickle got k_bufs')
                 self.k_bufs = so_pickle['k_bufs']
                 self.k_buf_len = so_pickle['k_buf_len']
+                if 'user_addr' in so_pickle:
+                    self.user_addr = so_pickle['user_addr']
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']

@@ -30,6 +30,8 @@ class PrepInjectWatch():
         self.read_mark = None
         self.k_start_ptr = None
         self.k_end_ptr = None
+        self.orig_buffer = None
+        self.user_addr = None
         if cpu.architecture == 'arm':
             self.decode = decodeArm
             self.lgr.debug('setup using arm decoder')
@@ -182,6 +184,8 @@ class PrepInjectWatch():
             kbufs = self.kbuffer.getKbuffers()
             pickDict['k_bufs'] = kbufs
             pickDict['k_buf_len'] = self.kbuffer.getBufLength()
+            pickDict['user_addr'] = self.kbuffer.getUserAddr()
+            pickDict['orig_buffer'] = self.kbuffer.getOrigBuf()
 
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 

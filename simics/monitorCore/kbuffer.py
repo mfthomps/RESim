@@ -23,6 +23,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 from simics import *
+'''
+Track kernel buffers used with read/recv calls
+'''
 class Kbuffer():
     def __init__(self, top, cpu, context_manager, mem_utils, lgr):
         self.context_manager = context_manager
@@ -36,6 +39,8 @@ class Kbuffer():
         self.write_hap = None
         self.read_count = None
         self.buf_remain = None
+        self.user_addr = None
+        self.orig_buffer = None
 
     def read(self, addr, count):
         ''' syscall got a read call. '''
@@ -45,6 +50,9 @@ class Kbuffer():
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
             self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
             self.read_count = count
+
+            self.user_addr = addr
+            self.orig_buffer = self.mem_utils.readBytes(self.cpu, addr, count)
         if self.buf_remain is not None:
             self.lgr.debug('Kbuffer read buf_reamin is %d count %d' % (self.buf_remain, count))
             if self.buf_remain < count:
@@ -86,6 +94,14 @@ class Kbuffer():
                 last_good = cur_addr
                 bad_count = 0
             cur_addr += 1
+        if last_good is None:
+            self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
+            print('kbuffer search found no special character (currently Z) in the kernel buffers.')
+            print('The kbuf option requires a data stream that contains Zs')
+            print('You also want the target to read as much as it can from the kernel buffers, e.g., if multiple reads are used.')
+            SIM_break_simulation('error in kbuffer')    
+            return
+     
         buf_size = (last_good - src) + 1 
         self.lgr.debug('Kbuffer writeHap, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
         if self.kbuf_len is None:
@@ -125,3 +141,9 @@ class Kbuffer():
 
     def getBufLength(self):
         return self.kbuf_len
+
+    def getUserAddr(self):
+        return self.user_addr
+
+    def getOrigBuf(self):
+        return self.orig_buffer
