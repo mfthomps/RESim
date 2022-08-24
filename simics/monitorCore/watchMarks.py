@@ -66,7 +66,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -91,6 +91,7 @@ class DataMark():
         self.trans_size = trans_size
         self.dest = dest
         self.sp = sp
+        self.note = note
         #print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
@@ -101,7 +102,10 @@ class DataMark():
         elif self.addr is None:
             mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
         elif self.end_addr is None:
-            mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+            if self.note is None:
+                mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+            else:
+                mark_msg = '%s %d bytes into 0x%x from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.note, self.trans_size, self.dest, self.addr, self.offset, self.start, self.length, self.cmp_ins)
         elif self.ad_hoc:
             length = (self.end_addr - self.addr) + 1
             self.lgr.debug('DataMark getMsg ad-hoc length is %d' % length)
@@ -433,7 +437,7 @@ class WatchMarks():
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None): 
+    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None, note=None): 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = None
         ''' TBD generalize for loops that make multiple refs? '''
@@ -462,6 +466,10 @@ class WatchMarks():
                     wm = self.addWatchMark(dm)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
+        elif note is not None:
+            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, note=note, dest=dest)
+            wm = self.addWatchMark(dm)
+            self.lgr.debug('watchMarks dataRead with note 0x%x %s' % (ip, dm.getMsg()))
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
