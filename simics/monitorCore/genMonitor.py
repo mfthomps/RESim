@@ -106,6 +106,7 @@ from resimHaps import *
 import reverseTrack
 import jumpers
 import kbuffer
+import funMgr
 import json
 import pickle
 import re
@@ -166,8 +167,6 @@ class GenMonitor():
         self.reverseTrack = {}
         self.kbuffer = {}
 
-
-
         ''' dict of syscall.SysCall keyed on call number '''
         self.call_traces = {}
         self.unistd = {}
@@ -207,6 +206,8 @@ class GenMonitor():
 
         ''' TBD safe to reuse this?  helps when detecting iterative changes in address value '''
         self.find_kernel_write = None
+
+        self.fun_mgr = None
 
         self.one_done_module = None
         self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
@@ -927,6 +928,8 @@ class GenMonitor():
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
                     self.getIDAFuns(full_path)
                     self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
+                    ''' TBD alter stackTrace to use this and buid it out'''
+                    self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
                     elf_info = self.soMap[self.target].addText(full_path, prog_name, pid)
                     if elf_info is not None:
@@ -936,7 +939,7 @@ class GenMonitor():
                         self.dataWatch[self.target].setIdaFuns(self.ida_funs)
                         self.dataWatch[self.target].setUserIterators(self.user_iterators)
                         self.bookmarks.setIdaFuns(self.ida_funs)
-                        self.dataWatch[self.target].setRelocatables(self.relocate_funs)
+                        self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
                              elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
