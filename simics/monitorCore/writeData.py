@@ -129,9 +129,10 @@ class WriteData():
                  count = min(self.k_buf_len, remain)
                  end = offset + count
                  if index >= len(self.k_bufs):
-                     self.lgr.error('writeKdata index %d out of range' % index)
+                     self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      #self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
+                 #self.lgr.debug('writeKdata write %d bytes.  k_buf_len is %d' % (len(data[offset:end]), self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
