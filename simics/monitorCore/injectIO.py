@@ -167,7 +167,7 @@ class InjectIO():
             #lenreg2 = 'r7'
         else:
             lenreg = 'eax'
-        if self.orig_buffer is not None:
+        if self.orig_buffer is not None and not self.mem_utils.isKernel(self.addr):
             ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                 references data past the end of what is received. '''
             #self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
