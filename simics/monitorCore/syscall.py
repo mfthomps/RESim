@@ -1066,12 +1066,15 @@ class Syscall():
                         if call_param.count >= call_param.nth:
                             self.lgr.debug('count >= param, set it')
                             exit_info.call_params = call_param
+                            if self.kbuffer is not None:
+                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     else:
                         self.lgr.debub('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
-                    if self.kbuffer is not None:
-                        self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                        self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                        if self.kbuffer is not None:
+                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     break
         elif socket_callname == "recvmsg": 
             
@@ -1415,11 +1418,23 @@ class Syscall():
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
                     if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
-                        self.lgr.debug('syscall read add param break_sim is %r' % call_param.break_simulation)
-                        exit_info.call_params = call_param
-                        if self.kbuffer is not None:
-                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+
+
+                        if call_param.nth is not None:
+                            call_param.count = call_param.count + 1
+                            self.lgr.debug('syscall read call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
+                            if call_param.count >= call_param.nth:
+                                self.lgr.debug('count >= param, set it')
+                                exit_info.call_params = call_param
+                                if self.kbuffer is not None:
+                                    self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                        else:
+                            self.lgr.debub('syscall read, call_param.nth is none, call it matched')
+                            exit_info.call_params = call_param
+                            if self.kbuffer is not None:
+                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                         break
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
