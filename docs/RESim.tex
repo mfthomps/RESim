@@ -474,6 +474,7 @@ that returns one byte would break on a reference to the fifth byte in the buffer
 \end{itemize}
 
 \subsection{System modification}
+\label{sec:modification}
 \begin{itemize}
 
 \item {\tt writeReg} – Write value to a register (Note: deletes existing bookmarks.)
@@ -491,7 +492,8 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 \item {\tt showLinks} - Display symbolic names of network connections.  These may then be used in DMOD directives, or manually using Simics {\tt connect}
 and {\tt disconnect} commands.
 
-\item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.
+\item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.  See
+the {\tt EXECUTION\_JUMPERS} ini environment value.
 
 \end{itemize}
 \subsection{Code coverage}
@@ -574,7 +576,6 @@ a driver component.  Thus, only single-packet processing can be analyzed.  Use {
 \item{\tt trackAFL(target)} -- Use injectIO to replay all AFL queue files for a given target, and store the set of resulting watch marks as json files
 in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions include multiple packets, then use the runTrack utlity to 
 start new Simics sessions for each queue file.
-\textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 
 \item{\tt injectToBB} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
 is assumed to be the RESim workspace directory name.
@@ -634,7 +635,7 @@ leave this undefined.
 particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed offset.  The value should be a .py file name, less the
 .py extension.  The file must be relative to the Simics workspace and it must have a {\tt filter(data, packet\_num)} method that returns
 the desired string.  For example, if the packet is to be rejected, return a byte array of zeros.  Filters can also be used to 
-compute and store CRCs within data.  (TBD, apply the filter for all replays?).
+compute and store CRCs within data.  
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
 \item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers.
 \item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
@@ -646,7 +647,8 @@ compute and store CRCs within data.  (TBD, apply the filter for all replays?).
 and is overridden by the {\tt READ\_LOOP\_MAX}.  A value of \textit{quit} will cause
 the RESim session to exit (useful for crashReport).  Otherwise, the data watch is stopped and execution continues, e.g., to arrive at a page boundary fault.
 \item {\tt READ\_LOOP\_MAX} -- Limit on dataWatch reads from a single buffer.
-\item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command, express and from/to addresses in hex.  \textbf{Note:} encountering
+\item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command in \ref{sec:modification}), expressed as 
+from/to addresses in hex.  \textbf{Note:} encountering
 a jumper will reset the reverse execution origin, and thus may not be suitable when using injectIO or crash analysis.
 
 \end{itemize}
@@ -782,19 +784,20 @@ non-interactive return so they are picked up by ssh):
 \item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
-\item PATH Extend your PATH variable, e.g., 
+\end{itemize}
+\item Add \$RESIM\_DIR/simics/bin to your path, e.g. by adding to your .profile,
 \begin{verbatim}
+   export RESIM_DIR=[path to your git clone]
    export PATH=$RESIM_DIR/simics/bin:$PATH
 \end{verbatim}
-\noindent And add that PATH line to your {\tt \$HOME/.profile}.
-\end{itemize}
 
 \end{itemize}
 
 \subsubsection{IDA Pro installation}
 The following steps augment a standard IDA installation (which is not covered here.)
 \begin{itemize}
-\item The IDA Pro installation should be configured to use Python 2.7.
+\item The IDA Pro installation should be configured to use Python 2.7, which must be
+installed, e.g., using {\tt apt-get install python2-dev}.
 \item If IDA and RESim run on different computers, e.g., remote access to RESim: 
 \begin{itemize}
 \item Clone the RESim git repo onto your local computer (i.e., where IDA will run)
@@ -856,6 +859,7 @@ Once you have identified a program to be analyzed, e.g., by reviewing a system t
 {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
 
 Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
+If IDA will run on a different computer than where Simics is running, include the host name as a command line option.
 
 The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is localhost and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
@@ -1436,6 +1440,10 @@ define a {\tt AFL\_PACKET\_FILTER} as a python program to reject AFL data that d
 at a specific offset.  The program must have a {\tt filter(data, packet\_number)} method that returns data to be injected.  
 For example, return nulls if the packet is to be rejected.  The intention is that will yield poor coverage, causing AFL not see new paths.
 Alternately, return an altered packed, e.g., with a computed CRC injected into the data.
+When creating filter modules, you may need to modify the python module search path to include the python distribution, e.g., 
+\begin{verbatim}
+sys.path.insert(0,'/usr/lib/python3/dist-packages')
+\end{verbatim}
 
 \subsection{Address jumpers}
 \label{jumpers}
@@ -1448,7 +1456,8 @@ A {\tt Packet filter} as described above might mitigate such a problem, however 
 have effects beyond the iteration count.  Review of the iterated code should identify whether use of a jumper might affect program
 execution.
 
-These jumpers are only intended for use with code coverage and/or fuzzing are different than those used with the {\tt jumper} command,
+These jumpers are only intended for use with code coverage and/or fuzzing are different than those used with the {\tt jumper} command described
+in \ref{sec:modification},
 which provides more general alterations to execution control flow.
 
 \subsection{Fuzz another library}
@@ -1787,7 +1796,9 @@ be on an NFS share so that the same ini file can be used on multiple RESim platf
 
 The idb and hits files will be per-user, stored in a local writable directory relative to path 
 named by the {\tt RESIM\_IDA\_DATA} environment varible.  Files will be copied between IDA
-and RESim platforms using scp.  
+and RESim platforms using scp. Each analyzed program has a subdirectory in the {\tt RESIM\_IDA\_DATA}
+directory.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
+a file with a ".prog" extension that identifies the path to program that was analyzed. 
 
 The hits files are stored as lists of basic block addresses.  When {\tt playAFL} is run the hits
 file includes the name of the target.  Per session hits files are also stored in the AFL output
@@ -2174,18 +2185,6 @@ Similarly, manual BNT analysis might yield crashes.  Do not let that stop you fr
 yield new code paths without crashing, since these are helpful to fuzzing and coverage.  Crashes are good, but sometimes they are dead ends.  So use findBB to locate other
 inputs besides the one picked by injectToBB.
 
-\subsection{prepInject with recv waiting in the kernel}
-Done.  Remove.
-\newline
-When preparing for injectIO or fuzzing, the target process may blocked in the kernel on the recv call.  This implies we do not know IP of the application
-when the call was made (though that may be guessed).  It also complicates recording of original buffer content, which must be done before data is received,
-e.g., at the very start of prepInject, or after a skip to the origin.  However, we have no guarantee of having the proper context prior to receipt of the data.
-(Also, skipping to origin will bleed real network data into the simulation and thus break reverse execution.)
-We could record the buffer physical address during revToCall, but that does not guarantee the page content is correct for the desired context.  Even if we break on
-scheduling of the target process, can we guarantee some kernel helper had not written data to the buffer?
-
-We will assume that no data enters the receive buffer untilthe target pid is scheduled.  The Simics magic instruction is used to establish a safe origin
-once the driver is done interacting with ssh.  The prepInject will then skip to this new origin and run forward to the scheduling of the target pid.
 
 \subsection{Skipping over kernel calls}
 The data injection scheme catches kernel reads and skips over them while injecting data.  This affects timing/scheduling because the kernel never
@@ -2203,11 +2202,15 @@ call    _ntohl
 
 \subsection{More on kernel data buffers}
 On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
-This option, kbuf=True, requires drive-driver.sh to send as large a data stream as wish to support for future injectIO or AFL sessions, and this data stream
+This option, kbuf=True, requires drive-driver.sh to send as large a data stream as you wish to support for future injectIO or AFL sessions, and this data stream
 must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
 kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
 application memory location that will receive the first byte from the next kernel buffer.
 
+And fuzzing design in general... In addition to basic problems that can be solved by filters, sometimes fuzzed data does not conform to system state values.
+For example, previously received data may contain a crc and/or length of the data to be fuzzed.  Jumpers around crc calculations and memory modification should
+be avoided simply because it requires code analysis to determine completeness, e.g., is that the only reference to the predetermined code length?  In general,
+it is preferable to start the fuzzing at the injest of the earlier data, e.g., by using a filter.
 \subsection{Data watch ad-hoc copies}
 Treated as an ad-hoc copy?:
 \begin {verbatim}
@@ -2219,6 +2222,20 @@ mov bar, x
 
 \subsection{UDP without headers}
 The injectIO and AFL design for UDP relies on their being UDP headers to break data into multiple packets.
+
+\subsection{TCP conversations and fuzzing}
+Consider a case of fuzzing TCP.  Assume the target is a client and the driver is a server.
+The driver component is directed to run a server that accepts on the port and sends a given file of data.
+
+You use the kbuf option to trackIO and then prepInjectWatch which gives you snapshot on the
+call to recv with lots of data in the kernel buffers.
+
+Fuzzing yields the start of a conversation, i.e., where the target makes a 2nd call to read (or poll/select).  It
+is assumed the first call to read had a length larger than the count.  (Find a way to distinguish a conversation from
+just reading more data.  For example, one or more writes to the socket between the reads.)
+
+We'd like to use this converstation start to advance system state, and then start fuzzing with the next read.  Use a 
+multifile driver directive to force a read between the two writes.
 
 \section{Driver platforms}
 \label{driver}
