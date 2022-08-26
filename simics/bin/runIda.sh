@@ -20,10 +20,7 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     echo "RESIM_IDA_DATA not defined."
     exit
 fi
-if [[ ! -f "$IDA_DIR/idc/runRESim.idc" ]]; then
-    echo "Copying runRESim.idc to the IDA directory at $IDA_DIR/idc"
-    cp $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
-fi
+cp -u $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
 if [ $# -eq 0 ] || [ $1 = "-h" ]; then
     echo "runIda.sh <target> [color/reset] [server]"
     exit
@@ -43,6 +40,10 @@ if [ $# -gt 1 ];then
        fi
        rsync -avh $remote:$remote_ida/$target_base/*.hits $RESIM_IDA_DATA/$target_base/
     fi
+else
+    remote=$1
+fi
+if [ $# -gt 0 ]; then
     tunnel=$( ps -aux | grep [9]123 )
     if [[ -z "$tunnel" ]];then
         echo "No tunnel found for $remote, create one."
@@ -59,7 +60,6 @@ if [ $# -gt 1 ];then
        fi
     fi
 fi
-
 target_path=$(realpath $target)
 ida_db_path=$RESIM_IDA_DATA/$target_base/$target_base.idb
 echo "target is $target"
