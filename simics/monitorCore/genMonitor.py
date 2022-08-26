@@ -678,8 +678,11 @@ class GenMonitor():
                             dlist = self.comp_dict[cell_name]['DMOD'].split(';')
                             for dmod in dlist:
                                 dmod = dmod.strip()
-                                self.runToDmod(dmod, cell_name=cell_name)
-                                print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                                if self.runToDmod(dmod, cell_name=cell_name):
+                                    print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                                else:
+                                    print('Dmod is missing, cannot continue.')
+                                    self.quit()
                     else:
                         #self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -2573,9 +2576,10 @@ class GenMonitor():
         self.runToDmod(dfile, cell_name = self.target)
 
     def runToDmod(self, dfile, cell_name=None, background=False):
+        retval = True
         if not os.path.isfile(dfile):
             print('No file found at %s' % dfile)
-            return
+            return False
         if cell_name is None:
             cell_name = self.target
         mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)
@@ -2590,6 +2594,7 @@ class GenMonitor():
         self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
         self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name='dmod')
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
+        return retval
 
     def runToWrite(self, substring):
         call_params = syscall.CallParams('write', substring, break_simulation=True)        
