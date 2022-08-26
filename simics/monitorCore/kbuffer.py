@@ -128,6 +128,9 @@ class Kbuffer():
             self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
 
     def readReturn(self, length):
+        if self.buf_remain is None:
+            self.lgr.debug('kbuffer readReturn, no buf_remain set, skip it.')
+            return
         self.buf_remain = self.buf_remain - length 
         self.lgr.debug('Kbuffer readReturn length %d, watching_addr was 0x%x, buf_remain now %d' % (length, self.watching_addr, self.buf_remain))
         if self.buf_remain <= 0:
