@@ -231,11 +231,13 @@ class DataWatch():
             self.total_read = self.total_read + length
             if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
                 self.read_limit_callback()
-                self.lgr.debug('dataWAtch setRange over read limit, set retval to %d' % self.read_limit_trigger)
-                self.mem_utils.setRegValue(self.cpu, 'syscall_ret', self.read_limit_trigger)
-                length = self.read_limit_trigger    
-                if msg is not None:
-                    msg = msg+' Count truncated to given %d bytes' % length
+                if len(self.start) == 0:
+                    ''' TBD seems to only make sense on first read '''
+                    self.lgr.debug('dataWAtch setRange over read limit, set retval to %d' % self.read_limit_trigger)
+                    self.mem_utils.setRegValue(self.cpu, 'syscall_ret', self.read_limit_trigger)
+                    length = self.read_limit_trigger    
+                    if msg is not None:
+                        msg = msg+' Count truncated to given %d bytes' % length
             if self.checkFread(start, length):
                 self.lgr.debug('dataWatch setRange was fread, return for now')
                 return
@@ -256,7 +258,7 @@ class DataWatch():
                 my_len = max_len
 
         #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
-               my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
+        #       my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
         end = start+(my_len-1)
         overlap = False
         for index in range(len(self.start)):
@@ -321,6 +323,7 @@ class DataWatch():
                 self.prev_cycle = self.cpu.cycles
         if no_backstop:
             self.no_backstop.append(start)
+
 
     def stackBufHap(self, dumb, third, forth, memory):
         ''' Returned from function on call chain that created a stack buffer.  See
@@ -1545,8 +1548,8 @@ class DataWatch():
     def readHap(self, index, an_object, breakpoint, memory):
         if self.return_hap is not None:
             return
-        #self.lgr.debug('dataWatch readHap addr: 0x%x marks: %s max: %s cycle: 0x%x' % (memory.logical_address, str(self.watchMarks.markCount()), str(self.max_marks), 
-        #     self.cpu.cycles))
+        self.lgr.debug('dataWatch readHap addr: 0x%x marks: %s max: %s cycle: 0x%x' % (memory.logical_address, str(self.watchMarks.markCount()), str(self.max_marks), 
+             self.cpu.cycles))
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
             self.stopWatch()
@@ -1692,7 +1695,7 @@ class DataWatch():
                 print('%d start: 0x%x  length: 0x%x' % (index, self.start[index], self.length[index]))
  
     def setBreakRange(self, i_am_alone=False):
-        self.lgr.debug('dataWatch setBreakRange')
+        #self.lgr.debug('dataWatch setBreakRange')
         ''' Set breakpoints for each range defined in self.start and self.length '''
         context = self.context_manager.getRESimContext()
         num_existing_haps = len(self.read_hap)
@@ -1707,11 +1710,10 @@ class DataWatch():
             break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, break_num, self.start[index], end, 
-                self.length[index], index, len(self.read_hap), i_am_alone, self.cpu.current_context))
+            #self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, break_num, self.start[index], end, 
+            #    self.length[index], index, len(self.read_hap), i_am_alone, self.cpu.current_context))
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
-            self.lgr.debug('DataWatch back from set break range')
-            SIM_break_simulation('wtf?, over')
+            #self.lgr.debug('DataWatch back from set break range')
             
 
         #if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
@@ -1811,11 +1813,12 @@ class DataWatch():
                         retval = None
                     else:
                         self.lgr.debug('dataWatch goToMark adjusted for call cycle now 0x%x' % cycle)
-                        call_ret_val = self.mem_utils.getRegVal(self.cpu, 'syscall_ret')
-                        mark = self.watchMarks.getMarkFromIndex(index)
-                        if call_ret_val != mark.mark.length:
-                            self.lgr.debug('dataWatch goToMark length %d does not match syscall_ret of %d' % (mark.mark.length))
-                            self.mem_utils.setRegValue(self.cpu, 'syscall_ret', call_ret_val)
+                        if index == 1:
+                            call_ret_val = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+                            mark = self.watchMarks.getMarkFromIndex(index)
+                            if call_ret_val != mark.mark.len:
+                                self.lgr.debug('dataWatch goToMark length %d does not match syscall_ret of %d' % (mark.mark.length))
+                                self.mem_utils.setRegValue(self.cpu, 'syscall_ret', call_ret_val)
                 else:
                     self.lgr.debug('dataWatch goToMark index %d NOT a call' % index)
             self.context_manager.restoreWatchTasks()
