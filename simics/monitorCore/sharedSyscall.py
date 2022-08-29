@@ -93,10 +93,10 @@ class SharedSyscall():
 
     def stopTrace(self):
         for context in self.exit_pids:
-            self.lgr.debug('sharedSyscall stopTrace context %s' % str(context))
+            #self.lgr.debug('sharedSyscall stopTrace context %s' % str(context))
             for eip in self.exit_hap:
                 self.context_manager.genDeleteHap(self.exit_hap[eip], immediate=True)
-                self.lgr.debug('sharedSyscall stopTrace removed exit hap for eip 0x%x context %s' % (eip, str(context)))
+                #self.lgr.debug('sharedSyscall stopTrace removed exit hap for eip 0x%x context %s' % (eip, str(context)))
             self.exit_pids[context] = {}
         for eip in self.exit_hap:
             self.exit_info[eip] = {}
@@ -862,10 +862,14 @@ class SharedSyscall():
                 trace_msg = ('\treturn from mmap pid:%d, addr: 0x%x \n' % (pid, ueax))
         elif callname == 'ipc':
             callname = exit_info.socket_callname
-            #callname = ipc.call[call]
-            if callname == ipc.MSGGET or callname == ipc.SHMGET:
+            call = exit_info.frame['param1']
+            if call == ipc.MSGGET or callname == ipc.SHMGET:
                 trace_msg = ('\treturn from ipc %s pid:%d key: 0x%x quid: 0x%x\n' % (callname, pid, exit_info.fname, ueax)) 
                 #SIM_break_simulation('msgget pid %d ueax 0x%x eax 0x%x' % (pid, ueax, eax))
+            elif call == ipc.SHMAT:
+                ret_addr = exit_info.frame['param4']
+                mem_addr = self.mem_utils.readPtr(self.cpu, ret_addr)
+                trace_msg = ('\treturn from ipc %s pid:%d mem_addr: 0x%x\n' % (callname, pid, mem_addr)) 
             else:
                 if eax < 0:
                     trace_msg = ('\treturn ERROR from ipc %s pid:%d result: %d\n' % (callname, pid, eax)) 
@@ -981,7 +985,7 @@ class SharedSyscall():
             self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)
 
     def rmExitBySyscallName(self, name, cell):
-        self.lgr.debug('rmExitBySyscallName %s' % name)
+        #self.lgr.debug('rmExitBySyscallName %s' % name)
         exit_name = '%s-exit' % name
         rmlist = []
         if name is None or name == 'None':

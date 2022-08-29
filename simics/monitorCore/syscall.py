@@ -496,7 +496,7 @@ class Syscall():
             self.background_break = None
             self.background_hap = None
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
-        self.lgr.debug('stopTraceAlone done')
+        #self.lgr.debug('stopTraceAlone done')
 
 
     def stopTrace(self, immediate=False):
@@ -1308,6 +1308,8 @@ class Syscall():
                        taskUtils.stringFromFrame(frame)) 
             elif call == ipc.MSGSND or call == ipc.MSGRCV:
                 ida_msg = 'ipc %s pid:%d quid: 0x%x size: %d addr: 0x%x' % (callname, pid, frame['param4'], frame['param3'], frame['param5'])
+            elif call == ipc.SHMAT:
+                ida_msg = 'ipc %s pid:%d segid: 0x%x ret_addr: 0x%x' % (callname, pid, frame['param2'], frame['param4'])
             else:
                 ida_msg = 'ipc %s pid:%d %s' % (callname, pid, taskUtils.stringFromFrame(frame) )
 
