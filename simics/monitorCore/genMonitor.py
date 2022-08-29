@@ -2041,10 +2041,10 @@ class GenMonitor():
     def stopTrace(self, cell_name=None, syscall=None):
         if cell_name is None:
             cell_name = self.target
-        if syscall is not None:
-            self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall.name))
-        else:
-            self.lgr.debug('genMonitor stopTrace from genMonitor cell %s no given syscall' % (cell_name))
+        #if syscall is not None:
+        #    self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall.name))
+        #else:
+        #    self.lgr.debug('genMonitor stopTrace from genMonitor cell %s no given syscall' % (cell_name))
 
         dup_traces = self.call_traces[cell_name].copy()
         for call in dup_traces:
@@ -2084,7 +2084,7 @@ class GenMonitor():
                 del self.call_traces[cell_name][call]
 
         else:
-            self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
             pass
 
     def traceFile(self, path):
@@ -3267,9 +3267,12 @@ class GenMonitor():
         self.lgr.debug('writeConfig done to %s' % name)
 
     def showCycle(self):
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        cycles = self.bookmarks.getCurrentCycle(cpu)
-        print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
+        cpu = self.cell_config.cpuFromCell(self.target)
+        if self.bookmarks is None:
+            print ('cpu cycles  0x%x' % (cpu.cycles))
+        else:
+            cycles = self.bookmarks.getCurrentCycle(cpu)
+            print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
         
     def continueForward(self):
         self.lgr.debug('continueForward')
@@ -4580,6 +4583,17 @@ class GenMonitor():
 
     def ignoreProg(self, prog):
         self.context_manager[self.target].ignoreProg(prog)
+
+    def runToCycle(self, cycle):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        if cycle < cpu.cycles:
+            print('Cannot use this function to run backwards.')
+            return
+        delta = cycle - cpu.cycles
+        print('will run forward 0x%x cycles' % delta)
+        cmd = 'run count = 0x%x unit = cycles' % (delta)
+        SIM_run_command(cmd)
+        
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
