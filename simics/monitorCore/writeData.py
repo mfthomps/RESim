@@ -96,7 +96,6 @@ class WriteData():
 
         self.pid = self.top.getPID()
         self.filter = filter
-        self.orig_len = len(in_data)
         self.dataWatch = dataWatch
         env_max_len = os.getenv('AFL_MAX_LEN')
         if env_max_len is not None:
@@ -120,7 +119,7 @@ class WriteData():
             if self.user_addr is not None and len(data) < len(self.orig_buffer):
                  ''' extend data to include what was in the original buffer '''
                  amount = len(self.orig_buffer) - len(data)
-                 self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
+                 #self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
                  data = data+self.orig_buffer[len(data):]
             remain = len(data)
             offset = 0
@@ -163,9 +162,10 @@ class WriteData():
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
                 self.writeKdata(result)
+                retval = len(result)
             else:
                 self.writeKdata(self.in_data)
-            retval = len(self.in_data)
+                retval = len(self.in_data)
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             if self.dataWatch is not None:
                 ''' Limit reads to buffer size '''
@@ -414,19 +414,22 @@ class WriteData():
         if eax <= 0: 
             self.lgr.error('writeData retHap got count of %d' % eax)
             return
+        remain = self.read_limit - self.total_read
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData retHap limit %d total_read %d' % (self.read_limit, self.total_read))
-        if self.total_read > self.read_limit:
+        if self.total_read >= self.read_limit:
             #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.write_callback is not None:
                  SIM_run_alone(self.write_callback, count)
             else:
                  if self.mem_utils.isKernel(self.addr):
                      ''' adjust the return value and continue '''
-                     self.mem_utils.setRegValue(self.cpu, 'syscall_ret', self.read_limit)
+                     if eax > remain:
+                         self.mem_utils.setRegValue(self.cpu, 'syscall_ret', remain)
+                         self.lgr.debug('writeData adjusted return eax to remain value of %d' % remain)
                      self.setCallHap()
                      SIM_run_alone(self.delRetHap, None)
-                     #self.lgr.debug('writeData retHap read over limit of %d, set eax, setCallHap and let it go' % self.read_limit)
+                     #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
                  else:
                      SIM_break_simulation('Over read limit')
                      #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
