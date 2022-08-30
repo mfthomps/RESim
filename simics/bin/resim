@@ -14,9 +14,10 @@ fi
 # compatibility...
 export RESIM=$RESIM_DIR
 if [ "$#" -lt 1 ]; then
-    echo "usage: resim <target> [-n]"
+    echo "usage: resim <target> [-n] [-b]"
     echo "   Where <target> is the base name of a RESim ini file"
     echo "   Use the -n option to supress the gui and terminal windows."
+    echo "   Use the -b option for batch mode."
     exit
 fi
 S4='simics-4.8'
@@ -48,6 +49,10 @@ if [[ "$2" == -n ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
     ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+elif [[ "$2" == -b ]];then
+    export RESIM_DISPLAY=$DISPLAY
+    unset DISPLAY
+    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e "@SIM_main_loop()" -batch-mode
 else
     ./simics $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
 fi
