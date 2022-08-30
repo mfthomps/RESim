@@ -796,6 +796,7 @@ class Syscall():
           
         pid_list = self.context_manager.getThreadPids()
         db_pid, dumbcpu = self.context_manager.getDebugPid()
+        
         if pid in pid_list and pid != db_pid:
             self.lgr.debug('syscall parseExecve remove %d from list being watched.' % (pid))
             #self.context_manager.rmTask(pid)
@@ -809,7 +810,11 @@ class Syscall():
             if prog_addr == 0:
                 self.lgr.error('parseExecve zero prog_addr pid %d' % pid)
                 SIM_break_simulation('parseExecve zero prog_addr pid %d' % pid)
-            self.finish_break[pid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
+            if pid in pid_list and pid != db_pid:
+                context = self.context_manager.getDefaultContext()
+            else:
+                context = cpu.current_context
+            self.finish_break[pid] = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
             self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
             return
         elif prog_string in exec_skip_list:
