@@ -177,7 +177,8 @@ class AFL():
             #self.lgr.debug('afl removed stop hap')
 
     def goAlone(self, dumb):
-        SIM_run_command('c') 
+        self.lgr.debug('afl go alone')
+        SIM_continue(0)
    
     def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
@@ -361,8 +362,9 @@ class AFL():
         self.write_data.write()
         self.page_faults.watchPageFaults()
         #self.lgr.debug('afl goN context %s cycle: 0x%x' % (self.cpu.current_context, self.cpu.cycles))
-        cli.quiet_run_command('c') 
-
+        #cli.quiet_run_command('c') 
+        SIM_continue(0)
+        
     def whenDone(self):
         #self.lgr.debug('afl whenDone callback')
         pass

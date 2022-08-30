@@ -387,7 +387,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         self.lgr.debug('stopModeChanged eip 0x%x %s' % (eip, instruct[1]))
-        SIM_run_alone(SIM_run_command, 'c')
+        SIM_continue(0)
 
     def modeChangeReport(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -525,7 +525,7 @@ class GenMonitor():
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             simics_status = SIM_simics_is_running()
             if not simics_status:
-                SIM_run_alone(SIM_run_command, 'continue')
+                SIM_continue(0)
         else:
             self.lgr.debug('run2User, already in user')
             if flist is not None: 
@@ -1036,7 +1036,7 @@ class GenMonitor():
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
-            SIM_run_command('c')
+            SIM_continue(0)
 
     def runToSignal(self, signal=None, pid=None):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -1059,7 +1059,7 @@ class GenMonitor():
         	     self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
-            SIM_run_command('c')
+            SIM_continue(0)
     
     def getIDAFuns(self, full_path):
         fun_path = full_path+'.funs'
@@ -1408,12 +1408,12 @@ class GenMonitor():
         if not status:
             try:
                 self.lgr.debug('toRunningProc try continue')
-                SIM_run_command('c')
+                SIM_continue(0)
                 pass
             except SimExc_General as e:
                 print('ERROR... try continue?')
                 self.lgr.error('ERROR in toRunningProc  try continue? %s' % str(e))
-                SIM_run_command('c')
+                SIM_continue(0)
         else:
             self.lgr.debug('toRunningProc thinks it is already running')
        
@@ -1997,7 +1997,7 @@ class GenMonitor():
                  self.mem_utils[self.target], self.task_utils[self.target], 
                  self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
                  None, stop_on_call=True, targetFS=self.targetFS[self.target])
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def traceSyscall(self, callname=None, soMap=None, call_params=[], trace_procs = False, swapper_ok=False):
         cell = self.cell_config.cell_context[self.target]
@@ -2228,7 +2228,7 @@ class GenMonitor():
         else:
             ''' stuff the call params into existing traceall syscall module '''
             self.trace_all[self.target].addCallParams(call_params)
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def clone(self, nth=1):
         ''' Run until we are in the child of the Nth clone of the current process'''
@@ -2480,7 +2480,7 @@ class GenMonitor():
 
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
 
-        SIM_run_alone(SIM_run_command, 'continue')
+        SIM_continue(0)
 
     def undoDebug(self, dumb):
         self.lgr.debug('undoDebug')
@@ -2549,7 +2549,7 @@ class GenMonitor():
             self.lgr.debug('runTo added parameters to trace_all rather than new syscall')
         if run:
             self.is_monitor_running.setRunning(True)
-            SIM_run_command('c')
+            SIM_continue(0)
         return retval
 
     def runToClone(self, nth=1):
@@ -2735,7 +2735,7 @@ class GenMonitor():
                 SIM_run_alone(run_fun, None) 
             if run:
                 self.lgr.debug('runToIO now run')
-                SIM_run_command('c')
+                SIM_continue(0)
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
         call_params1 = syscall.CallParams('read', fd, break_simulation=break_simulation)        
@@ -2785,7 +2785,7 @@ class GenMonitor():
             the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
        
         
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def getCurrentSO(self):
         cpu, comm, pid = self[self.target].task_utils[self.target].curProc() 
@@ -3086,7 +3086,7 @@ class GenMonitor():
             self.dataWatch[self.target].setRange(start, length, msg) 
         self.is_monitor_running.setRunning(True)
         if self.dataWatch[self.target].watch(show_cmp):
-            SIM_run_command('c')
+            SIM_continue(0)
         else: 
             print('no data being watched')
             self.lgr.debug('genMonitor watchData no data being watched')
@@ -3277,7 +3277,7 @@ class GenMonitor():
     def continueForward(self):
         self.lgr.debug('continueForward')
         self.is_monitor_running.setRunning(True)
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def showNets(self):
         net_commands = self.netInfo[self.target].getCommands()
@@ -3412,7 +3412,7 @@ class GenMonitor():
             self.coverage.doCoverage()
         self.context_manager[self.target].watchTasks()
         try:
-            SIM_run_command('c')
+            SIM_continue(0)
             pass
         except SimExc_General as e:
             print('ERROR... try continue?')
@@ -3420,7 +3420,7 @@ class GenMonitor():
             if 'already running' in str(e):
                 self.lgr.debug('thinks it is already running?')
             else:
-                SIM_run_command('c')
+                SIM_continue(0)
 
     def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False, kbuf=False):
         if self.bookmarks is None:
@@ -3717,7 +3717,7 @@ class GenMonitor():
             self.writeRegValue(lenreg2, len(byte_string))
         self.lgr.debug('traceInject from file %s. Length register %s set to 0x%x' % (dfile, lenreg, len(byte_string))) 
         self.traceAll()
-        SIM_run_command('c')
+        SIM_continue(0)
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
@@ -3799,7 +3799,7 @@ class GenMonitor():
     def runToKnown(self, go=True):
         self.soMap[self.target].runToKnown()
         if go:
-            SIM_run_command('c')
+            SIM_continue(0)
 
     def runToOther(self, go=True):
         ''' Continue execution until a different library is entered, or main text is returned to '''
@@ -3807,7 +3807,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         self.soMap[self.target].runToKnown(eip)
         if go:
-            SIM_run_command('c')
+            SIM_continue(0)
 
     def modFunction(self, fun, offset, word):
         ''' write a given word at the offset of a start of a function.  Intended to force a return
@@ -3855,7 +3855,7 @@ class GenMonitor():
         if callback is None:
             callback = self.toUser
         self.context_manager[self.target].catchPid(pid, callback)
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def cleanMode(self):
         if self.mode_hap is not None:
@@ -3927,7 +3927,7 @@ class GenMonitor():
 
         self.context_manager[self.target].watchTasks()
         self.lgr.debug('runToStack hap set, now run. flist in stophap is %s' % stop_action.listFuns())
-        SIM_run_alone(SIM_run_command, 'continue')
+        SIM_run_alone(SIM_continue, 0)
     
     def rmBackStop(self):
         self.lgr.debug('rmBackStop')
@@ -4430,7 +4430,7 @@ class GenMonitor():
         stop_action = hapCleaner.StopAction(hap_clean, [bp])
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
-        SIM_run_command('c')
+        SIM_continue(0)
 
     def stopAndGo(self, callback):
         ''' Will stop simulation and invoke the given callback once stopped.'''
@@ -4517,7 +4517,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('doBreak context %s' % cpu.current_context)
         if run:
-            SIM_run_command('r')
+            SIM_continue(0)
 
     def delUserBreak(self):
         self.user_break = None
