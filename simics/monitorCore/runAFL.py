@@ -118,7 +118,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     print('created afl')
     lgr.debug('created afl')
 
-    cmd = '%s %s -n' % (resim_path, resim_ini)
+    cmd = '%s %s -b' % (resim_path, resim_ini)
     os.environ['ONE_DONE_PARAM'] = str(port)
     print('cmd is %s' % cmd)
     resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
