@@ -971,7 +971,7 @@ class GenMonitor():
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
             self.jumper_dict[self.target].loadJumpers(jumper_file)
 
     def show(self):
@@ -3025,7 +3025,7 @@ class GenMonitor():
         self.resetOrigin(cpu)
         self.dataWatch[self.target].resetOrigin(cpu.cycles)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.stopTrackIO()
+        #self.stopTrackIO()
         self.lgr.debug('genMonitor clearBookmarks call clearWatches')
         self.rev_to_call[self.target].resetStartCycles()
         return True
@@ -4098,6 +4098,8 @@ class GenMonitor():
                 return
         else: 
             full_path=fname
+        if self.target in self.jumper_dict:
+            self.jumper_dict[self.target].noReverse()
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.context_manager[self.target], self.page_faults[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target=target, create_dead_zone=dead, port=port, one_done=one_done)
@@ -4541,7 +4543,8 @@ class GenMonitor():
     def jumper(self, from_addr, to_addr):
         ''' Set a control flow jumper '''
         if self.target not in self.jummper_dict:
-            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.lgr)
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
         self.jumper_dict[self.target].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
 
