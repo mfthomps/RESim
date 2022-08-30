@@ -764,8 +764,14 @@ class GenContextMgr():
             ''' TBD, do this in some other function? '''
             SIM_run_alone(self.clearAllHap, False)
             self.watching_tasks = False
+            if pid in self.watch_rec_list_saved:
+                self.watch_rec_list_saved.remove(pid)
+            if pid in self.watch_rec_list:
+                self.watch_rec_list.remove(pid)
             self.restoreDefaultContext() 
             self.lgr.debug('genContextManager No longer watching pid %d' % pid)
+            if pid in self.pid_cache:
+                self.pid_cache.remove(pid)
         
     def stopWatchTasks(self):
         self.stopWatchTasksAlone(None)
