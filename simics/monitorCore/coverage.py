@@ -259,7 +259,7 @@ class Coverage():
                     else:
                         self.lgr.error('coverage, has text_start but no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
                 else:
-                    self.lgr.error('coverage, no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
+                    self.lgr.debug('coverage, no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
 
 
     def getNumBlocks(self):
