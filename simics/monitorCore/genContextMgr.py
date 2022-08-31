@@ -1199,3 +1199,6 @@ class GenContextMgr():
             self.ignore_progs.append(prog)
             self.lgr.debug('contextManager ignoreProg %s' % prog)
             self.setTaskHap()
+
+    def getIgnoredProgs(self):
+            return list(self.ignore_progs)
