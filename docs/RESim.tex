@@ -2146,6 +2146,8 @@ set breakpoints...
 
 sscanf data tracking not right for some arm, if 1 or 2 values, r2 and r3 will point to where those go rather than using a pointer list.
 
+The playAFL function could disable reverse execution, also have it set jumpers to not clear bookmarks.
+
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
 lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
