@@ -62,10 +62,10 @@ class Pipes():
         for name in self.pipes:
             pid = name.split('-')[1]
             pname = self.proc_trace.getPname(pid)
-            print('%s %s' % (pname, name))
+            outline = '%s %s' % (pname, name)
             for mode in self.pipes[name]:
-                print('\t%s %s' % (mode, str(self.pipes[name][mode])))
-        
+                outline = outline+' %s%s' % (mode, str(self.pipes[name][mode]))
+            print(outline) 
 if __name__ == '__main__':
     proc = sys.argv[1]
     pipes = Pipes(proc)
