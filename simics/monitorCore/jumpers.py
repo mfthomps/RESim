@@ -7,28 +7,31 @@ class Jumpers():
         self.cpu = cpu
         self.context_manager = context_manager
         self.fromto = {}
+        self.comm_name = {}
+        self.temp = []
         self.hap = {}
         self.breakpoints = {}
         self.reverse_enabled = True
+        self.physical = True
+        self.break_simulation = []
 
-    def noReverse(self):
-        self.lgr.debug('jumper noReverse')
-        self.reverse_enabled = False
-
-    def setJumper(self, from_addr, to_addr):
+    def setJumper(self, from_addr, to_addr, comm=None):
         self.fromto[from_addr] = to_addr
+        if comm is not None:
+            self.comm_name[from_addr] = comm
         self.setOneBreak(from_addr)
 
     def setOneBreak(self, addr):
-            phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Execute)
-            if phys_block.address == 0 or phys_block.address is None:
-                self.lgr.error('jumper setOneBreak, memory not yet mapped.  No jumper set.')
-                return
-            self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-            self.hap[addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.doJump, addr, self.breakpoints[addr])
-
-            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-            #self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, None, proc_break, 'jumper')
+            if self.physical:
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Execute)
+                if phys_block.address == 0 or phys_block.address is None:
+                    self.lgr.error('jumper setOneBreak, memory not yet mapped.  No jumper set.')
+                    return
+                self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                self.hap[addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.doJump, addr, self.breakpoints[addr])
+            else:
+                proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, addr, proc_break, 'jumper')
             self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
 
     def setBreaks(self):
@@ -44,6 +47,11 @@ class Jumpers():
         if addr not in self.hap:
             self.lgr.debug('jumper doJump addr 0x%x not in haps' % addr)
             return
+        if addr in self.comm_name:
+            cpu, comm, pid = self.top.getCurrentProc()
+            if comm != self.comm_name[addr]:
+                self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, self.comm_name[addr]))
+                return
         if self.reverse_enabled:
             self.top.writeRegValue('eip', self.fromto[addr], alone=True)
         else:
@@ -52,22 +60,35 @@ class Jumpers():
             else:
                 reg_num = self.cpu.iface.int_register.get_number('pc')
             self.cpu.iface.int_register.write(reg_num, self.fromto[addr])
-        #self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (addr, self.fromto[addr]))
+        #if addr in self.comm_name:
+        #    self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (addr, self.fromto[addr], self.comm_name[addr]))
+        #else:
+        #    self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (addr, self.fromto[addr]))
+        if addr in self.break_simulation:
+            SIM_break_simulation('Jumper request')
 
-    def clearBreaks(self):
-        for f in self.fromto:
-            #self.context_manager[self.target].genDeleteHap(hap[f])
-            SIM_delete_breakpoint(self.breakpoints[f])
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[f])
+    def removeOneBreak(self, addr):
+        if addr not in self.hap:
+            self.lgr.debug('jumpers removeOneBreak but addr 0x%x not in dict.' % addr)
+            return
+        if not self.physical:
+            self.context_manager[self.target].genDeleteHap(self.hap[addr])
+        else:
+            SIM_delete_breakpoint(self.breakpoints[addr])
+            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[addr])
 
     def removeBreaks(self):
-        self.clearBreak()
+        for f in self.fromto:
+            self.removeOneBreak(addr)
         self.hap = {}
         self.breakpoints = {}
 
-    def loadJumpers(self, fname):
+    def loadJumpers(self, fname, physical=True):
+        self.physical = physical
         from_addr = None
         to_addr = None
+        self.reverse_enabled = self.top.reverseEnabled()
+        self.lgr.debug('jumpers loadJumper, physical: %r reverse_enabled: %r' % (physical, self.reverse_enabled))
         if not os.path.isfile(fname):
             self.lgr.error('No jumper file found at %s' % fname)
         else:
@@ -75,11 +96,21 @@ class Jumpers():
                 for line in fh:
                     if line.strip().startswith('#'):
                         continue
-                    try:
-                        from_addr, to_addr = line.strip().split()
-                        from_addr = int(from_addr, 16)
-                        to_addr = int(to_addr, 16)
-                    except:
-                        raise Exception("Error reading %s from %s, bad jumper" % (line, fname))
+                    parts = line.strip().split()
+                    if len(parts) < 2:
+                        self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+                        raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
                         return
-                    self.setJumper(from_addr, to_addr) 
+                    try:
+                        from_addr = int(parts[0], 16)
+                        to_addr = int(parts[1], 16)
+                    except:
+                        self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+                        raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+                        return
+                    comm = None
+                    if len(parts) > 2:
+                        comm = parts[2]
+                    if len(parts) > 3 and parts[3] == 'break':
+                        self.break_simulation.append(from_addr)
+                    self.setJumper(from_addr, to_addr, comm) 
