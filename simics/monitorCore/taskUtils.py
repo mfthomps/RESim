@@ -293,8 +293,9 @@ class TaskUtils():
                 task.sibling = []
         if self.param.ts_thread_group_list_head not in (None, -1):
             task.thread_group = self.read_list_head(cpu, addr, self.param.ts_thread_group_list_head)
-            ''' TBD why off by 4? '''
-            task.thread_group.next = task.thread_group.next + 4
+            if task.thread_group.next is not None:
+                ''' TBD why off by 4? '''
+                task.thread_group.next = task.thread_group.next + 4
         return task
 
     def getTaskStructs(self):
