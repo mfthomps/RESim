@@ -344,6 +344,8 @@ If nth is greater than 1, will run until the nth recv call.
 
 \item {\tt runToOpen(file)} -- Stops at the open of a given filename.
 
+\item {\tt runToWrite(substring)} -- Stops when a process writes the given substring.
+
 \item {\tt clone(nth)} – Continue execution until the nth clone system call in the current process occurs, and then halt execution within the child.
 
 \item {\tt runToText()} – Continue execution until the text segment of the currently debugged process is reached.  This, and revToText, are useful after execution transfers to libraries, or Linux linkage functions, e.g., references to the GOT.
@@ -587,6 +589,8 @@ is assumed to be the RESim workspace directory name.
 
 \subsection{Msc}
 \begin{itemize}
+\item{\tt runToCycle} -- Run to an absolute cpu cycle on the current cpu.  Useful for moving simulation forward to prepare to debug some process
+that is not created until after much processing.  Cycles reported in syscall logs can help get you close to the point in time.
 
 \item{\tt satisfyCondition} -- (experimental) Assess the comparison instruction at a given address and attempt to satisfy it by altering input data.  
 Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The 
@@ -2092,6 +2096,10 @@ Instead of tracing all from a boot, consider running ahead until the systemd-log
 
 Pay attention to the {\tt BACK\_STOP\_CYCLES} environment variable in the ini.  A large value may be needed during initial testing,
 but that may need to be greatly reduced for fuzzing.
+
+Some system may take a long time to create the process you are interested in.  This may be exacerbated by monitoring such as occurs during
+a runTo or debugProc (e.g., some script is in a loop failing on create of a process, which may happen millions of times.)  Consider using
+runToCycle to run forward to a desired cpu cycle with the least amount of overhead.
 
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
