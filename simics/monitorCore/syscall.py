@@ -31,7 +31,7 @@ Return value
 eax
 
 '''
-exec_skip_list = ['/bin/sleep']
+exec_skip_list = ['sleep']
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
@@ -339,6 +339,11 @@ class Syscall():
 
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
+
+        self.ignore_progs = context_manager.getIgnoredProgs()
+        for prog in exec_skip_list:
+            self.ignore_progs.append(prog)
+
         if trace is None and self.traceMgr is not None:
             tf = '/tmp/syscall_trace.txt'
             #self.traceMgr.open(tf, cpu, noclose=True)
@@ -483,12 +488,12 @@ class Syscall():
         return frame
 
     def stopTraceAlone(self, dumb):
-        #self.lgr.debug('stopTraceAlone')
+        self.lgr.debug('stopTraceAlone')
         if self.stop_hap is not None:
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-        #self.lgr.debug('stopTraceAlone2')
+        self.lgr.debug('stopTraceAlone2')
         if self.background_break is not None:
             self.lgr.debug('stopTraceAlone delete background_break %d' % self.background_break)
             RES_delete_breakpoint(self.background_break)
@@ -496,19 +501,20 @@ class Syscall():
             self.background_break = None
             self.background_hap = None
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
-        #self.lgr.debug('stopTraceAlone done')
+        self.lgr.debug('stopTraceAlone done')
 
 
     def stopTrace(self, immediate=False):
         self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
-            #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
+            self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
+        self.lgr.debug('do call to alone')
         SIM_run_alone(self.stopTraceAlone, None)
-        #self.lgr.debug('did call to alone')
+        self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces():
             self.sharedSyscall.stopTrace()
 
@@ -523,7 +529,7 @@ class Syscall():
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        #self.lgr.debug('syscall stopTrace return for %s' % self.name)
+        self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
         self.watch_first_mmap = fd
@@ -676,8 +682,8 @@ class Syscall():
                         else:
                             self.lgr.error('addElf got text segment but no text, unexpected.  pid %d' % pid)
                 else:
-                    self.lgr.debug('syscall addElf, no text segment found, advise SO we have an exec, but no starting map')
                     if self.soMap is not None:
+                        self.lgr.debug('syscall addElf, no text segment found, advise SO we have an exec, but no starting map')
                         self.soMap.noText(prog_string, pid)
                     retval = False
                     ftype = magic.from_file(full_path)
@@ -704,9 +710,9 @@ class Syscall():
         RES_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
-        if prog_string in exec_skip_list:
+        if prog_string in self.ignore_progs:
             self.lgr.debug('finishParseExecve pid:%d skipping (%s)' % (pid, prog_string))
-            return
+            return False
         self.lgr.debug('finishParseExecve pid:%d progstring (%s)' % (pid, prog_string))
         nargs = min(4, len(arg_string_list))
         arg_string = ''
@@ -730,10 +736,10 @@ class Syscall():
 
 
     def checkExecve(self, prog_string, arg_string_list, pid):
-        self.lgr.debug('checkExecve syscall %s  %s' % (self.name, prog_string))
+        #self.lgr.debug('checkExecve syscall %s  %s' % (self.name, prog_string))
         cp = None
         for call in self.call_params:
-            self.lgr.debug('checkExecve call %s' % call)
+            #self.lgr.debug('checkExecve call %s' % call)
             if call.subcall == 'execve':
                 cp = call
                 break
@@ -786,13 +792,16 @@ class Syscall():
                         SIM_run_alone(self.stopAlone, 'execve of %s %s' % (prog_string, sw))
 
     def parseExecve(self, syscall_info):
+        retval = True
         cpu, comm, pid = self.task_utils.curProc() 
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
         at_enter = True
         if syscall_info.calculated is not None:
             at_enter = False
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, at_enter, cpu)
-        self.lgr.debug('parseExecve len of arg_string_list %d' % len(arg_string_list))
+        if prog_string is not None and os.path.basename(prog_string) in self.ignore_progs:
+            return False
+        #self.lgr.debug('parseExecve len of arg_string_list %d' % len(arg_string_list))
           
         pid_list = self.context_manager.getThreadPids()
         db_pid, dumbcpu = self.context_manager.getDebugPid()
@@ -816,9 +825,7 @@ class Syscall():
                 context = cpu.current_context
             self.finish_break[pid] = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
             self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
-            return
-        elif prog_string in exec_skip_list:
-            return
+            return False
         nargs = min(4, len(arg_string_list))
         arg_string = ''
         for i in range(nargs):
@@ -840,7 +847,7 @@ class Syscall():
             self.netInfo.checkNet(prog_string, arg_string)
         self.checkExecve(prog_string, arg_string_list, pid)
 
-        return 
+        return retval
 
 
     def socketParse(self, callname, syscall_info, frame, exit_info, pid):
@@ -1253,6 +1260,8 @@ class Syscall():
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info)
+            if not retval:
+                exit_info = None
         elif callname == 'close':        
             fd = frame['param1']
             if self.traceProcs is not None:
@@ -1842,28 +1851,29 @@ class Syscall():
             #     callnum, syscall_info.callnum, self.stop_on_call))
             if syscall_info.callnum == callnum:
                 exit_info = self.syscallParse(callnum, callname, frame, cpu, pid, comm, syscall_info)
-                if comm != 'tar':
-                        ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
-                        tracing_all = False 
-                        if self.top is not None:
-                            tracing_all = self.top.tracingAll(self.cell_name, pid)
-                        if self.callback is None:
-                            if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all:
-                                if self.stop_on_call:
-                                    cp = CallParams(None, None, break_simulation=True)
-                                    exit_info.call_params = cp
-                                #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                                self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
-                                   len(syscall_info.call_params), tracing_all))
-                                self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                if exit_info is not None:
+                    if comm != 'tar':
+                            ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
+                            tracing_all = False 
+                            if self.top is not None:
+                                tracing_all = self.top.tracingAll(self.cell_name, pid)
+                            if self.callback is None:
+                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all:
+                                    if self.stop_on_call:
+                                        cp = CallParams(None, None, break_simulation=True)
+                                        exit_info.call_params = cp
+                                    #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
+                                    self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
+                                       len(syscall_info.call_params), tracing_all))
+                                    self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                else:
+                                    self.lgr.debug('did not add exitHap')
+                                    pass
                             else:
-                                self.lgr.debug('did not add exitHap')
-                                pass
-                        else:
-                            self.lgr.debug('syscall invoking callback')
-                            self.callback()
-                else:
-                    self.lgr.debug('syscallHap skipping tar %s, no exit' % comm)
+                                self.lgr.debug('syscall invoking callback')
+                                self.callback()
+                    else:
+                        self.lgr.debug('syscallHap skipping tar %s, no exit' % comm)
                 
             else:
                 ''' TBD no longer reached.  callnum set to syscall_info to handle 32 bit compat mode where we don't know how we got here '''
