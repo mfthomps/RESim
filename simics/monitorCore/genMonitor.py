@@ -525,7 +525,7 @@ class GenMonitor():
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             simics_status = SIM_simics_is_running()
             if not simics_status:
-                SIM_continue(0)
+                SIM_run_alone(SIM_continue, 0)
         else:
             self.lgr.debug('run2User, already in user')
             if flist is not None: 
@@ -972,7 +972,7 @@ class GenMonitor():
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
                 self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
-            self.jumper_dict[self.target].loadJumpers(jumper_file)
+                self.jumper_dict[self.target].loadJumpers(jumper_file)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1810,6 +1810,10 @@ class GenMonitor():
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         return this_pid
 
+    def getCurrentProc(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        return cpu, comm, pid
+
     def getCPL(self): 
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         cpl = memUtils.getCPL(cpu)
@@ -2050,8 +2054,9 @@ class GenMonitor():
         for call in dup_traces:
             syscall_trace = dup_traces[call]
             if syscall is None or syscall_trace == syscall: 
-                self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
+                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
                 syscall_trace.stopTrace(immediate=True)
+                #self.lgr.debug('genMonitor back from stopTrace')
                 self.rmCallTrace(cell_name, call)
 
         #if syscall is None or syscall_trace == syscall: 
@@ -3466,7 +3471,6 @@ class GenMonitor():
                 
         if 'runToIO' in self.call_traces[self.target]:
             self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
-            
         self.stopDataWatch()
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
@@ -4098,8 +4102,6 @@ class GenMonitor():
                 return
         else: 
             full_path=fname
-        if self.target in self.jumper_dict:
-            self.jumper_dict[self.target].noReverse()
         fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], self.dataWatch[self.target], 
             self.run_from_snap, self.context_manager[self.target], self.page_faults[self.target], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target=target, create_dead_zone=dead, port=port, one_done=one_done)
@@ -4596,7 +4598,17 @@ class GenMonitor():
         print('will run forward 0x%x cycles' % delta)
         cmd = 'run count = 0x%x unit = cycles' % (delta)
         SIM_run_command(cmd)
-        
+    
+    def loadJumpers(self):    
+        jumper_file = os.getenv('EXECUTION_JUMPERS')
+        if jumper_file is not None:
+            if self.target not in self.jumper_dict:
+                cpu = self.cell_config.cpuFromCell(self.target)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
+            self.jumper_dict[self.target].loadJumpers(jumper_file, physical=False)
+            print('Loaded jumpers from %s' % jumper_file)
+        else:
+            print('No jumper file defined.')
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
