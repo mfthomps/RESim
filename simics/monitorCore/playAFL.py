@@ -219,6 +219,14 @@ class PlayAFL():
                 #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
+            if not os.path.isfile(full):
+                self.lgr.debug('No file at %s, try local file' % full)
+                full = os.path.basename(full)
+                if not os.path.isfile(full):
+                    self.lgr.debug('No local file at %s, either, bail' % full)
+                    print('Could not find file for %s' % full)
+                    return
+            
             with open(full, 'rb') as fh:
                 if sys.version_info[0] == 2:
                     self.in_data = bytearray(fh.read())
