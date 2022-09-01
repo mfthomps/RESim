@@ -3356,8 +3356,8 @@ class GenMonitor():
     def reverseEnabled(self):
         # TBD fix this after WR replies to question
         #return True
-        #return VT_revexec_active()
-        
+        return VT_revexec_active()
+        ''' 
         cmd = 'sim.status'
         #cmd = 'sim.info.status'
         dumb, ret = cli.quiet_run_command(cmd)
@@ -3369,6 +3369,7 @@ class GenMonitor():
         else:
             self.context_manager[self.target].setIdaMessage('Reverse execution disabled')
             return False
+        ''' 
        
 
     def v2p(self, addr):
