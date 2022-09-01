@@ -1450,7 +1450,7 @@ class DataWatch():
                 our_reg = op1
                 next_ip = eip
                 next_instruct = instruct
-                for i in range(5):
+                for i in range(7):
                     next_ip = next_ip + next_instruct[0]
                     next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
                     if decode.isBranch(self.cpu, next_instruct[1]):
@@ -1468,7 +1468,13 @@ class DataWatch():
                             self.lgr.debug('dataWatch checkMove addr 0x%x  start 0x%x set finishCheckMoveHap' % (addr, start))
                             self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
                                      self.finishCheckMoveHap, move_stuff, break_num, 'checkMove')
-                        break
+                            break
+                        elif self.decode.isReg(op1):
+                            self.lgr.debug('dataWatch checkMove, switching our_reg to %s' % op1)
+                            our_reg = op1
+                        else:
+                            self.lgr.debug('dataWatch checkMove, giving up')
+                            break
                     elif next_instruct[1].startswith('push') and self.decode.isReg(op1) and op1 in our_reg:
                         next_ip = next_ip + next_instruct[0]
                         adhoc = self.checkNTOHL(next_ip, addr, trans_size, start, length)
