@@ -1177,7 +1177,8 @@ class reverseToCall():
                 else:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
-                self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
+                if newvalue is not None and value is not None: 
+                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
                     self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
