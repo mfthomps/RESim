@@ -11,7 +11,7 @@ class Jumpers():
         self.temp = []
         self.hap = {}
         self.breakpoints = {}
-        self.reverse_enabled = True
+        self.reverse_enabled = None
         self.physical = True
         self.break_simulation = []
 
@@ -52,6 +52,9 @@ class Jumpers():
             if comm != self.comm_name[addr]:
                 self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, self.comm_name[addr]))
                 return
+        if self.reverse_enabled is None:
+            self.reverse_enabled = self.top.reverseEnabled()
+            self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
         if self.reverse_enabled:
             self.top.writeRegValue('eip', self.fromto[addr], alone=True)
         else:
@@ -87,8 +90,7 @@ class Jumpers():
         self.physical = physical
         from_addr = None
         to_addr = None
-        self.reverse_enabled = self.top.reverseEnabled()
-        self.lgr.debug('jumpers loadJumper, physical: %r reverse_enabled: %r' % (physical, self.reverse_enabled))
+        self.lgr.debug('jumpers loadJumper, physical: %r' % (physical))
         if not os.path.isfile(fname):
             self.lgr.error('No jumper file found at %s' % fname)
         else:
@@ -114,3 +116,4 @@ class Jumpers():
                     if len(parts) > 3 and parts[3] == 'break':
                         self.break_simulation.append(from_addr)
                     self.setJumper(from_addr, to_addr, comm) 
+
