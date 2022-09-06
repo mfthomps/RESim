@@ -303,9 +303,9 @@ class InjectIO():
         if self.write_data is not None:
             self.write_data.delCallHap(None)
 
-    def setCallHap(self):
+    def restoreCallHap(self):
         if self.write_data is not None:
-            self.write_data.setCallHap()
+            self.write_data.restoreCallHap()
     
 
     def resetOrigin(self, dumb):
