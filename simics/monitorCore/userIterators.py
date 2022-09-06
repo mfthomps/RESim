@@ -12,8 +12,9 @@ class UserIterators():
             return
         base = os.path.basename(self.path).rsplit('.', )[0]
         self.new_path = os.path.join(ida_data, base, base+'.iterators')
-        self.load(self.new_path)
-        self.lgr.debug('userIterators count now %d from %s' % (len(self.iterators), self.new_path))
+        if os.path.isfile(self.new_path):
+            self.load(self.new_path)
+            self.lgr.debug('userIterators count now %d from %s' % (len(self.iterators), self.new_path))
 
     def load(self, path):
         if os.path.isfile(path):
