@@ -104,6 +104,8 @@ class WriteData():
 
         self.total_read = 0
         self.read_limit = None
+        ''' only restore call hap if there was one '''
+        self.was_a_call_hap = False
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -119,7 +121,7 @@ class WriteData():
             if self.user_addr is not None and len(data) < len(self.orig_buffer):
                  ''' extend data to include what was in the original buffer '''
                  amount = len(self.orig_buffer) - len(data)
-                 #self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
+                 self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
                  data = data+self.orig_buffer[len(data):]
             remain = len(data)
             offset = 0
@@ -129,9 +131,9 @@ class WriteData():
                  end = offset + count
                  if index >= len(self.k_bufs):
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
-                     #self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
+                     self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 #self.lgr.debug('writeKdata write %d bytes.  k_buf_len is %d' % (len(data[offset:end]), self.k_buf_len))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -204,7 +206,7 @@ class WriteData():
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
-               # self.lgr.debug('%s' % next_data)
+                #self.lgr.debug('%s' % next_data)
                 self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
@@ -426,7 +428,7 @@ class WriteData():
                      ''' adjust the return value and continue '''
                      if eax > remain:
                          self.mem_utils.setRegValue(self.cpu, 'syscall_ret', remain)
-                         self.lgr.debug('writeData adjusted return eax to remain value of %d' % remain)
+                         #self.lgr.debug('writeData adjusted return eax to remain value of %d' % remain)
                      self.setCallHap()
                      SIM_run_alone(self.delRetHap, None)
                      #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
@@ -434,10 +436,14 @@ class WriteData():
                      SIM_break_simulation('Over read limit')
                      #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         
+    def restoreCallHap(self):
+        if self.was_a_call_hap:
+            self.setCallHap()
 
     def delCallHap(self, dumb):
         #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
+            self.was_a_call_hap = True
             #self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
             RES_delete_breakpoint(self.call_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.call_hap)
