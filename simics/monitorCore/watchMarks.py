@@ -105,7 +105,7 @@ class DataMark():
             if self.note is None:
                 mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
             else:
-                mark_msg = '%s %d bytes into 0x%x from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.note, self.trans_size, self.dest, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+                mark_msg = '%s %d bytes into dest 0x%x from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.note, self.trans_size, self.dest, self.addr, self.offset, self.start, self.length, self.cmp_ins)
         elif self.ad_hoc:
             length = (self.end_addr - self.addr) + 1
             self.lgr.debug('DataMark getMsg ad-hoc length is %d' % length)
@@ -446,7 +446,7 @@ class WatchMarks():
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
             wm = self.addWatchMark(dm, ip=ip)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
-            self.lgr.debug('watchMarks dataRead 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
+            self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         if ad_hoc:
             if len(self.mark_list) > 0:
@@ -470,7 +470,7 @@ class WatchMarks():
         elif note is not None:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, note=note, dest=dest)
             wm = self.addWatchMark(dm)
-            self.lgr.debug('watchMarks dataRead with note 0x%x %s' % (ip, dm.getMsg()))
+            self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
