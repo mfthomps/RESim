@@ -2335,7 +2335,7 @@ class GenMonitor():
                 self.trace_malloc.setBreaks()
             self.lgr.debug('restoreDebugBreaks back  malloc')
             if self.injectIOInstance is not None:
-                self.injectIOInstance.setCallHap()
+                self.injectIOInstance.restoreCallHap()
             self.lgr.debug('restoreDebugBreaks back  inject')
             if self.user_break is not None:
                 self.user_break.doBreak()
@@ -3683,12 +3683,11 @@ class GenMonitor():
             return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 addr = so_pickle['addr']
-                max_len = so_pickle['size']
-                self.lgr.debug('traceInject pickle addr 0x%x len %d' % (addr, max_len))
+                self.lgr.debug('traceInject pickle addr 0x%x ' % (addr))
         cpu = self.cell_config.cpuFromCell(self.target)
         ''' Add memUtil function to put byte array into memory '''
         byte_string = None
-        with open(dfile) as fh:
+        with open(dfile, 'rb') as fh:
             byte_string = fh.read()
         
         self.dataWatch[self.target].goToRecvMark()
@@ -4599,7 +4598,23 @@ class GenMonitor():
         print('will run forward 0x%x cycles' % delta)
         cmd = 'run count = 0x%x unit = cycles' % (delta)
         SIM_run_command(cmd)
-    
+
+    def runToSeconds(self, seconds):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        dumb, ret = cli.quiet_run_command('ptime -t')
+        #print('dumb is %s ret is %s' % (dumb, ret))
+        now = float(dumb)
+        want = float(seconds)
+        if now > want:
+            print('Cannot use this function to run backwards.')
+            return
+        delta = want - now
+        ms = delta * 1000
+        
+        print('will run forward %d ms' % int(ms))
+        cmd = 'run count = %d unit = ms' % (int(ms))
+        SIM_run_command(cmd)
+        
     def loadJumpers(self):    
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
