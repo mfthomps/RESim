@@ -22,7 +22,7 @@ class CallMark():
         return self.msg
 
 class CopyMark():
-    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None):
+    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None, truncated=None):
         self.src = src
         self.dest = dest
         self.length = length
@@ -33,18 +33,21 @@ class CopyMark():
         if op_type == Sim_Trans_Load:
             if buf_start is not None:
                 offset = src - buf_start
-                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (from offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                trunc_string = ''
+                if truncated is not None:
+                    trunc_string = ' (trucated from %d)' % truncated        
+                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x. (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
             else:
-                self.msg = 'Copy %d bytes from 0x%x to 0x%x. (Source buffer starts before known buffers!)' % (length, src, dest)
+                self.msg = 'Copy %d bytes from 0x%x to 0x%08x. (Source buffer starts before known buffers!)' % (length, src, dest)
         else:
             if buf_start is not None:
                 if dest == buf_start:
-                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
                 else:
                     offset = dest - buf_start
-                    self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%x to 0x%x. Buffer unknown!)' % (length, src, dest, )
+                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. Buffer unknown!)' % (length, src, dest, )
             else:
                 self.msg = 'Modify Copy length is none, not where wth'
     def getMsg(self):
@@ -98,26 +101,32 @@ class DataMark():
         if self.start is None:
             mark_msg = 'Error getting mark message'
         elif self.modify and self.addr is not None:
-            mark_msg = 'Write %d to  0x%08x offset %4d into 0x%8x (buf size %4d)' % (self.trans_size, self.addr, self.offset, self.start, self.length)
+            mark_msg = 'Write %d to  0x%08x offset %4d into 0x%08x (buf size %4d)' % (self.trans_size, self.addr, self.offset, self.start, self.length)
         elif self.addr is None:
             mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
         elif self.end_addr is None:
+            offset_string = ''
+            if self.offset != 0 or self.trans_size != self.length:
+                offset_string = 'offset %4d into 0x%08x (buf size %4d)' % (self.offset, self.start, self.length)
             if self.note is None:
-                mark_msg = 'Read %d from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.trans_size, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+                mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.cmp_ins)
             else:
-                mark_msg = '%s %d bytes into dest 0x%x from 0x%08x offset %4d into 0x%8x (buf size %4d) %s' % (self.note, self.trans_size, self.dest, self.addr, self.offset, self.start, self.length, self.cmp_ins)
+                mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins)
         elif self.ad_hoc:
-            length = (self.end_addr - self.addr) + 1
-            self.lgr.debug('DataMark getMsg ad-hoc length is %d' % length)
+            copy_length = (self.end_addr - self.addr) + 1
+            self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
             if self.start is not None:
-                offset = self.addr - self.start
-                mark_msg = 'Copy %d bytes from 0x%x to 0x%x. Ad-hoc (from offset %d into buffer at 0x%x)' % (length, self.addr, self.dest, offset, self.start)
+                if copy_length == self.length and self.start == self.addr:
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc' % (copy_length, self.addr, self.dest)
+                else: 
+                    offset = self.addr - self.start
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
             else:
-                mark_msg = 'Copy %d bytes from 0x%x to 0x%x. Ad-hoc (Source buffer starts before known buffers!)' % (length, self.addr, self.dest)
+                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
         else:
-            length = self.end_addr- self.addr + 1
+            copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
-                 self.end_addr, length, self.offset, self.start, self.length, self.cmp_ins)
+                 self.end_addr, copy_length, self.offset, self.start, self.length, self.cmp_ins)
         return mark_msg
 
     def addrRange(self, addr):
@@ -348,6 +357,22 @@ class LogMark():
     def getMsg(self):
         return self.msg
 
+class PushMark():
+    def __init__(self, addr, dest, buf_start, length, ip, push_size):
+        self.addr = addr
+        self.dest = dest
+        self.length = length
+        self.start = buf_start
+        self.ip = ip
+        if addr == buf_start and length == push_size:
+            self.msg = 'push from 0x%x to 0x%x' % (addr, dest)
+        else:
+            offset = addr - buf_start
+            self.msg = 'push from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, buf_start, dest)
+    def getMsg(self):
+        return self.msg
+ 
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -442,13 +467,13 @@ class WatchMarks():
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = None
         ''' TBD generalize for loops that make multiple refs? '''
-        if ip not in self.prev_ip and not ad_hoc:
+        if ip not in self.prev_ip and not ad_hoc and not note:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
             wm = self.addWatchMark(dm, ip=ip)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
-        if ad_hoc:
+        elif ad_hoc:
             if len(self.mark_list) > 0:
                 pm = self.mark_list[-1]
                 if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None:
@@ -623,10 +648,10 @@ class WatchMarks():
         return sp, base
 
 
-    def copy(self, src, dest, length, buf_start, op_type, strcpy=False):
+    def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
-        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp)
+        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated)
         self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
         wm = self.addWatchMark(cm)
@@ -774,6 +799,11 @@ class WatchMarks():
     def logMark(self, s, prefix):
         lm = LogMark(s, prefix)
         self.addWatchMark(lm)
+
+    def pushMark(self, src, dest, buf_start, length, ip):
+        pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.WORD_SIZE)
+        wm = self.addWatchMark(pm)
+        return wm
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')
