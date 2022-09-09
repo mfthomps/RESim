@@ -32,6 +32,7 @@ class PlayAFL():
         self.target = target
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
+        self.afl_list = []
         ''' If parallel, the all_hits will not be tracked or written.  TBD to that separately.'''
         self.parallel = parallel
         ''' Only track current thread '''
@@ -70,6 +71,7 @@ class PlayAFL():
                 self.afl_list = aflPath.getTargetQueue(target, get_all=True)
                 if len(self.afl_list) == 0:
                     print('No queue files found for %s' % target)
+                    self.lgr.debug('playAFL No queue files found for %s' % target)
                     return
             else:
                 self.afl_list = aflPath.getTargetCrashes(target)
@@ -112,13 +114,6 @@ class PlayAFL():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         
         self.snap_name = snap_name
-        self.resim_ctl = None
-        if resimUtils.isParallel():
-            self.lgr.debug('playAFL found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
-            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
-            self.lgr.debug('playAFL back from open')
-        else: 
-            self.lgr.debug('playAFL: Not a parallel run, or playAFL did NOT find resim_ctl.fifo')
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
@@ -171,6 +166,11 @@ class PlayAFL():
 
 
     def go(self, findbb=None):
+        if len(self.afl_list) == 0:
+            print('Nothing in afl list')
+            self.lgr.debug('Nothing in afl list')
+            self.top.quit()
+            return
         self.lgr.debug('playAFL go')
         self.bnt_list = []
         self.index = -1
@@ -183,20 +183,21 @@ class PlayAFL():
         SIM_break_simulation('hang')
 
     def goAlone(self, clear_hits):
-        self.lgr.debug('playAFL goAlone')
         self.current_packet=1
         self.index += 1
+        self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d' % (len(self.afl_list), self.index))
         done = False
         if self.target != 'oneplay':
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
-                #self.lgr.debug('playAFL goAlone file %s' % fname)
+                self.lgr.debug('playAFL goAlone file %s' % fname)
                 ''' python 2 does not have FileExistsError,fly blind '''
                 try:
                     os.open(fname, os.O_CREAT | os.O_EXCL)
                     done = True
                 except:
+                    self.lgr.debug('playAFL goAlone did not get exclusive create for file at %s' % fname)
                     if not self.parallel:
                         try:
                             hits_json = json.load(open(fname))
@@ -218,13 +219,19 @@ class PlayAFL():
             if self.orig_buffer is not None:
                 #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
                 self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
+            if not os.path.isfile(full):
+                ''' TBD remove this '''
+                self.lgr.debug('No file at %s, non-parallel file' % full)
+                full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
             if not os.path.isfile(full):
                 self.lgr.debug('No file at %s, try local file' % full)
                 full = os.path.basename(full)
                 if not os.path.isfile(full):
                     self.lgr.debug('No local file at %s, either, bail' % full)
                     print('Could not find file for %s' % full)
+                    self.top.quit()
                     return
             
             with open(full, 'rb') as fh:
@@ -266,6 +273,7 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone now continue')
             SIM_run_command('c')
         else:
+            self.lgr.debug('playAFL did all sessions.')
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
                 hits = self.coverage.getHitCount()
