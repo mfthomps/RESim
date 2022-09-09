@@ -98,6 +98,8 @@ class Jumpers():
                 for line in fh:
                     if line.strip().startswith('#'):
                         continue
+                    if len(line.strip()) == 0:
+                        continue
                     parts = line.strip().split()
                     if len(parts) < 2:
                         self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
