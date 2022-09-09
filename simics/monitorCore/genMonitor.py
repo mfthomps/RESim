@@ -3354,9 +3354,12 @@ class GenMonitor():
             print('\t'+target)
 
     def reverseEnabled(self):
-        # TBD fix this after WR replies to question
+        # TBD Simics VT_revexec_active is broken.  Often gives the wrong answer
         #return True
-        return VT_revexec_active()
+        if self.disable_reverse: 
+            return False
+        else:
+            return VT_revexec_active()
         ''' 
         cmd = 'sim.status'
         #cmd = 'sim.info.status'
