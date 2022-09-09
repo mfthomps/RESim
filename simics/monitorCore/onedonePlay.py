@@ -12,7 +12,9 @@ def onedone(top):
         only_thread = True
     
     here = os.getcwd()
-    base = os.path.basename(os.path.dirname(here))
+    base = os.path.basename(here)
+    if base.startswith('resim_'):
+        base = os.path.basename(os.path.dirname(here))
     with open('logs/onedonePlay.log', 'w') as fh:
         fh.write('in onedone of onedonePlay\n') 
         if protocol == 'tcp': 
