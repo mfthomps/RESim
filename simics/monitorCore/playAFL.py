@@ -87,10 +87,18 @@ class PlayAFL():
         self.addr = None
         self.in_data = None
         #self.backstop_cycles =   100000
-        self.backstop_cycles =   900000
-        bsc = os.getenv('BACK_STOP_CYCLES')
-        if bsc is not None:
-            self.backstop_cycles = int(bsc)
+        if afl_mode:
+            if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
+                self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
+                self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+            else:
+                self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
+                self.backstop_cycles =   1000000
+        else:
+            self.backstop_cycles =   900000
+            bsc = os.getenv('BACK_STOP_CYCLES')
+            if bsc is not None:
+                self.backstop_cycles = int(bsc)
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 0
@@ -163,7 +171,7 @@ class PlayAFL():
         if hang is not None:
             hang_cycles = int(hang)
         self.backstop.setHangCallback(self.hangCallback, hang_cycles)
-
+        self.initial_cycle = cpu.cycles
 
     def go(self, findbb=None):
         if len(self.afl_list) == 0:
@@ -222,17 +230,21 @@ class PlayAFL():
             self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
             if not os.path.isfile(full):
-                ''' TBD remove this '''
                 self.lgr.debug('No file at %s, non-parallel file' % full)
                 full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
             if not os.path.isfile(full):
                 self.lgr.debug('No file at %s, try local file' % full)
-                full = os.path.basename(full)
+                full = self.afl_list[self.index]
                 if not os.path.isfile(full):
-                    self.lgr.debug('No local file at %s, either, bail' % full)
-                    print('Could not find file for %s' % full)
-                    self.top.quit()
-                    return
+                    self.lgr.debug('No file at %s, try basename' % full)
+                    full = os.path.basename(full)
+                    if not os.path.isfile(full):
+                        self.lgr.debug('No local file at %s, either, bail' % full)
+                        print('Could not find file for %s' % full)
+                        self.top.quit()
+                        return
+                else:
+                    self.lgr.debug('Using local file at: %s' % full)
             
             with open(full, 'rb') as fh:
                 if sys.version_info[0] == 2:
@@ -341,6 +353,10 @@ class PlayAFL():
 
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('playAFL in stopHap')
+        if self.cpu.cycles == self.initial_cycle:
+            self.lgr.debug('playAFL stopHap, but did not get anywhere, continue?')
+            SIM_run_alone(SIM_continue, 0)
+            return
         if self.stop_hap is not None:
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
