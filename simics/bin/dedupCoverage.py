@@ -84,7 +84,11 @@ def main():
                 print('or at %s' % realqueue)
                 continue
         queue_len = os.path.getsize(queue)
-        hits = json.load(open(f))
+        try:
+            hits = json.load(open(f))
+        except:
+            print('Failed loading json %s' % f)
+            exit(1)
         numhits = len(hits)
         gotone = None
         for item in hit_dict:
