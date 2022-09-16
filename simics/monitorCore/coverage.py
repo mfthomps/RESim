@@ -526,20 +526,20 @@ class Coverage():
                     self.afl_del_breaks.append(this_addr)
                     if prejump_addr is not None: 
                         self.afl_del_breaks.append(prejump_addr)
-                    if True:
-                        ''' Current strategy is to assume deleting breaks is just as bad as hitting saturated breaks.  consider before 
-                            prematurely optimizing'''
-                        #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, this_addr))
-                        if this_addr not in self.afl_del_breaks:
-                            #SIM_delete_breakpoint(break_num)
-                            #index = self.bp_list.index(break_num)
-                            self.afl_del_breaks.append(this_addr)
-                            '''
-                            if index < self.begin_tmp_bp:
-                                self.afl_del_breaks.append(this_addr)
-                            else:
-                                self.bp_list.remove(break_num)
-                            '''
+                    #if True:
+                    #    ''' Current strategy is to assume deleting breaks is just as bad as hitting saturated breaks.  consider before 
+                    #        prematurely optimizing'''
+                    #    #self.lgr.debug('high hit break_num %d count index %d 0x%x' % (break_num, index, this_addr))
+                    #    if this_addr not in self.afl_del_breaks:
+                    #        #SIM_delete_breakpoint(break_num)
+                    #        #index = self.bp_list.index(break_num)
+                    #        self.afl_del_breaks.append(this_addr)
+                    #        '''
+                    #        if index < self.begin_tmp_bp:
+                    #            self.afl_del_breaks.append(this_addr)
+                    #        else:
+                    #            self.bp_list.remove(break_num)
+                    #        '''
                 else:
                     self.trace_bits[index] =  self.trace_bits[index]+1
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
