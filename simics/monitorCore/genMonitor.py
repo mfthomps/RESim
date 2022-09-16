@@ -92,7 +92,6 @@ import playAFL
 import replayAFL
 import reportCrash
 import injectIO
-import writeData
 import instructTrace
 import aflPath
 import trackAFL
@@ -2142,7 +2141,7 @@ class GenMonitor():
             self.trace_all[target] = syscall.Syscall(self, target, None, self.param[target], self.mem_utils[target], self.task_utils[target], 
                            self.context_manager[target], self.traceProcs[target], self.sharedSyscall[target], self.lgr, self.traceMgr[target], call_list=None, 
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
-                           name='traceAll', linger=True)
+                           name='traceAll', linger=True, netInfo=self.netInfo[self.target])
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
@@ -4155,13 +4154,14 @@ class GenMonitor():
         self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
 
     def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, fname=None):
+            parallel=False, only_thread=False, fname=None, trace_all=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         if not self.checkUserSpace(cpu):
             return
         self.debugPidGroup(pid)
+        self.disable_reverse = True
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
@@ -4171,6 +4171,8 @@ class GenMonitor():
               crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
         if play is not None:
             self.lgr.debug('playAFL now go')
+            if trace_all: 
+                self.traceAll()
             play.go()
         else:
             print('playAFL failed?')
@@ -4628,6 +4630,15 @@ class GenMonitor():
             print('Loaded jumpers from %s' % jumper_file)
         else:
             print('No jumper file defined.')
+
+    def getSyscallEntry(self, callname):
+        callnum = self.task_utils[self.target].syscallNumber(callname, self.is_compat32)
+        #self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
+        if callnum is not None and callnum < 0:
+            self.lgr.error('getSyscallEntry bad call number %d for call <%s>' % (callnum, callname))
+            return None
+        entry = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
+        return entry
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
