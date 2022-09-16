@@ -457,7 +457,7 @@ The break\_on will break on execution of the given address.
 
 The trace\_all option will generate a system call trace instead of watch marks.
 
-\item {\tt traceInject(iofile)} -- Similar to injectIO, but performs a traceAll instead of tracking IO.
+\item {\tt traceInject(iofile)} -- (DEPRECATED) See the {\tt trace\_all} options to injectIO and playAFL.
 
 \item{\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of watch marks. Use {\tt showMalloc} to 
 then list by pid, block address and size.
@@ -549,11 +549,14 @@ a return from a read (e.g., using prepInject), set basic block coverage and iter
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory 
-relative to the {\tt AFL\_DATA} environment variable).  
+\item{\tt playAFL(target, afl\_mode=False, trace\_all=False)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
 \textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
 Tail the log if you suspect it has hung.
+
+If the given target is a file, then only that file will be played.  The {\tt afl\_mode} switch attempts to reproduce how the file was played in AFL, e.g., without temporary
+breakpoints and with the AFL backstop cycles.  The {\tt trace\_all} switch will generated a system call trace.  These are intended for use in discovering why AFL
+behaves in unexpected ways, e.g., lots of hangs, long sessions.
 
 The {\tt playAFL} command also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
@@ -641,7 +644,8 @@ particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed 
 the desired string.  For example, if the packet is to be rejected, return a byte array of zeros.  Filters can also be used to 
 compute and store CRCs within data.  
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
-\item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers.
+\item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers. Note the trimming occurs just prior to injection,
+and thus queue files and records of recent data, e.g., the ihung file, will not yet be trimmed.
 \item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
 
 \item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
@@ -654,6 +658,7 @@ the RESim session to exit (useful for crashReport).  Otherwise, the data watch i
 \item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command in \ref{sec:modification}), expressed as 
 from/to addresses in hex.  \textbf{Note:} encountering
 a jumper will reset the reverse execution origin, and thus may not be suitable when using injectIO or crash analysis.
+\item {\tt RESIM\_LOG\_LEVEL} -- Set to INFO to supress debug messages in the resim log.
 
 \end{itemize}
 
@@ -2148,6 +2153,8 @@ sscanf data tracking not right for some arm, if 1 or 2 values, r2 and r3 will po
 
 The playAFL function could disable reverse execution, also have it set jumpers to not clear bookmarks.
 
+Confirm crashReport uses jumpers.
+
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
 lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
@@ -2246,6 +2253,10 @@ just reading more data.  For example, one or more writes to the socket between t
 
 We'd like to use this converstation start to advance system state, and then start fuzzing with the next read.  Use a 
 multifile driver directive to force a read between the two writes.
+
+\subsection{Fuzzing crash detection}
+While fuzzing, we want to detect and report crashes and or process exits.
+
 
 \section{Driver platforms}
 \label{driver}
