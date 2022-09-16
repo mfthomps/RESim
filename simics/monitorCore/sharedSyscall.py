@@ -458,9 +458,12 @@ class SharedSyscall():
                 trace_msg = trace_msg + '\n'
                 msg_iov = msghdr.getIovec()
                 nbytes = min(eax, 256)
-                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, msg_iov[0].base)
-                if byte_array is not None:
-                    s = ''.join(map(chr,byte_array))
+                if msg_iov is not None and len(msg_iov)>0:
+                    byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, msg_iov[0].base)
+                    if byte_array is not None:
+                        s = ''.join(map(chr,byte_array))
+                    else:
+                        s = '<< NOT MAPPED >>'
                 else:
                     s = '<< NOT MAPPED >>'
                 trace_msg = trace_msg+'\t'+s+'\n'
