@@ -176,10 +176,6 @@ class AFL():
             self.stop_hap = None
             #self.lgr.debug('afl removed stop hap')
 
-    def goAlone(self, dumb):
-        self.lgr.debug('afl go alone')
-        SIM_continue(0)
-   
     def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
@@ -217,15 +213,17 @@ class AFL():
                         break
             self.page_faults.stopWatchPageFaults()
             if status == AFL_CRASH:
-                self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
-                with open('/tmp/icrashed', 'wb') as fh:
+                self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
+                with open('./icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
             elif status == AFL_HANG:
-                self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to /tmp/ihung' %(status, self.iteration)) 
-                with open('/tmp/ihung', 'wb') as fh:
+                self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to ./ihung' %(status, self.iteration)) 
+                with open('./ihung', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
+                #self.top.quit()
+                #return
 
             if self.one_done:
                 self.sock.close()
@@ -275,6 +273,8 @@ class AFL():
             if self.restart == 0:
                 if do_quit:
                     self.lgr.debug('afl was told to quit, bye')
+                    with open('./final_data.io', 'wb') as fh:
+                        fh.write(self.orig_in_data)
                     self.top.quit()
                 self.iteration += 1 
                 self.in_data = self.getMsg()
@@ -294,6 +294,10 @@ class AFL():
         ''' Also if coverage record exit is hit '''
         #self.lgr.debug('afl stopHap %s %s %s %s' % (str(dumb), str(one), str(exception), str(error_string)))
         if self.stop_hap is None:
+            return
+        if self.cpu.cycles == self.starting_cycle:
+            self.lgr.debug('afl stopHap but got nowhere.  continue.')
+            SIM_run_alone(SIM_continue, 0)
             return
         self.finishUp()
 
