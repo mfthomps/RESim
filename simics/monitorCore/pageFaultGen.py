@@ -204,9 +204,10 @@ class PageFaultGen():
 
     def pageFaultHapAlone(self, hack_rec):
         compat32, page_info, prec = hack_rec 
-
-        if self.debugging_pid is None:
+        ''' TBD FIX ME'''
+        if False and self.debugging_pid is None:
             #SIM_run_alone(self.watchExit, compat32)
+            #self.lgr.debug('pageFaultGen pageFaultHapAlone')
             self.watchExit(compat32)
             ''' Rely on ContextManager to watch for task kills if debugging -- and not '''
             # TBD fix for ability to watch full system for segv
