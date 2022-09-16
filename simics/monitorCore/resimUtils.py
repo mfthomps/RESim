@@ -24,11 +24,17 @@ def getLogger(name, logdir, level=None):
         os.makedirs(logdir)
     except:
         pass
+
+    log_level = logging.DEBUG
+    log_level_env = os.getenv('RESIM_LOG_LEVEL')
+    if log_level_env is not None and log_level_env.lower() == 'info':
+        log_level = logging.INFO
+        
     lgr = logging.getLogger(name)
     #lhStdout = lgr.handlers[0]
-    lgr.setLevel(logging.DEBUG)
+    lgr.setLevel(log_level)
     fh = logging.FileHandler(logdir+'/%s.log' % name)
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(log_level)
     frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(frmt)
     lgr.addHandler(fh)
