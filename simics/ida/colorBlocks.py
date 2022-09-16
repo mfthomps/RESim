@@ -136,5 +136,6 @@ def colorBlocks(in_path=None):
         else:
             print('no latest hits file at %s' % latest_hits_file)
 
-fname = idaversion.get_root_file_name()
-colorBlocks(fname)
+if __name__ == '__main__':
+    fname = idaversion.get_root_file_name()
+    colorBlocks(fname)
