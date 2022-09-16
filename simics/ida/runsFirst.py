@@ -19,11 +19,10 @@ import subprocess
 
 ok = True
 arg_count = idc.eval_idc("ARGV.count")
-target_path=idc.eval_idc("ARGV[1]")
-#print('in runsFirst target_path %s' % target_path)
-if arg_count > 2:
-    arg1 = idc.eval_idc("ARGV[2]")
-    if arg1 == 'color':
+if arg_count > 1:
+    resim_ida_arg=idc.eval_idc("ARGV[1]")
+    print('In runsFirst arg_count %d resim_ida_arg %s ' % (arg_count, resim_ida_arg))
+    if resim_ida_arg == 'color':
         print('did color')
         '''
         if arg_count > 3:
@@ -44,7 +43,7 @@ if arg_count > 2:
         resetBlocks.resetBlocks()
         colorBlocks.colorBlocks()
         
-    elif arg1 == 'clear':
+    elif resim_ida_arg == 'clear':
         resetBlocks.resetBlocks()
         print('did clear')
     else:
