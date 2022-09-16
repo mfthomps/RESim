@@ -17,6 +17,8 @@ Return a list of queue files that hit a given BB start address
 def findBB(target, bb, quiet=False):
     retval = []
     cover_list = aflPath.getAFLCoverageList(target)
+    if len(cover_list) == 0:
+        print('No coverage found for %s' % target)
     for cover in cover_list:
         with open(cover) as fh:
             try:
@@ -24,6 +26,7 @@ def findBB(target, bb, quiet=False):
             except:
                 print('Failed to open %s' % cover)
                 continue
+            #print('look for 0x%x in hit_list len %d' % (bb, len(hit_list)))
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
                 if not os.path.isfile(queue):
