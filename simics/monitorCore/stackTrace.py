@@ -372,7 +372,10 @@ class StackTrace():
             if cur_fun is not None and cur_fun_name is not None:
                 #self.lgr.debug('doX86, cur_fun 0x%x name %s' % (cur_fun, cur_fun_name))
                 pass
-            quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=18, eip=eip)
+ 
+            if not self.soMap.isMainText(eip):
+                ''' TBD need to be smarter to avoid bogus frames '''
+                quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=18, eip=eip)
 
 
         if quick_return is None:
