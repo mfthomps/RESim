@@ -130,6 +130,7 @@ class TraceProcs():
         return self.socket_handle[pid]
 
     def addProc(self, pid, parent, clone=False, comm=None):
+        ''' TBD fix this, handle reuse of PIDs'''
         if pid == 0:
             return False
         if pid is None:
@@ -141,7 +142,7 @@ class TraceProcs():
         if pid in self.plist:      
             ''' edge case of snapshot created during execve '''
             if pid not in self.init_proc_list:
-                self.lgr.error('traceProc addProc, pid:%s already in plist parent: %s' % (pid, parent))
+                self.lgr.debug('traceProc addProc, pid:%s already in plist parent: %s' % (pid, parent))
             return False
         self.lgr.debug('traceProc addProc pid:%s  parent %s  plist now %d' % (pid, parent, len(self.plist)))
         if parent is not None:
