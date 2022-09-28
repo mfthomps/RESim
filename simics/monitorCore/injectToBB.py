@@ -33,6 +33,8 @@ import applyFilter
 import resimUtils
 class InjectToBB():
     def __init__(self, top, bb, lgr):
+        unfiltered = '/tmp/bb.io'
+        filtered = '/tmp/bb_filtered.io'
         self.bb = bb
         self.top = top
         self.lgr = lgr
@@ -67,7 +69,6 @@ class InjectToBB():
             print('Will inject %s' % qfile)
         if qfile is not None:
             self.lgr.debug('InjectToBB inject %s' % qfile)
-            dest = os.path.join('/tmp', 'bb.io')
             self.top.setCommandCallback(self.doStop)
             self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False)
             afl_filter = self.inject_io.getFilter()
@@ -76,10 +77,9 @@ class InjectToBB():
                 with open(qfile, 'rb') as fh:
                     data = bytearray(fh.read())
                 new_data = afl_filter.filter(data, None)
-                with open(dest, 'wb') as fh:
+                with open(filtered, 'wb') as fh:
                     fh.write(new_data)
-            else:
-                shutil.copyfile(qfile, dest)
+            shutil.copyfile(qfile, unfiltered)
             self.inject_io.go()
        
         else:
@@ -89,7 +89,7 @@ class InjectToBB():
         self.lgr.debug('InjectToBB doStop')
         self.top.stopDataWatch()
         SIM_run_alone(self.inject_io.delCallHap, None)
-        self.top.setDebugBookmark('injectToBB')
+        SIM_run_alone(self.top.setDebugBookmark,'injectToBB')
         status = SIM_simics_is_running()
         if status:
             self.top.stopAndGo(self.gobb)
@@ -100,4 +100,4 @@ class InjectToBB():
         if self.inject_io is None:
             return
         self.top.setCommandCallback(None)
-        print('Data file copied to /tmp/bb.io (and filtered if there was one).')
+        print('Data file copied to /tmp/bb.io (and bb_filtered.io if there was a filter).')
