@@ -361,6 +361,13 @@ class GenMonitor():
                     self.lgr.debug('loaded net_list from %s' % net_file)
 
 
+    def runPreScripts(self):
+        ''' run the PRE_INIT_SCRIPT and the one_done module, if iany '''
+        init_script = os.getenv('PRE_INIT_SCRIPT')
+        if init_script is not None:
+            cmd = 'run-command-file %s' % init_script
+            SIM_run_command(cmd)
+            self.lgr.debug('ran PRE_INIT_SCRIPT %s' % init_script)
     def runScripts(self):
         ''' run the INIT_SCRIPT and the one_done module, if iany '''
         init_script = os.getenv('INIT_SCRIPT')
@@ -621,6 +628,7 @@ class GenMonitor():
             return
         run_cycles = self.getBootCycleChunk()
         done = False
+        self.runPreScripts()
         while not done:
             done = True
             for cell_name in self.cell_config.cell_context:
@@ -3485,8 +3493,8 @@ class GenMonitor():
     def clearWatches(self, cycle=None):
         self.dataWatch[self.target].clearWatches(cycle=cycle)
 
-    def showWatchMarks(self, old=False):
-        self.dataWatch[self.target].showWatchMarks(old=old)
+    def showWatchMarks(self, old=False, verbose=False):
+        self.dataWatch[self.target].showWatchMarks(old=old, verbose=verbose)
 
     def saveWatchMarks(self, fpath):
         self.dataWatch[self.target].saveWatchMarks(fpath)
@@ -3734,9 +3742,12 @@ class GenMonitor():
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
-        if 'coverage/id' in dfile:
-            print('Refusing to inject a coverage file into application memory')
-            fixed = dfile.replace('coverage', 'queue')
+        if 'coverage/id' in dfile or 'trackio/id' in dfile:
+            print('Refusing to inject a coverage or injectIO file into application memory')
+            if 'coverage/id' in dfile:
+                fixed = dfile.replace('coverage', 'queue')
+            else:
+                fixed = dfile.replace('trackio', 'queue')
             print('You may have meant to inject this instead: %s' % fixed)
             return
         if type(save_json) is bool:
