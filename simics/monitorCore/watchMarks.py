@@ -85,7 +85,7 @@ class DataMark():
         ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
-            self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
+            #self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
         self.loop_count = 0
@@ -114,7 +114,7 @@ class DataMark():
                 mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins)
         elif self.ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
-            self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
+            #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
             if self.start is not None:
                 if copy_length == self.length and self.start == self.addr:
                     mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc' % (copy_length, self.addr, self.dest)
@@ -392,24 +392,30 @@ class WatchMarks():
 
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
-            i = 0
+            i = 1
             for mark in self.mark_list:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
                 fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
                 i += 1
 
-    def showMarks(self, old=False):
+    def showMarks(self, old=False, verbose=False):
         i = 1
         if old:
             for mark in self.stale_marks:
-                print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
+                cycle = ' '
+                if verbose:
+                    cycle = ' 0x%x ' % mark.cycle
+                print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
                 i += 1
             print('Begin active watch marks.')
         elif len(self.stale_marks)>0:
             print('%d stale marks not displayed.  use old=True to see them.' % len(self.stale_marks))
         i = 1
         for mark in self.mark_list:
-            print('%d %s  ip:0x%x pid:%d' % (i, mark.mark.getMsg(), mark.ip, mark.pid))
+            cycle = ' '
+            if verbose:
+                cycle = ' 0x%x ' % mark.cycle
+            print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
@@ -462,16 +468,16 @@ class WatchMarks():
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None, note=None, ip=None): 
+    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None): 
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = None
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc and not note:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
-            wm = self.addWatchMark(dm, ip=ip)
+            wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
-            self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
+            #self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
             if len(self.mark_list) > 0:
@@ -480,11 +486,11 @@ class WatchMarks():
                     self.lgr.debug('dataRead previous mark end_addr 0x%x  addr is 0x%x' % (pm.mark.end_addr, addr))
                 if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
                     end_addr = addr + trans_size - 1
-                    self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                    #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
-                          start, length, dest, trans_size))
+                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
+                    #      start, length, dest, trans_size))
                     #sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
@@ -495,7 +501,7 @@ class WatchMarks():
         elif note is not None:
             dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, note=note, dest=dest)
             wm = self.addWatchMark(dm)
-            self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
+            #self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
@@ -508,8 +514,8 @@ class WatchMarks():
                     #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
                     dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
-                    wm = self.addWatchMark(dm)
-                    self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
+                    wm = self.addWatchMark(dm, cycles=cycles)
+                    #self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
         return wm
 
