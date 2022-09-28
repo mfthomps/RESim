@@ -96,7 +96,7 @@ class BackStop():
 
     def setFutureCycle(self, cycles, now=False):
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
-            self.lgr.debug('backstop hang cycles exceeded 0x%x' % self.hang_cycles_delta)
+            self.lgr.debug('backstop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
             self.hang_callback(self.cpu.cycles)
          
         if not now:
