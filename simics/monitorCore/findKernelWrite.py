@@ -109,12 +109,12 @@ class findKernelWrite():
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'findKernelWrite pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
+        #self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
 
-        self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
+        #self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
@@ -154,6 +154,8 @@ class findKernelWrite():
         return False
 
     def vt_handler(self, memory):
+        if self.rev_write_hap is None:
+            return
         offset = 0
         eip = self.top.getEIP(self.cpu)
         if memory.logical_address == 0:
