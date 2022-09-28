@@ -77,8 +77,8 @@ def skipToTest(cpu, cycle, lgr):
             lgr.error('Reverse execution is disabled.')
             return False
         retval = True
-        cli.quiet_run_command('disable-vmp')
         cli.quiet_run_command('pselect %s' % cpu.name)
+        cli.quiet_run_command('disable-vmp')
         cmd = 'skip-to cycle = %d ' % cycle
         cli.quiet_run_command(cmd)
         #cli.quiet_run_command('si')
@@ -98,22 +98,22 @@ def skipToTest(cpu, cycle, lgr):
 
 def getFree():
     cmd = "free"
-    ps = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output = ps.communicate()
-    use_available = False
-    for line in output[0].decode("utf-8").splitlines():
-         if 'available' in line:
-             use_available = True
-         if line.startswith('Mem:'):
-             parts = line.split()
-             tot = int(parts[1])
-             if use_available:
-                 free = int(parts[6])
-             else:
-                 free = int(parts[3])
-             #print('tot %s   free %s' % (tot, free))             
-             percent = (free / tot) * 100
-             return int(percent)
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+        output = ps.communicate()
+        use_available = False
+        for line in output[0].decode("utf-8").splitlines():
+             if 'available' in line:
+                 use_available = True
+             if line.startswith('Mem:'):
+                 parts = line.split()
+                 tot = int(parts[1])
+                 if use_available:
+                     free = int(parts[6])
+                 else:
+                     free = int(parts[3])
+                 #print('tot %s   free %s' % (tot, free))             
+                 percent = (free / tot) * 100
+                 return int(percent)
     return None
 
 def isParallel():
