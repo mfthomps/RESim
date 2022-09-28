@@ -505,7 +505,7 @@ class Syscall():
 
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('syscall stopTrace call_list %s' % str(self.call_list))
+        self.lgr.debug('syscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -1867,7 +1867,7 @@ class Syscall():
                                        len(syscall_info.call_params), tracing_all))
                                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
-                                    self.lgr.debug('did not add exitHap')
+                                    #self.lgr.debug('did not add exitHap')
                                     pass
                             else:
                                 self.lgr.debug('syscall invoking callback')
