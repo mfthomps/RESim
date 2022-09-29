@@ -592,7 +592,7 @@ class GenContextMgr():
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
         self.alterWatches(new_addr, prev_task)
-        if self.catch_pid == pid:
+        if self.catch_pid == pid or (self.catch_pid == -1 and pid in self.pid_cache):
             self.lgr.debug('contextManager changedThread do catch_callback for pid %d' % pid)
             #SIM_break_simulation('in pid %d' % pid)
       
