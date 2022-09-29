@@ -41,11 +41,12 @@ def findBB(target, bb, quiet=False):
                     print('0x%x in %s' % (bb, queue))
     return retval
 
-def getFirstReadCycle(trackio):
+def getFirstReadCycle(trackio, quiet=False):
     retval = None
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     if not os.path.isfile(trackio):
-        print('ERROR: no trackio file at %s' % trackio)
+        if not quiet:
+            print('ERROR: no trackio file at %s' % trackio)
         return None
     try:
         tjson = json.load(open(trackio))
@@ -58,24 +59,27 @@ def getFirstReadCycle(trackio):
             break
     return retval
 
-def getWatchMark(trackio, bb):
+def getWatchMark(trackio, bb, quiet=False):
     retval = None
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     if not os.path.isfile(trackio):
-        print('ERROR: no trackio file at %s' % trackio)
+        if not quiet:
+            print('ERROR: no trackio file at %s' % trackio)
         return None
     try:
         tjson = json.load(open(trackio))
     except:
         #print('ERROR: failed reading json from %s' % trackio)
         return None
+    index = 1
     for mark in tjson:
         if mark['mark_type'] == 'read':
             eip = mark['ip']
             if eip >= bb['start_ea'] and eip <= bb['end_ea']:
-                print('getWatchMarks found read mark at 0x%x' % eip)
+                print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
                 retval = eip
                 break
+        index = index + 1
     return retval
        
 def getBBCycle(coverage, bb): 

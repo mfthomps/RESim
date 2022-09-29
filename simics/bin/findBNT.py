@@ -19,8 +19,9 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
+def findBNT(target, hits, fun_blocks, no_print, prog_elf, show_read_marks, quiet):
     retval = []
+    count = 0
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             if bb_hit == bb['start_ea']:
@@ -37,8 +38,8 @@ def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark = findBB.getWatchMark(trackio, bb)
-                                first_read = findBB.getFirstReadCycle(trackio)
+                                read_mark = findBB.getWatchMark(trackio, bb, quiet=quiet)
+                                first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
                                 bb_cycle = findBB.getBBCycle(coverage, bb_hit)
                                 if read_mark is not None:
                                     if (bb['end_ea'] - read_mark) < 20:
@@ -48,11 +49,12 @@ def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
                                 elif bb_cycle < first_read:
                                     before_read = 'pre-read' 
  
-                        if not quiet:
+                        if not no_print:
                             mark_info = ''
                             if read_mark is not None:
                                 mark_info = 'read mark: 0x%x' % read_mark
                             print('function: %s branch 0x%x from 0x%x not in hits %s %s' % (fun_blocks['name'], branch, bb_hit, mark_info, before_read))
+                            count = count + 1
                         entry = {}
                         entry['bnt'] = branch
                         entry['source'] = bb_hit
@@ -62,7 +64,7 @@ def findBNT(target, hits, fun_blocks, quiet, prog_elf, show_read_marks):
                     #    print('branch 0x%x in hits' % branch)
     return retval
 
-def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
+def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False):
     ida_path = resimUtils.getIdaData(prog)
     print('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
@@ -80,7 +82,7 @@ def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
         return bnt_list
 
-    if not quiet:
+    if not no_print:
         num_blocks = 0
         num_funs = len(blocks)
         for f in blocks:
@@ -88,12 +90,12 @@ def aflBNT(prog, target, read_marks, fun_name=None, quiet=False):
         print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in blocks:
-            this_list = findBNT(target, hits, blocks[fun], quiet, prog_elf, read_marks)
+            this_list = findBNT(target, hits, blocks[fun], no_print, prog_elf, read_marks, quiet)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNT(hits, blocks[fun], quiet, prog_elf)
+                this_list = findBNT(hits, blocks[fun], no_print, prog_elf, read_marks, quiet)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
@@ -104,8 +106,10 @@ def main():
     parser.add_argument('-t', '--target', action='store', help='Optional target name, e.g., name of the workspace.')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
+    parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')
     args = parser.parse_args()
-    aflBNT(args.prog, args.target, args.datamarks, fun_name=args.function)
+    bnt_list = aflBNT(args.prog, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
+    print('Found %d branches not taken.' % len(bnt_list))
 
 if __name__ == '__main__':
     sys.exit(main())
