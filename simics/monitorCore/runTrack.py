@@ -116,6 +116,7 @@ def main():
     signal.signal(signal.SIGTERM, handler)
     here = os.getcwd()
     if len(glist) > 0: 
+        print('Parallel, doing %d instances' % len(glist))
         for instance in glist:
             if not os.path.isdir(instance):
                 continue
