@@ -57,7 +57,7 @@ class MagicOrigin():
             RES_hap_delete_callback_id("Core_Magic_Instruction", self.magic_hap)
             self.magic_hap = None
 
-    def setOrigin(self):
+    def setOrigin(self, dumb=None):
         cmd = 'disconnect-real-network'
         SIM_run_command(cmd)
         cmd = 'default_service_node0.status'
@@ -91,7 +91,9 @@ class MagicOrigin():
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
-        self.bookmarks.setOrigin(self.cpu)
+        self.lgr.debug('MagicOrigin to pid and then set origin')
+        self.top.toPid(-1, callback=self.top.setOrigin)
+        #self.bookmarks.setOrigin(self.cpu)
         self.did_magic = True
         self.deleteMagicHap()
         SIM_run_command('c')

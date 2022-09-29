@@ -3868,7 +3868,7 @@ class GenMonitor():
         return ptable_info
 
     def toPid(self, pid, callback = None):
-        self.lgr.debug('genMonitor toPid')
+        self.lgr.debug('genMonitor toPid %d' % pid)
         if callback is None:
             callback = self.toUser
         self.context_manager[self.target].catchPid(pid, callback)
@@ -4650,6 +4650,12 @@ class GenMonitor():
             return None
         entry = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
         return entry
+
+    def setOrigin(self):
+        ''' Reset the origin for the current target cpu '''
+        self.lgr.debug('setOrigin from genMonitor')
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.bookmarks.setOrigin(cpu) 
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
