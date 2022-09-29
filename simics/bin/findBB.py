@@ -39,6 +39,8 @@ def findBB(target, bb, quiet=False):
                 retval.append(queue)
                 if not quiet:
                     print('0x%x in %s' % (bb, queue))
+    if not quiet:
+        print('Found %d queue files that hit 0x%x' % (len(retval), bb))
     return retval
 
 def getFirstReadCycle(trackio, quiet=False):
