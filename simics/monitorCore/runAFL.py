@@ -254,7 +254,7 @@ def runAFLTilRestart(args, lgr):
             except OSError as e:
                 lgr.debug('fifo create failed %s' % e)    
             resim_ini = args.ini
-            cmd = '%s %s -n' % (resim_path, resim_ini)
+            cmd = '%s %s -b' % (resim_path, resim_ini)
             os.environ['ONE_DONE_PARAM'] = str(port)
             lgr.debug('cmd is %s' % cmd)
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
