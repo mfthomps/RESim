@@ -69,7 +69,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None):
+    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -95,6 +95,7 @@ class DataMark():
         self.dest = dest
         self.sp = sp
         self.note = note
+        self.value = value
         #print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
@@ -474,10 +475,11 @@ class WatchMarks():
         wm = None
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc and not note:
-            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
+            value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
+            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
             wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
-            #self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
+            self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
             if len(self.mark_list) > 0:
@@ -1047,6 +1049,7 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['reference_buffer'] = mark.mark.start
                 entry['trans_size'] = mark.mark.trans_size
+                entry['value'] = mark.mark.value
             elif isinstance(mark.mark, DataMark) and mark.mark.modify:
                 entry['mark_type'] = 'write' 
                 entry['addr'] = mark.mark.addr
