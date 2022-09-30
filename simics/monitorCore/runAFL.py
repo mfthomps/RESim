@@ -71,7 +71,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
             do_restart = True
             break
         free = resimUtils.getFree()
-        if free < 30:
+        if free < 10:
             lgr.debug('found memory only at %d, must be leaking, restart simics' % free)
             do_restart = True
             break
