@@ -60,8 +60,9 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
             os.environ['ONE_DONE_PARAM'] = trackoutput
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             cmd = '%s %s -n' % (resim_path, resim_ini)
-            print("starting monitor without UI cmd: %s" % cmd)
-            lgr.debug("%s starting monitor without UI cmd: %s" % (workspace, cmd))
+            here = os.getcwd()
+            print("starting monitor from %s without UI cmd: %s" % (here, cmd))
+            lgr.debug("%s starting monitor from %s without UI cmd: %s" % (here, workspace, cmd))
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
             resim_ps.wait()
             if stop_threads():
