@@ -10,7 +10,7 @@ import resimUtils
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, 
+           coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, no_track=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
         self.dfile = dfile
         self.stay = stay
@@ -106,6 +106,7 @@ class InjectIO():
             self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
         self.no_iterators = no_iterators
         self.only_thread = only_thread
+        self.no_track = no_track
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -174,7 +175,7 @@ class InjectIO():
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        if self.target is None and not self.trace_all and not self.instruct_trace:
+        if self.target is None and not self.trace_all and not self.instruct_trace and not self.no_track:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
@@ -228,7 +229,11 @@ class InjectIO():
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             if not self.stay:
-                if not self.trace_all and not self.instruct_trace:
+                if self.break_on is not None:
+                    self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
+                    proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
+                    self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
+                if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.bookmarks.setOrigin(self.cpu)
                     cli.quiet_run_command('disable-reverse-execution')
@@ -246,16 +251,12 @@ class InjectIO():
                             self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
                     if not self.no_rop:
                         self.top.watchROP()
-                    if self.break_on is not None:
-                        self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
-                        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
-                        self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
                 else:
                     self.top.traceAll()
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
-                if self.trace_all or self.instruct_trace:
+                if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     cli.quiet_run_command('c')
                 elif not self.mem_utils.isKernel(self.addr):
