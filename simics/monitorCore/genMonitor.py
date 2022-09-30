@@ -3743,13 +3743,11 @@ class GenMonitor():
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.'''
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
-            print('Refusing to inject a coverage or injectIO file into application memory')
+            print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             if 'coverage/id' in dfile:
-                fixed = dfile.replace('coverage', 'queue')
+                dfile = dfile.replace('coverage', 'queue')
             else:
-                fixed = dfile.replace('trackio', 'queue')
-            print('You may have meant to inject this instead: %s' % fixed)
-            return
+                dfile = dfile.replace('trackio', 'queue')
         if type(save_json) is bool:
             save_json = '/tmp/track.json'
         if self.bookmarks is not None:
