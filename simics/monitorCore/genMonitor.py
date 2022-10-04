@@ -4649,11 +4649,15 @@ class GenMonitor():
         entry = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
         return entry
 
-    def setOrigin(self):
+    def setOrigin(self, dumb=None):
         ''' Reset the origin for the current target cpu '''
         self.lgr.debug('setOrigin from genMonitor')
         cpu = self.cell_config.cpuFromCell(self.target)
         self.bookmarks.setOrigin(cpu) 
+
+    def isCode(self, addr):
+        pid = self.getPID()
+        return self.soMap[self.target].isCode(addr, pid)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
