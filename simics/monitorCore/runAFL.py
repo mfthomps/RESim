@@ -21,6 +21,8 @@ import threading
 import select
 import aflPath
 import resimUtils
+''' when remaining system ram gets below this percentage, kill and restart simics '''
+MIN_RAM=10
 def ioHandler(read_array, stop, lgr):
     log = '/tmp/resim.log'
     with open(log, 'wb') as fh:
@@ -71,7 +73,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
             do_restart = True
             break
         free = resimUtils.getFree()
-        if free < 10:
+        if free < MIN_RAM:
             lgr.debug('found memory only at %d, must be leaking, restart simics' % free)
             do_restart = True
             break
