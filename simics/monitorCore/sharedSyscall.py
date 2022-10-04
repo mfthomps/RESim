@@ -262,6 +262,7 @@ class SharedSyscall():
             if pid in self.trace_procs:
                 self.traceProcs.socket(pid, eax)
             trace_msg = ('\treturn from socketcall SOCKET pid:%d, FD: %d\n' % (pid, eax))
+            exit_info.syscall_instance.bindFDToSocket(pid, eax)
         elif socket_callname == "connect":
             if eax < 0:
                 trace_msg = ('\texception from socketcall CONNECT pid:%d FD: %d, eax %s  addr: 0x%x\n' % (pid, 
