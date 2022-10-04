@@ -54,7 +54,7 @@ class Kbuffer():
             self.user_addr = addr
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, addr, count)
         if self.buf_remain is not None:
-            self.lgr.debug('Kbuffer read buf_reamin is %d count %d' % (self.buf_remain, count))
+            self.lgr.debug('Kbuffer read buf_remain is %d count %d' % (self.buf_remain, count))
             if self.buf_remain < count:
                 new_addr = addr + self.buf_remain
                 self.watching_addr = new_addr
@@ -93,45 +93,49 @@ class Kbuffer():
         else:  
             self.lgr.debug('Kbuffer adding kbuf of 0x%x' % src)
             self.kbufs.append(src)
-            max_bad = 100
-            special = ord('Z')
-            done = False 
-            cur_addr = src
-            bad_count = 0
-            last_good = None
-            while not done:
-                b = self.mem_utils.readByte(self.cpu, cur_addr)
-                #self.lgr.debug('b is %d' % b)
-                if b != special:
-                    bad_count += 1
-                    if bad_count > max_bad:
-                        done = True
-                        break
-                else:
-                    last_good = cur_addr
-                    bad_count = 0
-                cur_addr += 1
-            if last_good is None:
-                self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
-                print('kbuffer search found no special character (currently Z) in the kernel buffers.')
-                print('The kbuf option requires a data stream that contains Zs')
-                print('You also want the target to read as much as it can from the kernel buffers, e.g., if multiple reads are used.')
-                SIM_break_simulation('error in kbuffer')    
-                return
-            buf_size = (last_good - src) + 1 
-            self.lgr.debug('Kbuffer writeHap, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
-            if self.kbuf_len is None:
-                self.kbuf_len = buf_size
-    
-    
-            self.buf_remain = self.kbuf_len
-    
-            if self.read_count > self.kbuf_len:
-                new_break = self.watching_addr + self.kbuf_len
-                self.lgr.debug('Kbuffer, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
-                SIM_run_alone(self.replaceHap, new_break)
-                self.watching_addr = new_break
-            #SIM_break_simulation('tmp')
+            if self.buf_remain >100:
+                max_bad = 100
+                special = ord('Z')
+                done = False 
+                cur_addr = src
+                bad_count = 0
+                last_good = None
+                while not done:
+                    b = self.mem_utils.readByte(self.cpu, cur_addr)
+                    #self.lgr.debug('b is %d' % b)
+                    if b != special:
+                        bad_count += 1
+                        if bad_count > max_bad:
+                            done = True
+                            break
+                    else:
+                        last_good = cur_addr
+                        bad_count = 0
+                    cur_addr += 1
+                if last_good is None:
+                    self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
+                    print('kbuffer search found no special character (currently Z) in the kernel buffers.')
+                    print('The kbuf option requires a data stream that contains Zs')
+                    print('You also want the target to read as much as it can from the kernel buffers, e.g., if multiple reads are used.')
+                    SIM_break_simulation('error in kbuffer')    
+                    return
+                buf_size = (last_good - src) + 1 
+                self.lgr.debug('Kbuffer writeHap, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
+                if self.kbuf_len is None:
+                    self.kbuf_len = buf_size
+        
+        
+                self.buf_remain = self.kbuf_len
+        
+                if self.read_count > self.kbuf_len:
+                    new_break = self.watching_addr + self.kbuf_len
+                    self.lgr.debug('Kbuffer, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
+                    SIM_run_alone(self.replaceHap, new_break)
+                    self.watching_addr = new_break
+                #SIM_break_simulation('tmp')
+            else:
+                ''' Not enough remaining... just assume same length. '''
+                self.buf_remain = 0
 
     def removeHap(self, dumb):
         if self.write_hap is not None:
@@ -146,12 +150,12 @@ class Kbuffer():
 
     def readReturn(self, length):
         if self.buf_remain is None:
-            self.lgr.debug('kbuffer readReturn, no buf_remain set, skip it.')
+            self.lgr.debug('Kbuffer readReturn, no buf_remain set, skip it.')
             return
         self.buf_remain = self.buf_remain - length 
         self.lgr.debug('Kbuffer readReturn length %d, watching_addr was 0x%x, buf_remain now %d' % (length, self.watching_addr, self.buf_remain))
         if self.buf_remain <= 0:
-            self.lgr.debug('got %d k buffers:' % len(self.kbufs))
+            self.lgr.debug('Kbuffer got %d k buffers:' % len(self.kbufs))
             for addr in self.kbufs:
                 self.lgr.debug('\t 0x%x' % addr)
             SIM_break_simulation('Final kbuf found for 2nd read.  TBD handle more reads!')
