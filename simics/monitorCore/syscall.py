@@ -68,6 +68,14 @@ class SockWatch():
             if got_it is not None:
                 self.watches[pid].remove(got_it) 
 
+class SockParams():
+    def __init__(self, domain, sock_type, protocol):
+        self.domain = domain
+        self.sock_type = sock_type
+        self.protocol = protocol
+    def getString(self):
+        return 'SockParams: domain %s type: %s protocol: %s' % (self.domain, self.sock_type, self.protocol)
+
 class SyscallInfo():
     def __init__(self, cpu, pid, callnum, calculated, trace, call_params = []):
         self.cpu = cpu
@@ -350,6 +358,10 @@ class Syscall():
             self.traceMgr.open(tf, cpu)
         ''' track kernel buffers '''
         self.kbuffer = kbuffer
+
+        '''complex means of tracking socket info'''
+        self.pid_sockets = {}
+        self.pid_fd_sockets = {}
        
         break_list, break_addrs = self.doBreaks(compat32, background)
  
@@ -849,6 +861,44 @@ class Syscall():
 
         return retval
 
+    def getSockParams(self, frame):
+        domain = None
+        sock_type = None
+        protocol = None
+        if self.cpu.architecture == 'arm':
+            domain = frame['param1']
+            sock_type_full = frame['param2']
+            protocol = frame['param3']
+        elif self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
+            frame_string = taskUtils.stringFromFrame(frame)
+            self.lgr.debug('socket call params: %s' % (frame_string))
+            domain = frame['param1']
+            sock_type_full = frame['param2']
+            protocol = frame['param3']
+        else:
+            ''' 32 bit '''
+            self.lgr.debug('syscall socketParse 32bit')
+            params = frame['param2']
+            #SIM_break_simulation('socket param2 0x%x' % params)
+            domain = self.mem_utils.readWord32(self.cpu, params)
+            sock_type_full = self.mem_utils.readWord32(self.cpu, params+4)
+            protocol = self.mem_utils.readWord32(self.cpu, params+8)
+        if sock_type_full is not None:
+            sock_type = sock_type_full & net.SOCK_TYPE_MASK
+            try:
+                type_string = net.socktype[sock_type]
+            except:
+                self.lgr.debug('syscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
+        sock_params = SockParams(domain, sock_type, protocol)
+        self.lgr.debug('syscall getSockParams returning %s' % sock_params.getString())
+        return sock_params
+
+    def bindFDToSocket(self, pid, fd):
+        if pid in self.pid_sockets:
+            if pid not in self.pid_fd_sockets:
+                self.pid_fd_sockets[pid] = {}
+            self.pid_fd_sockets[pid][fd] = self.pid_sockets[pid]
+            del self.pid_sockets[pid]
 
     def socketParse(self, callname, syscall_info, frame, exit_info, pid):
         ss = None
@@ -860,12 +910,14 @@ class Syscall():
             ida_msg = None
             socket_callnum = frame['param1']
             socket_callname = net.callname[socket_callnum].lower()
-            self.lgr.debug('syscall socketParse call %s from %d' % (socket_callname, pid))
+            #self.lgr.debug('syscall socketParse is socketcall call %s from %d' % (socket_callname, pid))
+            if socket_callname == 'socket':
+                self.pid_sockets[pid] = self.getSockParams(frame)
  
             ''' Is the call intended for this syscall instance? '''
             got_good = False 
             got_bad = False 
-            if self.name != 'traceAll':
+            if self.name != 'traceAll' and socket_callname != 'socket':
                 for call_param in syscall_info.call_params:
                     if call_param is not None and call_param.subcall is not None:
                         #self.lgr.debug('syscall socketParse subcall in call_param of %s' % call_param.subcall)
@@ -874,6 +926,7 @@ class Syscall():
                         else:
                             got_bad = True
                 if got_bad and not got_good:
+                    self.lgr.debug('syscall socketParse socketcall %s not in list, skip it' % socket_callname)
                     return None
 
             if self.record_fd and socket_callname not in record_fd_list:
@@ -886,17 +939,24 @@ class Syscall():
             if socket_callname != 'socket' and socket_callname != 'setsockopt':
                 self.lgr.debug('syscall socketParse get SockStruct from param2: 0x%x' % frame['param2'])
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
+                if pid in self.pid_fd_sockets and ss.fd is not None and ss.fd in self.pid_fd_sockets[pid]:
+                    ss.addParams(self.pid_fd_sockets[pid][ss.fd])
                 self.lgr.debug('ss is %s' % ss.getString())
         else:
-            ''' callname is the socket function '''
             socket_callname = callname
             self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
+                if pid in self.pid_fd_sockets and ss.fd is not None and ss.fd in self.pid_fd_sockets[pid]:
+                    ss.addParams(self.pid_fd_sockets[pid][ss.fd])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
+            else:
+                self.pid_sockets[pid] = self.getSockParams(frame)
+        ''' NOTE returns above '''
         exit_info.sock_struct = ss
 
         if socket_callname == 'socket':
+            #self.lgr.debug('syscall socketParse is socket')
             if self.cpu.architecture == 'arm':
                 domain = frame['param1']
                 sock_type_full = frame['param2']
@@ -909,6 +969,7 @@ class Syscall():
                 protocol = frame['param3']
             else:
                 ''' 32 bit '''
+                self.lgr.debug('syscall socketParse 32bit')
                 params = frame['param2']
                 #SIM_break_simulation('socket param2 0x%x' % params)
                 domain = self.mem_utils.readWord32(self.cpu, params)
@@ -921,8 +982,9 @@ class Syscall():
                 try:
                     type_string = net.socktype[sock_type]
                     ida_msg = '%s - %s pid:%s domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, pid, domain, type_string, protocol)
+                    #self.lgr.debug(ida_msg)
                 except:
-                    self.lgr.debug('sharedSyscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
+                    self.lgr.debug('syscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
                     ida_msg = '%s - %s pid:%d domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, pid, domain, sock_type, protocol)
         elif socket_callname == 'connect':
             ida_msg = '%s - %s pid:%d %s %s  param at: 0x%x' % (callname, socket_callname, pid, ss.getString(), ss.addressInfo(), frame['param2'])
@@ -1858,7 +1920,7 @@ class Syscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, pid)
                             if self.callback is None:
-                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all:
+                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
                                     if self.stop_on_call:
                                         cp = CallParams(None, None, break_simulation=True)
                                         exit_info.call_params = cp
@@ -1867,7 +1929,7 @@ class Syscall():
                                        len(syscall_info.call_params), tracing_all))
                                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
-                                    #self.lgr.debug('did not add exitHap')
+                                    self.lgr.debug('did not add exitHap')
                                     pass
                             else:
                                 self.lgr.debug('syscall invoking callback')
