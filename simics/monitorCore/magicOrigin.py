@@ -91,12 +91,13 @@ class MagicOrigin():
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
+        self.did_magic = True
+        self.deleteMagicHap()
         self.lgr.debug('MagicOrigin to pid and then set origin')
         self.top.toPid(-1, callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
-        self.did_magic = True
-        self.deleteMagicHap()
-        SIM_run_command('c')
+        #self.lgr.debug('MagicOrigin, continue')
+        #SIM_run_command('c')
 
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
