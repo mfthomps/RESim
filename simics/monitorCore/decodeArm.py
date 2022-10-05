@@ -33,6 +33,12 @@ def isIndirect(reg):
 def regIsPart(op, reg):
     return op.lower() == reg.lower()
 
+def regIsPartList(reg1, reg2_list):
+    for reg2 in reg2_list:
+        if regIsPart(reg1, reg2):
+            return True
+    return False
+
 def isByteReg(reg):
     return False
 

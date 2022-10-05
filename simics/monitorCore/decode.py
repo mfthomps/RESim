@@ -47,6 +47,12 @@ def regIsPart(reg1, reg2):
         return True
     return False
 
+def regIsPartList(reg1, reg2_list):
+    for reg2 in reg2_list:
+        if regIsPart(reg1, reg2):
+            return True
+    return False
+
 def isReg(reg):
     if reg in ia32_regs:
         return True
