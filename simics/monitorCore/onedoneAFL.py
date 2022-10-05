@@ -16,10 +16,10 @@ def onedone(top):
             is_linear=True
         if protocol == 'tcp': 
             fh.write('call aflTCP\n')
-            top.aflTCP(port=port)
+            top.aflTCP(port=port, dead=dead)
             fh.write('back from call aflTCP')
         else:
             fh.write('call afl\n')
-            top.afl(port=port, fname=fname, linear=is_linear)
+            top.afl(port=port, fname=fname, linear=is_linear, dead=dead)
             fh.write('back from afl\n')
 
