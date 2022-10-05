@@ -10,7 +10,7 @@ import resimUtils
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, target=None, targetFD=None, trace_all=False, save_json=None, no_track=False,
+           coverage=False, fname=None, target=None, targetFD=None, trace_all=False, save_json=None, no_track=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
         self.dfile = dfile
         self.stay = stay
@@ -65,6 +65,7 @@ class InjectIO():
                 return
 
         self.coverage = coverage
+        self.fname = fname
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
         else:
@@ -226,7 +227,7 @@ class InjectIO():
             self.dataWatch.clearWatches()
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
-                self.top.enableCoverage(backstop_cycles=self.backstop_cycles)
+                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             if not self.stay:
                 if self.break_on is not None:
