@@ -93,7 +93,7 @@ class Kbuffer():
         else:  
             self.lgr.debug('Kbuffer adding kbuf of 0x%x' % src)
             self.kbufs.append(src)
-            if self.buf_remain >100:
+            if self.buf_remain is None or self.buf_remain > 100:
                 max_bad = 100
                 special = ord('Z')
                 done = False 
