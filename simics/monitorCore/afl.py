@@ -124,9 +124,9 @@ class AFL():
         self.tmp_time = time.time()
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-            if self.orig_buffer is not None:
-                self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #if self.orig_buffer is not None:
+            #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
             cli.quiet_run_command('disable-reverse-execution')
@@ -201,7 +201,11 @@ class AFL():
                 #print(dog)
                 #self.top.showHaps()
             #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
-            status = self.coverage.getStatus()
+            if self.create_dead_zone:
+                self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
+                status = AFL_OK
+            else:
+                status = self.coverage.getStatus()
             if status == AFL_OK:
                 pid_list = self.context_manager.getWatchPids()
                 if len(pid_list) == 0:

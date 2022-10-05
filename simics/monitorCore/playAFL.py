@@ -224,9 +224,9 @@ class PlayAFL():
                 if clear_hits:
                     self.coverage.stopCover() 
                     self.coverage.doCoverage(no_merge=True, physical=self.physical) 
-            if self.orig_buffer is not None:
-                #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #if self.orig_buffer is not None:
+            #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
             if not os.path.isfile(full):
@@ -254,11 +254,11 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
         
-            if self.orig_buffer is not None:
-                ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
-                    references data past the end of what is received. '''
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
-                self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
+            #if self.orig_buffer is not None:
+            #    ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
+            #        references data past the end of what is received. '''
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #    self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
             if self.write_data is None:
@@ -370,6 +370,7 @@ class PlayAFL():
                     self.hit_total = hits 
                     self.lgr.debug('Found %d new hits' % delta)
                 hit_bbs = self.coverage.getBlocksHit()
+                self.lgr.debug('playAFL stophap gtBlocksHit returned %d hits' % len(hit_bbs))
                 if self.findbb is not None and self.index < len(self.afl_list):
                     self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:
