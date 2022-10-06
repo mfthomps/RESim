@@ -128,11 +128,11 @@ class WriteData():
         if self.k_bufs is None:
             self.mem_utils.writeString(self.cpu, self.addr, data) 
         else:
-            if self.user_addr is not None and len(data) < len(self.orig_buffer):
-                 ''' extend data to include what was in the original buffer '''
-                 amount = len(self.orig_buffer) - len(data)
-                 self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
-                 data = data+self.orig_buffer[len(data):]
+            #if self.user_addr is not None and len(data) < len(self.orig_buffer):
+            #     ''' extend data to include what was in the original buffer '''
+            #     amount = len(self.orig_buffer) - len(data)
+            #     self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
+            #     data = data+self.orig_buffer[len(data):]
             remain = len(data)
             offset = 0
             index = 0
@@ -173,6 +173,9 @@ class WriteData():
                 self.in_data = self.in_data[:self.max_len]
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
+                if len(result) > self.max_len:
+                    self.lgr.warning('dataWrite filter generated %d bytes, will be trimmed to %d.  May cause breakage, e.g., CRCs' % (len(result), self.max_len))
+                    result = result[:self.max_len]
                 self.writeKdata(result)
                 retval = len(result)
             else:
@@ -422,7 +425,7 @@ class WriteData():
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
                     if self.backstop_cycles > 0:
-                        #self.lgr.debug('writeData setting backstop')
+                        self.lgr.debug('writeData setting backstop')
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
