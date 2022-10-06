@@ -52,6 +52,8 @@ class WriteData():
         self.call_break = None
         self.select_hap = None
         self.select_break = None
+        self.poll_hap = None
+        self.poll_break = None
         self.ret_hap = None
         self.ret_break = None
         self.close_hap = None
@@ -315,7 +317,10 @@ class WriteData():
             entry = self.top.getSyscallEntry('_newselect')
             #self.lgr.debug('wrireData setSelectStopHap on 0x%x' % entry)
             self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+            entry = self.top.getSyscallEntry('poll')
+            self.poll_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
             self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.select_break)
+            self.poll_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.poll_break)
 
     def setRetHap(self):
         if self.ret_hap is None: 
@@ -324,7 +329,7 @@ class WriteData():
             self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
 
     def selectHap(self, dumb, third, break_num, memory):
-        ''' Hit a call to select'''
+        ''' Hit a call to select or poll'''
         if self.select_hap is None:
             return
         #self.lgr.debug('writeData selectHap ')
@@ -333,12 +338,12 @@ class WriteData():
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
             else:
-                #self.lgr.debug('writeData selectHap break simulation')
+                self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read')
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
-            #self.lgr.debug('writeData selectHap stop on read')
+            self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
         if pid != self.pid:
@@ -370,7 +375,7 @@ class WriteData():
         pid = self.top.getPID()
         #self.lgr.debug('writeData handleCall, pid:%d' % pid)
         if self.stop_on_read and len(self.in_data) == 0:
-            #self.lgr.debug('writeData stop on read')
+            #self.lgr.debug('writeData handleCall stop on read')
             SIM_break_simulation('writeData stop on read')
             return
         if pid != self.pid:
@@ -385,7 +390,7 @@ class WriteData():
             if self.write_callback is not None:
                 if self.mem_utils.isKernel(self.addr):
                     rprint('kernel buffer data consumed')
-                    #self.lgr.debug('writeData kernel buffer data consumed, stop')
+                    #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
                     SIM_break_simulation('kernel buffer data consumed.')
                     ''' errr no, if kernel buffer callhap only is set after dataWatch consumes sees all data consumed'''
                     ''' ???Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
@@ -425,7 +430,7 @@ class WriteData():
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
                     if self.backstop_cycles > 0:
-                        self.lgr.debug('writeData setting backstop')
+                        #self.lgr.debug('writeData setting backstop')
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
@@ -536,9 +541,12 @@ class WriteData():
             #self.lgr.debug('writeData setCloseHap on entry 0x%x context %s current %s' % (entry, str(self.cell), str(self.cpu.current_context)))
 
     def closeHap(self, dumb, third, break_num, memory):
-        if self.close_hap is not None:
-            #self.lgr.debug('writeData closeHap')
-            self.handleCall()
+        frame = self.top.frameFromRegs(self.cpu)
+        fd = frame['param1']
+        if fd == self.fd:
+            if self.close_hap is not None:
+                #self.lgr.debug('writeData closeHap')
+                self.handleCall()
 
     def selectStopHap(self, dumb, third, break_num, memory):
         if self.select_hap is not None:
