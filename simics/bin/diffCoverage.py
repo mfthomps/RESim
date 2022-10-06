@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+'''
+Show differences in hits between two targets (i.e., different fuzzing sessions).
+'''
 import sys
 import os
 import json
