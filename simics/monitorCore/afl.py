@@ -300,7 +300,7 @@ class AFL():
         if self.stop_hap is None:
             return
         if self.cpu.cycles == self.starting_cycle:
-            self.lgr.debug('afl stopHap but got nowhere.  continue.')
+            #self.lgr.debug('afl stopHap but got nowhere.  continue.')
             SIM_run_alone(SIM_continue, 0)
             return
         self.finishUp()
