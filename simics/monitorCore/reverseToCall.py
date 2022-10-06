@@ -169,6 +169,8 @@ class reverseToCall():
             return None
 
     def watchSysenter(self, dumb=None):
+        if self.cpu is None:
+            return
         cell = self.top.getCell()
         if self.sysenter_hap is None:
             if self.cpu.architecture == 'arm':
