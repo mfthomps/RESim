@@ -113,11 +113,12 @@ class Kbuffer():
                         bad_count = 0
                     cur_addr += 1
                 if last_good is None:
-                    self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
-                    print('kbuffer search found no special character (currently Z) in the kernel buffers.')
-                    print('The kbuf option requires a data stream that contains Zs')
-                    print('You also want the target to read as much as it can from the kernel buffers, e.g., if multiple reads are used.')
-                    SIM_break_simulation('error in kbuffer')    
+                    if len(self.kbufs) == 0:
+                        self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
+                        print('kbuffer search found no special character (currently Z) in the kernel buffers.')
+                        print('The kbuf option requires a data stream that contains Zs')
+                        print('You also want the target to read as much as it can from the kernel buffers, e.g., if multiple reads are used.')
+                        SIM_break_simulation('error in kbuffer')    
                     return
                 buf_size = (last_good - src) + 1 
                 self.lgr.debug('Kbuffer writeHap, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
