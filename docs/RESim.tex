@@ -368,6 +368,8 @@ programs.
 \item {\tt revToModReg(reg)} – Reverse execution until the given register is modified.
 
 
+\item {\tt toPid(pid)} -- Run forward until the given pid is scheduled.  Use {\tt -1} to indicate any of the threads being debugged.
+
 \item {\tt runToUser()} – Continue execution until user space of the current process is reached.
 
 \item {\tt reverseToUser()} – Reverse execution until user space of the current process is reached.
@@ -411,7 +413,12 @@ its origin just prior to the initial data transmission.  This also causes RESim 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
 
-The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.
+The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.  This data must be populated with 
+a designated character, currently ``Z''.  And there must be as much data as you expect to read during injectIO sessions.  The designated characters are used by
+RESim to identify the end of individual kernel buffers, and thus are critical to determining the size and location of the different kernel buffers.  It is also
+critical that the data be of a form that will be read by the application.
+If AFL filters are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
+Take care to avoid extranious characters, e.g., newlines at the end of the test data.
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -535,8 +542,10 @@ This may require use of the {\tt simics-magic} program on a driver computer.  Se
 Note that the data you provide for prepInject should not include multiple UDP packets because you want the recv to not see more data after consuming your
 subsequent data injections.
 
-\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when injecting data directly into kernel buffers.  Similar to prepInject but takes the index of a watch 
-mark that can be a call to ioctl, or a call to read/recieve. Generate the data marks by using trackIO.   
+\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when preparing to inject data directly into kernel buffers.  
+Similar to prepInject but takes the index of a watch 
+mark that can be a call to ioctl, or a call to read/recieve. Generate the data marks by using trackIO, and providing the maximum amount of data you expect to 
+read from kernel buffers.
 Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
 into a kernel buffer. If the watch mark was an ioctl call, the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
@@ -544,15 +553,16 @@ Do not try to run these checkpoints forward to establish new checkpoints.
 It is important that received data all appears within the kernel buffer before the application makes its recv call.  Otherwise, injectIO and AFL sessions
 will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command.
 
+
 \item{\tt fuzz(IOFile} -- Deprecated, AFL trims data itself just fine.  Trim a data file to the minimum needed to not affect coverage. Assume the simulation is at 
 a return from a read (e.g., using prepInject), set basic block coverage and iteratively execute while reducing the
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt playAFL(target, afl\_mode=False, trace\_all=False)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
+\item{\tt playAFL(target, afl\_mode=False, trace\_all=False, fname=None)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
 \textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
-Tail the log if you suspect it has hung.
+Tail the log if you suspect it has hung.  Provide a library name, e.g., libc.so.6, to record coverage of a library.  Note if if afl\_mode is set, no hits file is generated.
 
 If the given target is a file, then only that file will be played.  The {\tt afl\_mode} switch attempts to reproduce how the file was played in AFL, e.g., without temporary
 breakpoints and with the AFL backstop cycles.  The {\tt trace\_all} switch will generated a system call trace.  These are intended for use in discovering why AFL
@@ -844,7 +854,7 @@ the file in the {\tt RESIM\_UNISTD} parameter.
 and name that path in the {\tt RESIM\_ROOT\_PREFIX} parameter.  These images are used when analyzing specified programs, and are given
 to IDA Pro for analysis.
 \item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim
-(unless the param file already exists, in which case you are done with initial setup).
+(unless the param file already exists, in which case you are done with initial setup).  
 \end{itemize}
 \item Launch RESim using {\tt resim mytarget}.  That will start Simics and give you the Simics command prompt.
 \item  Continue the simulation until the kernel appears to have booted, then stop.
@@ -942,8 +952,13 @@ The windows described for the IDA plugin are duplicated within the Ghidra plugin
 Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
 the source of a memory location, put the cursor over the operand and right click...
 
+Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_10.2\_DEV/application.log
+
+Ghidra stores its analysis in "project" directories, typically in home.
+
 TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
 at the tunnel (or do copy as part of creating tunnel?.  
+
 
 
 \subsection{Dynamic modifications to memory and topology}
@@ -1481,10 +1496,12 @@ parameters to name the 2nd process and FD from which it reads the data.
 
 \subsection{Thread isolation}
 Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
-Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process.  Given the costs
+Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process -- or amongst
+all processes sharing a library that is being tracked.  Given the costs
 of tracking context, often this is the best alternative.  You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
-breakpoints using the {\tt dead=True} parameter.  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
-name of the snapshot from which the session began.  When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
+breakpoints using the {\tt dead=True} parameter (the {\tt -d} flag on runAFL).  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
+name of the snapshot from which the session began.  This may take several minutes to complete.  When it has found no new blocks hit by other threads for 2 minutes, it stores the
+dead zones and exits. When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
 when establishing code coverage.  One symptom of problems with thread isolation is that AFL reports poor stability.
 
 If performance appears to drop way off after a while, consider running with the dead switch again, this time using found paths instead of your seed.  Of course
@@ -1787,6 +1804,9 @@ Double-check your ini file snapshot.  Recall there are often 2 snapshots used fo
 driver-driven data.
 
 If you observe non-repeatable crashes, e,g., SEGV, confirm you are not injecting data past the end of a read buffer.
+
+If RESim appears to no longer run, e.g., runAFL just hangs, check that there are no zombie simics processes running.  Use
+the {\tt kill-simics.sh} script to kill them (but do not kill the lmgrd instance).
 
 \section{Data Stores}
 This section describes how RESim stores and accesses different data stores.
@@ -2155,6 +2175,8 @@ The playAFL function could disable reverse execution, also have it set jumpers t
 
 Confirm crashReport uses jumpers.
 
+Add read counts to data watches.
+
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
 lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
@@ -2230,12 +2252,12 @@ be avoided simply because it requires code analysis to determine completeness, e
 it is preferable to start the fuzzing at the injest of the earlier data, e.g., by using a filter.
 \subsection{Data watch ad-hoc copies}
 Treated as an ad-hoc copy?:
-\begin {verbatim}
+\begin{verbatim}
 mov x, buf
 push x
 call foo
 mov bar, x
-\end {verbatim}
+\end{verbatim}
 
 \subsection{UDP without headers}
 The injectIO and AFL design for UDP relies on their being UDP headers to break data into multiple packets.
