@@ -85,6 +85,7 @@ class Coverage():
         self.no_save = False
         self.mode_hap = None
         self.only_thread = False
+        self.last_delta = 0
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -129,20 +130,23 @@ class Coverage():
         ''' default is to use physical.  current exceptions are call for linear or default_context '''
         bp = None
         if self.linear:
-            bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+            if bb_rel not in self.dead_map:
+                bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         elif self.force_default_context:
-            bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
+            if bb_rel not in self.dead_map:
+                bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         else: 
             phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
-            if phys_block.address == 0 or phys_block.address is None:
-                #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
-                self.unmapped_addrs.append(bb_rel)
-            else:
-                if self.afl:
-                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+            if phys_block.address not in self.dead_map:
+                if phys_block.address == 0 or phys_block.address is None:
+                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    self.unmapped_addrs.append(bb_rel)
                 else:
-                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
-                self.addr_map[bp] = bb_rel
+                    if self.afl:
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                    else:
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
+                    self.addr_map[bp] = bb_rel
         return bp
  
     def cover(self, force_default_context=False, physical=False):
@@ -182,9 +186,9 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                if bb_rel in self.dead_map:
-                    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
-                    continue
+                #if bb_rel in self.dead_map:
+                #    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
+                #    continue
                 if self.afl:
                     rand = random.randrange(0, self.map_size)
                     self.afl_map[bb_rel] = rand
@@ -437,7 +441,7 @@ class Coverage():
             ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
             pid = self.top.getPID()
             if pid != self.pid:
-                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
+                #self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
 
         if self.only_thread:
@@ -505,13 +509,19 @@ class Coverage():
                     #SIM_break_simulation('broken')
                     return
                 if dead_set:
-                    if this_addr not in self.dead_map:
-                        self.dead_map.append(this_addr)
+                    #if this_addr not in self.dead_map:
+                    if addr not in self.dead_map:
+                        #self.dead_map.append(this_addr)
+                        ''' dead zone should be physical addresses '''
+                        self.dead_map.append(addr)
                         self.time_start = time.time()
+                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d ' % (pid, self.pid, len(self.dead_map)))
                 if self.create_dead_zone:
                     now = time.time()
-                    delta = now - self.time_start 
-                    #self.lgr.debug('delta is %d' % int(delta))
+                    delta = int(now - self.time_start)
+                    if delta != self.last_delta: 
+                        self.lgr.debug('delta is %d' % int(delta))
+                        self.last_delta = delta
                     if int(delta) > 120: 
                         self.lgr.debug('120 seconds since last dead spot %d dead spots' % len(self.dead_map)) 
                         self.saveDeadFile()
