@@ -3265,6 +3265,8 @@ class GenMonitor():
             debug_info['pid'] = debug_pid
             debug_info['cpu'] = debug_cpu.name
             self.lgr.debug('writeConfig debug_pid %d cpu %s' % (debug_pid, debug_cpu.name))
+        elif self.debug_info is not None:
+            debug_info = self.debug_info
         else:
             self.lgr.debug('writeConfig no debug_pid found from context manager')
         pickle.dump( debug_info, open(debug_info_file, "wb" ) )
@@ -3735,7 +3737,7 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
+            sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
@@ -3766,7 +3768,7 @@ class GenMonitor():
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
-                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover,
+                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
                   target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_track=no_track,  
                   no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread)
 
@@ -4086,9 +4088,9 @@ class GenMonitor():
                 retval = False
         return retval
 
-    def aflTCP(self, sor=False, fname=None, linear=False, port=8765):
+    def aflTCP(self, sor=False, fname=None, linear=False, port=8765, dead=False):
         ''' not hack of n = -1 to indicate tcp '''
-        self.afl(n=-1, sor=sor, fname=fname, port=port)
+        self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765, one_done=False):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
