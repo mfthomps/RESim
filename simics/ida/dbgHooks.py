@@ -9,10 +9,10 @@ class DBGHooks(DBG_Hooks):
         self.idasim = idasim
 
     def dbg_run_to(self, pid, tid, ea):
-        print('dbg_run_to')
+        #print('dbg_run_to')
         self.idasim.signalClient()
     def dbg_step_into(self):
-        print('dbg_step_into')
+        #print('dbg_step_into')
         self.idasim.signalClient()
     
     def dbg_process_attach(self, one,two,three,four,five,six):
