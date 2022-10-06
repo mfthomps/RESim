@@ -39,6 +39,7 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
         os.environ['ONE_DONE_PARAM2']='True'
     with open(log, 'wb') as fh:
         for f in afl_list:
+            os.chdir(here)
             os.environ['ONE_DONE_PATH'] = f
             base = os.path.basename(f)
             tdir = os.path.dirname(os.path.dirname(f))
@@ -60,9 +61,9 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
             os.environ['ONE_DONE_PARAM'] = trackoutput
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             cmd = '%s %s -n' % (resim_path, resim_ini)
-            here = os.getcwd()
-            print("starting monitor from %s without UI cmd: %s" % (here, cmd))
-            lgr.debug("%s starting monitor from %s without UI cmd: %s" % (here, workspace, cmd))
+            now_here = os.getcwd()
+            print("starting monitor from %s without UI cmd: %s" % (now_here, cmd))
+            lgr.debug("%s starting monitor from %s without UI cmd: %s" % (now_here, workspace, cmd))
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
             resim_ps.wait()
             if stop_threads():
@@ -70,7 +71,7 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
                 lgr.debug('oneTrack %s sees stop, exiting.' % workspace)
                 return
         
-        print('done')
+        print('done with %s' % workspace)
 
 def main():
     global stop_threads
