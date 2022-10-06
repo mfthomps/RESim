@@ -51,7 +51,10 @@ class GetKernelParams():
         print('using target of %s' % self.target)
         self.log_dir = '/tmp'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
-        self.param = kParams.Kparams(self.cpu, word_size, comp_dict[self.target]['PLATFORM'])
+        platform = None
+        if 'PLATFORM' in comp_dict[self.target]:
+            platform = comp_dict[self.target]['PLATFORM']
+        self.param = kParams.Kparams(self.cpu, word_size, platform)
 
 
         ''' try first without reference to fs when finding current_task.  If that fails in 3 searches,
@@ -209,6 +212,7 @@ class GetKernelParams():
             gs_base = self.cpu.ia32_gs_base
             self.lgr.debug('64-bit gs_base is 0x%x  gs_b700 0x%x current_task at 0x%x  phys 0x%x' % (gs_base, gs_b700, self.param.current_task, self.param.current_task_phys))
             self.findSwapper()
+        SIM_continue(0)
 
 
     def currentTaskStopHap(self, dumb, one, exception, error_string):
@@ -221,6 +225,7 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.current_task_stop_hap)
         self.lgr.debug('currentTaskStopHap, now call findSwapper')
         self.findSwapper()
+        SIM_run_alone(SIM_continue, 0)
 
     def taskModeChanged(self, cpu, one, old, new):
         ''' search kernel memory for the current_task address that seems to match
@@ -290,6 +295,7 @@ class GetKernelParams():
                 phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
                 self.lgr.debug('findSwapper phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
             self.current_task_phys = phys
+            self.lgr.debug('findSwapper got current task 0x%x phys: 0x%x' % (self.param.current_task, phys))
             SIM_break_simulation('got current task 0x%x phys: 0x%x' % (self.param.current_task, phys))
             
 
@@ -690,6 +696,14 @@ class GetKernelParams():
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.computeStopHap, compat32)
         SIM_run_command('c')
 
+    def deleteHaps(self, dumb):
+        self.lgr.debug('deleteHaps')
+        if self.entry_mode_hap is not None:
+            SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
+            self.entry_mode_hap = None
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
 
     def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is None: 
@@ -720,10 +734,7 @@ class GetKernelParams():
             
         if (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
                  and (self.param.sysexit is not None or self.skip_sysenter) and self.param.iretd is not None:
-            SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-            self.entry_mode_hap = None
+            SIM_run_alone(self.deleteHaps, None)
 
             self.lgr.debug('kernel entry and exits found')
 
@@ -752,10 +763,7 @@ class GetKernelParams():
             self.param.arm_svc = True
             
         if self.param.arm_entry is not None and self.param.arm_ret is not None and self.param.arm_ret2 is not None:
-            SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-            self.entry_mode_hap = None
+            SIM_run_alone(self.deleteHaps, None)
             self.lgr.debug('kernel entry and exits found')
 
             ''' HERE is where we do more stuff, at the end of this HAP '''
@@ -783,8 +791,7 @@ class GetKernelParams():
         elif self.prev_instruct == 'int 128' and self.param.compat_32_int128 is None:
             self.param.compat_32_int128 = eip
         if self.param.compat_32_entry is not None and self.param.compat_32_int128 is not None:
-            SIM_hap_delete_callback_id("Core_Mode_Change", self.entry_mode_hap)
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            SIM_run_alone(self.deleteHaps, None)
             SIM_run_alone(self.findCompute, True)
         else:
             SIM_run_alone(SIM_run_command, 'c')
@@ -822,10 +829,19 @@ class GetKernelParams():
         self.param.printParams()
         print('Param file stored in %s' % fname)
 
+    def deleteStopTaskHap(self, dumb):
+        if self.task_break is not None:
+            SIM_delete_breakpoint(self.task_break)
+            self.task_break = None
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+        if self.task_hap is not None:
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
+            self.task_hap = None
+
     def userEIPStopHap(self, dumb, one, exception, error_string):
-        SIM_delete_breakpoint(self.task_break)
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
+        SIM_run_alone(self.deleteStopTaskHap, None)
         SIM_run_alone(self.setPageFaultHap, None)
         
     def findUserEIP(self, user_eip, third, forth, memory):
