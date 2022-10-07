@@ -1136,6 +1136,10 @@ class DataWatch():
                     SIM_run_command('c')
             else:
                 self.pending_call = False
+                is_running = self.top.isRunning()
+                if not is_running:
+                    self.lgr.debug('getMemParams, not running, kick it.')
+                    SIM_continue(0)
 
     def runToReturnAlone(self, dumb):
         cell = self.top.getCell()
