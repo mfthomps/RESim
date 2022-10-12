@@ -69,7 +69,8 @@ network of computers.
 the elements of RESim configuration files (ini files) that define the system to be simulated.  
 \item The mechanics of installing and running 
 RESim are described in section \ref{running}.  This includes descriptions of data tracking (forward and reverse) and code coverage. 
-\item Examples of RESim use are provided in section \ref{example-workflows}.  
+\item Example workflows for RESim are provided in section \ref{example-workflows}.  
+\item Example disk images and targets are listed in section \ref{example-images}.
 \item Use of AFL to expand code coverage and identify vulnerabilities is described in section \ref{fuzz}.
 \item Section \ref{implementation} describes the implementation strategy and some of its consequences.
 \item Section \ref{troubleshooting} provides some trouble-shooting tips.
@@ -416,7 +417,8 @@ within your watch mark list as parsing encounters errors.
 The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.  This data must be populated with 
 a designated character, currently ``Z''.  And there must be as much data as you expect to read during injectIO sessions.  The designated characters are used by
 RESim to identify the end of individual kernel buffers, and thus are critical to determining the size and location of the different kernel buffers.  It is also
-critical that the data be of a form that will be read by the application.
+critical that the data be of a form that will be read by the application because RESim locates kernel buffers by backtracing data read into application buffers.
+However, if you find the first kernel buffer is as large as any data you might send, then a single application read will suffice.
 If AFL filters are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
 Take care to avoid extranious characters, e.g., newlines at the end of the test data.
 
@@ -593,8 +595,8 @@ in the AFL output directory.  Only the first packet is tracked.  If the AFL sess
 start new Simics sessions for each queue file.
 
 \item{\tt injectToBB} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
-is assumed to be the RESim workspace directory name.
-
+is assumed to be the current RESim workspace directory name.  Note the simulation breaks at the BB, and thus the watch marks do not reflect subsequent
+processing -- it they will not reflect any watch mark in the target BB. (TBD, modify to process/track everything, and then skip back to the first hit of the BB.)
 
 \item Also see utilties listed in section \ref{utilities}, e.g., to find branches not taken and AFL sessions that reach a given basic block.
 
@@ -857,8 +859,9 @@ to IDA Pro for analysis.
 (unless the param file already exists, in which case you are done with initial setup).  
 \end{itemize}
 \item Launch RESim using {\tt resim mytarget}.  That will start Simics and give you the Simics command prompt.
-\item  Continue the simulation until the kernel appears to have booted, then stop.
-\item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominial interaction
+\item  Continue the simulation until the kernel appears to have booted, then stop.  Try stopping before the initial processes complete, i.e.,
+while output is still spewing on the boot console.
+\item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominal interaction
 with the target system via its console, e.g., to schedule a new process.  If it displays a message saying it is not in the kernel,
 try running ahead a bit, e.g., {\tt r 10000} and try the gkp.go command again.
 \item After the parameters are created, quit Simics and remove the {\tt CREATE\_RESIM\_PARAMS} parameter.
@@ -1739,6 +1742,13 @@ See {\tt RESim/simics/examples/network\_file\_system} for an example use of RESi
 The README.md in that directory provides instructions for running the example, and for obtaining the disk images
 and binary files used within the example.
 
+\section{Example disk images}
+\label{example-images}
+\subsection{Cyber Grand Challenge Services}
+Vulnerable services from the DARPA Cyber Grand Challenge are available as described in the
+README in {\tt simics/examples/network\_file\_system} in your repo.
+The images described therein are located at: {\tt https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
+
 \section{Implementation strategy}
 \label{implementation}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
@@ -2177,6 +2187,8 @@ Confirm crashReport uses jumpers.
 
 Add read counts to data watches.
 
+dMod fails when traceAll is set?
+
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
 lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
@@ -2283,6 +2295,7 @@ While fuzzing, we want to detect and report crashes and or process exits.
 \section{Driver platforms}
 \label{driver}
 This appendix describes the driver image used internally at: /eems\_images/ubuntu\_img/driver/driver.disk.hd\_image.craff
+The driver is also available at \url{https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
 
 The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.ini} example has the Simics Agent pre-installed.  The
 {\tt driver-script.sh} in that directory can be copied and modified within your workspace.  The driver will download that shell script and execute
@@ -2392,6 +2405,7 @@ trace0.start
 \item The Simics command line uses standard bash history.  The up arrow can save much time and syntax problems.
 
 \item Capture command line output (redirect a copy) to a file using the output-file-start / output-file-stop commands
+(start-command-line-capture replaced that).
 
 \item {list-port-forwarding-setup} to view current port forwarding
 \end{itemize}
