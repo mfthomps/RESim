@@ -106,6 +106,7 @@ import reverseTrack
 import jumpers
 import kbuffer
 import funMgr
+#import fsMgr
 import json
 import pickle
 import re
@@ -252,6 +253,9 @@ class GenMonitor():
         ''' Control flow jumpers '''
         self.jumper_dict = {}
 
+        ''' Get valid FS base values for locating current task '''
+        self.fs_mgr = None
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
         exit_hap = RES_hap_add_callback("Core_At_Exit", self.simicsQuitting, None)
@@ -318,6 +322,10 @@ class GenMonitor():
                     self.param[cell_name].arm_ret2 = None
                 if not hasattr(self.param[cell_name], 'arm_svc'):
                     self.param[cell_name].arm_svc = False
+                if not hasattr(self.param[cell_name], 'delta'):
+                    self.param[cell_name].delta = None
+                if not hasattr(self.param[cell_name], 'fs_base'):
+                    self.param[cell_name].fs_base = None
 
                 ''' always true? TBD '''
                 self.param[cell_name].ts_state = 0
@@ -557,8 +565,9 @@ class GenMonitor():
                 self.lgr.error('could not read tu_cur_task_rec from taskUtils')
                 return
 
-            cur_task_rec = self.mem_utils[cell_name].getCurrentTask(self.param[cell_name], cpu)
-            #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
+            if self.param[cell_name].fs_base is None:
+                cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
+                self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
@@ -602,6 +611,7 @@ class GenMonitor():
         return run_cycles
    
     def snapInit(self):
+            ''' Running from a snapshot '''
             for cell_name in self.cell_config.cell_context:
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
@@ -619,8 +629,10 @@ class GenMonitor():
                 self.task_utils[cell_name] = task_utils
                 self.lgr.debug('snapInit for cell %s, now call to finishInit' % cell_name)
                 self.finishInit(cell_name)
+
  
     def doInit(self):
+        ''' Entry point from launchRESim '''
         self.lgr.debug('genMonitor doInit')
         if self.run_from_snap is not None:
             self.snapInit()
@@ -629,6 +641,7 @@ class GenMonitor():
         run_cycles = self.getBootCycleChunk()
         done = False
         self.runPreScripts()
+        #self.fs_mgr = fsMgr.FSMgr(self.cell_config.cell_context, self.param, self.cell_config, self.lgr)
         while not done:
             done = True
             for cell_name in self.cell_config.cell_context:
@@ -640,8 +653,11 @@ class GenMonitor():
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 ''' run until we get something sane '''
-                #self.lgr.debug('doInit cell %s get current task from mem_utils' % cell_name)
-                cur_task_rec = self.mem_utils[cell_name].getCurrentTask(self.param[cell_name], cpu)
+                eip = self.getEIP(cpu)
+                cpl = memUtils.getCPL(cpu)
+                #self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
+                cur_task_rec = None
+                cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
                 if cur_task_rec is None or cur_task_rec == 0:
                     #print('Current task not yet defined, continue')
                     #self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
@@ -652,25 +668,28 @@ class GenMonitor():
                         #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid None ' % (cell_name, cur_task_rec))
                         done = False
                         continue
+                    ''' TBD clean this up '''
                     #self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
-
+                    '''
                     phys = self.mem_utils[cell_name].v2p(cpu, self.param[cell_name].current_task)
                     tu_cur_task_rec = self.mem_utils[cell_name].readPhysPtr(cpu, phys)
                     if tu_cur_task_rec is None:
-                        #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d but None from task_utils ' % (cell_name, cur_task_rec, pid))
+                        self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d but None from task_utils ' % (cell_name, cur_task_rec, pid))
                         done = False
                         continue
-                    #self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
-                    #       cur_task_rec, pid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
+                    self.lgr.debug('doInit cell %s cur_task_rec 0x%x pid %d from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
+                           cur_task_rec, pid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
                     if tu_cur_task_rec != 0:
                         if cur_task_rec != tu_cur_task_rec:
-                            #self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
+                            self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
                             pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                             tu_pid = self.mem_utils[cell_name].readWord32(cpu, tu_cur_task_rec + self.param[cell_name].ts_pid)
                             self.lgr.debug('pid %s  tu_pid %s' % (str(pid), str(tu_pid)))
                             #SIM_break_simulation('no match')
                             done = False
                             continue
+                    '''
+                    if True:
                         unistd32 = None
                         if cell_name in self.unistd32:
                             unistd32 = self.unistd32[cell_name]
@@ -691,9 +710,10 @@ class GenMonitor():
                                     print('Dmod is missing, cannot continue.')
                                     self.quit()
                     else:
-                        #self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
+                        self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
             if not done:
+                ''' Tried each cell, still not done, advance forward '''
                 #self.lgr.debug('continue %d cycles' % run_cycles)
                 ''' using the most recently selected cpu, continue specified number of cycles '''
                 cmd = 'pselect %s' % cpu.name
@@ -4184,6 +4204,7 @@ class GenMonitor():
             self.lgr.debug('playAFL now go')
             if trace_all: 
                 self.traceAll()
+                self.trace_all = True
             play.go()
         else:
             print('playAFL failed?')

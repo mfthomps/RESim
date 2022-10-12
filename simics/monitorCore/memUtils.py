@@ -434,14 +434,42 @@ class memUtils():
         else:
             return 'rip'
 
-    def getCurrentTask(self, param, cpu):
-      
+    def adjustParam(self, delta):
+        self.param.current_task = self.param.current_task + delta
+        self.param.sysenter = self.param.sysenter + delta
+        self.param.sysexit = self.param.sysexit + delta
+        self.param.sys_entry = self.param.sys_entry + delta
+        self.param.iretd = self.param.iretd + delta
+        self.param.page_fault = self.param.page_fault + delta
+        self.param.syscall_compute = self.param.syscall_compute + delta
+        self.param.syscall_jump = self.param.syscall_jump + delta
+        
+
+    def getCurrentTask(self, cpu):
+        retval = None 
         if self.WORD_SIZE == 4:
             if cpu.architecture == 'arm':
-                return self.getCurrentTaskARM(param, cpu)
+                retval = self.getCurrentTaskARM(self.param, cpu)
+            elif self.param.fs_base is None:
+                cur_ptr = self.getCurrentTaskX86(self.param, cpu)
+                retval = cur_ptr
             else:
-                return self.getCurrentTaskX86(param, cpu)
+                new_fs_base = cpu.ia32_fs_base
+                if new_fs_base != 0:
+                    ''' TBD, this seems the wrong way around, but runs of getKernelParams shows delta is the same, but for the sign.'''
+                    if self.param.delta is None:
+                        self.param.delta = self.param.fs_base - new_fs_base
+                        #self.lgr.debug('getCurrentTask fs_base delta is 0x%x, current_task was 0x%x' % (self.param.delta, self.param.current_task))
+                        self.adjustParam(self.param.delta)
+                    cpl = getCPL(cpu)
+                    #current_task = self.param.current_task + self.param.delta
+                    ct_addr = new_fs_base + (self.param.current_task-self.param.kernel_base)
+                    retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+                    #self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
+                    #      self.param.current_task, new_fs_base, ct_addr, retval))
+  
         elif self.WORD_SIZE == 8:
+            ''' TBD generalze for all x86-64'''
             gs_b700 = self.getGSCurrent_task_offset(cpu)
             #phys_addr = self.v2p(cpu, gs_b700)
             #self.current_task[cpu] = phys_addr
@@ -449,18 +477,17 @@ class memUtils():
             ct_addr = self.v2p(cpu, gs_b700)
             if ct_addr is None:
                 self.lgr.debug('getCurrentTask finds no phys for 0x%x' % gs_b700)
-                return None
-            self.lgr.debug('memUtils getCurrentTask cell %s gs_b700 is 0x%x phys is 0x%x' % (self.cell_name, gs_b700, ct_addr))
-            try:
-                ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
-            except:
-                self.lgr.debug('getCurrentTask ct_addr 0x%x not mapped?' % ct_addr)
-                return None
-            self.lgr.debug('getCurrentTask ct_addr 0x%x ct 0x%x' % (ct_addr, ct))
-            return ct
+            else:
+                self.lgr.debug('memUtils getCurrentTask cell %s gs_b700 is 0x%x phys is 0x%x' % (self.cell_name, gs_b700, ct_addr))
+                try:
+                    retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+                    self.lgr.debug('getCurrentTask ct_addr 0x%x ct 0x%x' % (ct_addr, retval))
+                except:
+                    self.lgr.debug('getCurrentTask ct_addr 0x%x not mapped?' % ct_addr)
         else:
             print('unknown word size %d' % self.WORD_SIZE)
-            return None
+
+        return retval
 
     def kernel_v2p(self, param, cpu, vaddr):
         return vaddr - param.kernel_base + param.ram_base
@@ -498,7 +525,7 @@ class memUtils():
             esp = self.readPtr(cpu, tr_base + 4)
             if esp is None:
                 return None
-            #self.lgr.debug('getCurrentTaskX86 kernel mode, esp is 0x%x' % esp)
+            #self.lgr.debug('getCurrentTaskX86 kernel mode, esp is 0x%x, tr_base was 0x%x' % (esp, tr_base))
         else:
             esp = self.getRegValue(cpu, 'esp')
             #self.lgr.debug('getCurrentTaskX86 user mode, esp is 0x%x' % esp)
