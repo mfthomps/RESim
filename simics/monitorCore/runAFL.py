@@ -127,10 +127,10 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     resim_procs.append(resim_ps)
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
-    lgr.debug('created resim port %d' % port)
-    lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
+    lgr.debug('doOne created resim port %d' % port)
+    lgr.debug('doOne open fifo %s' % os.path.abspath('resim_ctl.fifo'))
     fh = os.open('resim_ctl.fifo', os.O_WRONLY)
-    lgr.debug('back from open fifo')
+    lgr.debug('doOne back from open fifo')
     fifo_list.append(fh)
     do_restart = handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
 
@@ -224,12 +224,13 @@ def runAFLTilRestart(args, lgr):
         for instance in glist:
             fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
+                self.lgr.debug('No instance at %s, skip' % instance)
                 continue
             os.chdir(instance)
             if not args.no_afl:
                 afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                       master_slave, fuzzid, port, dict_path, afl_name)
-                #print('afl_cmd %s' % afl_cmd) 
+                lgr.debug('afl_cmd %s' % afl_cmd) 
                 if args.remote or (args.quiet and master_slave == '-S'):
                     afllog = '/tmp/%s.log' % fuzzid 
                     fh = open(afllog, 'w')
@@ -313,6 +314,10 @@ def main():
     except:
         pass
     args = parser.parse_args()
+    if args.no_afl:
+        print('Starting RESim without starting AFL.')
+    if args.dead:
+        print('Trial run to find dead zones.')
     do_restart = runAFL(args, lgr)
   
 if __name__ == '__main__':
