@@ -565,9 +565,9 @@ class GenMonitor():
                 self.lgr.error('could not read tu_cur_task_rec from taskUtils')
                 return
 
-            if self.param[cell_name].fs_base is None:
-                cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
-                self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
+            #if self.param[cell_name].fs_base is None:
+            #    cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
+            #    #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
