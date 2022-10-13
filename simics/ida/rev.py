@@ -525,24 +525,6 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     dbg_hooks.setRESim(isim)
     idb_hooks.setRESim(isim)
     
-    #form=idaversion.find_widget("IDA View-EIP")
-    #idaversion.activate_widget(form, True)
-    #print('IDA View-EIP form is %s' % str(form))
-    # MakeCode(eip)
-
-    '''
-    run_to_connect_desc = idaapi.action_desc_t(
-        'run_to_connect:action',   # The action name. This acts like an ID and must be unique
-        'Run to connect',  # The action text.
-        RunToConnectHandler())   # The action handler.
-
-    idaapi.register_action(run_to_connect_desc)
-
-    idaapi.attach_action_to_menu(
-        'Debugger/O Run to/', # The relative path of where to add the action
-        'run_to_connect:action',                        # The action ID (see above)
-        idaapi.SETMENU_APP)                 # We want to append the action after the 'Manual instruction...'
-    '''
 
     if not keymap_done:
         doKeyMap(isim)
