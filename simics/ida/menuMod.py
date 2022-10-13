@@ -76,7 +76,6 @@ class DoStepOverHandler(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
         self.isim = isim
     def activate(self, ctx):
-        print('DoStepOverHandler')
         self.isim.doStepOver()
         return 1
     def update(self, ctx):

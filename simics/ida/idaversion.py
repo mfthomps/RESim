@@ -36,15 +36,10 @@ def add_bpt(bptEA):
         return ida_dbg.add_bpt(bptEA)
 
 def wait_for_next_event(kind, flag):
-    print('wait_for_next_event')
     if idaapi.IDA_SDK_VERSION <= 699:
-        print('wait_for_next_event less than 699')
         event = idc.GetDebuggerEvent(kind, flag)
-        print('wait_for_next_event back')
     else:
-        print('wait_for_next_event more than 699  kind: %s  flag %s' % (str(kind), str(flag)))
         event = ida_dbg.wait_for_next_event(kind, flag)
-        print('wait_for_next_event back')
 
 def ask_str(default, label, hist=0):
     if idaapi.IDA_SDK_VERSION <= 699:
