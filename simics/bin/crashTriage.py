@@ -11,16 +11,40 @@ for crash in sorted(clist):
     full = os.path.join(cpath, crash)
     page_boundary = False
     memcpy = None
+    watch_addr = False
+    add_to_zero = None
+    prior_to_origin = False
     with open(full) as fh:
+        seg_addr = None
         for line in fh:
             if 'came from memcpy' in line:
                 memcpy = line
                 break
             elif 'boundary' in line:
                 page_boundary = True
+            elif line.startswith('SEGV'):
+                seg_addr = line.strip().split()[5]
+                if len(seg_addr) <= 4:
+                    ''' look for something like [eax+0x12]'''
+            elif seg_addr is not None and line.startswith('Stack trace:'):
+                watch_addr = True
+            elif watch_addr:
+                ''' First line of stack trace.  Does it contain +seg_addr?'''
+                look_for = "+%s" % seg_addr
+                if look_for in line:
+                    add_to_zero = line
+                    watch_addr = False
+                else:
+                    break
+            elif add_to_zero is not None and 'occured prior to' in line:
+                prior_to_origin = True
+                break
+            
         if memcpy is not None:
             print('%s %s' % (crash, memcpy))
         elif page_boundary:
             print('%s page boundary, not memcpy' % crash)
+        elif add_to_zero is not None:
+            print('%s Add offset to zero, prior: %r 1st frame: %s' % (crash, prior_to_origin, add_to_zero))
         else:
             print('%s **OTHER**' % crash) 

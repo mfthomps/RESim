@@ -3,9 +3,9 @@
 
   This Software is part of Wind River Simics. The rights to copy, distribute,
   modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable Wind River license agreement.
+  pursuant to the terms of an applicable license agreement.
   
-  Copyright 2010-2017 Intel Corporation
+  Copyright 2010-2019 Intel Corporation
 
 */
 
@@ -137,6 +137,11 @@ struct gdb_remote {
 
         /* Offset to add to breakpoints, used by custom 'segment' command. */
         uint32 segment_linear_base;
+
+        /* Alloc qRcmd command which allows any simics command to be executed
+           from remote. This will allow a gdb remote connection to do anything
+           that can be done from CLI. */
+        bool allow_remote_commands;
 };
 
 typedef enum {
@@ -192,6 +197,8 @@ GDB_PRINT_HEX_HEADER(16);
 GDB_PRINT_HEX_HEADER(32);
 GDB_PRINT_HEX_HEADER(64);
 
+bool read_opt_attr(conf_object_t *log_obj, conf_object_t *obj,
+                   const char *attr_name, attr_value_t * const attr);
 uint64 reg_read_zero(conf_object_t *cpu, register_description_t *rd);
 uint64 reg_read_int(conf_object_t *cpu, register_description_t *rd);
 uint64 reg_read_int32l(conf_object_t *cpu, register_description_t *rd);

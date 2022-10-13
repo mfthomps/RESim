@@ -40,23 +40,28 @@ class TargetFS():
                 else:
                     retval = os.path.join(os.path.dirname(full), real)
             elif not os.path.isfile(full):
-                lgr.debug('TargetFS getFull no file at %s -- use glob' % full)
+                if lgr is not None:
+                    lgr.debug('TargetFS getFull no file at %s -- use glob' % full)
                 flist = glob.glob(full+'*')
                 if len(flist) > 0:
                     retval = flist[0]
                 else:
-                    lgr.debug('TargetFS getFull, no glob at %s' % (full+'*'))
+                    if lgr is not None:
+                        lgr.debug('TargetFS getFull, no glob at %s' % (full+'*'))
                     ''' try basename '''
                     base = os.path.basename(path)
                     fun_file = base+'.funs'
-                    lgr.debug('is relative, fun_file %s' % fun_file)
+                    if lgr is not None:
+                        lgr.debug('is relative, fun_file %s' % fun_file)
                     full_fun = self.find(fun_file)
                     if full_fun is not None:              
                         retval = os.path.join(os.path.dirname(full_fun), base)
-                        lgr.debug('getFull found file %s' % retval)
+                        if lgr is not None:
+                            lgr.debug('getFull found file %s' % retval)
                     else:
                         retval = self.find(base)
-                        lgr.debug('getFull used find found file %s' % retval)
+                        if lgr is not None:
+                            lgr.debug('getFull used find found file %s' % retval)
 
             else:
                 retval = full

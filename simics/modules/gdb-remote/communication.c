@@ -3,9 +3,9 @@
 
   This Software is part of Wind River Simics. The rights to copy, distribute,
   modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable Wind River license agreement.
+  pursuant to the terms of an applicable license agreement.
   
-  Copyright 2010-2017 Intel Corporation
+  Copyright 2010-2019 Intel Corporation
 */
 
 #include "communication.h"
@@ -168,17 +168,32 @@ activate_gdb_notifier(gdb_remote_t *gdb)
         SIM_notify_on_socket(gdb->fd, Sim_NM_Read, 0, read_gdb_data, gdb);
 }
 
-void
-send_packet(gdb_remote_t *gdb, const char *cmd)
+static void
+send_packet_common(gdb_remote_t *gdb, const char *cmd, bool do_log)
 {
-        SIM_LOG_INFO(4, &gdb->obj, 0, "Sending packet: \"%s\"", cmd);
+        if (do_log)
+                SIM_LOG_INFO(4, &gdb->obj, 0, "Sending packet: \"%s\"", cmd);
         size_t cmd_len = strlen(cmd);
         size_t packet_len = cmd_len + 4;
         char buf[packet_len + 1];
         snprintf(buf, sizeof buf, "$%s#%02x", cmd,
                  (int)packet_checksum(cmd, cmd_len));
-        if (os_socket_write(gdb->fd, buf, packet_len) != packet_len)
+        size_t sent_packet_len = os_socket_write(gdb->fd, buf, packet_len);
+        if (do_log && sent_packet_len != packet_len) {
                 SIM_LOG_INFO(1, &gdb->obj, 0,
                              "Failed to send packet \"%s\" of length %llu to"
                              " remote gdb", buf, (uint64)packet_len);
+        }
+}
+
+void
+send_packet(gdb_remote_t *gdb, const char *cmd)
+{
+        send_packet_common(gdb, cmd, true);
+}
+
+void
+send_packet_no_log(gdb_remote_t *gdb, const char *cmd)
+{
+        send_packet_common(gdb, cmd, false);
 }

@@ -21,6 +21,8 @@ import threading
 import select
 import aflPath
 import resimUtils
+''' when remaining system ram gets below this percentage, kill and restart simics '''
+MIN_RAM=10
 def ioHandler(read_array, stop, lgr):
     log = '/tmp/resim.log'
     with open(log, 'wb') as fh:
@@ -28,6 +30,7 @@ def ioHandler(read_array, stop, lgr):
             if stop():
                 print('ioHandler sees stop, return.')
                 lgr.debug('ioHandler sees stop, return.')
+                fh.flush()
                 return
             try:
                 r, w, e = select.select(read_array, [], [], 10) 
@@ -43,6 +46,7 @@ def ioHandler(read_array, stop, lgr):
                     return
                 if len(data.decode().strip()) > 0:
                     fh.write(data+b'\n')
+            fh.flush()
                    
 
 def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
@@ -69,7 +73,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
             do_restart = True
             break
         free = resimUtils.getFree()
-        if free < 30:
+        if free < MIN_RAM:
             lgr.debug('found memory only at %d, must be leaking, restart simics' % free)
             do_restart = True
             break
@@ -87,7 +91,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
     for proc in resim_procs:
         proc.wait()
         lgr.debug('proc exited')
-
+    lgr.debug('set stop_threads')
     stop_threads = True
     for fd in read_array:
         fd.close()
@@ -116,17 +120,17 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     print('created afl')
     lgr.debug('created afl')
 
-    cmd = '%s %s -n' % (resim_path, resim_ini)
+    cmd = '%s %s -b' % (resim_path, resim_ini)
     os.environ['ONE_DONE_PARAM'] = str(port)
     print('cmd is %s' % cmd)
     resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     resim_procs.append(resim_ps)
     read_array.append(resim_ps.stdout)
     read_array.append(resim_ps.stderr)
-    lgr.debug('created resim port %d' % port)
-    lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
+    lgr.debug('doOne created resim port %d' % port)
+    lgr.debug('doOne open fifo %s' % os.path.abspath('resim_ctl.fifo'))
     fh = os.open('resim_ctl.fifo', os.O_WRONLY)
-    lgr.debug('back from open fifo')
+    lgr.debug('doOne back from open fifo')
     fifo_list.append(fh)
     do_restart = handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
 
@@ -220,12 +224,13 @@ def runAFLTilRestart(args, lgr):
         for instance in glist:
             fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
+                self.lgr.debug('No instance at %s, skip' % instance)
                 continue
             os.chdir(instance)
             if not args.no_afl:
                 afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                       master_slave, fuzzid, port, dict_path, afl_name)
-                #print('afl_cmd %s' % afl_cmd) 
+                lgr.debug('afl_cmd %s' % afl_cmd) 
                 if args.remote or (args.quiet and master_slave == '-S'):
                     afllog = '/tmp/%s.log' % fuzzid 
                     fh = open(afllog, 'w')
@@ -252,7 +257,7 @@ def runAFLTilRestart(args, lgr):
             except OSError as e:
                 lgr.debug('fifo create failed %s' % e)    
             resim_ini = args.ini
-            cmd = '%s %s -n' % (resim_path, resim_ini)
+            cmd = '%s %s -b' % (resim_path, resim_ini)
             os.environ['ONE_DONE_PARAM'] = str(port)
             lgr.debug('cmd is %s' % cmd)
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -309,6 +314,10 @@ def main():
     except:
         pass
     args = parser.parse_args()
+    if args.no_afl:
+        print('Starting RESim without starting AFL.')
+    if args.dead:
+        print('Trial run to find dead zones.')
     do_restart = runAFL(args, lgr)
   
 if __name__ == '__main__':

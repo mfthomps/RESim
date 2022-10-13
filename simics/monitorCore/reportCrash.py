@@ -80,14 +80,17 @@ class ReportCrash():
         #self.top.injectIO(self.flist[self.index], keep_size = True)
         ''' Either inject or track '''
         if self.trackFD is None:
-            self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, targetFD=self.targetFD, callback=self.doneForward)
+            self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
+                   targetFD=self.targetFD, callback=self.top.stopTrackIO(), no_iterators=True)
+            #       targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
             ''' Be sure we are debugging and then do the trackIO '''
             self.top.debugSnap(final_fun = self.doTrack)
 
     def doTrack(self):
         SIM_run_command('disable-reverse-execution')
-        self.top.trackIO(self.trackFD, reset=True, callback=self.doneForward)
+        #self.top.trackIO(self.trackFD, reset=True, callback=self.doneForward)
+        self.top.trackIO(self.trackFD, reset=True, callback=top.stopTrackIO)
 
     def doneBackward(self, dumb):
         try:
@@ -118,12 +121,23 @@ class ReportCrash():
         op2, op1 = self.decode.getOperands(instruct[1])
         self.lgr.debug('reportCrash op2: %s op1: %s' % (op2, op1))
         reg_find = re.findall(r'\[.*?\]', op2) 
-        self.lgr.debug('reportCrash found in brackets %s' % str(reg_find))
+        self.lgr.debug('reportCrash found in brackets for %s is %s' % (op2, str(reg_find)))
+        if len(reg_find) == 0:
+            reg_find = re.findall(r'\[.*?\]', op1) 
+            self.lgr.debug('reportCrash found in brackets for %s is %s' % (op1, str(reg_find)))
+            if len(reg_find) > 0:
+                if self.mem_utils.isReg(op2):
+                    value = self.mem_utils.getRegValue(self.cpu, op2)
+                    self.lgr.debug('op2 is reg: %s value: 0x%x' % (op2, value))
+                    self.crash_report.write('Corrupt write from reg: %s value: 0x%x\n' % (op2, value))
+   
         if len(reg_find) > 0:
             brack_str = reg_find[0].strip()[1:-1]
             if ',' in brack_str: 
                 ''' TBD FIXME '''
                 reg = brack_str.split(',')[0].strip()
+            elif '+' in brack_str: 
+                reg = brack_str.split('+')[0].strip()
             else:
                 reg = brack_str
             if self.mem_utils.isReg(reg):
@@ -131,10 +145,12 @@ class ReportCrash():
             else:
                 self.lgr.debug('reportCrash not a reg %s' % reg)
                 self.top.setCommandCallback(None)
+                self.top.quit()
     
         else:
             self.lgr.debug('reportCrash no regs in %s' % op2)
             self.top.setCommandCallback(None)
+            self.top.quit()
 
     def reportStack(self):
         self.crash_report.write('Stack trace:\n')

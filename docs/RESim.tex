@@ -56,6 +56,8 @@ In most other systems, the debugger or its agent would run on the target, and th
 would cause the kernel to page
 in the memory containing the referenced code.\footnote{See \ref{external} for another example of the implications}.
 
+\includegraphics{resimfig.eps}
+
 \subsection{This Guide}
 The remainer of this introduction provides an overview of RESim features and its limitations and availability.  Following the introduction:
 \begin{itemize}
@@ -67,7 +69,8 @@ network of computers.
 the elements of RESim configuration files (ini files) that define the system to be simulated.  
 \item The mechanics of installing and running 
 RESim are described in section \ref{running}.  This includes descriptions of data tracking (forward and reverse) and code coverage. 
-\item Examples of RESim use are provided in section \ref{example-workflows}.  
+\item Example workflows for RESim are provided in section \ref{example-workflows}.  
+\item Example disk images and targets are listed in section \ref{example-images}.
 \item Use of AFL to expand code coverage and identify vulnerabilities is described in section \ref{fuzz}.
 \item Section \ref{implementation} describes the implementation strategy and some of its consequences.
 \item Section \ref{troubleshooting} provides some trouble-shooting tips.
@@ -115,9 +118,20 @@ See section \ref{divergence} for information on potential divergence of simulati
 \subsection{Development and Availability}
 In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
-Simics “OS Awareness” or Eclipse-based interfaces.   IDA Pro extensions are implemented using IDAPython.  
-All of the RESim code is available on github at \url{https://github.com/mfthomps/RESim}  A fork of the AFL fuzzer integrated with 
-RESim is availabe at: \url{https://github.com/mfthomps/AFL}.
+Simics “OS Awareness” or Eclipse-based interfaces.   
+\begin{itemize}
+\item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
+\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}
+
+\item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
+\url{https://github.com/mfthomps/RESim/simics/ida}  
+
+\item The Ghidra plugins for RESim are available at: \url{https://github.com/mfthomps/RESimGhidraPlugins}  A fork 
+of gdb needed for use with the Ghidra plugin is at \url{https://github.com/mfthomps/binutils-gdb}.
+
+\item A fork of the AFL fuzzer integrated with 
+RESim is available at: \url{https://github.com/mfthomps/AFL}.
+\end{itemize}
 
 
 \section{Notional Workflow}
@@ -141,7 +155,7 @@ in this guide.  The general steps include:
 \subsection{Workspace directories}
 Simics simulations are run from workspace directories prepared using the {\tt resim-ws.sh} command, which creates a Simics workspace within a new empty
 directory and populates it with selected RESim files.  The workspace is where simulation-specific configuration files and scripts are to reside.  Snapshot
-data is also stored withn workspace directories.  You may share snapshots between workspaces by using symbolic links.  
+data is also stored within workspace directories.  You may share snapshots between workspaces by using symbolic links.  
 
 \subsection{Configuration files}
 Simulated systems are defined within RESim configuration files (see \ref{configuration} that  parameterize pre-defined Simics scripts to identify 
@@ -183,7 +197,7 @@ further analyzed using the interactive IDA Pro client.  The {\tt traceAll} comma
 system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
 event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
 IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
-and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directiv.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
+and then update your ini file to begin at that checkpoint using the {\tt RUN\_FROM\_SNAP} directive.  Trace files are created in the /tmp directory.  During a trace, if you use the Simics stop and
 run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
 see network ports being listened to. 
 
@@ -227,16 +241,18 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 \label{commands}
 \subsection{General display}
 \begin{itemize}
-\item {\tt show} -- Show current process information.
-\item {\tt tasks} -- List currently executing process names and their PIDs.
-\item {\tt tasksDBG} -- List threads of process currently selected for analysis, e.g., via {\tt debugProc}.
-\item {\tt showThreads} - List the thread PIDs of the process being debugged.  TBD merge these? Difference?
+\item {\tt show} -- Show current process information for the currently monitored target.
+\item {\tt tasks} -- List currently executing process names and their PIDs for the currently monitored target.
+\item {\tt showThreads} -- List threads of process currently selected for analysis, e.g., via {\tt debugProc}.
+\item {\tt showTargets} - List the target cells that may be monitored.
+\item {\tt setTarget} -- Set the currently monitored target.
 \end{itemize}
 
 \subsection{Process tracing}
 \label{process_tracing}
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
+To limit tracing to the current thread, first issue the {\tt debugThis} command.
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
 Tracing continues until the stopTrace command is issued.  
@@ -254,7 +270,7 @@ See the scripts in {\tt RESim/postscripts} to parse system call logs and create 
 The {\tt trackIO} command can be directed to include traced file output in the watch marks, e.g., to see where log messages occur within the
 time line of watch marks.
 
-\item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log  
+\item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in /tmp/output-fd-[FD].log   Assumes traceAll is set.
 
 \item {\tt flushTrace} - Flush trace output to the trace log files.
 
@@ -302,6 +318,8 @@ If you prefix the given process name with {\tt sh }, (sh followed by a space), R
 
 \item {\tt debugIfNot} -- Will call debugPidGroup for the currently scheduled process.
 
+\item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
+
 \item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
 uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
 potential instruction calls are to functions.  The monitor-local {\tt stackTrace} command displays a
@@ -327,11 +345,13 @@ If nth is greater than 1, will run until the nth recv call.
 
 \item {\tt runToOpen(file)} -- Stops at the open of a given filename.
 
+\item {\tt runToWrite(substring)} -- Stops when a process writes the given substring.
+
 \item {\tt clone(nth)} – Continue execution until the nth clone system call in the current process occurs, and then halt execution within the child.
 
 \item {\tt runToText()} – Continue execution until the text segment of the currently debugged process is reached.  This, and revToText, are useful after execution transfers to libraries, or Linux linkage functions, e.g., references to the GOT.
 
-\item {\tt revToText()} – Reverse execute the current process until the text segment is reached.  Also useful when you get lucky and execution is down a nop sled.
+\item {\tt revToText()} – Reverse execute the current process until the text segment is reached.  Also useful when you get lucky and execution is down a nop sled.  This function can be slow, e.g., if there is a kernel system call between you and the text segment.
  
 \item {\tt showSOMap(pid)} – Display the map of shared object library files to their load addresses for the given pid (along with the main text segment).
 
@@ -348,6 +368,8 @@ programs.
 
 \item {\tt revToModReg(reg)} – Reverse execution until the given register is modified.
 
+
+\item {\tt toPid(pid)} -- Run forward until the given pid is scheduled.  Use {\tt -1} to indicate any of the threads being debugged.
 
 \item {\tt runToUser()} – Continue execution until user space of the current process is reached.
 
@@ -375,7 +397,7 @@ might interfere with your subsequent analysis.
 Also see \ref{tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -386,11 +408,19 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
     cat foo.io > /dev/udp/127.0.0.1/6060 
 \end{verbatim}
 \noindent Note that sending multiple packets via real networks will cause the origin to reset on each packet, thereby limiting the range of reverse execution.  It is generally simpler
-to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  That program executes the Simics magic instruction to cause RESim to reset
+to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
+
+The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.  This data must be populated with 
+a designated character, currently ``Z''.  And there must be as much data as you expect to read during injectIO sessions.  The designated characters are used by
+RESim to identify the end of individual kernel buffers, and thus are critical to determining the size and location of the different kernel buffers.  It is also
+critical that the data be of a form that will be read by the application because RESim locates kernel buffers by backtracing data read into application buffers.
+However, if you find the first kernel buffer is as large as any data you might send, then a single application read will suffice.
+If AFL filters are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
+Take care to avoid extranious characters, e.g., newlines at the end of the test data.
 
 \item {\tt retrack} -- Intended for use after modifying content of an input buffer in memory.  This will track accesses to the input buffer.
 Note that this function does record additional IO operations, BUT WILL reflect subsequent access to the existing watch buffers.  (TBD, terminate on access
@@ -402,8 +432,7 @@ xmlParseFile and then tracks its access, e.g., via xmlGetParam, adding watch mar
 \item {\tt showWatchMarks(old=False)} Display a list of watch marks created by watchData or trackIO.  Use the {\tt old} flag to view stale watch marks, i.e., 
 those that occurred prior to the origin (which gets reset on each data injection.)
 
-\item {\tt goToDataMark(watch\_mark)}  Skip to the simulation cycle associated with the given {\tt watch\_mark}, which is an index into the list of
-data watch bookmarks generated by {\tt trackIO}.
+\item {\tt goToDataMark(watch\_mark)}  Skip to the simulation cycle associated with the given {\tt watch\_mark}, which is an index into the list of data watch bookmarks generated by {\tt trackIO} or {\tt injectIO}.
 
 \item {\tt getWatchMarks()} Return a json list of watch marks created by watchData or trackIO, used by the IDA client.
 
@@ -421,7 +450,7 @@ write watch bookmarks generated by {\tt trackFunctionWrite}.
 
 \item {\tt revTaintAddr(addr)} -- Back trace the source of the content the given address until either a system call, or a non-trivial computation
 
-\item {\tt injectIO(iofile, stay=False, n=1, target=None, targetFD=None, cover=False)} -- Assumes you have previously used {\tt prepInject}
+\item {\tt injectIO(iofile, stay=False, n=1, target=None, targetFD=None, cover=False, break\_on=None, trace\_all=False)} -- Assumes you have previously used {\tt prepInject}
 to create a snapshot (see \ref{prepInject} and that snapshot has been loaded.
 The content of the given {\tt iofile} is written into the read buffer, and the register reflecting 
 the count is modified to reflect the size of the file.  If {\tt stay} is False, the {\tt retrack} function is then invoked. If {\tt keep\_size} is
@@ -433,7 +462,11 @@ if the original receiving process does some processing and sends derivative data
 of the pipe.  If the {\tt cover} parameter is true, code coverage will be tracked and saved in a hits file.  This may take a while -- wait for the
 Simics prompt to display a message such as {\tt Coverage saveCoverage to...}.
 
-\item {\tt traceInject(iofile)} -- Similar to injectIO, but performs a traceAll instead of tracking IO.
+The break\_on will break on execution of the given address. 
+
+The trace\_all option will generate a system call trace instead of watch marks.
+
+\item {\tt traceInject(iofile)} -- (DEPRECATED) See the {\tt trace\_all} options to injectIO and playAFL.
 
 \item{\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of watch marks. Use {\tt showMalloc} to 
 then list by pid, block address and size.
@@ -452,6 +485,7 @@ that returns one byte would break on a reference to the fifth byte in the buffer
 \end{itemize}
 
 \subsection{System modification}
+\label{sec:modification}
 \begin{itemize}
 
 \item {\tt writeReg} – Write value to a register (Note: deletes existing bookmarks.)
@@ -469,7 +503,8 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 \item {\tt showLinks} - Display symbolic names of network connections.  These may then be used in DMOD directives, or manually using Simics {\tt connect}
 and {\tt disconnect} commands.
 
-\item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.
+\item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.  See
+the {\tt EXECUTION\_JUMPERS} ini environment value.
 
 \end{itemize}
 \subsection{Code coverage}
@@ -506,22 +541,34 @@ Note using this with TCP and real networks can lead to undefined behavior, and t
 Use the count to stop the simuation subsequent to the nth input system call, e.g., to get an initial state for fuzzing that is predicated on a preamble exchange.
 This may require use of the {\tt simics-magic} program on a driver computer.  See \ref{prepInject} for details.
 
-\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when injecting data directly into kernel buffers.  Similar to prepInject but takes the index of a watch 
-mark that is assumed to be a call to ioctl. Generate the data marks by using trackIO.   Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
-into a kernel buffer, and the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
+Note that the data you provide for prepInject should not include multiple UDP packets because you want the recv to not see more data after consuming your
+subsequent data injections.
+
+\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when preparing to inject data directly into kernel buffers.  
+Similar to prepInject but takes the index of a watch 
+mark that can be a call to ioctl, or a call to read/recieve. Generate the data marks by using trackIO, and providing the maximum amount of data you expect to 
+read from kernel buffers.
+Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
+into a kernel buffer. If the watch mark was an ioctl call, the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
+It is important that received data all appears within the kernel buffer before the application makes its recv call.  Otherwise, injectIO and AFL sessions
+will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command.
+
 
 \item{\tt fuzz(IOFile} -- Deprecated, AFL trims data itself just fine.  Trim a data file to the minimum needed to not affect coverage. Assume the simulation is at 
 a return from a read (e.g., using prepInject), set basic block coverage and iteratively execute while reducing the
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt playAFL(target)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory 
-relative to the {\tt AFL\_DATA} environment variable).  
+\item{\tt playAFL(target, afl\_mode=False, trace\_all=False, fname=None)} -- Play data input files discovered by AFL.  Assumes {\tt target} is a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
 Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
 \textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
-Tail the log if you suspect it has hung.
+Tail the log if you suspect it has hung.  Provide a library name, e.g., libc.so.6, to record coverage of a library.  Note if if afl\_mode is set, no hits file is generated.
+
+If the given target is a file, then only that file will be played.  The {\tt afl\_mode} switch attempts to reproduce how the file was played in AFL, e.g., without temporary
+breakpoints and with the AFL backstop cycles.  The {\tt trace\_all} switch will generated a system call trace.  These are intended for use in discovering why AFL
+behaves in unexpected ways, e.g., lots of hangs, long sessions.
 
 The {\tt playAFL} command also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
@@ -546,11 +593,10 @@ a driver component.  Thus, only single-packet processing can be analyzed.  Use {
 \item{\tt trackAFL(target)} -- Use injectIO to replay all AFL queue files for a given target, and store the set of resulting watch marks as json files
 in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions include multiple packets, then use the runTrack utlity to 
 start new Simics sessions for each queue file.
-\textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 
 \item{\tt injectToBB} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
-is assumed to be the RESim workspace directory name.
-
+is assumed to be the current RESim workspace directory name.  Note the simulation breaks at the BB, and thus the watch marks do not reflect subsequent
+processing -- it they will not reflect any watch mark in the target BB. (TBD, modify to process/track everything, and then skip back to the first hit of the BB.)
 
 \item Also see utilties listed in section \ref{utilities}, e.g., to find branches not taken and AFL sessions that reach a given basic block.
 
@@ -558,6 +604,8 @@ is assumed to be the RESim workspace directory name.
 
 \subsection{Msc}
 \begin{itemize}
+\item{\tt runToCycle} -- Run to an absolute cpu cycle on the current cpu.  Useful for moving simulation forward to prepare to debug some process
+that is not created until after much processing.  Cycles reported in syscall logs can help get you close to the point in time.
 
 \item{\tt satisfyCondition} -- (experimental) Assess the comparison instruction at a given address and attempt to satisfy it by altering input data.  
 Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The 
@@ -593,7 +641,7 @@ generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} c
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
-\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event.
+\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event, or the last code coverage hit.
 \item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
 \item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
@@ -606,15 +654,23 @@ leave this undefined.
 particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed offset.  The value should be a .py file name, less the
 .py extension.  The file must be relative to the Simics workspace and it must have a {\tt filter(data, packet\_num)} method that returns
 the desired string.  For example, if the packet is to be rejected, return a byte array of zeros.  Filters can also be used to 
-compute and store CRCs within data.  (TBD, apply the filter for all replays?).
+compute and store CRCs within data.  
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
+\item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers. Note the trimming occurs just prior to injection,
+and thus queue files and records of recent data, e.g., the ihung file, will not yet be trimmed.
+\item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
+
 \item {\tt TARGET\_IP} -- IP address to use on driver fuctions such as {\tt replayAFL}
 \item {\tt TARGET\_PORT} -- Port to use on driver fuctions such as {\tt replayAFL}
 \item {\tt STOP\_ON\_READ} -- Cause AFL and replays to stop once the original read/recv call (or select) is hit.
-\item {\tt READ\_LOOP} -- What to do if dataWatch detects a read loop, e.g., a vary large CRC calculation.  A value of \textit{quit} will cause
+\item {\tt READ\_LOOP} -- What to do if dataWatch detects a read loop, e.g., a vary large CRC calculation.  The read loop trigger defaults at 10,000
+and is overridden by the {\tt READ\_LOOP\_MAX}.  A value of \textit{quit} will cause
 the RESim session to exit (useful for crashReport).  Otherwise, the data watch is stopped and execution continues, e.g., to arrive at a page boundary fault.
-\item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command, express and from/to addresses in hex.  \textbf{Note:} encountering
+\item {\tt READ\_LOOP\_MAX} -- Limit on dataWatch reads from a single buffer.
+\item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command in \ref{sec:modification}), expressed as 
+from/to addresses in hex.  \textbf{Note:} encountering
 a jumper will reset the reverse execution origin, and thus may not be suitable when using injectIO or crash analysis.
+\item {\tt RESIM\_LOG\_LEVEL} -- Set to INFO to supress debug messages in the resim log.
 
 \end{itemize}
 
@@ -724,7 +780,8 @@ It also assumes you have IDA Pro. See the \textit{RESim Remote Access Guide} for
 servers.  RESim can be used without IDA Pro, though you are limited to the command line and don't benefit from
 function analysis provided by IDA.
 
-The IDA Pro installation should be configured to use Python 2.7.
+Note if you are using an NPS-provided RESim server, this RESim installation will have already been done.  But
+see the IDA Pro installation below for information on installing IDA. 
 
 \begin{itemize}
 \item Get RESim from the git repo:
@@ -745,13 +802,36 @@ non-interactive return so they are picked up by ssh):
 \item RESIM\_DIR  Path to your git clone.
 \item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}
 \item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
+\item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
-\item PATH Extend your PATH variable to include {\tt \$RESIM\_DIR/simics/bin}
+\end{itemize}
+\item Add \$RESIM\_DIR/simics/bin to your path, e.g. by adding to your .profile,
+\begin{verbatim}
+   export RESIM_DIR=[path to your git clone]
+   export PATH=$RESIM_DIR/simics/bin:$PATH
+\end{verbatim}
+
+\end{itemize}
+
+\subsubsection{IDA Pro installation}
+The following steps augment a standard IDA installation (which is not covered here.)
+\begin{itemize}
+\item The IDA Pro installation should be configured to use Python 2.7, which must be
+installed, e.g., using {\tt apt-get install python2-dev}.
+\item If IDA and RESim run on different computers, e.g., remote access to RESim: 
+\begin{itemize}
+\item Clone the RESim git repo onto your local computer (i.e., where IDA will run)
+\item Configure the RESIM\_DIR, RESIM\_IDA\_DIR and
+IDA\_DIR variables as described above.  
+\item Extend your PATH to include the RESIM\_DIR/simics/bin as described above.
 \end{itemize}
 
 \item In your {\tt \$IDA\_DIR/cfg} directory, there are a number of xml files that need to be replaced with those found
-in {\tt simics/ida/cfg}.  Backup the original xmls first.
+in {\tt \$RESIM\_DIR/simics/ida/cfg}.  Backup the original xmls first.
+
+\item Start Ida and configure the debugger to use remote gdb, and configure the Debugger process options to use localhost and port 9123.
+
 \end{itemize}
 
 \subsection{Getting started}
@@ -776,11 +856,12 @@ the file in the {\tt RESIM\_UNISTD} parameter.
 and name that path in the {\tt RESIM\_ROOT\_PREFIX} parameter.  These images are used when analyzing specified programs, and are given
 to IDA Pro for analysis.
 \item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim
-(unless the param file already exists, in which case you are done with initial setup).
+(unless the param file already exists, in which case you are done with initial setup).  
 \end{itemize}
 \item Launch RESim using {\tt resim mytarget}.  That will start Simics and give you the Simics command prompt.
-\item  Continue the simulation until the kernel appears to have booted, then stop.
-\item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominial interaction
+\item  Continue the simulation until the kernel appears to have booted, then stop.  Try stopping before the initial processes complete, i.e.,
+while output is still spewing on the boot console.
+\item Use the {\tt @gkp.go()} command to generate the parameter file.  This may take a while, and may require nominal interaction
 with the target system via its console, e.g., to schedule a new process.  If it displays a message saying it is not in the kernel,
 try running ahead a bit, e.g., {\tt r 10000} and try the gkp.go command again.
 \item After the parameters are created, quit Simics and remove the {\tt CREATE\_RESIM\_PARAMS} parameter.
@@ -800,6 +881,7 @@ Once you have identified a program to be analyzed, e.g., by reviewing a system t
 {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
 
 Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
+If IDA will run on a different computer than where Simics is running, include the host name as a command line option.
 
 The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is localhost and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
@@ -828,11 +910,59 @@ There are attempts to catch the termination of the process being debugged.  But 
 return to a known state.  
 
 There are situations where it is most productive, or necessary, to enage with the Simics command line directly.  If you change the execution state
-via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.
-For example, if you are debugging a program,
-and run ahead arbitrarily and stop in some other process/kernel context, the IDA breakpoints will not work until you resynch.
+via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.  Or you can double-click a bookmark
+or watch mark.
 
 RESim commands are available in IDA via the Debugger menu item, and via right clicking on addresses.  
+
+Setting IDA breakpoints requires that the current context be within the thread family being debugged.  For example, if execution is currently 
+stopped in some other process, use \textit{Run to user space} to get execution back into the debugged process.  You may then use IDA breakpoints.
+
+The IDA step-over function will usually handle page faults and return you to the point after which the page is swapped in.  If you find yourself in
+the kernel, use \textit{Run to user space}.
+
+
+\subsubsection{RESim IDA windows}
+The IDA plugin creates several tabs along side of the IDA \textit{Stack view} window.  
+\begin{itemize}
+\item Bookmarks -- List of bookmarks created by the user (e.g., via right click), or created automatically when reverse tracking data.
+Double-clicking on a bookmark will skip execution to the associated cycle.
+\item stack trace -- The stack trace, as determined by RESim.  You may need to right-click / refresh to see this.  Double-clicking on a item
+will take the \textit{IDA View-EIP} to that address, but has no effect on the current execution cycle.  Note, your previous focus must be in
+the \textit{IDA View-EIP} window, otherwise you may end up changing the address of a \textit{Hex View} window.
+\item data watch -- List of watch marks generated by a trackIO or injectIO (which would be run from the Simics command line).  
+Use right-click / refresh to view these.  Double-click will skip the execution to the associated cycle.
+\end{itemize}
+
+\subsection{Ghidra}
+A preliminay RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
+See that repo's README for installation instructions.  It is assumed that the user has experience with the Ghidra platform.
+
+Use of the Ghidra plugin requires a modified version of gdb, available at
+\url{https://github.com/mfthomps/binutils-gdb}.  The modification causes
+gdb to display responses from gdb "monitor" commands using the same FD as used
+for other gdb command results.  This is needed for Ghidra to see the results of monitor commands, which the plugin
+uses to interact with RESim.
+
+Once the RESimGhidraPlugins extension is installed, start the debugger and organize the RESim windows
+as desired, e.g., by dragging them to other tabbed windows.
+
+Use the RESim / Configure menu options to set the path to your customized gdb; the path to
+the file system root of the target binary, the host:port of your Simics host, and to set the ARM architecture if needed.
+
+The windows described for the IDA plugin are duplicated within the Ghidra plugin.
+
+Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
+the source of a memory location, put the cursor over the operand and right click...
+
+Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_10.2\_DEV/application.log
+
+Ghidra stores its analysis in "project" directories, typically in home.
+
+TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
+at the tunnel (or do copy as part of creating tunnel?.  
+
+
 
 \subsection{Dynamic modifications to memory and topology}
 \label{dmod}
@@ -1037,14 +1167,16 @@ RESim includes a suite of related data tracking functions to replay AFL queue fi
 
 \subsection{Preparing for data injection}
 \label{prepInject}
-The {\tt prepInject} and {\tt prepInjectWatch} command is used to put the simulation in a state suitable for injecting data into an application
+Data injection techniques depend on whether the goal is to inject data into the application buffer, or into a kernel buffer.
+
+The {\tt prepInject} command is used to put the simulation in a state suitable for injecting data into an application
 read buffer, i.e., the named by the application when making a syscall such as recv.  For network traffic, the general steps for this include:
 \begin{itemize}
 \item Run the simulation to a desired state after selecting the target process for debugging, e.g., using {\tt debugProc}.  This state may include
 completion of initialization that may occur while the target process is waiting in the kernel on the target recv.
 \item Create a snapshot.
 \item Prepare a means of sending sample data to the target port.  The purpose of this data is to cause the target to receive it and return.  The
-data itself will be replaced later by injected data.
+data itself will be replaced later by injected data.  The data should not include multiple UDP packets, you want a single read.
 \item Restart RESim and issue the {\tt prepInject} command, providing the FD of the receive socket a name for the new snapshot.
 \item Send the sample data.
 \item RESim will pause the simulation when the data is read and will create a new snapshot.
@@ -1056,7 +1188,8 @@ kernel for data.  The use of ssh and scp can be made safe by executing the {\tt 
 starting {\tt prepInject} but prior to sending data to the target.  That program executes a Simics \textit{magic instruction} that RESim 
 detects and uses to reset the origin for reverse execution during performance of prepInject.  The use of this magic is currently required for all
 cases where the receive call is waiting in the kernel, whether or not ssh is used.  See the {\tt simics/bin/driver-driver.py} program for an example
-of using the magic instruction when sending data from the driver.
+of using the magic instruction when sending data from the driver.  Using the {\tt -d} option will cause it to establish a new origin and will disconnect
+the driver from the network simulation.
 
 
 \subsubsection{Tracking data through pipes}
@@ -1179,7 +1312,7 @@ created by {\tt injectToBB} at {\tt /tmp/bb.io}.
 \item Use the arch-tars.sh utility (edit to name your archive path) to archive the AFL results and the workspace.
 \end{itemize}
 
-The {\\tt -d} option of {\tt findBNT.py} will annotate its output with any data watch marks found in the BB leading to the BNT.  This option uses watch mark data generated
+The {\tt -d} option of {\tt findBNT.py} will annotate its output with any data watch marks found in the BB leading to the BNT.  This option uses watch mark data generated
 using the {\tt runTrack} utility, which runs injectIO on all of the AFL sessions and records all of the watch marks.  This option can be useful when there are a large number
 of BNTs and you want to prioritize those with a higher likelihood of being affected by inputs.
 
@@ -1228,7 +1361,7 @@ to name fuzzing artifcats, so make it meaningful.
 \item Use the {\tt prepInject} command to create a snapshot of the state where data from the FD has been read and user space is being returned to.
 Typically, start the system from scratch and use {\tt debugProc} to debug the desired process.  Then issue the {\tt prepInject} command and
 send the service some data (or wait for some other component to do so.)  The data does not matter -- though make it large enough
-to map any page that might be referenced by the maximum read length.  Update your ini file to reflect
+to map any page that might be referenced by the maximum read length, and do not send multiple UDP packets.  Update your ini file to reflect
 the snapshot name.  See section \ref{partial-reads} if injection into kernel memory is needed.
 \item Assuming you've created a set of input files that follow different paths through the service of interest, 
 reduce them to the minimal number of bytes needed to function -- or skip this step if you think your input files are
@@ -1248,6 +1381,7 @@ in the workspace.
 Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
 value is defined in the {\tt BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
 if the there is not more data to inject into application memory upon hitting the read call address.
+(NOTE: the backstop value is currently shared with the value used with trackIO, and thus may need to change for fuzzing.)
 
 The {\tt HANG\_CYCLES} value determine when a session is considered to be hung, e.g., the program is in an infinite loop.
 Hangs may reflect more than just DoS vulnerabilities, e.g., corruption of a return address might lead to a viable code location
@@ -1333,6 +1467,10 @@ define a {\tt AFL\_PACKET\_FILTER} as a python program to reject AFL data that d
 at a specific offset.  The program must have a {\tt filter(data, packet\_number)} method that returns data to be injected.  
 For example, return nulls if the packet is to be rejected.  The intention is that will yield poor coverage, causing AFL not see new paths.
 Alternately, return an altered packed, e.g., with a computed CRC injected into the data.
+When creating filter modules, you may need to modify the python module search path to include the python distribution, e.g., 
+\begin{verbatim}
+sys.path.insert(0,'/usr/lib/python3/dist-packages')
+\end{verbatim}
 
 \subsection{Address jumpers}
 \label{jumpers}
@@ -1345,7 +1483,8 @@ A {\tt Packet filter} as described above might mitigate such a problem, however 
 have effects beyond the iteration count.  Review of the iterated code should identify whether use of a jumper might affect program
 execution.
 
-These jumpers are only intended for use with code coverage and/or fuzzing are different than those used with the {\tt jumper} command,
+These jumpers are only intended for use with code coverage and/or fuzzing are different than those used with the {\tt jumper} command described
+in \ref{sec:modification},
 which provides more general alterations to execution control flow.
 
 \subsection{Fuzz another library}
@@ -1360,10 +1499,12 @@ parameters to name the 2nd process and FD from which it reads the data.
 
 \subsection{Thread isolation}
 Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
-Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process.  Given the costs
+Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process -- or amongst
+all processes sharing a library that is being tracked.  Given the costs
 of tracking context, often this is the best alternative.  You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
-breakpoints using the {\tt dead=True} parameter.  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
-name of the snapshot from which the session began.  When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
+breakpoints using the {\tt dead=True} parameter (the {\tt -d} flag on runAFL).  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
+name of the snapshot from which the session began.  This may take several minutes to complete.  When it has found no new blocks hit by other threads for 2 minutes, it stores the
+dead zones and exits. When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
 when establishing code coverage.  One symptom of problems with thread isolation is that AFL reports poor stability.
 
 If performance appears to drop way off after a while, consider running with the dead switch again, this time using found paths instead of your seed.  Of course
@@ -1596,6 +1737,18 @@ value to {\tt doBreak} so that it breaks just before the divergence.
 \subsection{Branches not taken}
 See \ref{BNT} and \ref{BNT-fuzz} for workflows related to finding branches not taken.
 
+\subsection{Packaged example with public images}
+See {\tt RESim/simics/examples/network\_file\_system} for an example use of RESim, including IO tracking and fuzzing.
+The README.md in that directory provides instructions for running the example, and for obtaining the disk images
+and binary files used within the example.
+
+\section{Example disk images}
+\label{example-images}
+\subsection{Cyber Grand Challenge Services}
+Vulnerable services from the DARPA Cyber Grand Challenge are available as described in the
+README in {\tt simics/examples/network\_file\_system} in your repo.
+The images described therein are located at: {\tt https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
+
 \section{Implementation strategy}
 \label{implementation}
 This section discusses our approach to implementing RESim, and some implications for the analyst.
@@ -1662,6 +1815,9 @@ driver-driven data.
 
 If you observe non-repeatable crashes, e,g., SEGV, confirm you are not injecting data past the end of a read buffer.
 
+If RESim appears to no longer run, e.g., runAFL just hangs, check that there are no zombie simics processes running.  Use
+the {\tt kill-simics.sh} script to kill them (but do not kill the lmgrd instance).
+
 \section{Data Stores}
 This section describes how RESim stores and accesses different data stores.
 
@@ -1679,7 +1835,9 @@ be on an NFS share so that the same ini file can be used on multiple RESim platf
 
 The idb and hits files will be per-user, stored in a local writable directory relative to path 
 named by the {\tt RESIM\_IDA\_DATA} environment varible.  Files will be copied between IDA
-and RESim platforms using scp.  
+and RESim platforms using scp. Each analyzed program has a subdirectory in the {\tt RESIM\_IDA\_DATA}
+directory.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
+a file with a ".prog" extension that identifies the path to program that was analyzed. 
 
 The hits files are stored as lists of basic block addresses.  When {\tt playAFL} is run the hits
 file includes the name of the target.  Per session hits files are also stored in the AFL output
@@ -1715,7 +1873,7 @@ to avoid redefinitions of the origin that would occur if trackIO were used multi
 \item cycleSeeds -- Populate the AFL seed directory with queue files and manually added files identified in the results of the {\tt dedupeCoverge} utility.
 \item kill-simics -- Sometimes it is the only way.
 \item drive-driver.py -- Send data from a driver computer to a target IP/PORT.  A real network is used to push the data and scripts
-to the driver.  There are many ways to send data to a target computer, and this is an example.
+to the driver.  There are many ways to send data to a target computer, and this is an example.  See the script for syntax of its directives.
 \item 
 \end{itemize}
 
@@ -1765,7 +1923,7 @@ ARM prefetch abort entry for 64-bit cpu is 0xffff0280.  How to find that with ke
 We've subsequently gone back to only relying on Core\_Exception breakpoints.
 
 \section{External tracking of shared object libraries}
-\ref{shared-libraries}
+\label{shared-libraries}
 During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in IDA Pro to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
 synthesizing access to {\tt /proc/$<$pid$>$/map}
 
@@ -1942,6 +2100,10 @@ unless registers are defined for each register value returned by Simics in the '
 The IDA debugger in 7.2 uses thread ID 1 when performing the vCont GDB operation.  Hex-rays modified the IDA gdb plugin to
 use ID 0, thereby fixingthe problem.
 
+The block coloring in IDA fails sometimes, possibly when the function includes unmapped pages.  The coloring works fine prior
+to attaching the debugger.  After attaching the debugger, some blocks revert to their default color.  Running the colorBlocks.py script
+manually from IDA's recent scripts will usually correct the problem.  But by that time you already know something is messed up.
+
 \section{Simics issues and work arounds}
 \begin{itemize}
 \item New-style Simics console management causes an X11 error: ''The program 'simics-common' received an X Window System error.''
@@ -1967,6 +2129,13 @@ Haps maintained by the revToCall module.  Programs can be pathological with thei
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
 
+Pay attention to the {\tt BACK\_STOP\_CYCLES} environment variable in the ini.  A large value may be needed during initial testing,
+but that may need to be greatly reduced for fuzzing.
+
+Some system may take a long time to create the process you are interested in.  This may be exacerbated by monitoring such as occurs during
+a runTo or debugProc (e.g., some script is in a loop failing on create of a process, which may happen millions of times.)  Consider using
+runToCycle to run forward to a desired cpu cycle with the least amount of overhead.
+
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
 the file, and run with realtime enabled.  After the install, use save-persistent-state, and then rename the resulting craff as
@@ -1977,7 +2146,6 @@ When using real networks, configure the image routing and resolv.conf, using you
   route add default gw 10.10.0.1
   echo nameserver 10.10.0.1 > /etc/resolv.conf
 \end{verbatim}
-
 
 
 \section{Implementation notes}
@@ -2012,6 +2180,14 @@ Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap fun
 set breakpoints...
 
 sscanf data tracking not right for some arm, if 1 or 2 values, r2 and r3 will point to where those go rather than using a pointer list.
+
+The playAFL function could disable reverse execution, also have it set jumpers to not clear bookmarks.
+
+Confirm crashReport uses jumpers.
+
+Add read counts to data watches.
+
+dMod fails when traceAll is set?
 
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
@@ -2060,26 +2236,66 @@ Similarly, manual BNT analysis might yield crashes.  Do not let that stop you fr
 yield new code paths without crashing, since these are helpful to fuzzing and coverage.  Crashes are good, but sometimes they are dead ends.  So use findBB to locate other
 inputs besides the one picked by injectToBB.
 
-\subsection{prepInject with recv waiting in the kernel}
-Done.  Remove.
-\newline
-When preparing for injectIO or fuzzing, the target process may blocked in the kernel on the recv call.  This implies we do not know IP of the application
-when the call was made (though that may be guessed).  It also complicates recording of original buffer content, which must be done before data is received,
-e.g., at the very start of prepInject, or after a skip to the origin.  However, we have no guarantee of having the proper context prior to receipt of the data.
-(Also, skipping to origin will bleed real network data into the simulation and thus break reverse execution.)
-We could record the buffer physical address during revToCall, but that does not guarantee the page content is correct for the desired context.  Even if we break on
-scheduling of the target process, can we guarantee some kernel helper had not written data to the buffer?
-
-We will assume that no data enters the receive buffer untilthe target pid is scheduled.  The Simics magic instruction is used to establish a safe origin
-once the driver is done interacting with ssh.  The prepInject will then skip to this new origin and run forward to the scheduling of the target pid.
 
 \subsection{Skipping over kernel calls}
 The data injection scheme catches kernel reads and skips over them while injecting data.  This affects timing/scheduling because the kernel never
 blocks.
 
+\subsection{Data Watch ntohl}
+The ntohl function is common in some programs.  Consider treating it results as a data copy if easy to find where in memory it lands. e.g.,
+\begin{verbatim}
+call    _ntohl
+0808A7E0 add     esp, 10h
+0808A7E3 mov     edx, eax
+0808A7E5 mov     eax, [ebp+arg_0]
+0808A7E8 mov     [eax+68h], edx
+\end{verbatim}
+
+\subsection{More on kernel data buffers}
+On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
+This option, kbuf=True, requires drive-driver.sh to send as large a data stream as you wish to support for future injectIO or AFL sessions, and this data stream
+must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
+kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
+application memory location that will receive the first byte from the next kernel buffer.
+
+And fuzzing design in general... In addition to basic problems that can be solved by filters, sometimes fuzzed data does not conform to system state values.
+For example, previously received data may contain a crc and/or length of the data to be fuzzed.  Jumpers around crc calculations and memory modification should
+be avoided simply because it requires code analysis to determine completeness, e.g., is that the only reference to the predetermined code length?  In general,
+it is preferable to start the fuzzing at the injest of the earlier data, e.g., by using a filter.
+\subsection{Data watch ad-hoc copies}
+Treated as an ad-hoc copy?:
+\begin{verbatim}
+mov x, buf
+push x
+call foo
+mov bar, x
+\end{verbatim}
+
+\subsection{UDP without headers}
+The injectIO and AFL design for UDP relies on their being UDP headers to break data into multiple packets.
+
+\subsection{TCP conversations and fuzzing}
+Consider a case of fuzzing TCP.  Assume the target is a client and the driver is a server.
+The driver component is directed to run a server that accepts on the port and sends a given file of data.
+
+You use the kbuf option to trackIO and then prepInjectWatch which gives you snapshot on the
+call to recv with lots of data in the kernel buffers.
+
+Fuzzing yields the start of a conversation, i.e., where the target makes a 2nd call to read (or poll/select).  It
+is assumed the first call to read had a length larger than the count.  (Find a way to distinguish a conversation from
+just reading more data.  For example, one or more writes to the socket between the reads.)
+
+We'd like to use this converstation start to advance system state, and then start fuzzing with the next read.  Use a 
+multifile driver directive to force a read between the two writes.
+
+\subsection{Fuzzing crash detection}
+While fuzzing, we want to detect and report crashes and or process exits.
+
+
 \section{Driver platforms}
 \label{driver}
 This appendix describes the driver image used internally at: /eems\_images/ubuntu\_img/driver/driver.disk.hd\_image.craff
+The driver is also available at \url{https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
 
 The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.ini} example has the Simics Agent pre-installed.  The
 {\tt driver-script.sh} in that directory can be copied and modified within your workspace.  The driver will download that shell script and execute
@@ -2189,11 +2405,15 @@ trace0.start
 \item The Simics command line uses standard bash history.  The up arrow can save much time and syntax problems.
 
 \item Capture command line output (redirect a copy) to a file using the output-file-start / output-file-stop commands
+(start-command-line-capture replaced that).
 
 \item {list-port-forwarding-setup} to view current port forwarding
 \end{itemize}
 
 \section{Injecting to kernel buffers}
+TBD integrate all injection sections, and clarify different approaches: ioctl; select / read; x86 buffers
+
+
 The injectIO function is hamstrung if the application makes many single-byte read calls, because writing data into the
 simulation forces a reset of the orgin used for reverse execution.  This may also arise when protocols are implented
 with buffered reads, e.g., 80 bytes at a time.
@@ -2212,9 +2432,10 @@ on the intervening blocking.  Altering kernel buffer pointers avoids some of tho
 for use by AFL or data tracking must then include the address of the kernel buffer, and the addresses of the two pointer
 values that the kernel references when responding to read calls.  Each are found by using reverse data tracking within the
 prepInjectWatch command, which is intended to be used after the analyst does a trackIO and observes the system calls.
-Current support assumes a call to ioctl followed by a read.  The snapshot will be made prior to the call to ioctl.  RESim
+Current support assumes a call to ioctl followed by a read, or use of select prior to a read.  The snapshot will be made prior to the call to ioctl, or
+prior to the read.  RESim
 back traces the return value from ioctl to get the pointer addresses, and it backtraces the read data to get the kernel
-read buffer.  The WriteData module then uses these addresses to modify the kernel for each data injection.
+read buffer.  The WriteData module then uses these addresses to modify the kernel buffer for each data injection.
 
 
 \section{Troubleshooting}
@@ -2265,6 +2486,9 @@ Add a "value" field to the bookmark printout to make it more obvious when a perm
 \subsection{Fork exit}
 A fork followed by an exit may result in the exit occuring before the child is ever scheduled.
 
+\subsection{Fuzzing}
+If the number of paths seems stuck low, look at the cycle backstops.  If the application will loop looking for more data, that will lead to a perceived
+hang.  Use the STOP\_ON\_READ=True to cause the session to stop when the application cycles back to the read.  This has obvious limitations.
 \subsection{Fuzzing TCP}
 Programs may be sensitive to packetizing that occurs under TCP.  All testing and operations may have occurred with
 complete data transfers in which each read call returns all data needed for a transaction.  If the fuzzing session
@@ -2283,6 +2507,14 @@ The latter rquires at least two computers in the simulation.
 When TCP data is injected into kernel buffers, the state of the kernel becomes corrupted, thus preventing running forward, e.g., to a new checkpoint.
 In order to change state of the system, revert to a running snapshot and send the crafted data via a driver.  Again, do not try to move a prepInjectWatch
 checkpoint forward.
+
+\subsection{Your target process is not scheduled in the snapshot}
+Consider debugging a service that loads before you want to create a snapshot, e.g., you wish to wait for other processes to start.
+You wish to debug the target's data consumption and you know it will hang on a select or a read. So after debugProc, 
+you run a while without giving it data and then create a snapshot.  When the snapshot
+is restored, your target process is not scheduled, and thus the debugSnap function will appear to hang until you provide data that causes your
+target to be scheduled.  This is expected.
+
 \end{appendices}
 \end{document}
 

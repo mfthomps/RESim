@@ -57,7 +57,7 @@ class stopHap():
             SIM_run_command('disable-vmp')
             self.lgr.debug('stopHap disabled VMP & network')
         
-        SIM_run_alone(SIM_run_command, 'continue')
+        SIM_continue(0)
         self.lgr.debug('return from runAlone')
 
     def stopCallback(self, dum, one, two, three):

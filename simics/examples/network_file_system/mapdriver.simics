@@ -1,0 +1,6 @@
+echo "driver"
+connect-real-network 10.0.0.140 switch0
+
+echo "target server"
+connect-real-network 10.0.0.91 switch0
+

@@ -83,6 +83,12 @@ class reverseToAddr():
         self.stop_hap = None 
         RES_delete_breakpoint(self.the_break)
         self.the_break = None
+        origin = self.top.getFirstCycle()
+        if cpu.cycles == origin:
+            self.lgr.debug('reverseToAddr stopHap hit origin cycle')
+            self.context_manager.setIdaMessage('Could not reverse past origin cycle')
+            self.top.skipAndMail()
+            return
  
         self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
         #self.top.gdbMailbox('0x%x' % eip)

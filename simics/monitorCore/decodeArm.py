@@ -33,6 +33,12 @@ def isIndirect(reg):
 def regIsPart(op, reg):
     return op.lower() == reg.lower()
 
+def regIsPartList(reg1, reg2_list):
+    for reg2 in reg2_list:
+        if regIsPart(reg1, reg2):
+            return True
+    return False
+
 def isByteReg(reg):
     return False
 
@@ -211,3 +217,23 @@ def inBracket(op):
     res = re.find(r'\[.*?\]', op) 
     return res
 
+def isBranch(cpu, instruct):
+    if instruct.startswith('b') or isCall(cpu, instruct):
+        return True
+    else:
+        return False
+
+def isDirectMove(instruct):
+    retval = False
+    if getMn(instruct).startswith('mov'): 
+        op2, op1 = getOperands(instruct)
+        try:
+            dumb = int(op2)
+            retval = True
+        except:
+            try:
+                dumb = int(op2, 16)
+                retval = True
+            except:
+                pass
+    return retval

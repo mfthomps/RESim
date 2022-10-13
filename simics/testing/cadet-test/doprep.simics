@@ -9,7 +9,7 @@ script-branch "trackIO" {
    wait-for-shell "sleep 20"
    echo "doprep.simics slept 20"
    !./findWindow.sh "cadet01-tst"
-   !xdotool type "@cgc.prepInjectWatch(0, 'cadetread')"
+   !xdotool type "@cgc.prepInjectWatch(1, 'cadetread')"
    !xdotool key Return
 }
 @cgc.trackIO(4)

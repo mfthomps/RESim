@@ -41,7 +41,7 @@ def ioHandler(read_array, stop, lgr):
                 fh.write(data+b'\n')
                    
 
-def handleClose(resim_procs, read_array, remote, fifo_list, lgr):
+def handleClose(resim_procs, read_array, remote, lgr):
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads, lgr))
     io_handler.start()
@@ -81,14 +81,19 @@ def runPlay(args, lgr):
         exit(1)
 
     glist = glob.glob('resim_*/')
-
+    if len(glist) == 0:
+        glist = ['./']
     if args.tcp:
         os.environ['ONE_DONE_PARAM']='tcp'
     else:
         os.environ['ONE_DONE_PARAM']='udp'
+    if args.only_thread:
+        os.environ['ONE_DONE_PARAM2']='True'
+    
+    os.environ['ONE_DONE_PARAM3']=args.program
+         
 
     read_array = []
-    fifo_list = []
     if len(glist) > 0:
         lgr.debug('Parallel, doing %d instances' % len(glist))
         print('Parallel, doing %d instances' % len(glist))
@@ -97,14 +102,6 @@ def runPlay(args, lgr):
                 continue
             os.chdir(instance)
 
-            try:
-                os.remove('resim_ctl.fifo')
-            except:
-                pass
-            try:
-                os.mkfifo('resim_ctl.fifo')
-            except OSError as e:
-                lgr.debug('fifo create failed %s' % e)    
             resim_ini = args.ini
             cmd = '%s %s -n' % (resim_path, resim_ini)
             lgr.debug('cmd is %s' % cmd)
@@ -112,24 +109,22 @@ def runPlay(args, lgr):
             resim_procs.append(resim_ps)
             read_array.append(resim_ps.stdout)
             read_array.append(resim_ps.stderr)
-            if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
-                lgr.debug('open fifo %s' % os.path.abspath('resim_ctl.fifo'))
-                fh = os.open('resim_ctl.fifo', os.O_WRONLY)
-                lgr.debug('back from open fifo')
-                fifo_list.append(fh)
-            else:
-                lgr.debug('no fifo found')
             lgr.debug('created resim')
             os.chdir(here)
 
-        do_restart = handleClose(resim_procs, read_array, args.remote, fifo_list, lgr)
+        do_restart = handleClose(resim_procs, read_array, args.remote, lgr)
         cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
         all_hits = []
         for hit_file in cover_list:
             if not os.path.isfile(hit_file):
                 print('did not find %s, old unique file?' % hit_file)
                 continue
-            coverage = json.load(open(hit_file))
+            try:
+                coverage = json.load(open(hit_file))
+            except:
+                with open(hit_file, 'w'):
+                    pass
+                continue 
             print('do hit file %s' % hit_file)
             for hit in coverage:
                 hit_i = int(hit)
@@ -143,6 +138,8 @@ def runPlay(args, lgr):
             fh.write(s)
         
         print('all hits total %d' % len(all_hits))
+    else:
+        print('Nothing to do.')
     return do_restart
 
 def main():
@@ -152,13 +149,14 @@ def main():
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
+    parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
         pass
     args = parser.parse_args()
     do_restart = runPlay(args, lgr)
-    time.sleep(20)
+    #time.sleep(20)
     if do_restart:
         print('restarting resim in 10')
         os.remove('/tmp/resim_restart.txt')

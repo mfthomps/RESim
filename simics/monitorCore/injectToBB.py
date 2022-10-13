@@ -30,8 +30,11 @@ binpath = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin')
 sys.path.append(binpath)
 import findBB
 import applyFilter
+import resimUtils
 class InjectToBB():
     def __init__(self, top, bb, lgr):
+        unfiltered = '/tmp/bb.io'
+        filtered = '/tmp/bb_filtered.io'
         self.bb = bb
         self.top = top
         self.lgr = lgr
@@ -41,21 +44,43 @@ class InjectToBB():
         self.lgr.debug('InjectToBB bb: 0x%x target is %s' % (bb, target))
         flist = findBB.findBB(target, bb, quiet=True)
         self.inject_io = None
-        if len(flist) > 0:
-            first = flist[0]
-            self.lgr.debug('InjectToBB inject %s' % first)
-            dest = os.path.join('/tmp', 'bb.io')
+        self.top.debugSnap()
+        prog = self.top.getFullPath()
+        basic_block = resimUtils.getOneBasicBlock(prog, bb)
+        if basic_block is None:
+            print('ERROR getting basic block for address 0x%x prog %s' % (bb, prog)) 
+            return
+        good_bb = None
+        qfile = None 
+        for f in flist:
+            #print('q file %s, bbstart 0x%x' % (f, basic_block['start_ea'])) 
+            trackfile = f.replace('queue', 'trackio')
+            if not os.path.isfile(trackfile):
+                continue
+            mark = findBB.getWatchMark(trackfile, basic_block)
+            if mark is not None:
+                self.lgr.debug('injectToBB, found data ref for %s at 0x%x' % (f, mark))
+                good_bb = mark
+                qfile = f
+                print('Will inject %s, has a data ref at 0x%x' % (f, mark))
+                break 
+        if good_bb is None and len(flist)>0:
+            qfile = flist[0]
+            print('Will inject %s' % qfile)
+        if qfile is not None:
+            self.lgr.debug('InjectToBB inject %s' % qfile)
             self.top.setCommandCallback(self.doStop)
-            self.inject_io = self.top.injectIO(first, callback=self.doStop, break_on=bb, go=False)
+            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
-                with open(first, 'rb') as fh:
+                with open(qfile, 'rb') as fh:
                     data = bytearray(fh.read())
                 new_data = afl_filter.filter(data, None)
-                with open(dest, 'wb') as fh:
+                with open(filtered, 'wb') as fh:
                     fh.write(new_data)
-                self.inject_io.go()
+            shutil.copyfile(qfile, unfiltered)
+            self.inject_io.go()
        
         else:
             print('No input files found to get to bb 0x%x' % bb)
@@ -64,6 +89,7 @@ class InjectToBB():
         self.lgr.debug('InjectToBB doStop')
         self.top.stopDataWatch()
         SIM_run_alone(self.inject_io.delCallHap, None)
+        SIM_run_alone(self.top.setDebugBookmark,'injectToBB')
         status = SIM_simics_is_running()
         if status:
             self.top.stopAndGo(self.gobb)
@@ -74,4 +100,4 @@ class InjectToBB():
         if self.inject_io is None:
             return
         self.top.setCommandCallback(None)
-        print('Data file copied to /tmp/bb.io (and filtered if there was one).')
+        print('Data file copied to /tmp/bb.io (and bb_filtered.io if there was a filter).')

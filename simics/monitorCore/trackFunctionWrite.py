@@ -22,6 +22,9 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
+'''
+Record data written by a function from its invocation until its exit.
+'''
 from simics import *
 import memUtils
 import writeMarks
@@ -47,13 +50,16 @@ class TrackFunctionWrite():
         self.ret_addr = None 
         self.lgr = lgr 
         self.context_manager = context_manager
+        ''' Display merged read marks and write marks? '''
+        self.show_compare = False
         self.writeMarks = writeMarks.WriteMarks(mem_utils, cpu, lgr)
 
-
-    def trackFunction(self, pid, fun, ida_funs, read_watch_marks):
+    
+    def trackFunction(self, pid, fun, ida_funs, read_watch_marks, show_compare):
         self.pid = pid
         self.fun = fun
         self.read_watch_marks = read_watch_marks
+        self.show_compare = show_compare
         start, end = ida_funs.getAddr(fun)
         if start is None:
             self.lgr.error('TrackFunctionWrite, no function found: %s' % fun)         
@@ -162,6 +168,7 @@ class TrackFunctionWrite():
 
         for higher in sorted_by_lower_bound:
             if not merged:
+                print('not merged? eh? appending 0x%x-0x%x' % higher)
                 merged.append(higher)
             else:
                 lower = merged[-1]
@@ -169,8 +176,10 @@ class TrackFunctionWrite():
                 # we know via sorting that lower[0] <= higher[0]
                 if higher[0] <= lower[1]:
                     upper_bound = max(lower[1], higher[1])
+                    print('replacing 0x%x-0x%x with 0x%x-0x%x' % (merged[-1][0], merged[-1][1], lower[0], upper_bound))
                     merged[-1] = (lower[0], upper_bound)  # replace by merged interval
                 else:
+                    print('higher[0] > lower[1] appending 0x%x-0x%x' % higher)
                     merged.append(higher)
         return merged
 
@@ -183,12 +192,15 @@ class TrackFunctionWrite():
                 item = (watch_mark['start'], watch_mark['end'])
                 range_list.append(item)
             else:
-                item = (watch_mark['start'], watch_mark['start']+watch_mark['size'])
+                item = (watch_mark['start'], watch_mark['start']+watch_mark['size']-1)
                 range_list.append(item)
         merged = self.mergeIntervals(range_list)
+        #print('Write ranges of len >8')
+        print('Write ranges  >8')
         for start,end in merged:
-            if end > (start+8):
-                print('0x%x - 0x%x' % (start, end))
+            print('0x%x - 0x%x len: %d' % (start, end, (end-start)+1))
+            #if end > (start+8):
+            #    print('0x%x - 0x%x' % (start, end))
         
         if len(merged) == 1:
             addr, end = merged[0]

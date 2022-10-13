@@ -1,7 +1,7 @@
 from simics import *
 import cli
 class InstructTrace():
-    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_pid=None):
+    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_pid=None, just_kernel=False):
         self.top = top
         self.lgr = lgr
         if just_pid is None:
@@ -18,6 +18,7 @@ class InstructTrace():
         self.tracer = SIM_get_object(tracer_name)
         self.all_proc = all_proc
         self.kernel = kernel
+        self.just_kernel = just_kernel
         self.watch_threads = watch_threads
         self.just_pid = just_pid
         print('tracer is %s' % tracer_name)
@@ -27,7 +28,9 @@ class InstructTrace():
         #cmd = '%s->file=%s' % (tracer_name, tfile)
         SIM_run_command(cmd)
         print('begin, or what?')
-        if not kernel:
+        if just_kernel:
+            self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, None)
+        elif not kernel:
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
         self.lgr.debug('InstructTrace starting with pid:%d, watch_threads: %r' % (pid, watch_threads))
 
@@ -50,18 +53,29 @@ class InstructTrace():
     def modeChanged(self, want_pid, one, old, new):
         this_pid = self.top.getPID()
         self.lgr.debug('mode changed %d' % (this_pid))
-        if want_pid != this_pid:
-            if self.watch_threads:
-                if not self.top.amWatching(this_pid):
-                    self.lgr.debug('mode changed wrong pid watching threads, wanted %d got %d' % (want_pid, this_pid))
+        if not self.just_kernel:
+            if want_pid != this_pid:
+                if self.watch_threads:
+                    if not self.top.amWatching(this_pid):
+                        self.lgr.debug('mode changed wrong pid watching threads, wanted %d got %d' % (want_pid, this_pid))
+                        return
+                elif not self.all_proc:
+                    self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
                     return
-            elif not self.all_proc:
-                self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
-                return
         cpl = self.top.getCPL()
-        if new == Sim_CPU_Mode_Supervisor:
-            self.lgr.debug('instructTrace into kernel, stop trace')
-            SIM_run_alone(self.stop, None)
+        if not self.just_kernel:
+            if new == Sim_CPU_Mode_Supervisor:
+                self.lgr.debug('instructTrace into kernel, stop trace')
+                SIM_run_alone(self.stop, None)
+            else:
+                self.lgr.debug('instructTrace out of  kernel, start trace')
+                SIM_run_alone(self.start, None)
+
         else:
-            self.lgr.debug('instructTrace out of  kernel, start trace')
-            SIM_run_alone(self.start, None)
+            if new == Sim_CPU_Mode_Supervisor:
+                self.lgr.debug('instructTrace into kernel, start trace')
+                SIM_run_alone(self.start, None)
+            else:
+                self.lgr.debug('instructTrace out of  kernel, stop trace')
+                SIM_run_alone(self.stop, None)
+

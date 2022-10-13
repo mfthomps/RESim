@@ -31,12 +31,15 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr):
     here = os.getcwd()
     workspace = os.path.basename(here)
     log = '/tmp/resim-%s.log' % workspace
+    if only_thread:
+        os.environ['ONE_DONE_PARAM2']='True'
     with open(log, 'wb') as fh:
         for f in afl_list:
+            os.chdir(here)
             os.environ['ONE_DONE_PATH'] = f
             base = os.path.basename(f)
             tdir = os.path.dirname(os.path.dirname(f))
@@ -46,6 +49,9 @@ def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
             except:
                 pass
             trackoutput = os.path.join(tdir, 'trackio', base)
+            if os.path.isfile(trackoutput):
+                lgr.debug('path exists, skip it %s' % trackoutput)
+                continue
             try:
                 os.open(trackoutput, os.O_CREAT | os.O_EXCL)
             except:
@@ -55,8 +61,9 @@ def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
             os.environ['ONE_DONE_PARAM'] = trackoutput
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             cmd = '%s %s -n' % (resim_path, resim_ini)
-            print("starting monitor without UI cmd: %s" % cmd)
-            lgr.debug("%s starting monitor without UI cmd: %s" % (workspace, cmd))
+            now_here = os.getcwd()
+            print("starting monitor from %s without UI cmd: %s" % (now_here, cmd))
+            lgr.debug("%s starting monitor from %s without UI cmd: %s" % (now_here, workspace, cmd))
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
             resim_ps.wait()
             if stop_threads():
@@ -64,7 +71,7 @@ def oneTrack(afl_list, resim_path, resim_ini, stop_threads, lgr):
                 lgr.debug('oneTrack %s sees stop, exiting.' % workspace)
                 return
         
-        print('done')
+        print('done with %s' % workspace)
 
 def main():
     global stop_threads
@@ -73,6 +80,7 @@ def main():
     parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
+    parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
     
     args = parser.parse_args()
     resim_ini = args.ini
@@ -110,17 +118,18 @@ def main():
     signal.signal(signal.SIGTERM, handler)
     here = os.getcwd()
     if len(glist) > 0: 
+        print('Parallel, doing %d instances' % len(glist))
         for instance in glist:
             if not os.path.isdir(instance):
                 continue
             os.chdir(instance)
             lgr.debug('start oneTrack from workspace %s' % instance)
-            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr))
             thread_list.append(track_thread)
             track_thread.start()
             os.chdir(here)
     else:
-        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, lambda: stop_threads, lgr))
+        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr))
         thread_list.append(track_thread)
         track_thread.start()
    

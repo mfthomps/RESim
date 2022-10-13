@@ -12,7 +12,7 @@ import json
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -32,8 +32,11 @@ class PlayAFL():
         self.target = target
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
+        self.afl_list = []
         ''' If parallel, the all_hits will not be tracked or written.  TBD to that separately.'''
         self.parallel = parallel
+        ''' Only track current thread '''
+        self.only_thread = only_thread
         pad_env = os.getenv('AFL_PAD') 
         if pad_env is not None:
             try:
@@ -56,7 +59,10 @@ class PlayAFL():
             ''' single file to play '''
             self.target = 'oneplay'
             relative = target[(len(self.afl_dir)+1):]
-            self.afl_list = [relative]
+            if len(relative.strip()) > 0:
+                self.afl_list = [relative]
+            else:
+                self.afl_list = [target]
             self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
         else:
             if not crashes:
@@ -65,6 +71,7 @@ class PlayAFL():
                 self.afl_list = aflPath.getTargetQueue(target, get_all=True)
                 if len(self.afl_list) == 0:
                     print('No queue files found for %s' % target)
+                    self.lgr.debug('playAFL No queue files found for %s' % target)
                     return
             else:
                 self.afl_list = aflPath.getTargetCrashes(target)
@@ -80,10 +87,18 @@ class PlayAFL():
         self.addr = None
         self.in_data = None
         #self.backstop_cycles =   100000
-        self.backstop_cycles =   900000
-        bsc = os.getenv('BACK_STOP_CYCLES')
-        if bsc is not None:
-            self.backstop_cycles = int(bsc)
+        if afl_mode:
+            if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
+                self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
+                self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+            else:
+                self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
+                self.backstop_cycles =   1000000
+        else:
+            self.backstop_cycles =   900000
+            bsc = os.getenv('BACK_STOP_CYCLES')
+            if bsc is not None:
+                self.backstop_cycles = int(bsc)
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 0
@@ -107,13 +122,6 @@ class PlayAFL():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         
         self.snap_name = snap_name
-        self.resim_ctl = None
-        if resimUtils.isParallel():
-            self.lgr.debug('playAFL found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
-            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
-            self.lgr.debug('playAFL back from open')
-        else: 
-            self.lgr.debug('playAFL: Not a parallel run, or playAFL did NOT find resim_ctl.fifo')
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
@@ -123,8 +131,11 @@ class PlayAFL():
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
         self.physical=False
         if self.coverage is not None:
+            full_path = None
+            if fname is not None:
+                full_path = self.top.getFullPath(fname)
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone)
+               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=full_path)
             self.physical = True
             if linear:
                 self.physical = False
@@ -133,29 +144,41 @@ class PlayAFL():
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
 
-            full_path = self.coverage.getFullPath()
-            full_path = os.path.abspath(full_path)
+            if True:
+                ''' TBD, multple writers?'''
+                full_path = self.coverage.getFullPath()
+                full_path = os.path.abspath(full_path)
     
-            hits_path = self.coverage.getHitsPath()+'.prog'
-            parent = os.path.dirname(os.path.abspath(hits_path))
-            print('parent is %s' % parent)
-            try:
-                os.makedirs(parent)
-            except:
-                pass
-            with open(hits_path, 'w') as fh:
-                fh.write(full_path+'\n')
-                fh.write(self.cfg_file+'\n')
-            #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
+                hits_path = self.coverage.getHitsPath()+'.prog'
+                self.lgr.debug('create prog file at path: %s' % hits_path)
+                parent = os.path.dirname(os.path.abspath(hits_path))
+                print('parent is %s' % parent)
+                try:
+                    os.makedirs(parent)
+                except:
+                    pass
+                try:
+                    fh = open(hits_path, 'x')
+                    fh.write(full_path+'\n')
+                    fh.write(self.cfg_file+'\n')
+                except:
+                    self.lgr.debug('create failed (already exists?) at path: %s' % hits_path)
+                    pass
+                    #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
         hang_cycles = 90000000
         hang = os.getenv('HANG_CYCLES')
         if hang is not None:
             hang_cycles = int(hang)
         self.backstop.setHangCallback(self.hangCallback, hang_cycles)
-
+        self.initial_cycle = cpu.cycles
 
     def go(self, findbb=None):
+        if len(self.afl_list) == 0:
+            print('Nothing in afl list')
+            self.lgr.debug('Nothing in afl list')
+            self.top.quit()
+            return
         self.lgr.debug('playAFL go')
         self.bnt_list = []
         self.index = -1
@@ -168,20 +191,21 @@ class PlayAFL():
         SIM_break_simulation('hang')
 
     def goAlone(self, clear_hits):
-        self.lgr.debug('playAFL goAlone')
         self.current_packet=1
         self.index += 1
+        self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d' % (len(self.afl_list), self.index))
         done = False
         if self.target != 'oneplay':
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
-                #self.lgr.debug('playAFL goAlone file %s' % fname)
+                self.lgr.debug('playAFL goAlone file %s' % fname)
                 ''' python 2 does not have FileExistsError,fly blind '''
                 try:
                     os.open(fname, os.O_CREAT | os.O_EXCL)
                     done = True
                 except:
+                    self.lgr.debug('playAFL goAlone did not get exclusive create for file at %s' % fname)
                     if not self.parallel:
                         try:
                             hits_json = json.load(open(fname))
@@ -200,10 +224,28 @@ class PlayAFL():
                 if clear_hits:
                     self.coverage.stopCover() 
                     self.coverage.doCoverage(no_merge=True, physical=self.physical) 
-            if self.orig_buffer is not None:
-                #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #if self.orig_buffer is not None:
+            #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
             full = os.path.join(self.afl_dir, self.afl_list[self.index])
+            if not os.path.isfile(full):
+                self.lgr.debug('No file at %s, non-parallel file' % full)
+                full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
+            if not os.path.isfile(full):
+                self.lgr.debug('No file at %s, try local file' % full)
+                full = self.afl_list[self.index]
+                if not os.path.isfile(full):
+                    self.lgr.debug('No file at %s, try basename' % full)
+                    full = os.path.basename(full)
+                    if not os.path.isfile(full):
+                        self.lgr.debug('No local file at %s, either, bail' % full)
+                        print('Could not find file for %s' % full)
+                        self.top.quit()
+                        return
+                else:
+                    self.lgr.debug('Using local file at: %s' % full)
+            
             with open(full, 'rb') as fh:
                 if sys.version_info[0] == 2:
                     self.in_data = bytearray(fh.read())
@@ -212,11 +254,11 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
             self.afl_packet_count = self.packet_count
         
-            if self.orig_buffer is not None:
-                ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
-                    references data past the end of what is received. '''
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
-                self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
+            #if self.orig_buffer is not None:
+            #    ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
+            #        references data past the end of what is received. '''
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #    self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
             if self.write_data is None:
@@ -243,6 +285,7 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone now continue')
             SIM_run_command('c')
         else:
+            self.lgr.debug('playAFL did all sessions.')
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
                 hits = self.coverage.getHitCount()
@@ -295,6 +338,10 @@ class PlayAFL():
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
         fname = self.getHitsPath(self.index)
+        if not os.path.isfile(fname):
+            self.lgr.debug('playAFL record hits, assume ad-hoc path')
+            print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
+            fname = '/tmp/playAFL.hits'
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             json.dump(hit_bbs, fh) 
@@ -306,6 +353,10 @@ class PlayAFL():
 
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('playAFL in stopHap')
+        if self.cpu.cycles == self.initial_cycle:
+            self.lgr.debug('playAFL stopHap, but did not get anywhere, continue?')
+            SIM_run_alone(SIM_continue, 0)
+            return
         if self.stop_hap is not None:
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
@@ -319,6 +370,7 @@ class PlayAFL():
                     self.hit_total = hits 
                     self.lgr.debug('Found %d new hits' % delta)
                 hit_bbs = self.coverage.getBlocksHit()
+                self.lgr.debug('playAFL stophap gtBlocksHit returned %d hits' % len(hit_bbs))
                 if self.findbb is not None and self.index < len(self.afl_list):
                     self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:

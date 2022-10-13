@@ -130,8 +130,10 @@ def getAFLCoverageList(target, get_all=False, host=None):
         #glist = glob.glob(glob_mask)
         if len(glist) == 0:
             ''' single instance '''
-            glob_mask = '%s/coverage/id:*,src*' % (afl_dir)
-            glist = glob.glob(glob_mask)
+            #glob_mask = '%s/coverage/id:*,src*' % (afl_dir)
+            #glist = glob.glob(glob_mask)
+            glob_mask = '%s/%s//coverage/id:*' % (afl_path, target)
+            glist = [f for f in glob.glob(glob_mask) if 'src' in f or 'orig' in f]
         else:
             ''' this is where manual adds store their coverage '''
             manual = os.path.join(afl_dir, 'coverage')
@@ -190,7 +192,7 @@ def getTargetQueue(target, get_all=False, host=None):
         else:
             qdir = os.path.join(afl_dir, 'queue')
             if os.path.isdir(qdir):
-                afl_list = [f for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
+                afl_list = [os.path.join(qdir, f) for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
         manual = os.path.join(afl_dir, 'manual')
         if os.path.isdir(manual):
             manual_list = os.listdir(manual)
@@ -211,7 +213,7 @@ def getTargetCrashes(target):
     else:
         cdir = os.path.join(afl_dir, 'crashes')
         if os.path.isdir(cdir):
-            afl_list = [f for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
+            afl_list = [os.path.join(cdir, f) for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
     return afl_list
 
 def getTargetPath(target):

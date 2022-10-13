@@ -13,13 +13,14 @@ will include the address of the kernel buffer, and the kernel pointers
 used ot calculate the ioctl return value.
 '''
 class PrepInjectWatch():
-    def __init__(self, top, cpu, cell_name, mem_utils, dataWatch, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, dataWatch, kbuffer, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
         self.top = top
         self.dataWatch = dataWatch
         self.lgr = lgr
         self.mem_utils = mem_utils
+        self.kbuffer = kbuffer
         self.snap_name = None
         self.len_buf = None
         self.fd = None
@@ -29,11 +30,17 @@ class PrepInjectWatch():
         self.read_mark = None
         self.k_start_ptr = None
         self.k_end_ptr = None
+        self.orig_buffer = None
+        self.user_addr = None
         if cpu.architecture == 'arm':
             self.decode = decodeArm
             self.lgr.debug('setup using arm decoder')
         else:
             self.decode = decode
+        if self.kbuffer is not None:
+            self.lgr.debug('PrepInjectWatch got kbuffer')
+        else:
+            self.lgr.debug('PrepInjectWatch NO kbuffer')
 
 
     def doInject(self, snap_name, watch_mark):
@@ -45,24 +52,35 @@ class PrepInjectWatch():
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
-        #if type(mark.mark) is watchMarks.CallMark:
-        if isinstance(mark.mark, watchMarks.CallMark):
-            self.lgr.debug('doInject is call mark')
-            if 'ioctl' in mark.mark.getMsg():
-                self.len_buf = mark.mark.recv_addr
-                self.lgr.debug('is ioctl len_buf is 0x%x' % self.len_buf)
-                self.ioctl_mark = watch_mark
-                self.read_mark = watch_mark+1           
- 
-                ''' Try to reverse and find where kernel keeps count data ''' 
-                self.top.revTaintAddr(mark.mark.recv_addr, kernel=True, prev_buffer=True, callback=self.handleDelta)
-
-            else:
-                self.lgr.debug('prepInjectWatch watch mark is not an ioctl call.')
-                self.read_mark = watch_mark
-                self.handleReadBuffer(callback=self.instrumentRead)
+        if self.kbuffer is not None:
+            ''' go forward one to user space and record the return IP '''
+            SIM_run_command('pselect %s' % self.cpu.name)
+            SIM_run_command('si')
+            self.ret_ip = self.top.getEIP(self.cpu)
+            self.top.precall()
+            self.call_ip = self.top.getEIP(self.cpu)
+            ''' TBD need to set kbuf to a kernel buffer, though only used for indirect purposes, clean up writeData'''
+            kbufs = self.kbuffer.getKbuffers()
+            self.fd = mark.mark.fd
+            self.pickleit(kbufs[0])  
         else:
-            self.lgr.debug('doInject not a CallMark')
+            if isinstance(mark.mark, watchMarks.CallMark):
+                self.lgr.debug('doInject is call mark')
+                if 'ioctl' in mark.mark.getMsg():
+                    self.len_buf = mark.mark.recv_addr
+                    self.lgr.debug('is ioctl len_buf is 0x%x' % self.len_buf)
+                    self.ioctl_mark = watch_mark
+                    self.read_mark = watch_mark+1           
+     
+                    ''' Try to reverse and find where kernel keeps count data ''' 
+                    self.top.revTaintAddr(mark.mark.recv_addr, kernel=True, prev_buffer=True, callback=self.handleDelta)
+
+                else:
+                    self.lgr.debug('prepInjectWatch watch mark is not an ioctl call.')
+                    self.read_mark = watch_mark
+                    self.handleReadBuffer(callback=self.instrumentRead)
+            else:
+                self.lgr.debug('doInject not a CallMark')
                
     def handleDelta(self, buf_addr_list): 
         ''' Assume backtrace stopped at something like rsb r6, r3, r6 
@@ -124,6 +142,7 @@ class PrepInjectWatch():
         SIM_run_command('si')
         self.ret_ip = self.top.getEIP(self.cpu)
         ''' now record the call '''
+        # TBD replace below with call to precall?
         frame, cycle = self.top.getPreviousEnterCycle()
         frame_s = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
             frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
@@ -159,8 +178,19 @@ class PrepInjectWatch():
         ''' POOR names, we don't know which one is the start until we read the values from these addresses '''
         pickDict['k_start_ptr'] = self.k_start_ptr
         pickDict['k_end_ptr'] = self.k_end_ptr
+        if self.kbuffer is not None:
+            ''' TBD extend to dict to also track cycles so we can inject to middle of a stream, e.g., third read '''
+            kbufs = self.kbuffer.getKbuffers()
+            pickDict['k_bufs'] = kbufs
+            k_buf_len = self.kbuffer.getBufLength()
+            pickDict['k_buf_len'] = k_buf_len
+            pickDict['user_addr'] = self.kbuffer.getUserAddr()
+            orig_buf = self.kbuffer.getOrigBuf()
+            pickDict['orig_buffer'] = orig_buf
+            self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  Orig buffer len %d' % (len(kbufs), k_buf_len, len(orig_buf)))
+
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
-        ''' Otherwise console has no indiation of when done. '''
+        ''' Otherwise console has no indication of when done. '''
         print('Configuration file saved, ok to quit.')
         self.top.quit()

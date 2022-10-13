@@ -74,6 +74,9 @@ class Kparams():
         self.stack_frame_eip = None
         # arm call-specific svc 
         self.arm_svc = False
+        # No process local task ptr at base of kernel stack. Only refer to offset in fs segment
+        self.fs_base = None
+        self.delta = None
 
 
     def printParams(self):

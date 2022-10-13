@@ -20,10 +20,7 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     echo "RESIM_IDA_DATA not defined."
     exit
 fi
-if [[ ! -f "$IDA_DIR/idc/runRESim.idc" ]]; then
-    echo "Copying runRESim.idc to the IDA directory at $IDA_DIR/idc"
-    cp $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
-fi
+cp -u $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
 if [ $# -eq 0 ] || [ $1 = "-h" ]; then
     echo "runIda.sh <target> [color/reset] [server]"
     exit
@@ -31,18 +28,32 @@ fi
 idacmd=$IDA_DIR/ida
 target=$1
 target_base="$(basename -- $target)"
+resim_ida_arg=""
+#
+# syntax is runIDA.sy target [color/reset] [server]
+#
 shift 1
 if [ $# -gt 1 ];then
     echo "more than 1"
     remote=$2
-    if [ $1 == color ]; then
-       remote_ida=$( ssh $remote "source $HOME/.resimrc;echo \$RESIM_IDA_DATA" )
+    resim_ida_arg=$1
+else
+    if [ $1 == color ] || [ $1 == reset ]; then
+       resim_ida_arg=$1
+    else
+       remote=$1
+    fi
+fi    
+if [ $resim_ida_arg == color ] && [ ! -z $remote ]; then
+       remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$target_base; echo \$RESIM_IDA_DATA" )
        if [ -z "$remote_ida" ];then
            echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
            exit 1 
        fi
        rsync -avh $remote:$remote_ida/$target_base/*.hits $RESIM_IDA_DATA/$target_base/
-    fi
+fi
+if [ ! -z "$remote" ]; then
+    echo "REMOTE IS $remote"
     tunnel=$( ps -aux | grep [9]123 )
     if [[ -z "$tunnel" ]];then
         echo "No tunnel found for $remote, create one."
@@ -59,15 +70,16 @@ if [ $# -gt 1 ];then
        fi
     fi
 fi
-
 target_path=$(realpath $target)
 ida_db_path=$RESIM_IDA_DATA/$target_base/$target_base.idb
 echo "target is $target"
 echo "dbpath $ida_db_path"
-remain="$target_path $@"
+echo "resim_ida_arg is $resim_ida_arg"
 if [[ -f $ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
-    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $remain" $ida_db_path
+    #echo "ida_db_path is $ida_db_path"
+    export IDA_DB_PATH=$ida_db_path
+    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p $RESIM_IDA_DATA/$target_base

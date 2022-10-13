@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 '''
 Send data files to the driver and from there, send them to one or more target IP/ports.
-Executes magic instruction 99 just prior to sending data to reset RESim origin.
+Optionally executes magic instruction 99 just prior to sending data to reset RESim origin,
+and disconnects the driver from the system.
 
 
 directive file example:
@@ -19,6 +20,7 @@ import subprocess
 import argparse
 import shlex
 resim_dir = os.getenv('RESIM_DIR')
+user_name = os.getenv('RESIM_DIR')
 core_path=os.path.join(resim_dir,'simics', 'monitorCore')
 sys.path.append(core_path)
 import runAFL
@@ -26,8 +28,9 @@ import resimUtils
 def main():
     parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
     parser.add_argument('directives', action='store', help='File containing driver directives')
-    parser.add_argument('-n', '--no_magic', action='store_true', help='Do not execute magic instruction.')
+    parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
     parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
+    parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     args = parser.parse_args()
     sshport = args.port
@@ -35,7 +38,9 @@ def main():
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
         exit(1)
-    if args.tcp:
+    if args.server:
+        client_cmd = 'serverTCP'
+    elif args.tcp:
         client_cmd = 'clientTCP'
     else:
         client_cmd = 'clientudpMult'
@@ -55,14 +60,21 @@ def main():
                 print('Time out, more than 10 failures trying to scp to driver.')
                 sys.exit(1)
     exit
-    magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
-    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
-    os.system(cmd)
+    if args.disconnect:
+        magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
+        cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
+        os.system(cmd)
 
-    remote_directives_file = '/tmp/directives.sh'
+    user_dir = os.path.join('/tmp', user_name)
+    try:
+        os.mkdir(user_dir)
+    except:
+        pass
+    remote_directives_file = os.path.join(user_dir, 'directives.sh')
+    directives_script = '/tmp/directives.sh'
     driver_file = open(remote_directives_file, 'w')
     driver_file.write('sleep 2\n')
-    if not args.no_magic:
+    if args.disconnect:
         driver_file.write('/tmp/simics-magic\n')
     file_list = []
     with open(args.directives) as fh:
@@ -74,24 +86,21 @@ def main():
             parts = line.split()
             if len(parts) == 2 and parts[0] == 'sleep':
                 driver_file.write(line)
-            #if args.tcp and len(parts) != 3:
-            #    print('Invalid TCP driver directive: %s' % line)
-            #    print('    iofile ip port')
-            #    exit(1)
-            elif not args.tcp and len(parts) != 4:
-                print('Invalid driver directive: %s' % line)
-                print('    iofile ip port header')
-                exit(1)
             elif len(parts) == 1:
                 iofile = parts[0].strip()
                 file_list.append(iofile)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
+                os.system(cmd)
+            elif not args.tcp and len(parts) != 4 and not args.server:
+                print('Invalid driver directive: %s' % line)
+                print('    iofile ip port header')
+                exit(1)
             else:
                 iofile = parts[0]
                 file_list.append(iofile)
                 ip = parts[1]
                 port = parts[2]
-                if not args.tcp:
+                if not args.tcp and not args.server:
                     header = parts[3]
                 else:
                     header = ''
@@ -112,7 +121,7 @@ def main():
 
     cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, remote_directives_file)
     os.system(cmd)
-    cmd = 'ssh -p %d mike@localhost "nohup %s > /dev/null 2>&1 &"' % (sshport, remote_directives_file)
+    cmd = 'ssh -p %d mike@localhost "nohup %s > /tmp/directive.log 2>&1 &"' % (sshport, directives_script)
     os.system(cmd)
 
 if __name__ == '__main__':

@@ -9,13 +9,24 @@ import argparse
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
+import findBB
 
+'''
+Return a list of queue files that hit a given BB start address
+'''
 def findBB(target, bb, quiet=False):
     retval = []
     cover_list = aflPath.getAFLCoverageList(target)
+    if len(cover_list) == 0:
+        print('No coverage found for %s' % target)
     for cover in cover_list:
         with open(cover) as fh:
-            hit_list = json.load(fh)
+            try:
+                hit_list = json.load(fh)
+            except:
+                print('Failed to open %s' % cover)
+                continue
+            #print('look for 0x%x in hit_list len %d' % (bb, len(hit_list)))
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
                 if not os.path.isfile(queue):
@@ -28,8 +39,69 @@ def findBB(target, bb, quiet=False):
                 retval.append(queue)
                 if not quiet:
                     print('0x%x in %s' % (bb, queue))
+    if not quiet:
+        print('Found %d queue files that hit 0x%x' % (len(retval), bb))
     return retval
-        
+
+def getFirstReadCycle(trackio, quiet=False):
+    retval = None
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    if not os.path.isfile(trackio):
+        if not quiet:
+            print('ERROR: no trackio file at %s' % trackio)
+        return None
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        #print('ERROR: failed reading json from %s' % trackio)
+        return None
+    for mark in tjson:
+        if mark['mark_type'] == 'read':
+            retval = mark['cycle']
+            break
+    return retval
+
+def getWatchMark(trackio, bb, quiet=False):
+    retval = None
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    if not os.path.isfile(trackio):
+        if not quiet:
+            print('ERROR: no trackio file at %s' % trackio)
+        return None
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        #print('ERROR: failed reading json from %s' % trackio)
+        return None
+    index = 1
+    for mark in tjson:
+        if mark['mark_type'] == 'read':
+            eip = mark['ip']
+            if eip >= bb['start_ea'] and eip <= bb['end_ea']:
+                print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
+                retval = eip
+                break
+        index = index + 1
+    return retval
+       
+def getBBCycle(coverage, bb): 
+    retval = None
+    ''' Find cycle at which a given bb was hit in the coverage json '''
+    if not os.path.isfile(coverage):
+        print('ERROR: no coverage file at %s' % coverage)
+        return None
+    try:
+        tjson = json.load(open(coverage))
+    except:
+        #print('ERROR: failed reading json from %s' % coverage)
+        return None
+
+    bb_str = str(bb)
+    if bb_str in tjson:
+        retval = tjson[bb_str]
+    else:
+        print('Could not find bb 0x%x in json %s' % (bb, coverage))
+    return retval
 
 def main():
     parser = argparse.ArgumentParser(prog='findBBB', description='Show AFL queue entries that lead to a given basic block address.')

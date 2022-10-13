@@ -63,6 +63,7 @@ class BackStop():
         self.callback = None
         self.hang_callback = None
         self.hang_cycles = None
+        self.hang_cycles_delta = 0
         self.report_backstop = False
         self.lgr.debug('backStop init cpu %s' % self.cpu.name)
 
@@ -95,7 +96,7 @@ class BackStop():
 
     def setFutureCycle(self, cycles, now=False):
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
-            self.lgr.debug('backstop hang cycles exceeded')
+            self.lgr.debug('backstop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
             self.hang_callback(self.cpu.cycles)
          
         if not now:
@@ -113,8 +114,9 @@ class BackStop():
 
     def setHangCallback(self, callback, cycles):
         self.hang_cycles = self.cpu.cycles + cycles
+        self.hang_cycles_delta = cycles
         self.hang_callback = callback
-        self.lgr.debug('backstop setHangCallback to %s' % str(callback))
+        self.lgr.debug('backstop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
         if self.hang_event is None:
             self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
         SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)

@@ -71,7 +71,7 @@ class PageFaultGen():
     def pdirWriteHap(self, prec, third, forth, memory):
         pdir_entry = SIM_get_mem_op_value_le(memory)
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('ppageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
+        #self.lgr.debug('pageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
             #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
@@ -79,7 +79,10 @@ class PageFaultGen():
             #self.context_manager.genDeleteHap(self.pdir_hap)
             self.pdir_break = None
             self.pdir_hap = None
-            self.rmExit(pid)
+            if pdir_entry != 0xff:
+                self.rmExit(pid)
+            else:
+                self.lgr.debug('pageFaultGen pdirWriteHap assuming entry of 0xff implies a segv')
 
     def watchPdir(self, pdir_addr, prec):
         pcell = self.cpu.physical_memory
@@ -147,7 +150,7 @@ class PageFaultGen():
                 data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
                 fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
+                #self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
@@ -161,7 +164,7 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x' % (pid, comm, cr2))
+        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
@@ -170,7 +173,7 @@ class PageFaultGen():
             page_info = pageUtils.findPageTableIA32E(self.cpu, cr2, self.lgr)
         else:
             page_info = pageUtils.findPageTable(self.cpu, cr2, self.lgr)
-        prec = Prec(self.cpu, comm, pid, cr2, eip)
+        prec = Prec(self.cpu, comm, pid, cr2, cur_pc)
         if pid not in self.pending_faults:
             self.pending_faults[pid] = prec
             #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x cycle 0x%x' % (pid, prec.cr2, prec.cycles))
@@ -201,9 +204,10 @@ class PageFaultGen():
 
     def pageFaultHapAlone(self, hack_rec):
         compat32, page_info, prec = hack_rec 
-
-        if self.debugging_pid is None:
+        ''' TBD FIX ME'''
+        if False and self.debugging_pid is None:
             #SIM_run_alone(self.watchExit, compat32)
+            #self.lgr.debug('pageFaultGen pageFaultHapAlone')
             self.watchExit(compat32)
             ''' Rely on ContextManager to watch for task kills if debugging -- and not '''
             # TBD fix for ability to watch full system for segv
@@ -375,7 +379,7 @@ class PageFaultGen():
         #if cpu != prec.cpu:
         #    self.lgr.debug('exitHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
         #    return
-        self.lgr.debug('pageFaultGen exitHap')
+        #self.lgr.debug('pageFaultGen exitHap')
         cpu, comm, pid = self.task_utils.curProc() 
         if pid != prec.pid and prec.pid in self.exit_break:
             self.lgr.debug('exitHap wrong pid %d expected %d' % (pid, prec.pid))
@@ -400,16 +404,34 @@ class PageFaultGen():
     def skipAlone(self, prec):
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
-        self.lgr.debug('pageFaultGen skipAlone') 
+       
         if self.top.hasBookmarks():
+            self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
                 return
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+            if eip != prec.eip:
+                if not resimUtils.skipToTest(self.cpu, target_cycles-1, self.lgr):
+                    return
+                cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+                self.lgr.warning('pageFaultGen skipAlone, wrong eip is 0x%x wanted 0x%x, skipped again, now eip is 0x%x' % (eip, prec.eip, cur_eip))
+                eip = cur_eip
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
-                SIM_run_command('skip-to cycle = 0x%x' % target_cycles)
-                self.lgr.debug('pageFaultGen skipAlone landed in kernel, backed up one') 
+                if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                    return
+                else:
+                    cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+                    self.lgr.debug('pageFaultGen skipAlone landed in kernel 0x%x, backed up one to 0x%x eip:0x%x' % (eip, target_cycles, cur_eip))
+                    if cur_eip == eip: 
+                        self.lgr.debug('pageFaultGen skipAlone same eip, back up more')
+                        target_cycles = self.cpu.cycles - 1
+                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                            return
+                        
+                        cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+                        self.lgr.debug('pageFaultGen skipAlone after another backup, eip is 0x%x' % (cur_eip))
     
             if prec.fsr is not None and prec.fsr == 2:            
                 self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
@@ -533,3 +555,9 @@ class PageFaultGen():
             return True
         else:
             return False
+
+    def getPendingFaultCycle(self, pid):
+        if pid in self.pending_faults:
+            return self.pending_faults[pid].cycles
+        else:
+            return None

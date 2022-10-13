@@ -103,7 +103,7 @@ class DataWatch(simplecustviewer_t):
         except:
             print('could not get json from %s' % simicsString)
             return
-        index = 0
+        index = 1
         for entry in data_json:
             instruct = idc.GetDisasm(entry['ip'])
             uline = '%3d 0x%08x 0x%08x %s pid:%d' % (index, entry['ip'], entry['cycle'], entry['msg'], entry['pid'])

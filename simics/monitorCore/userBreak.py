@@ -34,9 +34,10 @@ class UserBreak():
         self.count = count
         self.context_manager = context_manager
         self.lgr = lgr
-        self.doBreak()
         self.hit = 0
         self.user_break_hap = None
+
+        self.doBreak()
 
     def userBreakHap(self, dumb, third, forth, memory):
         if self.user_break_hap is not None:

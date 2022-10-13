@@ -137,9 +137,13 @@ class SockStruct():
         self.sin_addr = None
         self.sa_data = None
         self.sa_family = None
+        self.sock_type = None
+        self.domain = None
+        self.protocol = None
         try:
             self.sa_family = mem_utils.readWord16(cpu, self.addr) 
         except:
+            #print('fail reading socket stuff')
             return
         if self.sa_family == 1:
             self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)
@@ -185,18 +189,32 @@ class SockStruct():
             flag = 'EXTERNAL IP'
         return flag
 
+    def addParams(self, params):
+        self.domain = params.domain
+        self.sock_type = params.sock_type
+        self.protocol = params.protocol
+
     def getString(self):
         fd = ''
+        addr = ''
+        sock_type = ''
         if self.fd is not None and self.fd >= 0:
             fd = 'FD: %d' % self.fd
+        if self.addr is not None:
+            addr = 'addr: 0x%x' % self.addr
+        if self.sock_type is not None:
+            if self.sock_type < len(socktype):
+                sock_type = 'type: %s' % socktype[self.sock_type]
+            else:
+                sock_type = 'type: %s' % self.sock_type
         if self.sa_family is None:
             retval = ('%s sa_family unknown' % (fd))
         elif self.sa_family == 1:
-            retval = ('%s sa_family%d: %s  sa_data: %s' % (fd, self.sa_family, self.famName(), self.sa_data))
-        elif self.sa_family == 2 or (self.sa_family == 0 and self.port is not None):
-            retval = ('%s sa_family%d: %s  address: %s:%d' % (fd, self.sa_family, self.famName(), self.dottedIP(), self.port))
+            retval = ('%s sa_family%d: %s %s %s sa_data: %s' % (fd, self.sa_family, self.famName(), sock_type, addr, self.sa_data))
+        elif (self.sa_family == 2 or self.sa_family == 0) and self.port is not None:
+            retval = ('%s sa_family%d: %s %s %s IP address: %s:%d' % (fd, self.sa_family, self.famName(), sock_type, addr, self.dottedIP(), self.port))
         else:
-            retval = ('%s sa_family%d: %s  TBD' % (fd, self.sa_family, self.famName()))
+            retval = ('%s sa_family%d: %s %s TBD' % (fd, self.sa_family, self.famName(), addr))
         return retval
 
 class Iovec():

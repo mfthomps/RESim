@@ -75,12 +75,12 @@ class AFL():
         if stop_on_read:
             self.backstop_cycles = 0
         else:
-            if os.getenv('BACK_STOP_CYCLES') is not None:
-                self.backstop_cycles =   int(os.getenv('BACK_STOP_CYCLES'))
-                self.lgr.debug('afl BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+            if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
+                self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
+                self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
             else:
-                self.lgr.warning('no BACK_STOP_CYCLES defined, using default of 100000')
-                self.backstop_cycles =   100000
+                self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
+                self.backstop_cycles =   1000000
                 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
@@ -118,12 +118,15 @@ class AFL():
             self.lgr.debug('afl back from open')
         else: 
             self.lgr.debug('AFL did NOT find resim_ctl.fifo')
-          
+         
+        self.starting_cycle = cpu.cycles 
+        self.total_cycles = 0
+        self.tmp_time = time.time()
         if target is None:
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
-            if self.orig_buffer is not None:
-                self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
-                self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            #if self.orig_buffer is not None:
+            #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
+            #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
             cli.quiet_run_command('disable-reverse-execution')
@@ -163,6 +166,7 @@ class AFL():
         self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
         self.fault_hap = None
         self.top.noWatchSysEnter()
+        self.tmp_time = time.time()
         self.goN(0) 
 
 
@@ -172,9 +176,6 @@ class AFL():
             self.stop_hap = None
             #self.lgr.debug('afl removed stop hap')
 
-    def goAlone(self, dumb):
-        SIM_run_command('c') 
-   
     def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
@@ -182,14 +183,29 @@ class AFL():
                 trace_bits = self.coverage.getTraceBits()
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
-            self.total_hits += self.coverage.getHitCount() 
+            new_hits = self.coverage.getHitCount() 
+            self.total_hits += new_hits
+            self.total_cycles = self.total_cycles+(self.cpu.cycles-self.starting_cycle)
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
-                self.lgr.debug('afl average hits in last 100 iterations is %d' % avg)
+                avg_cycles = self.total_cycles/100
+                now = time.time()
+                delta = 100/(now - self.tmp_time)
+                self.lgr.debug('afl average hits in last 100 iterations is %d avg cycles: 0x%x execs/sec: %.2f' % (avg, int(avg_cycles), delta))
                 self.total_hits = 0
+                self.total_cycles = 0
+                self.tmp_time = time.time()
                 struct._clearcache()
-            #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x' % (self.iteration, self.cpu.cycles))
-            status = self.coverage.getStatus()
+                #dog = SIM_run_command('list-breakpoints')
+                #self.lgr.debug(dog)
+                #print(dog)
+                #self.top.showHaps()
+            #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
+            if self.create_dead_zone:
+                self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
+                status = AFL_OK
+            else:
+                status = self.coverage.getStatus()
             if status == AFL_OK:
                 pid_list = self.context_manager.getWatchPids()
                 if len(pid_list) == 0:
@@ -201,15 +217,17 @@ class AFL():
                         break
             self.page_faults.stopWatchPageFaults()
             if status == AFL_CRASH:
-                self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to /tmp/icrashed' %(status, self.iteration)) 
-                with open('/tmp/icrashed', 'wb') as fh:
+                self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
+                with open('./icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
             elif status == AFL_HANG:
-                self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to /tmp/ihung' %(status, self.iteration)) 
-                with open('/tmp/ihung', 'wb') as fh:
+                self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to ./ihung' %(status, self.iteration)) 
+                with open('./ihung', 'wb') as fh:
                     fh.write(self.orig_in_data)
                 self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
+                #self.top.quit()
+                #return
 
             if self.one_done:
                 self.sock.close()
@@ -259,6 +277,8 @@ class AFL():
             if self.restart == 0:
                 if do_quit:
                     self.lgr.debug('afl was told to quit, bye')
+                    with open('./final_data.io', 'wb') as fh:
+                        fh.write(self.orig_in_data)
                     self.top.quit()
                 self.iteration += 1 
                 self.in_data = self.getMsg()
@@ -276,8 +296,12 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        #self.lgr.debug('afl stopHap')
+        #self.lgr.debug('afl stopHap %s %s %s %s' % (str(dumb), str(one), str(exception), str(error_string)))
         if self.stop_hap is None:
+            return
+        if self.cpu.cycles == self.starting_cycle:
+            #self.lgr.debug('afl stopHap but got nowhere.  continue.')
+            SIM_run_alone(SIM_continue, 0)
             return
         self.finishUp()
 
@@ -345,9 +369,10 @@ class AFL():
 
         self.write_data.write()
         self.page_faults.watchPageFaults()
-        #self.lgr.debug('afl goN context %s' % self.cpu.current_context)
-        cli.quiet_run_command('c') 
-
+        #self.lgr.debug('afl goN context %s cycle: 0x%x' % (self.cpu.current_context, self.cpu.cycles))
+        #cli.quiet_run_command('c') 
+        SIM_continue(0)
+        
     def whenDone(self):
         #self.lgr.debug('afl whenDone callback')
         pass

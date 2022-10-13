@@ -109,12 +109,12 @@ class findKernelWrite():
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'findKernelWrite pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
+        #self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
 
-        self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
+        #self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
@@ -154,6 +154,8 @@ class findKernelWrite():
         return False
 
     def vt_handler(self, memory):
+        if self.rev_write_hap is None:
+            return
         offset = 0
         eip = self.top.getEIP(self.cpu)
         if memory.logical_address == 0:
@@ -205,7 +207,8 @@ class findKernelWrite():
         else:
             location = memory.logical_address
             phys = memory.physical_address
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x' % (location, phys, memory.size, self.cpu.cycles))
+            eip = self.top.getEIP(self.cpu)
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             VT_in_time_order(self.vt_handler, my_memory)
 
@@ -568,6 +571,16 @@ class findKernelWrite():
                     self.lgr.debug('findKernelWrite, found mem copy, now look for address 0x%x, value is 0x%x' % (copy_addr, value))
                     SIM_run_alone(self.cleanup, False)
                     self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
+                elif instruct[1].startswith('rep movs'):
+                    src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+                    if self.prev_buffer:
+                        ''' TBD... assume break hit after first rep, thus subtract word from esi value... '''
+                        self.k_buffer_addrs.append(src_addr - self.mem_utils.WORD_SIZE)
+                        #self.k_buffer_addrs.append(self.addr)
+                        if True or len(self.k_buffer_addrs) > 2:
+                            SIM_run_alone(self.cleanup, False)
+                            self.lgr.debug('findKernelWrite got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
+                            self.rev_to_call.cleanup(self.k_buffer_addrs)
                 else:
                     self.lgr.debug('findKernelWrite thinkWeWrote, call backOneAlone with offset zero?')
                     SIM_run_alone(self.backOneAlone, 0)
@@ -679,7 +692,6 @@ class findKernelWrite():
             src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
             if self.prev_buffer:
                 self.k_buffer_addrs.append(src_addr)
-                #self.k_buffer_addrs.append(self.addr)
                 if True or len(self.k_buffer_addrs) > 2:
                     SIM_run_alone(self.cleanup, False)
                     self.lgr.debug('got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
