@@ -25,7 +25,7 @@ class IdaSIM():
         self.reg_list = reg_list
         self.origAnalysis = origAnalysis.OrigAnalysis(idaversion.get_input_file_path())
         proc_info = idaapi.get_inf_structure()
-        if proc_info.procName == 'ARM':
+        if proc_info.procname == 'ARM':
             self.PC='pc'
             self.SP='sp'
         else:
@@ -65,7 +65,7 @@ class IdaSIM():
                 print('signalClient got wrong stuff? %s from getEIP' % str(eip))
                 return
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
-        idaapi.step_into()
+        idaversion.step_into()
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         new_eip = idaversion.get_reg_value(self.PC)
         #print('signalClient back from cont new_eip is 0x%x' % new_eip)
@@ -77,7 +77,7 @@ class IdaSIM():
         start_eip = idaversion.get_reg_value(self.PC)
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
         if norev:
-            idaapi.step_into()
+            idaversion.step_into()
             idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.printRegJson()");')
         try:
@@ -181,7 +181,7 @@ class IdaSIM():
         curAddr = idaversion.get_reg_value(self.PC)
         #goNowhere()
         #print('doReverse, back from goNowhere curAddr is %x' % curAddr)
-        isBpt = idc.CheckBpt(curAddr)
+        isBpt = idaversion.check_bpt(curAddr)
         # if currently at a breakpoint, we need to back an instruction to so we don't break
         # here
         if isBpt > 0:
@@ -190,7 +190,7 @@ class IdaSIM():
             if addr is None:
                 return None
             print('in doReverse, did RevStepOver got addr of %x' % addr)
-            isBpt = idc.CheckBpt(addr)
+            isBpt = idaversion.check_bpt(addr)
             if isBpt > 0:
                 # back up onto a breakpoint, we are done
                 print('doReverse backed to breakpoint, we are done')
@@ -439,10 +439,10 @@ class IdaSIM():
         ''' keep from reversing past start of process '''
         addr = LocByName("_start")
         if addr is not None:
-            bptEnabled = idc.CheckBpt(addr)
+            bptEnabled = idaversion.check_bpt(addr)
             if bptEnabled < 0:
                 print('breakAtStart bpt set at 0x%x' % addr)
-                idc.AddBpt(addr)
+                idaversion.add_bpt(addr)
         else:
             print('setBreakAtStart, got no loc for _start')
         return addr
@@ -538,7 +538,7 @@ class IdaSIM():
         if prev_addr == cur_addr:
             self.doRevStepInto()
         elif prev_addr is not None:
-            next_addr = idc.NextHead(prev_addr)
+            next_addr = idaversion.next_head(prev_addr)
             if next_addr == cur_addr:
                 ''' reverse two to get there? '''
                 print('revBlock rev two?')
@@ -698,28 +698,23 @@ class IdaSIM():
     
     def doStepInto(self):
         #print('in doInto')
-        idaapi.step_into()
+        idaversion.step_into()
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
         if cur_addr > self.kernel_base:
             print('doStepInto run to user space')
             self.runToUserSpace()
    
-    def doStepOverXXX(self):
-        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.ni()");')
-        eip = gdbProt.getEIPWhenStopped(delay=0.5)
-        self.signalClient()
- 
     def doStepOver(self):
         #print('in doStepOver')
-        idaapi.step_over()
+        idaversion.step_over()
         #print('back from step over')
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         #print('back getDebuggerEvent')
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
-            print('doStepOver in kernel run to user space')
+            #print('doStepOver in kernel run to user space')
             self.runToUserSpace()
         else:
             #print('doStepOver signal client')

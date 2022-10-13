@@ -56,7 +56,7 @@ if ok:
     idb_hooks.hook()
     dbg_hooks = dbgHooks.DBGHooks()
     dbg_hooks.hook()
-    ida_dbg.set_remote_debugger('127.0.0.1', '9123')
+    #ida_dbg.set_remote_debugger('127.0.0.1', '9123')
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
     print('attach result %d' % result)

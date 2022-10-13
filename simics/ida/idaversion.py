@@ -29,11 +29,22 @@ def check_bpt(bptEA):
     else:
         return ida_dbg.check_bpt(bptEA)
 
-def wait_for_next_event(kind, flag):
+def add_bpt(bptEA):
     if idaapi.IDA_SDK_VERSION <= 699:
-        event = idc.GetDebuggerEvent(kind, flag)
+        return idc.AddBpt(bptEA)
     else:
+        return ida_dbg.add_bpt(bptEA)
+
+def wait_for_next_event(kind, flag):
+    print('wait_for_next_event')
+    if idaapi.IDA_SDK_VERSION <= 699:
+        print('wait_for_next_event less than 699')
+        event = idc.GetDebuggerEvent(kind, flag)
+        print('wait_for_next_event back')
+    else:
+        print('wait_for_next_event more than 699  kind: %s  flag %s' % (str(kind), str(flag)))
         event = ida_dbg.wait_for_next_event(kind, flag)
+        print('wait_for_next_event back')
 
 def ask_str(default, label, hist=0):
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -351,3 +362,21 @@ def get_bpt_ea(i):
     else:
         bpt_ea = idc.get_bpt_ea(i)
     return bpt_ea
+
+def make_code(eip):
+    if idaapi.IDA_SDK_VERSION <= 699:
+        idc.MakeCode(eip)
+    else:
+        idc.create_insn(eip)
+
+def step_into():
+    if idaapi.IDA_SDK_VERSION <= 699:
+        idc.StepInto()
+    else:
+        ida_dbg.step_into()
+
+def step_over():
+    if idaapi.IDA_SDK_VERSION <= 699:
+        idc.StepOver()
+    else:
+        ida_dbg.step_over()

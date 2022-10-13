@@ -111,6 +111,6 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
     return retval
 
 def stepWait():
-    idc.StepInto()
+    idaversion.step_into()
     event = idaversion.wait_for_next_event(idc.WFNE_ANY, -1)
 

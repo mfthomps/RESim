@@ -61,9 +61,9 @@ idaapi.require("menuMod")
 '''
 from idaapi import Choose
 '''
-    Ida script to reverse execution of Simics to the next breakpoint.
-    Since Ida does not know about reverse exectution, the general approach is to 
-    tell Simics to reverse and then tell Ida to continue forward.
+    IDA script to reverse execution of Simics to the next breakpoint.
+    Since IDA does not know about reverse exectution, the general approach is to 
+    tell Simics to reverse and then tell IDA to continue forward.
     The script installs its functions as a hotkeys. 
     See showHelp below
 '''
@@ -74,11 +74,11 @@ def showHelp(prompt=False):
     print('in showHelp')
     lines = {}
     lines['overview'] = """
-CGC Monitor Ida Client Help
-The Ida gdb client is enhanced to support reverse execution; use of
+CGC Monitor IDA Client Help
+The IDA gdb client is enhanced to support reverse execution; use of
 execution bookmarks; and functions such as reversing until a specified
 register is modified.  The functions are available through the "Debug"
-menu.   Ida has also been extended to include a "Bookmarks" tabbed window
+menu.   IDA has also been extended to include a "Bookmarks" tabbed window
 that lists execution bookmarks, which can be appended via a right click.
 
 The GCC Monitor will have broken execution at a PoV or signal, as reflected
@@ -482,7 +482,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
             if 'nox' in bm:
                 eip_str = getTagValue(bm, 'nox')
                 eip = int(eip_str, 16)
-                idc.MakeCode(eip) 
+                idaversion.make_code(eip) 
 
     idaversion.grab_focus(bm_title)
     st_title = 'stack trace'
@@ -561,7 +561,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     idaversion.batch(0)
     #isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)
-    print('RESim Ida Client Version 1.2')
+    print('RESim IDA Client Version 1.2a')
 
 if __name__ == "__main__":
     RESimClient()
