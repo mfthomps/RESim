@@ -38,13 +38,13 @@ if [ $# -gt 1 ];then
     remote=$2
     resim_ida_arg=$1
 else
-    if [ $1 == color ] || [ $1 == reset ]; then
+    if [ "$1" == color ] || [ "$1" == reset ]; then
        resim_ida_arg=$1
     else
        remote=$1
     fi
 fi    
-if [ $resim_ida_arg == color ] && [ ! -z $remote ]; then
+if [ "$resim_ida_arg" == color ] && [ ! -z $remote ]; then
        remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$target_base; echo \$RESIM_IDA_DATA" )
        if [ -z "$remote_ida" ];then
            echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
@@ -79,7 +79,8 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
     #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
-    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
+    idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
+    #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p $RESIM_IDA_DATA/$target_base
