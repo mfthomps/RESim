@@ -2607,14 +2607,14 @@ class GenMonitor():
     def setDmod(self, dfile):
         self.runToDmod(dfile, cell_name = self.target)
 
-    def runToDmod(self, dfile, cell_name=None, background=False):
+    def runToDmod(self, dfile, cell_name=None, background=False, comm=None):
         retval = True
         if not os.path.isfile(dfile):
             print('No file found at %s' % dfile)
             return False
         if cell_name is None:
             cell_name = self.target
-        mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr)
+        mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr, comm=comm)
         operation = mod.getOperation()
         call_params = syscall.CallParams(operation, mod, break_simulation=True)        
         if cell_name is None:
