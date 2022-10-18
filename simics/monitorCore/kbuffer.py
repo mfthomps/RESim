@@ -91,9 +91,10 @@ class Kbuffer():
                 self.watching_addr = new_break
 
         else:  
-            self.lgr.debug('Kbuffer adding kbuf of 0x%x' % src)
+            self.lgr.debug('Kbuffer adding kbuf of 0x%x, kbuf_len is %s' % (src, str(self.kbuf_len)))
             self.kbufs.append(src)
-            if self.buf_remain is None or self.buf_remain > 100:
+            print('adding kbuf 0x%x' % src)
+            if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
                 max_bad = 100
                 special = ord('Z')
                 done = False 
@@ -113,7 +114,7 @@ class Kbuffer():
                         bad_count = 0
                     cur_addr += 1
                 if last_good is None:
-                    if len(self.kbufs) == 0:
+                    if self.kbuf_len is None:
                         self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('The kbuf option requires a data stream that contains Zs')
@@ -136,6 +137,7 @@ class Kbuffer():
                 #SIM_break_simulation('tmp')
             else:
                 ''' Not enough remaining... just assume same length. '''
+                self.lgr.debug('Kbuffer not enough remaining buf_reamin is %s' % str(self.buf_remain))
                 self.buf_remain = 0
 
     def removeHap(self, dumb):
