@@ -34,7 +34,7 @@ class Dmod():
             self.cmds = cmds        
 
 
-    def __init__(self, top, path, mem_utils, cell_name, lgr):
+    def __init__(self, top, path, mem_utils, cell_name, lgr, comm=None):
         self.top = top
         self.kind = None
         self.fiddle = None
@@ -43,6 +43,7 @@ class Dmod():
         self.stop_hap = None
         self.cell_name = cell_name
         self.path = path
+        self.comm = comm
         self.operation = None
         self.count = 1
         if os.path.isfile(path):
@@ -253,6 +254,9 @@ class Dmod():
 
     def getCount(self):
         return self.count
+
+    def getComm(self):
+        return self.comm
                     
         
 if __name__ == '__main__':
