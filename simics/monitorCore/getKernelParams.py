@@ -29,6 +29,7 @@
 
 '''
 from simics import *
+import simics
 import memUtils
 import taskUtils
 import resimUtils
@@ -298,6 +299,7 @@ class GetKernelParams():
                 ta = self.mem_utils.getCurrentTask(self.cpu)
                 if ta is None or ta == 0:
                     self.lgr.debug('ta nothing, continue')
+                    #SIM_break_simulation('remove this')
                     return
                 if ta < self.param.kernel_base:
                     self.lgr.debug('ta 0x%x less than base 0x%x   return?' % (ta, self.param.kernel_base))
