@@ -248,7 +248,11 @@ class memUtils():
 
     def readStringPhys(self, cpu, paddr, maxlen):
         s = ''
-        read_data = readPhysBytes(cpu, paddr, maxlen)
+        try:
+            read_data = readPhysBytes(cpu, paddr, maxlen)
+        except ValueError:
+            self.lgr.debug('readStringPhys, error reading paddr 0x%x' % paddr)
+            return None
         for v in read_data:
             if v == 0:
                 del read_data
@@ -490,7 +494,20 @@ class memUtils():
         return retval
 
     def kernel_v2p(self, param, cpu, vaddr):
-        return vaddr - param.kernel_base + param.ram_base
+        cpl = getCPL(cpu)
+        pc = self.getRegValue(cpu, 'pc')
+        try:
+            phys_block = cpu.iface.processor_info.logical_to_physical(vaddr, Sim_Access_Read)
+        except:
+            return None
+
+        if phys_block.address != 0:
+            #self.lgr.debug('kernel_v2p, cpl: %d pc: 0x%x got phys block, get unsigned of of phys 0x%x' % (cpl, pc, phys_block.address))
+            return self.getUnsigned(phys_block.address)
+        else:
+            retval =  vaddr - param.kernel_base + param.ram_base
+            #self.lgr.debug('kernel_v2p cpl: %d pc: 0x%x phys block zero, use kernel and ram base got 0x%x' % (cpl, pc, retval))
+            return retval
 
     def getCurrentTaskARM(self, param, cpu):
         reg_num = cpu.iface.int_register.get_number("sp")
@@ -505,7 +522,9 @@ class memUtils():
         if ts < param.kernel_base:
             ts += param.kernel_base
             #self.lgr.debug('getCurrentTaskARM ts adjusted by base now 0x%x' % ts)
-        ct_addr = self.kernel_v2p(param, cpu, ts) + 12
+        task_struct = ts + 12
+        ct_addr = self.kernel_v2p(param, cpu, task_struct) 
+        #self.lgr.debug('ts: 0x%x  task_struct: 0x%x  phys: 0x%x' % (ts, task_struct, ct_addr))
         try:
             ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
         except:
