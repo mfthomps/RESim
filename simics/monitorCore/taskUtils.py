@@ -101,7 +101,10 @@ class TaskUtils():
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
-                phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                if cpu.architecture == 'arm':
+                    phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
+                else:
+                    phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
                 self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
             self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
@@ -127,7 +130,7 @@ class TaskUtils():
     def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0
-        #self.lgr.debug('taskUtils getCurTaskRec read phys from 0x%x' % self.phys_current_task)
+        #self.lgr.debug('taskUtils getCurTaskRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         #if cur_task_rec is None:
         #    self.lgr.debug('FAILED')
@@ -164,7 +167,7 @@ class TaskUtils():
             cpu = self.cpu
             #task = self.mem_utils.getCurrentTask(self.param, cpu)
             done = False
-            while not done:
+            while not done and task is not None:
                 comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
                 pid = self.mem_utils.readWord32(cpu, task + self.param.ts_pid)
                 #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
