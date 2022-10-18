@@ -3,4 +3,5 @@ create-ethernet-switch switch0
 create-ethernet-switch switch1
 create-ethernet-switch switch2
 create-ethernet-switch switch3
+create-ethernet-hub hub0
 
