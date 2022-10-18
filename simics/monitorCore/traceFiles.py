@@ -135,7 +135,7 @@ class TraceFiles():
                 if fname is not None and fname in self.path_list:
                     file_watch = self.path_list[fname]
                     with open(self.path_list[fname].outfile+suf, 'a') as fh:
-                        s = ''.join(map(chr,stripped))
+                        s = ''.join(map(chr,stripped))+'\n'
                         self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                         fh.write(s)
                         fh.flush()
@@ -146,7 +146,7 @@ class TraceFiles():
             if not did_write and fd in self.open_files:
                 ''' tracing fd '''
                 with open(self.open_files[fd].outfile+suf, 'a') as fh:
-                    s = ''.join(map(chr,stripped))
+                    s = ''.join(map(chr,stripped))+'\n'
                     self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
                     fh.write(s)
                     if self.dataWatch is not None:
