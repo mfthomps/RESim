@@ -734,7 +734,9 @@ class SharedSyscall():
                         if call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
                             #self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
-                            if dmod.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
+                            if dmod is not None and dmod.getComm() is not None and dmod.getComm() != comm:
+                                self.lgr.debug('sharedSyscall read is dmod, but wrong comm, wanted %s, this is %s' % (dmod.getComm(), comm))
+                            elif dmod.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
                                 self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
                                 if dmod.getCount() == 0:
                                     self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
