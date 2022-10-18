@@ -187,7 +187,10 @@ class PrepInjectWatch():
             pickDict['user_addr'] = self.kbuffer.getUserAddr()
             orig_buf = self.kbuffer.getOrigBuf()
             pickDict['orig_buffer'] = orig_buf
-            self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  Orig buffer len %d' % (len(kbufs), k_buf_len, len(orig_buf)))
+            if orig_buf is not None:
+                self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  Orig buffer len %d' % (len(kbufs), k_buf_len, len(orig_buf)))
+            else:
+                self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  ' % (len(kbufs), k_buf_len))
 
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
