@@ -1488,7 +1488,8 @@ class Syscall():
 
         elif callname == 'read':        
             exit_info.old_fd = frame['param1']
-            ida_msg = 'read pid:%d (%s) FD: %d buf: 0x%x count: %d' % (pid, comm, frame['param1'], frame['param2'], frame['param3'])
+            ida_msg = 'read pid:%s (%s) FD: %s buf: 0x%x count: %s' % (str(pid), comm, str(frame['param1']), frame['param2'], str(frame['param3']))
+            #ida_msg = 'read pid:%d (%s) FD: %d buf: 0x%x count: %d' % (pid, comm, frame['param1'], frame['param2'], frame['param3'])
             exit_info.retval_addr = frame['param2']
             exit_info.count = frame['param3']
             ''' check runToIO '''
@@ -1925,8 +1926,12 @@ class Syscall():
                                         cp = CallParams(None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                                    self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
-                                       len(syscall_info.call_params), tracing_all))
+                                    if syscall_info.call_params is not None:
+                                        self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
+                                           len(syscall_info.call_params), tracing_all))
+                                    else:
+                                        self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, pid, syscall_info.callnum, 
+                                           tracing_all))
                                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
                                     self.lgr.debug('did not add exitHap')
