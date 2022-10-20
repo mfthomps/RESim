@@ -1,0 +1,13 @@
+--- debugfs/debugfs.c	2022-10-10 16:58:04.500382009 +0000
++++ debugfs/debugfs.c.orig	2022-10-10 15:25:56.388360059 +0000
+@@ -51,10 +51,8 @@
+ #define S_BLKSIZE 512
+ #endif
+ 
+-#ifndef SKIP_GLOBDEFS
+ ss_request_table *extra_cmds;
+ const char *debug_prog_name;
+-#endif
+ int sci_idx;
+ 
+ ext2_filsys	current_fs = NULL;
