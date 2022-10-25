@@ -109,7 +109,8 @@ def main():
                 hit_dict[rel_path] = hits
     for f in hit_dict:
         full = os.path.join(prefix, f)
-        print('hits: %d fsize: %d  %s' % (len(hit_dict[f]), os.path.getsize(full), f))
+        full_queue = full.replace('coverage', 'queue')
+        print('hits: %d fsize: %d  %s' % (len(hit_dict[f]), os.path.getsize(full_queue), full_queue))
     print('got %d unique hit lists' % len(hit_dict))
     saveUnique(hit_dict, args.target)
 
