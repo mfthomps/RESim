@@ -46,6 +46,9 @@ class Dmod():
         self.comm = comm
         self.operation = None
         self.count = 1
+        self.fd = None
+        self.pid = None
+        self.fname_addr = None
         if os.path.isfile(path):
             with open(path) as fh:
                done = False
@@ -106,6 +109,19 @@ class Dmod():
                        was = nextLine(fh)
                        becomes = nextLine(fh) 
                        self.fiddle = self.Fiddle(match, was, becomes)
+               elif self.kind == 'open_replace':
+                   match = nextLine(fh) 
+                   length = nextLine(fh) 
+                   becomes_file = nextLine(fh)
+                   if not os.path.isfile(becomes_file):
+                       self.lgr.error('Dmod, open_replace expected file name, could not find %s' % becomes_file)
+                       return
+                   becomes = None
+                   with open(becomes_file, 'rb') as bf_fh:
+                       becomes = bf_fh.read()
+                   # hack using "was" as length
+                   self.fiddle = self.Fiddle(match, length, becomes)
+
                else: 
                    print('Unknown dmod kind: %s' % self.kind)
                    return
@@ -174,7 +190,7 @@ class Dmod():
                 operation = ['_llseek', 'close']
                 call_params = syscall.CallParams(operation, diddle_lseek)        
                 self.top.runTo(operation, call_params, run=False, ignore_running=True)
-                self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid %d fd %d' % (delta, pid, fd))
+                self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid:%d fd %d' % (delta, pid, fd))
             else:
                 self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
         else:
@@ -230,6 +246,8 @@ class Dmod():
             rm_this = self.fullReplace(cpu, s, addr)
         elif self.kind == 'match_cmd':
             rm_this = self.matchCmd(s)
+        elif self.kind == 'open_replace':
+           pass
         else:
             print('Unknown kind %s' % self.kind)
             return
@@ -257,7 +275,41 @@ class Dmod():
 
     def getComm(self):
         return self.comm
-                    
+
+    def setPid(self, pid):
+        self.pid = pid
+
+    def setFD(self, fd):
+        self.fd = fd
+
+    def getFD(self):
+        return self.fd
+
+    def setFnameAddr(self, addr):
+        self.fname_addr = addr
+    
+    def getMatch(self):                
+        if self.fiddle is not None:
+            return self.fiddle.match
+        else:
+            return None
+
+    def getWas(self):                
+        if self.fiddle is not None:
+            return self.fiddle.was
+        else:
+            return None
+
+    def getBecomes(self):                
+        if self.fiddle is not None:
+            return self.fiddle.becomes
+        else:
+            return None
+
+    def resetOpen(self):
+        self.lgr.debug('Dmod resetOpen')
+        self.fd = None
+        self.pid = None
         
 if __name__ == '__main__':
     print('begin')
