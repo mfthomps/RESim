@@ -252,6 +252,12 @@ class GenContextMgr():
         self.break_handle = self.break_handle+1
         return self.break_handle 
 
+    def getBPContext(self, handle):
+        for bp in self.breakpoints:
+            if bp.handle == handle:
+                return bp.cell
+        return None
+
     def genBreakpoint(self, cell, addr_type, mode, addr, length, flags, prefix=None):
         ''' create a GenContextManager breakpoint.  This is not yet set.
             Determine if the context should be resim, e.g., only when one of our
