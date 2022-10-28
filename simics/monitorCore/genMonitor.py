@@ -2103,11 +2103,11 @@ class GenMonitor():
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
-        #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
+        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
             the_call = self.call_traces[cell_name][callname]
             rm_list = []
-            #self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
+            self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
             for call in self.call_traces[cell_name]:
                 if self.call_traces[cell_name][call] == the_call:
@@ -2116,7 +2116,7 @@ class GenMonitor():
                 del self.call_traces[cell_name][call]
 
         else:
-            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
             pass
 
     def traceFile(self, path):
@@ -2138,6 +2138,15 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         call = self.mem_utils[self.target].getRegValue(cpu, 'r7')
         self.lgr.debug('exeptHap except: %d  pid %d call %d' % (exception_number, pid, call))
+
+    def copyCallParams(self, syscall):
+        #self.lgr.debug('copyCallParams for syscall %s' % syscall.name)
+        the_calls = syscall.getCallList()
+        for other_call in self.call_traces[self.target]:
+            if (the_calls is None or len(the_calls)==0) or self.call_traces[self.target][other_call].callListIntersects(the_calls):
+                #self.lgr.debug('copyCallParams found a syscall with intersecting calls (or syscall was traceAll), copy its params')
+                params = self.call_traces[self.target][other_call].getCallParams()
+                syscall.addCallParams(params) 
         
     def traceAll(self, target=None, record_fd=False):
         if target is None:
@@ -2170,6 +2179,7 @@ class GenMonitor():
                            self.context_manager[target], self.traceProcs[target], self.sharedSyscall[target], self.lgr, self.traceMgr[target], call_list=None, 
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
                            name='traceAll', linger=True, netInfo=self.netInfo[self.target])
+            self.copyCallParams(self.trace_all[target])
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
@@ -2574,12 +2584,12 @@ class GenMonitor():
                 self.lgr.debug('runTo added sycall for %s', call_name)
             else:
                 self.call_traces[cell_name][call_name].addCallParams(call_params_list)
-                self.lgr.debug('runTo added parameters to existig %s rather than new syscall', call_name)
+                self.lgr.debug('runTo added parameters to existing %s rather than new syscall', call_name)
         else:
             ''' stuff the call params into existing traceall syscall module '''
             self.trace_all[cell_name].addCallParams(call_params_list)
             self.lgr.debug('runTo added parameters to trace_all rather than new syscall')
-        if run:
+        if run and not self.is_monitor_running.isRunning():
             self.is_monitor_running.setRunning(True)
             SIM_continue(0)
         return retval
@@ -2624,7 +2634,8 @@ class GenMonitor():
             run = False
         operation = mod.getOperation()
         self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
-        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name='dmod')
+        name = 'dmod-%s' % operation
+        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name=name)
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
         return retval
 
@@ -2664,10 +2675,10 @@ class GenMonitor():
         self.lgr.debug('runToReceive to %s' % substring)
         self.runTo(call, call_params, name='recv')
 
-    def runToRead(self, substring):
+    def runToRead(self, substring, ignore_running=False):
         call_params = syscall.CallParams('read', substring, break_simulation=True)        
-        self.lgr.debug('runToRead to %s' % substring)
-        self.runTo('read', call_params, name='read')
+        self.lgr.debug('runToRead to %s' % str(substring))
+        self.runTo(['read'], call_params, name='read', ignore_running=ignore_running)
 
     def runToAccept(self, fd, flist=None, proc=None):
         call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
@@ -2709,7 +2720,21 @@ class GenMonitor():
     
             if self.target not in self.trace_all or self.trace_all[self.target] is None:
                 accept_call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
-                calls = ['read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'bind']
+                # add open to catch Dmods for open_replace
+                calls = ['open', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'bind']
+                # but remove the open if there is already a syscall, e.g., open-dmod in the current context
+                for call in self.call_traces[self.target]:
+                    self.lgr.debug('runToIO check call %s' % call)
+                    if self.call_traces[self.target][call].callListContains(['open']):
+                        self.lgr.debug('runToIO found syscall %s contains open' % self.call_traces[self.target][call].name)
+                        if self.call_traces[self.target][call].syscall_context == cpu.current_context:
+                            self.lgr.debug('runToIO contexts match will remove open and add param to existing %s call' % call)
+                            calls.remove('open')
+                            self.call_traces[self.target][call].addCallParams([call_params])
+                        else:
+                            self.lgr.debug('runToIO contexts differ will leave open call')
+
+
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
@@ -2758,6 +2783,7 @@ class GenMonitor():
                 if len(frames) > 0:
                     self.lgr.debug('runToIO, call to setExits')
                     the_syscall.setExits(frames, reset=reset, context_override=self.context_manager[self.target].getRESimContext()) 
+                self.copyCallParams(the_syscall)
             else:
                 self.trace_all[self.target].addCallParams([call_params])
                 self.lgr.debug('runToIO added parameters rather than new syscall')
@@ -3050,7 +3076,7 @@ class GenMonitor():
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
-            print('** Not debugging?? **')
+            #print('** Not debugging?? **')
             self.lgr.debug('clearBookmarks, Not debugging?? **')
             return False
         self.bookmarks.clearMarks()
@@ -3064,9 +3090,8 @@ class GenMonitor():
 
     def writeRegValue(self, reg, value, alone=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        reg_num = cpu.iface.int_register.get_number(reg)
-        cpu.iface.int_register.write(reg_num, value)
-        self.lgr.debug('writeRegValue %s, %x regnum %d' % (reg, value, reg_num))
+        self.mem_utils[self.target].setRegValue(cpu, reg, value)
+        self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if alone:
             SIM_run_alone(self.clearBookmarks, None) 
         else:
