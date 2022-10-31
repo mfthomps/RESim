@@ -110,8 +110,8 @@ def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
 
 def doConnect(switch, eth, switch_map, index):
     print('do connect switch %s eth %s' % (switch, eth))
-    cmd = '$%s' % eth
-    dog = run_command(cmd)
+    #cmd = '$%s' % eth
+    #dog = run_command(cmd)
     #print('dog is %s' % dog)
     if switch.startswith('v'):
         cmd = '%s.get-free-trunk-connector 2' % switch
