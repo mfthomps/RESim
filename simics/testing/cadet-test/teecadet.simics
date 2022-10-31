@@ -8,6 +8,10 @@ script-branch "driver login" {
     }
     $console.wait-for-string "ubuntu login: "
     $console.input "mike\n"
+    $console.input "mike\n"
     $console.wait-for-string "ubuntu login: "
     $console.input "mike\n"
+    $console.wait-for-string "Password: "
+    $console.input "mike\n"
+    $console.input "echo Here we go...\n"
 }

@@ -1,5 +1,6 @@
 sleep 8
 ./findWindow.sh "cadet01-tst"
+sleep 2
 xdotool type "@cgc.debugSnap()"
 xdotool key Return
 xdotool type "run-command-file doprep.simics"
