@@ -297,8 +297,7 @@ class GenMonitor():
             binder_file = os.path.join('./', self.run_from_snap, 'binder.json')
             if os.path.isfile(binder_file):
                 self.binders.loadJson(binder_file)
-             
-
+                         
         for cell_name in comp_dict:
             if 'RESIM_PARAM' in comp_dict[cell_name]:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
@@ -367,7 +366,6 @@ class GenMonitor():
                 if os.path.isfile(net_file):
                     self.netInfo[cell_name].loadfile(net_file)
                     self.lgr.debug('loaded net_list from %s' % net_file)
-
 
     def runPreScripts(self):
         ''' run the PRE_INIT_SCRIPT and the one_done module, if iany '''
@@ -596,6 +594,13 @@ class GenMonitor():
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
+            if self.run_from_snap is not None:
+                dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
+                if os.path.isfile(dmod_file):
+                    dmod_dict = pickle.load( open(dmod_file, 'rb') )
+                    for dmod_path in dmod_dict[cell_name]:
+                        self.runToDmod(dmod_path, cell_name=cell_name)
+
 
     def getBootCycleChunk(self):
         run_cycles =  900000000
@@ -2624,7 +2629,7 @@ class GenMonitor():
             return False
         if cell_name is None:
             cell_name = self.target
-        mod = dmod.Dmod(self, dfile, self.mem_utils[self.target], cell_name, self.lgr, comm=comm)
+        mod = dmod.Dmod(self, dfile, self.mem_utils[cell_name], cell_name, self.lgr, comm=comm)
         operation = mod.getOperation()
         call_params = syscall.CallParams(operation, mod, break_simulation=True)        
         if cell_name is None:
@@ -3268,6 +3273,19 @@ class GenMonitor():
     #    for pid in self.proc_list[self.target]:
     #        print('%d %s' % (pid, self.proc_list[self.target][pid]))
 
+    def getDmodPaths(self):
+        dmod_dict = {}
+        for target in self.context_manager:
+            dmod_dict[target] = [] 
+            for call in self.call_traces[target]:
+                dmod_list = self.call_traces[target][call].getDmods()
+                for dmod in dmod_list:
+                    path = dmod.getPath()
+                    if path not in dmod_dict[target]:
+                        dmod_dict[target].append(path)
+        return dmod_dict
+                    
+
     def writeConfig(self, name):
         cmd = 'write-configuration %s' % name 
         SIM_run_command(cmd)
@@ -3316,13 +3334,17 @@ class GenMonitor():
             self.lgr.debug('writeConfig no debug_pid found from context manager')
         pickle.dump( debug_info, open(debug_info_file, "wb" ) )
 
-
         if self.connectors is not None:
             connector_file = os.path.join('./', name, 'connector.json')
             self.connectors.dumpJson(connector_file)
         if self.binders is not None:
             binder_file = os.path.join('./', name, 'binder.json')
             self.binders.dumpJson(binder_file)
+
+        dmod_file = os.path.join('./', name, 'dmod.pickle')
+        dmod_dict = self.getDmodPaths()
+        pickle.dump(dmod_dict, open(dmod_file, "wb"))
+
         self.lgr.debug('writeConfig done to %s' % name)
 
     def showCycle(self):
