@@ -106,7 +106,7 @@ class TaskUtils():
                 else:
                     phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
                 self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
-            self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
+            #self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
 
             if self.phys_current_task > 0xffffffff:
@@ -117,7 +117,7 @@ class TaskUtils():
             #    self.phys_current_task = 0
             #    self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))
             #    return None
-        self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
+        #self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
         self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
         if unistd32 is not None:
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
@@ -298,7 +298,8 @@ class TaskUtils():
             task.thread_group = self.read_list_head(cpu, addr, self.param.ts_thread_group_list_head)
             if task.thread_group.next is not None:
                 ''' TBD why off by 4? '''
-                task.thread_group.next = task.thread_group.next + 4
+                #task.thread_group.next = task.thread_group.next + 4
+                task.thread_group.next = task.thread_group.next 
         return task
 
     def getTaskStructs(self):
@@ -329,28 +330,33 @@ class TaskUtils():
             #   self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
             #   #return tasks
             if task_addr is None or task.next is None: 
-                #self.lgr.debug('task_addr None')
+                self.lgr.debug('task_addr None')
                 break
             if (task.comm is None or len(task.comm.strip()) == 0) and not (task.pid == 0 and len(stack)==0):
                 # cleaner way to know we are done?
-                self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
+                #self.lgr.debug('read task struct for %x got comm of ZIP pid %d next %x' % (task_addr, task.pid, task.next))
                 break
                 #continue
            
             #else:
             #    self.lgr.debug('read task struct for %x got comm of %s pid %d next %x previous list head reads were for this task' % (task_addr, task.comm, task.pid, task.next))
           
-            #print 'reading task struct for got comm of %s ' % (task.comm)
+            #self.lgr.debug('reading task struct addr: 0x%x for got comm of %s pid:%d' % (task_addr, task.comm, task.pid))
             tasks[task_addr] = task
             for child in task.children:
                 if child:
+                    #self.lgr.debug('appending child 0x%x' % child)
                     stack.append((child, task_addr))
     
             if task.real_parent:
                 stack.append((task.real_parent, False))
             if self.param.ts_thread_group_list_head != None:
                 if task.thread_group.next:
-                    stack.append((task.thread_group.next, False))
+                    ''' TBD more on this thread group hack'''
+                    #hack_val = task.thread_group.next - 4
+                    hack_val = task.thread_group.next
+                    stack.append((hack_val, False))
+                    #self.lgr.debug('appending group next 0x%x' % hack_val)
     
             if x is True:
                 task.in_main_list = True
@@ -363,6 +369,7 @@ class TaskUtils():
                 for s in task.sibling:
                     if s and s != x:
                         stack.append((s, x))
+                        #self.lgr.debug('appending sib 0x%x' % s)
 
         ''' TBD: why does current task need to be seperately added, does not appear in task walk? '''
         task_rec_addr = self.getCurTaskRec()
@@ -538,7 +545,8 @@ class TaskUtils():
                     #self.lgr.debug('getTaskListPtr, has thread_group c is 0x%x' % c) 
                     #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
                     ''' TBD remove hack of off by 4 once other off by 4 hack sorted out '''
-                    if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
+                    #if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
+                    if (task.thread_group.next) == task_rec_addr or (task.thread_group.next) == task_rec_addr:
                         thread_group_addr = task_addr + self.param.ts_thread_group_list_head
                         #value = self.mem_utils.readPtr(self.cpu, thread_group_addr)
                         #self.lgr.debug('getTaskListPtr return thread group 0x%x val read is 0x%x' % (thread_group_addr, value))
