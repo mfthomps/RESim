@@ -238,6 +238,7 @@ class Dmod():
             self.lgr.debug('Dmod checkstring bytearray None from 0x%x' % addr)
             return retval
         s = ''.join(map(chr,byte_array))
+        rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
         elif self.kind == 'script_replace':
