@@ -588,13 +588,13 @@ class Syscall():
             flags = frame['param2']
             mode = frame['param3']
         fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
-        if fname is not None:
-            try:
-                fname.decode('ascii')
-            except:
-                self.lgr.warning('non-ascii fname at 0x%x %s' % (fname_addr, fname))
-                #SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
-                #return None, None, None, None, None
+        #if fname is not None:
+        #    try:
+        #        fname.decode('ascii')
+        #    except:
+        #        self.lgr.warning('non-ascii fname at 0x%x %s' % (fname_addr, fname))
+        #        #SIM_break_simulation('non-ascii fname at 0x%x %s' % (fname_addr, fname))
+        #        #return None, None, None, None, None
         cpu, comm, pid = self.task_utils.curProc() 
         if callname == 'openat':
             ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  pid:%d' % (callname, flags, 
@@ -2294,6 +2294,15 @@ class Syscall():
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  return True
         return False
+
+    def getDmods(self):
+        retval = []
+        for call_param in self.syscall_info.call_params:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                 dmod = call_param.match_param
+                 if dmod not in retval:
+                     retval.append(dmod)
+        return retval
 
     def getCallList(self):
         return self.call_list
