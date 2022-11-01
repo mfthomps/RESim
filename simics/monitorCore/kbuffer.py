@@ -23,6 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 from simics import *
+import decodeArm;
 '''
 Track kernel buffers used with read/recv calls
 '''
@@ -63,21 +64,51 @@ class Kbuffer():
                 self.read_count = count
                 self.lgr.debug('Kbuffer read, set new hap at new_addr 0x%x read_count %d' % (new_addr, count))
 
+    def gotBufferCallback(self, buf_addrs):
+        ''' Not yet used, would need to stop simulation'''
+        if len(buf_addrs) == 0:
+            self.lgr.error('Kbuffer gotBufferCallback called with no buffers')
+        else:
+            src = buf_addrs[0]
+            self.lgr.debug('Kbuffer gotBufferCallback, src 0x%x' % src)
+            self.updateBuffers(src)
 
-    def writeHap(self, Dumb, third, forth, memory):
-        ''' callback when user space buffer address is written'''
-        if self.write_hap is None:
-            return
-        self.lgr.debug('Kbuffer writeHap')
-        ''' TBD generalize.  currently only x86 32 bit'''
+    def findArmBuf(self):
         eip = self.top.getEIP()
-        if not self.mem_utils.isKernel(eip):
-            self.lgr.debug('Kbuffer eip 0x%x not in kernel, skip' % eip)
-            return
+        self.lgr.debug('Kbuffer findArmBuf, is ARM, expect a str')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        esi = self.mem_utils.getRegValue(self.cpu, 'esi') 
-        src = esi 
-        self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s' % (eip, esi, instruct[1]))
+        if instruct[1].startswith('str'):
+            op2, op1 = decodeArm.getOperands(instruct[1])
+            self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
+            #self.top.revRegSrc(op1, kernel=True, callback=self.gotBufferCallback, taint=False)
+            ''' Simulation is running.  So make hacky assumption about there being a recent ldm instruction to avoid stopping '''
+            limit = 20
+            gotone = False
+            for i in range(limit):
+                eip = eip - self.mem_utils.WORD_SIZE
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                self.lgr.debug('findArmBuf instruct: %s' % instruct[1])
+                if instruct[1].startswith('ldm'):
+                    op2, op1 = decodeArm.getOperands(instruct[1])
+                    if op1.endswith('!'):
+                        op1 = op1[:-1]
+                    self.lgr.debug('findArmBuf op1 is %s from  %s' % (op1, instruct[1]))
+                    value = self.top.getReg(op1, self.cpu)
+                    num_regs = op2.count(',')+1
+                    value = value - self.mem_utils.WORD_SIZE * num_regs
+                    self.lgr.debug('findArmBuf buf found at 0x%x' % value)
+                    self.updateBuffers(value)
+                    gotone = True
+                    break
+            if not gotone:
+                self.lgr.error('findArmBuf failed to find instruction sequence')
+        else:
+            self.lgr.error('findArmBuf, expected str instruction, got %s' % instruct[1])
+            
+
+                    
+
+    def updateBuffers(self, src):
         if self.kbuf_len is not None and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len):
             ''' The read is from the same kernel buffer used on the previous read.'''
             self.lgr.debug('Kbuffer read from previous kernel buffer 0x%x' % self.kbufs[-1])
@@ -139,6 +170,29 @@ class Kbuffer():
                 ''' Not enough remaining... just assume same length. '''
                 self.lgr.debug('Kbuffer not enough remaining buf_reamin is %s' % str(self.buf_remain))
                 self.buf_remain = 0
+
+
+    def writeHap(self, Dumb, third, forth, memory):
+        ''' callback when user space buffer address is written'''
+        if self.write_hap is None:
+            return
+        self.lgr.debug('Kbuffer writeHap addr 0x%x' % memory.logical_address)
+        if self.cpu.architecture != 'arm':
+            eip = self.top.getEIP()
+            if not self.mem_utils.isKernel(eip):
+                self.lgr.debug('Kbuffer eip 0x%x not in kernel, skip' % eip)
+                return
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            esi = self.mem_utils.getRegValue(self.cpu, 'esi') 
+            src = esi 
+            self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s' % (eip, esi, instruct[1]))
+            self.updateBuffers(src)
+        else:
+           
+            #self.removeHap(None)
+            #self.top.stopTrackIO()
+            src = self.findArmBuf()
+            #SIM_break_simulation('arm writeHap')
 
     def removeHap(self, dumb):
         if self.write_hap is not None:
