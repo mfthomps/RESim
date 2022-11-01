@@ -156,8 +156,13 @@ class Coverage():
         self.physical = physical
         block_file = self.full_path+'.blocks'
         if not os.path.isfile(block_file):
-            self.lgr.error('coverage: No blocks file at %s' % block_file)
-            return
+            if os.path.islink(self.full_path):
+                real = os.readlink(self.full_path)
+                parent = os.path.dirname(self.full_path)
+                block_file = os.path.join(parent, (real+'.blocks'))
+                if not os.path.isfile(block_file):
+                    self.lgr.error('coverage: No blocks file at %s' % block_file)
+                    return
         self.loadBlocks(block_file)         
         so_entry = self.so_map.getSOAddr(self.full_path, pid=self.pid)
         if so_entry is None:
