@@ -724,7 +724,8 @@ Appendix \ref{driver} for mappings of addresses and device names.  You may also 
 observe which interfaces are connected to the different switches, e.g., {\tt wireshark switch0} will display traffic on switch0.
 Take care to note MAC addresses and don't be fooled by packets routed through computers to other switches.
 
-Four network switches are created, named switch0, switch1, switch2 and switch3.   Each generic RESim computer has one or more network interfaces,
+Four network switches are created, named switch0, switch1, switch2 and switch3. And two network hubs, named hub0 and hub1, are created.  
+Each generic RESim computer has one or more network interfaces,
 depending on the type of platform.
 These are named eth0, eth1 and and eth2, and are assigned corresponding MAC addresses from the
 RESim configuration file. By default, each computer ethernet interface is connected to its correspondingly numbered switch.
@@ -735,6 +736,10 @@ ETH0_SWITCH=switch2
 \noindent would connect the eth0 deivce to switch2.  A switch value of {\tt NONE} prevents the ethernet device from being connected
 to any switch.  Note there is no error checking or sanity testing.  In the above example, you would also need to re-assign the eth2 device
 or it will attempt to attach two connections to the same switch port.
+Alternately you can connect the ethernet devices to the hub, e.g.,:
+\begin{verbatim}
+ETH0_SWITCH=hub0
+\end{verbatim}
 
 Ethernet devices on the generic x86 platform default to the {\tt i82543gc} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
 entry lets you pick one of the following alternate ethernet devices:
@@ -743,6 +748,8 @@ i82559
 i82546bg
 i82543gc
 \end{verbatim}
+
+If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
 
 Simics CLI variables are assigned to each computer ethernet link using the convention {\tt \$TARGET\_eth0} where {\tt TARGET}
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
@@ -955,7 +962,7 @@ The windows described for the IDA plugin are duplicated within the Ghidra plugin
 Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
 the source of a memory location, put the cursor over the operand and right click...
 
-Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_10.2\_DEV/application.log
+Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_10.3\_DEV/application.log
 
 Ghidra stores its analysis in "project" directories, typically in home.
 
@@ -2187,7 +2194,8 @@ Confirm crashReport uses jumpers.
 
 Add read counts to data watches.
 
-dMod fails when traceAll is set?
+dMod scriptReplace sets an lseek DMod to adjust future lseek calls.  The dmod sticks around until the file is closed (even then?, would 
+have to track pid/FD).
 
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
@@ -2304,7 +2312,7 @@ Note the simulation will hang while processing that script, so launch any long r
 The sample driver script loads an authorized\_keys file from that directory.  This allows ssh into the driver without passwords and uses
 rsa key files also found in that directory.
 
-The username driver is mike, no password is required.  Use {\tt enable-real-time-mode} to avoid login timeouts and network timeouts when
+The username and password for the driver is mike. No password is required if ssh keys are used.  Use {\tt enable-real-time-mode} to avoid login timeouts and network timeouts when
 interacting directly with the driver.  
 
 The driver device has 4 ethernet interfaces.  The mac addresses below are as defined in the ini file:
