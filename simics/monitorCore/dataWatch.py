@@ -2033,7 +2033,7 @@ class DataWatch():
                             call_ret_val = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
                             mark = self.watchMarks.getMarkFromIndex(index)
                             if call_ret_val != mark.mark.len:
-                                self.lgr.debug('dataWatch goToMark length %d does not match syscall_ret of %d' % (mark.mark.length))
+                                self.lgr.debug('dataWatch goToMark length %d does not match syscall_ret of %d' % (mark.mark.len, call_ret_val))
                                 self.mem_utils.setRegValue(self.cpu, 'syscall_ret', call_ret_val)
                 else:
                     self.lgr.debug('dataWatch goToMark index %d NOT a call' % index)
