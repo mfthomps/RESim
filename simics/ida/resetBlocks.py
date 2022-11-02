@@ -12,11 +12,14 @@ def getBB(graph, bb):
             return block.id
     return None
 
-def resetBlocks():
+def resetBlocks(in_path=None):
     p = idaapi.node_info_t()
     p.bg_color =  0xFFFFCC
     #fname = idaapi.get_root_filename()
-    fname = idc.eval_idc("ARGV[1]")
+    if in_path is None:
+        fname = idc.eval_idc("ARGV[1]")
+    else:
+        fname = in_path
     funs_file = fname+'.funs'
     if not os.path.isfile(funs_file):
         print('No file at %s\n Creating the database files needed by RESim.' % funs_file)
