@@ -13,6 +13,7 @@ import resetBlocks
 import rev
 import time
 import reHooks
+import idaversion
 import idbHooks
 import dbgHooks
 import subprocess
@@ -23,7 +24,7 @@ if arg_count > 1:
     resim_ida_arg=idc.eval_idc("ARGV[1]")
     print('In runsFirst arg_count %d resim_ida_arg %s ' % (arg_count, resim_ida_arg))
     if resim_ida_arg == 'color':
-        print('did color')
+        print('do color')
         '''
         if arg_count > 3:
             remote = idc.eval_idc("ARGV[3]")
@@ -42,6 +43,7 @@ if arg_count > 1:
             
         resetBlocks.resetBlocks()
         colorBlocks.colorBlocks()
+        print('did color')
         
     elif resim_ida_arg == 'clear':
         resetBlocks.resetBlocks()
@@ -55,13 +57,15 @@ if ok:
     idb_hooks = idbHooks.IDBHooks()
     idb_hooks.hook()
     dbg_hooks = dbgHooks.DBGHooks()
+    dbg_hooks.setIdbHooks(idb_hooks)
     dbg_hooks.hook()
     #ida_dbg.set_remote_debugger('127.0.0.1', '9123')
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
     print('attach result %d' % result)
-    if result == 1:
-        ''' Hooks must be set from __main__, or so it seems '''
-        re_hooks = reHooks.Hooks()
-        re_hooks.hook()
-        rev.RESimClient(re_hooks, dbg_hooks, idb_hooks)
+    ''' Now done in dbg_hooks in the start_process callback'''
+    #if result == 1:
+    #    ''' Hooks must be set from __main__, or so it seems '''
+    #    re_hooks = reHooks.Hooks()
+    #    re_hooks.hook()
+    #    rev.RESimClient(re_hooks, dbg_hooks, idb_hooks)

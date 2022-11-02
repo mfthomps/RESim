@@ -212,6 +212,9 @@ def grab_focus(title):
             print('No form titled %s' % title)
             break
         activate_widget(form, True)
+        done=True
+        '''
+        TBD: get_current does not really get the current, it gets whatever was current when the script started
         cur_form = get_current_widget()
         if form == cur_form:
             done = True
@@ -226,6 +229,7 @@ def grab_focus(title):
                 i = i+1
                 if i > limit:
                     done = True
+        '''
 
 def get_widget_type(form):
     if idaapi.IDA_SDK_VERSION <= 699:
