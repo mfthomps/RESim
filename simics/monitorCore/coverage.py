@@ -163,6 +163,9 @@ class Coverage():
                 if not os.path.isfile(block_file):
                     self.lgr.error('coverage: No blocks file at %s' % block_file)
                     return
+            else:
+                self.lgr.error('coverage: No blocks file at %s' % block_file)
+                return
         self.loadBlocks(block_file)         
         so_entry = self.so_map.getSOAddr(self.full_path, pid=self.pid)
         if so_entry is None:

@@ -189,8 +189,16 @@ def getBasicBlocks(prog):
         block_file = prog_file+'.blocks'
         print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
-            print('block file not found %s' % block_file)
-            return
+            if os.path.islink(prog_file):
+                real = os.readlink(prog_file)
+                parent = os.path.dirname(prog_file)
+                block_file = os.path.join(parent, (real+'.blocks'))
+                if not os.path.isfile(block_file):
+                    print('block file not found %s' % block_file)
+                    return
+            else:
+               print('block file (or link) not found %s' % block_file)
+               return
         with open(block_file) as fh:
             blocks = json.load(fh)
     return blocks, prog_elf
