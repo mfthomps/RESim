@@ -526,12 +526,12 @@ class Syscall():
         return frame
 
     def stopTraceAlone(self, dumb):
-        self.lgr.debug('stopTraceAlone')
+        #self.lgr.debug('stopTraceAlone')
         if self.stop_hap is not None:
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-        self.lgr.debug('stopTraceAlone2')
+        #self.lgr.debug('stopTraceAlone2')
         if self.background_break is not None:
             self.lgr.debug('stopTraceAlone delete background_break %d' % self.background_break)
             RES_delete_breakpoint(self.background_break)
@@ -539,7 +539,7 @@ class Syscall():
             self.background_break = None
             self.background_hap = None
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
-        self.lgr.debug('stopTraceAlone done')
+        #self.lgr.debug('stopTraceAlone done')
 
 
     def stopTrace(self, immediate=False):
@@ -2269,7 +2269,8 @@ class Syscall():
             self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
             self.lgr.debug('syscall addCallParams added params')
         else:
-            self.lgr.debug('syscall addCallParams, no new params')
+            pass
+            #self.lgr.debug('syscall addCallParams, no new params')
 
     def isRecordFD(self):
         return self.record_fd
@@ -2327,3 +2328,4 @@ class Syscall():
                     retval = True
                     break
         return retval 
+
