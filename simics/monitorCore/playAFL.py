@@ -59,11 +59,12 @@ class PlayAFL():
             ''' single file to play '''
             self.target = 'oneplay'
             relative = target[(len(self.afl_dir)+1):]
-            if len(relative.strip()) > 0:
+            if target.startswith(aflPath.getAFLOutput()) and len(relative.strip()) > 0:
                 self.afl_list = [relative]
+                self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
             else:
                 self.afl_list = [target]
-            self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
+                self.lgr.debug('playAFL, single file, abs path is %s' % target)
         else:
             if not crashes:
                 print('get target queue')
