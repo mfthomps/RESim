@@ -496,11 +496,13 @@ class Coverage():
             if not self.afl:
                 #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
                 if this_addr not in self.blocks_hit:
-                    self.blocks_hit[this_addr] = self.cpu.cycles
-                    self.latest_hit = this_addr
-                    addr_str = '%d' % (this_addr - self.offset)
+                    adjusted_addr = this_addr - self.offset
+                    self.blocks_hit[adjusted_addr] = self.cpu.cycles
+                    self.latest_hit = adjusted_addr
+                    #addr_str = '%d' % (this_addr - self.offset)
+                    addr_str = '%d' % adjusted_addr
                     if addr_str in self.blocks:
-                        self.funs_hit.append(this_addr)
+                        self.funs_hit.append(adjusted_addr)
                         #self.lgr.debug('bbHap add funs_hit 0x%x' % addr)
                     #self.lgr.debug('bbHap hit 0x%x %s count %d of %d   Functions %d of %d' % (this_addr, addr_str, 
                     #       len(self.blocks_hit), self.block_total, len(self.funs_hit), len(self.blocks)))
