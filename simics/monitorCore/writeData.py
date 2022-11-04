@@ -9,7 +9,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
-                  dataWatch=None):
+                  dataWatch=None, shared_syscall=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -118,6 +118,9 @@ class WriteData():
         self.read_limit = None
         ''' only restore call hap if there was one '''
         self.was_a_call_hap = False
+
+        ''' support fixup of read counts '''
+        self.shared_syscall = shared_syscall
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -323,10 +326,13 @@ class WriteData():
             self.poll_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.poll_break)
 
     def setRetHap(self):
-        if self.ret_hap is None: 
-            #self.lgr.debug('writeData set retHap on return_ip 0x%x, cell is %s' % (self.return_ip, str(self.cell)))
-            self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
-            self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
+        if self.shared_syscall is None:
+            if self.ret_hap is None: 
+                #self.lgr.debug('writeData set retHap on return_ip 0x%x, cell is %s' % (self.return_ip, str(self.cell)))
+                self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
+                self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
+        else:
+            self.shared_syscall.setReadFixup(self.doRetFixup)
 
     def selectHap(self, dumb, third, break_num, memory):
         ''' Hit a call to select or poll'''
@@ -338,12 +344,12 @@ class WriteData():
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
             else:
-                self.lgr.debug('writeData selectHap break simulation')
+                #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read')
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
-            self.lgr.debug('writeData selectHap stop on read')
+            #self.lgr.debug('writeData selectHap stop on read')
             SIM_break_simulation('writeData selectHap stop on read')
             return
         if pid != self.pid:
@@ -435,36 +441,38 @@ class WriteData():
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
                 
-
-    def retHap(self, dumb, third, break_num, memory):
-        ''' Hit a return from read'''
-        if self.retHap is None:
-            return
+    def doRetFixup(self):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 
             #self.lgr.error('writeData retHap got count of %d' % eax)
-            return
+            return eax
         remain = self.read_limit - self.total_read
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData retHap read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
         if self.total_read >= self.read_limit:
             #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
-            if self.write_callback is not None:
-                 SIM_run_alone(self.write_callback, count)
+            if self.mem_utils.isKernel(self.addr):
+                 ''' adjust the return value and continue '''
+                 if eax > remain:
+                     self.mem_utils.setRegValue(self.cpu, 'syscall_ret', remain)
+                     #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     eax = remain
+                 self.setCallHap()
+                 self.setSelectStopHap()
+                 SIM_run_alone(self.delRetHap, None)
+                 #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
-                 if self.mem_utils.isKernel(self.addr):
-                     ''' adjust the return value and continue '''
-                     if eax > remain:
-                         self.mem_utils.setRegValue(self.cpu, 'syscall_ret', remain)
-                         #self.lgr.debug('writeData adjusted return eax to remain value of %d' % remain)
-                     self.setCallHap()
-                     self.setSelectStopHap()
-                     SIM_run_alone(self.delRetHap, None)
-                     #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
-                 else:
-                     SIM_break_simulation('Over read limit')
-                     #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+                 ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
+                 SIM_break_simulation('Over read limit')
+                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+        return eax
+
+    def retHap(self, dumb, third, break_num, memory):
+        ''' Hit a return from read'''
+        if self.retHap is None:
+            return
+        self.doRetFixup()
         
     def restoreCallHap(self):
         if self.was_a_call_hap:
