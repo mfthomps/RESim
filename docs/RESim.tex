@@ -594,9 +594,10 @@ a driver component.  Thus, only single-packet processing can be analyzed.  Use {
 in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions include multiple packets, then use the runTrack utlity to 
 start new Simics sessions for each queue file.
 
-\item{\tt injectToBB} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
+\item{\tt injectToBB(bb, fname)} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
 is assumed to be the current RESim workspace directory name.  Note the simulation breaks at the BB, and thus the watch marks do not reflect subsequent
 processing -- it they will not reflect any watch mark in the target BB. (TBD, modify to process/track everything, and then skip back to the first hit of the BB.)
+Provide an fname if the bb is in a lib.  The bb value is per the program addresses, and RESim will adjust it to reflect the lib load address.
 
 \item Also see utilties listed in section \ref{utilities}, e.g., to find branches not taken and AFL sessions that reach a given basic block.
 
@@ -2196,6 +2197,10 @@ Add read counts to data watches.
 
 dMod scriptReplace sets an lseek DMod to adjust future lseek calls.  The dmod sticks around until the file is closed (even then?, would 
 have to track pid/FD).
+
+Add fuzzing/coverage option to instrument main program and a lib(s).
+
+IDA hotkey to go to address adjusted by the start of the LOAD segment.
 
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
