@@ -203,6 +203,7 @@ class GenMonitor():
         self.aflPlay = None
         ''' What to call when a command completes from skipAndMail (if anything '''
         self.command_callback = None
+        self.command_callback_param = None
 
         ''' TBD safe to reuse this?  helps when detecting iterative changes in address value '''
         self.find_kernel_write = None
@@ -1545,7 +1546,7 @@ class GenMonitor():
             self.coverage.saveCoverage()
         if self.command_callback is not None:
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
-            SIM_run_alone(self.command_callback, None)
+            SIM_run_alone(self.command_callback, self.command_callback_param)
         else:
             self.restoreDebugBreaks()
 
@@ -2861,6 +2862,10 @@ class GenMonitor():
         retval = self.getSO(eip)
         return retval
 
+    def getSOAddr(self, fname, pid):
+        elf_info  = self.soMap[self.target].getSOAddr(fname, pid=pid) 
+        return elf_info
+
     def getSOFromFile(self, fname):
         retval = ''
         self.lgr.debug('getSOFromFile %s' % fname)
@@ -3753,6 +3758,7 @@ class GenMonitor():
         self.traceProcs[self.target].addProc(pid, leader_pid, comm=comm, clone=clone)
 
     def traceInject(self, dfile):
+        ''' DEPRECATED, remove '''
         self.lgr.debug('traceInject %s' % dfile)
         if not os.path.isfile(dfile):
             print('File not found at %s\n\n' % dfile)
@@ -4339,6 +4345,9 @@ class GenMonitor():
     def setCommandCallback(self, callback):
         self.command_callback = callback 
 
+    def setCommandCallbackParam(self, param):
+        self.command_callback_param = param 
+
     def getCommandCallback(self):
         return self.command_callback 
 
@@ -4547,8 +4556,8 @@ class GenMonitor():
     def log(self, string):
         rprint(string)
 
-    def injectToBB(self, bb):
-        ibb = injectToBB.InjectToBB(self, bb, self.lgr)
+    def injectToBB(self, bb, fname=None):
+        ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
 
     def getParam(self):
         return self.param[self.target]
