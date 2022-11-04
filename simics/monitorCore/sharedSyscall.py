@@ -70,6 +70,8 @@ class SharedSyscall():
         self.callback_param = None
    
         self.kbuffer = None
+        ''' Adjust read return counts using writeData '''
+        self.read_fixup_callback = None
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -389,6 +391,8 @@ class SharedSyscall():
                         exit_info.call_params = None
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
+            if self.read_fixup_callback is not None:
+                eax = self.read_fixup_callback()
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
@@ -715,6 +719,8 @@ class SharedSyscall():
 
         elif callname == 'read':
             #self.lgr.debug('is read eax 0x%x' % eax)
+            if self.read_fixup_callback is not None:
+                eax = self.read_fixup_callback()
             if eax < 0: 
 
                 call_params = exit_info.syscall_instance.getCallParams()
@@ -746,7 +752,7 @@ class SharedSyscall():
                     s = ''.join(map(chr,byte_array))
                 else:
                     s = '<<NOT MAPPED>>'
-                trace_msg = ('\treturn from read pid:%d (%s) FD: %d count: %d into 0x%x given length: %d cycle: 0x%x \n\t%s\n' % (pid, comm, exit_info.old_fd, 
+                trace_msg = ('\treturn from read pid:%d (%s) FD: %d returned length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (pid, comm, exit_info.old_fd, 
                               eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None \
@@ -1067,7 +1073,7 @@ class SharedSyscall():
         for pid in rmlist:
             del self.exit_names[pid]
 
-        self.lgr.debug('rmExitBySyscallName return from %s' % name)
+        #self.lgr.debug('rmExitBySyscallName return from %s' % name)
 
     def setcallback(self, callback, param):
         self.callback = callback
@@ -1081,3 +1087,6 @@ class SharedSyscall():
 
     def setKbuffer(self, kbuffer):
         self.kbuffer = kbuffer
+
+    def setReadFixup(self, read_fixup_callback):
+        self.read_fixup_callback = read_fixup_callback
