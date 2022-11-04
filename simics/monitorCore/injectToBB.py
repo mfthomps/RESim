@@ -32,7 +32,7 @@ import findBB
 import applyFilter
 import resimUtils
 class InjectToBB():
-    def __init__(self, top, bb, lgr):
+    def __init__(self, top, bb, lgr, fname=None):
         unfiltered = '/tmp/bb.io'
         filtered = '/tmp/bb_filtered.io'
         self.bb = bb
@@ -45,7 +45,10 @@ class InjectToBB():
         flist = findBB.findBB(target, bb, quiet=True)
         self.inject_io = None
         self.top.debugSnap()
-        prog = self.top.getFullPath()
+        if fname is None:
+            prog = self.top.getFullPath()
+        else: 
+            prog = fname
         basic_block = resimUtils.getOneBasicBlock(prog, bb)
         if basic_block is None:
             print('ERROR getting basic block for address 0x%x prog %s' % (bb, prog)) 
@@ -70,7 +73,7 @@ class InjectToBB():
         if qfile is not None:
             self.lgr.debug('InjectToBB inject %s' % qfile)
             self.top.setCommandCallback(self.doStop)
-            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False)
+            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, fname=fname)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
@@ -85,11 +88,12 @@ class InjectToBB():
         else:
             print('No input files found to get to bb 0x%x' % bb)
 
-    def doStop(self, dumb=None):
+    def doStop(self, got_hit=None):
         self.lgr.debug('InjectToBB doStop')
         self.top.stopDataWatch()
         SIM_run_alone(self.inject_io.delCallHap, None)
-        SIM_run_alone(self.top.setDebugBookmark,'injectToBB')
+        if got_hit == True:
+            SIM_run_alone(self.top.setDebugBookmark,'injectToBB')
         status = SIM_simics_is_running()
         if status:
             self.top.stopAndGo(self.gobb)

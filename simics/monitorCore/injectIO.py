@@ -26,8 +26,20 @@ class InjectIO():
         self.mem_utils = mem_utils
         self.context_manager = context_manager
         self.top = top
-        self.break_on = break_on
         self.lgr = lgr
+        self.lgr.debug('break_on given as %s fname as %s' % (str(break_on), fname))
+        self.break_on = break_on
+        if break_on is not None and fname is not None:
+            self.lgr.debug('break_on given as 0x%x' % break_on)
+            so_entry = self.top.getSOAddr(fname, pid=self.pid)
+            if so_entry is None:
+                self.lgr.error('injectIO no SO entry for %s' % prog)
+            if so_entry.address is not None:
+                if so_entry.locate is not None:
+                    self.break_on = self.break_on + so_entry.locate + so_entry.offset
+                    self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
+            else:
+                self.lgr.error('injectIO SO entry address is None for %s' % fname)
         self.in_data = None
         self.backstop_cycles =   9000000
         bsc = os.getenv('BACK_STOP_CYCLES')
@@ -108,12 +120,15 @@ class InjectIO():
         self.no_iterators = no_iterators
         self.only_thread = only_thread
         self.no_track = no_track
+        self.hit_break_on = False
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
             self.context_manager.genDeleteHap(self.break_on_hap)
         self.lgr.debug('breakCleanup do stopandgo')
         if self.callback is not None:
+            ''' NOTE obscure way of telling injectToBB that we stopped due to a hit, vice a backstop'''
+            self.top.setCommandCallbackParam(True)
             self.top.stopAndGo(self.callback)
         else:
             self.top.stopAndGo(self.top.skipAndMail)
@@ -122,6 +137,7 @@ class InjectIO():
         self.lgr.debug('injectIO breakOnHap')
         if self.break_on_hap is None:
             return
+        self.hit_break_on = True
         SIM_run_alone(self.breakCleanup, None)
 
     def go(self, no_go_receive=False):
@@ -211,10 +227,14 @@ class InjectIO():
             self.lgr.debug('injectIO dissable user iterators')
             self.dataWatch.setUserIterators(None)
 
+        if self.trace_all: 
+            use_data_watch = None
+        else:
+            use_data_watch = self.dataWatch
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=self.dataWatch, filter=self.filter_module)
+                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, shared_syscall=self.top.getSharedSyscall())
 
         #bytes_wrote = self.writeData()
         bytes_wrote = self.write_data.write()
