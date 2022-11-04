@@ -11,10 +11,12 @@ c 900000000
 @cgc.writeConfig('cadet')
 @cgc.watchROP()
 !./findWindow.sh "Simics Target Consoles"
+!sleep 2
 !xdotool key Down
 !xdotool key Return
 !sleep 2
 !./findWindow.sh driver.mb.sb.com
+!sleep 2
 !xdotool type "          ./client.py"
 !xdotool key Return
 script-branch "sent it" {

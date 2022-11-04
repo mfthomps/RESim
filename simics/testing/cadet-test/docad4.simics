@@ -9,6 +9,7 @@ c 900000000
 @cgc.writeConfig('cadet')
 @cgc.watchROP()
 !./findWindow.sh ".*driver.mb.sb.com.0..*"
+!sleep 2
 
 !xdotool type "          ./client.py"
 !xdotool key Return

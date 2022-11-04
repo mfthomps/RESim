@@ -3,6 +3,7 @@
 # Calling that script directly from RESim would break scope
 #
 !./findWindow.sh cadet01-tst
+!sleep 1
 if $simics_version == 4.8{
     !xdotool type 'run-command-file docad4.simics'
 }else{
