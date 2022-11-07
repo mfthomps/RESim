@@ -966,6 +966,8 @@ class SharedSyscall():
                 trace_msg = ('\treturn from %s pid:%d NO select info result: %d\n' % (callname, pid, eax))
         elif callname == 'poll' or callname == 'ppoll':
             trace_msg = ('\treturn from %s pid:%d %s  result: %d\n' % (callname, pid, exit_info.poll_info.getString(), eax))
+            exit_info.call_params = None
+
         elif callname == 'vfork':
             trace_msg = ('\treturn from vfork in parent %d child pid:%d\n' % (pid, ueax))
             if pid in self.trace_procs:
