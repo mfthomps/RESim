@@ -346,8 +346,11 @@ class ReturnInt():
         return self.msg
 
 class ResetOrigin():
-    def __init__(self, origin_watches):
-        self.msg = 'Reset origin with %d data watches' % len(origin_watches)
+    def __init__(self, origin_watches, new_msg):
+        if new_msg is None:
+            self.msg = 'Reset origin with %d data watches' % len(origin_watches)
+        else:
+            self.msg = new_msg
         self.origin_watches = origin_watches
     def getMsg(self):
         return self.msg
@@ -390,6 +393,8 @@ class WatchMarks():
         self.recent_buf_max_len = None
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        ''' will store so map with saved json files ''' 
+        self.so_map = None
 
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
@@ -456,9 +461,14 @@ class WatchMarks():
                 self.recent_buf_max_len = max_len
         self.recordIP(ip)
  
-    def resetOrigin(self, origin_watches): 
+    def resetOrigin(self, origin_watches, reuse_msg=False): 
+        old_msg = None
+        if reuse_msg:
+           old_origin = self.getMarkFromIndex(1)
+           if old_origin is not None:
+               old_msg = old_origin.mark.getMsg() 
         self.clearWatchMarks()
-        ro = ResetOrigin(origin_watches)
+        ro = ResetOrigin(origin_watches, new_msg=old_msg)
         self.addWatchMark(ro)
         self.lgr.debug('watchMarks resetOrigin')
 
@@ -609,6 +619,8 @@ class WatchMarks():
         
                 
     def addWatchMark(self, mark, cycles=None, ip=None):
+        if self.so_map is None:
+            self.somap = self.top.getSOMap(quiet=True)
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         pid = self.top.getPID()
@@ -952,14 +964,18 @@ class WatchMarks():
         self.lgr.debug('watchMarks saveJson %d marks to file %s packet %d' % (len(self.mark_list), fname, packet))
         if os.path.isfile(fname):
             try:
-                my_marks = json.load(open(fname))
+                combined = json.load(open(fname))
+                my_marks = combined['marks']
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
         new_marks = self.getJson(self.mark_list, packet=packet)
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
-            json.dump(my_marks, fh) 
+            combined = {}
+            combined['somap'] = self.so_map
+            combined['marks'] = my_marks
+            json.dump(combined, fh) 
 
     def getDataWatchList(self):
         ''' get list intended for use in recontructing data watches '''

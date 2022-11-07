@@ -241,7 +241,7 @@ class DataWatch():
                 self.read_limit_callback()
                 if len(self.start) == 0:
                     ''' TBD seems to only make sense on first read '''
-                    self.lgr.debug('dataWAtch setRange over read limit, set retval to %d' % self.read_limit_trigger)
+                    self.lgr.debug('dataWatch setRange over read limit, set retval to %d' % self.read_limit_trigger)
                     self.mem_utils.setRegValue(self.cpu, 'syscall_ret', self.read_limit_trigger)
                     length = self.read_limit_trigger    
                     if msg is not None:
@@ -713,7 +713,7 @@ class DataWatch():
             if buf_index is not None:
                 #self.lgr.debug('dataWatch returnHap memset on one of our buffers')
                 if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
-                    self.lgr.debug('dataWAtch returnHap memset is exact match, remove buffer')
+                    self.lgr.debug('dataWatch returnHap memset is exact match, remove buffer')
                     if buf_index in self.read_hap:
                         self.context_manager.genDeleteHap(self.read_hap[buf_index], immediate=False)
                         self.read_hap[buf_index] = None
@@ -2095,7 +2095,7 @@ class DataWatch():
                 self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x, len %d' % (index, index, self.start[index], self.length[index]))
 
 
-    def resetOrigin(self, cycle):
+    def resetOrigin(self, cycle, reuse_msg=False):
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
         if len(self.start) == 0:
             return
@@ -2115,7 +2115,7 @@ class DataWatch():
             else:
                 self.lgr.debug('clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
                 break
-        self.watchMarks.resetOrigin(origin_watches)
+        self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg)
 
     def setIdaFuns(self, ida_funs):
         self.lgr.debug('DataWatch setIdaFuns')
