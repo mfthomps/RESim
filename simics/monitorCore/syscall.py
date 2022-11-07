@@ -2222,7 +2222,7 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
 
-    def setExits(self, frames, reset=False, context_override=None):
+    def setExits(self, frames, origin_reset=False, context_override=None):
         ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
         for pid in frames:
             self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
@@ -2248,7 +2248,7 @@ class Syscall():
                 self.handleSelect(callname, pid, frames[pid], exit_info, syscall_info)
 
             if exit_info.call_params is not None:
-                exit_info.origin_reset = reset
+                exit_info.origin_reset = origin_reset
                 if exit_info.retval_addr is not None:
                     self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
                 else:
