@@ -79,6 +79,8 @@ class DataWatch(simplecustviewer_t):
         except:
             print('%s' % simicsString)
             return
+        index = index - 1
+        #print('nextWatchMark decremented index to %d' % index)
         self.Jump(index)
 
     def updateDataWatch(self):
