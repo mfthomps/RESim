@@ -4,6 +4,7 @@ import os
 import idaapi
 import ida_graph
 import ida_gdl
+import ida_nalt
 import idc
 import gdbProt
 import subprocess
@@ -53,8 +54,17 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     p.bg_color =  new_hit_color
     num_new = 0
     graph_dict = {}
+    offset = 0
+    info = idaapi.get_inf_structure()
+    if info.is_dll():
+        offset = ida_nalt.get_imagebase()
+
     for bb in latest_hits_json:
+        bb = bb + offset
         f = idaapi.get_func(bb)
+        if f is None:
+            print('Error getting function for bb 0x%x' % bb)
+            return
         f_start = f.start_ea
         if f_start not in graph_dict:
             graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
@@ -114,10 +124,12 @@ def colorBlocks(in_path=None):
     else:
         #in_path = idaapi.get_root_filename()
         if in_path is None:
+            ''' TBD this is broken, argv1 is sometimes other param, e.g., color'''
             in_path = idc.eval_idc("ARGV[1]")
         base = os.path.basename(in_path)
         fname = os.path.join(resim_ida_data, base, base)
         latest_hits_file = fname+'.hits' 
+        #print('latest_hits_file is %s' % latest_hits_file)
         if not os.path.isfile(latest_hits_file):
             ida_db_path = os.getenv('IDA_DB_PATH')
             if ida_db_path is not None:
@@ -130,6 +142,7 @@ def colorBlocks(in_path=None):
                 
             
         if os.path.isfile(latest_hits_file):
+            print('Using latest_hits_file is %s' % latest_hits_file)
             all_hits_file = fname+'.all.hits'
             pre_hits_file = fname+'.pre.hits'
             doColor(latest_hits_file, all_hits_file, pre_hits_file)

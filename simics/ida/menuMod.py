@@ -1,4 +1,6 @@
 import idaapi
+import ida_nalt
+import idaversion
 import os
 '''
  * This software was created by United States Government employees
@@ -300,6 +302,22 @@ class RunToAcceptHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class GoToHandler(idaapi.action_handler_t):
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+    def activate(self, ctx):
+        prompt = 'Go to address (less program base)'
+        target_addr = idaversion.ask_addr(0, prompt)
+        if target_addr is not None:
+            info = idaapi.get_inf_structure()
+            if info.is_dll():
+                offset = ida_nalt.get_imagebase()
+                target_addr = target_addr + offset
+            idaapi.jumpto(target_addr)
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     do_show_cycle_action = idaapi.action_desc_t(
         'do_show_cycle:action',
@@ -447,6 +465,13 @@ def register(isim):
         'Run to accept', 
         RunToAcceptHandler(isim))
 
+    go_to_action = idaapi.action_desc_t(
+        'go_to_action:action',
+        '^ Rev until call', 
+        GoToHandler(),
+        'Ctrl+Shift+g')
+
+
     this_dir = os.path.dirname(os.path.realpath(__file__))
     play_icon = os.path.join(this_dir, "play.png")
     continue_forward_action = idaapi.action_desc_t(
@@ -483,6 +508,7 @@ def register(isim):
     idaapi.register_action(track_io_action)
     idaapi.register_action(retrack_action)
     idaapi.register_action(run_to_accept_action)
+    idaapi.register_action(go_to_action)
 
 
 def attach():
@@ -591,7 +617,7 @@ def attach():
         'Debugger/Continue process', 
         'continue_forward:action',
         idaapi.SETMENU_APP) 
-   
+
     #if idaapi.IDA_SDK_VERSION >= 740:
     #    idaapi.unregister_action("ProcessStart")
     idaapi.attach_action_to_toolbar("DebugToolBar", "continue_forward:action")

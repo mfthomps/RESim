@@ -56,8 +56,11 @@ if arg_count > 1:
 if ok:
     idb_hooks = idbHooks.IDBHooks()
     idb_hooks.hook()
+    re_hooks = reHooks.Hooks()
     dbg_hooks = dbgHooks.DBGHooks()
     dbg_hooks.setIdbHooks(idb_hooks)
+    dbg_hooks.setReHooks(re_hooks)
+    re_hooks.hook()
     dbg_hooks.hook()
     #ida_dbg.set_remote_debugger('127.0.0.1', '9123')
     ida_dbg.load_debugger('gdb', True)

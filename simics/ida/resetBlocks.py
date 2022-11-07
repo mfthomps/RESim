@@ -17,7 +17,8 @@ def resetBlocks(in_path=None):
     p.bg_color =  0xFFFFCC
     #fname = idaapi.get_root_filename()
     if in_path is None:
-        fname = idc.eval_idc("ARGV[1]")
+        #fname = idc.eval_idc("ARGV[1]")
+        fname = idaversion.get_input_file_path()
     else:
         fname = in_path
     funs_file = fname+'.funs'
