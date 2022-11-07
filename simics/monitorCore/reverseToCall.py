@@ -632,6 +632,8 @@ class reverseToCall():
                     retval = False
                     self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
                        rval))
+            elif self.cpu.architecture == 'arm' and self.tryShortCall():
+                retval = True
             elif self.tryRecentCycle(page_faults, pid):
                 self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
             else:
@@ -643,6 +645,24 @@ class reverseToCall():
                 self.context_manager.showHaps()
                 SIM_run_alone(SIM_run_command, 'rev')
                 retval = None
+        return retval
+
+    def tryShortCall(self):
+        ''' Arm libc will call the kernel for memory barriers?  iae, the kernel does not execute a lot of instructions '''
+        retval = False
+        initial = self.cpu.cycles 
+        for i in range(20):
+            skip_to = self.cpu.cycles - 1
+            skip_ok = self.skipToTest(skip_to)
+            if not skip_ok:
+                self.lgr.error('reverseToCall tryShortCall skip to failed')
+                break
+            cpl = memUtils.getCPL(self.cpu)
+            if cpl > 0:
+                retval = True
+                break
+        if not retval:
+            skip_ok = self.skipToTest(initial)
         return retval
 
     def tryRecentCycle(self, page_faults, pid):
