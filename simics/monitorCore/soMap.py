@@ -259,7 +259,7 @@ class SOMap():
         else:
             print('no so map for %d' % pid)
             
-    def getSO(self, pid=None):
+    def getSO(self, pid=None, quiet=False):
         retval = {}
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
@@ -292,7 +292,9 @@ class SOMap():
         else:
             self.lgr.debug('no so map for %d' % pid)
         ret_json = json.dumps(retval) 
-        print(ret_json)
+        if not quiet:
+            print(ret_json)
+        return ret_json
  
     def handleExit(self, pid, killed=False):
         ''' when a thread leader exits, clone the so map structures to each child, TBD determine new thread leader? '''
@@ -551,4 +553,3 @@ class SOMap():
            return True
        else:
            return False
-                
