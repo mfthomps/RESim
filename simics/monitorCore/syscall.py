@@ -543,16 +543,16 @@ class Syscall():
 
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('syscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
+        #self.lgr.debug('syscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
-            self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
+            #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
-        self.lgr.debug('do call to alone')
+        #self.lgr.debug('do call to alone')
         SIM_run_alone(self.stopTraceAlone, None)
-        self.lgr.debug('did call to alone')
+        #self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces():
             self.sharedSyscall.stopTrace()
 
@@ -570,7 +570,7 @@ class Syscall():
         ''' reset SO map tracking ''' 
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
-        self.lgr.debug('syscall stopTrace return for %s' % self.name)
+        #self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
         self.watch_first_mmap = fd
