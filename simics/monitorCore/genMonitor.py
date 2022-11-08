@@ -2114,11 +2114,11 @@ class GenMonitor():
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
-        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
+        #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
             the_call = self.call_traces[cell_name][callname]
             rm_list = []
-            self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
+            #self.lgr.debug('genMonitor rmCallTrace will delete %s' % callname)
             del self.call_traces[cell_name][callname]
             for call in self.call_traces[cell_name]:
                 if self.call_traces[cell_name][call] == the_call:
@@ -2127,7 +2127,7 @@ class GenMonitor():
                 del self.call_traces[cell_name][call]
 
         else:
-            self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
+            #self.lgr.debug('rmCallTrace callname %s not in call_traces for cell %s' % (callname, cell_name))
             pass
 
     def traceFile(self, path):
@@ -2715,8 +2715,9 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params, name='bind')
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation, proc=proc)        
+        ''' nth occurance of syscalls that match params '''
         call_params.nth = count
        
         if 'runToIO' in self.call_traces[self.target]:
@@ -2793,7 +2794,7 @@ class GenMonitor():
                        self.lgr.debug('kept frames for pid %d' % pid)
                 if len(frames) > 0:
                     self.lgr.debug('runToIO, call to setExits')
-                    the_syscall.setExits(frames, reset=reset, context_override=self.context_manager[self.target].getRESimContext()) 
+                    the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager[self.target].getRESimContext()) 
                 self.copyCallParams(the_syscall)
             else:
                 self.trace_all[self.target].addCallParams([call_params])
@@ -2926,8 +2927,8 @@ class GenMonitor():
     def listSOMap(self):
         self.soMap[self.target].listSO()
 
-    def getSOMap(self):
-        self.soMap[self.target].getSO()
+    def getSOMap(self, quiet=False):
+        return self.soMap[self.target].getSO(quiet=quiet)
 
     def getSOFile(self, addr):
         fname = self.soMap[self.target].getSOFile(addr)
@@ -3087,30 +3088,32 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
-    def clearBookmarks(self, dumb=None):
+    def clearBookmarks(self, reuse_msg=False):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.lgr.debug('genMonitor clearBookmarks')
         if pid is None:
             #print('** Not debugging?? **')
             self.lgr.debug('clearBookmarks, Not debugging?? **')
             return False
+       
         self.bookmarks.clearMarks()
         self.resetOrigin(cpu)
-        self.dataWatch[self.target].resetOrigin(cpu.cycles)
+        self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         #self.stopTrackIO()
         self.lgr.debug('genMonitor clearBookmarks call clearWatches')
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
-    def writeRegValue(self, reg, value, alone=False):
+    def writeRegValue(self, reg, value, alone=False, reuse_msg=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.mem_utils[self.target].setRegValue(cpu, reg, value)
-        self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
-        if alone:
-            SIM_run_alone(self.clearBookmarks, None) 
-        else:
-            self.clearBookmarks()
+        #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
+        if self.reverseEnabled():
+            if alone:
+                SIM_run_alone(self.clearBookmarks, reuse_msg) 
+            else:
+                self.clearBookmarks(reuse_msg=reuse_msg)
 
     def writeWord(self, address, value):
         ''' NOTE: wipes out bookmarks! '''
@@ -3118,8 +3121,9 @@ class GenMonitor():
         self.mem_utils[self.target].writeWord(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
-        self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
-        self.clearBookmarks()
+        if self.reverseEnabled():
+            self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
+            self.clearBookmarks()
 
     def writeByte(self, address, value):
         ''' NOTE: wipes out bookmarks! '''
@@ -3127,16 +3131,18 @@ class GenMonitor():
         self.mem_utils[self.target].writeByte(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
-        self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
-        self.clearBookmarks()
+        if self.reverseEnabled():
+            self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
+            self.clearBookmarks()
 
     def writeString(self, address, string):
         ''' NOTE: wipes out bookmarks! '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.lgr.debug('writeString 0x%x %s' % (address, string))
         self.mem_utils[self.target].writeString(cpu, address, string)
-        self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
-        self.clearBookmarks()
+        if self.reverseEnabled():
+            self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
+            self.clearBookmarks()
 
     def stopDataWatch(self):
         self.lgr.debug('genMonitor stopDataWatch')
@@ -3517,7 +3523,7 @@ class GenMonitor():
             else:
                 SIM_continue(0)
 
-    def trackIO(self, fd, reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False, kbuf=False):
+    def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False, kbuf=False):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3545,7 +3551,7 @@ class GenMonitor():
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
 
-        self.runToIO(fd, linger=True, break_simulation=False, reset=reset, run_fun=run_fun, count=count, kbuf=kbuf)
+        self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf)
 
     def stopTrackIO(self):
         thread_pids = self.context_manager[self.target].getThreadPids()
@@ -4742,6 +4748,26 @@ class GenMonitor():
     def isCode(self, addr):
         pid = self.getPID()
         return self.soMap[self.target].isCode(addr, pid)
+
+    def getTargetPlatform(self):
+        platform = None
+        if 'PLATFORM' in self.comp_dict[self.target]:
+            platform = self.comp_dict[self.target]['PLATFORM']
+        return platform
+
+    def getReadAddr(self):
+        retval = None
+        cpu = self.cell_config.cpuFromCell(self.target)
+        callnum = self.mem_utils[self.target].getCallNum(cpu)
+        callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
+        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        if callname in ['read', 'recv', 'recfrom']:
+            retval = reg_frame['param2']
+            length = reg_frame['param3']
+        elif callname == 'socketcall':
+            retval = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+16)
+            length = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+20)
+        return retval, length
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
