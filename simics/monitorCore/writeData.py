@@ -43,8 +43,6 @@ class WriteData():
         self.k_end_ptr = None
 
         self.fd = None
-        self.callnum = None
-        self.socket_callname = None
 
         #  NOTE all these haps get deleted on startup, so don't 
         #  create them until they are needed.
@@ -88,8 +86,9 @@ class WriteData():
 
         self.stop_on_read = stop_on_read
         self.k_bufs = None
-        self.user_addr = None
         self.orig_buffer = None
+        # for restoring user space to what it was, less what we read from the kernel
+        self.user_space_addr = None
 
         self.loadPickle(snapshot_name)
 
@@ -122,25 +121,27 @@ class WriteData():
         ''' support fixup of read counts '''
         self.shared_syscall = shared_syscall
 
+        self.kernel_buf_consumed = False
+
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
         self.addr = addr
         self.expected_packet_count = expected_packet_count
         self.current_packet = 0
         self.total_read = 0
+        self.kernel_buf_consumed = False
 
     def writeKdata(self, data):
         if self.k_bufs is None:
             self.mem_utils.writeString(self.cpu, self.addr, data) 
         else:
-            #if self.user_addr is not None and len(data) < len(self.orig_buffer):
-            #     ''' extend data to include what was in the original buffer '''
-            #     amount = len(self.orig_buffer) - len(data)
-            #     self.lgr.debug('writeKdata, extend data to include original buffer %d bytes' % amount)
-            #     data = data+self.orig_buffer[len(data):]
             remain = len(data)
             offset = 0
             index = 0
+            self.user_space_addr, length = self.top.getReadAddr()
+            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+            #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            self.setCallHap()
             while remain > 0:
                  count = min(self.k_buf_len, remain)
                  end = offset + count
@@ -187,15 +188,16 @@ class WriteData():
                 self.writeKdata(self.in_data)
                 retval = len(self.in_data)
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
-            if self.dataWatch is not None:
-                ''' Limit reads to buffer size '''
-                self.dataWatch.setReadLimit(retval, self.readLimitCallback)
-            else:
-                ''' Limit reads to buffer size using a hap on the read return '''
-                #self.lgr.debug('writeData call setRetHap')
-                self.setRetHap()
-                self.read_limit = retval
-                self.total_read = 0
+            #if self.dataWatch is not None:
+            #    ''' Limit reads to buffer size '''
+            #    self.dataWatch.setReadLimit(retval, self.readLimitCallback)
+            #else:
+            ''' Limit reads to buffer size using a hap on the read return '''
+            ''' TBD can we stop tracking total read now that sharedSyscall is used to adjust values?'''
+            #self.lgr.debug('writeData call setRetHap')
+            self.setRetHap()
+            self.read_limit = retval
+            self.total_read = 0
             self.in_data = ''
            
         else:
@@ -332,6 +334,7 @@ class WriteData():
                 self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
         else:
+            #self.lgr.debug('writeData set retHap setReadFixup')
             self.shared_syscall.setReadFixup(self.doRetFixup)
 
     def selectHap(self, dumb, third, break_num, memory):
@@ -395,10 +398,15 @@ class WriteData():
             '''
             if self.write_callback is not None:
                 if self.mem_utils.isKernel(self.addr):
+                    if not self.kernel_buf_consumed:
+                        self.user_space_addr, length = self.top.getReadAddr()
+                        if self.user_space_addr is not None:
+                            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+                        return
                     rprint('kernel buffer data consumed')
                     #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
                     SIM_break_simulation('kernel buffer data consumed.')
-                    ''' errr no, if kernel buffer callhap only is set after dataWatch consumes sees all data consumed'''
+                    ''' errr no, if kernel buffer callHap only is set after dataWatch consumes sees all data consumed'''
                     ''' ???Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
                         The entire data was injected into the kernel, we don't know here when to stop '''
                     #self.lgr.debug('writeData handleCall current packet %d kernel buffer, just continue ' % self.current_packet)
@@ -409,6 +417,11 @@ class WriteData():
                     SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
+                    if not self.kernel_buf_consumed:
+                        self.user_space_addr, length = self.top.getReadAddr()
+                        if self.user_space_addr is not None:
+                            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+                        return
                     SIM_run_alone(self.delCallHap, None)
                     SIM_break_simulation('writeData out of data')
                     #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
@@ -443,22 +456,30 @@ class WriteData():
                 
     def doRetFixup(self):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+        pid = self.top.getPID()
+        if pid != self.pid:
+            return eax
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 
             #self.lgr.error('writeData retHap got count of %d' % eax)
             return eax
         remain = self.read_limit - self.total_read
         self.total_read = self.total_read + eax
-        #self.lgr.debug('writeData retHap read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
+        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
         if self.total_read >= self.read_limit:
             #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain:
-                     self.mem_utils.setRegValue(self.cpu, 'syscall_ret', remain)
+                     if self.user_space_addr is not None:
+                         start = self.user_space_addr + remain
+                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
+                     self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
                      eax = remain
-                 self.setCallHap()
+                 self.kernel_buf_consumed = True
+                 #self.setCallHap()
                  self.setSelectStopHap()
                  SIM_run_alone(self.delRetHap, None)
                  #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
@@ -612,14 +633,8 @@ class WriteData():
                 self.lgr.debug('writeData pickle got k_bufs')
                 self.k_bufs = so_pickle['k_bufs']
                 self.k_buf_len = so_pickle['k_buf_len']
-                if 'user_addr' in so_pickle:
-                    self.user_addr = so_pickle['user_addr']
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-                self.lgr.debug('injectiO load orig_buffer from pickle')
-            if 'callnum' in so_pickle:
-                self.callnum = so_pickle['callnum']
-                self.socket_callname = so_pickle['socket_callname']
-                self.lgr.debug('loadPickle callnum %d socket_callname %s' % (self.callnum, self.socket_callname))
+                self.lgr.debug('injectIO load orig_buffer from pickle')
                 
