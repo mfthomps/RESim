@@ -52,6 +52,7 @@ def getRegValue(cpu, reg):
     return reg_value
 
 def getValue(item, cpu, lgr=None):
+    item = item.strip()
     value = None
     if lgr is not None:
         lgr.debug('getValue for <%s>' % item)
@@ -60,7 +61,8 @@ def getValue(item, cpu, lgr=None):
         if lgr is not None:
             lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):
-        lgr.debug('getValue NOT A REG <%s>' % item)
+        if lgr is not None:
+            lgr.debug('getValue NOT A REG <%s>' % item)
         if item.startswith('#0x'):
             try:
                 value = int(item[3:], 16)
