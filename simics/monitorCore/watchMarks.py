@@ -620,7 +620,11 @@ class WatchMarks():
                 
     def addWatchMark(self, mark, cycles=None, ip=None):
         if self.so_map is None:
-            self.somap = self.top.getSOMap(quiet=True)
+            self.so_map = json.loads(self.top.getSOMap(quiet=True))
+            if self.so_map is None:
+                self.lgr.error('watchMarks addWatchMark, so_map is None')
+            else:
+                self.lgr.debug('dataWatch addWatchMark got so_map')
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         pid = self.top.getPID()
