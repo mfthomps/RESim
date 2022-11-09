@@ -3584,6 +3584,9 @@ class GenMonitor():
     def saveWatchMarks(self, fpath):
         self.dataWatch[self.target].saveWatchMarks(fpath)
 
+    def saveWatchMarksJson(self, fpath):
+        self.dataWatch[self.target].saveJson(fpath)
+
     def getWatchMarks(self):
         self.lgr.debug('getWatchMarks')
         watch_marks = self.dataWatch[self.target].getWatchMarks()
@@ -4268,7 +4271,7 @@ class GenMonitor():
             self.lgr.debug('playAFL now go')
             if trace_all: 
                 self.traceAll()
-                self.trace_all = True
+                #self.trace_all = True
             play.go()
         else:
             print('playAFL failed?')
