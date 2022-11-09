@@ -1382,21 +1382,21 @@ class DataWatch():
             self.context_manager.genDeleteHap(self.finish_check_move_hap)
             self.finish_check_move_hap = None
             return
-        #self.lgr.debug('dataWatch finishCheckMoveHap')
-        dest_addr = self.decode.getAddressFromOperand(self.cpu, move_stuff.op1, self.lgr)
+        self.lgr.debug('dataWatch finishCheckMoveHap')
+        dest_addr = self.decode.getAddressFromOperand(self.cpu, move_stuff.dest_op, self.lgr)
         ad_hoc = False
         if move_stuff.function is None:
             if dest_addr != move_stuff.addr:
-                #self.lgr.debug('dataWatch finishCheckMoveHap might add address 0x%x' % dest_addr)
+                self.lgr.debug('dataWatch finishCheckMoveHap might add address 0x%x' % dest_addr)
                 existing_index = self.findRangeIndex(dest_addr)
                 if existing_index is None:
                     ''' TBD may miss some add hocs? not likely '''
-                    #self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
+                    self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
                     self.last_ad_hoc=dest_addr
                     ad_hoc = True
                 else:
                     ''' Re-use of ad-hoc buffer '''
-                    #self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
+                    self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
                     pass
             else:
                 self.lgr.debug('dataWatch finishCheckMoveHap dest is same as addr')
@@ -1405,7 +1405,7 @@ class DataWatch():
             wm = self.watchMarks.dataRead(move_stuff.addr, move_stuff.start, move_stuff.length, 
                      self.getCmp(), move_stuff.trans_size, ad_hoc=True, dest=self.last_ad_hoc)
             self.setRange(dest_addr, move_stuff.trans_size, watch_mark=wm)
-            #self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (move_stuff.addr, ad_hoc, dest_addr))
+            self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (move_stuff.addr, ad_hoc, dest_addr))
             self.setBreakRange()
         elif move_stuff.function is not None:
             if dest_addr != move_stuff.addr:
@@ -1419,8 +1419,8 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch finishCheckMove rewrote 0x%x using %s' % (dest_addr, move_stuff.function))
         else:
-            #self.lgr.debug('dataWatch finishCheckMove, not ad_hoc addr 0x%x  start 0x%x ad_hoc %r ip: 0x%x' % (move_stuff.addr, move_stuff.start, ad_hoc, 
-            #     move_stuff.ip))
+            self.lgr.debug('dataWatch finishCheckMove, not ad_hoc addr 0x%x  start 0x%x ad_hoc %r ip: 0x%x' % (move_stuff.addr, move_stuff.start, ad_hoc, 
+                 move_stuff.ip))
             if self.cpu.cycles != self.prev_cycle:
                 #self.lgr.debug('dataWatch checkMove found nothing, use prev cycle 0x%x for recording' % self.prev_cycle)
                 self.watchMarks.dataRead(move_stuff.addr, move_stuff.start, move_stuff.length, self.getCmp(), move_stuff.trans_size, ip=move_stuff.ip,
@@ -1433,12 +1433,12 @@ class DataWatch():
 
 
     class CheckMoveStuff():
-        def __init__(self, addr, trans_size, start, length, op1, function=None, ip=None):
+        def __init__(self, addr, trans_size, start, length, dest_op, function=None, ip=None):
             self.addr = addr
             self.trans_size = trans_size
             self.start = start
             self.length = length
-            self.op1 = op1
+            self.dest_op = dest_op
             self.function = function
             self.ip = ip
         def getString(self):
@@ -1495,28 +1495,36 @@ class DataWatch():
         return retval
 
     def adjustSP(self, sp, instruct, op1, op2):
+        sign = None
         retval = None
         if instruct[1].startswith('sub') and 'sp' in op1:
-            ''' adjust our emulated sp value '''
-            try:
-                if '0x' in op2:
-                    retval = sp - int(op2, 16)
-                else:
-                    retval = sp - int(op2)
-                #self.lgr.debug('dataWatch adjustSP sp sub, now 0x%x' % retval)
-            except: 
-                self.lgr.error('dataWatch adjustSP failed sub sp in %s' % instruct[1])
+            sign = -1
         elif instruct[1].startswith('add') and 'sp' in op1:
-            ''' adjust our emulated sp value '''
-            try:
-                if '0x' in op2:
-                    retval = sp + int(op2, 16)
-                else:
-                    retval = sp + int(op2)
-                #self.lgr.debug('dataWatch adjustSP sp add, now 0x%x' % retval)
-            except: 
-                self.lgr.error('dataWatch adjustSP failed add sp in %s' % instruct[1])
+            sign = 1
+        if sign is not None:
+            if ',' in op2:
+                op2 = op2.split(',')[1]
+            val = self.decode.getValue(op2, self.cpu)
+            if val is None:
+                self.lgr.error('dataWatch adjustSP could not get value from op2 %s' % op2)
+            else:
+                retval = sp + (val * sign)
         return retval
+
+    def getMoveDestAddr(self, next_instruct, op1, op2, our_reg_list):
+        dest_addr = None
+        if self.cpu.architecture == 'arm':
+            #self.lgr.debug('dataWatch getMoveDestAddr instruct: %s' % next_instruct[1]) 
+            if next_instruct[1].startswith('str') and self.decode.isReg(op1): 
+                #self.lgr.debug('dataWatch getMoveDestAddr is str op1 is <%s>  reglist is %s' % (op1, str(our_reg_list)))
+                if self.decode.regIsPartList(op1, our_reg_list):
+                    #self.lgr.debug('dataWatch getMoveDestAddr is in reg list')
+                    dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+        else:
+            if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
+                #self.lgr.debug('dataWatch loopAdHoc, maybe op1 is %s' % op1)
+                dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+        return dest_addr
 
     def loopAdHoc(self, addr, trans_size, start, length, instruct, our_reg, eip, orig_ip):
             ''' Loop through the next several instructions to see if our reg is stored to memory,
@@ -1537,27 +1545,26 @@ class DataWatch():
                 if decode.isBranch(self.cpu, next_instruct[1]):
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s' % (next_ip, next_instruct[1]))
+                #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
-                if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
-                    #self.lgr.debug('dataWatch loopAdHoc, maybe op1 is %s' % op1)
-                    dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-                    if dest_addr is not None:
-                        #self.lgr.debug('dest addr found to be 0x%x' % dest_addr)
-                        adhoc = True
-                        break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
-                        move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, op1, ip=orig_ip)
-                        #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap' % (addr, start))
-                        self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                                 self.finishCheckMoveHap, move_stuff, break_num, 'loopAdHoc')
-                        break
-                    elif self.decode.isReg(op1):
+                dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
+                if dest_addr is not None:
+                    #self.lgr.debug('dest addr found to be 0x%x' % dest_addr)
+                    adhoc = True
+                    break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
+                    dest_op = op1
+                    if self.cpu.architecture == 'arm':
+                        dest_op = op2
+                    move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip)
+                    #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap' % (addr, start))
+                    self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                             self.finishCheckMoveHap, move_stuff, break_num, 'loopAdHoc')
+                    break
+                elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                         #self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
                         our_reg_list.append(op1)
-                    else:
-                        #self.lgr.debug('dataWatch loopAdHoc, giving up')
-                        break
-                elif next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
+                elif self.cpu.architecture != 'arm' and next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
+                    # TBD fix for arm
                     #self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
                     our_reg_list.remove(op1)
 
@@ -1663,7 +1670,7 @@ class DataWatch():
         retval = None
         adhoc = False
         orig_ip = self.top.getEIP(self.cpu)
-        if instruct[1].startswith('mov'):
+        if instruct[1].startswith('mov') or instruct[1].startswith('ldr'):
             op2, op1 = self.decode.getOperands(instruct[1])
             if self.decode.isReg(op1):
                 #self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
