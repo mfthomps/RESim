@@ -53,9 +53,9 @@ class PrepInjectWatch():
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
         if self.kbuffer is not None:
-            ''' go forward one to user space and record the return IP '''
-            SIM_run_command('pselect %s' % self.cpu.name)
-            SIM_run_command('si')
+            #''' go forward one to user space and record the return IP '''
+            #SIM_run_command('pselect %s' % self.cpu.name)
+            #SIM_run_command('si')
             self.ret_ip = self.top.getEIP(self.cpu)
             self.top.precall()
             self.call_ip = self.top.getEIP(self.cpu)
@@ -137,9 +137,9 @@ class PrepInjectWatch():
         mark = self.dataWatch.getMarkFromIndex(self.read_mark)
         self.lgr.debug('prepInjectWatch handleReadBuffer got mark %s' % mark.mark.getMsg())
 
-        ''' go forward one to user space and record the return IP '''
-        SIM_run_command('pselect %s' % self.cpu.name)
-        SIM_run_command('si')
+        #''' go forward one to user space and record the return IP '''
+        #SIM_run_command('pselect %s' % self.cpu.name)
+        #SIM_run_command('si')
         self.ret_ip = self.top.getEIP(self.cpu)
         ''' now record the call '''
         # TBD replace below with call to precall?
