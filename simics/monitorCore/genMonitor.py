@@ -4760,6 +4760,7 @@ class GenMonitor():
 
     def getReadAddr(self):
         retval = None
+        length = None
         cpu = self.cell_config.cpuFromCell(self.target)
         callnum = self.mem_utils[self.target].getCallNum(cpu)
         callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
