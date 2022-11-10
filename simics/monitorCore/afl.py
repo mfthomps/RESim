@@ -17,6 +17,7 @@ RESIM_MSG_SIZE=80
 AFL_OK=0
 AFL_CRASH=1
 AFL_HANG=2
+AFL_CLOSED=3
 class AFL():
     def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, page_faults, lgr,
                  packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, 
@@ -128,7 +129,7 @@ class AFL():
             #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-                afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone)
+                afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone, record_hits=False)
             cli.quiet_run_command('disable-reverse-execution')
             cli.quiet_run_command('enable-unsupported-feature internals')
             cli.quiet_run_command('save-snapshot name = origin')
@@ -248,7 +249,12 @@ class AFL():
                     self.restart = True
                 elif fifo_read.startswith(b'quit'):
                     do_quit = True
-            
+
+            closed_fd = self.write_data.closedFD() 
+            if closed_fd and status == AFL_OK:
+                #self.lgr.debug('afl status closed')
+                status = AFL_CLOSED 
+
             ''' Send the status message '''
             if self.restart:
                 self.lgr.debug('afl telling AFL we will restart')
@@ -306,7 +312,7 @@ class AFL():
         self.finishUp()
 
     def goN(self, status):
-        if status != AFL_OK:
+        if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang')
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 0
@@ -324,7 +330,7 @@ class AFL():
         #self.top.restoreRESimContext()
 
         #self.lgr.debug('got %d of data from afl iteration %d' % (len(self.in_data), self.iteration))
-        if status != 0:
+        if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang. restored snapshot after getting %d bytes from afl' % len(self.in_data))
        
         current_length = len(self.in_data)
@@ -355,7 +361,7 @@ class AFL():
         if self.stop_hap is None:
             #self.lgr.debug('afl added stop hap')
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
-        if status != AFL_OK:
+        if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang, watch exits, cpu cycle was 0x%x context %s' % (self.cpu.cycles, self.cpu.current_context))
             self.coverage.watchExits(pid=self.pid)
 
