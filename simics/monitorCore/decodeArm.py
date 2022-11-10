@@ -85,9 +85,10 @@ def getValue(item, cpu, lgr=None):
     return value 
         
 
-def getAddressFromOperand(cpu, op, lgr):
+def getAddressFromOperand(cpu, op, lgr, after=False):
     retval = None
     express = None
+    remain = None
     if op.endswith(']!'):
         op = op[:-1]
     if op[0] == '[' and op[-1] == ']':
@@ -97,16 +98,29 @@ def getAddressFromOperand(cpu, op, lgr):
     elif op[0] == '[' and '],' in op:
         rb = op.find(']')
         express = op[1:rb]
+        remain = op[rb+1:]
     if express is not None:
         value = 0
         parts = express.split(',')
         for p in parts:
             v = getValue(p.strip(), cpu, lgr=lgr) 
             if v is not None:
+                lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
             else:
                 lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
                 return None    
+        if remain is not None and remain.startswith(','):
+            remain = remain[1:]
+            adjust = getValue(remain, cpu, lgr=lgr)
+            if adjust is not None:
+                if after:
+                    value = value - adjust
+            else: 
+                lgr.error('decodeArm getAddressFromOperand failed to get value from %s' % remain)
+        else:
+            lgr.debug('decodeArm getAddressFromOperand, do not know what to do with %s' % remain)
+
         retval = value
     else:
         lgr.debug('getAddressFromOperand nothing from %s' % op)
