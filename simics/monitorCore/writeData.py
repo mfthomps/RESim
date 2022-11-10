@@ -122,6 +122,7 @@ class WriteData():
         self.shared_syscall = shared_syscall
 
         self.kernel_buf_consumed = False
+        self.closed_fd = False
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -130,6 +131,7 @@ class WriteData():
         self.current_packet = 0
         self.total_read = 0
         self.kernel_buf_consumed = False
+        self.closed_fd = False
 
     def writeKdata(self, data):
         if self.k_bufs is None:
@@ -454,10 +456,10 @@ class WriteData():
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
                 
-    def doRetFixup(self):
+    def doRetFixup(self, fd):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         pid = self.top.getPID()
-        if pid != self.pid:
+        if pid != self.pid or fd != self.fd:
             return eax
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 
@@ -493,7 +495,7 @@ class WriteData():
         ''' Hit a return from read'''
         if self.retHap is None:
             return
-        self.doRetFixup()
+        self.doRetFixup(self.fd)
         
     def restoreCallHap(self):
         if self.was_a_call_hap:
@@ -575,6 +577,7 @@ class WriteData():
         if fd == self.fd:
             if self.close_hap is not None:
                 #self.lgr.debug('writeData closeHap')
+                self.closed_fd = True
                 self.handleCall()
 
     def selectStopHap(self, dumb, third, break_num, memory):
@@ -588,6 +591,8 @@ class WriteData():
                 self.lgr.debug('writeData closeHap break simulation')
                 SIM_break_simulation('writeData closeHap')
             '''
+    def closedFD(self):
+        return self.closed_fd
 
     def loadPickle(self, name):
         cell_name = self.top.getTopComponentName(self.cpu)

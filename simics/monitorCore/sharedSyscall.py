@@ -720,7 +720,7 @@ class SharedSyscall():
         elif callname == 'read':
             #self.lgr.debug('is read eax 0x%x' % eax)
             if self.read_fixup_callback is not None:
-                eax = self.read_fixup_callback()
+                eax = self.read_fixup_callback(exit_info.old_fd)
             if eax < 0: 
 
                 call_params = exit_info.syscall_instance.getCallParams()
