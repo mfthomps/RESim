@@ -75,8 +75,8 @@ class Kbuffer():
 
     def findArmBuf(self):
         eip = self.top.getEIP()
-        self.lgr.debug('Kbuffer findArmBuf, is ARM, expect a str')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        self.lgr.debug('Kbuffer findArmBuf, is ARM, expect a str: %s' % instruct[1])
         if instruct[1].startswith('str'):
             op2, op1 = decodeArm.getOperands(instruct[1])
             self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
@@ -88,14 +88,21 @@ class Kbuffer():
                 eip = eip - self.mem_utils.WORD_SIZE
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('findArmBuf instruct: %s' % instruct[1])
-                if instruct[1].startswith('ldm'):
+                if instruct[1].startswith('ldm') or instruct[1].startswith('ldr'):
                     op2, op1 = decodeArm.getOperands(instruct[1])
-                    if op1.endswith('!'):
-                        op1 = op1[:-1]
-                    self.lgr.debug('findArmBuf op1 is %s from  %s' % (op1, instruct[1]))
-                    value = self.top.getReg(op1, self.cpu)
-                    num_regs = op2.count(',')+1
-                    value = value - self.mem_utils.WORD_SIZE * num_regs
+                    writeback = False
+                    if instruct[1].startswith('ldm'):
+                        if op1.endswith('!'):
+                            op1 = op1[:-1]
+                            writeback = True
+                        self.lgr.debug('findArmBuf op1 is %s from  %s' % (op1, instruct[1]))
+                        value = self.top.getReg(op1, self.cpu)
+                        if writeback:
+                            num_regs = op2.count(',')+1
+                            value = value - self.mem_utils.WORD_SIZE * num_regs
+                    else:
+                        ''' assume ldr '''
+                        value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
                     self.lgr.debug('findArmBuf buf found at 0x%x' % value)
                     self.updateBuffers(value)
                     gotone = True
