@@ -86,6 +86,7 @@ class Coverage():
         self.mode_hap = None
         self.only_thread = False
         self.last_delta = 0
+        self.record_hits = True
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -493,7 +494,7 @@ class Coverage():
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
                 #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
                 prejump_addr = this_addr
-            if not self.afl:
+            if self.record_hits:
                 #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
                 if this_addr not in self.blocks_hit:
                     adjusted_addr = this_addr - self.offset
@@ -509,7 +510,7 @@ class Coverage():
                 else:
                     #self.lgr.debug('addr already in blocks_hit')
                     pass
-            else:
+            if self.afl:
                 ''' AFL mode '''
                 if this_addr not in self.afl_map:
                     self.lgr.debug('broke at wrong addr linear 0x%x' % this_addr)
@@ -821,11 +822,13 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, create_dead_zone=False, no_save=False, only_thread=False):
+    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
+                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True):
         self.enabled = True
         self.pid = pid
         self.create_dead_zone = create_dead_zone
         self.no_save = no_save
+        self.record_hits = record_hits
         self.only_thread = only_thread
         if fname is not None:
             self.full_path = fname
