@@ -64,7 +64,8 @@ def showTrack(f):
     track_path = getTrack(f)
     if os.path.isfile(track_path):
         track = json.load(open(track_path))
-        first = track[0]
+        mark_list = track['marks']
+        first = mark_list[0]
         print('first cycle is 0x%x' % first['cycle'])
    
 
