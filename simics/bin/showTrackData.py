@@ -33,7 +33,8 @@ def main():
             jtrack = json.load(open(track))
         except:
             continue
-        for mark in jtrack:
+        mark_list = jtrack['marks']
+        for mark in mark_list:
             if mark['mark_type'] == 'read': 
                 #print('ip is 0x%x' % mark['ip'])
                 if mark['ip'] == address:
