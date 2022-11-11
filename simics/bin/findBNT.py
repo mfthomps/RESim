@@ -19,11 +19,13 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNT(target, hits, fun_blocks, no_print, prog_elf, show_read_marks, quiet):
+def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet):
     retval = []
     count = 0
+    #print('in findBNT')
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
+            #print('compare %s to %s' % (bb_hit, bb['start_ea']))
             if bb_hit == bb['start_ea']:
                 if bb_hit < prog_elf.address or bb_hit > (prog_elf.address + prog_elf.size):
                     #print('bb_hit 0x%x not in program text' % bb_hit)
@@ -38,7 +40,7 @@ def findBNT(target, hits, fun_blocks, no_print, prog_elf, show_read_marks, quiet
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark = findBB.getWatchMark(trackio, bb, quiet=quiet)
+                                read_mark = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
                                 bb_cycle = findBB.getBBCycle(coverage, bb_hit)
                                 if read_mark is not None:
@@ -90,12 +92,12 @@ def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False)
         print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in blocks:
-            this_list = findBNT(target, hits, blocks[fun], no_print, prog_elf, read_marks, quiet)
+            this_list = findBNT(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNT(hits, blocks[fun], no_print, prog_elf, read_marks, quiet)
+                this_list = findBNT(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
                 bnt_list.extend(this_list)
                 break
     return bnt_list

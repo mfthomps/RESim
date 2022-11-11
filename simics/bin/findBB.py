@@ -55,15 +55,17 @@ def getFirstReadCycle(trackio, quiet=False):
     except:
         #print('ERROR: failed reading json from %s' % trackio)
         return None
-    for mark in tjson:
+    mark_list = tjson['marks']
+    for mark in mark_list:
         if mark['mark_type'] == 'read':
             retval = mark['cycle']
             break
     return retval
 
-def getWatchMark(trackio, bb, quiet=False):
+def getWatchMark(trackio, bb, prog, quiet=False):
     retval = None
     ''' Find a read watch mark within a given watch mark json for a given bb '''
+    ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
     if not os.path.isfile(trackio):
         if not quiet:
             print('ERROR: no trackio file at %s' % trackio)
@@ -74,14 +76,31 @@ def getWatchMark(trackio, bb, quiet=False):
         #print('ERROR: failed reading json from %s' % trackio)
         return None
     index = 1
-    for mark in tjson:
-        if mark['mark_type'] == 'read':
-            eip = mark['ip']
-            if eip >= bb['start_ea'] and eip <= bb['end_ea']:
-                print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
-                retval = eip
-                break
-        index = index + 1
+    somap = tjson['somap']
+    wrong_file = False
+    offset = 0
+    if somap['prog'] == prog:
+       print('0x%x is in prog' % bb)  
+    else:
+       got_section = False
+       wrong_file = True
+       for section in somap['sections']:
+           #print('section file is %s' % section['file'])
+           if section['file'].endswith(prog):
+               offset = section['locate']
+               #print('got section, offset is 0x%x' % offset)
+               wrong_file = False
+    if not wrong_file:
+        mark_list = tjson['marks']
+        for mark in mark_list:
+            if mark['mark_type'] == 'read':
+                eip = mark['ip'] - offset
+                #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
+                if eip >= bb['start_ea'] and eip <= bb['end_ea']:
+                    print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
+                    retval = eip
+                    break
+            index = index + 1
     return retval
        
 def getBBCycle(coverage, bb): 
@@ -91,14 +110,14 @@ def getBBCycle(coverage, bb):
         print('ERROR: no coverage file at %s' % coverage)
         return None
     try:
-        tjson = json.load(open(coverage))
+        cjson = json.load(open(coverage))
     except:
         #print('ERROR: failed reading json from %s' % coverage)
         return None
 
     bb_str = str(bb)
-    if bb_str in tjson:
-        retval = tjson[bb_str]
+    if bb_str in cjson:
+        retval = cjson[bb_str]
     else:
         print('Could not find bb 0x%x in json %s' % (bb, coverage))
     return retval
