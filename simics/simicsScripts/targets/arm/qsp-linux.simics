@@ -69,7 +69,7 @@ decl {
     result switch1_con : string
     result switch2_con : string
 }
-$kernel_image = "%simics%/targets/qsp-arm/images/uImage"
+
 #echo "def sys in is "+$default_system_info
 run-command-file "%script%/qsp-system.include"
 run-command-file "%script%/qsp-linux-system.include" 
