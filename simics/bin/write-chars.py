@@ -10,4 +10,4 @@ parser.add_argument('chr', action='store', help='the characters.')
 args = parser.parse_args()
 
 s = args.count*args.chr
-print(s)
+sys.stdout.write(s)
