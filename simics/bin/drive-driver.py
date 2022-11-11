@@ -11,6 +11,9 @@ directive file example:
 Or, multiwrite TCP (with read between them):
     first.io
     second.io  171.10.0.1 29121
+
+Directive lines that start with a # are ignored.
+Lines that start with ! are treated as shell commands to be executed on the driver.
 '''
 import os
 import time
@@ -30,6 +33,7 @@ def main():
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
     parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
+    parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
     parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     args = parser.parse_args()
@@ -42,6 +46,9 @@ def main():
         client_cmd = 'serverTCP'
     elif args.tcp:
         client_cmd = 'clientTCP'
+    elif args.tcpx:
+        client_cmd = 'clientTCPnoread'
+        args.tcp = True
     else:
         client_cmd = 'clientudpMult'
     client_mult_path = os.path.join(core_path, client_cmd)
@@ -82,6 +89,9 @@ def main():
             if line.strip().startswith('#'):
                 continue
             if len(line.strip()) == 0:
+                continue
+            if line.strip().startswith('!'):
+                driver_file.write(line[1:]+'\n')
                 continue
             parts = line.split()
             if len(parts) == 2 and parts[0] == 'sleep':
