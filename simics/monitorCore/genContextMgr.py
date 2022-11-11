@@ -464,8 +464,10 @@ class GenContextMgr():
             
         '''
         if not self.watching_tasks:
+            #self.lgr.debug('contextManager DEBUG, was not watching')
             ''' Was not watching any task '''
             if new_task in self.watch_rec_list:
+                #self.lgr.debug('contextManager DEBUG, task in watch_rec_list')
                 self.watching_tasks = True
                 self.restoreDebugContext()
                 ''' Should watch new task '''
@@ -478,6 +480,7 @@ class GenContextMgr():
                     SIM_run_alone(self.setAllHap, True)
                     #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list but in maze breakout, watch ONLY maze breaks')
             else:
+                #self.lgr.debug('contextManager DEBUG, task NOT in watch_rec_list')
                 '''New task not in watch_rec_list'''
                 if len(self.watch_rec_list) == 0:
                     ''' no debug tasks '''
@@ -548,10 +551,11 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, new_addr + self.param.ts_comm, 16)
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
-        '''
+        ''' 
         self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
             prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
-        '''
+        ''' 
+       
         if len(self.ignore_progs) > 0:
             if pid in self.ignore_pids:
                 self.lgr.debug('ignoring context for pid %d' % pid)
@@ -568,29 +572,28 @@ class GenContextMgr():
                 self.watch_rec_list[new_addr] = pid
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
+        add_task = False
         if pid not in self.pid_cache and comm in self.debugging_comm and pid not in self.no_watch:
            group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
-           add_it = False
+           add_task = False
            if leader_pid in self.pid_cache:
-               add_it = True
+               add_task = True
            elif pid == leader_pid:
                parent = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_real_parent)
                if parent in self.watch_rec_list:
                    parent_pid = self.mem_utils.readWord32(cpu, parent + self.param.ts_pid)
                    self.lgr.debug('contextManager new clone %d is its own leader, but parent %d is in cache.  Call the parent the leader.' % (pid, parent_pid))
-                   add_it = True
+                   add_task = True
                    leader_pid = parent_pid
                else:
                    #self.lgr.debug('contextManager pid:%d (%s) not in cache, nor is parent in watch_rec_list 0x%x' % (pid, comm, parent))
                    pass
-           if add_it:
+           if add_task:
                ''' TBD, we have no reason to believe this clone is created by the group leader? Using parent or real_parent is no help'''
                self.lgr.debug('contextManager adding clone %d (%s) leader is %d' % (pid, comm, leader_pid))
-               self.addTask(pid, new_addr)
-               self.top.addProc(pid, leader_pid, comm, clone=True)
-               self.watchExit(new_addr, pid)
-               self.top.recordStackClone(pid, leader_pid)
+               ''' add task, but do not try to watch exit since we do not have proper context yet.  Will watch below'''
+               self.addTask(pid, new_addr, watch_exit=False)
            else:
                pass
                #self.lgr.debug('contextManager pid:%d (%s) not in cache, group leader 0x%x  leader pid %d' % (pid, comm, group_leader, leader_pid))
@@ -598,6 +601,10 @@ class GenContextMgr():
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
         self.alterWatches(new_addr, prev_task)
+        if add_task:
+            self.top.addProc(pid, leader_pid, comm, clone=True)
+            self.watchExit(new_addr, pid)
+            self.top.recordStackClone(pid, leader_pid)
         if self.catch_pid == pid or (self.catch_pid == -1 and pid in self.pid_cache):
             self.lgr.debug('contextManager changedThread do catch_callback for pid %d' % pid)
             #SIM_break_simulation('in pid %d' % pid)
@@ -691,7 +698,7 @@ class GenContextMgr():
                 self.lgr.debug('rmTask remaining debug recs %s' % str(self.watch_rec_list))
         return retval
 
-    def addTask(self, pid, rec=None):
+    def addTask(self, pid, rec=None, watch_exit=True):
         if rec is None:
             rec = self.task_utils.getRecAddrForPid(pid)
         if rec not in self.watch_rec_list:
@@ -701,7 +708,8 @@ class GenContextMgr():
             else:
                 #self.lgr.debug('genContextManager, addTask pid %d add rec 0x%x' % (pid, rec))
                 self.watch_rec_list[rec] = pid
-                self.watchExit(rec=rec, pid=pid)
+                if watch_exit:
+                    self.watchExit(rec=rec, pid=pid)
             if pid not in self.pid_cache:
                 self.pid_cache.append(pid)
         else:
