@@ -185,7 +185,7 @@ class memUtils():
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
             if v < self.param.kernel_base and not ptable_info.page_exists:
-                self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
+                #self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
                 return None
             #self.lgr.debug('phys addr for 0x%x return 0' % (v))
             if cpu.architecture == 'arm':
