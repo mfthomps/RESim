@@ -268,7 +268,8 @@ class AFL():
                 self.rmStopHap()
                 return
             if status != AFL_OK:
-                self.lgr.debug('afl stopHap status back from sendall trace_bits')
+                #self.lgr.debug('afl stopHap status back from sendall trace_bits')
+                pass
             '''
             if self.iteration == 1:
                 self.trace_snap1 = tracemalloc.take_snapshot()

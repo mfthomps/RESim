@@ -300,6 +300,7 @@ class Coverage():
 
     def saveDeadFile(self):
         dead_file = '%s.dead' % self.run_from_snap
+        self.lgr.debug('saveDeadFile %s len %d' % (dead_file, len(self.dead_map)))
         with open(dead_file, 'w') as fh:
             fh.write(json.dumps(self.dead_map))
         SIM_run_alone(SIM_run_command, 'q')
@@ -444,13 +445,14 @@ class Coverage():
             self.lgr.debug('converage bbHap, bp 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
             return
         ''' 
+       
         
         dead_set = False
         if self.create_dead_zone:
             ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
             pid = self.top.getPID()
             if pid != self.pid:
-                #self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
+                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
 
         if self.only_thread:
@@ -526,7 +528,7 @@ class Coverage():
                         ''' dead zone should be physical addresses '''
                         self.dead_map.append(addr)
                         self.time_start = time.time()
-                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d ' % (pid, self.pid, len(self.dead_map)))
+                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num dead spots %d ' % (pid, self.pid, len(self.dead_map)))
                 if self.create_dead_zone:
                     now = time.time()
                     delta = int(now - self.time_start)
