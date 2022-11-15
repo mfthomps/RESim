@@ -161,7 +161,7 @@ def isIndirect(reg):
     else:
         return False
 
-def getValue(s, cpu, lgr):
+def getValue(s, cpu, lgr=None):
     retval = None
     #lgr.debug('getValue for %s' % s)
     if '+' in s:
@@ -175,7 +175,7 @@ def getValue(s, cpu, lgr):
         retval = 1
         parts = s.split('*')
         for p in parts:
-            retval = retval * getValue(p, cpu, lgr) 
+            retval = retval * getValue(p, cpu, lgr=lgr) 
     elif isReg(s):
         reg_num = cpu.iface.int_register.get_number(s)
         #lgr.debug('getValue %s is reg, get its value' % s)
