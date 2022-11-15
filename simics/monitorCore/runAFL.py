@@ -303,7 +303,7 @@ def main():
     parser.add_argument('-l', '--linear', action='store_true', default=False, help='Use LINEAR addressing for coverage breakpoints.')
     parser.add_argument('-d', '--dead', action='store_true', help='Trial run to identify dead blocks, i.e., those being hit by other threads.')
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
-    parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR.')
+    parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR/dictionaries.')
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
