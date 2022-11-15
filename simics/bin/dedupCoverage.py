@@ -56,7 +56,7 @@ def saveUnique(hit_dict, target):
 
  
 def main():
-    parser = argparse.ArgumentParser(prog='dedupCoverage', description='Show coverage of one or more hits files')
+    parser = argparse.ArgumentParser(prog='dedupCoverage', description='Create a deduped file of all unique coverage files.')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     args = parser.parse_args()
 
