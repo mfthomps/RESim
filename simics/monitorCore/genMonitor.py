@@ -2625,9 +2625,6 @@ class GenMonitor():
         call_params.nth = nth
         self.runTo(call, call_params, name='connect')
 
-    def setDmod(self, dfile):
-        self.runToDmod(dfile, cell_name = self.target)
-
     def runToDmod(self, dfile, cell_name=None, background=False, comm=None):
         retval = True
         if not os.path.isfile(dfile):
@@ -3300,6 +3297,20 @@ class GenMonitor():
                     if path not in dmod_dict[target]:
                         dmod_dict[target].append(path)
         return dmod_dict
+
+    def showDmods(self):
+        for target in self.context_manager:
+            for call in self.call_traces[target]:
+                dmod_list = self.call_traces[target][call].getDmods()
+                for dmod in dmod_list:
+                    path = dmod.getPath()
+                    print('%s %s %s' % (target, call, path))                    
+
+    def rmAllDmods(self):
+        for target in self.context_manager:
+            call_copy = list(self.call_traces[target])
+            for call in call_copy:
+                self.call_traces[target][call].rmDmods()
                     
 
     def writeConfig(self, name):
@@ -4772,6 +4783,11 @@ class GenMonitor():
             retval = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+16)
             length = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+20)
         return retval, length
+
+    def showSyscallTraces(self):
+        for call in self.call_traces[self.target]:
+            print('%s  -- %s' % (call, self.call_traces[self.target][call].name))
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
