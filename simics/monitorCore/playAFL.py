@@ -379,6 +379,7 @@ class PlayAFL():
                         self.bnt_list.append((self.afl_list[self.index], packet_num))
                 else:
                     self.recordHits(hit_bbs)
+                    self.coverage.saveDeadFile()
                 if self.coverage.didExit():
                     self.exit_list.append(self.afl_list[self.index])
             else:

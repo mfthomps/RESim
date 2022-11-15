@@ -299,11 +299,12 @@ class Coverage():
         return self.proc_status
 
     def saveDeadFile(self):
-        dead_file = '%s.dead' % self.run_from_snap
-        self.lgr.debug('saveDeadFile %s len %d' % (dead_file, len(self.dead_map)))
-        with open(dead_file, 'w') as fh:
-            fh.write(json.dumps(self.dead_map))
-        SIM_run_alone(SIM_run_command, 'q')
+        if self.create_dead_zone:
+            dead_file = '%s.dead' % self.run_from_snap
+            self.lgr.debug('saveDeadFile %s len %d' % (dead_file, len(self.dead_map)))
+            with open(dead_file, 'w') as fh:
+                fh.write(json.dumps(self.dead_map))
+            SIM_run_alone(SIM_run_command, 'q')
                         
     def addHapAlone(self, bplist): 
         if len(bplist) == 0:
