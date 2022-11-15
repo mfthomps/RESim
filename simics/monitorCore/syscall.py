@@ -1541,7 +1541,7 @@ class Syscall():
             exit_info.retval_addr = frame['param2']
             exit_info.count = frame['param3']
             ''' check runToIO '''
-            self.lgr.debug('syscall read loop %d call_params ' % len(syscall_info.call_params))
+            #self.lgr.debug('syscall read loop %d call_params ' % len(syscall_info.call_params))
             for call_param in syscall_info.call_params:
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
@@ -1566,9 +1566,9 @@ class Syscall():
                         break
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
-                    self.lgr.debug('syscall read, is dmod from %s' % call_param.match_param.getPath())
+                    #self.lgr.debug('syscall read, is dmod from %s' % call_param.match_param.getPath())
                     if call_param.match_param.pid is not None and (pid != call_param.match_param.pid or exit_info.old_fd == call_param.match_param.fd):
-                        self.lgr.debug('syscall read, is dmod, but pid or fd does not match')
+                        #self.lgr.debug('syscall read, is dmod, but pid or fd does not match')
                         continue
                     exit_info.call_params = call_param
                     '''
@@ -1698,7 +1698,7 @@ class Syscall():
             ida_msg = '%s %s   pid:%d' % (callname, taskUtils.stringFromFrame(frame), pid)
             self.context_manager.setIdaMessage(ida_msg)
         if ida_msg is not None and not quiet:
-            self.lgr.debug(ida_msg.strip()) 
+            #self.lgr.debug(ida_msg.strip()) 
             
             #if ida_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
             if ida_msg is not None and self.traceMgr is not None:
@@ -2304,6 +2304,20 @@ class Syscall():
                  if dmod not in retval:
                      retval.append(dmod)
         return retval
+
+    def rmDmods(self):
+        params_copy = list(self.syscall_info.call_params)
+        rm_list = []
+        for call_param in params_copy:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                self.lgr.debug('syscall rmDmods, removing dmod %s' % call_param.match_param.path)
+                rm_list.append(call_param)
+
+        for call_param in rm_list:
+            self.rmCallParam(call_param)
+        if len(self.syscall_info.call_params) == 0:
+            self.lgr.debug('syscall rmDmods, no more call_params, remove syscall')
+            self.stopTrace()
 
     def getCallList(self):
         return self.call_list
