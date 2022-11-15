@@ -230,6 +230,8 @@ def getRelativePath(f, target):
     afl_output = getAFLOutput()
     target_path = os.path.join(afl_output, target)
     retval = f[len(target_path)+1:]
+    if retval.startswith('/'):
+        retval = retval[1:]
     return retval
 
 def getSyncDirs(target):
