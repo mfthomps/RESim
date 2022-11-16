@@ -148,6 +148,9 @@ class Coverage():
                     else:
                         bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
                     self.addr_map[bp] = bb_rel
+            else:
+                #self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_block.address)
+                pass
         return bp
  
     def cover(self, force_default_context=False, physical=False):
@@ -386,17 +389,21 @@ class Coverage():
                         if pt.page_addr is None or pt.page_addr == 0:
                             self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
-                        got_one = True
                         addr = pt.page_addr | (bb & 0x00000fff)
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
-                        #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
-                        self.addr_map[bp] = bb
-                        if prev_bp is not None and bp != (prev_bp+1):
-                            #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
-                            SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
-                            bb_index = len(self.bp_list)
-                        self.bp_list.append(bp)                 
-                        prev_bp = bp
+                        if addr not in self.dead_map:
+                            got_one = True
+                            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
+                            #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                            self.addr_map[bp] = bb
+                            if prev_bp is not None and bp != (prev_bp+1):
+                                #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
+                                SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
+                                bb_index = len(self.bp_list)
+                            self.bp_list.append(bp)                 
+                            prev_bp = bp
+                        else:
+                            #self.lgr.debug('tableHap addr 0x%x in dead map, skip' % addr)
+                            pass
                     if not got_one:
                         self.lgr.error('tableHap no pt for any bb address 0x%x' % value)
                     SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
@@ -422,9 +429,13 @@ class Coverage():
                 for bb in self.missing_pages[memory.physical_address]:
                     offset = memUtils.bitRange(pdir_entry, 0, 19)
                     addr = value + offset
-                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
-                    self.lgr.error('pageHap NOT YET FINISHED added break at phys addr 0x%x' % addr)
-                    self.addr_map[bp] = bb
+                    if addr not in self.dead_map:
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
+                        self.lgr.error('pageHap NOT YET FINISHED added break at phys addr 0x%x' % addr)
+                        self.addr_map[bp] = bb
+                    else:
+                        #self.lgr.debug('pageHap addr 0x%x was in dead map, skip' % addr)
+                        pass
         else:
             self.lgr.debug('coverage pageHap breaknum should have no hap %d' % break_num)
 
@@ -443,10 +454,9 @@ class Coverage():
         NOTE!  reading simulated memory may slow down fuzzing by a factor of 2!
         pid = self.top.getPID()
         if pid != self.pid:
-            self.lgr.debug('converage bbHap, bp 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
-            return
+            self.lgr.debug('converage bbHap, bp on addr 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
+            #return
         ''' 
-       
         
         dead_set = False
         if self.create_dead_zone:
@@ -529,7 +539,8 @@ class Coverage():
                         ''' dead zone should be physical addresses '''
                         self.dead_map.append(addr)
                         self.time_start = time.time()
-                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num dead spots %d ' % (pid, self.pid, len(self.dead_map)))
+                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d add phys addr 0x%x to dead map num dead spots %d ' % (pid, 
+                               self.pid, addr, len(self.dead_map)))
                 if self.create_dead_zone:
                     now = time.time()
                     delta = int(now - self.time_start)
@@ -858,7 +869,10 @@ class Coverage():
             dead_file = '%s.dead' % self.run_from_snap
             if os.path.isfile(dead_file):
                 with open(dead_file) as fh:
+                    self.lgr.debug('coverage enableCoverage, loaded dead file from %s' % dead_file)
                     self.dead_map = json.load(fh)
+                    #for addr in self.dead_map:
+                    #    self.lgr.debug('dead spot: 0x%x' % addr)
 
     def disableCoverage(self):
         self.lgr.debug('coverage disableCoverage')
