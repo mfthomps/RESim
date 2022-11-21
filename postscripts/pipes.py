@@ -33,6 +33,8 @@ def getPipeParts(tok):
         mode = fdmode[0:1]
         fd = fdmode[2:-1]
         return name, mode, fd
+    else:
+        return None, None, None
     
 class Pipes():
                      
@@ -60,6 +62,8 @@ class Pipes():
 
     def showPipes(self):
         for name in self.pipes:
+            if name is None:
+                continue
             pid = name.split('-')[1]
             pname = self.proc_trace.getPname(pid)
             outline = '%s %s' % (pname, name)
