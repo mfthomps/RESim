@@ -1,2 +1,13 @@
 #!/bin/bash
-$RESIM_DIR/simics/monitorCore/runTrack.py $@
+import os
+import sys
+import glob
+glist = glob.glob('resim_*/')
+here = os.getcwd()
+if len(glist) > 0:
+    for instance in glist:
+        os.chdir(instance)
+        $RESIM_DIR/simics/monitorCore/runTrack.py $@
+        os.chdir(here)
+else:
+    $RESIM_DIR/simics/monitorCore/runTrack.py $@
