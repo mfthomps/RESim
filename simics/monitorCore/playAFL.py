@@ -80,7 +80,7 @@ class PlayAFL():
                     print('No crashes found for %s' % target)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
-        self.lgr.debug('playAFL afl list has %d items' % len(self.afl_list))
+        self.lgr.debug('playAFL afl list has %d items.  current context %s' % (len(self.afl_list), self.cpu.current_context))
         self.index = -1
         self.stop_hap = None
         self.call_hap = None
@@ -126,10 +126,15 @@ class PlayAFL():
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
-        cli.quiet_run_command('disable-reverse-execution')
-        cli.quiet_run_command('enable-unsupported-feature internals')
-        cli.quiet_run_command('save-snapshot name = origin')
-        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        if self.target != 'oneplay':
+            cli.quiet_run_command('disable-reverse-execution')
+            self.top.setDisableReverse()
+            cli.quiet_run_command('enable-unsupported-feature internals')
+            cli.quiet_run_command('save-snapshot name = origin')
+            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        else:
+            self.top.resetOrigin()
+
         self.physical=False
         if self.coverage is not None:
             full_path = None
@@ -220,7 +225,8 @@ class PlayAFL():
                     self.index += 1
         if self.index < len(self.afl_list):
             self.lgr.debug('playAFL goAlone index %d' % self.index)
-            cli.quiet_run_command('restore-snapshot name = origin')
+            if self.target != 'oneplay':
+                cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
                 if clear_hits:
                     self.coverage.stopCover() 
@@ -263,10 +269,14 @@ class PlayAFL():
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
             if self.write_data is None:
+                force_default_context = True
+                if self.target == 'oneplay':
+                    force_default_context = False
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                         pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=True, 
-                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
+                         pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
+                         filter=self.filter_module, stop_on_read=self.stop_on_read)
+                         #filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
@@ -275,7 +285,11 @@ class PlayAFL():
             self.backstop.setFutureCycle(self.backstop_cycles, now=True)
 
             if self.afl_mode: 
-                self.coverage.watchExits()
+                if self.coverage is not None:
+                    self.coverage.watchExits()
+                else:
+                    self.lgr.error('playAFL afl_mode but not coverage?')
+                    return
             elif self.coverage is not None:
                 self.coverage.watchExits(callback=self.reportExit)
             else:
@@ -283,6 +297,11 @@ class PlayAFL():
                 self.context_manager.setExitCallback(self.reportExit)
             if self.stop_hap is None:
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+
+            self.top.watchPageFaults()
+            if self.target == 'oneplay':
+                self.top.resetOrigin()
+
             self.lgr.debug('playAFL goAlone now continue')
             SIM_run_command('c')
         else:
@@ -311,7 +330,8 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
-            cli.quiet_run_command('restore-snapshot name = origin')
+            if self.target != 'oneplay':
+                cli.quiet_run_command('restore-snapshot name = origin')
             if len(self.exit_list)>0:
                 print('%d Sessions that called exit:' % len(self.exit_list))
                 for exit in sorted(self.exit_list):
@@ -382,6 +402,10 @@ class PlayAFL():
                     self.coverage.saveDeadFile()
                 if self.coverage.didExit():
                     self.exit_list.append(self.afl_list[self.index])
+
+                if self.top.hasPendingPageFault(self.pid):
+                    print('PID %d has pending page fault' % self.pid)
+                    self.lgr.debug('PID %d has pending page fault' % self.pid)
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, True)
