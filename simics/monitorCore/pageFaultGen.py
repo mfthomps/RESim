@@ -138,7 +138,11 @@ class PageFaultGen():
         if not self.context_manager.watchingThis():
             #self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
             return
-        eip = self.exception_eip
+        if self.exception_eip is None:
+            eip = self.mem_utils.getRegValue(cpu, 'pc')
+            self.lgr.debug('pageFaultHap exception_eip was none, use current 0x%x' % eip)
+        else:
+            eip = self.exception_eip
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         access_type = None
         if self.cpu.architecture == 'arm':
