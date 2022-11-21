@@ -133,7 +133,7 @@ class DataMark():
     def addrRange(self, addr):
         self.end_addr = addr
         self.loop_count += 1
-        self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
+        #self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
     def noAdHoc(self):
         self.ad_hoc = False
 
@@ -711,6 +711,11 @@ class WatchMarks():
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
+            src_str = src_str.replace('\n\r','<newline>')
+            src_str = src_str.replace('\n','<newline>')
+            src_str = src_str.replace('\t','<tab>')
+            #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
+            #self.lgr.debug('srcdst_string hex is %s' % hexstring)
         else:
             dst_str = ''
             src_str = ''
@@ -731,7 +736,10 @@ class WatchMarks():
 
     def sscanf(self, src, dest, count, buf_start):
         #sp, base = self.getStackBase(dest)
-        sp = self.isStackBuf(dest)
+        if dest is not None:
+            sp = self.isStackBuf(dest)
+        else:
+            sp = None
         sm = ScanMark(src, dest, count, buf_start, sp)        
         wm = self.addWatchMark(sm)
         self.lgr.debug('watchMarks sscanf %s' % (sm.getMsg()))
