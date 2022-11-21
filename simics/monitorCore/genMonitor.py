@@ -113,6 +113,7 @@ import re
 import shutil
 import imp
 import glob
+import inspect
 
 
 class Prec():
@@ -267,7 +268,7 @@ class GenMonitor():
         remove all previous breakpoints.  
         '''
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
-        SIM_run_command("delete -all")
+        SIM_run_command("bp.delete -all")
         self.target = os.getenv('RESIM_TARGET')
         print('using target of %s' % self.target)
         self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()))
@@ -551,11 +552,11 @@ class GenMonitor():
 
     def finishInit(self, cell_name):
         
-            self.lgr.debug('finishInit for cell %s' % cell_name)
             if cell_name not in self.param: 
                 return
             cpu = self.cell_config.cpuFromCell(cell_name)
             cell = self.cell_config.cell_context[cell_name]
+            self.lgr.debug('finishInit for cell %s, cell.name: %s' % (cell_name, cell.name))
             #self.task_utils[cell_name] = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
             #      self.unistd[cell_name], self.run_from_snap, self.lgr)
  
@@ -1830,8 +1831,14 @@ class GenMonitor():
         #self.lgr.debug('about to call traceOpen')
         self.traceOpen.traceOpenSyscall()
 
-    def getCell(self):
-        return self.cell_config.cell_context[self.target]
+    def getCell(self, cell_name=None):
+        if cell_name is None:
+            return self.cell_config.cell_context[self.target]
+        elif cell_name in self.cell_config.cell_context:
+            return self.cell_config.cell_context[cell_name]
+        else: 
+            self.lgr.error('getCell, name %s not found' % cell_name)
+            return None
 
     def getTarget(self):
         return self.target
@@ -2562,7 +2569,7 @@ class GenMonitor():
                     return True
         return False
 
-    def runTo(self, call, call_params, cell_name=None, run=True, linger=False, background=False, 
+    def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None):
         retval = None
         ''' call is a list '''
@@ -2571,13 +2578,15 @@ class GenMonitor():
             return
         if cell_name is None:
             cell_name = self.target
-        cell = self.cell_config.cell_context[cell_name]
         ''' qualify call with name, e.g, for multiple dmod on reads '''
         call_name = call[0]
         if name is not None:
             #call_name = '%s-%s' % (call[0], name)
             call_name = name
-        self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
+        if cell is None:
+            self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
+        else:
+            self.lgr.debug('genMonitor runTo cellname %s cell: %s call_name %s compat32 %r' % (cell_name, cell.name, call_name, self.is_compat32))
         if call_params is None:
             call_params_list = []
         else:
@@ -2585,7 +2594,7 @@ class GenMonitor():
 
         if cell_name not in self.trace_all or self.trace_all[cell_name] is None:
             if call_name not in self.call_traces[cell_name]:
-                retval = syscall.Syscall(self, cell_name, None, self.param[cell_name], self.mem_utils[cell_name], 
+                retval = syscall.Syscall(self, cell_name, cell, self.param[cell_name], self.mem_utils[cell_name], 
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
                                call_list=call, call_params=call_params_list, targetFS=self.targetFS[cell_name], linger=linger, 
@@ -3105,7 +3114,7 @@ class GenMonitor():
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.mem_utils[self.target].setRegValue(cpu, reg, value)
-        #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
+        self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if self.reverseEnabled():
             if alone:
                 SIM_run_alone(self.clearBookmarks, reuse_msg) 
@@ -3140,6 +3149,8 @@ class GenMonitor():
         if self.reverseEnabled():
             self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
             self.clearBookmarks()
+        else:
+            self.lgr.debug('writeString reverse execution was not enabled.')
 
     def stopDataWatch(self):
         self.lgr.debug('genMonitor stopDataWatch')
@@ -4259,6 +4270,10 @@ class GenMonitor():
     def hasBookmarks(self):
         return self.bookmarks is not None
 
+    def setDisableReverse(self):
+        ''' Once set, cannot go back '''
+        self.disable_reverse = True
+
     def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
         self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
 
@@ -4270,7 +4285,6 @@ class GenMonitor():
         if not self.checkUserSpace(cpu):
             return
         self.debugPidGroup(pid)
-        self.disable_reverse = True
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
@@ -4788,6 +4802,8 @@ class GenMonitor():
         for call in self.call_traces[self.target]:
             print('%s  -- %s' % (call, self.call_traces[self.target][call].name))
 
+    def hasPendingPageFault(self, pid):
+        return self.page_faults[self.target].hasPendingPageFault(pid)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
