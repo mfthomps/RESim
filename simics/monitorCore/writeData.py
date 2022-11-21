@@ -135,7 +135,9 @@ class WriteData():
 
     def writeKdata(self, data):
         if self.k_bufs is None:
-            self.mem_utils.writeString(self.cpu, self.addr, data) 
+            ''' TBD remove this, all kernel buffers should now use k_bufs'''
+            self.lgr.error('writeKdata, missing k_bufs')
+            #self.mem_utils.writeString(self.cpu, self.addr, data) 
         else:
             remain = len(data)
             offset = 0
@@ -162,6 +164,10 @@ class WriteData():
         #self.lgr.debug('writeData write, addr is 0x%x filter: %s' % (self.addr, str(self.filter)))
         if self.k_start_ptr is not None:
             ''' we have buffer start/end info from tracing ioctl '''
+            ''' TBD remove this, all kernel bufs now use kbuf?'''
+            self.lgr.error('found k_start_ptr, deprecated?')
+            return
+            '''
             this_len = len(self.in_data)
             orig_len = self.getOrigLen()
             if this_len > orig_len:
@@ -175,6 +181,7 @@ class WriteData():
             retval = this_len
             self.modKernBufSize(this_len)
             #self.setCallHap()
+            '''
         elif self.mem_utils.isKernel(self.addr):
             ''' not done, no control over size. prep must use maximum buffer'''
             if len(self.in_data) > self.max_len:
@@ -336,7 +343,7 @@ class WriteData():
                 self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
         else:
-            #self.lgr.debug('writeData set retHap setReadFixup')
+            #self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
             self.shared_syscall.setReadFixup(self.doRetFixup)
 
     def selectHap(self, dumb, third, break_num, memory):
