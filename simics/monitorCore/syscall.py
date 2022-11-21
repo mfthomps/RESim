@@ -316,8 +316,12 @@ class Syscall():
             #self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
         ''' Note cell may be None, leaving it up to the context manager '''
-        self.cell = cell
         self.cell_name = cell_name
+        self.cell = cell
+        if cell is not None:
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, cell is not none: %s' % (cell_name, name, cell.name))
+        else:
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, cell is none.' % (cell_name, name))
         self.top = top
         self.param = param
         self.sharedSyscall = sharedSyscall
@@ -438,7 +442,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall cell %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
+        self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
@@ -1341,7 +1345,7 @@ class Syscall():
                          #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
                          #if mod.fname_addr is None:
                          if mod.getMatch() == exit_info.fname:
-                             self.lgr.debug('syscallParse, dmod match on fname')
+                             self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
                              exit_info.call_params = call_param
                     if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
                         self.lgr.debug('syscall open, found match_param %s' % call_param.match_param)
@@ -1897,7 +1901,8 @@ class Syscall():
         ''' catch stray calls from wrong pid.  Allow calls if the syscall instance's cell is not None, which means it is not up to the context manager
             to watch or not.  An example is execve, which must be watched for all processes to provide a toExecve function. '''
         if self.debugging and not self.context_manager.amWatching(pid) and syscall_info.callnum is not None and self.background_break is None and self.cell is None:
-            self.lgr.debug('syscallHap  pid:%d missing from context manager.  Debugging and specific syscall watched' % pid)
+            self.lgr.debug('syscallHap name: %s pid:%d missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
+                 pid, syscall_info.callnum))
             return
 
         if self.bang_you_are_dead:
@@ -2006,12 +2011,13 @@ class Syscall():
                                         exit_info.call_params = cp
                                     #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
                                     if syscall_info.call_params is not None:
-                                        self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, pid, syscall_info.callnum, 
-                                           len(syscall_info.call_params), tracing_all))
+                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, 
+                                           self.cell_name, pid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
                                     else:
-                                        self.lgr.debug('syscallHap %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, pid, syscall_info.callnum, 
-                                           tracing_all))
+                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, self.cell, 
+                                           pid, syscall_info.callnum, tracing_all))
                                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    #self.sharedSyscall.addExitHap(cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
                                     #self.lgr.debug('did not add exitHap')
                                     pass
