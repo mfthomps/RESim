@@ -169,10 +169,15 @@ class SharedSyscall():
         if exit_eip1 not in my_exit_pids:
             my_exit_pids[exit_eip1] = []
 
+        if cell is None and exit_info.syscall_instance.name is not None:
+            if exit_info.syscall_instance.name.startswith('dmod'):
+                cell = self.top.getCell(self.cell_name)
+                #self.lgr.debug('sharedSyscall addExitHap, cell is None, is dmod, set cell to %s' % cell) 
+
         if exit_eip1 is not None: 
             #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
             if len(my_exit_pids[exit_eip1]) == 0:
-                #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d' % (exit_eip1, pid))
+                #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d cell: %s' % (exit_eip1, pid, cell))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
@@ -181,7 +186,8 @@ class SharedSyscall():
             my_exit_pids[exit_eip1].append(pid)
             #self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
         else:
-            self.lgr.debug('sharedSyscall addExitHap exit_eip1 is None')
+            pass
+            #self.lgr.debug('sharedSyscall addExitHap exit_eip1 is None')
 
         if exit_eip2 is not None:
             if exit_eip2 not in my_exit_pids:
@@ -392,6 +398,7 @@ class SharedSyscall():
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
             if self.read_fixup_callback is not None:
+                self.lgr.debug('sharedSyscall call read_fixup_callback')
                 eax = self.read_fixup_callback()
             if eax >= 0:
                 nbytes = min(eax, 256)
@@ -693,7 +700,10 @@ class SharedSyscall():
                     dmod.setPid(pid)
                     #self.top.runToRead(dmod, ignore_running=True)
                     call_params = syscall.CallParams('read', dmod, break_simulation=False)        
-                    self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True)
+                    cell_name = dmod.getCellName()
+                    cell = self.top.getCell(cell_name = cell_name)
+                    self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True, 
+                       cell_name=dmod.getCellName(), cell=cell)
 
                     trace_msg = ('\treturn from open pid:%s DMOD! forced return FD of 99 \n' % (str(pid)))
                 exit_info.call_params = None
@@ -720,6 +730,7 @@ class SharedSyscall():
         elif callname == 'read':
             #self.lgr.debug('is read eax 0x%x' % eax)
             if self.read_fixup_callback is not None:
+                self.lgr.debug('sharedSyscall read call read_fixup_callback')
                 eax = self.read_fixup_callback(exit_info.old_fd)
             if eax < 0: 
 
@@ -835,7 +846,11 @@ class SharedSyscall():
             if eax >= 0:
                 if self.mem_utils.WORD_SIZE == 4:
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-                    trace_msg = ('\treturn from %s pid:%d FD: %d result: 0x%x\n' % (callname, pid, exit_info.old_fd, result))
+                    if result is not None:
+                        trace_msg = ('\treturn from %s pid:%d FD: %d result: 0x%x\n' % (callname, pid, exit_info.old_fd, result))
+                    else:
+                        trace_msg = ('\treturn from %s pid:%d FD: %d result failed read of addr 0x%x\n' % (callname, pid, 
+                              exit_info.old_fd, exit_info.retval_addr))
                 else:
                     trace_msg = ('\treturn from %s pid:%d FD: %d eax: 0x%x\n' % (callname, pid, exit_info.old_fd, eax))
 
@@ -1032,7 +1047,7 @@ class SharedSyscall():
         if self.stop_hap is not None:
             SIM_run_alone(self.top.resetOrigin, self.cpu)
             SIM_run_alone(self.delStopAlone, None)
-            self.lgr.debug('sharedSyscall did reset, not continue')
+            self.lgr.debug('sharedSyscall did reset, now continue')
             SIM_run_alone(SIM_run_command, 'c')
 
     def getExitList(self, name):
