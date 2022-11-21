@@ -144,7 +144,7 @@ class Dmod():
                 self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (self.fiddle.was, s))
                 return
             if was is not None:
-                self.lgr.debug('Dmod replace %s with %s in \n%s' % (self.fiddle.was, self.fiddle.becomes, s))
+                self.lgr.debug('Dmod cell: %s replace %s with %s in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, s))
                 new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
                 self.mem_utils.writeString(cpu, addr, new_string)
             else:
@@ -189,7 +189,9 @@ class Dmod():
                 diddle_lseek = DmodSeek(delta, pid, fd)
                 operation = ['_llseek', 'close']
                 call_params = syscall.CallParams(operation, diddle_lseek)        
-                self.top.runTo(operation, call_params, run=False, ignore_running=True)
+                cell = self.top.getCell(cell_name=self.cell_name)
+                ''' Provide explicit cell to avoid defaulting to the contextManager.  Cell is typically None.'''
+                self.top.runTo(operation, call_params, run=False, ignore_running=True, cell_name=self.cell_name, cell=cell)
                 self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid:%d fd %d' % (delta, pid, fd))
             else:
                 self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
@@ -311,6 +313,9 @@ class Dmod():
         self.lgr.debug('Dmod resetOpen')
         self.fd = None
         self.pid = None
+
+    def getCellName(self):
+        return self.cell_name
         
 if __name__ == '__main__':
     print('begin')
