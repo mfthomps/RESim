@@ -186,9 +186,9 @@ class StrChrMark():
         return self.msg
 
 class StrtousMark():
-    def __init__(self, src):
+    def __init__(self, fun, src):
         self.src = src
-        self.msg = 'strtoul at 0x%x' % (self.src)
+        self.msg = '%s at 0x%x' % (fun, self.src)
     def getMsg(self):
         return self.msg
 
@@ -729,8 +729,8 @@ class WatchMarks():
         self.addWatchMark(cm)
         self.lgr.debug('watchMarks strchr %s' % (cm.getMsg()))
 
-    def strtoul(self, src):
-        cm = StrtousMark(src)
+    def strtoul(self, fun, src):
+        cm = StrtousMark(fun, src)
         self.addWatchMark(cm)
         self.lgr.debug('watchMarks strtous %s' % (cm.getMsg()))
 
