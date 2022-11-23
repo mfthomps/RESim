@@ -1,13 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env python3
 import os
 import sys
 import glob
 glist = glob.glob('resim_*/')
+resim_dir = os.getenv('RESIM_DIR')
 here = os.getcwd()
+args = ' '.join(sys.argv[1:])
+cmd = os.path.join(resim_dir, 'simics', 'monitorCore', 'runTrack.py') + ' '+args
 if len(glist) > 0:
     for instance in glist:
         os.chdir(instance)
-        $RESIM_DIR/simics/monitorCore/runTrack.py $@
+        os.system(cmd)
         os.chdir(here)
 else:
-    $RESIM_DIR/simics/monitorCore/runTrack.py $@
+    os.system(cmd)
