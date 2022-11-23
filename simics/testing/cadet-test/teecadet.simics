@@ -6,12 +6,12 @@ script-branch "driver login" {
     }else{
         $console = driver.serconsole.con
     }
-    $console.wait-for-string "ubuntu login: "
+    $console.bp-wait-for-console-string "ubuntu login: "
     $console.input "mike\n"
     $console.input "mike\n"
-    $console.wait-for-string "ubuntu login: "
+    $console.bp-wait-for-console-string "ubuntu login: "
     $console.input "mike\n"
-    $console.wait-for-string "Password: "
+    $console.bp-wait-for-console-string "Password: "
     $console.input "mike\n"
     $console.input "echo Here we go...\n"
 }
