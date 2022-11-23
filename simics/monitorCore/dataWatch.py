@@ -18,12 +18,15 @@ import sys
 import traceback
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 'mempcpy', 
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
+            'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
+mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
+free_funs = ['free_ptr', 'free']
 class MemSomething():
     def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None):
             self.fun = fun
@@ -696,8 +699,8 @@ class DataWatch():
             self.watchMarks.strchr(self.mem_something.src, the_chr, self.mem_something.count)
             #self.lgr.debug('dataWatch returnHap, return from %s strchr 0x%x count %d ' % (self.mem_something.fun, 
             #       self.mem_something.the_chr, self.mem_something.count))
-        elif self.mem_something.fun in ['strtoul', 'strtoull']:
-            self.watchMarks.strtoul(self.mem_something.src)
+        elif self.mem_something.fun in ['strtoul', 'strtoull', 'strtol', 'strtoll', 'strtoq']:
+            self.watchMarks.strtoul(self.mem_something.fun, self.mem_something.src)
         elif self.mem_something.fun == 'strcpy' or self.mem_something.fun == 'strncpy':
             #self.lgr.debug('dataWatch returnHap, strcpy return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
             #       self.mem_something.dest, self.mem_something.count))
@@ -1021,7 +1024,7 @@ class DataWatch():
                 self.mem_something.src, self.mem_something.the_chr, dumb = self.getCallParams(sp)
                 ''' TBD fix to reflect strnchr? '''
                 self.mem_something.count=1
-            elif self.mem_something.fun in ['strtoul', 'strtoull']:
+            elif self.mem_something.fun in ['strtoul', 'strtoull', 'strtol', 'strtoll', 'strtoq']:
                 self.mem_something.src, dumb2, dumb = self.getCallParams(sp)
 
             elif self.mem_something.fun == 'sscanf':
@@ -1870,26 +1873,43 @@ class DataWatch():
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp') - self.mem_utils.WORD_SIZE
                 self.trackPush(sp, instruct, addr, start, length, eip)
             else:
-                if not self.lookForMemStuff(addr, start, length, memory, op_type):
-                    #self.lgr.debug('dataWatch, not memstuff, do finishRead')
-                    self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
+                st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+                if st is None:
+                    self.lgr.debug('DataWatch readHap stack trace is None, wrong pid?')
+                else:
+                    frames = st.getFrames(20)
+                    if not self.checkFree(frames, index):
+                        if not self.lookForMemStuff(addr, start, length, memory, op_type, frames):
+                            #self.lgr.debug('dataWatch, not memstuff, do finishRead')
+                            self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
         else:
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
 
-    def lookForMemStuff(self, addr, start, length, memory, op_type):
+    def checkFree(self, frames, index):
+        retval = False
+        max_index = len(frames)-1
+        for i in range(max_index, -1, -1):
+            frame = frames[i]
+            fun = self.adjustFunName(frame)
+            self.lgr.debug('dataWatch checkFree fun is %s' % fun)
+            if fun in free_funs:
+                self.lgr.debug('dataWatch checkFree got free %s' % fun)
+                self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                self.read_hap[index] = None
+                self.start[index] = 0
+                retval = True
+        return retval
+  
+
+    def lookForMemStuff(self, addr, start, length, memory, op_type, frames):
         ''' See if reference is within a memcpy type of function '''
         retval = False
         mem_stuff = None
         # check if we already failed on this memsomething
         if not self.undo_pending:
-            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
-            if st is None:
-                self.lgr.debug('DataWatch lookForMemstuff stack trace is None, wrong pid?')
-                return
             #self.lgr.debug('%s' % st.getJson()) 
             # look for memcpy'ish... TBD generalize 
-            frames = st.getFrames(20)
-            mem_stuff = self.memsomething(frames, mem_funs, st)
+            mem_stuff = self.memsomething(frames, mem_funs)
         else:
             self.lgr.debug('DataWatch lookForMemStuff, skip memsomething, already failed on it')
             self.undo_pending = False
@@ -2206,7 +2226,7 @@ class DataWatch():
             return
         ''' look for memcpy'ish... TBD generalize '''
         frames = st.getFrames(20)
-        mem_stuff = self.memsomething(frames, my_mem_funs, st)
+        mem_stuff = self.memsomething(frames, my_mem_funs)
         if mem_stuff is not None:
             self.lgr.debug('mem_stuff function %s, ret_ip is 0x%x' % (mem_stuff.fun, mem_stuff.ret_addr))
             self.mem_something = MemSomething(mem_stuff.fun, None, mem_stuff.ret_addr, None, None, None, 
@@ -2384,12 +2404,33 @@ class DataWatch():
                             break
                        
         return retval
-                    
+                   
+    def adjustFunName(self, frame): 
+        fun = None
+        if frame.fun_name is not None:
+            fun = frame.fun_name
+            if '@' in frame.fun_name:
+                fun = frame.fun_name.split('@')[0]
+                try:
+                    fun_hex = int(fun, 16) 
+                    if self.ida_funs is not None:
+                        fun_name = self.ida_funs.getName(fun_hex)
+                        #self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                        if fun_name is not None:
+                            fun = fun_name
+                    else:
+                        self.lgr.debug('No ida_funs')
+                except ValueError:
+                    pass
+            for pre in mem_prefixes:
+                if fun.startswith(pre):
+                    fun = fun[len(pre):]
+                    #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
+        return fun
     
-    def memsomething(self, frames, local_mem_funs, st):
+    def memsomething(self, frames, local_mem_funs):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
         ''' Will iterate through the frames backwards, looking for the highest level function'''
-        mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
@@ -2408,26 +2449,8 @@ class DataWatch():
             #    self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
             #    pass
             if frame.instruct is not None:
-                fun = None
-                if frame.fun_name is not None:
-                    fun = frame.fun_name
-                    if '@' in frame.fun_name:
-                        fun = frame.fun_name.split('@')[0]
-                        try:
-                            fun_hex = int(fun, 16) 
-                            if self.ida_funs is not None:
-                                fun_name = self.ida_funs.getName(fun_hex)
-                                #self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
-                                if fun_name is not None:
-                                    fun = fun_name
-                            else:
-                                self.lgr.debug('No ida_funs')
-                        except ValueError:
-                            pass
-                    for pre in mem_prefixes:
-                        if fun.startswith(pre):
-                            fun = fun[len(pre):]
-                            #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
+                fun = self.adjustFunName(frame)
+                if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
                 #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
