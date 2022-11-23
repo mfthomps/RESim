@@ -15,14 +15,16 @@ c 900000000
 !xdotool key Down
 !xdotool key Return
 !sleep 2
-!./findWindow.sh driver.mb.sb.com
-!sleep 2
-!xdotool type "          ./client.py"
-!xdotool key Return
+$console = driver.serconsole.con
+$console.input "./client.py\n"
+#!./findWindow.sh driver.mb.sb.com
+#!sleep 2
+#!xdotool type "          ./client.py"
+#!xdotool key Return
 script-branch "sent it" {
     local $console = NIL
     $console = driver.serconsole.con
-    $console.wait-for-string "sent it"
+    $console.bp-wait-for-console-string "sent it"
     echo "client sent string, run some then check log"
 }
 #
