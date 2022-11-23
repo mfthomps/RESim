@@ -935,9 +935,9 @@ class DataWatch():
                     else:
                         self.lgr.debug('dataWatch getMemParam ret_addr_addr is None, did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (self.mem_something.fun, eip))
                     self.mem_fun_entries[self.mem_something.fun] = self.MemCallRec(None, ret_addr_offset, eip)
-                else:
-                    self.lgr.debug('dataWatch getMemParams, fun %s in mem_fun_enties? will return' % self.mem_something.fun)
-                    return
+                #else:
+                #    self.lgr.debug('dataWatch getMemParams, fun %s in mem_fun_entries? will return' % self.mem_something.fun)
+                #    return
             else:
                 ''' adjust  to account for simics not adjusting sp on break on function entry '''
                 sp = sp + self.mem_utils.WORD_SIZE
@@ -1891,9 +1891,9 @@ class DataWatch():
         for i in range(max_index, -1, -1):
             frame = frames[i]
             fun = self.adjustFunName(frame)
-            self.lgr.debug('dataWatch checkFree fun is %s' % fun)
+            #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
             if fun in free_funs:
-                self.lgr.debug('dataWatch checkFree got free %s' % fun)
+                #self.lgr.debug('dataWatch checkFree got free %s' % fun)
                 self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
                 self.read_hap[index] = None
                 self.start[index] = 0
