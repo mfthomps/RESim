@@ -677,7 +677,7 @@ class StackTrace():
             ''' ptr iterates through stack addresses.  val is the value at that address '''
             val = self.mem_utils.readPtr(self.cpu, ptr)
             if val is None:
-                self.lgr.debug('stackTrace, failed to read from 0x%x' % ptr)
+                #self.lgr.debug('stackTrace, failed to read from 0x%x' % ptr)
                 count += 1
                 ptr = ptr + self.mem_utils.WORD_SIZE
                 done = True
