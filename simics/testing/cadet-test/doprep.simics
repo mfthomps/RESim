@@ -13,5 +13,5 @@ script-branch "trackIO" {
    !xdotool type "@cgc.prepInjectWatch(1, 'cadetread')"
    !xdotool key Return
 }
-@cgc.trackIO(4)
+@cgc.trackIO(4, kbuf=True)
 

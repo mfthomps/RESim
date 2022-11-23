@@ -15,7 +15,7 @@ fi
 sleep 1
 ./findWindow.sh driver.mb.sb.com
 sleep 1
-xdotool type "perl -E 'say \"X\" x 1000' | nc 10.0.0.91 5001"
+xdotool type "perl -E 'say \"Z\" x 1000' | nc 10.0.0.91 5001"
 xdotool key Return
 #
 # Now run the simulation
