@@ -82,12 +82,18 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
         print('did quit')
         lgr.debug('handleClose must have gotten quit')
         for fifo in fifo_list:
-            os.write(fifo, bytes('quit\n', 'UTF-8'))
-            lgr.debug('wrote quit to fifo') 
+            try:
+                os.write(fifo, bytes('quit\n', 'UTF-8'))
+                lgr.debug('wrote quit to fifo') 
+            except:
+                lgr.debug('fifo broken pipe')
     else:
         for fifo in fifo_list:
-            os.write(fifo, bytes('restart\n', 'UTF-8'))
-            lgr.debug('wrote restart to fifo')
+            try:
+                os.write(fifo, bytes('restart\n', 'UTF-8'))
+                lgr.debug('wrote restart to fifo')
+            except:
+                lgr.debug('fifo broken pipe')
     for proc in resim_procs:
         proc.wait()
         lgr.debug('proc exited')
