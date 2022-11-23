@@ -32,7 +32,7 @@ class ReverseTrack():
                 self.lgr.debug('revTaintReg stack trace is None, wrong pid?')
                 return
             frames = st.getFrames(20)
-            mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs, st)
+            mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)
             if mem_stuff is not None:
                 self.mem_something = dataWatch.MemSomething(mem_stuff.fun, None, mem_stuff.ret_addr, None, None, None, 
                       mem_stuff.called_from_ip, None, None, None, ret_addr_addr = mem_stuff.ret_addr_addr)
