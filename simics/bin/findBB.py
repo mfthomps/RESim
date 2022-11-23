@@ -14,6 +14,7 @@ import findBB
 '''
 Return a list of queue files that hit a given BB start address
 '''
+read_marks = ['read', 'compare', 'scan', 'sprint', 'strchr', 'strt']
 def findBB(target, bb, quiet=False):
     retval = []
     cover_list = aflPath.getAFLCoverageList(target)
@@ -57,12 +58,13 @@ def getFirstReadCycle(trackio, quiet=False):
         return None
     mark_list = tjson['marks']
     for mark in mark_list:
-        if mark['mark_type'] == 'read':
+        if mark['mark_type'] in read_marks:
             retval = mark['cycle']
             break
     return retval
 
 def getWatchMark(trackio, bb, prog, quiet=False):
+    #print('in getWatchMark')
     retval = None
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
@@ -79,8 +81,11 @@ def getWatchMark(trackio, bb, prog, quiet=False):
     somap = tjson['somap']
     wrong_file = False
     offset = 0
-    if somap['prog'] == prog:
-       print('0x%x is in prog' % bb)  
+    #print('prog: %s  somap[proc] %s' % (prog, somap['prog']))
+    so_prog = os.path.basename(somap['prog'])
+    if so_prog == prog:
+       #print('0x%x is in prog' % bb['start_ea'])  
+       pass
     else:
        got_section = False
        wrong_file = True
@@ -91,13 +96,14 @@ def getWatchMark(trackio, bb, prog, quiet=False):
                #print('got section, offset is 0x%x' % offset)
                wrong_file = False
     if not wrong_file:
+        #print('not wrong file')
         mark_list = tjson['marks']
         for mark in mark_list:
-            if mark['mark_type'] == 'read':
+            if mark['mark_type'] in read_marks:
                 eip = mark['ip'] - offset
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
                 if eip >= bb['start_ea'] and eip <= bb['end_ea']:
-                    print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
+                    #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
                     retval = eip
                     break
             index = index + 1
