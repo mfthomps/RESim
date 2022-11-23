@@ -876,8 +876,10 @@ class GenMonitor():
             plist[tasks[t].pid] = t 
         for pid in sorted(plist):
             t = plist[pid]
-            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid))
+            uid, e_uid = self.task_utils[self.target].getCred(t)
+            id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
+            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -4804,6 +4806,9 @@ class GenMonitor():
 
     def hasPendingPageFault(self, pid):
         return self.page_faults[self.target].hasPendingPageFault(pid)
+
+    def getCred(self):
+        return self.task_utils[self.target].getCred()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

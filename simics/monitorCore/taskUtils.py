@@ -947,3 +947,24 @@ class TaskUtils():
     def getExecMode(self):
         mode = self.cpu.iface.x86_reg_access.get_exec_mode()
         return mode
+
+    def getIds(self, address):
+        uid_addr = address + 4*self.mem_utils.WORD_SIZE
+        uid = self.mem_utils.readWord32(self.cpu, uid_addr)
+        e_uid_addr = address + 8*self.mem_utils.WORD_SIZE
+        e_uid = self.mem_utils.readWord32(self.cpu, e_uid_addr)
+        return uid, e_uid
+
+
+    def getCred(self, task_addr=None):
+        if task_addr is None:
+            cur_addr = self.getCurTaskRec()
+        else:
+            cur_addr = task_addr
+        real_cred_addr = cur_addr + (self.param.ts_comm - 2*self.mem_utils.WORD_SIZE)
+        cred_addr = cur_addr + (self.param.ts_comm - self.mem_utils.WORD_SIZE)
+        real_cred_struct = self.mem_utils.readPtr(self.cpu, real_cred_addr) + self.mem_utils.WORD_SIZE
+        uid, eu_id = self.getIds(real_cred_struct)
+        return uid, eu_id
+
+
