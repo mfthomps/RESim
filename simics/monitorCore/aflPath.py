@@ -193,11 +193,11 @@ def getTargetQueue(target, get_all=False, host=None):
             qdir = os.path.join(afl_dir, 'queue')
             if os.path.isdir(qdir):
                 afl_list = [os.path.join(qdir, f) for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
-        manual = os.path.join(afl_dir, 'manual')
-        if os.path.isdir(manual):
-            manual_list = os.listdir(manual)
-            for f in manual_list:
-                afl_list.append(os.path.join(manual, f))
+    manual = os.path.join(afl_dir, 'manual')
+    if os.path.isdir(manual):
+        manual_list = os.listdir(manual)
+        for f in manual_list:
+            afl_list.append(os.path.join(manual, f))
     return afl_list
 
 def getTargetCrashes(target):
