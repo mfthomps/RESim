@@ -114,9 +114,19 @@ def doConnect(switch, eth, switch_map, index):
     #dog = run_command(cmd)
     #print('dog is %s' % dog)
     if switch.startswith('v'):
-        cmd = '%s.get-free-trunk-connector 2' % switch
+        switch, group = switch.split('-')
+        no_vlan = False
+        if group.startswith('nv'):
+            no_vlan = True
+            group = group[2:]
+        group = int(group)
+        if not no_vlan:
+            cmd = '%s.get-free-trunk-connector %d' % (switch, group)
+        else:
+            cmd = '%s.get-free-connector %d' % (switch, group)
     else:
         cmd = '%s.get-free-connector' % switch
+    print('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
     cmd = 'connect $%s cnt1 = %s' % (eth, con)
     print('doConnect cmd: %s' % cmd)
@@ -159,12 +169,18 @@ def createDict(config, not_a_target):
     return comp_dict
 
 def checkVLAN(config):
+    did_these = []
     for name, value in config.items('ENV'):
         if name.startswith('VLAN_'):
+            print('GOT VLAN %s' % name)
             num = int(name.split('_')[1])
-            cmd = 'create-ethernet-vlan-switch vswitch%d' % num
-            run_command(cmd)
-            cmd = 'vswitch%d.add-vlan 2' % num
+            if num not in did_these:
+                cmd = 'create-ethernet-vlan-switch vswitch%d' % num
+                print('checkVLAN cmd: %s' % cmd)
+                run_command(cmd)
+                did_these.append(num)
+            value = int(value)
+            cmd = 'vswitch%d.add-vlan %d' % (num, value)
             run_command(cmd)
 
 class LaunchRESim():
