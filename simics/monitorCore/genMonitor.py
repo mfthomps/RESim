@@ -421,7 +421,7 @@ class GenMonitor():
     def modeChanged(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         if want_pid != this_pid:
-            #self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
+            self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
         cpl = memUtils.getCPL(cpu)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
@@ -2492,7 +2492,7 @@ class GenMonitor():
         return retval
             
 
-    def runToText(self, flist = None):
+    def runToText(self, flist = None, this_pid=False):
         ''' run until within the currently defined text segment '''
         self.is_monitor_running.setRunning(True)
         start, end = self.context_manager[self.target].getText()
@@ -2509,8 +2509,11 @@ class GenMonitor():
             self.context_manager[self.target].setDebugPid()
 
         proc_break = self.context_manager[self.target].genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, count, 0)
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        if pid is None:
+        if this_pid:
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+        else:
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None or this_pid:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             prec = Prec(cpu, None, [pid], who='to text')
         else:
@@ -3116,7 +3119,7 @@ class GenMonitor():
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.mem_utils[self.target].setRegValue(cpu, reg, value)
-        self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
+        #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if self.reverseEnabled():
             if alone:
                 SIM_run_alone(self.clearBookmarks, reuse_msg) 
