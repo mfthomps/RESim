@@ -66,10 +66,10 @@ def getCPL(cpu):
     #print('arch %s' % cpu.architecture)
     if cpu.architecture == 'arm':
         ''' TBD FIX this! '''
-        reg_num = cpu.iface.int_register.get_number("pc")
-        pc = cpu.iface.int_register.read(reg_num)
-        #print('pc is 0x%x' % pc)
-        if pc > 0xc0000000:
+        reg_num = cpu.iface.int_register.get_number("sp")
+        sp = cpu.iface.int_register.read(reg_num)
+        #print('sp is 0x%x' % sp)
+        if sp > 0xc0000000:
             return 0
         else:
             return 1
@@ -207,7 +207,7 @@ class memUtils():
     def readByte(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 1)
+            return SIM_read_phys_memory(cpu, phys, 1)
         else:
             return None
     '''
@@ -275,7 +275,10 @@ class memUtils():
                 remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
                 if remain_in_page < count:
                     #self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
-                    first_read = readPhysBytes(cpu, ps, remain_in_page)
+                    try:
+                        first_read = readPhysBytes(cpu, ps, remain_in_page)
+                    except ValueError:
+                        self.lgr.error('memUtils readBytes failed to read 0x%x' % ps)
                     if first_read is not None and len(first_read) == remain_in_page:
                         ''' get the rest ''' 
                         ps = self.v2p(cpu, start+remain_in_page)
@@ -284,13 +287,19 @@ class memUtils():
                             retval = retval+first_read
                         else:
                             #self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
-                            second_read = readPhysBytes(cpu, ps, count - remain_in_page)
+                            try:
+                                second_read = readPhysBytes(cpu, ps, count - remain_in_page)
+                            except ValueError:
+                                self.lgr.error('memUtils readBytes, second read failed to read 0x%x' % ps)
                             #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
                             retval = retval+first_read+second_read
                     else:
                         retval = retval+first_read
                 else: 
-                    retval = retval+readPhysBytes(cpu, ps, count)
+                    try:
+                        retval = retval+readPhysBytes(cpu, ps, count)
+                    except ValueError:
+                        self.lgr.error('memUtils readBytes, second read %d bytes from  0x%x' % (count, ps))
                     #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
             #self.lgr.debug('readBytes got %d' % len(retval))
             start = start+count
@@ -312,11 +321,20 @@ class memUtils():
         return value
 
     def readWord16(self, cpu, vaddr):
-        return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 2)
+        paddr = self.v2p(cpu, vaddr) 
+        if paddr is None:
+            return None
+        return SIM_read_phys_memory(cpu, paddr, 2)
     
     def readWord16le(self, cpu, vaddr):
-        hi = SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), 1)
-        lo = SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr+1), 1)
+        paddr = self.v2p(cpu, vaddr) 
+        if paddr is None:
+            return None
+        paddrplus = self.v2p(cpu, vaddr+1) 
+        if paddrplus is None:
+            return None
+        hi = SIM_read_phys_memory(cpu, paddr, 1)
+        lo = SIM_read_phys_memory(cpu, paddrplus, 1)
         retval = hi << 8 | lo
         return retval
 
@@ -468,7 +486,11 @@ class memUtils():
                     cpl = getCPL(cpu)
                     #current_task = self.param.current_task + self.param.delta
                     ct_addr = new_fs_base + (self.param.current_task-self.param.kernel_base)
-                    retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+                    try:
+                        retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
+                    except:
+                        self.lgr.error('memUtils getCurrentTask failed to read phys address 0x%x' % ct_addr)
+                        retval = None
                     #self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
                     #      self.param.current_task, new_fs_base, ct_addr, retval))
   
