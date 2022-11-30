@@ -48,7 +48,7 @@ class PlayAFL():
             self.pad_to_size = 0
         self.stop_on_read =   stop_on_read
         if not self.stop_on_read:
-            sor = os.getenv('STOP_ON_READ')
+            sor = os.getenv('AFL_STOP_ON_READ')
             if sor is not None and sor.lower() == 'true':
                 self.stop_on_read = True
         self.udp_header = os.getenv('AFL_UDP_HEADER')

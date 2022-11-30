@@ -103,7 +103,7 @@ class InjectIO():
         self.stop_hap = None
         self.no_rop = no_rop
         self.instruct_trace = instruct_trace
-        sor = os.getenv('STOP_ON_READ')
+        sor = os.getenv('AFL_STOP_ON_READ')
         self.lgr.debug('sor is %s' % sor)
         if sor is not None and sor.lower() == 'true':
             self.stop_on_read = True
