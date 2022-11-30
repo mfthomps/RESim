@@ -39,12 +39,15 @@ def readPhysBytes(cpu, paddr, count):
         return None
     while tot_read < count:
         remain = count - tot_read
-        remain = min(remain, 1024)
+        #remain = min(remain, 1024)
+        remain = min(remain, 4)
         try:
-            bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 0)
+            ''' difference between theses?  try alternate as experiment to prevent assert error'''
+            #bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 0)
+            bytes_read = SIM_read_phys_memory(cpu, cur_addr, remain)
         except:
             raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
-        retval = retval + bytes_read
+        retval = retval + tuple(bytes_read.to_bytes(4, 'little'))
         tot_read = tot_read + remain
         cur_addr = cur_addr + remain
     return retval
