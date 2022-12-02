@@ -1,0 +1,15 @@
+--- e2fsprogs_1.42.11/debugfs/Makefile.in.orig	2022-12-01 18:26:40.803895257 +0000
++++ e2fsprogs_1.42.11/debugfs/Makefile.in	2022-12-01 18:30:52.683896257 +0000
+@@ -75,6 +75,11 @@
+ 	$(E) "	MK_CMDS $@"
+ 	$(Q) $(MK_CMDS) $(srcdir)/ro_debug_cmds.ct
+ 
++debugfs.o: debugfs.c
++	$(E) "	CC $<"
++	$(Q) $(CC) -c $(ALL_CFLAGS) -DSKIP_GLOBDEFS $< -o $@
++	$(Q) $(CHECK_CMD) $(ALL_CFLAGS) $<
++
+ ro_debugfs.o: debugfs.c
+ 	$(E) "	CC $@"
+ 	$(Q) $(CC) -c $(ALL_CFLAGS) $< -DREAD_ONLY -o $@
+

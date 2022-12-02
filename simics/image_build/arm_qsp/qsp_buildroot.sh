@@ -12,7 +12,17 @@ cd buildroot
 git branch -f qsp-$TARGET_ARCH $BUILDROOT_VERSION
 git checkout qsp-$TARGET_ARCH
 
-PATCH=qsp-$TARGET_ARCH-buildroot-*.patch
+PATCH=../pkgconf.patch
+cd package
+git apply -p1 ../$PATCH
+cd ..
+
+PATCH=../Config.patch
+cd package
+git apply -p1 ../$PATCH
+cd ..
+
+PATCH=../qsp-$TARGET_ARCH-buildroot-*.patch
 if [ ! -e configs/qsp_${TARGET_ARCH}_linux_defconfig ]; then
     # patching buildroot
     if [ ! -e $PATCH ]; then
@@ -25,7 +35,6 @@ if [ ! -e configs/qsp_${TARGET_ARCH}_linux_defconfig ]; then
 fi
  
 make qsp_${TARGET_ARCH}_linux_defconfig
+../dopatches.sh
+make 
 
-make source
-
-echo "apply patches..."

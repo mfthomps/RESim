@@ -1,4 +1,0 @@
-333c333
-< 	$(Q) $(CC) $(ALL_CFLAGS) -DSKIP_GLOBDEFS -c $< -o $@
----
-> 	$(Q) $(CC) $(ALL_CFLAGS) -c $< -o $@

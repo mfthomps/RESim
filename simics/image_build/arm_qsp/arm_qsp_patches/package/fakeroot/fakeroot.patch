@@ -1,0 +1,10 @@
+--- fakeroot-1.18.2/libfakeroot.c	2022-10-10 21:45:17.464450434 +0000
++++ fakeroot-1.18.2/libfakeroot.c.orig	2022-10-10 21:43:30.512450009 +0000
+@@ -61,6 +61,9 @@
+ #define SEND_GET_STAT(a,b) send_get_stat(a)
+ #define SEND_GET_STAT64(a,b) send_get_stat64(a)
+ #endif
++#ifndef _STAT_VER
++#define _STAT_VER 0
++#endif
+
