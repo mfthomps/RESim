@@ -133,7 +133,7 @@ class Kbuffer():
             self.kbufs.append(src)
             print('adding kbuf 0x%x' % src)
             if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
-                max_bad = 100
+                max_bad = 1000
                 special = ord('Z')
                 done = False 
                 cur_addr = src
