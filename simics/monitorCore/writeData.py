@@ -111,7 +111,7 @@ class WriteData():
         self.stop_on_close = False
         if stop_on_close_env is not None and stop_on_close_env.lower()=='true':
             self.stop_on_close = True
-            #self.lgr.debug('writeData, stop on close is true')
+            self.lgr.debug('writeData, stop on close is true')
 
         self.total_read = 0
         self.read_limit = None
@@ -145,6 +145,7 @@ class WriteData():
             self.user_space_addr, length = self.top.getReadAddr()
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
             #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            #self.lgr.debug('writeData writeKdata, call setCallHap')
             self.setCallHap()
             while remain > 0:
                  count = min(self.k_buf_len, remain)
@@ -380,8 +381,6 @@ class WriteData():
                 self.cpu.iface.int_register.write(self.pc_reg, self.select_return_ip)
                 #self.lgr.debug('writeData selectHap, skipped over kernel')
 
-
-
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''
         #self.lgr.debug('writeData callHap')
@@ -391,49 +390,59 @@ class WriteData():
 
     def handleCall(self):
         pid = self.top.getPID()
-        #self.lgr.debug('writeData handleCall, pid:%d' % pid)
-        if self.stop_on_read and len(self.in_data) == 0:
-            #self.lgr.debug('writeData handleCall stop on read')
-            SIM_break_simulation('writeData stop on read')
-            return
+        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
         if pid != self.pid:
             #self.lgr.debug('writeData handleCall wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
-        if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            #self.lgr.debug('writeData handleCall current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+        if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
+            if self.closed_fd:
+                #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
+                pass
+            else:
+                #self.lgr.debug('writeData handleCall current packet %d no data left. write_callback: %s' % (self.current_packet, self.write_callback))
+                pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             '''
             if self.write_callback is not None:
+                #self.lgr.debug('writeData handleCall write_callback not None')
                 if self.mem_utils.isKernel(self.addr):
-                    if not self.kernel_buf_consumed:
+                    if self.closed_fd:
+                        rprint('fd closed')
+                        #self.lgr.debug('writeData handleCall fd closed, stop and call write_callback')
+                        SIM_break_simulation('fd closed.')
+                        SIM_run_alone(self.write_callback, 0)
+
+                    elif not self.kernel_buf_consumed:
                         self.user_space_addr, length = self.top.getReadAddr()
                         if self.user_space_addr is not None:
                             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
-                        return
-                    rprint('kernel buffer data consumed')
-                    #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
-                    SIM_break_simulation('kernel buffer data consumed.')
-                    ''' errr no, if kernel buffer callHap only is set after dataWatch consumes sees all data consumed'''
-                    ''' ???Rely on the dataWatch to track data read from kernel and initiate stop when all data consumed.
-                        The entire data was injected into the kernel, we don't know here when to stop '''
-                    #self.lgr.debug('writeData handleCall current packet %d kernel buffer, just continue ' % self.current_packet)
-                    SIM_run_alone(self.write_callback, 0)
-                    return
+                        #self.lgr.debug('writeData handleCall kernel buffer not consumed.')
+                    else:
+                        rprint('kernel buffer data consumed')
+                        #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
+                        SIM_break_simulation('kernel buffer data consumed.')
+                        #self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
+                        SIM_run_alone(self.write_callback, 0)
                 else:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
                     SIM_run_alone(self.write_callback, 0)
             else:
                 if self.mem_utils.isKernel(self.addr):
-                    if not self.kernel_buf_consumed:
+                    if self.closed_fd:
+                        SIM_run_alone(self.delCallHap, None)
+                        SIM_break_simulation('writeData fd closed')
+                        #self.lgr.debug('writeData handleCall current packet %d fd closed stop simulation' % self.current_packet)
+                    elif not self.kernel_buf_consumed:
                         self.user_space_addr, length = self.top.getReadAddr()
                         if self.user_space_addr is not None:
                             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
-                        return
-                    SIM_run_alone(self.delCallHap, None)
-                    SIM_break_simulation('writeData out of data')
-                    #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall kernel buf not consumed')
+                    else:
+                        SIM_run_alone(self.delCallHap, None)
+                        SIM_break_simulation('writeData out of data')
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
                 else:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
                     pass

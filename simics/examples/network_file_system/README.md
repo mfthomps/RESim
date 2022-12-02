@@ -21,7 +21,7 @@ Create a RESim workspace on your Simics host and copy these files into it, e.g.,
    * mkdir network_file_system
    * cd network_file_system
    * resim-ws.sh
-   * cp $RESIM_DIR/simics/examples/network_file_system/* . 
+   * cp $RESIM_DIR/simics/examples/network_file_system/\* . 
    
 If you are running on NPS infrastructure, all images and the binaries named in the
 ubuntu_driver.ini file should be already available through the NFS /mnt/re_images.  
@@ -44,7 +44,10 @@ Use the poll.io file to create an injectIOWatch snapshot.
 
 The poll.io file was created using the traceFD command after selecting 
 Network_File_System as the debug process and sending a poll from the driver.
-The goal was to send a single data package to the server such that the data
+That file is named tpoll.io
+A lot of Z characters were then appended to that file as a file named 
+poll.io.  (As noted below, the Z character is used to find the length of kernel buffers.)
+The goal is to send a single data package to the server such that the data
 is all injested by the kernel at once rather than a sequence of send/receives.  
 Subsequent injectIO and fuzzing will overwrite the kernel buffer, and we don't 
 want additional spurrious data arriving after the snapshot is created.
@@ -56,11 +59,12 @@ Use the poll.io to create a snapshot for use with fuzzing or injectIO:
    * run a bit
    * debugProc('Network_File_System')
    * From another terminal in the workspace:
-       driver-driver.py poll.directive -t
-   * trackIO(0, max_marks=50)
+       driver-driver.py poll.directive -t -d
+   * trackIO(0, max_marks=50, kbuf=True)
    * prepInjectWatch(1, 'read0')
 
 The max_marks option speeds up the trackIO, otherwise over 1000 data marks are generated from this input.
+The kbuf option tells the trackIO function to look for kernel buffer addresses.
 
 Update the ubuntu_driver.ini to identify read0 as the snapshot.
 This snapshot can be used with the injectIO function, and with fuzzing.
@@ -78,12 +82,13 @@ Why is the file named "waa"?
 ## Fuzzing setup
 To fuzz, use the poll.io file as your seed.
    * mkdir -p $AFL_DATA/seeds/network_file_system
-   * cp poll.io $AFL_DATA/seeds/network_file_system
-   * clonewd.sh 2
+   * cp tpoll.io $AFL_DATA/seeds/network_file_system
+   * clonewd.sh 2 (skip this step if you are only able to run a single instance of Simics).
    
 The parameter to clonewd.sh determines how many parallel fuzzing sessions are created.
 If running on a blade server other than bladet10, you can clone up to 9 copies.
-Otherwise, the basic Simics licenses will let you clone 2 copies.
+Otherwise, the basic Simics licenses will let you clone 2 copies (or not, depending on the
+Simics version and license files).
 
 Then run the fuzzing session:
    * runAFL ubuntu_driver.ini

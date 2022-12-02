@@ -8,11 +8,12 @@ import os
 import glob
 import pickle
 import json
+from resimUtils import rprint
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None, repeat=False):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -33,6 +34,9 @@ class PlayAFL():
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
         self.afl_list = []
+        ''' for testing, replay same data file over and over. only works with single file '''
+        self.repeat = repeat
+        self.repeat_counter = 0
         ''' If parallel, the all_hits will not be tracked or written.  TBD to that separately.'''
         self.parallel = parallel
         ''' Only track current thread '''
@@ -48,7 +52,7 @@ class PlayAFL():
             self.pad_to_size = 0
         self.stop_on_read =   stop_on_read
         if not self.stop_on_read:
-            sor = os.getenv('STOP_ON_READ')
+            sor = os.getenv('AFL_STOP_ON_READ')
             if sor is not None and sor.lower() == 'true':
                 self.stop_on_read = True
         self.udp_header = os.getenv('AFL_UDP_HEADER')
@@ -126,7 +130,7 @@ class PlayAFL():
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
-        if self.target != 'oneplay':
+        if self.target != 'oneplay' or self.repeat:
             cli.quiet_run_command('disable-reverse-execution')
             self.top.setDisableReverse()
             cli.quiet_run_command('enable-unsupported-feature internals')
@@ -198,7 +202,12 @@ class PlayAFL():
 
     def goAlone(self, clear_hits):
         self.current_packet=1
-        self.index += 1
+        if not self.repeat:
+            self.index += 1
+        else:
+            self.repeat_counter += 1
+            if self.repeat_counter % 10 == 0:
+                rprint(str(self.repeat_counter))
         self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d' % (len(self.afl_list), self.index))
         done = False
         if self.target != 'oneplay':
@@ -223,12 +232,12 @@ class PlayAFL():
                             if hit not in self.all_hits:
                                 self.all_hits.append(hit)
                     self.index += 1
-        if self.index < len(self.afl_list):
+        if self.index < len(self.afl_list) or self.repeat:
             self.lgr.debug('playAFL goAlone index %d' % self.index)
-            if self.target != 'oneplay':
+            if self.target != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
-                if clear_hits:
+                if clear_hits and not self.repeat:
                     self.coverage.stopCover() 
                     self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
@@ -270,7 +279,7 @@ class PlayAFL():
             #self.context_manager.restoreDebugContext()
             if self.write_data is None:
                 force_default_context = True
-                if self.target == 'oneplay':
+                if self.target == 'oneplay' and not self.repeat:
                     force_default_context = False
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
@@ -299,7 +308,7 @@ class PlayAFL():
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
             self.top.watchPageFaults()
-            if self.target == 'oneplay':
+            if self.target == 'oneplay' and not self.repeat:
                 self.top.resetOrigin()
 
             self.lgr.debug('playAFL goAlone now continue')
@@ -330,7 +339,7 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
-            if self.target != 'oneplay':
+            if self.target != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
             if len(self.exit_list)>0:
                 print('%d Sessions that called exit:' % len(self.exit_list))
@@ -397,7 +406,7 @@ class PlayAFL():
                     if self.findbb in hit_bbs:
                         packet_num = self.write_data.getCurrentPacket()
                         self.bnt_list.append((self.afl_list[self.index], packet_num))
-                else:
+                elif not self.repeat:
                     self.recordHits(hit_bbs)
                     self.coverage.saveDeadFile()
                 if self.coverage.didExit():

@@ -140,7 +140,7 @@ class PageFaultGen():
             return
         if self.exception_eip is None:
             eip = self.mem_utils.getRegValue(cpu, 'pc')
-            self.lgr.debug('pageFaultHap exception_eip was none, use current 0x%x' % eip)
+            #self.lgr.debug('pageFaultHap exception_eip was none, use current 0x%x' % eip)
         else:
             eip = self.exception_eip
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
