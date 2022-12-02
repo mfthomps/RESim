@@ -4283,7 +4283,7 @@ class GenMonitor():
         self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
 
     def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, fname=None, trace_all=False):
+            parallel=False, only_thread=False, fname=None, trace_all=False, repeat=False):
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
@@ -4296,7 +4296,7 @@ class GenMonitor():
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
-              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
+              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname, repeat=repeat)
         if play is not None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
