@@ -236,6 +236,9 @@ class PageFaultGen():
 
 
     def watchPageFaults(self, pid=None, compat32=False):
+        if self.fault_hap1 is not None or self.fault_hap is not None:
+            self.lgr.debug('pageFaultGen watchPageFaults, already watching.  Do nothing.')
+            return
         self.debugging_pid = pid
         if self.cpu.architecture == 'arm':
             '''
