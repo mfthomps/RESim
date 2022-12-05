@@ -533,6 +533,12 @@ class WriteData():
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.select_hap)
             self.select_hap = None
             self.select_break = None
+        if self.poll_hap is not None:
+            #self.lgr.debug('writeData delCallHap poll_break %d' % self.poll_break)
+            RES_delete_breakpoint(self.poll_break)
+            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.poll_hap)
+            self.poll_hap = None
+            self.poll_break = None
         if self.close_hap is not None:
             #self.lgr.debug('writeData delCallHap delete close_break %d' % self.close_break)
             RES_delete_breakpoint(self.close_break)
