@@ -144,6 +144,7 @@ class PlayAFL():
             full_path = None
             if fname is not None:
                 full_path = self.top.getFullPath(fname)
+            self.lgr.debug('playAFL call enableCoverage')
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=full_path)
             self.physical = True
@@ -244,31 +245,32 @@ class PlayAFL():
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
-            full = os.path.join(self.afl_dir, self.afl_list[self.index])
-            if not os.path.isfile(full):
-                self.lgr.debug('No file at %s, non-parallel file' % full)
-                full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
-            if not os.path.isfile(full):
-                self.lgr.debug('No file at %s, try local file' % full)
-                full = self.afl_list[self.index]
+            if self.in_data is None or not self.repeat:
+                full = os.path.join(self.afl_dir, self.afl_list[self.index])
                 if not os.path.isfile(full):
-                    self.lgr.debug('No file at %s, try basename' % full)
-                    full = os.path.basename(full)
+                    self.lgr.debug('No file at %s, non-parallel file' % full)
+                    full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
+                if not os.path.isfile(full):
+                    self.lgr.debug('No file at %s, try local file' % full)
+                    full = self.afl_list[self.index]
                     if not os.path.isfile(full):
-                        self.lgr.debug('No local file at %s, either, bail' % full)
-                        print('Could not find file for %s' % full)
-                        self.top.quit()
-                        return
-                else:
-                    self.lgr.debug('Using local file at: %s' % full)
-            
-            with open(full, 'rb') as fh:
-                if sys.version_info[0] == 2:
-                    self.in_data = bytearray(fh.read())
-                else:
-                    self.in_data = fh.read()
-            self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
-            self.afl_packet_count = self.packet_count
+                        self.lgr.debug('No file at %s, try basename' % full)
+                        full = os.path.basename(full)
+                        if not os.path.isfile(full):
+                            self.lgr.debug('No local file at %s, either, bail' % full)
+                            print('Could not find file for %s' % full)
+                            self.top.quit()
+                            return
+                    else:
+                        self.lgr.debug('Using local file at: %s' % full)
+                
+                with open(full, 'rb') as fh:
+                    if sys.version_info[0] == 2:
+                        self.in_data = bytearray(fh.read())
+                    else:
+                        self.in_data = fh.read()
+                self.lgr.debug('playAFL goAlone loaded %d bytes from file session %d of %d' % (len(self.in_data), self.index, len(self.afl_list)))
+                self.afl_packet_count = self.packet_count
         
             #if self.orig_buffer is not None:
             #    ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
@@ -295,7 +297,8 @@ class PlayAFL():
 
             if self.afl_mode: 
                 if self.coverage is not None:
-                    self.coverage.watchExits()
+                    if self.repeat is False or self.repeat_counter > 1:
+                        self.coverage.watchExits()
                 else:
                     self.lgr.error('playAFL afl_mode but not coverage?')
                     return
@@ -312,7 +315,13 @@ class PlayAFL():
                 self.top.resetOrigin()
 
             self.lgr.debug('playAFL goAlone now continue')
-            SIM_run_command('c')
+            if self.repeat:
+                #if self.repeat_counter > 20:
+                #    return
+                SIM_continue(0)
+            else:
+                SIM_continue(0)
+            #SIM_run_command('c')
         else:
             self.lgr.debug('playAFL did all sessions.')
             ''' did all sessions '''
