@@ -158,9 +158,7 @@ def main():
 
     ida_data = os.getenv('RESIM_IDA_DATA')
     prog_path = os.path.join(ida_data, args.program)
-    if not os.path.isdir(prog_path):
-        print('No directory at %s.  Is the program argument correct?' % prog_path)
-        exit(1)
+    os.makedirs(prog_path, exist_ok=True)
 
     do_restart = runPlay(args, lgr)
     #time.sleep(20)
