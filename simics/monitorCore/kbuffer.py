@@ -80,10 +80,12 @@ class Kbuffer():
         if instruct[1].startswith('str'):
             op2, op1 = decodeArm.getOperands(instruct[1])
             self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
+            our_reg = op1
             #self.top.revRegSrc(op1, kernel=True, callback=self.gotBufferCallback, taint=False)
             ''' Simulation is running.  So make hacky assumption about there being a recent ldm instruction to avoid stopping '''
             limit = 20
             gotone = False
+            skipped_list = []
             for i in range(limit):
                 eip = eip - self.mem_utils.WORD_SIZE
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -102,7 +104,22 @@ class Kbuffer():
                             value = value - self.mem_utils.WORD_SIZE * num_regs
                     else:
                         ''' assume ldr '''
-                        value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
+                        if op1 == our_reg:
+                            value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
+                            our_op2 = op2
+                            ''' adjust based on quantity of ldr instructions that adjusted the register value '''
+                            for skipped in skipped_list:
+                                op2, op1 = decodeArm.getOperands(skipped)
+                                if op2 == our_op2: 
+                                    self.lgr.debug('findArmBuf would adjust per %s' % op2)
+                                    if ',' in op2:
+                                        adjust = decodeArm.getValue(op2.split(',')[1], self.cpu)
+                                        value = value - adjust
+                                
+                        else:
+                            self.lgr.debug('findARmBuf not our reg, skip it, but record so we can adjust register per arm side-effects')
+                            skipped_list.append(instruct[1])
+                            continue
                     self.lgr.debug('findArmBuf buf found at 0x%x' % value)
                     self.updateBuffers(value)
                     gotone = True
