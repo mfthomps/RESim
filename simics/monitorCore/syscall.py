@@ -1175,13 +1175,13 @@ class Syscall():
                             exit_info.call_params = call_param
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, ss.length)
                     else:
                         self.lgr.debub('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                            self.kbuffer.read(exit_info.retval_addr, ss.length)
                     break
         elif socket_callname == "recvmsg": 
             
