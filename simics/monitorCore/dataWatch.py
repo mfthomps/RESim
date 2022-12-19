@@ -2138,7 +2138,7 @@ class DataWatch():
                 self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x, len %d' % (index, index, self.start[index], self.length[index]))
 
 
-    def resetOrigin(self, cycle, reuse_msg=False):
+    def resetOrigin(self, cycle, reuse_msg=False, record_old=False):
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
         if len(self.start) == 0:
             return
@@ -2158,7 +2158,7 @@ class DataWatch():
             else:
                 self.lgr.debug('clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
                 break
-        self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg)
+        self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
 
     def setIdaFuns(self, ida_funs):
         self.lgr.debug('DataWatch setIdaFuns')

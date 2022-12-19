@@ -461,13 +461,13 @@ class WatchMarks():
                 self.recent_buf_max_len = max_len
         self.recordIP(ip)
  
-    def resetOrigin(self, origin_watches, reuse_msg=False): 
+    def resetOrigin(self, origin_watches, reuse_msg=False, record_old=False): 
         old_msg = None
         if reuse_msg:
            old_origin = self.getMarkFromIndex(1)
            if old_origin is not None:
                old_msg = old_origin.mark.getMsg() 
-        self.clearWatchMarks()
+        self.clearWatchMarks(record_old=record_old)
         ro = ResetOrigin(origin_watches, new_msg=old_msg)
         self.addWatchMark(ro)
         self.lgr.debug('watchMarks resetOrigin')
@@ -501,8 +501,7 @@ class WatchMarks():
                     #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
-                    #      start, length, dest, trans_size))
+                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
                     #sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))

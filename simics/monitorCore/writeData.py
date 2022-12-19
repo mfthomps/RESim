@@ -9,7 +9,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None):
+                  dataWatch=None, shared_syscall=None, no_reset=False):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -123,6 +123,7 @@ class WriteData():
 
         self.kernel_buf_consumed = False
         self.closed_fd = False
+        self.no_reset = no_reset
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -489,12 +490,17 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain:
+                     if self.no_reset:
+                         self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
+                         SIM_break_simulation('Would have to reset origin, no_reset requested.')
+                         return 0
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                  self.kernel_buf_consumed = True
                  #self.setCallHap()
