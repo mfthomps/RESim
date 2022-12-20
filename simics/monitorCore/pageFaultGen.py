@@ -449,6 +449,7 @@ class PageFaultGen():
             print('SEGV with no bookmarks.  Not yet debugging?')
             self.lgr.debug('SEGV with no bookmarks.  Not yet debugging?')
         self.stopWatchPageFaults()
+        self.top.stopTrackIO()
         self.top.skipAndMail()
 
     def stopAlone(self, prec):
@@ -531,7 +532,7 @@ class PageFaultGen():
         else:
             return {}
 
-    def handleExit(self, pid, leader):
+    def handleExit(self, pid, leader, report_only=False):
         ''' Assumed called while debugging a pid group.  Search all pids for most recent reference, assuming a 
             true fault is handled without rescheduling. 
             Return True if we think a segv occured
@@ -550,11 +551,17 @@ class PageFaultGen():
                         recent_pid = pending_pid
             if recent_pid == pid or pid == leader or leader is None: 
                 self.lgr.debug('pageFaultGen handleExit pid:%d has pending fault.  SEGV?' % recent_pid)
-                SIM_run_alone(self.hapAlone, self.pending_faults[recent_pid])
-                self.pending_faults = {}
-                self.stopPageFaults()
-                self.stopWatchPageFaults()
-                retval = True
+                if not report_only:
+                    SIM_run_alone(self.hapAlone, self.pending_faults[recent_pid])
+                    self.pending_faults = {}
+                    self.stopPageFaults()
+                    self.stopWatchPageFaults()
+                    retval = True
+                else:
+                    prec = self.pending_faults[recent_pid]
+                    self.lgr.debug('SEGV access to memory 0x%x cycle: 0x%x' % (prec.cr2, prec.cycles))
+                    print('SEGV access to memory 0x%x cycles: 0x%x' % (prec.cr2, prec.cycles))
+                    
         return retval
 
     def hasPendingPageFault(self, pid):
