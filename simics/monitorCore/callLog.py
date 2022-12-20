@@ -28,7 +28,10 @@ import memUtils
 import os
 import shutil
 import simics
-import ConfigParser
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 from simics import *
 '''
     Create an xml formatted log of CB system calls.  One file is created for each session, and the
