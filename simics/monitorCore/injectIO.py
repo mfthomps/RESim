@@ -339,9 +339,6 @@ class InjectIO():
         SIM_run_command('enable-reverse-execution') 
 
     def resetReverseAlone(self, count):
-        if self.stop_hap is not None:
-            self.lgr.debug('resetReverseAlone called but no stop hap?')
-            return
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
         if count != 0:
             packet_num = self.write_data.getCurrentPacket() - 1
@@ -357,9 +354,10 @@ class InjectIO():
             if self.addr_addr is not None:
                 self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
 
-        self.lgr.debug('injectIO resetReverseAlone delete stop hap')
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        self.stop_hap = None
+        if self.stop_hap is not None:
+            self.lgr.debug('injectIO resetReverseAlone delete stop hap')
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
         if count > 0:
             SIM_run_command('c')
         else:
