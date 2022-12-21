@@ -211,17 +211,21 @@ def armLDM(cpu, instruct, reg, lgr):
             lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
 
-def isCall(cpu, instruct):
+def isCall(cpu, instruct, ignore_flags=False):
     N, Z, C, V = armCond.flags(cpu)
     if instruct.startswith('ble'):
-        return Z or (N and not V) or (not N and V)
-    if instruct.startswith('blt'):
-        return (N and not V) or (not N and V)
-    if instruct.startswith('blo'):
-        return (not C)
-    if instruct.startswith('bls'):
-       return (not C) or Z
+        return ignore_flags or Z or (N and not V) or (not N and V)
+    elif instruct.startswith('bxne'):
+        return ignore_flags or not Z 
+    elif instruct.startswith('blt'):
+        return ignore_flags or (N and not V) or (not N and V)
+    elif instruct.startswith('blo'):
+        return ignore_flags or (not C)
+    elif instruct.startswith('bls'):
+       return ignore_flags or (not C) or Z
     elif instruct.startswith('bl'):
+       return True
+    elif instruct.startswith('bx'):
        return True
     elif instruct.startswith('ldr pc'):
        return True
