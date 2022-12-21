@@ -99,7 +99,7 @@ class StackTrace():
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
-            if self.decode.isCall(self.cpu, instruct[1]):
+            if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
                 #self.lgr.debug('followCall arm eip 0x%x' % eip)
                 retval = eip
         else:
