@@ -561,7 +561,7 @@ class Syscall():
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
-            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
+            self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
 
@@ -577,6 +577,7 @@ class Syscall():
         #self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
+        self.lgr.debug('syscall watchFirstMmap fd: %d fname %s' % (fd, fname))
         self.watch_first_mmap = fd
         self.mmap_fname = fname
         return
@@ -1620,7 +1621,9 @@ class Syscall():
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  
         elif callname == 'mmap' or callname == 'mmap2':        
+            self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
+            '''
             if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0:
                 #self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
@@ -1631,7 +1634,7 @@ class Syscall():
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
                 if fd is not None:
-                    #self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
+                    self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
                     pass
                 if pid is None:
                     self.lgr.error('PID is NONE?')
@@ -1642,12 +1645,28 @@ class Syscall():
                     ida_msg = '%s pid:%d FD: NONE' % (callname, pid)
                 else:
                     ida_msg = '%s pid:%d FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, pid, fd, arg_addr, length, prot, flags, offset)
+            '''
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+                ''' tbd wth? the above seems wrong, why key on addr of zero? '''
+                fd = frame['param5']
+                prot = frame['param3']
+                ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
+                    fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
+                self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
             else:
                 fd = frame['param5']
-                ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
+                prot = frame['param3']
+                ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
-                self.lgr.debug(taskUtils.stringFromFrame(frame))
-            if self.watch_first_mmap == fd:
+                if self.watch_first_mmap is not None:
+                    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
+                else:
+                    self.lgr.debug('syscall mmap watch_first_mmap is none')
+                self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
+            is_ex = prot & 4
+            self.lgr.debug('is exec? %d' % is_ex)
+            if self.watch_first_mmap == fd and is_ex:
+                self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % fd)
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
 
