@@ -36,18 +36,18 @@ class CopyMark():
                 trunc_string = ''
                 if truncated is not None:
                     trunc_string = ' (trucated from %d)' % truncated        
-                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x. (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
+                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
             else:
-                self.msg = 'Copy %d bytes from 0x%x to 0x%08x. (Source buffer starts before known buffers!)' % (length, src, dest)
+                self.msg = 'Copy %d bytes from 0x%x to 0x%08x . (Source buffer starts before known buffers!)' % (length, src, dest)
         else:
             if buf_start is not None:
                 if dest == buf_start:
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
                 else:
                     offset = dest - buf_start
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. Buffer unknown!)' % (length, src, dest, )
+                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer unknown!)' % (length, src, dest, )
             else:
                 self.msg = 'Modify Copy length is none, not where wth'
     def getMsg(self):
@@ -118,12 +118,12 @@ class DataMark():
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
             if self.start is not None:
                 if copy_length == self.length and self.start == self.addr:
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc' % (copy_length, self.addr, self.dest)
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (copy_length, self.addr, self.dest)
                 else: 
                     offset = self.addr - self.start
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
             else:
-                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
+                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
