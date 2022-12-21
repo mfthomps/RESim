@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #
 import sys
@@ -42,13 +42,15 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                                 coverage = q.replace('queue', 'coverage')   
                                 read_mark = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
+                                if first_read is None:
+                                    print('No read mark in %s' % trackio)
                                 bb_cycle = findBB.getBBCycle(coverage, bb_hit)
                                 if read_mark is not None:
                                     if (bb['end_ea'] - read_mark) < 20:
                                         #print('qfile: %s had readmark at 0x%x' % (q, read_mark))
                                         pass
                                     break
-                                elif bb_cycle < first_read:
+                                elif first_read is not None and bb_cycle < first_read:
                                     before_read = 'pre-read' 
  
                         if not no_print:

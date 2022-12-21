@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # given a hits file or an AFL session named by target, instance and index,
 # display the hits as hex.
