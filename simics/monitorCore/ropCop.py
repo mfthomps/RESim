@@ -74,7 +74,8 @@ class RopCop():
                 return
             
             #if instruct[1].startswith('call'):
-            if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+            #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+            if instruct[1].startswith.callmn:
                 done = True
             else:
                 eip = eip+1
@@ -115,10 +116,16 @@ class RopCop():
             pc = ret_addr - 4
             prev_instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
-            if not self.decode.isCall(self.cpu, prev_instruct[1]):
-                self.in_process = True
-                self.lgr.debug('********************* not call %s  at 0x%x' % (prev_instruct[1], pc))
-                SIM_run_alone(self.stopAlone, ret_addr)
+            #if not self.decode.isCall(self.cpu, prev_instruct[1]):
+            if not prev_instruct[1].startswith(self.callmn):
+                prev_pc = pc - 4
+                prev_prev_instruct = SIM_disassemble_address(self.cpu, prev_pc, 1, 0)
+                op2, op1 = self.decode.getOperands(prev_prev_instruct[1])
+                if not (prev_prev_instruct[1].startswith('mov') and op2 == 'pc' and op1 == 'lr'):
+                    self.in_process = True
+                    self.lgr.debug('********************* not call %s  at 0x%x' % (prev_instruct[1], pc))
+                    self.lgr.debug('********************* or not mov lr, pc: %s' % prev_prev_instruct[1])
+                    SIM_run_alone(self.stopAlone, ret_addr)
 
     def stopAlone(self, ret_addr):
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)

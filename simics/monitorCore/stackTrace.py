@@ -502,7 +502,7 @@ class StackTrace():
                         frame.ret_addr = call_ip + instruct_of_call[0] 
                         self.addFrame(frame)
                         mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                        #self.lgr.debug('Found call to %s instruct:%s  ret_to_addr 0x%x ret 0x%x' % (cur_fun, instruct, ptr, mft_ret))
+                        #self.lgr.debug('Found x86 call to %s instruct:%s  ret_to_addr 0x%x ret 0x%x' % (cur_fun, instruct, ptr, mft_ret))
                     elif call_addr is not None:
 
                         #if cur_fun is not None:
@@ -532,7 +532,7 @@ class StackTrace():
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                            #self.lgr.debug('Found call %s  ret_to_addr 0x%x ret 0x%x' % (instruct, ptr, mft_ret))
+                            #self.lgr.debug('Found x86 call %s  ret_to_addr 0x%x ret 0x%x' % (instruct, ptr, mft_ret))
                         elif cur_fun_name is not None and got_fun_name is not None and got_fun_name.startswith(cur_fun_name):
                             retval = ptr
                             fname = self.soMap.getSOFile(call_ip)
@@ -540,7 +540,7 @@ class StackTrace():
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                            #self.lgr.debug('Found GOT call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, got_fun_name, call_ip, call_addr, ptr, mft_ret))
+                            #self.lgr.debug('Found GOT x86 call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif got_fun_name is not None and cur_is_clib:
                             retval = ptr
                             fname = self.soMap.getSOFile(call_ip)
@@ -548,7 +548,7 @@ class StackTrace():
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                            #self.lgr.debug('Found GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
+                            #self.lgr.debug('Found x86 GOT, though no current fuction found. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
                             #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif got_fun_name is not None:
                             retval = ptr
@@ -557,7 +557,7 @@ class StackTrace():
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                            #self.lgr.debug('Found GOT, though current fuction is not called function. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
+                            #self.lgr.debug('Found x86 GOT, though current fuction is not called function. call %s  is got %s   add entry  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
                             #     got_fun_name, call_ip, call_addr, ptr, mft_ret))
                         elif (fun_name is not None and fun_name.startswith('memcpy')) and (current_instruct is not None and current_instruct.startswith('rep movsd')):
                             # hacks are us
@@ -567,7 +567,7 @@ class StackTrace():
                             frame.ret_addr = call_ip + instruct_of_call[0] 
                             self.addFrame(frame)
                             mft_ret = self.mem_utils.readPtr(self.cpu, ptr)
-                            #self.lgr.debug('memcpy/rep mov hack call %s ret_t_addr: 0x%x ret: 0x%x' % (instruct, ptr, mft_ret))
+                            #self.lgr.debug('memcpy/rep x86 mov hack call %s ret_t_addr: 0x%x ret: 0x%x' % (instruct, ptr, mft_ret))
                         else:
                             pass
                             #self.lgr.debug('no radio ')
@@ -765,7 +765,7 @@ class StackTrace():
                                 skip_this = True
                                 #self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
                             elif call_to in self.relocate_funs:
-                                self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
+                                #self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
                                 skip_this = True
                             else:
                                 #self.lgr.debug('stackTrace 0x%x is not a function?' % call_to)
@@ -823,7 +823,12 @@ class StackTrace():
                             #        #self.lgr.debug('stackTrace found call from clib to 0x%x, assume a ghost frame')
                             #        skip_this = True        
                             if not skip_this:
-                                frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
+                                if self.cpu.architecture == 'arm':
+                                    ret_addr = call_ip + 4
+                                    frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
+                                else:
+                                    self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
+                                    frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                 self.addFrame(frame)
                                 #self.lgr.debug('stackTrace fname %s added frame %s' % (fname, frame.dumpString()))
                             else:
