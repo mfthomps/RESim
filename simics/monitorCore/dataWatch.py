@@ -22,7 +22,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'fgets']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
@@ -790,6 +790,15 @@ class DataWatch():
                    self.mem_something.count))
             mark = self.watchMarks.inet_ntop(self.mem_something.dest, self.mem_something.count, self.mem_something.the_string)
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
+        elif self.mem_something.fun == 'fgets':
+            if self.mem_something.dest is None:
+                self.lgr.debug('dataWatch %s dest is None' % self.mem_something.fun)
+            self.mem_something.src = self.mem_something.addr
+            buf_start = self.findRange(self.mem_something.src)
+            mark = self.watchMarks.fgetsMark(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
+                   self.mem_something.dest, self.mem_something.count))
+            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -919,7 +928,8 @@ class DataWatch():
                     self.lgr.error('getMemParams, tried going forward, failed')
                     return
                 ''' TBD parse the va_list and look for sources so we can handle sprintf'''
-                if self.mem_something.fun not in self.mem_fun_entries and 'printf' not in self.mem_something.fun and 'syslog' not in self.mem_something.fun:
+                if self.mem_something.fun not in self.mem_fun_entries and 'printf' not in self.mem_something.fun and 'syslog' not in self.mem_something.fun \
+                         and 'fgets' not in self.mem_something.fun:
                     eip = self.top.getEIP(self.cpu)
                     ret_addr_offset = None
                     if self.mem_something.ret_addr_addr is not None:
@@ -1079,6 +1089,9 @@ class DataWatch():
 
             elif self.mem_something.fun == 'inet_ntop':
                 dumb1, dumb2, self.mem_something.dest = self.getCallParams(sp)
+
+            elif self.mem_something.fun == 'fgets':
+                self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
 
             # Begin XML
             elif self.mem_something.fun == 'xmlGetProp':

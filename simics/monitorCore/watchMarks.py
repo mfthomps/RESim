@@ -376,6 +376,16 @@ class PushMark():
     def getMsg(self):
         return self.msg
  
+class FGetsMark():
+    def __init__(self, fun, addr, dest, count, start):
+        self.addr = addr
+        self.dest = dest
+        self.length = count
+        self.start = start
+        offset = addr - start
+        self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+    def getMsg(self):
+        return self.msg
 
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
@@ -835,6 +845,10 @@ class WatchMarks():
         pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.WORD_SIZE)
         wm = self.addWatchMark(pm)
         return wm
+
+    def fgetsMark(self, fun, src, dest, count, start):
+        fm = FGetsMark(fun, src, dest, count, start)
+        self.addWatchMark(fm)
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')
