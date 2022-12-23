@@ -1696,10 +1696,10 @@ class Syscall():
                 exit_info = None
 
         elif callname == 'wait4':
-            ida_msg = '%s pid:%d wiatforpid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, pid, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
+            ida_msg = '%s pid:%d waitforpid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, pid, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
 
         else:
-            ida_msg = '%s %s   pid:%d' % (callname, taskUtils.stringFromFrame(frame), pid)
+            ida_msg = '%s %s   pid:%d (%s)' % (callname, taskUtils.stringFromFrame(frame), pid, comm)
             self.context_manager.setIdaMessage(ida_msg)
         if ida_msg is not None and not quiet:
             #self.lgr.debug(ida_msg.strip()) 
