@@ -16,9 +16,15 @@ def getTrack(f):
     cover = os.path.dirname(f)
     track = os.path.join(os.path.dirname(cover), 'trackio', base)
     return track
+def getQueue(f):
+    base = os.path.basename(f)
+    cover = os.path.dirname(f)
+    track = os.path.join(os.path.dirname(cover), 'queue', base)
+    return track
 
 def findTrack(f, addr):
     track_path = getTrack(f)
+    queue_path = getQueue(f)
     if os.path.isfile(track_path):
         track = json.load(open(track_path))
         mark_list = track['marks']
@@ -26,7 +32,8 @@ def findTrack(f, addr):
         count = 1
         for mark in mark_list:
             if mark['mark_type'] == 'read' and mark['ip']==addr:
-                print('0x%x found at mark %d in %s (TBD, why off by one?)' % (addr, count, f))
+                size = os.path.getsize(queue_path)
+                print('0x%x found at mark %d in (len %d)  %s (TBD, why off by one?)' % (addr, count, size, queue_path))
             count += 1
     else:
         print('not a file: %s' % track_path)
