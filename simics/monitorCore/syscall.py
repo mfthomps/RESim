@@ -13,6 +13,7 @@ import dmod
 import sys
 import copy
 from resimHaps import *
+from resimUtils import rprint
 '''
 how does simics not have this in its python sys.path?
 '''
@@ -2135,7 +2136,7 @@ class Syscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                print("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
+                rprint("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
                 SIM_break_simulation('timer loop?')
    
  
@@ -2151,6 +2152,8 @@ class Syscall():
             
 
     def checkTimeLoop(self, callname, pid):
+        if self.cpu.architecture == 'arm':
+            return
         limit = 800
         delta_limit = 0x12a05f200
         if pid not in self.timeofday_count:

@@ -229,6 +229,22 @@ def isCall(cpu, instruct, ignore_flags=False):
        return True
     return False
 
+def isJump(cpu, instruct, ignore_flags=False):
+    if instruct.startswith('bl'):
+        return False
+    N, Z, C, V = armCond.flags(cpu)
+    if instruct.startswith('beq'):
+        return ignore_flags or Z 
+    if instruct.startswith('bne'):
+        return ignore_flags or not Z 
+    elif instruct.startswith('blt'):
+        return ignore_flags or (N and not V) or (not N and V)
+    elif instruct.startswith('blo'):
+        return ignore_flags or (not C)
+    elif instruct.startswith('bls'):
+       return ignore_flags or (not C) or Z
+    return False
+
 def inBracket(op):
     res = re.find(r'\[.*?\]', op) 
     return res
