@@ -97,6 +97,7 @@ class DataWatch():
         self.vt_cycle = 0
         ''' hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
         self.recent_fgets = None
+        self.recent_reused_index=None
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -152,6 +153,8 @@ class DataWatch():
         self.undo_pending = False
 
         self.transform_push_hap = None
+        self.recent_fgets = None
+        self.recent_reused_index=None
 
     def addFreadAlone(self, dumb):
         #self.lgr.debug('dataWatch addFreadAlone')
@@ -1452,6 +1455,7 @@ class DataWatch():
                 else:
                     ''' Re-use of ad-hoc buffer '''
                     #self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
+                    self.recent_reused_index = existing_index
                     pass
             else:
                 self.lgr.debug('dataWatch finishCheckMoveHap dest is same as addr')
@@ -1782,12 +1786,13 @@ class DataWatch():
             else:   
                 self.context_manager.setIdaMessage('Data written to 0x%x within buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
             
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
                 self.watchMarks.memoryMod(start, length, trans_size, addr=addr)
                 if self.break_simulation:
                     ''' TBD when to treat buffer as unused?  does it matter?'''
                     self.start[index] = None
                     SIM_break_simulation('DataWatch written data')
+                else:
+                    self.rmSubRange(addr, trans_size)
         elif self.retrack:
             self.lgr.debug('dataWatch finishReadHap, modification by kernel, set kernelReturn hap')
             self.return_hap = 'eh'
@@ -1868,6 +1873,8 @@ class DataWatch():
                         self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
                         self.read_hap[index] = None
                 return
+        else:
+            self.recent_reused_index=None
 
         ''' NOTE RETURNS above '''
 
@@ -2046,6 +2053,34 @@ class DataWatch():
     def setShow(self):
         self.show_cmp = ~ self.show_cmp
         return self.show_cmp
+
+    def rmSubRange(self, addr, trans_size):
+        index = self.findRangeIndex(addr)
+        if index is not None:
+ 
+            if index != self.recent_reused_index:
+                start = self.start[index]
+                length = self.length[index]
+                end = start + length - 1
+                new_start = None
+                self.lgr.debug('dataWatch rmSubRange, addr: 0x%x start 0x%x length: %d end 0x%x' % (addr, start, length, end))
+                self.start[index] = None
+                if self.read_hap[index] is not None:
+                    self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                    self.read_hap[index] = None
+                if start < addr:
+                    newlen = addr - start + 1
+                    self.setRange(start, newlen)
+                    new_start = addr + trans_size
+                elif start == addr and trans_size < length:
+                    new_start = addr+trans_size
+                if new_start is not None and new_start < end:
+                    newlen = end - new_start + 1
+                    self.setRange(new_start, newlen)
+            else:
+                self.lgr.debug('dataWatch rmSubRange found index %d was recent reused index, do not delete subrange.' % index)
+        else:
+            self.lgr.error('dataWatch rmSubRange no index for addr 0x%x' % addr)
 
     def rmRange(self, addr):
         index = self.findRangeIndex(addr)
