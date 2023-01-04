@@ -38,16 +38,6 @@ def getCover(fpath, funs):
             all_hits.append(hit)
     return len(hits1), len(funs_hit)
 
-def getPathList(target):
-    afl_path = os.getenv('AFL_DATA')
-    if afl_path is None:
-        print('AFL_DATA not defined')
-        exit(1)
-    glob_mask = '%s/output/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
-    print('glob_mask is %s' % glob_mask)
-    glist = glob.glob(glob_mask)
-    return glist
-
 def getHeader(ini):
     config = ConfigParser.ConfigParser()
     config.read(ini)
