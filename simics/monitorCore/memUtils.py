@@ -294,6 +294,8 @@ class memUtils():
                                 second_read = readPhysBytes(cpu, ps, count - remain_in_page)
                             except ValueError:
                                 self.lgr.error('memUtils readBytes, second read failed to read 0x%x' % ps)
+                                retval = retval+first_read
+                                break
                             #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
                             retval = retval+first_read+second_read
                     else:
