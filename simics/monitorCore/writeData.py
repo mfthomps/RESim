@@ -125,6 +125,12 @@ class WriteData():
         self.closed_fd = False
         self.no_reset = no_reset
 
+        self.skip_read_n = os.getenv('AFL_SKIP_READ_N')
+        if self.skip_read_n is not None:
+            self.skip_read_n = int(self.skip_read_n)
+            self.lgr.debug('writeData AFL_SKIP_READ_N is %d' % self.skip_read_n)
+        self.read_count = 2
+
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
         self.addr = addr
@@ -384,9 +390,10 @@ class WriteData():
 
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''
-        #self.lgr.debug('writeData callHap')
         if self.call_hap is None:
             return
+        self.read_count = self.read_count + 1
+        #self.lgr.debug('writeData callHap, read_count is %d' % self.read_count)
         self.handleCall()
 
     def handleCall(self):
@@ -416,10 +423,19 @@ class WriteData():
                         SIM_run_alone(self.write_callback, 0)
 
                     elif not self.kernel_buf_consumed:
-                        self.user_space_addr, length = self.top.getReadAddr()
-                        if self.user_space_addr is not None:
-                            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
                         #self.lgr.debug('writeData handleCall kernel buffer not consumed.')
+                        if self.skip_read_n is not None and self.skip_read_n == self.read_count:
+                            # REMOVE/fix TBD
+                            self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
+                            self.top.writeRegValue('syscall_ret', 0x12, alone=True, reuse_msg=True)
+                            self.lgr.debug('writeData handleCall hacked it')
+                            self.read_count = 0
+                        else:
+                            self.user_space_addr, length = self.top.getReadAddr()
+                            if self.user_space_addr is not None:
+                                #self.lgr.debug('writeData handleCall user space addr is 0x%x' % self.user_space_addr)
+                                self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+                        
                     else:
                         rprint('kernel buffer data consumed')
                         #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
@@ -491,7 +507,7 @@ class WriteData():
                  ''' adjust the return value and continue '''
                  if eax > remain:
                      if self.no_reset:
-                         self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
+                         #self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
                          SIM_break_simulation('Would have to reset origin, no_reset requested.')
                          return 0
                      if self.user_space_addr is not None:
@@ -521,7 +537,7 @@ class WriteData():
         
     def restoreCallHap(self):
         if self.was_a_call_hap:
-            #self.lgr.debug('writeData restoreCalHap')
+            self.lgr.debug('writeData restoreCalHap')
             self.setCallHap()
 
     def delCallHap(self, dumb):
@@ -604,13 +620,13 @@ class WriteData():
         fd = frame['param1']
         if fd == self.fd:
             if self.close_hap is not None:
-                #self.lgr.debug('writeData closeHap')
+                self.lgr.debug('writeData closeHap')
                 self.closed_fd = True
                 self.handleCall()
 
     def selectStopHap(self, dumb, third, break_num, memory):
         if self.select_hap is not None:
-            #self.lgr.debug('writeData selectStopHap')
+            self.lgr.debug('writeData selectStopHap')
             self.handleCall()
             '''
             if self.write_callback is not None:
