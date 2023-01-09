@@ -580,7 +580,7 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
-            self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
+            self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
                   self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.lgr)
@@ -4383,6 +4383,7 @@ class GenMonitor():
         return self.bookmarks.getFaultAddr()
    
     def setCommandCallback(self, callback):
+        self.lgr.debug('setCommandCallback')
         self.command_callback = callback 
 
     def setCommandCallbackParam(self, param):
