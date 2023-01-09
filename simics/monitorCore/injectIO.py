@@ -362,9 +362,14 @@ class InjectIO():
             SIM_run_command('c')
         else:
             if self.callback is not None:
-                self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback')
-                self.write_data.delCallHap(None)
-                self.callback()
+                cmd_callback = self.top.getCommandCallback()
+                if cmd_callback is None:
+                    self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback (%s)' % str(self.callback))
+                    self.write_data.delCallHap(None)
+                    self.callback()
+                else:
+                    self.lgr.debug('resetReverseAlone no more data, remove writeData callback found command callback, override given callback (%s)' % str(cmd_callback))
+                    cmd_callback()
             else:
                 self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
                 SIM_run_command('c')
