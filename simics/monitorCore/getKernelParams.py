@@ -50,9 +50,11 @@ class GetKernelParams():
         word_size = 4
         if self.os_type == 'LINUX64':
             word_size = 8
-        print('using target of %s' % self.target)
+        print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
+
         self.log_dir = '/tmp'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
+        self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
         platform = None
         if 'PLATFORM' in comp_dict[self.target]:
             platform = comp_dict[self.target]['PLATFORM']
@@ -210,6 +212,7 @@ class GetKernelParams():
             self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
             self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.currentTaskStopHap, None)
             self.lgr.debug('getCurrentTaskPtr added mode and stop haps')
+            self.continueAhead()
         else:
             gs_b700 = self.mem_utils.getGSCurrent_task_offset(self.cpu)
             self.param.current_task = self.mem_utils.getUnsigned(gs_b700)
@@ -219,7 +222,6 @@ class GetKernelParams():
             gs_base = self.cpu.ia32_gs_base
             self.lgr.debug('64-bit gs_base is 0x%x  gs_b700 0x%x current_task at 0x%x  phys 0x%x' % (gs_base, gs_b700, self.param.current_task, self.param.current_task_phys))
             self.findSwapper()
-        self.continueAhead()
 
     def delCurrentTaskStopHap(self, dumb):
         if self.current_task_stop_hap is not None:
@@ -300,7 +302,7 @@ class GetKernelParams():
                 if ta is None or ta == 0:
                     self.lgr.debug('ta nothing, continue')
                     #SIM_break_simulation('remove this')
-                    return
+                    #return
                 if ta < self.param.kernel_base:
                     self.lgr.debug('ta 0x%x less than base 0x%x   return?' % (ta, self.param.kernel_base))
                     #SIM_break_simulation('no soap')
@@ -367,6 +369,7 @@ class GetKernelParams():
         real_parent_offset = 0
         maybe=[]
         for i in range(800):
+            #self.lgr.debug('isThisSwapper read from 0x%x' % ((task + real_parent_offset)))
             test_task = self.mem_utils.readPtr(self.cpu, task + real_parent_offset)
             test_task1 = self.mem_utils.readPtr(self.cpu, task + real_parent_offset+self.mem_utils.WORD_SIZE)
             if test_task == task and test_task1 == task:
@@ -375,11 +378,12 @@ class GetKernelParams():
                 #return real_parent_offset
                 real_parent_offset += self.mem_utils.WORD_SIZE
             else:
-                if test_task is not None and test_task1 is not None:
-                    self.lgr.debug('task was 0x%x test_task 0x%x test_task1 0x%x' % (task, test_task, test_task1))
-                else:
-                    self.lgr.debug('test task was None')
-                real_parent_offset += self.mem_utils.WORD_SIZE
+                #if test_task is not None and test_task1 is not None:
+                #    self.lgr.debug('loop %d task was 0x%x test_task 0x%x test_task1 0x%x' % (i, task, test_task, test_task1))
+                #else:
+                #    self.lgr.debug('test task was None')
+                #real_parent_offset += self.mem_utils.WORD_SIZE
+                real_parent_offset += 4
         if len(maybe)>0:
             self.lgr.debug('last match for real parent 0x%x from count %d' % (maybe[-1], len(maybe)))
             return maybe[-1]
@@ -391,7 +395,7 @@ class GetKernelParams():
     def isSwapper(self, task): 
         ''' look for what might be a real_parent and subsequent parent pointer fields that point to the
             given task.  if found, assume this is swaper and record those offsets.'''
-        #self.lgr.debug('isSwapper check task 0x%x real realparent is 0x%x' % (task, self.real_param.ts_real_parent))
+        self.lgr.debug('isSwapper check task 0x%x ' % (task))
         real_parent_offset = self.isThisSwapper(task)
         if real_parent_offset is not None:
             self.lgr.debug('isSwapper (maybe) real_parent at 0x%x looks like swapper at 0x%x' % (real_parent_offset, task))
@@ -438,6 +442,13 @@ class GetKernelParams():
         if cur_task not in self.trecs:
             self.trecs.append(cur_task)
             self.lgr.debug('changedThread try task 0x%x' % cur_task)
+            #xcom = cur_task+0x5a0 
+            #comm = self.mem_utils.readString(self.cpu, xcom, 16)
+            #print('comm: %s' % comm)
+            #SIM_break_simulation('remove this')
+            #self.lgr.debug('changedThread did break simulation')
+            #return
+
             if cur_task != 0 and self.isSwapper(cur_task) is not None:
                 self.lgr.debug('changedThread found swapper 0x%x  real_parent %d' % (self.idle, self.param.ts_real_parent))
                 SIM_break_simulation('found swapper')
@@ -485,6 +496,26 @@ class GetKernelParams():
                 next_offset += 4
         if self.param.ts_next is None:
             self.lgr.debug('failed to find ts_next')
+
+    def findComm(self, task):
+        got_comm = False
+        self.lgr.debug('getInit look for comm from task 0x%x' % (task))
+        comm_offset = self.param.ts_pid+8
+        #self.lgr.debug('getInit real comm at %d' % (self.real_param.ts_comm))
+        for i in range(800):
+            comm = self.mem_utils.readString(self.cpu, task+comm_offset, 16)
+            if comm.startswith('init') or comm.startswith('systemd') or comm.startswith('linuxrc') or comm.startswith('swapper'):
+                self.lgr.debug('getInit found comm %s at %d' % (comm, comm_offset))
+                self.param.ts_comm = comm_offset
+                got_comm = True
+                break
+            else:
+                self.lgr.debug('offset %d comm: %s' % (comm_offset, comm))
+                pass
+            comm_offset += 4
+        self.lgr.debug('getInit out of comm loop')
+        return got_comm
+    
 
     def getInit(self):
         ''' Assuming we have swapper in init.idle, find init and use it to locate
@@ -534,25 +565,13 @@ class GetKernelParams():
             pid_offset += 4
          
         if self.param.ts_pid is not None:
-            got_comm = False
-            self.lgr.debug('getInit look for comm from task 0x%x' % (self.init_task))
-            while not got_comm:
-                comm_offset = self.param.ts_pid+8
-                #self.lgr.debug('getInit real comm at %d' % (self.real_param.ts_comm))
-                for i in range(800):
-                    comm = self.mem_utils.readString(self.cpu, self.init_task+comm_offset, 16)
-                    if comm.startswith('init') or comm.startswith('systemd') or comm.startswith('linuxrc') or comm.startswith('swapper'):
-                        self.lgr.debug('getInit found comm %s at %d' % (comm, comm_offset))
-                        self.param.ts_comm = comm_offset
-                        got_comm = True
-                        break
-                    else:
-                        self.lgr.debug('offset %d comm: %s' % (comm_offset, comm))
-                        pass
-                    comm_offset += 4
-                self.lgr.debug('getInit out of comm loop')
-                if not got_comm:
-                    SIM_run_command('c 50000000')
+            got_comm = self.findComm(self.idle)
+            if not got_comm:
+                self.lgr.debug('failed to get comm for idle process, try init')
+                got_comm = self.findComm(self.init_task)
+            if not got_comm:
+                self.lgr.error('failed to find comm')
+                return 1
         else:
             self.lgr.error('failed to find ts_pid')
             return 1
@@ -743,6 +762,7 @@ class GetKernelParams():
 
     def findCompute(self, compat32=False):
         #cell = self.cell_config.cell_context[self.target]
+        self.lgr.debug('findCompute')
         if self.cpu.architecture == 'arm':
             self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
             self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.computeDoStop, None, self.task_break)
@@ -810,6 +830,7 @@ class GetKernelParams():
             SIM_run_alone(self.continueAhead, None)
 
     def stopHap(self, dumb, one, exception, error_string):
+        self.lgr.debug('stopHap')
         if self.stop_hap is not None: 
             self.getEntries()
         
@@ -898,6 +919,7 @@ class GetKernelParams():
         print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
 
     def deleteStopTaskHap(self, dumb):
+        self.lgr.debug('deleteStopTaskHap')
         if self.task_break is not None:
             SIM_delete_breakpoint(self.task_break)
             self.task_break = None
@@ -1085,6 +1107,7 @@ class GetKernelParams():
         if not SIM_simics_is_running():
             try:
                 SIM_continue(0)
+                self.lgr.debug('continueAhead did continue')
             except simics.SimExc_General:
                 pass
 
