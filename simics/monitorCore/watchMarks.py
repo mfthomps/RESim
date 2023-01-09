@@ -382,8 +382,11 @@ class FGetsMark():
         self.dest = dest
         self.length = count
         self.start = start
-        offset = addr - start
-        self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+        if start is not None:
+            offset = addr - start
+            self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+        else:
+            self.msg = 'fgets from 0x%08x (unknown buffer?) to 0x%08x' % (addr, dest)
     def getMsg(self):
         return self.msg
 
