@@ -36,10 +36,14 @@ class BackStop():
         if self.back_stop_cycle is None:
             return
         if self.cpu is not None:
-            #self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x' % (self.cpu.name, self.cpu.cycles))
+            #self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
             self.clearCycle()
             SIM_break_simulation('hit final cycle')
-            if self.callback is not None:
+            cmd_callback = self.top.getCommandCallback()
+            if cmd_callback is not None:
+                self.lgr.debug('backStop cycle_handler, commandCallback takes precidence.')
+                cmd_callback()
+            elif self.callback is not None:
                 self.callback()
             if self.report_backstop:
                 rprint('Backstop hit.')
@@ -51,7 +55,7 @@ class BackStop():
         #SIM_event_post_cycle(obj, cycle_event, obj, cycles, cycles)
  
 
-    def __init__(self, cpu, lgr=None):
+    def __init__(self, top, cpu, lgr=None):
         if lgr is None:
             self.lgr = logging
         else:
@@ -60,6 +64,7 @@ class BackStop():
         ''' only hit if futureCycles never set '''
         self.hang_event = None 
         self.cpu = cpu
+        self.top = top
         self.callback = None
         self.hang_callback = None
         self.hang_cycles = None
