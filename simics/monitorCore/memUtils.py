@@ -462,6 +462,7 @@ class memUtils():
             return 'rip'
 
     def adjustParam(self, delta):
+        ''' Adjust parameters for ASLR '''
         self.param.current_task = self.param.current_task + delta
         self.param.sysenter = self.param.sysenter + delta
         self.param.sysexit = self.param.sysexit + delta
@@ -482,11 +483,12 @@ class memUtils():
                 retval = cur_ptr
             else:
                 new_fs_base = cpu.ia32_fs_base
-                if new_fs_base != 0:
+                ''' TBD generalize this, will it always be such? '''
+                if new_fs_base != 0 and new_fs_base != 0x10000:
                     ''' TBD, this seems the wrong way around, but runs of getKernelParams shows delta is the same, but for the sign.'''
                     if self.param.delta is None:
                         self.param.delta = self.param.fs_base - new_fs_base
-                        #self.lgr.debug('getCurrentTask fs_base delta is 0x%x, current_task was 0x%x' % (self.param.delta, self.param.current_task))
+                        self.lgr.debug('getCurrentTask param.fs_base 0x%x new_fs_base 0x%x delta is 0x%x, current_task was 0x%x' % (self.param.fs_base, new_fs_base, self.param.delta, self.param.current_task))
                         self.adjustParam(self.param.delta)
                     cpl = getCPL(cpu)
                     #current_task = self.param.current_task + self.param.delta
@@ -496,8 +498,11 @@ class memUtils():
                     except:
                         self.lgr.error('memUtils getCurrentTask failed to read phys address 0x%x' % ct_addr)
                         retval = None
-                    #self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
-                    #      self.param.current_task, new_fs_base, ct_addr, retval))
+                    if retval is None or retval == 0:
+                        self.param.delta = None
+                    else:
+                        self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
+                              self.param.current_task, new_fs_base, ct_addr, retval))
   
         elif self.WORD_SIZE == 8:
             ''' TBD generalze for all x86-64'''
