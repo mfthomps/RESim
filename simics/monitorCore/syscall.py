@@ -443,7 +443,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
+        #self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
@@ -453,7 +453,7 @@ class Syscall():
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 if self.syscall_context is None:
                     self.syscall_context = self.context_manager.getBPContext(proc_break)
-                    self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
+                    #self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
                 #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                 break_addrs.append(self.param.arm_entry)
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
@@ -896,7 +896,7 @@ class Syscall():
 
         return retval
 
-    def getSockParams(self, frame):
+    def getSockParams(self, frame, syscall_info):
         domain = None
         sock_type = None
         protocol = None
@@ -947,7 +947,7 @@ class Syscall():
             socket_callname = net.callname[socket_callnum].lower()
             #self.lgr.debug('syscall socketParse is socketcall call %s from %d' % (socket_callname, pid))
             if socket_callname == 'socket':
-                self.pid_sockets[pid] = self.getSockParams(frame)
+                self.pid_sockets[pid] = self.getSockParams(frame, syscall_info)
  
             ''' Is the call intended for this syscall instance? '''
             got_good = False 
@@ -986,7 +986,7 @@ class Syscall():
                     ss.addParams(self.pid_fd_sockets[pid][ss.fd])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
             else:
-                self.pid_sockets[pid] = self.getSockParams(frame)
+                self.pid_sockets[pid] = self.getSockParams(frame, syscall_info)
         ''' NOTE returns above '''
         exit_info.sock_struct = ss
 
@@ -1905,7 +1905,7 @@ class Syscall():
             return
         value = memory.logical_address
         #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+            #pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
