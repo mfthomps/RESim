@@ -2168,7 +2168,7 @@ class GenMonitor():
                 params = self.call_traces[self.target][other_call].getCallParams()
                 syscall.addCallParams(params) 
         
-    def traceAll(self, target=None, record_fd=False):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False):
         if target is None:
             target = self.target
 
@@ -2198,7 +2198,7 @@ class GenMonitor():
             self.trace_all[target] = syscall.Syscall(self, target, None, self.param[target], self.mem_utils[target], self.task_utils[target], 
                            self.context_manager[target], self.traceProcs[target], self.sharedSyscall[target], self.lgr, self.traceMgr[target], call_list=None, 
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
-                           name='traceAll', linger=True, netInfo=self.netInfo[self.target])
+                           name='traceAll', linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok)
             self.copyCallParams(self.trace_all[target])
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
