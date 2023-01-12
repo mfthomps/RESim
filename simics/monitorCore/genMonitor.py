@@ -299,9 +299,17 @@ class GenMonitor():
             binder_file = os.path.join('./', self.run_from_snap, 'binder.json')
             if os.path.isfile(binder_file):
                 self.binders.loadJson(binder_file)
+            for cell_name in comp_dict:
+                param_file = os.path.join('./', self.run_from_snap, cell_name, 'param.pickle')
+                if os.path.isfile(param_file):
+                    self.param[cell_name] = pickle.load(open(param_file, 'rb'))
+                    self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
+                else:
+                    self.lgr.debug('No param pickle at %s' % param_file)
+                
                          
         for cell_name in comp_dict:
-            if 'RESIM_PARAM' in comp_dict[cell_name]:
+            if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
                 print('Cell %s using params from %s' % (cell_name, param_file))
                 self.lgr.debug('Cell %s using params from %s' % (cell_name, param_file))
@@ -332,7 +340,7 @@ class GenMonitor():
                 self.param[cell_name].ts_state = 0
 
                 self.lgr.debug(self.param[cell_name].getParamString())
-            else:
+            elif cell_name not in self.param:
                 print('Cell %s missing params, it will not be monitored. ' % (cell_name))
                 self.lgr.debug('Cell %s missing params ' % (cell_name))
                 continue 
@@ -662,13 +670,16 @@ class GenMonitor():
                 ''' run until we get something sane '''
                 eip = self.getEIP(cpu)
                 cpl = memUtils.getCPL(cpu)
-                #self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
+                self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
                 cur_task_rec = None
                 cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
                 if cur_task_rec is None or cur_task_rec == 0:
                     #print('Current task not yet defined, continue')
-                    #self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
+                    self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
                     done = False
+                elif cur_task_rec == -1:
+                    self.lgr.error('debugging')
+                    SIM_break_simulation('remove this') 
                 else:
                     pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if pid is None:
@@ -676,7 +687,7 @@ class GenMonitor():
                         done = False
                         continue
                     ''' TBD clean this up '''
-                    #self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
+                    self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
                     '''
                     phys = self.mem_utils[cell_name].v2p(cpu, self.param[cell_name].current_task)
                     tu_cur_task_rec = self.mem_utils[cell_name].readPhysPtr(cpu, phys)
@@ -3357,6 +3368,9 @@ class GenMonitor():
                 exit_info_list = self.sharedSyscall[cell_name].getExitList('traceAll')
                 self.lgr.debug('writeConfig saved %d exit_info records' % len(exit_info_list))
                 pickle.dump(exit_info_list, open(p_file, 'wb'))
+
+                param_file = os.path.join('./', name, cell_name, 'param.pickle')
+                pickle.dump(self.param[cell_name], open(param_file, 'wb'))
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
