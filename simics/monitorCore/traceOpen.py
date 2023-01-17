@@ -1,7 +1,7 @@
 from simics import *
 import taskUtils
+''' for debugging and testing '''
 class TraceOpen():
-    OPEN = 5
     def __init__(self, param, mem_utils, task_utils, cpu, cell, lgr):
         self.cpu = cpu
         self.cell = cell
@@ -19,7 +19,8 @@ class TraceOpen():
     def traceOpenSyscall(self, pid = None):
         self.lgr.debug('traceOpen called')
         self.pid = pid
-        entry = self.task_utils.getSyscallEntry(self.OPEN)
+        callnum = self.task_utils.syscallNumber('open', False)
+        entry = self.task_utils.getSyscallEntry(callnum, False)
         self.lgr.debug('traceOpen set break at 0x%x' % entry)
         self.open_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, self.mem_utils.WORD_SIZE, 0)
         self.open_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openHap, self.cpu, self.open_break)
@@ -35,7 +36,9 @@ class TraceOpen():
         stack_frame = self.task_utils.frameFromStackSyscall()
         self.lgr.debug('frame: %s' % taskUtils.stringFromFrame(stack_frame))
         
-        fname = self.mem_utils.readString(cpu, stack_frame['ebx'], 512)
-        mode = stack_frame['edx']
+        fname_addr = stack_frame['param1']
+        flags = stack_frame['param2']
+        mode = stack_frame['param3']
+        fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
         self.report_fh.write('fopen from %d (%s) mode: 0x%x file: %s  \n' % (pid, comm, mode, fname))
         #SIM_break_simulation('fopen from %d (%s) ebx: 0x%x\n' % (pid, comm, stack_frame['ebx'])) 
