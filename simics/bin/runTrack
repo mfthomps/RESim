@@ -7,6 +7,7 @@ resim_dir = os.getenv('RESIM_DIR')
 here = os.getcwd()
 args = ' '.join(sys.argv[1:])
 cmd = os.path.join(resim_dir, 'simics', 'monitorCore', 'runTrack.py') + ' '+args
+cmd = cmd+" &"
 if len(glist) > 0:
     for instance in glist:
         os.chdir(instance)
