@@ -75,7 +75,7 @@ class RopCop():
             
             #if instruct[1].startswith('call'):
             #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
-            if instruct[1].startswith.callmn:
+            if instruct[1].startswith(self.callmn):
                 done = True
             else:
                 eip = eip+1
