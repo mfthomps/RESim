@@ -157,7 +157,6 @@ class GenMonitor():
         self.page_faults = {}
         self.rev_to_call = {}
         self.pfamily = {}
-        self.traceOpen = {}
         self.traceProcs = {}
         self.dataWatch = {}
         self.trackFunction = {}
@@ -304,6 +303,7 @@ class GenMonitor():
                 if os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
+                    self.lgr.debug(self.param[cell_name].getParamString())
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
                 
@@ -665,11 +665,16 @@ class GenMonitor():
                     continue
                 if cell_name in self.task_utils:
                     ''' already got taskUtils for this cell '''
+                    self.lgr.debug('already got %s' % cell_name)
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 ''' run until we get something sane '''
                 eip = self.getEIP(cpu)
                 cpl = memUtils.getCPL(cpu)
+                if cpl == 0 and not self.mem_utils[cell_name].isKernel(eip):
+                    self.lgr.debug('doInit cell %s cpl 0 but not in kernel code yet eip 0x%x cycles: 0x%x' % (cell_name, eip, cpu.cycles))
+                    done = False
+                    continue
                 self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
                 cur_task_rec = None
                 cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
@@ -732,7 +737,7 @@ class GenMonitor():
                         done = False
             if not done:
                 ''' Tried each cell, still not done, advance forward '''
-                #self.lgr.debug('continue %d cycles' % run_cycles)
+                self.lgr.debug('Tried each, now continue %d cycles' % run_cycles)
                 ''' using the most recently selected cpu, continue specified number of cycles '''
                 cmd = 'pselect %s' % cpu.name
                 dumb, ret = cli.quiet_run_command(cmd)
@@ -1842,7 +1847,7 @@ class GenMonitor():
 
     def traceOpenSyscall(self):
         #self.lgr.debug('about to call traceOpen')
-        self.traceOpen.traceOpenSyscall()
+        self.traceOpen[self.target].traceOpenSyscall()
 
     def getCell(self, cell_name=None):
         if cell_name is None:
