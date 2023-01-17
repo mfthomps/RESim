@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
 Executable program for generating crash reports by starting/stopping
 RESim for each crash.
@@ -8,7 +8,10 @@ import sys
 import glob
 import subprocess
 import shutil
-import ConfigParser
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 import threading
 import time
 import argparse

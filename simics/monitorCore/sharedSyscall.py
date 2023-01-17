@@ -398,7 +398,7 @@ class SharedSyscall():
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
             if self.read_fixup_callback is not None:
-                self.lgr.debug('sharedSyscall call read_fixup_callback')
+                self.lgr.debug('sharedSyscall call read_fixup_callback eax was %d' % eax)
                 eax = self.read_fixup_callback(exit_info.old_fd)
             if eax >= 0:
                 nbytes = min(eax, 256)

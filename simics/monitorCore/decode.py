@@ -274,17 +274,20 @@ def getUnmapped(cpu, instruct, lgr):
     return None
            
    
-def isCall(cpu, instruct): 
+def isCall(cpu, instruct, ignore_flags=False): 
     if instruct.startswith('call'):
        return True
     else:
        return False
-    
+   
 def isBranch(cpu, instruct):
     if instruct.startswith('j'):
         return True
     else: 
         return False
+
+def isJump(cpu, instruct, ignore_flags=False): 
+    return isBranch(cpu, instruct)
 
 def isDirectMove(instruct):
     retval = False

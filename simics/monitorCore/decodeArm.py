@@ -103,23 +103,23 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         value = 0
         parts = express.split(',')
         for p in parts:
-            v = getValue(p.strip(), cpu, lgr=lgr) 
+            v = getValue(p.strip(), cpu, lgr=None) 
             if v is not None:
-                lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
+                #lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
             else:
-                lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
+                #lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
                 return None    
         if remain is not None and remain.startswith(','):
             remain = remain[1:]
-            adjust = getValue(remain, cpu, lgr=lgr)
+            adjust = getValue(remain, cpu, lgr=None)
             if adjust is not None:
                 if after:
                     value = value - adjust
             else: 
                 lgr.error('decodeArm getAddressFromOperand failed to get value from %s' % remain)
-        else:
-            lgr.debug('decodeArm getAddressFromOperand, do not know what to do with %s' % remain)
+        #else:
+        #    lgr.debug('decodeArm getAddressFromOperand, do not know what to do with %s' % remain)
 
         retval = value
     else:
@@ -211,22 +211,38 @@ def armLDM(cpu, instruct, reg, lgr):
             lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
 
-def isCall(cpu, instruct):
+def isCall(cpu, instruct, ignore_flags=False):
     N, Z, C, V = armCond.flags(cpu)
     if instruct.startswith('ble'):
-        return Z or (N and not V) or (not N and V)
-    if instruct.startswith('blt'):
-        return (N and not V) or (not N and V)
-    if instruct.startswith('blo'):
-        return (not C)
-    if instruct.startswith('bls'):
-       return (not C) or Z
+        return ignore_flags or Z or (N and not V) or (not N and V)
+    elif instruct.startswith('blt'):
+        return ignore_flags or (N and not V) or (not N and V)
+    elif instruct.startswith('blo'):
+        return ignore_flags or (not C)
+    elif instruct.startswith('bls'):
+       return ignore_flags or (not C) or Z
     elif instruct.startswith('bl'):
        return True
     elif instruct.startswith('ldr pc'):
        return True
     elif instruct.startswith('mov pc'):
        return True
+    return False
+
+def isJump(cpu, instruct, ignore_flags=False):
+    if instruct.startswith('bl'):
+        return False
+    N, Z, C, V = armCond.flags(cpu)
+    if instruct.startswith('beq'):
+        return ignore_flags or Z 
+    if instruct.startswith('bne'):
+        return ignore_flags or not Z 
+    elif instruct.startswith('blt'):
+        return ignore_flags or (N and not V) or (not N and V)
+    elif instruct.startswith('blo'):
+        return ignore_flags or (not C)
+    elif instruct.startswith('bls'):
+       return ignore_flags or (not C) or Z
     return False
 
 def inBracket(op):

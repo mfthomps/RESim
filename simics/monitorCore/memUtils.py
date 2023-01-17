@@ -294,6 +294,8 @@ class memUtils():
                                 second_read = readPhysBytes(cpu, ps, count - remain_in_page)
                             except ValueError:
                                 self.lgr.error('memUtils readBytes, second read failed to read 0x%x' % ps)
+                                retval = retval+first_read
+                                break
                             #self.lgr.debug('readBytes second read %s from 0x%x' % (second_read, ps))
                             retval = retval+first_read+second_read
                     else:
@@ -460,14 +462,19 @@ class memUtils():
             return 'rip'
 
     def adjustParam(self, delta):
+        ''' Adjust parameters for ASLR '''
         self.param.current_task = self.param.current_task + delta
-        self.param.sysenter = self.param.sysenter + delta
-        self.param.sysexit = self.param.sysexit + delta
+        if self.param.sysenter is not None:
+            self.param.sysenter = self.param.sysenter + delta
+        if self.param.sysexit is not None:
+            self.param.sysexit = self.param.sysexit + delta
         self.param.sys_entry = self.param.sys_entry + delta
         self.param.iretd = self.param.iretd + delta
         self.param.page_fault = self.param.page_fault + delta
         self.param.syscall_compute = self.param.syscall_compute + delta
-        self.param.syscall_jump = self.param.syscall_jump + delta
+        ''' This value seems to get adjusted the other way.  TBD why? '''
+        self.param.syscall_jump = self.param.syscall_jump - delta
+        self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         
 
     def getCurrentTask(self, cpu):
@@ -480,12 +487,18 @@ class memUtils():
                 retval = cur_ptr
             else:
                 new_fs_base = cpu.ia32_fs_base
-                if new_fs_base != 0:
+                ''' TBD generalize this, will it always be such? '''
+                if new_fs_base != 0 and new_fs_base != 0x10000:
                     ''' TBD, this seems the wrong way around, but runs of getKernelParams shows delta is the same, but for the sign.'''
+                    '''
+                    current_task is the offset into the FS segment
+                    '''
                     if self.param.delta is None:
                         self.param.delta = self.param.fs_base - new_fs_base
-                        #self.lgr.debug('getCurrentTask fs_base delta is 0x%x, current_task was 0x%x' % (self.param.delta, self.param.current_task))
+                        self.lgr.debug('getCurrentTask param.fs_base 0x%x new_fs_base 0x%x delta is 0x%x, current_task was 0x%x' % (self.param.fs_base, 
+                              new_fs_base, self.param.delta, self.param.current_task))
                         self.adjustParam(self.param.delta)
+                        self.lgr.debug('getCurrentTask now 0x%x' % self.param.current_task)
                     cpl = getCPL(cpu)
                     #current_task = self.param.current_task + self.param.delta
                     ct_addr = new_fs_base + (self.param.current_task-self.param.kernel_base)
@@ -494,8 +507,14 @@ class memUtils():
                     except:
                         self.lgr.error('memUtils getCurrentTask failed to read phys address 0x%x' % ct_addr)
                         retval = None
-                    #self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
-                    #      self.param.current_task, new_fs_base, ct_addr, retval))
+                    if retval == 0:
+                        self.lgr.error('retval is zero reading 0x%x' % ct_addr)
+                        return -1
+                    if retval is None or retval == 0:
+                        self.param.delta = None
+                    else:
+                        self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
+                              self.param.current_task, new_fs_base, ct_addr, retval))
   
         elif self.WORD_SIZE == 8:
             ''' TBD generalze for all x86-64'''

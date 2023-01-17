@@ -36,18 +36,18 @@ class CopyMark():
                 trunc_string = ''
                 if truncated is not None:
                     trunc_string = ' (trucated from %d)' % truncated        
-                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x. (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
+                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
             else:
-                self.msg = 'Copy %d bytes from 0x%x to 0x%08x. (Source buffer starts before known buffers!)' % (length, src, dest)
+                self.msg = 'Copy %d bytes from 0x%x to 0x%08x . (Source buffer starts before known buffers!)' % (length, src, dest)
         else:
             if buf_start is not None:
                 if dest == buf_start:
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
                 else:
                     offset = dest - buf_start
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x. Buffer unknown!)' % (length, src, dest, )
+                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer unknown!)' % (length, src, dest, )
             else:
                 self.msg = 'Modify Copy length is none, not where wth'
     def getMsg(self):
@@ -118,12 +118,12 @@ class DataMark():
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
             if self.start is not None:
                 if copy_length == self.length and self.start == self.addr:
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc' % (copy_length, self.addr, self.dest)
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (copy_length, self.addr, self.dest)
                 else: 
                     offset = self.addr - self.start
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
+                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
             else:
-                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x. Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
+                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
@@ -376,6 +376,19 @@ class PushMark():
     def getMsg(self):
         return self.msg
  
+class FGetsMark():
+    def __init__(self, fun, addr, dest, count, start):
+        self.addr = addr
+        self.dest = dest
+        self.length = count
+        self.start = start
+        if start is not None:
+            offset = addr - start
+            self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+        else:
+            self.msg = 'fgets from 0x%08x (unknown buffer?) to 0x%08x' % (addr, dest)
+    def getMsg(self):
+        return self.msg
 
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
@@ -461,13 +474,13 @@ class WatchMarks():
                 self.recent_buf_max_len = max_len
         self.recordIP(ip)
  
-    def resetOrigin(self, origin_watches, reuse_msg=False): 
+    def resetOrigin(self, origin_watches, reuse_msg=False, record_old=False): 
         old_msg = None
         if reuse_msg:
            old_origin = self.getMarkFromIndex(1)
            if old_origin is not None:
                old_msg = old_origin.mark.getMsg() 
-        self.clearWatchMarks()
+        self.clearWatchMarks(record_old=record_old)
         ro = ResetOrigin(origin_watches, new_msg=old_msg)
         self.addWatchMark(ro)
         self.lgr.debug('watchMarks resetOrigin')
@@ -501,8 +514,7 @@ class WatchMarks():
                     #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                     pm.mark.addrRange(end_addr)
                 else:
-                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d' % (addr, 
-                    #      start, length, dest, trans_size))
+                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
                     #sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
@@ -836,6 +848,10 @@ class WatchMarks():
         pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.WORD_SIZE)
         wm = self.addWatchMark(pm)
         return wm
+
+    def fgetsMark(self, fun, src, dest, count, start):
+        fm = FGetsMark(fun, src, dest, count, start)
+        self.addWatchMark(fm)
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks')

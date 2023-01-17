@@ -5,6 +5,7 @@ import subprocess
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
 sys.path.append('/usr/lib/python2.7/dist-packages')
 sys.path.append('/usr/local/lib/python3.6/dist-packages')
+sys.path.append('/usr/lib/python3/dist-packages')
 import magic
 class Text():
     def __init__(self, address, offset, size):

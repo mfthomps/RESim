@@ -60,6 +60,7 @@ class ReportCrash():
                 report_file = 'crash_report_%05d' % self.report_index
             report_path = os.path.join(self.report_dir, report_file)
             print('Creating crash report at %s' % report_path)
+            self.lgr.debug('Creating crash report at %s' % report_path)
             self.crash_report = open(report_path, 'w')
       
             SIM_run_alone(self.goAlone, None)

@@ -110,7 +110,7 @@ class SOMap():
         pid = self.getSOPid(pid)
         if pid is None:
             return False
-        if pid in self.prog_start:
+        if pid in self.prog_start and self.prog_start[pid] is not None:
             if address >= self.prog_start[pid] and address <= self.prog_end[pid]:
                 return True
             else: 

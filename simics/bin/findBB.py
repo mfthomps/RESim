@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #
 import sys
@@ -54,7 +54,7 @@ def getFirstReadCycle(trackio, quiet=False):
     try:
         tjson = json.load(open(trackio))
     except:
-        #print('ERROR: failed reading json from %s' % trackio)
+        print('ERROR: failed reading json from %s' % trackio)
         return None
     mark_list = tjson['marks']
     for mark in mark_list:

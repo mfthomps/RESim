@@ -24,6 +24,8 @@
 '''
 from simics import *
 import decode
+import decodeArm
+import memUtils
 from collections import OrderedDict
 '''
 Scheme to manage syscall tracing in cases where the application spins around waiting for
@@ -46,12 +48,6 @@ NOTE: Tracing may miss data ingest, e.g., network traffic that arrives within th
 extend to scheme catch actual arrival of data though a breakpoint in the kernel?
 
 '''
-def getCPL(cpu):
-    reg_num = cpu.iface.int_register.get_number("cs")
-    cs = cpu.iface.int_register.read(reg_num)
-    mask = 3
-    return cs & mask
-
 def getEIP(cpu):
     reg_num = cpu.iface.int_register.get_number('eip')
     reg_value = cpu.iface.int_register.read(reg_num)
@@ -92,6 +88,11 @@ class ExitMaze():
         self.stack_frames = []
         self.broke_out_count = 0
         self.planted_break_sets = 0
+        if cpu.architecture == 'arm':
+            self.decode = decodeArm
+            self.lgr.debug('findKernelWrite using arm decoder')
+        else:
+            self.decode = decode
 
     def mazeReturn(self, was_running=False):
         if self.function_ret is None:
@@ -150,7 +151,7 @@ class ExitMaze():
             eip = getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             result = SIM_run_command(cmd)
-            if getCPL(self.cpu) > 0:
+            if memUtils.getCPL(self.cpu) > 0:
                 ''' see if we are returning from kernel or call from outer scope''' 
                 if i > 0 and i == count:
                     ''' returned, check timeofday count'''
@@ -258,7 +259,7 @@ class ExitMaze():
         self.syscall.resetTimeofdayCount(self.pid)
         self.timeofday_count_start = 0
         self.lgr.debug('exitMaze, Begin.  timeofday_count_start is %d' % self.timeofday_count_start)
-        cpl = getCPL(self.cpu)
+        cpl = memUtils.getCPL(self.cpu)
         self.cycle_start = self.cpu.cycles
         self.cycle_len = 0
         self.traceCircuit(0)
@@ -294,7 +295,7 @@ class ExitMaze():
             print('exit eip 0x%x' % x)
         for eip in self.instructs:
             ins = self.instructs[eip][1]
-            if ins.startswith('j') and prev is not None:
+            if self.decode.isJump(self.cpu, ins, ignore_flags=True) and prev is not None:
                 self.lgr.debug('is jump: 0x%x %s' % (eip, ins))
                 try:
                     parts = str(ins).split(' ', 1)

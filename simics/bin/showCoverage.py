@@ -1,7 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-# given a hits file or an AFL session named by target, instance and index,
-# display the hits as hex.
+# Display the number of hits in each coverage file for a given target/program, optionally focusing on a given index/instance.
 #
 import sys
 import os
@@ -38,16 +37,6 @@ def getCover(fpath, funs):
             all_hits.append(hit)
     return len(hits1), len(funs_hit)
 
-def getPathList(target):
-    afl_path = os.getenv('AFL_DATA')
-    if afl_path is None:
-        print('AFL_DATA not defined')
-        exit(1)
-    glob_mask = '%s/output/%s/resim_*/coverage/id:*,src*' % (afl_path, target)
-    print('glob_mask is %s' % glob_mask)
-    glist = glob.glob(glob_mask)
-    return glist
-
 def getHeader(ini):
     config = ConfigParser.ConfigParser()
     config.read(ini)
@@ -67,7 +56,7 @@ def getPackets(f, header):
     return retval  
 
 def main():
-    parser = argparse.ArgumentParser(prog='showCoverage', description='Show coverage of one or more hits files')
+    parser = argparse.ArgumentParser(prog='showCoverage', description='Show number of hits (coverage) of one or more hits files')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('prog', action='store', help='The program that was fuzzed.  TBD should store via runAFL or similar?.')
     parser.add_argument('-i', '--index', action='store', help='index')

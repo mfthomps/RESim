@@ -980,6 +980,8 @@ class GenContextMgr():
             self.clearExitBreaks()
             self.lgr.debug('contextManager deadParrot pid:%d rec no longer found removed task' % (pid))
         if self.exit_callback is not None:
+            group_leader = self.task_utils.getGroupLeaderPid(pid)
+            self.pageFaultGen.handleExit(pid, group_leader, report_only=True)
             self.lgr.debug('contextManager deadParrot do exit_callback')
             self.exit_callback()
         self.task_utils.setExitPid(pid)

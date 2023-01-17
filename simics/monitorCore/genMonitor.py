@@ -157,7 +157,6 @@ class GenMonitor():
         self.page_faults = {}
         self.rev_to_call = {}
         self.pfamily = {}
-        self.traceOpen = {}
         self.traceProcs = {}
         self.dataWatch = {}
         self.trackFunction = {}
@@ -299,9 +298,18 @@ class GenMonitor():
             binder_file = os.path.join('./', self.run_from_snap, 'binder.json')
             if os.path.isfile(binder_file):
                 self.binders.loadJson(binder_file)
+            for cell_name in comp_dict:
+                param_file = os.path.join('./', self.run_from_snap, cell_name, 'param.pickle')
+                if os.path.isfile(param_file):
+                    self.param[cell_name] = pickle.load(open(param_file, 'rb'))
+                    self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
+                    self.lgr.debug(self.param[cell_name].getParamString())
+                else:
+                    self.lgr.debug('No param pickle at %s' % param_file)
+                
                          
         for cell_name in comp_dict:
-            if 'RESIM_PARAM' in comp_dict[cell_name]:
+            if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
                 print('Cell %s using params from %s' % (cell_name, param_file))
                 self.lgr.debug('Cell %s using params from %s' % (cell_name, param_file))
@@ -332,7 +340,7 @@ class GenMonitor():
                 self.param[cell_name].ts_state = 0
 
                 self.lgr.debug(self.param[cell_name].getParamString())
-            else:
+            elif cell_name not in self.param:
                 print('Cell %s missing params, it will not be monitored. ' % (cell_name))
                 self.lgr.debug('Cell %s missing params ' % (cell_name))
                 continue 
@@ -580,7 +588,7 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
             self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
-            self.back_stop[cell_name] = backStop.BackStop(cpu, self.lgr)
+            self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
                   self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.lgr)
@@ -657,18 +665,26 @@ class GenMonitor():
                     continue
                 if cell_name in self.task_utils:
                     ''' already got taskUtils for this cell '''
+                    self.lgr.debug('already got %s' % cell_name)
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 ''' run until we get something sane '''
                 eip = self.getEIP(cpu)
                 cpl = memUtils.getCPL(cpu)
-                #self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
+                if cpl == 0 and not self.mem_utils[cell_name].isKernel(eip):
+                    self.lgr.debug('doInit cell %s cpl 0 but not in kernel code yet eip 0x%x cycles: 0x%x' % (cell_name, eip, cpu.cycles))
+                    done = False
+                    continue
+                self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
                 cur_task_rec = None
                 cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
                 if cur_task_rec is None or cur_task_rec == 0:
                     #print('Current task not yet defined, continue')
-                    #self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
+                    self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
                     done = False
+                elif cur_task_rec == -1:
+                    self.lgr.error('debugging')
+                    SIM_break_simulation('remove this') 
                 else:
                     pid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if pid is None:
@@ -676,7 +692,7 @@ class GenMonitor():
                         done = False
                         continue
                     ''' TBD clean this up '''
-                    #self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
+                    self.lgr.debug('doInit cell %s pid is %d' % (cell_name, pid))
                     '''
                     phys = self.mem_utils[cell_name].v2p(cpu, self.param[cell_name].current_task)
                     tu_cur_task_rec = self.mem_utils[cell_name].readPhysPtr(cpu, phys)
@@ -721,7 +737,7 @@ class GenMonitor():
                         done = False
             if not done:
                 ''' Tried each cell, still not done, advance forward '''
-                #self.lgr.debug('continue %d cycles' % run_cycles)
+                self.lgr.debug('Tried each, now continue %d cycles' % run_cycles)
                 ''' using the most recently selected cpu, continue specified number of cycles '''
                 cmd = 'pselect %s' % cpu.name
                 dumb, ret = cli.quiet_run_command(cmd)
@@ -1831,7 +1847,7 @@ class GenMonitor():
 
     def traceOpenSyscall(self):
         #self.lgr.debug('about to call traceOpen')
-        self.traceOpen.traceOpenSyscall()
+        self.traceOpen[self.target].traceOpenSyscall()
 
     def getCell(self, cell_name=None):
         if cell_name is None:
@@ -2168,7 +2184,7 @@ class GenMonitor():
                 params = self.call_traces[self.target][other_call].getCallParams()
                 syscall.addCallParams(params) 
         
-    def traceAll(self, target=None, record_fd=False):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False):
         if target is None:
             target = self.target
 
@@ -2198,7 +2214,7 @@ class GenMonitor():
             self.trace_all[target] = syscall.Syscall(self, target, None, self.param[target], self.mem_utils[target], self.task_utils[target], 
                            self.context_manager[target], self.traceProcs[target], self.sharedSyscall[target], self.lgr, self.traceMgr[target], call_list=None, 
                            trace=True, soMap=self.soMap[target], binders=self.binders, connectors=self.connectors, targetFS=self.targetFS[target], record_fd=record_fd,
-                           name='traceAll', linger=True, netInfo=self.netInfo[self.target])
+                           name='traceAll', linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok)
             self.copyCallParams(self.trace_all[target])
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
@@ -3109,7 +3125,7 @@ class GenMonitor():
        
         self.bookmarks.clearMarks()
         self.resetOrigin(cpu)
-        self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg)
+        self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         #self.stopTrackIO()
         self.lgr.debug('genMonitor clearBookmarks call clearWatches')
@@ -3357,6 +3373,9 @@ class GenMonitor():
                 exit_info_list = self.sharedSyscall[cell_name].getExitList('traceAll')
                 self.lgr.debug('writeConfig saved %d exit_info records' % len(exit_info_list))
                 pickle.dump(exit_info_list, open(p_file, 'wb'))
+
+                param_file = os.path.join('./', name, cell_name, 'param.pickle')
+                pickle.dump(self.param[cell_name], open(param_file, 'wb'))
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
@@ -3853,11 +3872,12 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_thread=False, no_track=False):
+            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
-            the instance is not defined until it is done.'''
+            the instance is not defined until it is done.
+            use no_reset True to stop the tracking if RESim would need to reset the origin.'''
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             if 'coverage/id' in dfile:
@@ -3883,7 +3903,7 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
-                  target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_track=no_track,  
+                  target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, 
                   no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread)
 
         if go:
@@ -4382,6 +4402,7 @@ class GenMonitor():
         return self.bookmarks.getFaultAddr()
    
     def setCommandCallback(self, callback):
+        self.lgr.debug('setCommandCallback')
         self.command_callback = callback 
 
     def setCommandCallbackParam(self, param):

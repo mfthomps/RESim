@@ -21,7 +21,10 @@ class Kparams():
             self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
             #self.cur_task_offset_into_gs = 0xc700
             #self.cur_task_offset_into_gs = 0xa748
-            self.cur_task_offset_into_gs = 0xa780
+            #self.cur_task_offset_into_gs = 0xa780
+            #self.cur_task_offset_into_gs = 0xb780
+            # TBD fix getKernelParams for x86-64
+            self.cur_task_offset_into_gs = 0xc280
 
 
         self.ts_next_relative = True

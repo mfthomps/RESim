@@ -13,6 +13,7 @@ import dmod
 import sys
 import copy
 from resimHaps import *
+from resimUtils import rprint
 '''
 how does simics not have this in its python sys.path?
 '''
@@ -442,7 +443,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
+        #self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r reset timeofdaycount' % (self.cell_name, compat32))
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
@@ -452,7 +453,7 @@ class Syscall():
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 if self.syscall_context is None:
                     self.syscall_context = self.context_manager.getBPContext(proc_break)
-                    self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
+                    #self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
                 #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                 break_addrs.append(self.param.arm_entry)
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
@@ -561,7 +562,7 @@ class Syscall():
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
-            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
+            self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
 
@@ -577,6 +578,7 @@ class Syscall():
         #self.lgr.debug('syscall stopTrace return for %s' % self.name)
        
     def watchFirstMmap(self, pid, fname, fd, compat32):
+        self.lgr.debug('syscall watchFirstMmap fd: %d fname %s' % (fd, fname))
         self.watch_first_mmap = fd
         self.mmap_fname = fname
         return
@@ -894,7 +896,7 @@ class Syscall():
 
         return retval
 
-    def getSockParams(self, frame):
+    def getSockParams(self, frame, syscall_info):
         domain = None
         sock_type = None
         protocol = None
@@ -945,7 +947,7 @@ class Syscall():
             socket_callname = net.callname[socket_callnum].lower()
             #self.lgr.debug('syscall socketParse is socketcall call %s from %d' % (socket_callname, pid))
             if socket_callname == 'socket':
-                self.pid_sockets[pid] = self.getSockParams(frame)
+                self.pid_sockets[pid] = self.getSockParams(frame, syscall_info)
  
             ''' Is the call intended for this syscall instance? '''
             got_good = False 
@@ -984,7 +986,7 @@ class Syscall():
                     ss.addParams(self.pid_fd_sockets[pid][ss.fd])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
             else:
-                self.pid_sockets[pid] = self.getSockParams(frame)
+                self.pid_sockets[pid] = self.getSockParams(frame, syscall_info)
         ''' NOTE returns above '''
         exit_info.sock_struct = ss
 
@@ -1175,13 +1177,13 @@ class Syscall():
                             exit_info.call_params = call_param
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, ss.length)
                     else:
                         self.lgr.debub('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                            self.kbuffer.read(exit_info.retval_addr, ss.length)
                     break
         elif socket_callname == "recvmsg": 
             
@@ -1620,7 +1622,9 @@ class Syscall():
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  
         elif callname == 'mmap' or callname == 'mmap2':        
+            self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
+            '''
             if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0:
                 #self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
@@ -1631,7 +1635,7 @@ class Syscall():
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
                 if fd is not None:
-                    #self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
+                    self.lgr.debug('mmap pid:%d FD: %d' % (pid, fd))
                     pass
                 if pid is None:
                     self.lgr.error('PID is NONE?')
@@ -1642,12 +1646,28 @@ class Syscall():
                     ida_msg = '%s pid:%d FD: NONE' % (callname, pid)
                 else:
                     ida_msg = '%s pid:%d FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, pid, fd, arg_addr, length, prot, flags, offset)
+            '''
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+                ''' tbd wth? the above seems wrong, why key on addr of zero? '''
+                fd = frame['param5']
+                prot = frame['param3']
+                ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
+                    fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
+                self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
             else:
                 fd = frame['param5']
-                ida_msg = '%s pid:%d FD: %d buf: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
+                prot = frame['param3']
+                ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
-                self.lgr.debug(taskUtils.stringFromFrame(frame))
-            if self.watch_first_mmap == fd:
+                if self.watch_first_mmap is not None:
+                    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
+                else:
+                    self.lgr.debug('syscall mmap watch_first_mmap is none')
+                self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
+            is_ex = prot & 4
+            self.lgr.debug('is exec? %d' % is_ex)
+            if self.watch_first_mmap == fd and is_ex:
+                self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % fd)
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
 
@@ -1885,7 +1905,7 @@ class Syscall():
             return
         value = memory.logical_address
         #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-        #    pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+            #pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
@@ -2116,7 +2136,7 @@ class Syscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                print("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
+                rprint("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
                 SIM_break_simulation('timer loop?')
    
  
@@ -2132,6 +2152,8 @@ class Syscall():
             
 
     def checkTimeLoop(self, callname, pid):
+        if self.cpu.architecture == 'arm':
+            return
         limit = 800
         delta_limit = 0x12a05f200
         if pid not in self.timeofday_count:

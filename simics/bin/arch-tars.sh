@@ -5,7 +5,7 @@ if [ ! -f drones.txt ]; then
 else
    flist=$(cat drones.txt)
 fi
-if [ "$#" -ne 1 ]; then
+if [ "$#" -ne 1 ] || [ "$1" = "-h" ]; then
     echo "arch-tars.sh <project>"
     echo "   Archive workspace and sync folders to the resim_archive under a given project name"
     echo "   All data will be in a subdirectory having the workspace name."

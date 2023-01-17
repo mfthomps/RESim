@@ -3,6 +3,21 @@ class SyscallNumbers():
     def __init__(self, fpath, lgr):
         self.syscalls = {}
         self.callnums = {}
+        if fpath.endswith('ia64.tbl'):
+            self.fromTbl(fpath)
+        else:
+            self.fromInclude(fpath)
+
+    def fromTbl(self, fpath):
+        with open(fpath) as fh:
+            for line in fh:
+                parts = line.split()
+                callnum = int(parts[0])
+                name = parts[1].strip()
+                self.syscalls[callnum] = name
+                self.callnums[name] = callnum
+
+    def fromInclude(self, fpath):
         hackvals = {}
         if not os.path.isfile:
             print('Could not find unistd file at %s' % fpath)
