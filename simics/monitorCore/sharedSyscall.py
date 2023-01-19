@@ -403,10 +403,11 @@ class SharedSyscall():
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
-                if self.traceFiles is not None:
-                    self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 if byte_array is not None:
                     s = ''.join(map(chr,byte_array))
+                    if self.traceFiles is not None:
+                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                        self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
                 src = ''
@@ -475,6 +476,9 @@ class SharedSyscall():
                     byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, msg_iov[0].base)
                     if byte_array is not None:
                         s = ''.join(map(chr,byte_array))
+                        if self.traceFiles is not None:
+                            byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, msg_iov[0].base)
+                            self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                     else:
                         s = '<< NOT MAPPED >>'
                 else:
@@ -761,6 +765,9 @@ class SharedSyscall():
                     self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 if byte_array is not None:
                     s = ''.join(map(chr,byte_array))
+                    if self.traceFiles is not None:
+                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                        self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
                 trace_msg = ('\treturn from read pid:%d (%s) FD: %d returned length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (pid, comm, exit_info.old_fd, 
@@ -819,14 +826,13 @@ class SharedSyscall():
                     byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                     if byte_array is not None:
                         s = ''.join(map(chr,byte_array[:max_len]))
+                        if self.traceFiles is not None:
+                            byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                            self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     else:
                         s = '<<NOT MAPPED>>'
                     #trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, byte_string))
                     trace_msg = ('\treturn from write pid:%d FD: %d count: %d\n\t%s\n' % (pid, exit_info.old_fd, eax, s))
-                    if self.traceFiles is not None:
-                        #self.lgr.debug('sharedSyscall write call tracefiles with fd %d' % exit_info.old_fd)
-                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
-                        self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
                         self.lgr.debug('sharedSyscall write check string %s against %s' % (s, exit_info.call_params.match_param))
                         if exit_info.call_params.match_param not in s:
