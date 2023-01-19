@@ -4834,6 +4834,13 @@ class GenMonitor():
     def getCred(self):
         return self.task_utils[self.target].getCred()
 
+    def trackProgArgs(self):
+        ''' Assuming the process is at start, track references to its argsv '''
+        self.dataWatch[self.target].watchArgs()
+    def trackCGIArgs(self):
+        ''' Assuming the process is at start, track references to its argsv '''
+        self.dataWatch[self.target].watchCGIArgs()
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

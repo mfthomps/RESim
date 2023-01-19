@@ -22,7 +22,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
@@ -810,6 +810,8 @@ class DataWatch():
                    self.mem_something.dest, self.mem_something.count))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.recent_fgets = self.mem_something.dest
+        elif self.mem_something.fun in ['getenv', 'regexec']:
+            mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -1109,6 +1111,9 @@ class DataWatch():
 
             elif self.mem_something.fun == 'inet_ntop':
                 dumb1, dumb2, self.mem_something.dest = self.getCallParams(sp)
+            elif self.mem_something.fun in ['getenv', 'regexec']:
+                self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
+                self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
 
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
@@ -1140,7 +1145,7 @@ class DataWatch():
             self.top.restoreDebugBreaks(was_watching=True)
 
             #self.context_manager.restoreDefaultContext()
-            if not data_hit and not skip_fun:
+            if not data_hit and not skip_fun and self.mem_something not in ['getenv']:
                 #self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
                 #buf_start = self.findRange(self.mem_something.src)
@@ -1155,7 +1160,7 @@ class DataWatch():
                         if self.mem_something.src is not None and self.mem_something.dest is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x and dst 0x%x not buffers we care about, skip it' % (self.mem_something.src,
                                  self.mem_something.dest))
-                        else:
+                        elif self.mem_something.src is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                 else:
                     if self.length[buf_index] < self.mem_something.count:
@@ -1509,10 +1514,24 @@ class DataWatch():
                 return 'addr: 0x%x trans_size: %d start: 0x%x len: %d' % (self.addr, self.trans_size, self.start, self.length)
 
     def isDataTransformCall(self, instruct):
+        fun_list = ['ntohl', 'htonl', 'tolower', 'toupper']
         retval = None
         if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
             fun_hex, fun = self.fun_mgr.getFunName(instruct[1])
-            if fun is not None and 'ntohl' in fun or 'htonl' in fun:
+            self.lgr.debug('isDataTransformCall fun is %s  (0x%x)' % (fun, fun_hex))
+            if fun is not None:
+                for tform in fun_list:
+                    if tform in fun:
+                        retval = fun
+                        break
+        return retval
+
+    def isDataRef(self, instruct):
+        retval = None
+        if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
+            fun_hex, fun = self.fun_mgr.getFunName(instruct[1])
+            self.lgr.debug('isDataRef fun is %s  (0x%x)' % (fun, fun_hex))
+            if fun is not None and 'isalpha' in fun:
                 retval = fun
         return retval
 
@@ -1527,7 +1546,7 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
         fun = self.isDataTransformCall(instruct)
         if fun is not None:
-                #self.lgr.debug('dataWatch checkNTOHL is %s' % fun)
+                self.lgr.debug('dataWatch checkNTOHL is %s' % fun)
                 our_reg = self.mem_utils.regs['syscall_ret']
                 next_instruct = instruct
                 for i in range(5):
@@ -1553,6 +1572,12 @@ class DataWatch():
                                          self.finishCheckMoveHap, move_stuff, break_num, 'checkMove')
                                 retval = True
                             break
+        else:
+            fun = self.isDataRef(instruct)
+            if fun is not None:
+                self.lgr.debug('dataWatch checkNOTHL is data ref %s' % fun)
+                retval = True
+                mark = self.watchMarks.mscMark(fun, addr)
         return retval
 
     def adjustSP(self, sp, instruct, op1, op2):
@@ -1663,7 +1688,7 @@ class DataWatch():
                                      self.transformPushHap, move_stuff, break_num, 'transformPush')
                                 adhoc = True
                         else:
-                            #self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory')
+                            self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory')
                             pass
                         break
                     else:
@@ -2111,7 +2136,7 @@ class DataWatch():
             if self.start[index] is not None:
                 end = self.start[index] + (self.length[index]-1)
                 #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
-                if addr >= self.start[index] and addr <= end:
+                if addr is not None and addr >= self.start[index] and addr <= end:
                     return index
         return None
 
@@ -2668,3 +2693,44 @@ class DataWatch():
         self.lgr.debug('dataWatch markLog')
         self.watchMarks.logMark(s, prefix)
 
+    def watchArgs(self):
+        self.enable()
+        self.break_simulation = False
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        argc = self.mem_utils.readPtr(self.cpu, sp)
+        self.lgr.debug('dataWatch watchArgs sp 0x%x, argc is %d' % (sp, argc))
+        argptr = sp + self.mem_utils.WORD_SIZE
+        for index in range(argc):
+            ''' TBD good size limit? '''
+            valptr = self.mem_utils.readPtr(self.cpu, argptr)
+            argval = self.mem_utils.readString(self.cpu, valptr, 100)
+            self.lgr.debug('dataWatch watchArgs arg %d is %s' % (index, argval))
+            argptr = argptr + self.mem_utils.WORD_SIZE
+            msg = 'prog arg %s' % argval
+            self.setRange(argptr, len(argval), msg=msg)
+        self.setBreakRange()
+        
+    def watchCGIArgs(self):
+        self.enable()
+        self.break_simulation = False
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        argc = self.mem_utils.readPtr(self.cpu, sp)
+        self.lgr.debug('dataWatch watchCGIArgs sp 0x%x, argc is %d' % (sp, argc))
+        argptr = sp + self.mem_utils.WORD_SIZE
+        valptr = self.mem_utils.readPtr(self.cpu, argptr)
+        if argc != 1:
+            self.ldr.error('dataWatch watchCGIArgs expected only one argv, got %d' % argc)
+        else:
+            index = 0
+            while True:
+                ''' TBD good size limit? '''
+                argval = self.mem_utils.readString(self.cpu, valptr, 1200)
+                if argval is None or len(argval) == 0:
+                    self.lgr.debug('dataWatch watchCGIArgs Got null argval')
+                    break
+                self.lgr.debug('dataWatch watchCGIArgs arg %d is %s' % (index, argval))
+                msg = 'cgi-bin arg %s' % argval
+                self.setRange(valptr, len(argval), msg=msg)
+                valptr = valptr + len(argval)+1
+                index = index + 1
+            self.setBreakRange()

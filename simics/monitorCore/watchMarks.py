@@ -390,6 +390,13 @@ class FGetsMark():
     def getMsg(self):
         return self.msg
 
+class MscMark():
+    def __init__(self, fun, addr):
+        self.addr = addr
+        self.msg = '%s read 0x%x' % (fun, addr)
+    def getMsg(self):
+        return self.msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -851,6 +858,10 @@ class WatchMarks():
 
     def fgetsMark(self, fun, src, dest, count, start):
         fm = FGetsMark(fun, src, dest, count, start)
+        self.addWatchMark(fm)
+
+    def mscMark(self, fun, src):
+        fm = MscMark(fun, src)
         self.addWatchMark(fm)
 
     def clearWatchMarks(self, record_old=False): 
