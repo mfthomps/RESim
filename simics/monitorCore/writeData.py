@@ -253,14 +253,15 @@ class WriteData():
                     ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
                     self.addr = self.addr+1
             else:
+                tot_len = len(self.in_data)
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
                 if self.filter is not None:
                     result = self.filter.filter(self.in_data, self.current_packet)
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
+                    tot_len = len(result)
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
-                tot_len = len(self.in_data)
                 eip = self.top.getEIP(self.cpu)
                 #self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
