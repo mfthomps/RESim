@@ -46,7 +46,7 @@ def ioHandler(read_array, stop, lgr):
                     return
                 if len(data.decode().strip()) > 0:
                     fh.write(data+b'\n')
-            fh.flush()
+                    fh.flush()
                    
 
 def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
