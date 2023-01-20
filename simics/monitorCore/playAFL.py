@@ -28,7 +28,6 @@ class PlayAFL():
         self.findbb = None
         self.write_data = None
         self.orig_buffer = None
-        self.return_ip = None
         self.cfg_file = cfg_file
         self.target = target
         self.afl_dir = aflPath.getAFLOutput()
@@ -107,7 +106,6 @@ class PlayAFL():
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 0
-        self.call_ip = None
         self.hit_total = 0
 
         self.filter_module = None
@@ -441,8 +439,6 @@ class PlayAFL():
             self.lgr.debug('afl pickle from %s' % afl_file)
             so_pickle = pickle.load( open(afl_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
-            self.call_ip = so_pickle['call_ip']
-            self.return_ip = so_pickle['return_ip']
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
             if 'orig_buffer' in so_pickle:
