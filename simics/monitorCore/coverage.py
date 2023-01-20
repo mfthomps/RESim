@@ -87,6 +87,7 @@ class Coverage():
         self.only_thread = False
         self.last_delta = 0
         self.record_hits = True
+        self.did_missing = []
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -242,13 +243,13 @@ class Coverage():
 
     def handleUnmapped(self):
         for bb_rel in self.unmapped_addrs:
-            #self.lgr.debug('handleUnmapped for 0x%x' % bb_rel)
+            self.lgr.debug('handleUnmapped for 0x%x' % bb_rel)
             pt = pageUtils.findPageTable(self.cpu, bb_rel, self.lgr)
             if pt.page_addr is not None:
                 if pt.page_addr not in self.missing_pages:
                     self.missing_pages[pt.page_addr] = []
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
-                    #self.lgr.debug('coverage no physical address for 0x%x, set break %d on page_addr 0x%x' % (bb_rel, break_num, pt.page_addr))
+                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on page_addr 0x%x' % (bb_rel, break_num, pt.page_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                           None, break_num)
@@ -258,7 +259,7 @@ class Coverage():
                 if pt.ptable_addr not in self.missing_tables:
                     self.missing_tables[pt.ptable_addr] = []
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
-                    #self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (bb_rel, break_num, pt.ptable_addr))
+                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (bb_rel, break_num, pt.ptable_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
                           None, break_num)
@@ -384,7 +385,11 @@ class Coverage():
                         #self.lgr.debug('coverage tableHap setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
                     prev_bp = None
                     got_one = False
+                    got_missing = False
                     for bb in self.missing_tables[physical]:
+                        if bb in self.did_missing:
+                            got_missing=True
+                            continue
                         pt = pageUtils.findPageTable(self.cpu, bb, self.lgr, use_sld=value)
                         if pt.page_addr is None or pt.page_addr == 0:
                             self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
@@ -401,12 +406,14 @@ class Coverage():
                                 bb_index = len(self.bp_list)
                             self.bp_list.append(bp)                 
                             prev_bp = bp
+                            self.did_missing.append(bb)
                         else:
                             #self.lgr.debug('tableHap addr 0x%x in dead map, skip' % addr)
                             pass
-                    if not got_one:
+                    if not got_one and not got_missing:
                         self.lgr.error('tableHap no pt for any bb address 0x%x' % value)
-                    SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
+                    if got_one:
+                        SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
             else:
                 self.lgr.error('coverage tableHap for 64 bits not yet handled')
 
@@ -780,25 +787,27 @@ class Coverage():
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
-        #self.lgr.debug('coverage doCoverage')    
+        self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
             self.cover(physical=physical)
+            self.lgr.debug('coverage called cover')
             self.did_cover = True
         else:
             #self.restoreBreaks()
-            #self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
-            if self.begin_tmp_bp is not None:
+            self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
+            if False and self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
                     RES_delete_breakpoint(bp)
                 for hap in self.bb_hap[self.begin_tmp_hap:]:
                     #self.lgr.debug('coverage doCoverage delete tmp_bp hap %d' % hap)
                     SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
                 
-                self.bp_list = self.bp_list[:self.begin_tmp_bp]
-                self.bb_hap = self.bb_hap[:self.begin_tmp_hap]
-                #self.lgr.debug('coverage doCoverage after deleting tmp haps, now have %d breaks' % len(self.bp_list))
+                self.bp_list = list(self.bp_list[:self.begin_tmp_bp])
+                self.bb_hap = list(self.bb_hap[:self.begin_tmp_hap])
+                self.lgr.debug('coverage doCoverage after deleting tmp haps, now have %d breaks' % len(self.bp_list))
                 self.begin_tmp_bp = None 
                 self.begin_tmp_hap = None 
+                self.did_missing = []
 
         if not self.afl:
             if not no_merge:
@@ -812,7 +821,7 @@ class Coverage():
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
-            #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
+            self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
             self.prev_loc = 0
             self.proc_status = 0
             self.hit_count = 0
