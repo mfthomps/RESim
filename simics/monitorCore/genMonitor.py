@@ -4262,7 +4262,7 @@ class GenMonitor():
     def prepInject(self, fd, snap_name, count=1):
         ''' 
             Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
-            fd -- will runToIOish on that FD
+            fd -- will runToIOish on that FD and will record the buffer address for use by injectIO or fuzzing.
             snap_name -- will writeConfig to that snapshot.  Use that snapshot for fuzz and afl commands. '''
         if self.reverseEnabled():
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -4279,6 +4279,7 @@ class GenMonitor():
             print('Reverse execution must be enabled to run prepInject')
 
     def prepInjectWatch(self, watch_mark, snap_name):
+        ''' Like prepInject, but goes to given watchmark records the kernel buffers identified by using trackIO(kbuf=True) '''
         if self.reverseEnabled():
             cpu = self.cell_config.cpuFromCell(self.target)
             cell_name = self.getTopComponentName(cpu)
@@ -4291,6 +4292,16 @@ class GenMonitor():
             prep_inject.doInject(snap_name, watch_mark)
         else:
             print('prepInjectWatch requires reverse execution.')
+
+    def prepInjectAddr(self, addr, snap_name):
+        ''' Variant of prepInject that uses current execution point and records the given address as the application buffer '''
+        self.lgr.debug('prepInjectAddr  begin')
+        self.writeConfig(snap_name)
+        pickDict = {}
+        pickDict['addr'] = addr
+        afl_file = os.path.join('./', snap_name, self.target, 'afl.pickle')
+        pickle.dump( pickDict, open( afl_file, "wb") ) 
+        print('Configuration file saved to %s, ok to quit.' % afl_file)
 
     def hasBookmarks(self):
         return self.bookmarks is not None
