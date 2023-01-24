@@ -135,7 +135,7 @@ class PrepInject():
                 return
 
             orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
-            self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles))
+            self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
             ''' skip back to return so the snapshot is ready to inject input '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
