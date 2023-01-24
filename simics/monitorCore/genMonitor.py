@@ -982,7 +982,7 @@ class GenMonitor():
                 if full_path is not None:
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
                     self.getIDAFuns(full_path)
-                    self.relocate_funs = elfText.getRelocate(full_path, self.lgr)
+                    self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
                     ''' TBD alter stackTrace to use this and buid it out'''
                     self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
@@ -2040,6 +2040,15 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
+    def runToCall(self, callname):
+        cell = self.cell_config.cell_context[self.target]
+        self.is_monitor_running.setRunning(True)
+        call_params = []
+        self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
+                 self.mem_utils[self.target], self.task_utils[self.target], 
+                 self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
+                 call_params=call_params, stop_on_call=True, targetFS=self.targetFS[self.target])
+
     def runToSyscall(self, callnum = None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
@@ -2337,7 +2346,6 @@ class GenMonitor():
         eip = self.getEIP(cpu)
         self.lgr.debug('textHap eip is 0x%x' % eip)
         self.is_monitor_running.setRunning(False)
-        self.exit_group_syscall[self.target].unsetDebuggingExit()
         SIM_break_simulation('text hap')
         if prec.debugging:
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
@@ -2355,7 +2363,7 @@ class GenMonitor():
         self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                        self.mem_utils[self.target], self.task_utils[self.target], 
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
-                       call_list=['exit_group'], soMap=somap, debugging_exit=True, compat32=self.is_compat32, name="debugExitHap")
+                       call_list=['exit_group'], soMap=somap, compat32=self.is_compat32, name="debugExitHap")
         cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
                cpu.current_context))
@@ -2367,6 +2375,12 @@ class GenMonitor():
             self.lgr.debug('rmDebugExit')
             self.exit_group_syscall[self.target].stopTrace()
             del self.exit_group_syscall[self.target]
+
+    def stopOnExit(self):
+        if self.target in self.exit_group_syscall:
+            self.exit_group_syscall[self.target].stopOnExit()
+        else:
+            print('stopOnExit, no exit_group_syscall, are you debugging?')
        
     def noReverse(self):
         self.noWatchSysEnter()
@@ -3558,6 +3572,7 @@ class GenMonitor():
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.context_manager[self.target].watchTasks()
+        self.lgr.debug('retrack now continue')
         try:
             SIM_continue(0)
             pass
@@ -4851,6 +4866,19 @@ class GenMonitor():
     def trackCGIArgs(self):
         ''' Assuming the process is at start, track references to its argsv '''
         self.dataWatch[self.target].watchCGIArgs()
+
+    def hasProcHap(self):
+        if self.proc_hap is None:
+            return False
+        else:
+            return True
+
+    def showFuns(self, search=None):
+        self.ida_funs.showFuns(search = search)
+
+    def getFun(self, addr):
+        fname = self.ida_funs.getFunName(addr)
+        print('fun for 0x%x is %s' % (addr, fname))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
