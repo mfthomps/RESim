@@ -301,7 +301,7 @@ class Syscall():
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
-                   debugging_exit=False, compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
+                   compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
@@ -311,8 +311,7 @@ class Syscall():
         pid, cpu = context_manager.getDebugPid()
         self.debugging = False
         self.stop_on_call = stop_on_call
-        self.debugging_exit = debugging_exit
-        if pid is not None or debugging_exit:
+        if pid is not None:
             self.debugging = True
             #self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
@@ -421,6 +420,7 @@ class Syscall():
         self.exit_calls.append('exit')
         self.exit_calls.append('tkill')
         self.exit_calls.append('tgkill')
+        self.stop_on_exit = False
 
     def breakOnExecve(self):
         for call in self.call_params:
@@ -1998,12 +1998,15 @@ class Syscall():
                     return
             else: 
                 ida_msg = '%s pid:%d' % (callname, pid)
-            self.lgr.debug('syscallHap exit of pid:%d' % pid)
+            self.lgr.debug('syscallHap %s exit of pid:%d stop_on_exit: %r' % (self.name, pid, self.stop_on_exit))
             if callname == 'exit_group':
                 self.handleExit(pid, ida_msg, exit_group=True)
             else:
                 self.handleExit(pid, ida_msg)
             self.context_manager.stopWatchPid(pid)
+            if self.stop_on_exit:
+                self.lgr.debug('syscall break simulation for stop_on_exit')
+                SIM_break_simulation(ida_msg)
             return
 
         ''' Set exit breaks '''
@@ -2067,8 +2070,6 @@ class Syscall():
                 else:
                     self.lgr.debug('syscallHap pid:%d skip exitHap for tar' % pid)
 
-    def unsetDebuggingExit(self):
-        self.debugging_exit = False
 
     def handleExit(self, pid, ida_msg, killed=False, retain_so=False, exit_group=False):
             if self.traceProcs is not None:
@@ -2087,9 +2088,9 @@ class Syscall():
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
             debugging_pid, dumb = self.context_manager.getDebugPid()
-            self.lgr.debug('syscallHap handleExit pid %d last_one %r debugging %d retain_so %r' % (pid, last_one, self.debugging, retain_so))
+            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r' % (self.name, pid, last_one, self.debugging, retain_so))
             if (last_one or (exit_group and pid == debugging_pid)) and self.debugging:
-                if self.debugging_exit:
+                if self.top.hasProcHap():
                     ''' exit before we got to text section '''
                     self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
                     SIM_run_alone(self.top.undoDebug, None)
@@ -2099,6 +2100,7 @@ class Syscall():
                 self.task_utils.setExitPid(pid)
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
+                print('exit pid %d' % pid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
 
     def getBinders(self):
@@ -2371,3 +2373,6 @@ class Syscall():
                     break
         return retval 
 
+    def stopOnExit(self):
+        self.stop_on_exit=True
+        self.lgr.debug('syscall stopOnExit')
