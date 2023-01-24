@@ -104,8 +104,9 @@ class WriteData():
         self.dataWatch = dataWatch
         env_max_len = os.getenv('AFL_MAX_LEN')
         if env_max_len is not None:
-            self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
-            self.max_len = int(env_max_len)
+            if self.max_len is None or self.max_len > int(env_max_len):
+                self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
+                self.max_len = int(env_max_len)
 
         stop_on_close_env = os.getenv('AFL_STOP_ON_CLOSE')
         self.stop_on_close = False
