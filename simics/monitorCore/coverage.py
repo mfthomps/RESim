@@ -787,14 +787,14 @@ class Coverage():
             self.lgr.debug('cover NOT ENABLED')
             return
         ''' Reset coverage and merge last with all '''
-        self.lgr.debug('coverage doCoverage')    
+        #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
             self.cover(physical=physical)
             self.lgr.debug('coverage called cover')
             self.did_cover = True
         else:
             #self.restoreBreaks()
-            self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
+            #self.lgr.debug('coverage doCoverage had %d breaks' % len(self.bp_list))
             if False and self.begin_tmp_bp is not None:
                 for bp in self.bp_list[self.begin_tmp_bp:]:
                     RES_delete_breakpoint(bp)
@@ -821,7 +821,7 @@ class Coverage():
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
-            self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
+            #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
             self.prev_loc = 0
             self.proc_status = 0
             self.hit_count = 0
