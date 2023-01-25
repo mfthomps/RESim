@@ -862,7 +862,7 @@ class GenContextMgr():
     def watchTasks(self, set_debug_pid = False):
         if self.task_break is not None:
             self.lgr.debug('watchTasks called, but already watching')
-            return
+            #return
         ctask = self.task_utils.getCurTaskRec()
         cell, comm, pid  = self.task_utils.curProc()
         if pid == 1:
