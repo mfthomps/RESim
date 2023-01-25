@@ -390,6 +390,20 @@ class FGetsMark():
     def getMsg(self):
         return self.msg
 
+class StringMark():
+    def __init__(self, fun, src, dest, count, start):
+        self.addr = src
+        self.dest = dest
+        self.length = count
+        self.start = start
+        if start is not None:
+            offset = src - start
+            self.msg = '%s from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x %d bytes' % (fun, src, offset, start, dest, count)
+        else:
+            self.msg = '%s from 0x%08x (unknown buffer?) to 0x%08x %d bytes' % (fun, src, dest, count)
+    def getMsg(self):
+        return self.msg
+
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
@@ -858,6 +872,10 @@ class WatchMarks():
 
     def fgetsMark(self, fun, src, dest, count, start):
         fm = FGetsMark(fun, src, dest, count, start)
+        self.addWatchMark(fm)
+
+    def stringMark(self, fun, src, dest, count, start):
+        fm = StringMark(fun, src, dest, count, start)
         self.addWatchMark(fm)
 
     def mscMark(self, fun, src):
