@@ -80,7 +80,10 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, in
 
 def main():
     global stop_threads
-    lgr = resimUtils.getLogger('runTrack', '/tmp/', level=None)
+    here = os.getcwd()
+    workspace = os.path.basename(here)
+    log_name = 'runTrack-%s' % workspace
+    lgr = resimUtils.getLogger(log_name, '/tmp/', level=None)
     script_path= os.path.dirname(os.path.realpath(__file__))
     parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
@@ -100,10 +103,10 @@ def main():
         ''' single file to report on '''
         afl_list = [target]
     else:
-        afl_list = aflPath.getTargetQueue(target)
+        afl_list = aflPath.getTargetQueue(target, ws_filter=workspace)
 
     ''' remove any empty or corrupt track jsons '''
-    track_list = aflPath.getAFLTrackList(target)
+    track_list = aflPath.getAFLTrackList(target, ws_filter=workspace)
     for track_file in track_list:
         if os.path.isfile(track_file):
             with open(track_file) as fh:
@@ -116,28 +119,13 @@ def main():
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(script_path, 'onedoneTrack.py')
     resim_path = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin', 'resim')
-    glist = glob.glob('resim_*/')
     thread_list = []
     stop_threads=False
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-    here = os.getcwd()
-    if len(glist) > 0: 
-        ''' TBD remove this, runTrack now creates multiple processes.  The mess below causes os.cwd issues in threads'''
-        print('Parallel, doing %d instances' % len(glist))
-        lgr.debug('Parallel, doing %d instances' % len(glist))
-        for instance in glist:
-            instance_path = os.path.join(here, instance)
-            lgr.debug('start oneTrack from workspace %s' % instance_path)
-            track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr, instance_path))
-            thread_list.append(track_thread)
-            track_thread.start()
-    else:
-        print('Single instance')
-        lgr.debug('Single instance')
-        track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr, None))
-        thread_list.append(track_thread)
-        track_thread.start()
+    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr, None))
+    thread_list.append(track_thread)
+    track_thread.start()
    
     lgr.debug('Wait for threads to finish')
     for thread in thread_list:

@@ -144,7 +144,7 @@ def getAFLCoverageList(target, get_all=False, host=None):
                     glist.append(os.path.join(manual, f))
     return glist
 
-def getAFLTrackList(target, get_all=False, host=None):
+def getAFLTrackList(target, get_all=False, host=None, ws_filter=None):
     glist = []
     afl_path = getAFLOutput()
     afl_dir = os.path.join(afl_path, target)
@@ -152,13 +152,15 @@ def getAFLTrackList(target, get_all=False, host=None):
     if os.path.isfile(unique_path):
         ulist = json.load(open(unique_path))
         for path in ulist:
+            if ws_filter is not None and ws_filter not in path:
+                continue
             path = path.replace('coverage', 'trackio')
             glist.append(os.path.join(afl_dir, path)) 
     else:
         print('No file at %s' % unique_path)
     return glist
 
-def getTargetQueue(target, get_all=False, host=None):
+def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
     ''' get list of queue files, relative to afloutput.  ignore sync files and return based on target.unique if allowed.'''
     afl_list = []
     afl_output = getAFLOutput()
@@ -167,6 +169,8 @@ def getTargetQueue(target, get_all=False, host=None):
     if not get_all and os.path.isfile(unique_path):
         cover_list = json.load(open(unique_path))
         for path in cover_list:
+            if ws_filter is not None and ws_filter not in path:
+                continue
             full = os.path.join(afl_dir, path)
             base = os.path.basename(full)
             grand = os.path.dirname(os.path.dirname(full))
