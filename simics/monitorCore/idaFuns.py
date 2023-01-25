@@ -7,12 +7,29 @@ class IDAFuns():
         self.lgr = lgr
         self.did_paths = []
         self.lgr.debug('IDAFuns for path %s' % path)
+        self.mangle = {}
+        if path.endswith('funs'):
+            mpath = path[:-4]+'mangle' 
+            if os.path.isfile(mpath):
+               with open(mpath) as fh:
+                   self.mangle = json.load(fh)
+                   lgr.debug('Loaded mangle from %s' % mpath)
+            else:
+                lgr.debug('no mangle file at %s' % mpath)
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
                 for sfun in jfuns:
                     fun = int(sfun)
-                    self.funs[fun] = jfuns[sfun]
+                    fun_rec = jfuns[sfun]
+                    fun_name = fun_rec['name']
+                    if fun_name.startswith('__imp__'):
+                        fun_name = fun_name[7:]
+                    if fun_name in self.mangle:
+                        #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
+                        fun_rec['name'] = self.mangle[fun_name]
+                        #lgr.debug('function name for 0x%x (%s) changed to %s' % (fun, fun_name, fun_rec['name']))
+                    self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
 
     def getFunPath(self, path):
@@ -83,16 +100,25 @@ class IDAFuns():
 
     def getFunName(self, ip):
         retval = None
-        fun = self.getFun(ip)
-        if fun is not None:
-            retval = self.getName(fun)
+        if ip in self.funs:
+            retval = self.getName(ip)
+        else:
+            fun = self.getFun(ip)
+            if fun is not None:
+                retval = self.getName(fun)
         return retval
 
     def showFuns(self, search=None):
-        for fun in self.funs:
+        for fun in sorted(self.funs):
             if search is not None:
                 if search in self.funs[fun]['name']:
                     print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
             else:
                 print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
         
+
+    def demangle(self, fun):
+        if fun in self.mangle:
+            return self.mangle[fun]
+        else:
+            return fun
