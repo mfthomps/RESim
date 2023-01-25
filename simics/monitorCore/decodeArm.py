@@ -123,7 +123,12 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
 
         retval = value
     else:
-        lgr.debug('getAddressFromOperand nothing from %s' % op)
+        if op.endswith('!'):
+            op = op[:-1]
+        if isReg(op):
+            retval = getValue(op, cpu)
+        else:
+            lgr.debug('getAddressFromOperand nothing from %s' % op)
     return retval
            
 def armWriteBack(instruct, reg):
@@ -269,3 +274,13 @@ def isDirectMove(instruct):
             except:
                 pass
     return retval
+
+def regCount(op):
+    retval = None
+    if op.startswith('{') and op.endswith('}'):
+        regset = op[1:-1]
+        xregs = regset.split(',')
+        regs = map(str.strip, xregs)
+        regs = list(regs)
+        retval = len(regs)
+    return retval 
