@@ -243,7 +243,9 @@ class DataWatch():
         if fd is not None and self.readLib is not None and self.readLib.inFun():
             ''' Within a read lib, ignore '''
             return
-
+        if length == 0:
+            self.lgr.error('dataWatch setRange called with length of zero')
+            return
 
         if fd is not None:
             self.total_read = self.total_read + length
@@ -558,7 +560,7 @@ class DataWatch():
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('kernelReturnHap, pid:%d (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (pid, comm, eip, eax, 
         #    kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
-        self.lgr.debug(taskUtils.stringFromFrame(frame))
+        #self.lgr.debug(taskUtils.stringFromFrame(frame))
         if kernel_return_info.op_type == Sim_Trans_Load:
             if 'ss' in frame:
                 #self.lgr.debug('frame has ss: %s' % frame['ss'].getString())
@@ -595,7 +597,9 @@ class DataWatch():
         #self.lgr.debug('kernelReturn for addr 0x%x optype %s' % (kernel_return_info.addr, str(kernel_return_info.op_type))) 
         ''' hack TBD '''
         self.top.getSharedSyscall().setcallback(self.kernelReturnHap, kernel_return_info)
-        return
+
+        #return
+
         if not self.break_simulation:
             self.stopWatch()
         if self.cpu.architecture == 'arm':
@@ -620,21 +624,22 @@ class DataWatch():
        
       
     def checkNumericStore(self): 
-        ip = self.mem_something.called_from_ip
-        instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
-        next_ip = ip + instruct[0]
-        next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
-        if next_instruct[1].startswith('str'):
-            op2, op1 = self.decode.getOperands(next_instruct[1])
-            if op1 == self.mem_utils.regs['syscall_ret']:
-                self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
-                addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
-                if addr is not None:
-                    count = self.mem_utils.WORD_SIZE
-                    if next_instruct[1].startswith('strh'):
-                        count = int(self.mem_utils.WORD_SIZE/2)
-                    self.setRange(addr, count, 'fun result')
-                    self.move_cycle = self.cpu.cycles
+        if self.mem_something.called_from_ip is not None:
+            ip = self.mem_something.called_from_ip
+            instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+            next_ip = ip + instruct[0]
+            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+            if next_instruct[1].startswith('str'):
+                op2, op1 = self.decode.getOperands(next_instruct[1])
+                if op1 == self.mem_utils.regs['syscall_ret']:
+                    self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
+                    addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                    if addr is not None:
+                        count = self.mem_utils.WORD_SIZE
+                        if next_instruct[1].startswith('strh'):
+                            count = int(self.mem_utils.WORD_SIZE/2)
+                        self.setRange(addr, count, 'fun result')
+                        self.move_cycle = self.cpu.cycles
           
         
      
@@ -835,13 +840,29 @@ class DataWatch():
         elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
         elif self.mem_something.fun == 'string':
+            skip_it = False
             obj_ptr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             self.mem_something.dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
-            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
-               self.mem_something.count))
-            buf_start = self.findRange(self.mem_something.src)
-            mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
-            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
+            ''' TBD is this right for x86? '''
+            if self.cpu.architecture == 'arm':
+                r1val = self.mem_utils.getRegValue(self.cpu, 'r1')
+                if r1val == self.mem_something.src:
+                    self.lgr.debug('dataWatch string, not handled, r1 unchanged')
+                    skip_it = True
+                elif r1val < 5000:
+                    self.mem_something.count = r1val
+                else:
+                    self.lgr.warning('dataWatch string return size %d, confused? skipping' % r1val)
+                    skip_it = True
+            else:
+                self.lgr.warning('dataWatch string return size not yet tested on x86')
+                self.mem_something.count = 1
+            if not skip_it:
+                self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+                   self.mem_something.count))
+                buf_start = self.findRange(self.mem_something.src)
+                mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+                self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -1146,7 +1167,7 @@ class DataWatch():
                 self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
             elif self.mem_something.fun == 'string':
                 self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
-                dumb, self.mem_something.src, self.mem_something.count = self.getCallParams(sp)
+                dumb, self.mem_something.src, dumb2 = self.getCallParams(sp)
 
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
@@ -1196,7 +1217,7 @@ class DataWatch():
                         elif self.mem_something.src is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                 else:
-                    if self.length[buf_index] < self.mem_something.count:
+                    if self.mem_something.count is not None and self.length[buf_index] < self.mem_something.count:
                         self.lgr.debug('dataWatch getMemParams no data hit, copy larger than buffer, truncate to %d' % self.length[buf_index])
                         self.mem_something.count = self.length[buf_index]
                     self.mem_something.op_type = Sim_Trans_Load
@@ -1656,11 +1677,11 @@ class DataWatch():
             new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
             if new_sp is not None:
                 track_sp = new_sp
-            self.lgr.debug('dataWatch loopAdHoc, reg_set %s, eip 0x%x starting sp 0x%x trns_size %d' % (reg_set, eip, track_sp, trans_size))
+            self.lgr.debug('dataWatch loopAdHocMult, reg_set %s, eip 0x%x starting sp 0x%x trns_size %d' % (reg_set, eip, track_sp, trans_size))
             for i in range(7):
                 next_ip = next_ip + next_instruct[0]
                 next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
-                if decode.isBranch(self.cpu, next_instruct[1]):
+                if decode.isBranch(self.cpu, next_instruct[1]) or decode.isCall(self.cpu, next_instruct[1], ignore_flags=True):
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
                 self.lgr.debug('datawatch loopAdHocMult, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
@@ -1908,10 +1929,10 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         if op_type != Sim_Trans_Load:
-            self.lgr.debug('dataWatch readHap write addr: 0x%x marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, str(self.watchMarks.markCount()), str(self.max_marks), 
+            self.lgr.debug('dataWatch readHap write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         else:
-            self.lgr.debug('dataWatch readHap read addr: 0x%x marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, str(self.watchMarks.markCount()), str(self.max_marks), 
+            self.lgr.debug('dataWatch readHap read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         #if self.watchMarks.markCount() == 186:
         #    print('is 186')
@@ -2661,13 +2682,13 @@ class DataWatch():
             #else:
             #    self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
             #    pass
-            self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
+            #self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
             if frame.instruct is not None:
                 fun = self.adjustFunName(frame)
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
                 if fun is not None and fun == prev_fun and fun != 'None':
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
