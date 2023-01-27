@@ -130,7 +130,11 @@ class WriteData():
         if self.skip_read_n is not None:
             self.skip_read_n = int(self.skip_read_n)
             self.lgr.debug('writeData AFL_SKIP_READ_N is %d' % self.skip_read_n)
-        self.read_count = 2
+        if self.k_bufs is not None:
+            ''' TBD clarify fix logic here '''
+            self.read_count = 2
+        else:
+            self.read_count = 0
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -278,6 +282,7 @@ class WriteData():
         elif self.udp_header is not None:
             ''' see if there will be yet another udp header '''
             index = self.in_data[5:].find(self.udp_header)
+            #self.lgr.debug('got %d when look for %s in %s' % (index, self.udp_header, self.in_data[5:]))
             if index > 0:
                 first_data = self.in_data[:(index+5)]
                 self.in_data = self.in_data[len(first_data):]
@@ -287,7 +292,6 @@ class WriteData():
                 if self.filter is not None: 
                     result = self.filter.filter(first_data, self.current_packet)
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
-                    #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 
                 # TBD add handling of padding with udp header                
@@ -301,11 +305,9 @@ class WriteData():
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
                 #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
-                if self.filter is not None and not self.filter.filter(data, self.current_packet):
-                    self.mem_utils.writeString(self.cpu, self.addr, bytearray(len(data))) 
-                    #self.lgr.debug('writeData failed filter, wrote nulls')
-                else:
-                    self.mem_utils.writeString(self.cpu, self.addr, data) 
+                if self.filter is not None:
+                    result = self.filter.filter(data, self.current_packet)
+                    self.mem_utils.writeString(self.cpu, self.addr, result)
                 retval = len(data)
                 self.in_data = ''
                 #retval = 100
@@ -394,22 +396,26 @@ class WriteData():
         ''' Hit a call to recv '''
         if self.call_hap is None:
             return
+        pid = self.top.getPID()
+        if pid != self.pid:
+            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            return
         self.read_count = self.read_count + 1
         #self.lgr.debug('writeData callHap, read_count is %d' % self.read_count)
         self.handleCall()
 
     def handleCall(self):
         pid = self.top.getPID()
-        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
         if pid != self.pid:
             #self.lgr.debug('writeData handleCall wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
+        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             if self.closed_fd:
                 #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
                 pass
             else:
-                #self.lgr.debug('writeData handleCall current packet %d no data left. write_callback: %s' % (self.current_packet, self.write_callback))
+                #self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
                 pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
@@ -444,7 +450,7 @@ class WriteData():
                         SIM_break_simulation('kernel buffer data consumed.')
                         #self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
                         SIM_run_alone(self.write_callback, 0)
-                else:
+                elif len(self.in_data) == 0:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
                     SIM_run_alone(self.write_callback, 0)
             else:
@@ -463,8 +469,13 @@ class WriteData():
                         SIM_break_simulation('writeData out of data')
                         #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
                 else:
-                    #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
-                    pass
+                    if self.stop_on_read:
+                        SIM_run_alone(self.delCallHap, None)
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, stop_on_read set so stop' % self.current_packet)
+                        SIM_break_simulation('writeData out of data')
+                    else:
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
+                        pass
             #SIM_run_alone(self.delCallHap, None)
         else:
             
@@ -486,7 +497,7 @@ class WriteData():
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
                     if self.backstop_cycles > 0:
-                        #self.lgr.debug('writeData setting backstop')
+                        self.lgr.debug('writeData setting backstop')
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
@@ -514,7 +525,7 @@ class WriteData():
                          return 0
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
@@ -539,7 +550,7 @@ class WriteData():
         
     def restoreCallHap(self):
         if self.was_a_call_hap:
-            self.lgr.debug('writeData restoreCalHap')
+            #self.lgr.debug('writeData restoreCalHap')
             self.setCallHap()
 
     def delCallHap(self, dumb):
@@ -622,13 +633,13 @@ class WriteData():
         fd = frame['param1']
         if fd == self.fd:
             if self.close_hap is not None:
-                self.lgr.debug('writeData closeHap')
+                #self.lgr.debug('writeData closeHap')
                 self.closed_fd = True
                 self.handleCall()
 
     def selectStopHap(self, dumb, third, break_num, memory):
         if self.select_hap is not None:
-            self.lgr.debug('writeData selectStopHap')
+            #self.lgr.debug('writeData selectStopHap')
             self.handleCall()
             '''
             if self.write_callback is not None:
@@ -659,6 +670,7 @@ class WriteData():
             if 'select_call_ip' in so_pickle:
                 self.select_call_ip = so_pickle['select_call_ip']
                 self.select_return_ip = so_pickle['select_return_ip']
+                #self.lgr.debug('writeData pickle got select call_ip 0x%x' % self.select_call_ip)
             if self.select_call_ip is None and self.select_return_ip is not None:
                 if self.cpu.architecture == 'arm':
                     self.select_call_ip = self.select_return_ip - 4
