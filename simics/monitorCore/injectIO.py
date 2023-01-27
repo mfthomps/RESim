@@ -158,6 +158,9 @@ class InjectIO():
             elif self.mem_utils.isKernel(self.addr):
                 self.lgr.debug('injectIO set callback to stopTrackIO, no better plan when modifying kernel buffer')
                 self.callback = self.top.stopTrackIO
+            elif self.stop_on_read:
+                self.lgr.debug('injectIO set callback to stopTrackIO, based on ENV variable')
+                self.callback = self.top.stopTrackIO
             else:
                 self.lgr.debug('injectIO no callback set for when we are out of data.  Assume program knows best, e.g., will block on read')
         if not os.path.isfile(self.dfile):
@@ -289,7 +292,8 @@ class InjectIO():
                         self.top.traceAll()
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
-                    self.callback = None
+                    # TBD why?
+                    #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
                     self.top.stopTrackIO()
@@ -361,8 +365,8 @@ class InjectIO():
         if count > 0:
             SIM_run_command('c')
         else:
+            cmd_callback = self.top.getCommandCallback()
             if self.callback is not None:
-                cmd_callback = self.top.getCommandCallback()
                 if cmd_callback is None:
                     self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback (%s)' % str(self.callback))
                     self.write_data.delCallHap(None)
@@ -378,7 +382,7 @@ class InjectIO():
     def stopHap(self, count, one, exception, error_string):
         if self.stop_hap is None:
             return
-        self.lgr.debug('injectIO stopHap from writeCallback')
+        self.lgr.debug('injectIO stopHap from writeCallback count %d' % count)
         SIM_run_alone(self.resetReverseAlone, count)
         
     def writeCallback(self, count):
