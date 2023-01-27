@@ -2246,9 +2246,12 @@ class Syscall():
                  self.cpu, self.mem_utils, self.lgr)
 
             ida_msg = '%s pid:%d %s\n' % (callname, pid, exit_info.select_info.getString())
+            #self.lgr.debug('handleSelect %s' % ida_msg)
             for call_param in syscall_info.call_params:
-                if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
-                    self.lgr.debug('handleSelect call param found %d' % (call_param.match_param))
+                #self.lgr.debug('handleSelect call_param %s' % str(call_param))
+                #if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                if type(call_param.match_param) is int and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                    #self.lgr.debug('handleSelect call param found %d' % (call_param.match_param))
                     exit_info.call_params = call_param
                     break
 
@@ -2285,6 +2288,8 @@ class Syscall():
                     self.lgr.debug('setExits almost done for pid %d call %d retval_addr is None' % (pid, callnum))
                 exit_info_name = '%s-%s-exit' % (the_callname, self.name)
                 self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
+            else:
+                self.lgr.debug('setExits call_param is none')
 
     def addCallParams(self, call_params):
         gotone = False
