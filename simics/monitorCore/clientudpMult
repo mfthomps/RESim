@@ -39,7 +39,7 @@ with open (infile) as fh:
             iter_list = parts
         for p in iter_list:
             if add_header:
-                packet = 'RrUdP'+p
+                packet = header+p
             else:
                 packet = p
                 add_header = True
