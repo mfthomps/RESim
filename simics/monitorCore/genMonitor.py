@@ -143,6 +143,7 @@ class GenMonitor():
         self.proc_break = None
         self.gdb_mailbox = None
         self.stop_hap = None
+        self.snap_warn_hap = None
         #self.log_dir = '/tmp/'
         self.log_dir = os.path.join(os.getcwd(), 'logs')
         try:
@@ -627,6 +628,7 @@ class GenMonitor():
    
     def snapInit(self):
             ''' Running from a snapshot '''
+            self.warnSnapshot()
             for cell_name in self.cell_config.cell_context:
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
@@ -947,8 +949,8 @@ class GenMonitor():
 
             if group:
                 leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
-                self.lgr.debug('genManager debug, will debug entire process group under leader %d' % leader_pid)
                 pid_list = self.task_utils[self.target].getGroupPids(leader_pid)
+                self.lgr.debug('genManager debug, will debug entire process group under leader %d %s' % (leader_pid, str(pid_list)))
                 for pid in pid_list:
                     self.context_manager[self.target].addTask(pid)
 
@@ -1319,9 +1321,9 @@ class GenMonitor():
         if leader_pid is None:
             self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
             return
-        self.lgr.debug('debugPidGroup cell %s pid %d found leader %d' % (self.target, pid, leader_pid))
         pid_dict = self.task_utils[self.target].getGroupPids(leader_pid)
         pid_list = list(pid_dict.keys())
+        self.lgr.debug('debugPidGroup cell %s pid %d found leader %d and %d pids' % (self.target, pid, leader_pid, len(pid_list)))
         self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun, to_user=to_user)
 
     def debugPidList(self, pid_list, debug_function, final_fun=None, to_user=True):
@@ -1411,7 +1413,7 @@ class GenMonitor():
                     return True
         return False
 
-    def toRunningProc(self, proc, want_pid_list=None, flist=None, debug_group=False, final_fun=None):
+    def toRunningProc(self, proc, want_pid_list, flist, debug_group=False, final_fun=None):
         ''' intended for use when process is already running '''
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         ''' if already in proc, just attach debugger '''
@@ -1584,6 +1586,7 @@ class GenMonitor():
         if debugging:
             self.context_manager[self.target].setIdaMessage(msg)
             self.restoreDebugBreaks(was_watching=True)
+            self.lgr.debug('goToOrigin call stopWatchTasks')
             self.context_manager[self.target].stopWatchTasks()
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
 
@@ -2249,6 +2252,7 @@ class GenMonitor():
         self.rev_execution_enabled = False
         self.removeDebugBreaks(keep_watching=True, keep_coverage=False)
         self.sharedSyscall[self.target].setDebugging(False)
+        self.noWatchSysEnter()
 
     def stopDebug(self):
         ''' stop all debugging '''
@@ -2383,10 +2387,8 @@ class GenMonitor():
             print('stopOnExit, no exit_group_syscall, are you debugging?')
        
     def noReverse(self):
-        self.noWatchSysEnter()
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
-        self.noWatchSysEnter()
         self.lgr.debug('genMonitor noReverse')
 
     def allowReverse(self):
@@ -4560,6 +4562,9 @@ class GenMonitor():
 
     def debugSnap(self, final_fun=None):
         retval = True
+        if self.snap_warn_hap is not None:
+            SIM_run_alone(self.rmWarnHap, self.snap_warn_hap)
+            self.snap_warn_hap = None
         if self.debug_info is not None and 'pid' in self.debug_info:
             self.debugPidGroup(self.debug_info['pid'], to_user=False, final_fun=final_fun)
             self.lgr.debug('debugSnap did debugPidGroup for pid %d' % self.debug_info['pid'])
@@ -4879,6 +4884,24 @@ class GenMonitor():
     def getFun(self, addr):
         fname = self.ida_funs.getFunName(addr)
         print('fun for 0x%x is %s' % (addr, fname))
+
+    def rmWarnHap(self, hap):
+        RES_hap_delete_callback_id("Core_Continuation", hap)
+
+    def warnSnapshotHap(self, stop_action, one):
+        if self.snap_warn_hap is None:
+            return
+        debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
+        if debug_pid is None and 'pid' in self.debug_info:
+            print('Warning snapshot exists but not debugging.  Running will lose state (e.g., threads waiting in the kernel.')
+            print('Continue again to go on.  Will not be warned again this session.')
+            SIM_break_simulation('stopped')
+        SIM_run_alone(self.rmWarnHap, self.snap_warn_hap)
+        self.snap_warn_hap = None
+
+    def warnSnapshot(self):
+        self.snap_warn_hap = RES_hap_add_callback("Core_Continuation", self.warnSnapshotHap, None)
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
