@@ -713,7 +713,7 @@ class GenContextMgr():
             if pid not in self.pid_cache:
                 self.pid_cache.append(pid)
         else:
-            self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
+            #self.lgr.debug('addTask, already has rec 0x%x for PID %d' % (rec, pid))
             pass
 
     def watchingThis(self):
