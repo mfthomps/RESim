@@ -36,14 +36,16 @@ class BackStop():
         if self.back_stop_cycle is None:
             return
         if self.cpu is not None:
-            #self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
+            self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
             self.clearCycle()
             SIM_break_simulation('hit final cycle')
+            '''
             cmd_callback = self.top.getCommandCallback()
             if cmd_callback is not None:
                 self.lgr.debug('backStop cycle_handler, commandCallback takes precidence.')
                 cmd_callback()
-            elif self.callback is not None:
+            '''
+            if self.callback is not None:
                 self.callback()
             if self.report_backstop:
                 rprint('Backstop hit.')
@@ -66,6 +68,7 @@ class BackStop():
         self.cpu = cpu
         self.top = top
         self.callback = None
+        self.saved_callback = None
         self.hang_callback = None
         self.hang_cycles = None
         self.hang_cycles_delta = 0
@@ -74,6 +77,13 @@ class BackStop():
 
     def setCallback(self, callback):
         self.callback = callback
+
+    def overrideCallback(self, callback):
+        self.saved_callback = self.callback
+        self.callback = callback
+
+    def restoreCallback(self):
+        self.callback = self.saved_callback
 
     def clearCycle(self):
         if self.cycle_event is not None:

@@ -4430,7 +4430,7 @@ class GenMonitor():
         return self.bookmarks.getFaultAddr()
    
     def setCommandCallback(self, callback):
-        self.lgr.debug('setCommandCallback')
+        self.lgr.debug('setCommandCallback to %s' % str(callback))
         self.command_callback = callback 
 
     def setCommandCallbackParam(self, param):
@@ -4902,6 +4902,12 @@ class GenMonitor():
     def warnSnapshot(self):
         self.snap_warn_hap = RES_hap_add_callback("Core_Continuation", self.warnSnapshotHap, None)
 
+    def overrideBackstopCallback(self, callback):
+        self.lgr.debug('overrideBackstopCallback with %s' % str(callback))
+        self.back_stop[self.target].overrideCallback(callback)
+
+    def restoreBackstopCallback(self):
+        self.back_stop[self.target].restoreCallback()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

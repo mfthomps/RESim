@@ -73,6 +73,7 @@ class InjectToBB():
         if qfile is not None:
             self.lgr.debug('InjectToBB inject %s' % qfile)
             self.top.setCommandCallback(self.doStop)
+            self.top.overrideBackstopCallback(self.doStop)
             self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, fname=fname)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
@@ -104,4 +105,5 @@ class InjectToBB():
         if self.inject_io is None:
             return
         self.top.setCommandCallback(None)
+        self.top.restoreBackstopCallback()
         print('Data file copied to /tmp/bb.io (and bb_filtered.io if there was a filter).')
