@@ -22,11 +22,12 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string', 'ostream_insert']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string', 'ostream_insert', 'regcomp']
+funs_need_addr = ['ostream_insert']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
-free_funs = ['free_ptr', 'free']
+free_funs = ['free_ptr', 'free', 'regcomp']
 class MemSomething():
     def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -321,8 +322,9 @@ class DataWatch():
             self.hack_reuse.append(0)
             self.cycle.append(self.cpu.cycles)
             self.mark.append(watch_mark)
-            if self.isCopyMark(watch_mark) and watch_mark.mark.sp:
-                #self.lgr.debug('dataWatch setRange is stack buffer copyMark, look for ret_to')
+            if (self.isCopyMark(watch_mark) and watch_mark.mark.sp) or (msg == 'fun result' and self.watchMarks.isStackBuf(start)):
+                ''' TBD awkward method for deciding to watch function results going to memory'''
+                self.lgr.debug('dataWatch setRange is stack buffer start 0x%x' % start)
                 #ret_to = self.getReturnAddr(watch_mark.mark)
                 index = len(self.start)-1
                 self.manageStackBuf([index])
@@ -337,6 +339,7 @@ class DataWatch():
             if recv_addr is None:
                 recv_addr = start
             #self.lgr.debug('dataWatch call markCall, length %d' % length)
+            ''' TBD what if fun result? e.g., checkNumericStore'''
             self.watchMarks.markCall(fixed, max_len, recv_addr=recv_addr, length=length, fd=fd, is_lib=is_lib)
             if self.prev_cycle is None:
                 ''' first data read, start data session if doing coverage '''
@@ -369,7 +372,7 @@ class DataWatch():
             for range_index in self.stack_buffers[eip]:
                if range_index < len(self.read_hap):
                    if self.start[range_index] is None:
-                        self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
+                        #self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
                         continue
   
                    if self.start[range_index] < sp:
@@ -378,6 +381,7 @@ class DataWatch():
                         self.read_hap[range_index] = None
                         self.start[range_index] = None
                    else:
+                        #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
                         replace_index.append(range_index)
                else:
                    self.lgr.debug('dataWatch stackBufHap range_index %d out of range of read_hap whose len is %d?' % (range_index, len(self.read_hap)))
@@ -497,7 +501,7 @@ class DataWatch():
             else:
                 #self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
                 pass
-        #self.lgr.debug('DataWatch stopWatch removed read haps')
+        self.lgr.debug('DataWatch stopWatch removed read haps')
         del self.read_hap[:]
         if break_simulation is not None: 
             self.break_simulation = break_simulation
@@ -1008,7 +1012,8 @@ class DataWatch():
                             self.lgr.debug('dataWatch getMemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomthing ret_ip 0x%x' % (self.mem_something.fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
                     else:
                         self.lgr.debug('dataWatch getMemParam ret_addr_addr is None, did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (self.mem_something.fun, eip))
-                    self.mem_fun_entries[self.mem_something.fun] = self.MemCallRec(None, ret_addr_offset, eip)
+                    if self.mem_something.fun not in funs_need_addr:
+                        self.mem_fun_entries[self.mem_something.fun] = self.MemCallRec(None, ret_addr_offset, eip)
                 #else:
                 #    self.lgr.debug('dataWatch getMemParams, fun %s in mem_fun_entries? will return' % self.mem_something.fun)
                 #    return
@@ -1445,7 +1450,7 @@ class DataWatch():
 
     def handleMemStuff(self, dumb):
         '''
-        We are within a memcpy type functionfor which we believe we know the calling conventions (or a user-defined iterator).  However those values have been
+        We are within a memcpy type function for which we believe we know the calling conventions (or a user-defined iterator).  However those values have been
         lost to the vagaries of the implementation by the time we hit the breakpoint.  We need to stop; Reverse to the call; record the parameters;
         set a break on the return; and continue.  We'll assume not too many instructions between us and the call, so manually walk er back.
         '''
@@ -1677,20 +1682,20 @@ class DataWatch():
             new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
             if new_sp is not None:
                 track_sp = new_sp
-            self.lgr.debug('dataWatch loopAdHocMult, reg_set %s, eip 0x%x starting sp 0x%x trns_size %d' % (reg_set, eip, track_sp, trans_size))
+            #self.lgr.debug('dataWatch loopAdHocMult, reg_set %s, eip 0x%x starting sp 0x%x trns_size %d' % (reg_set, eip, track_sp, trans_size))
             for i in range(7):
                 next_ip = next_ip + next_instruct[0]
                 next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
                 if decode.isBranch(self.cpu, next_instruct[1]) or decode.isCall(self.cpu, next_instruct[1], ignore_flags=True):
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                self.lgr.debug('datawatch loopAdHocMult, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
+                #self.lgr.debug('datawatch loopAdHocMult, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
                 if next_instruct[1].startswith('stm') and op2 == reg_set:
-                    self.lgr.debug('loopAdHocMult, got stm reg set match, op1 is %s' % op1)
+                    #self.lgr.debug('loopAdHocMult, got stm reg set match, op1 is %s' % op1)
                     reg_count = self.decode.regCount(reg_set)
                     if reg_count is None:
-                        self.lgr.error('did not get reg count from %s' % reg_set)
+                        #self.lgr.error('did not get reg count from %s' % reg_set)
                         break
                     trans_size = trans_size * reg_count
                     adhoc = True
@@ -1714,7 +1719,7 @@ class DataWatch():
             new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
             if new_sp is not None:
                 track_sp = new_sp
-            self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x starting sp 0x%x' % (our_reg, eip, track_sp))
+            #self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x starting sp 0x%x' % (our_reg, eip, track_sp))
             our_reg_list = [our_reg]
             for i in range(7):
                 next_ip = next_ip + next_instruct[0]
@@ -1722,7 +1727,7 @@ class DataWatch():
                 if decode.isBranch(self.cpu, next_instruct[1]):
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
+                #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
                 dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
                 if dest_addr is not None:
@@ -1779,7 +1784,7 @@ class DataWatch():
                                      self.transformPushHap, move_stuff, break_num, 'transformPush')
                                 adhoc = True
                         else:
-                            self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory')
+                            #self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory')
                             pass
                         break
                     else:
@@ -1861,6 +1866,21 @@ class DataWatch():
             #self.lgr.debug('dataWatch checkMove, not adHoc, std data read')
             self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
         return retval
+
+    def isReuse(self, eip):
+        ''' guess is a data buffer is being recycled, e.g., loaded with zeros'''
+        retval = False
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        ''' TBD why care about direct move vs some other reuse of buffer???'''
+        if self.decode.isDirectMove(instruct[1]):
+            retval = True
+        elif instruct[1].startswith('str'):
+            op2, op1 = self.decode.getOperands(instruct[1])
+            if self.decode.isReg(op1) and self.decode.getValue(op1, self.cpu)==0:
+                retval = True
+        return retval
+              
+
                     
     def finishReadHap(self, op_type, trans_size, eip, addr, length, start, pid, index=None):
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -1980,9 +2000,8 @@ class DataWatch():
             if addr in self.no_backstop:
                 remove_watch = True
             elif memory.size == self.length[index]:
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                if self.decode.isDirectMove(instruct[1]):
-                    self.lgr.debug('dataWatch readHap direct move into watch, remove it')
+                if self.isReuse(eip):
+                    self.lgr.debug('dataWatch readHap direct move or such into watch, remove it')
                     remove_watch = True
             if remove_watch:
                 self.start[index] = None
@@ -2077,7 +2096,7 @@ class DataWatch():
         else:
             self.lgr.debug('DataWatch lookForMemStuff, skip memsomething, already failed on it')
             self.undo_pending = False
-
+ 
         skip_this = False
         if mem_stuff is not None and mem_stuff.fun is not None and mem_stuff.fun.startswith('mempcpy'):
             if mem_stuff.ret_addr is not None:
@@ -2200,14 +2219,14 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch rmSubRange found index %d was recent reused index, do not delete subrange.' % index)
         else:
-            self.lgr.error('dataWatch rmSubRange no index for addr 0x%x' % addr)
+            self.lgr.debug('dataWatch rmSubRange no index for addr 0x%x' % addr)
 
     def rmRange(self, addr):
         index = self.findRangeIndex(addr)
         if index is not None:
-            self.lgr.debug('dataWatch rmRange addr 0x%x index %d' % (addr, index))
+            self.lgr.debug('dataWatch rmRange addr 0x%x index %d len of read_hap %d' % (addr, index, len(self.read_hap)))
             self.start[index] = None
-            if self.read_hap[index] is not None:
+            if index in self.read_hap and self.read_hap[index] is not None:
                 self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
                 self.read_hap[index] = None
 
