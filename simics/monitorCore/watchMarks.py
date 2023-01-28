@@ -433,6 +433,12 @@ class WatchMarks():
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
             i = 1
+            for mark in self.stale_marks:
+                the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
+                fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
+                i += 1
+            fh.write('\n\nBegin active watch marks.\n\n')
+            i = 1
             for mark in self.mark_list:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
                 fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
