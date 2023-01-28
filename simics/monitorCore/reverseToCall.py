@@ -1621,7 +1621,7 @@ class reverseToCall():
         self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
         for pid in self.recent_cycle:
             r, f = self.recent_cycle[pid]
-            self.lgr.debug('pid %d cycle 0x%x f %s' % (pid, r, str(f)))
+            self.lgr.debug('pickleit pid %d cycle 0x%x f %s' % (pid, r, str(f)))
         try:
             pickle.dump( self.recent_cycle, open( rev_call_file, "wb") ) 
         except TypeError as ex:
