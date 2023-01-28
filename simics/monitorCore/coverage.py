@@ -243,7 +243,7 @@ class Coverage():
 
     def handleUnmapped(self):
         for bb_rel in self.unmapped_addrs:
-            self.lgr.debug('handleUnmapped for 0x%x' % bb_rel)
+            #self.lgr.debug('handleUnmapped for 0x%x' % bb_rel)
             pt = pageUtils.findPageTable(self.cpu, bb_rel, self.lgr)
             if pt.page_addr is not None:
                 if pt.page_addr not in self.missing_pages:

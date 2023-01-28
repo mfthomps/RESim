@@ -498,7 +498,7 @@ class WriteData():
                     # set backstop if needed, we are on the last (or only) packet.
                     #SIM_run_alone(self.delCallHap, None)
                     if self.backstop_cycles > 0:
-                        self.lgr.debug('writeData setting backstop')
+                        #self.lgr.debug('writeData setting backstop')
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
