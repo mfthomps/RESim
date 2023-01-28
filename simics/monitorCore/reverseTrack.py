@@ -17,7 +17,9 @@ class ReverseTrack():
 
     def revTaintReg(self, reg, bookmarks, kernel=False):
         ''' back track the value in a given register '''
+        #TBD why store this? would it change?
         self.top_command_callback = self.top.getCommandCallback()
+
         self.bookmarks = bookmarks
         reg = reg.lower()
         self.reg = reg

@@ -443,6 +443,7 @@ class PageFaultGen():
             if prec.fsr is not None and prec.fsr == 2:            
                 self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
             else:
+                print('SEGV access to 0x%x' % prec.cr2)
                 self.top.setDebugBookmark('SEGV access to 0x%x' % prec.cr2)
             self.context_manager.resetWatchTasks()
         else:
