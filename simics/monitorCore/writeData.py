@@ -363,7 +363,8 @@ class WriteData():
         if self.select_hap is None:
             return
         #self.lgr.debug('writeData selectHap ')
-        if self.stop_on_read:
+        if self.stop_on_read and self.mem_utils.isKernel(self.addr):
+
             #self.lgr.debug('writeData selectHap stop on read')
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
