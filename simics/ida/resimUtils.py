@@ -3,6 +3,25 @@ import idc
 import idaapi
 import idaversion
 import idautils
+def demangle(fname):
+    mangle_map = {}
+    for mangled in idautils.Functions():
+        fun_name = str(idaapi.get_func_name(mangled))
+        #print('fun %s' % fun_name)
+        demangled = idc.demangle_name(
+            fun_name,
+            idc.get_inf_attr(idc.INF_SHORT_DN)
+        )
+     
+        if demangled is not None:
+            if fun_name.startswith('_'):
+                fun_name = fun_name[1:]
+            mangle_map[fun_name] = demangled
+    s = json.dumps(mangle_map, indent=4)
+    with open(fname+'.mangle', 'w') as fh:
+        fh.write(s)
+    print('Wrote mangle to %s.mangle' % fname)
+
 def dumpFuns(fname=None):
     funs = {}
     #ea = get_screen_ea()
@@ -17,9 +36,9 @@ def dumpFuns(fname=None):
         for function_ea in idautils.Functions(start,  end):
             funs[function_ea] = {}
             try:
-                end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)
+                fun_end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)-1
                 funs[function_ea]['start'] = function_ea
-                funs[function_ea]['end'] = end
+                funs[function_ea]['end'] = fun_end
                 funs[function_ea]['name'] = idaversion.get_func_name(function_ea)
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
@@ -28,6 +47,7 @@ def dumpFuns(fname=None):
     with open(fname+'.funs', "w") as fh:
         json.dump(funs, fh)
         print('Wrote functions to %s.funs' % fname)
+    demangle(fname)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
@@ -74,3 +94,4 @@ def getHex(s):
     except:
         pass
     return retval
+
