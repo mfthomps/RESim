@@ -2096,7 +2096,8 @@ class GenMonitor():
     def traceProcesses(self, new_log=True, swapper_ok=False):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
-                     'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
+                     'exit', 'exit_group', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
+        #             'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             call_list.remove('socketcall')
             call_list.remove('mmap2')
@@ -2768,7 +2769,7 @@ class GenMonitor():
             self.call_traces[self.target]['runToIO'].addCallParams([call_params])
         else:
             cell = self.cell_config.cell_context[self.target]
-            self.lgr.debug('runToIO on FD %d' % fd)
+            self.lgr.debug('runToIO on FD %s' % str(fd))
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             if pid is None:
                 cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -4908,6 +4909,32 @@ class GenMonitor():
 
     def restoreBackstopCallback(self):
         self.back_stop[self.target].restoreCallback()
+
+    def findKernelEntry(self):
+        self.found_entries = []
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeFindEntry, None)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopFindEntry, None)
+
+    def modeChangeFindEntry(self, dumb, one, old, new):
+        target_cpu = self.cell_config.cpuFromCell(self.target)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        if new == Sim_CPU_Mode_Supervisor:
+            SIM_break_simulation('mode changed')
+
+    def stopFindEntry(self, stop_action, one, exception, error_string):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        if eip in self.found_entries:
+            SIM_run_alone(SIM_continue, 0)
+            return
+        self.found_entries.append(eip)
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        if eip not in [self.param[self.target].arm_entry, self.param[self.target].arm_svc, self.param[self.target].data_abort, self.param[self.target].page_fault]:
+            self.lgr.debug('stopFindEntry pid: %d eip 0x%x %s' % (pid, eip, instruct[1]))
+            print('stopFindEntry pid: %d eip 0x%x %s' % (pid, eip, instruct[1]))
+        else:
+            SIM_run_alone(SIM_continue, 0)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
