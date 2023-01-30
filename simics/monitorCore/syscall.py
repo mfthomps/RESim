@@ -266,6 +266,8 @@ class ExitInfo():
         self.sock_struct = None
         self.select_info = None
         self.poll_info = None
+        ''' for sendmsg/recvmsg '''
+        self.msghdr = None
         self.compat32 = compat32
         self.frame = frame
         ''' narrow search to information about the call '''
@@ -1190,15 +1192,25 @@ class Syscall():
             if self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
                 exit_info.old_fd = frame['param1']
                 exit_info.retval_addr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'])
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'], self.lgr)
                 ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, frame['param2'], msghdr.getString())
+            elif self.cpu.architecture == 'arm':
+                exit_info.old_fd = frame['param1']
+                msg_hdr_ptr = frame['param2']
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+                ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                self.lgr.debug(ida_msg) 
+                SIM_break_simulation('recvmsg')
+ 
             else:
+                ''' TBD is this right for x86 32?'''
                 params = frame['param2']
                 exit_info.old_fd = self.mem_utils.readWord32(self.cpu, params)
                 msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
                 exit_info.retval_addr = msg_hdr_ptr
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr)
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
                 ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+            exit_info.msghdr = msghdr
             exit_info.call_params = self.sockwatch.getParam(pid, exit_info.old_fd)
 
             for call_param in syscall_info.call_params:
@@ -1210,8 +1222,17 @@ class Syscall():
                     exit_info.call_params = call_param
                     break
             
-        elif socket_callname == "send" or socket_callname == "sendto" or \
-                     socket_callname == "sendmsg": 
+        elif socket_callname == "sendmsg":
+            if self.cpu.architecture == 'arm':
+                exit_info.old_fd = frame['param1']
+                msg_hdr_ptr = frame['param2']
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+                exit_info.msghdr = msghdr
+                ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                self.lgr.debug(ida_msg) 
+                #SIM_break_simulation('sendmsg')
+
+        elif socket_callname == "send" or socket_callname == "sendto":
             exit_info.old_fd = ss.fd
             exit_info.retval_addr = ss.addr
             exit_info.call_params = self.sockwatch.getParam(pid, ss.fd)

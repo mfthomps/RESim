@@ -239,7 +239,7 @@ class Msghdr():
            };
     '''
 
-    def __init__(self, cpu, mem_utils, msghdr_address):
+    def __init__(self, cpu, mem_utils, msghdr_address, lgr):
         self.msg_name = mem_utils.readPtr(cpu, msghdr_address) 
         self.msg_namelen = mem_utils.readPtr(cpu, msghdr_address+mem_utils.WORD_SIZE) 
         self.msg_iov = mem_utils.readPtr(cpu, msghdr_address+2*mem_utils.WORD_SIZE) 
@@ -250,6 +250,7 @@ class Msghdr():
         self.flags = mem_utils.readPtr(cpu, msghdr_address+6*mem_utils.WORD_SIZE) 
         self.cpu = cpu
         self.mem_utils = mem_utils
+        self.lgr = lgr
 
     def getIovec(self):
         retval = []
@@ -274,11 +275,33 @@ class Msghdr():
             iov_addr = self.msg_iov
             iov_string = ''
             #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
-            limit = max(10, self.msg_iovlen)
+            limit = min(10, self.msg_iovlen)
             for i in range(limit):
                 base = self.mem_utils.readPtr(self.cpu, iov_addr)
                 length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
                 iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
                 iov_addr = iov_addr+iov_size
             retval = retval + iov_string    
+        return retval
+
+    def getBytes(self):
+        if self.msg_name is None:
+            retval = 'msg_name not initialized'
+        else:
+            retval = ''
+            iov_size = 2*self.mem_utils.WORD_SIZE
+            iov_addr = self.msg_iov
+            iov_string = ''
+            #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
+            limit = min(10, self.msg_iovlen)
+            for i in range(limit):
+                base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                limit = min(length, 80)
+                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
+                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, limit, base)
+                s = ''.join(map(chr,byte_array))
+                self.lgr.debug('base 0x%x length %d str: %s' % (base, length, s))
+                retval = retval + s
+                iov_addr = iov_addr+iov_size
         return retval

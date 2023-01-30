@@ -369,8 +369,7 @@ class SharedSyscall():
             trace_msg = ('\treturn from socketcall SOCKETPAIR pid:%d, fd1: %s fd2: %s\n' % (pid, str(fd1), str(fd2)))
             #self.lgr.debug('\treturn from socketcall SOCKETPAIR pid:%d, fd1: %d fd2: %d' % (pid, fd1, fd2))
 
-        elif socket_callname == "send" or socket_callname == "sendto" or \
-             socket_callname == "sendmsg": 
+        elif socket_callname == "send" or socket_callname == "sendto": 
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
@@ -382,6 +381,9 @@ class SharedSyscall():
                 else:
                     s = '<< NOT MAPPED >>'
                 eip = self.getEIP()
+                if exit_info.retval_addr is None:
+                    self.lgr.error('sharedSyscall %s failed to get retval addr' % socket_callname)
+                    return
                 trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x\n%s\n' % (socket_callname, pid, exit_info.old_fd, 
                     eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
             else:
@@ -390,6 +392,28 @@ class SharedSyscall():
             if exit_info.call_params is not None:
                 if syscall.DEST_PORT in exit_info.call_params.param_flags: 
                     self.lgr.debug('sharedSyscall sendto found dest port match.')
+                elif type(exit_info.call_params.match_param) is str and eax > 0:
+                    self.lgr.debug('sharedSyscall SEND check string %s against %s' % (s, exit_info.call_params.match_param))
+                    if exit_info.call_params.match_param not in s:
+                        ''' no match, set call_param to none '''
+                        exit_info.call_params = None
+
+        elif socket_callname == "sendmsg":
+            s = ''
+            if eax >= 0:
+                msghdr = exit_info.msghdr
+                trace_msg = ('\treturn from socketcall %s pid:%d FD: %d count: %d %s' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+                if pid in self.trace_procs:
+                    if self.traceProcs.isExternal(pid, exit_info.old_fd):
+                        trace_msg = trace_msg +' EXTERNAL'
+                trace_msg = trace_msg + '\n'
+                s =msghdr.getBytes()
+                trace_msg = trace_msg+'\t'+s+'\n'
+            else:
+                trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
+            if exit_info.call_params is not None:
+                if syscall.DEST_PORT in exit_info.call_params.param_flags: 
+                    self.lgr.debug('sharedSyscall sendmsg found dest port match.')
                 elif type(exit_info.call_params.match_param) is str and eax > 0:
                     self.lgr.debug('sharedSyscall SEND check string %s against %s' % (s, exit_info.call_params.match_param))
                     if exit_info.call_params.match_param not in s:
@@ -464,25 +488,14 @@ class SharedSyscall():
                 trace_msg = ('\terror return from socketcall %s pid:%d FD: %d exception: %d \n' % (socket_callname, pid, exit_info.old_fd, eax))
                 exit_info.call_params = None
             else:
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
+                #msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
+                msghdr = exit_info.msghdr
                 trace_msg = ('\treturn from socketcall %s pid:%d FD: %d count: %d %s' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
                 if pid in self.trace_procs:
                     if self.traceProcs.isExternal(pid, exit_info.old_fd):
                         trace_msg = trace_msg +' EXTERNAL'
                 trace_msg = trace_msg + '\n'
-                msg_iov = msghdr.getIovec()
-                nbytes = min(eax, 256)
-                if msg_iov is not None and len(msg_iov)>0:
-                    byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, msg_iov[0].base)
-                    if byte_array is not None:
-                        s = ''.join(map(chr,byte_array))
-                        if self.traceFiles is not None:
-                            byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, msg_iov[0].base)
-                            self.traceFiles.read(pid, exit_info.old_fd, byte_array)
-                    else:
-                        s = '<< NOT MAPPED >>'
-                else:
-                    s = '<< NOT MAPPED >>'
+                s =msghdr.getBytes()
                 trace_msg = trace_msg+'\t'+s+'\n'
                 if exit_info.call_params is not None:
                     if exit_info.call_params.break_simulation and self.dataWatch is not None:
