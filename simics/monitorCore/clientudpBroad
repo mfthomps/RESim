@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+#
+#  Send multiple UDP packets as read from a file found
+#  at /tmp/sendudp, with packets delimited by RrUdP
+#
+import sys
+import time
+import os
+import socket
+host = sys.argv[1].strip()
+port = int(sys.argv[2].strip())
+local_ip = sys.argv[3].strip()
+print('ip %s' % host)
+print('port %d' % port)
+print('local_ip %s' % local_ip)
+header = None
+if len(sys.argv) > 4:
+    header = sys.argv[4]
+infile = '/tmp/sendudp'
+if len(sys.argv) > 5:
+    infile = sys.argv[5]
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+local_addr = (local_ip, port)
+sock.bind(local_addr)
+server_addr = (host, port)
+#server_addr = ('localhost', port)
+
+with open (infile) as fh:
+    s = fh.read()
+    add_header = True
+    if header is not None:
+        if not s.startswith(header):
+            print('file does not start with %s' % header)
+            add_header = False
+            #exit(1)
+        parts = s.split(header)
+        print('num messages is %d' % len(parts))
+        index = 1
+        if add_header:
+            iter_list = parts[1:]
+        else:
+            iter_list = parts
+        for p in iter_list:
+            if add_header:
+                packet = header+p
+            else:
+                packet = p
+                add_header = True
+            print('len packet is %d' % len(packet))
+            sock.sendto(packet, server_addr)
+            #time.sleep(.01)
+    else:
+        print('no UDP header, just send file')
+        sock.sendto(s, server_addr)
+        
