@@ -305,9 +305,10 @@ class WriteData():
                 data = self.in_data[:self.max_len]
                 #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
                 #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
+                result = data
                 if self.filter is not None:
                     result = self.filter.filter(data, self.current_packet)
-                    self.mem_utils.writeString(self.cpu, self.addr, result)
+                self.mem_utils.writeString(self.cpu, self.addr, result)
                 retval = len(data)
                 self.in_data = ''
                 #retval = 100
