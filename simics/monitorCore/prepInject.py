@@ -72,10 +72,7 @@ class PrepInject():
         syscall = self.top.getSyscall(self.cell_name, 'runToInput')
         if syscall is not None:
             if read_original:
-                if self.exit_info.sock_struct is not None:
-                    length = self.exit_info.sock_struct.length
-                else:
-                    length = self.exit_info.count
+                length = self.getLength()
                 ''' TBD if this falls on a page boundary, cannot get all original bytes?  be sure to run the service first!'''
                 orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length)
                 #orig_buffer, dumb = self.mem_utils.getBytes(self.cpu, length, retval_addr_phys, phys_in=True)
@@ -94,6 +91,18 @@ class PrepInject():
         self.lgr.debug('%s' % pinfo.valueString())
         self.top.stopAndGo(self.finishNoCall)
 
+    def getLength(self):
+        if self.exit_info.sock_struct is not None:
+            length = self.exit_info.sock_struct.length
+            self.lgr.debug('prepInject getLength length from sock_struct is %d' % length)
+            if length == 0:
+                length = self.exit_info.count
+                self.lgr.debug('prepInject getLength length from sock_struct was zero, use count %d ***TBD FIX THIS' % length)
+        else:
+            length = self.exit_info.count
+            self.lgr.debug('prepInject getLength length from count is %d' % length)
+        return length
+
     def instrumentAlone(self, dumb): 
         self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
         ''' go forward one to user space and record the return IP '''
@@ -108,10 +117,7 @@ class PrepInject():
         self.exit_info = self.top.getMatchingExitInfo()
 
         pid = self.top.getPID()
-        if self.exit_info.sock_struct is not None:
-            length = self.exit_info.sock_struct.length
-        else:
-            length = self.exit_info.count
+        length = self.getLength()
 
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
@@ -134,6 +140,7 @@ class PrepInject():
                 self.lgr.error('instrumentAlone, retval_addr is None')
                 return
 
+            ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
             orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
             self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
             ''' skip back to return so the snapshot is ready to inject input '''
@@ -161,10 +168,7 @@ class PrepInject():
         pickDict['fd'] = exit_info.old_fd
         pickDict['callnum'] = exit_info.callnum
         pickDict['socket_callname'] = exit_info.socket_callname
-        if exit_info.sock_struct is not None:
-            pickDict['size'] = exit_info.sock_struct.length
-        else:
-            pickDict['size'] = exit_info.count
+        pickDict['size'] = self.getLength()
         self.lgr.debug('prepInject pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
         ''' Otherwise console has no indiation of when done. '''
 
