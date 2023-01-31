@@ -1893,7 +1893,7 @@ class Syscall():
         else:
             ''' for example, rec calls rec_from '''
             if self.hack_cycle+20 >= cpu.cycles:
-                self.lgr.debug('syscallHap skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match?.')
+                self.lgr.debug('syscallHap pid:%d skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match?.' % pid)
                 return
             else:
                 self.hack_cycle = cpu.cycles
