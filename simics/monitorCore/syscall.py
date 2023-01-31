@@ -293,6 +293,9 @@ class CallParams():
         self.proc = proc
         self.nth = None
         self.count = 0
+    def toString(self):
+        retval = 'subcall %s  match_param %s' % (self.subcall, str(self.match_param))
+        return retval
 
 
 ''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
@@ -321,9 +324,9 @@ class Syscall():
         self.cell_name = cell_name
         self.cell = cell
         if cell is not None:
-            self.lgr.debug('syscall _init_ cell_name %s, name: %s, cell is not none: %s' % (cell_name, name, cell.name))
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is not none, cell.name: %s' % (cell_name, name, str(call_params), cell.name))
         else:
-            self.lgr.debug('syscall _init_ cell_name %s, name: %s, cell is none.' % (cell_name, name))
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is none.' % (cell_name, name, str(call_params)))
         self.top = top
         self.param = param
         self.sharedSyscall = sharedSyscall
@@ -1200,7 +1203,6 @@ class Syscall():
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
                 ida_msg = '%s - %s pid:%d FD: %d msghdr: 0x%x %s' % (callname, socket_callname, pid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
                 self.lgr.debug(ida_msg) 
-                SIM_break_simulation('recvmsg')
  
             else:
                 ''' TBD is this right for x86 32?'''
@@ -1214,11 +1216,13 @@ class Syscall():
             exit_info.call_params = self.sockwatch.getParam(pid, exit_info.old_fd)
 
             for call_param in syscall_info.call_params:
+                #self.lgr.debug('syscall call_params %s' % call_param.toString())
                 if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                    #self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
                     exit_info.call_params = call_param
                     break
                 elif type(call_param.match_param) is str and call_param.subcall == 'recvmsg' and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
-                    self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
+                    #self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
                     exit_info.call_params = call_param
                     break
             
@@ -1870,8 +1874,8 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        #self.lgr.debug('syscalhap context %s break_num %s cpu is %s t is %s' % (str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
-        #self.lgr.debug('name %s' % (memory.ini_ptr.name))
+        #self.lgr.debug('syscalhap %s context %s break_num %s cpu is %s t is %s' % (self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, pid = self.task_utils.curProc() 
@@ -2209,7 +2213,7 @@ class Syscall():
         return retval
 
     def handleReadOrSocket(self, callname, frame, exit_info, syscall_info):
-        ''' TBD not yet used '''
+        
         retval = None
         the_callname = callname
         if 'ss' in frame:
@@ -2239,7 +2243,7 @@ class Syscall():
     
             retval = the_callname
             self.lgr.debug('syscall setExists callname %s' % the_callname)
-            if the_callname in ['accept', 'recv', 'recvfrom', 'read']:
+            if the_callname in ['accept', 'recv', 'recvfrom', 'read', 'recvmsg']:
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('syscall setExists subcall %s' % call_param.subcall)
                     if call_param.subcall is None or call_param.subcall == the_callname:
