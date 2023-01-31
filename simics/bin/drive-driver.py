@@ -33,6 +33,7 @@ def main():
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
     parser.add_argument('-t', '--tcp', action='store_true', help='Use TCP.')
+    parser.add_argument('-b', '--broadcast', action='store_true', help='Use broadcast.')
     parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
     parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
@@ -49,6 +50,8 @@ def main():
     elif args.tcpx:
         client_cmd = 'clientTCPnoread'
         args.tcp = True
+    elif args.broadcast:
+        client_cmd = 'clientudpBroad'
     else:
         client_cmd = 'clientudpMult'
     client_mult_path = os.path.join(core_path, client_cmd)
@@ -101,7 +104,7 @@ def main():
                 file_list.append(iofile)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
-            elif not args.tcp and len(parts) != 4 and not args.server:
+            elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')
                 exit(1)
@@ -110,15 +113,18 @@ def main():
                 file_list.append(iofile)
                 ip = parts[1]
                 port = parts[2]
+                local_ip = ''
                 if not args.tcp and not args.server:
                     header = parts[3]
+                    if args.broadcast:
+                        local_ip = parts[4]
                 else:
                     header = ''
                 flist = ''
                 for f in file_list:
                     full = '/tmp/%s' % os.path.basename(f)
                     flist = flist + full + ' '
-                directive = '/tmp/%s  %s %s %s %s' % (client_cmd, ip, port, header, flist)
+                directive = '/tmp/%s  %s %s %s %s %s' % (client_cmd, ip, port, local_ip, header, flist)
                 driver_file.write(directive+'\n')
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)

@@ -14,7 +14,7 @@ else:
     instance = sys.argv[2]
     index = sys.argv[3]
 
-    resim_num = 'resim_%s' % instance
+    resim_num = '*resim_%s' % instance
     afl_path = os.getenv('AFL_DATA')
     
     glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
@@ -24,6 +24,9 @@ else:
     else:
         print(glist[0]) 
     hits1 = json.load(open(glist[0]))
-for hit in hits1:
-    print('0x%x' % hit)
+
+
+for hitkey in hits1:
+    hit = int(hitkey) 
+    print('hit 0x%x cycle: 0x%x' % (hit, hits1[hitkey]))
 
