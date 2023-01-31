@@ -135,6 +135,8 @@ class WriteData():
             self.read_count = 2
         else:
             self.read_count = 0
+        ''' keep afl from running amuck'''
+        self.udp_header_limit = 10
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -283,6 +285,9 @@ class WriteData():
             ''' see if there will be yet another udp header '''
             index = self.in_data[5:].find(self.udp_header)
             #self.lgr.debug('got %d when look for %s in %s' % (index, self.udp_header, self.in_data[5:]))
+            if index > 0 and self.current_packet > self.udp_header_limit:
+                self.lgr.debug('writeData, too many udp headers')
+                index = -1
             if index > 0:
                 first_data = self.in_data[:(index+5)]
                 self.in_data = self.in_data[len(first_data):]
