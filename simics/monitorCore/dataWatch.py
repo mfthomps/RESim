@@ -392,6 +392,7 @@ class DataWatch():
                             ''' avoid trying to return from text to some library '''
                             if self.top.isMainText(eip) and not self.top.isMainText(ret_to):
                                 #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, but would be return to lib from main, skip it).' % (self.start[range_index], sp))
+                                pass
                             else:
                                 #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
                                 replace_index.append(range_index)
