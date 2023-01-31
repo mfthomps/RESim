@@ -81,7 +81,7 @@ class DataWatch():
             self.read_loop_max = 10000
         else:
             self.read_loop_max = int(read_loop_string)
-        lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
+        #lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
         if cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
@@ -158,7 +158,7 @@ class DataWatch():
         self.recent_reused_index=None
 
     def addFreadAlone(self, dumb):
-        #self.lgr.debug('dataWatch addFreadAlone')
+        self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
         SIM_break_simulation('handle memstuff')
 
@@ -217,9 +217,13 @@ class DataWatch():
                     retval = True
         return retval
 
-    def manageStackBuf(self, index_list):
-        ret_to = self.getReturnAddr()
+    def manageStackBuf(self, index_list, ret_to):
         if ret_to is not None:
+            eip = self.top.getEIP(self.cpu)
+            #self.lgr.debug('manageStackBuf ret_to 0x%x, eip 0x%x' % (ret_to, eip))
+            if eip == ret_to:
+                #self.lgr.error('manageStackBuf, eh????')
+                return
             #self.lgr.debug('DataWatch manageStackBuf stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
             if ret_to not in self.stack_buffers:
                 self.stack_buffers[ret_to] = []
@@ -327,7 +331,8 @@ class DataWatch():
                 self.lgr.debug('dataWatch setRange is stack buffer start 0x%x' % start)
                 #ret_to = self.getReturnAddr(watch_mark.mark)
                 index = len(self.start)-1
-                self.manageStackBuf([index])
+                ret_to = self.getReturnAddr()
+                self.manageStackBuf([index], ret_to)
 
             #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
         if msg is not None:
@@ -349,6 +354,7 @@ class DataWatch():
             self.no_backstop.append(start)
 
 
+
     def stackBufHap(self, dumb, third, forth, memory):
         ''' Returned from function on call chain that created a stack buffer.  See
             if the stack buffer should be deleted.  Otherwise, set a hap on the
@@ -368,6 +374,7 @@ class DataWatch():
                 #self.lgr.debug('dataWatch stackBufHap adjusted sp to 0x%x' % new_sp)
                 sp = new_sp
 
+            ret_to = self.getReturnAddr()
             replace_index = []
             for range_index in self.stack_buffers[eip]:
                if range_index < len(self.read_hap):
@@ -381,17 +388,22 @@ class DataWatch():
                         self.read_hap[range_index] = None
                         self.start[range_index] = None
                    else:
-                        #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
-                        replace_index.append(range_index)
+                        if ret_to is not None:
+                            ''' avoid trying to return from text to some library '''
+                            if self.top.isMainText(eip) and not self.top.isMainText(ret_to):
+                                #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, but would be return to lib from main, skip it).' % (self.start[range_index], sp))
+                            else:
+                                #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
+                                replace_index.append(range_index)
                else:
                    self.lgr.debug('dataWatch stackBufHap range_index %d out of range of read_hap whose len is %d?' % (range_index, len(self.read_hap)))
                    self.lgr.debug('read_hap has %s' % str(self.read_hap))
-            #self.lgr.debug('stackBufHap remove entry for 0x%x' % eip)
+            self.lgr.debug('stackBufHap remove entry for 0x%x' % eip)
             del self.stack_buf_hap[eip] 
             del self.stack_buffers[eip] 
             if len(replace_index) > 0:
                 #self.lgr.debug('dataWatch stackBuffHap will replace %d indices' % (len(replace_index)))
-                self.manageStackBuf(replace_index)
+                self.manageStackBuf(replace_index, ret_to)
             
         else:
             self.lgr.debug('stackBufHap eip NOT in stack_buf_hap')
@@ -636,7 +648,7 @@ class DataWatch():
             if next_instruct[1].startswith('str'):
                 op2, op1 = self.decode.getOperands(next_instruct[1])
                 if op1 == self.mem_utils.regs['syscall_ret']:
-                    self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
+                    #self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
                     addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
                     if addr is not None:
                         count = self.mem_utils.WORD_SIZE
@@ -645,11 +657,11 @@ class DataWatch():
                         self.setRange(addr, count, 'fun result')
                         self.move_cycle = self.cpu.cycles
           
-        
      
     def startUndoAlone(self, dumb):
         self.undo_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.undoHap, self.mem_something)
         self.watchMarks.undoMark()
+        self.lgr.debug('dataWatch startUndoAlone')
         SIM_break_simulation('undo it')
  
     def returnHap(self, dumb, third, forth, memory):
@@ -1271,7 +1283,8 @@ class DataWatch():
             SIM_run_alone(self.undoAlone, None)
 
     def undoAlone(self, dumb):
-            oneless = self.save_cycle -1
+            #oneless = self.save_cycle -1
+            oneless = self.save_cycle 
             self.lgr.debug('undoAlone skip back to 0x%x' % oneless)
             if not resimUtils.skipToTest(self.cpu, oneless, self.lgr):
                 self.lgr.error('undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
@@ -1363,7 +1376,7 @@ class DataWatch():
             VT_in_time_order(self.vt_handler, vt_stuff)
 
     def setCallStopAlone(self, alt_callback):
-        #self.lgr.debug('dataWatch setCallStopAlone, delete call_hap and set stop hap')
+        self.lgr.debug('dataWatch setCallStopAlone, delete call_hap and set stop hap')
         self.rmCallHap()
             
         if alt_callback is None:
@@ -1473,7 +1486,7 @@ class DataWatch():
             ''' run back to the call '''
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.memstuffStopHap, None)
-            #self.lgr.debug('handleMemStuff now stop')
+            self.lgr.debug('handleMemStuff now stop')
             SIM_break_simulation('handle memstuff')
             
     def getStartLength(self, index, addr):
@@ -1494,6 +1507,25 @@ class DataWatch():
             self.addr = addr 
             self.op_type = op_type 
 
+    def adHocCopy(self, addr, trans_size, dest_addr, start, length):
+        retval = False
+        if dest_addr != addr:
+            self.lgr.debug('dataWatch adHocCopy might add address 0x%x' % dest_addr)
+            existing_index = self.findRangeIndex(dest_addr)
+            if existing_index is None:
+                ''' TBD may miss some add hocs? not likely '''
+                self.lgr.debug('dataWatch adHocCopy will add address 0x%x' % dest_addr)
+                self.last_ad_hoc=dest_addr
+                retval = True
+            else:
+                ''' Re-use of ad-hoc buffer '''
+                self.lgr.debug('dataWatch adHocCopy, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (addr, start))
+                self.recent_reused_index = existing_index
+                pass
+        else:
+            self.lgr.debug('dataWatch adHocCopy dest is same as addr')
+        return retval
+
     def finishCheckMoveHap(self, move_stuff, an_object, breakpoint, memory):
         ''' Hap invoked when we reach the end of a canidate ad hoc move '''
         if self.finish_check_move_hap is None:
@@ -1508,21 +1540,23 @@ class DataWatch():
         dest_addr = self.decode.getAddressFromOperand(self.cpu, move_stuff.dest_op, self.lgr)
         ad_hoc = False
         if move_stuff.function is None:
+            ad_hoc = self.adHocCopy(move_stuff.addr, move_stuff.trans_size, dest_addr, move_stuff.start, move_stuff.length)
+            
+            '''
             if dest_addr != move_stuff.addr:
-                #self.lgr.debug('dataWatch finishCheckMoveHap might add address 0x%x' % dest_addr)
+                self.lgr.debug('dataWatch finishCheckMoveHap might add address 0x%x' % dest_addr)
                 existing_index = self.findRangeIndex(dest_addr)
                 if existing_index is None:
-                    ''' TBD may miss some add hocs? not likely '''
-                    #self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
+                    self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
                     self.last_ad_hoc=dest_addr
                     ad_hoc = True
                 else:
-                    ''' Re-use of ad-hoc buffer '''
-                    #self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
+                    self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
                     self.recent_reused_index = existing_index
                     pass
             else:
                 self.lgr.debug('dataWatch finishCheckMoveHap dest is same as addr')
+            '''
 
         if ad_hoc:
             wm = self.watchMarks.dataRead(move_stuff.addr, move_stuff.start, move_stuff.length, 
@@ -1721,7 +1755,7 @@ class DataWatch():
                 track_sp = new_sp
             #self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x starting sp 0x%x' % (our_reg, eip, track_sp))
             our_reg_list = [our_reg]
-            for i in range(7):
+            for i in range(10):
                 next_ip = next_ip + next_instruct[0]
                 next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
                 if decode.isBranch(self.cpu, next_instruct[1]):
@@ -1731,17 +1765,22 @@ class DataWatch():
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
                 dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
                 if dest_addr is not None:
-                    #self.lgr.debug('dest addr found to be 0x%x' % dest_addr)
-                    adhoc = True
-                    break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
-                    dest_op = op1
-                    if self.cpu.architecture == 'arm':
-                        dest_op = op2
-                    move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip)
-                    #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap' % (addr, start))
-                    self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                             self.finishCheckMoveHap, move_stuff, break_num, 'loopAdHoc')
-                    break
+                    ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
+                    if 'sp' in op2:
+                        adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
+                        break
+                    else:                   
+                        self.lgr.debug('dest addr found to be 0x%x, not relative to SP' % dest_addr)
+                        adhoc = True
+                        break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
+                        dest_op = op1
+                        if self.cpu.architecture == 'arm':
+                            dest_op = op2
+                        move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip)
+                        #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x' % (addr, start, next_ip))
+                        self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                                 self.finishCheckMoveHap, move_stuff, break_num, 'loopAdHoc')
+                        break
                 elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                         #self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
                         our_reg_list.append(op1)
@@ -1914,12 +1953,13 @@ class DataWatch():
                     ''' see if an ad-hoc move. checkMove will update watch marks '''
                     self.checkMove(addr, trans_size, start, length, eip, instruct)
                 if self.break_simulation:
+                    self.lgr.debug('dataWatch told to break simulation')
                     SIM_break_simulation('DataWatch read data')
 
 
         elif cpl > 0:
             ''' is a write to a data watch buffer '''
-            #self.lgr.debug('finishReadHap Data written to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
+            self.lgr.debug('finishReadHap Data written to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             if addr == self.recent_fgets:
                 self.lgr.debug('dataWatch reuse of fgets buffer at 0x%x, remove it' % addr)
                 self.rmRange(addr)
@@ -1930,9 +1970,12 @@ class DataWatch():
                 if self.break_simulation:
                     ''' TBD when to treat buffer as unused?  does it matter?'''
                     self.start[index] = None
+                    self.lgr.debug('dataWatch toldx to break simulation')
                     SIM_break_simulation('DataWatch written data')
                 else:
-                    self.rmSubRange(addr, trans_size)
+                    ''' TBD deleting buffer, sometimes, in finishReadHap, here too?'''
+                    #self.rmSubRange(addr, trans_size)
+                    pass
         elif self.retrack:
             self.lgr.debug('dataWatch finishReadHap, modification by kernel, set kernelReturn hap')
             self.return_hap = 'eh'
@@ -1948,11 +1991,12 @@ class DataWatch():
             return
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
+        dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         if op_type != Sim_Trans_Load:
-            self.lgr.debug('dataWatch readHap write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
+            self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         else:
-            self.lgr.debug('dataWatch readHap read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
+            self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         #if self.watchMarks.markCount() == 186:
         #    print('is 186')
@@ -2160,6 +2204,8 @@ class DataWatch():
             self.read_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch'))
             #self.lgr.debug('DataWatch back from set break range')
             
+        if len(self.start) != len(self.read_hap):
+            self.lgr.error('dataWatch setBreakRange start len is %d while read_hap is %d' % (len(self.start), len(self.read_hap)))
 
         #if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
         #    #self.lgr.debug('dataWatch, setBreakRange call to setFutureCycle')
@@ -2204,7 +2250,7 @@ class DataWatch():
                 new_start = None
                 self.lgr.debug('dataWatch rmSubRange, addr: 0x%x start 0x%x length: %d end 0x%x' % (addr, start, length, end))
                 self.start[index] = None
-                if self.read_hap[index] is not None:
+                if index in self.read_hap and self.read_hap[index] is not None:
                     self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
                     self.read_hap[index] = None
                 if start < addr:
@@ -2216,6 +2262,8 @@ class DataWatch():
                 if new_start is not None and new_start < end:
                     newlen = end - new_start + 1
                     self.setRange(new_start, newlen)
+                self.stopWatch()
+                self.watch()
             else:
                 self.lgr.debug('dataWatch rmSubRange found index %d was recent reused index, do not delete subrange.' % index)
         else:
