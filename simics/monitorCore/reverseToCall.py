@@ -1552,7 +1552,7 @@ class reverseToCall():
         if self.cpu is None:
             self.lgr.error('preCallFD called before reverseToCall setup')
             return
-        read_calls = ['read', 'recv', 'recvfrom']
+        read_calls = ['read', 'recv', 'recvfrom', 'recvmsg']
         plist = {}
         pid_list = self.context_manager.getThreadPids()
         tasks = self.task_utils.getTaskStructs()
