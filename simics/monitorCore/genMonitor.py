@@ -2760,6 +2760,7 @@ class GenMonitor():
         self.runTo(call, call_params, name='bind')
 
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+        ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         call_params = syscall.CallParams(None, fd, break_simulation=break_simulation, proc=proc)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
@@ -2852,18 +2853,17 @@ class GenMonitor():
                 SIM_continue(0)
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
-        call_params1 = syscall.CallParams('read', fd, break_simulation=break_simulation)        
-        call_params1.nth = count
-        call_params2 = syscall.CallParams('recv', fd, break_simulation=break_simulation)        
-        call_params2.nth = count
-        call_params3 = syscall.CallParams('recvfrom', fd, break_simulation=break_simulation)        
-        call_params3.nth = count
-        call_params4 = syscall.CallParams('select', fd, break_simulation=break_simulation)        
-        call_params4.nth = count
-        cell = self.cell_config.cell_context[self.target]
+        ''' Track syscalls that consume inputs.  Intended for use by prepInject functions '''
+        ''' Also see runToIO for more general tracking '''
+        input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
+        call_param_list = []
+        for call in input_calls:
+            call_param = syscall.CallParams(call, fd, break_simulation=break_simulation)        
+            call_param.nth = count
+            call_param_list.append(call_param)
+
         self.lgr.debug('runToInput on FD %d' % fd)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
-        #calls = ['read', 'recv', 'recvfrom', 'socketcall', 'select', '_newselect', 'pselect6']
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
@@ -2878,7 +2878,7 @@ class GenMonitor():
 
         the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                                self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
-                               calls, call_params=[call_params1,call_params2,call_params3,call_params4], targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
+                               calls, call_params=call_param_list, targetFS=self.targetFS[self.target], linger=linger, flist_in=flist_in, 
                                skip_and_mail=skip_and_mail, name='runToInput')
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
@@ -2895,7 +2895,7 @@ class GenMonitor():
             if call not in calls:
                del frames[pid]
         if len(frames) > 0:
-            self.lgr.debug('runToIO, call to setExits')
+            self.lgr.debug('runToInput, call to setExits')
             the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
        
         
@@ -4935,6 +4935,10 @@ class GenMonitor():
             print('stopFindEntry pid: %d eip 0x%x %s' % (pid, eip, instruct[1]))
         else:
             SIM_run_alone(SIM_continue, 0)
+
+    def isMainText(self, address):
+        return self.soMap[self.target].isMainText(address)
+   
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
