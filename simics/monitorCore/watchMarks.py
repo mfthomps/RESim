@@ -96,7 +96,9 @@ class DataMark():
         self.sp = sp
         self.note = note
         self.value = value
-        #print('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
+        ''' keep value after a reset '''
+        self.was_ad_hoc = False
+        #self.lgr.debug('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
 
     def getMsg(self):
         if self.start is None:
@@ -113,7 +115,7 @@ class DataMark():
                 mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.cmp_ins)
             else:
                 mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins)
-        elif self.ad_hoc:
+        elif self.ad_hoc or self.was_ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
             if self.start is not None:
@@ -134,8 +136,11 @@ class DataMark():
         self.end_addr = addr
         self.loop_count += 1
         #self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
+
     def noAdHoc(self):
-        self.ad_hoc = False
+        if self.ad_hoc:
+            self.was_ad_hoc = True
+            self.ad_hoc = False
 
 class KernelMark():
     def __init__(self, addr, count, callnum, fd):
@@ -556,11 +561,11 @@ class WatchMarks():
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
-                #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
+                self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, DataMark):
                     pm.mark.addrRange(addr)
                     if pm.mark.ad_hoc:
-                        self.lgr.debug('dataRead was add-hoc, but this is not, so reset it')
+                        #self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
                     #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
