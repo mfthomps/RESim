@@ -40,6 +40,7 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, in
     log = '/tmp/resim-%s.log' % workspace
     if only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
+    count = 0
     with open(log, 'wb') as fh:
         for f in afl_list:
             #os.chdir(here)
@@ -67,8 +68,9 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, in
             #result = os.system('%s %s -n' % (resim_path, resim_ini))
             cmd = '%s %s -n' % (resim_path, resim_ini)
             now_here = os.getcwd()
-            print("%s: starting monitor from %s without UI cmd: %s" % (workspace, now_here, cmd))
-            lgr.debug("%s starting monitor from %s without UI cmd: %s" % (now_here, workspace, cmd))
+            count = count + 1
+            print("%s: starting monitor from %s count %d" % (workspace, now_here, count))
+            lgr.debug("%s: starting monitor from %s count %d" % (workspace, now_here, count))
             resim_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
             resim_ps.wait()
             if stop_threads():

@@ -1354,7 +1354,7 @@ class DataWatch():
             return
         else: 
             self.vt_cycle = self.cpu.cycles
-        self.lgr.debug('vt_handler at 0x%x set call_stop_hap cycle: 0x%x' % (location, self.cpu.cycles))
+        #self.lgr.debug('vt_handler at 0x%x set call_stop_hap cycle: 0x%x' % (location, self.cpu.cycles))
         SIM_run_alone(self.deleteGhostStopHap, None)
         SIM_run_alone(self.setCallStopAlone, vt_stuff.alt_callback)
         SIM_break_simulation('vt_handler')
@@ -1511,16 +1511,16 @@ class DataWatch():
     def adHocCopy(self, addr, trans_size, dest_addr, start, length):
         retval = False
         if dest_addr != addr:
-            self.lgr.debug('dataWatch adHocCopy might add address 0x%x' % dest_addr)
+            #self.lgr.debug('dataWatch adHocCopy might add address 0x%x' % dest_addr)
             existing_index = self.findRangeIndex(dest_addr)
             if existing_index is None:
                 ''' TBD may miss some add hocs? not likely '''
-                self.lgr.debug('dataWatch adHocCopy will add address 0x%x' % dest_addr)
+                #self.lgr.debug('dataWatch adHocCopy will add address 0x%x' % dest_addr)
                 self.last_ad_hoc=dest_addr
                 retval = True
             else:
                 ''' Re-use of ad-hoc buffer '''
-                self.lgr.debug('dataWatch adHocCopy, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (addr, start))
+                #self.lgr.debug('dataWatch adHocCopy, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (addr, start))
                 self.recent_reused_index = existing_index
                 pass
         else:
@@ -1771,7 +1771,7 @@ class DataWatch():
                         adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
                         break
                     else:                   
-                        self.lgr.debug('dest addr found to be 0x%x, not relative to SP' % dest_addr)
+                        #self.lgr.debug('dest addr found to be 0x%x, not relative to SP' % dest_addr)
                         adhoc = True
                         break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
                         dest_op = op1
@@ -1960,7 +1960,7 @@ class DataWatch():
 
         elif cpl > 0:
             ''' is a write to a data watch buffer '''
-            self.lgr.debug('finishReadHap Data written to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
+            #self.lgr.debug('finishReadHap Data written to 0x%x within buffer (offset of %d into buffer of %d bytes starting at 0x%x) pid:%d eip: 0x%x' % (addr, offset, length, start, pid, eip))
             if addr == self.recent_fgets:
                 self.lgr.debug('dataWatch reuse of fgets buffer at 0x%x, remove it' % addr)
                 self.rmRange(addr)
@@ -1993,12 +1993,14 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        '''
         if op_type != Sim_Trans_Load:
             self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         else:
             self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
+        '''
         #if self.watchMarks.markCount() == 186:
         #    print('is 186')
         #    SIM_break_simulation("FIX THIS")
@@ -2063,7 +2065,7 @@ class DataWatch():
         ''' NOTE RETURNS above '''
 
         if self.finish_check_move_hap is not None:
-            self.lgr.debug('DataWatch readHap delete finish_check_move_hap')
+            #self.lgr.debug('DataWatch readHap delete finish_check_move_hap')
             self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=False)
             self.finish_check_move_hap = None
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)

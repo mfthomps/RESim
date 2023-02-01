@@ -561,7 +561,7 @@ class WatchMarks():
         else:
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
-                self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
+                #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, DataMark):
                     pm.mark.addrRange(addr)
                     if pm.mark.ad_hoc:
