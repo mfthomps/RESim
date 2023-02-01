@@ -17,7 +17,19 @@ if os.path.isfile(sys.argv[4]):
 else:
     instance_2 = sys.argv[4]
     index_2 = sys.argv[5]
+    try:
+        index_val = int(index_2)
+    except:
+        print('bad index %s' % index_2)
+    if index_val < 999:
+        index_2 = '000'+index_2 
 
+try:
+    index_val = int(index)
+except:
+    print('bad index %s' % index)
+if index_val < 999:
+    index = '000'+index 
 
 resim_num = '*resim_%s' % instance
 afl_path = os.getenv('AFL_DATA')
@@ -31,8 +43,9 @@ else:
     print(glist[0]) 
 hits1_json = json.load(open(glist[0]))
 hits1 = []
-for hit in hits1_json:
-    hits1.append(int(hit))
+sorted_hits = sorted(hits1_json.items(), key=lambda x:x[1])
+for hit in sorted_hits:
+    hits1.append(int(hit[0]))
 
 if instance_2 is not None:
     resim_num = '*resim_%s' % instance_2
@@ -47,8 +60,9 @@ if instance_2 is not None:
 else:
     hits2_json = json.load(open(hits_file))
 hits2 = []
-for hit in hits2_json:
-    hits2.append(int(hit))
+sorted_hits = sorted(hits2_json.items(), key=lambda x:x[1])
+for hit in sorted_hits:
+    hits2.append(int(hit[0]))
 
 lesser = min(len(hits1), len(hits2))
 print('Hits in 1: %d  Hits in 2: %d' % (len(hits1), len(hits2)))

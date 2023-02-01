@@ -13,6 +13,13 @@ else:
     target = sys.argv[1]
     instance = sys.argv[2]
     index = sys.argv[3]
+    try:
+        index_val = int(index)
+    except:
+        print('bad index %s' % index)
+    if index_val < 999:
+        index = '000'+index 
+  
 
     resim_num = '*resim_%s' % instance
     afl_path = os.getenv('AFL_DATA')
@@ -25,8 +32,8 @@ else:
         print(glist[0]) 
     hits1 = json.load(open(glist[0]))
 
-
-for hitkey in hits1:
-    hit = int(hitkey) 
-    print('hit 0x%x cycle: 0x%x' % (hit, hits1[hitkey]))
+sorted_hits = sorted(hits1.items(), key=lambda x:x[1])
+for hitkey in sorted_hits:
+    hit = int(hitkey[0])
+    print('hit: 0x%x' % hit)
 
