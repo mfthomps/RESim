@@ -998,3 +998,4 @@ class Coverage():
 
     def setPacketNumber(self, packet_number):
         self.packet_num = packet_number
+        self.lgr.debug('coverage set packet number to %d' % packet_number)
