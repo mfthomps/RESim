@@ -344,46 +344,52 @@ class InjectIO():
 
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
-        if count != 0:
-            packet_num = self.write_data.getCurrentPacket() - 1
-            self.saveJson(packet=packet_num)
-            self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
-            self.resetOrigin(None)
-            self.dataWatch.clearWatchMarks(record_old=True)
-        if count != 0:
-            self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
-            ''' special case'''
-            if self.max_len == 1:
-                self.addr += 1
-            if self.addr_addr is not None:
-                self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
-
-        if self.stop_hap is not None:
-            self.lgr.debug('injectIO resetReverseAlone delete stop hap')
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-        if count > 0:
-            SIM_run_command('c')
+        if self.no_reset:
+            self.lgr.debug('resetReverseAlone no reset, so stop.')
         else:
-            cmd_callback = self.top.getCommandCallback()
-            if self.callback is not None:
-                if cmd_callback is None:
-                    self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback (%s)' % str(self.callback))
-                    self.write_data.delCallHap(None)
-                    self.callback()
-                else:
-                    self.lgr.debug('resetReverseAlone no more data, remove writeData callback found command callback, override given callback (%s)' % str(cmd_callback))
-                    cmd_callback()
-            else:
-                self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
+            if count != 0:
+                packet_num = self.write_data.getCurrentPacket() - 1
+                self.saveJson(packet=packet_num)
+                self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
+                self.resetOrigin(None)
+                self.dataWatch.clearWatchMarks(record_old=True)
+            if count != 0:
+                self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                ''' special case'''
+                if self.max_len == 1:
+                    self.addr += 1
+                if self.addr_addr is not None:
+                    self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+    
+            if self.stop_hap is not None:
+                self.lgr.debug('injectIO resetReverseAlone delete stop hap')
+                RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+                self.stop_hap = None
+            if count > 0:
                 SIM_run_command('c')
+            else:
+                cmd_callback = self.top.getCommandCallback()
+                if self.callback is not None:
+                    if cmd_callback is None:
+                        self.lgr.debug('resetReverseAlone no more data, remove writeData callback and invoke the given callback (%s)' % str(self.callback))
+                        self.write_data.delCallHap(None)
+                        self.callback()
+                    else:
+                        self.lgr.debug('resetReverseAlone no more data, remove writeData callback found command callback, override given callback (%s)' % str(cmd_callback))
+                        cmd_callback()
+                else:
+                    self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
+                    SIM_run_command('c')
         
 
     def stopHap(self, count, one, exception, error_string):
         if self.stop_hap is None:
             return
-        self.lgr.debug('injectIO stopHap from writeCallback count %d' % count)
-        SIM_run_alone(self.resetReverseAlone, count)
+        self.lgr.debug('injectIO stopHap from writeCallback count %s' % str(count))
+        if count is not None:
+            SIM_run_alone(self.resetReverseAlone, count)
+        else:
+            self.lgr.debug('injectIO stopHap, count None, just stop?')
         
     def writeCallback(self, count):
         self.lgr.debug('injectIO writeCallback')
