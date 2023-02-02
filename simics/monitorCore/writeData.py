@@ -241,6 +241,10 @@ class WriteData():
 
     def userBufWrite(self, record=False):
         retval = None
+        if self.current_packet > 1 and self.no_reset:
+             self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
+             SIM_break_simulation('writeData userBufWrite, no reset')
+             return
         if self.expected_packet_count <= 1 and self.udp_header is None:
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
                 next_data = self.in_data[:self.max_len]
@@ -528,8 +532,7 @@ class WriteData():
                  if eax > remain:
                      if self.no_reset:
                          #self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
-                         SIM_break_simulation('Would have to reset origin, no_reset requested.')
-                         return 0
+                         SIM_break_simulation('writeData selectHap stop on read')
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
                          #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
