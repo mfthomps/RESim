@@ -22,12 +22,13 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string', 'ostream_insert', 'regcomp']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string', 'ostream_insert', 'regcomp', 'replace']
 funs_need_addr = ['ostream_insert']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
-free_funs = ['free_ptr', 'free', 'regcomp']
+''' TBD confirm end_cleanup is a good choice for free'''
+free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup']
 class MemSomething():
     def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -99,6 +100,8 @@ class DataWatch():
         ''' hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
         self.recent_fgets = None
         self.recent_reused_index=None
+        ''' control trace of malloc calls, e.g., within xml parsing '''
+        self.me_trace_malloc = False
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -854,7 +857,7 @@ class DataWatch():
                    self.mem_something.dest, self.mem_something.count))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.recent_fgets = self.mem_something.dest
-        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
+        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
         elif self.mem_something.fun == 'string':
             skip_it = False
@@ -1180,7 +1183,7 @@ class DataWatch():
 
             elif self.mem_something.fun == 'inet_ntop':
                 dumb1, dumb2, self.mem_something.dest = self.getCallParams(sp)
-            elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
+            elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
                 self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
                 self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
             elif self.mem_something.fun == 'string':
@@ -2117,17 +2120,22 @@ class DataWatch():
 
     def checkFree(self, frames, index):
         retval = False
-        max_index = len(frames)-1
-        for i in range(max_index, -1, -1):
-            frame = frames[i]
-            fun = self.adjustFunName(frame)
-            #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
-            if fun in free_funs:
-                #self.lgr.debug('dataWatch checkFree got free %s' % fun)
-                self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
-                self.read_hap[index] = None
-                self.start[index] = None
-                retval = True
+        if self.start[index] is None:
+            self.debug('dataWatch checkFree called with index %d, but that start is None')
+        else:
+            max_index = len(frames)-1
+            for i in range(max_index, -1, -1):
+                frame = frames[i]
+                fun = self.adjustFunName(frame)
+                #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
+                if fun in free_funs:
+                    self.recordFree(self.start[index], fun)
+                    #self.lgr.debug('dataWatch checkFree got free %s' % fun)
+                    self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                    self.read_hap[index] = None
+                    self.start[index] = None
+                    retval = True
+                    break
         return retval
   
 
@@ -2432,6 +2440,7 @@ class DataWatch():
             else:
                 self.lgr.debug('clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
                 break
+        self.lgr.debug('dataWatch resetOrigin now call watchmarks')
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
 
     def setIdaFuns(self, ida_funs):
@@ -2567,14 +2576,16 @@ class DataWatch():
         else:
             self.watchMarks.malloc(addr, size)
 
-    def recordFree(self, addr):
+    def recordFree(self, addr, fun=None):
         if self.me_trace_malloc:
             if addr not in self.malloc_dict:
                 self.lgr.debug('Freed value not in malloc db: 0x%x' % addr)
             else:
                 del self.malloc_dict[addr]
         else:
-            self.watchMarks.free(addr)
+            if fun is None:
+                fun = 'free'
+            self.watchMarks.free(addr, fun)
 
 
     def mergeMallocXX(self):
@@ -2696,7 +2707,8 @@ class DataWatch():
     def adjustFunName(self, frame): 
         fun = None
         if frame.fun_name is not None:
-            fun = frame.fun_name
+            fun = frame.fun_name.strip()
+            #self.lgr.debug('dataWatch adjustFunName fun starts as %s' % fun)
             if '@' in frame.fun_name:
                 fun = frame.fun_name.split('@')[0]
                 try:
@@ -2718,6 +2730,18 @@ class DataWatch():
                 fun = fun[len('std::string::'):]
                 if '(' in fun:
                     fun = fun.split('(')[0]
+            ''' TBD clean up this hack?'''
+            if fun.endswith('destroy'):
+                #self.lgr.debug('is destroy')
+                fun = 'destroy'
+            elif fun.startswith('operator delete'):
+                #self.lgr.debug('is destroy')
+                fun = 'delete'
+            elif 'find_first' in fun: 
+                fun = 'find_first'
+            elif fun.endswith('end_cleanup'):
+                fun = 'end_cleanup'
+
             if '__' in fun:
                 ''' TBD generalized? '''
                 fun = fun.split('__')[1]
