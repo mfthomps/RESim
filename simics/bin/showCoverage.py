@@ -59,6 +59,7 @@ def main():
     parser = argparse.ArgumentParser(prog='showCoverage', description='Show number of hits (coverage) of one or more hits files')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('prog', action='store', help='The program that was fuzzed.  TBD should store via runAFL or similar?.')
+    parser.add_argument('ini', action='store', help='The ini file.')
     parser.add_argument('-i', '--index', action='store', help='index')
     parser.add_argument('-n', '--instance', action='store', help='instance')
     args = parser.parse_args()
@@ -68,7 +69,6 @@ def main():
         print('RESIM_IDA_DATA not defined')
         exit(1)
     data_path = os.path.join(ida_data, args.prog, args.prog+'.prog')
-    udp_header = None
     funs = None
     with open(data_path) as fh:
         lines = fh.read().strip().splitlines()
@@ -77,11 +77,8 @@ def main():
         funs = getFuns(prog_file)
         if funs is None:
             exit(1)
-        if len(lines) > 1:
-            ini_file = lines[1].strip()
-            print('ini file is %s' % ini_file)
-            udp_header = getHeader(ini_file)
 
+    udp_header = getHeader(args.ini)
     if args.index is not None:
         path = aflPath.getAFLCoveragePath(args.target, args.instance, args.index)
         num_hits, num_funs = getCover(path, funs) 
