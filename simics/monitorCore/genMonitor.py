@@ -4107,6 +4107,7 @@ class GenMonitor():
         self.coverage.saveHits(fname)
 
     def difCoverage(self, fname):
+        ''' TBD not used'''
         self.coverage.difCoverage(fname)
 
     def precall(self, pid=None):
@@ -4939,6 +4940,9 @@ class GenMonitor():
     def isMainText(self, address):
         return self.soMap[self.target].isMainText(address)
    
+    def setPacketNumber(self, packet_number):
+        if self.coverage is not None:
+            self.coverage.setPacketNumber(packet_number)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

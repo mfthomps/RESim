@@ -88,6 +88,7 @@ class Coverage():
         self.last_delta = 0
         self.record_hits = True
         self.did_missing = []
+        self.packet_num = None
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -518,7 +519,7 @@ class Coverage():
                 #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
                 if this_addr not in self.blocks_hit:
                     adjusted_addr = this_addr - self.offset
-                    self.blocks_hit[adjusted_addr] = self.cpu.cycles
+                    self.blocks_hit[adjusted_addr] = self.getHitRec()
                     self.latest_hit = adjusted_addr
                     #addr_str = '%d' % (this_addr - self.offset)
                     addr_str = '%d' % adjusted_addr
@@ -620,7 +621,7 @@ class Coverage():
         self.lgr.debug('saveCoverage for %d functions' % len(self.funs_hit))
         #hit_list = list(self.blocks_hit.keys())
         hit_list = []
-        for hit, cycle in self.blocks_hit.items():
+        for hit in self.blocks_hit:
             hit_list.append(hit)
         s = json.dumps(hit_list)
         if fname is None:
@@ -827,6 +828,14 @@ class Coverage():
             self.hit_count = 0
             self.afl_del_breaks = []
 
+    def getHitRec(self, cycle=None):
+        if cycle is None:
+            cycle = self.cpu.cycles
+        retval = {}
+        retval['cycle'] = cycle
+        retval['packet_num'] = self.packet_num
+        return retval
+
     def startDataSessions(self, dumb):
         if not self.enabled:
             return
@@ -834,13 +843,13 @@ class Coverage():
             the very last hit is the bb that first referenced data '''
         self.lgr.debug('coverage startDataSessions')
         if self.latest_hit is not None:
-            first_data_cycle = self.blocks_hit[self.latest_hit]
+            first_data_cycle = self.blocks_hit[self.latest_hit]['cycle']
             del self.blocks_hit[self.latest_hit]
             self.saveCoverage(fname = 'pre')
             self.restoreBreaks()
             self.funs_hit = []
             self.blocks_hit = OrderedDict()
-            self.blocks_hit[self.latest_hit] = first_data_cycle
+            self.blocks_hit[self.latest_hit] = self.getHitRec(cycle=first_data_cycle)
             self.latest_hit = None
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
@@ -888,6 +897,7 @@ class Coverage():
         self.enabled = False
 
     def difCoverage(self, fname):
+        ''' TBD not used'''
         save_name = '%s.%s.hits' % (self.hits_path, fname)
         if not os.path.isfile(save_name):
             print('No file named %s' % save_name)
@@ -909,7 +919,7 @@ class Coverage():
         retval = None
         if addr in self.blocks_hit:
             dumb=SIM_run_command('pselect %s' % self.cpu.name)
-            cmd = 'skip-to cycle = %d ' % self.blocks_hit[addr]
+            cmd = 'skip-to cycle = %d ' % self.blocks_hit[addr]['cycle']
             self.lgr.debug('coverage goToBasicBlock cmd: %s' % cmd)
             dumb=SIM_run_command(cmd)
             #self.lgr.debug('coverage skipped to 0x%x' % self.cpu.cycles)
@@ -986,3 +996,5 @@ class Coverage():
                     bp_list.append(bp)
                 hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.exitHap, None, bp_list[0], bp_list[-1])
 
+    def setPacketNumber(self, packet_number):
+        self.packet_num = packet_number

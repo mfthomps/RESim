@@ -322,6 +322,8 @@ class WriteData():
                 self.in_data = ''
                 #retval = 100
             self.cpu.iface.int_register.write(self.len_reg_num, retval)
+            ''' reflect current packet in artifacts '''
+            self.top.setPacketNumber(self.current_packet)
                 
         else:
             self.lgr.error('writeData could not handle data parameters.')
