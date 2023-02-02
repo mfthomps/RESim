@@ -40,7 +40,7 @@ def getGlobMask(target, index, instance, which, host=None, sync=False):
             exit(1)
         ''' Look if there are host prefixes, otherwise assume legacy '''
         glob_mask = os.path.join(afl_dir, target, this_host)+'*'
-        print('glob_mask is %s' % glob_mask)
+        #print('glob_mask is %s' % glob_mask)
         glist = glob.glob(glob_mask)
         if len(glist) == 0:
             print('legacy')
@@ -50,7 +50,7 @@ def getGlobMask(target, index, instance, which, host=None, sync=False):
             else:
                 retval = '%s/%s/%s/%s/id:*0%s,sync*' % (afl_dir, target, resim_instance, which, index)
         else:
-            print('has host?')
+            #print('has host?')
             fuzzid = '%s_%s' % (this_host, resim_instance)
             if not sync:
                 retval = '%s/%s/%s/%s/id:*0%s,src*' % (afl_dir, target, fuzzid, which, index)
@@ -99,7 +99,7 @@ def getAFLPath(target, index, instance, host=None):
 
 
 def getAFLCoveragePath(target, instance, index, host=None):
-    resim_num = 'resim_%s' % instance
+    resim_num = '*resim_%s' % instance
     afl_path = getAFLOutput()
     retval = None
     glob_mask = getGlobMask(target, index, instance, 'coverage', host)
