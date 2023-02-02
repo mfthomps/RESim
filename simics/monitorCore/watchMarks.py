@@ -311,9 +311,9 @@ class MallocMark():
         return self.msg
 
 class FreeMark():
-    def __init__(self, addr):
+    def __init__(self, addr, fun):
         self.addr = addr
-        self.msg = 'free addr: 0x%x' % (addr)
+        self.msg = '%s addr: 0x%x' % (fun, addr)
     def getMsg(self):
         return self.msg
 
@@ -846,10 +846,14 @@ class WatchMarks():
         mm = MallocMark(addr, size)
         self.addWatchMark(mm)
         self.lgr.debug('watchMarks malloc %s' % (mm.getMsg()))
-    def free(self, addr):
-        fm = FreeMark(addr)
-        self.addWatchMark(fm)
-        self.lgr.debug('watchMarks free %s' % (fm.getMsg()))
+
+    def free(self, addr, fun):
+        if addr is not None:
+            fm = FreeMark(addr, fun)
+            self.addWatchMark(fm)
+            self.lgr.debug('watchMarks free %s' % (fm.getMsg()))
+        else:
+            self.lgr.debug('watchMarks free %s but addr is none' % fun)
 
     def freeXMLDoc(self):
         fm = FreeXMLMark()
@@ -894,11 +898,13 @@ class WatchMarks():
         self.addWatchMark(fm)
 
     def clearWatchMarks(self, record_old=False): 
-        self.lgr.debug('watchMarks clearWatchMarks')
+        self.lgr.debug('watchMarks clearWatchMarks, entered with %d marks and %d stale marks' % (len(self.mark_list), len(self.stale_marks)))
         if record_old:
             self.stale_marks.extend(self.mark_list)
         del self.mark_list[:] 
+        self.mark_list = []
         self.prev_ip = []
+        self.lgr.debug('watchMarks clearWatchMarks, leave with %d marks and %d stale marks' % (len(self.mark_list), len(self.stale_marks)))
 
     def firstBufferAddress(self):
         ''' address of first buffer '''
@@ -1007,7 +1013,7 @@ class WatchMarks():
         return retval
        
     def markCount(self):
-        return len(self.mark_list) 
+        return (len(self.mark_list) + len(self.stale_marks))
 
     def getMarks(self):
         return self.mark.list
@@ -1029,15 +1035,17 @@ class WatchMarks():
 
     def saveJson(self, fname, packet=1):
         my_marks = []
+        start_index = 1
         self.lgr.debug('watchMarks saveJson %d marks to file %s packet %d' % (len(self.mark_list), fname, packet))
         if os.path.isfile(fname):
             try:
                 combined = json.load(open(fname))
                 my_marks = combined['marks']
+                start_index = len(my_marks)
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
-        new_marks = self.getJson(self.mark_list, packet=packet)
+        new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
             combined = {}
@@ -1084,18 +1092,21 @@ class WatchMarks():
     def getAllJson(self):
         self.lgr.debug('getAllJson %d stale and %d new marks' % (len(self.stale_marks), len(self.mark_list)))
         all_marks = self.getJson(self.stale_marks)
-        new_marks = self.getJson(self.mark_list)
+        new_marks = self.getJson(self.mark_list, start_index=len(self.stale_marks))
         all_marks.extend(new_marks)
         self.lgr.debug('getAllJson returning %d marks' % len(all_marks))
         return all_marks
 
-    def getJson(self, mark_list, packet=1):
+    def getJson(self, mark_list, packet=1, start_index=1):
         my_marks = []
+        index = start_index
         for mark in mark_list:
             entry = {}
             entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
             entry['packet'] = packet
+            entry['index'] = index
+            index = index + 1
             #self.lgr.debug('saveJson mark %s' % str(mark.mark)) 
             if isinstance(mark.mark, CopyMark):
                 entry['mark_type'] = 'copy' 
@@ -1160,6 +1171,18 @@ class WatchMarks():
             elif isinstance(mark.mark, StrtousMark):
                 entry['mark_type'] = 'strt' 
                 entry['src'] = mark.mark.src
+            elif isinstance(mark.mark, StringMark):
+                entry['mark_type'] = 'string' 
+                entry['src'] = mark.mark.addr
+                entry['dest'] = mark.mark.dest
+                entry['length'] = mark.mark.length
+            elif isinstance(mark.mark, MscMark):
+                entry['mark_type'] = 'msc' 
+                entry['src'] = mark.mark.addr
+            elif isinstance(mark.mark, LenMark):
+                entry['mark_type'] = 'len' 
+                entry['src'] = mark.mark.src
+                entry['count'] = mark.mark.count
 
             elif isinstance(mark.mark, IteratorMark) or isinstance(mark.mark, KernelModMark) or isinstance(mark.mark, SetMark):
                 continue
