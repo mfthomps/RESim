@@ -255,12 +255,16 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 \label{process_tracing}
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
+See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
 To limit tracing to the current thread, first issue the {\tt debugThis} command.
 \item {\tt traceProcesses} – Begin tracing the following system calls as they occur:
 vfork; clone; execve;  open; pipe; pipe2; close; dup; dup2; socketcall; exit; group\_exit
 Tracing continues until the stopTrace command is issued.  
+\textbf{Note} Generally use traceAll instead of this command.  This command has some value in that it results in breakpoints on calculated entry points vs
+sysenter type entry points.  This may aid in some RESim debugging.
 See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
 
+\item {\tt saveTraces} -- Combines the next 4 items.
 \item {\tt showProcTrace} – Generate a process family summary of all processes that executed since the traceProcess (or traceAll) command.
 
 \item {\tt showNets} – Display network configuration commands (e.g., {\tt ifconfig} collected from process tracing and the use of toProc.
@@ -669,7 +673,8 @@ doing so after enabling reverse execution (which should be avoided due to Simics
 This value will also be used to determine the size of writes to receive buffers when multi-packet AFL is used.
 \item{\tt AFL\_UDP\_HEADER} Used with multi-packet AFL, will split data received from AFL at these strings.  If single-packet UDP sessions are desired,
 leave this undefined. NOTE: initial data, e.g., AFL seeds should include the UDP header, (vice relying on filters) because the system will split input data into datagrams at the
-headers \textit{prior} to applying filters.
+headers \textit{prior} to applying filters.  The default maximum number of UDP packets is 10.  A maximum is needed, otherwise AFL gets carried away by duplicating
+the header.  (TBD, add an env override.)
 \item{\tt AFL\_PACKET\_FILTER} A packet filter to modify or weed out data received from AFL for purposes of constraining fuzzing sessions to
 particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed offset.  The value should be a .py file name, less the
 .py extension.  The file must be relative to the Simics workspace and it must have a {\tt filter(data, packet\_num)} method that returns
@@ -1342,6 +1347,24 @@ Offending network connections can be disconnected as described in \ref{manual_ne
 
 \subsection{Code coverage}
 \label{coverage}
+RESim generate two different kinds of code coverage artifacts:
+\begin{itemize}
+\item Coverage files resulting from the replay of AFL sessions using the {\tt runPlay} script.  These files are stored beneath the AFL output directory
+and include cpu cycles and UDP packet number for each hit. 
+\item Hits files containing lists of all basic blocks hit in a session or cumulatively.
+\end{itemize}
+\subsubsection{Coverage from fuzzing}
+After a fuzzing session, the {\tt playAFL} script will create coverage files for each code execution path found by AFL.  These tend to have a lot of
+redundancy because of the way that AFL determines uniqueness.  When fuzzing UPD with a defined {\tt AFL\_UDP\_HEADER}, the extraneous execution paths compound,
+e.g., if AFL gets 2 UDP packets for one session, and each of result in hit sets already covered by different other sessions, AFL will treat that as a execution
+new path.  For this reason, the quantity of UPD headers is bounded as described in TBD.  
+
+The {\tt dedupCoverage.py} script creates a list of coverage files that are, in some sense, unique.  First, removes duplicate coverage files resulting from
+parallel fuzzing.  Next it removes any file whose hits are a subset of another coverage file.  When UDP headers are used, the script first assesses all files from
+sessions having a single UDP packet.  It then considers multi-packet sessions that result in new hits.  And where these match or are subsets, it removes files 
+giving preference to those whose hits occur on the earliest session.
+
+\subsubsection{Ad-hoc code coverage}
 Features to reflect code coverage should support human analysis as well as automated analysis, e.g., fuzzing.  To support the human, coverage is highlighted within IDA using color-coded
 basic blocks.  The scope of coverage is tied either to the text segment, i.e., the program, or a single shared library.  We refer to this as a \textit{coverage unit}..  
 Coverage tracking commences with use of the {\tt mapCoverage} command and is intended to aid understanding of program response to inputs tracked via 
