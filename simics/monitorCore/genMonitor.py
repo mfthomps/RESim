@@ -2287,6 +2287,7 @@ class GenMonitor():
             self.track_threads[cell_name].stopTrack()
 
     def showProcTrace(self):
+        ''' TBD this looks like a hack, why are the precs none?'''
         pid_comm_map = self.task_utils[self.target].getPidCommMap()
         precs = self.traceProcs[self.target].getPrecs()
         for pid in precs:
@@ -3036,17 +3037,16 @@ class GenMonitor():
             self.binders.showAll('/tmp/binder.txt')
             self.binders.dumpJson('/tmp/binder.json')
 
-    def dumpBinders(self):
-            self.binders = self.call_traces[self.target]['socketcall'].getBinders()
-            self.binders.dumpJson('/tmp/binder.json')
-
     def showConnectors(self):
             self.connectors.showAll('/tmp/connector.txt')
             self.connectors.dumpJson('/tmp/connector.json')
 
-    def dumpConnectors(self):
-            self.connectors = self.call_traces[self.target]['socketcall'].getConnectors()
-            self.connectors.dumpJson('/tmp/connector.json')
+    def saveTraces(self):
+        self.showBinders()
+        self.showConnectors()
+        self.showProcTrace()
+        self.showNets()
+        print('Traces saved in /tmp.  Move them to artifact repo and run postScripts')
 
     def stackTrace(self, verbose=False, in_pid=None):
         cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
@@ -3447,6 +3447,9 @@ class GenMonitor():
            print('No exec of ip addr or ifconfig found')
         for c in net_commands:
             print(c)
+        with open('/tmp/networks.txt', 'w') as fh:
+            for c in net_commands:
+                fh.write(c+'\n')   
 
     def isRunning(self):
         status = self.is_monitor_running.isRunning()

@@ -427,7 +427,7 @@ class TraceProcs():
             for child in self.plist[pid].children:
                 self.showFamily(child, tabs)
 
-    def showAll(self):
+    def showAll(self, quiet=False):
         trace_path = '/tmp/procTrace.txt'
         self.trace_fh = open(trace_path, 'w') 
         del self.did_that[:]
