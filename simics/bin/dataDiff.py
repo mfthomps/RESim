@@ -47,7 +47,7 @@ def findDiff(f1, f2):
     retval = None
     cksum = None
     for index in range(len(cover1)):
-        hit1, cycle1 = items1[index]
+        hit1, cycle1, packet1 = items1[index]
         hit1 = int(hit1)
         if index >= len(items2):
             ''' TBD, fix so that splits don't get recorded if bad'''
@@ -57,7 +57,7 @@ def findDiff(f1, f2):
             addSplit(index, None, None, cksum)
             retval = cycle1
             break
-        hit2, cycle2 = items2[index]
+        hit2, cycle2, packet2 = items2[index]
         hit1 = int(hit1)
         hit2 = int(hit2)
         if hit1 != hit2:
