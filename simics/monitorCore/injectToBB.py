@@ -60,7 +60,7 @@ class InjectToBB():
             trackfile = f.replace('queue', 'trackio')
             if not os.path.isfile(trackfile):
                 continue
-            mark = findBB.getWatchMark(trackfile, basic_block, prog)
+            mark, packet_num = findBB.getWatchMark(trackfile, basic_block, prog)
             if mark is not None:
                 self.lgr.debug('injectToBB, found data ref for %s at 0x%x' % (f, mark))
                 good_bb = mark
