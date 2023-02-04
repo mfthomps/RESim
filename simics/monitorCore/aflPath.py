@@ -33,7 +33,7 @@ def getGlobMask(target, index, instance, which, host=None, sync=False):
     retval = None
     this_host = getHost()
     afl_dir = getAFLOutput()
-    resim_instance = 'resim_%d' % instance
+    resim_instance = '*resim_%d' % instance
     if host is None:
         if target is None:
             print('aflPath getGlobMask target is None, must exit')
