@@ -992,13 +992,17 @@ process and load its RESim plugin.  Alternately you can manually attach the proc
 $RESIM/simics/ida/rev.py
 \end{verbatim}
 
-You can now run the commands found in the debugger help menu.  Note those commands generally invoke RESim commands listed in \ref{commands}.
+\noindent \textbf{Note:} When you use {\tt shift-r} or attach the debugger, IDA may generate a few pop-ups informing you of this or that.  When that happens, select the 
+\textit{do not show again} checkbox.  Then, save the IDA state, kill it and restart it.  The goal is to suppress those pop-ups, which can corrupt the
+loading of IDA plugins when the debugger is attaching.
 
-Note the RESim IDA client is not a robust debug environment in the sense that you can easily cause Simics to leave your intended execute context.
-There are attempts to catch the termination of the process being debugged.  But in general, you should consider defining bookmarks to enable you to
+You can now run the commands found in the debugger help menu.  Those commands generally invoke RESim commands listed in \ref{commands}.
+
+The RESim IDA client is not a robust debug environment in the sense that you can easily cause Simics to leave your intended execution context.
+There are attempts to catch the termination of the process being debugged.  But in general, you should consider defining bookmarks to allow you to
 return to a known state.  
 
-There are situations where it is most productive, or necessary, to enage with the Simics command line directly.  If you change the execution state
+There are situations where it is most productive, or necessary, to engage with the Simics command line directly.  If you change the execution state
 via the command line, you can get IDA back in synch via the {\tt Debugger / Resynch with server} menu selection.  Or you can double-click a bookmark
 or watch mark.
 
