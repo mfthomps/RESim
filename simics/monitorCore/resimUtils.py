@@ -214,3 +214,28 @@ def getOneBasicBlock(prog, addr):
         if retval is not None:
             break    
     return retval
+
+def findBB(blocks, addr):
+    retval = None
+    for fun in blocks:
+        for bb in blocks[fun]['blocks']:
+            if addr >= bb['start_ea'] and addr <= bb['end_ea']:
+                retval =  bb['start_ea']
+                break
+    return retval
+
+def findEndBB(blocks, addr):
+    retval = None
+    for fun in blocks:
+        for bb in blocks[fun]['blocks']:
+            #print('compare 0x%x (%s) to 0x%x (%s)' % (bb['start_ea'], type(bb['start_ea']), addr, type(addr)))
+            if addr == bb['start_ea']:
+                retval =  bb['end_ea']
+                break
+        if retval is not None:
+            break
+    if retval is None:
+        print('failed to find 0x%x in basic blocks' % addr)
+        exit(1)
+    return retval
+ 
