@@ -65,7 +65,7 @@ def getFirstReadCycle(trackio, quiet=False):
 
 def getWatchMark(trackio, bb, prog, quiet=False):
     #print('in getWatchMark')
-    retval = None
+    retval = (None, None)
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
     if not os.path.isfile(trackio):
@@ -104,7 +104,7 @@ def getWatchMark(trackio, bb, prog, quiet=False):
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
                 if eip >= bb['start_ea'] and eip <= bb['end_ea']:
                     #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
-                    retval = eip
+                    retval = (eip, mark['packet'])
                     break
             index = index + 1
     return retval
@@ -123,7 +123,7 @@ def getBBCycle(coverage, bb):
 
     bb_str = str(bb)
     if bb_str in cjson:
-        retval = cjson[bb_str]
+        retval = cjson[bb_str]['cycle']
     else:
         print('Could not find bb 0x%x in json %s' % (bb, coverage))
     return retval
@@ -133,6 +133,8 @@ def main():
     parser.add_argument('target', action='store', help='The target, e.g., the name of the workspace.')
     parser.add_argument('bb', action='store', help='The address of the basic block.')
     args = parser.parse_args()
+    if args.target.endswith('/'):
+        args.target = args.target[:-1]
     findBB(args.target, int(args.bb, 16))
 
 if __name__ == '__main__':

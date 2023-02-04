@@ -146,6 +146,8 @@ def main():
     parser = argparse.ArgumentParser(prog='dataDiff', description='look for a pony')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     args = parser.parse_args()
+    if args.target.endswith('/'):
+        args.target = args.target[:-1]
     '''
     afl_path = os.getenv('AFL_DATA')
     target_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 

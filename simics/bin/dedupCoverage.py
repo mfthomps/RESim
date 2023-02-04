@@ -186,6 +186,7 @@ def checkMulti(flist, all_hits, udp_header, hit_dict):
                 this_count = data.count(udp_header)
         hit_dict[f] = multi_hits[f] 
         print('%d new hits and %d headers in %s' % (len(multi_hits[f]), this_count, f))
+    return hit_dict
     
                
 
@@ -241,7 +242,7 @@ def main():
     print('after subset pass %d paths and %d hits' % (len(hit_dict), len(all_hits)))
   
     if udp_header is not None: 
-        checkMulti(flist, all_hits, udp_header, hit_dict) 
+        hit_dict = checkMulti(flist, all_hits, udp_header, hit_dict) 
 
     ''' report results '''
     for f in hit_dict:

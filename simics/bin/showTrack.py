@@ -24,18 +24,24 @@ def showTrack(f):
         mark_list = track['marks']
         first = mark_list[0]
         print('first cycle is 0x%x' % first['cycle'])
+        for mark in mark_list:
+            print('%d 0x%x %s %d' % (mark['index'], mark['ip'], mark['mark_type'], mark['packet']))
 
 def main():
     parser = argparse.ArgumentParser(prog='showTrack', description='dump track files')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     args = parser.parse_args()
-
-    afl_path = os.getenv('AFL_DATA')
-    target_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
-    expaths = json.load(open(target_path))
-    print('got %d paths' % len(expaths))
+    if args.target.endswith('/'):
+        args.target = args.target[:-1]
+    if os.path.isfile(args.target):
+        showTrack(args.target)
+    else:
+        afl_path = os.getenv('AFL_DATA')
+        target_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
+        expaths = json.load(open(target_path))
+        print('got %d paths' % len(expaths))
    
-    for index in range(len(expaths)):
+        for index in range(len(expaths)):
             showTrack(expaths[index])
 
 if __name__ == '__main__':

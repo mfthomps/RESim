@@ -7,43 +7,48 @@ import sys
 import os
 import glob
 import json
-target = sys.argv[1]
-instance = sys.argv[2]
-index = sys.argv[3]
 hits_file = None
 instance_2 = None
-if os.path.isfile(sys.argv[4]):
-    hits_file = sys.argv[4]
+if len(sys.argv) == 3:
+    hits_file = sys.argv[1]
+    hits1_json = json.load(open(hits_file))
 else:
-    instance_2 = sys.argv[4]
-    index_2 = sys.argv[5]
+    target = sys.argv[1]
+    instance = sys.argv[2]
+    index = sys.argv[3]
+    if os.path.isfile(sys.argv[4]):
+        hits_file = sys.argv[4]
+    else:
+        instance_2 = sys.argv[4]
+        index_2 = sys.argv[5]
+        try:
+            index_val = int(index_2)
+        except:
+            print('bad index %s' % index_2)
+        if index_val < 999:
+            index_2 = '000'+index_2 
+
     try:
-        index_val = int(index_2)
+        index_val = int(index)
     except:
-        print('bad index %s' % index_2)
+        print('bad index %s' % index)
     if index_val < 999:
-        index_2 = '000'+index_2 
+        index = '000'+index 
 
-try:
-    index_val = int(index)
-except:
-    print('bad index %s' % index)
-if index_val < 999:
-    index = '000'+index 
+    resim_num = '*resim_%s' % instance
+    afl_path = os.getenv('AFL_DATA')
 
-resim_num = '*resim_%s' % instance
-afl_path = os.getenv('AFL_DATA')
+    glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
+    print('glob_mask is %s' % glob_mask)
+    glist = glob.glob(glob_mask)
+    if len(glist) == 0:
+        print('No file found for %s' % glob_mask)
+    else:
+        print(glist[0]) 
+    hits1_json = json.load(open(glist[0]))
 
-glob_mask = '%s/output/%s/%s/coverage/id:*%s,src*' % (afl_path, target, resim_num, index)
-print('glob_mask is %s' % glob_mask)
-glist = glob.glob(glob_mask)
-if len(glist) == 0:
-    print('No file found for %s' % glob_mask)
-else:
-    print(glist[0]) 
-hits1_json = json.load(open(glist[0]))
 hits1 = []
-sorted_hits = sorted(hits1_json.items(), key=lambda x:x[1])
+sorted_hits = sorted(hits1_json.items(), key=lambda x: x[1]['cycle'])
 for hit in sorted_hits:
     hits1.append(int(hit[0]))
 
@@ -58,9 +63,10 @@ if instance_2 is not None:
     
     hits2_json = json.load(open(glist2[0]))
 else:
+    hits_file = sys.argv[2]
     hits2_json = json.load(open(hits_file))
 hits2 = []
-sorted_hits = sorted(hits2_json.items(), key=lambda x:x[1])
+sorted_hits = sorted(hits2_json.items(), key=lambda x: x[1]['cycle'])
 for hit in sorted_hits:
     hits2.append(int(hit[0]))
 

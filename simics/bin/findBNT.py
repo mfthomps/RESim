@@ -34,13 +34,14 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                 for branch in bb['succs']:
                     if branch not in hits:
                         read_mark = None
+                        packet_num = None
                         before_read = ''
                         if show_read_marks:
                             queue_list = findBB.findBB(target, bb_hit, True) 
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
+                                read_mark, packet_num = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
                                 if first_read is None:
                                     print('No read mark in %s' % trackio)
@@ -56,7 +57,7 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                         if not no_print:
                             mark_info = ''
                             if read_mark is not None:
-                                mark_info = 'read mark: 0x%x' % read_mark
+                                mark_info = 'read mark: 0x%x packet: %d' % (read_mark, packet_num)
                             print('function: %s branch 0x%x from 0x%x not in hits %s %s' % (fun_blocks['name'], branch, bb_hit, mark_info, before_read))
                             count = count + 1
                         entry = {}

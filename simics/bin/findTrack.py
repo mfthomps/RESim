@@ -27,14 +27,14 @@ def findTrack(f, addr, one):
     track_path = getTrack(f)
     queue_path = getQueue(f)
     mark_cycle = 0
-    print('NEW FIND TRACK %s' % track_path)
+    #print('NEW FIND TRACK %s' % track_path)
     if os.path.isfile(track_path):
         track = json.load(open(track_path))
         mark_list = track['marks']
         #print('%d marks' % len(mark_list))
         count = 1
         for mark in mark_list:
-            print('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
+            #print('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
             if mark['cycle'] < mark_cycle:
                 print('OUT OF ORDER')
                 print('mark cycle 0x%x' % mark['cycle'])
@@ -43,7 +43,7 @@ def findTrack(f, addr, one):
                 mark_cycle = mark['cycle'] 
             if mark['mark_type'] == 'read' and mark['ip']==addr:
                 size = os.path.getsize(queue_path)
-                print('0x%x found at mark %d in (len %d)  %s (TBD, why off by one?)' % (addr, count, size, queue_path))
+                print('0x%x found at mark %d in (len %d)  %s' % (addr, count, size, queue_path))
                 retval = True
                 if one:
                     break
@@ -59,6 +59,8 @@ def main():
     parser.add_argument('-o', '--one', action='store_true', help='stop after one.')
     args = parser.parse_args()
 
+    if args.target.endswith('/'):
+        args.target = args.target[:-1]
     afl_path = os.getenv('AFL_DATA')
     unique_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
     target_path = os.path.join(afl_path, 'output', args.target)
