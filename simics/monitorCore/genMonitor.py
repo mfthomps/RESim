@@ -98,6 +98,7 @@ import trackAFL
 import prepInject
 import prepInjectWatch
 import injectToBB
+import injectToWM
 import traceMarks
 import userBreak
 import magicOrigin
@@ -4654,6 +4655,9 @@ class GenMonitor():
 
     def injectToBB(self, bb, fname=None):
         ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
+
+    def injectToWM(self, addr, fname=None):
+        iwm = injectToWM.InjectToWM(self, addr, self.lgr, fname=fname)
 
     def getParam(self):
         return self.param[self.target]
