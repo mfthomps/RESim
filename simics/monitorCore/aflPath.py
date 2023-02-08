@@ -182,7 +182,10 @@ def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
                     continue
                 
             afl_list.append(new)
-        print('trackAFL found unique file at %s, %d entries' % (unique_path, len(afl_list)))
+        filter_str = ''
+        if ws_filter is not None:
+            filter_str = ' filtered on %s' % ws_filter
+        print('getTargetQueue found unique file at %s, %d entries %s' % (unique_path, len(afl_list), filter_str))
     else:
         if not get_all:
             print('No unique paths from %s, use all.' % unique_path)
