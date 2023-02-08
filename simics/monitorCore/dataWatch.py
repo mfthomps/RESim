@@ -22,7 +22,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string', 'ostream_insert', 'regcomp', 'replace']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string_chr', 'string_std', 'string', 'ostream_insert', 'regcomp', 'replace']
 funs_need_addr = ['ostream_insert']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
@@ -859,7 +859,7 @@ class DataWatch():
             self.recent_fgets = self.mem_something.dest
         elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
-        elif self.mem_something.fun == 'string':
+        elif self.mem_something.fun.startswith('string'):
             skip_it = False
             obj_ptr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             self.mem_something.dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
@@ -1186,9 +1186,14 @@ class DataWatch():
             elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
                 self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
                 self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
-            elif self.mem_something.fun == 'string':
-                self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
+            elif self.mem_something.fun == 'string_std':
+                dumb, src_addr, dumb2 = self.getCallParams(sp)
+                self.mem_something.src = self.mem_utils.readPtr(self.cpu, src_addr)
+                self.lgr.debug('dataWatch getMemParms %s src([r1]) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
+                
+            elif self.mem_something.fun == 'string_chr':
                 dumb, self.mem_something.src, dumb2 = self.getCallParams(sp)
+                self.lgr.debug('dataWatch getMemParms %s src(r1) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
 
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
@@ -1996,14 +2001,15 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-        '''
+        ''' 
         if op_type != Sim_Trans_Load:
             self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         else:
             self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
-        '''
+        ''' 
+   
         #if self.watchMarks.markCount() == 186:
         #    print('is 186')
         #    SIM_break_simulation("FIX THIS")
@@ -2729,7 +2735,14 @@ class DataWatch():
             if fun.startswith('std::string::'):
                 fun = fun[len('std::string::'):]
                 if '(' in fun:
-                    fun = fun.split('(')[0]
+                    fun, param1 = fun.split('(',1)
+                    if fun == 'string': 
+                        if param1.startswith('char const*'):
+                            fun = 'string_chr'
+                        elif param1.startswith('std::string'):
+                            fun = 'string_std'
+                        else:
+                            self.lgr.error('unknown string constructor %s' % fun)
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy'):
                 #self.lgr.debug('is destroy')
