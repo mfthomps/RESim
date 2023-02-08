@@ -509,17 +509,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     idaversion.grab_focus(ww_title)
     write_watch.register()
 
-    if re_hooks is None:
-        re_hooks = reHooks.Hooks()
-        re_hooks.hook()
 
-        # force client sync after operations like step into
-        dbg_hooks = dbgHooks.DBGHooks()
-        dbg_hooks.hook()
-
-        idb_hooks = idbHooks.IDBHooks()
-        idb_hooks.hook()
-   
     reHooks.register(isim)
 
     dbg_hooks.setRESim(isim)
@@ -546,4 +536,13 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     print('RESim IDA Client Version 1.2a')
 
 if __name__ == "__main__":
-    RESimClient()
+    #Hooks must be done in main.  Also see runsFirst.py
+    idb_hooks = idbHooks.IDBHooks()
+    idb_hooks.hook()
+    re_hooks = reHooks.Hooks()
+    dbg_hooks = dbgHooks.DBGHooks()
+    dbg_hooks.setIdbHooks(idb_hooks)
+    dbg_hooks.setReHooks(re_hooks)
+    re_hooks.hook()
+    dbg_hooks.hook()
+    RESimClient(re_hooks=re_hooks, dbg_hooks=dbg_hooks, idb_hooks=idb_hooks)
