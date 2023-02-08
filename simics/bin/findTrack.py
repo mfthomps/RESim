@@ -22,8 +22,14 @@ def getQueue(f):
     track = os.path.join(os.path.dirname(cover), 'queue', base)
     return track
 
-def findTrack(f, addr, one):
-    retval = False
+class TrackResult():
+    def __init__(self, path, size, mark):
+        self.path = path 
+        self.size = size
+        self.mark = mark
+
+def findTrack(f, addr, one, quiet=False):
+    retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
     mark_cycle = 0
@@ -41,13 +47,14 @@ def findTrack(f, addr, one):
                 break
             else:
                 mark_cycle = mark['cycle'] 
-            if mark['mark_type'] == 'read' and mark['ip']==addr:
+            #if mark['mark_type'] == 'read' and mark['ip']==addr:
+            if mark['ip']==addr:
                 size = os.path.getsize(queue_path)
-                print('0x%x found at mark %d in (len %d)  %s' % (addr, count, size, queue_path))
-                retval = True
+                retval = TrackResult(queue_path, size, mark)
+                if not quiet:
+                    print('0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
                 if one:
                     break
-            count += 1
     else:
         print('not a file: %s' % track_path)
     return retval
@@ -69,7 +76,7 @@ def main():
     addr = int(args.addr, 16) 
     for index in range(len(expaths)):
         result = findTrack(os.path.join(target_path, expaths[index]), addr, args.one)
-        if result and args.one:
+        if result is not None and args.one:
             break
 
 if __name__ == '__main__':
