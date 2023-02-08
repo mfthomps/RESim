@@ -7,6 +7,7 @@ import glob
 import json
 import argparse
 import findBB
+import findTrack
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
@@ -38,10 +39,29 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                         before_read = ''
                         if show_read_marks:
                             queue_list = findBB.findBB(target, bb_hit, True) 
+                            least_packet = 100000
+                            least_size = 100000
+                            best_result = None
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
                                 read_mark, packet_num = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
+                                if read_mark is not None:
+                                    ''' Look for the best mark '''
+                                    result = findTrack.findTrack(trackio, read_mark, True, quiet=True)
+                                    if result is not None:
+                                        if result.mark['packet'] < least_packet:
+                                            least_packet = result.mark['packet']
+                                            least_size = result.size
+                                            best_result = result
+                                        elif result.mark['packet'] == least_packet and result.size < least_size:
+                                            least_size = result.size
+                                            best_result = result
+                                if best_result is not None:
+                                    read_mark = best_result.mark['ip']
+                                    packet_num = best_result.mark['packet']
+                                  
+                                '''
                                 first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
                                 if first_read is None:
                                     print('No read mark in %s' % trackio)
@@ -53,6 +73,7 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                                     break
                                 elif first_read is not None and bb_cycle < first_read:
                                     before_read = 'pre-read' 
+                                '''
  
                         if not no_print:
                             mark_info = ''
@@ -94,7 +115,7 @@ def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False)
             num_blocks = num_blocks + len(blocks[f]['blocks']) 
         print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
-        for fun in blocks:
+        for fun in sorted(blocks):
             this_list = findBNT(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
             bnt_list.extend(this_list)
     else:
