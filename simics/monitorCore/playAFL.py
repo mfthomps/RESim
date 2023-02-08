@@ -338,6 +338,22 @@ class PlayAFL():
                     fh.write(s)
                     fh.flush()
                 print('%d Hits file written to %s' % (len(self.all_hits), save_name))
+                all_prev_hits_path = '%s.hits' % hits_path
+                if os.path.isfile(all_prev_hits_path):
+                    all_prev_hits = json.load(open(all_prev_hits_path))
+                    count = 0
+                    for hit in self.all_hits:
+                        if hit not in all_prev_hits:
+                            print('New hit found at 0x%x' % hit)
+                            gotone = True
+                            count = count+1
+                    if not count == 0:
+                        print('No new hits.')
+                    else:
+                        print('Found %d new hits that were not in %s' % all_prev_hits_path)
+                        
+                else:
+                    print('no hits file at %s ?' % all_prev_hits_path)
             elif self.parallel:
                 self.top.quit()
             self.delStopHap(None)               
