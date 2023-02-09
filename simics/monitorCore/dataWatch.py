@@ -22,7 +22,8 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string_chr', 'string_std', 'string', 'ostream_insert', 'regcomp', 'replace']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string_chr', 'string_std', 'string', 'ostream_insert', 'regcomp', 
+            'replace_chr', 'replace_std', 'replace']
 funs_need_addr = ['ostream_insert']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
@@ -52,6 +53,7 @@ class MemSomething():
             self.run = run
             ''' was memcpy length beyond our buffer?'''
             self.truncated = None
+            self.pos = None
 
 class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
@@ -857,7 +859,7 @@ class DataWatch():
                    self.mem_something.dest, self.mem_something.count))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.recent_fgets = self.mem_something.dest
-        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
+        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
         elif self.mem_something.fun.startswith('string'):
             skip_it = False
@@ -883,6 +885,15 @@ class DataWatch():
                 buf_start = self.findRange(self.mem_something.src)
                 mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
                 self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
+        elif self.mem_something.fun.startswith('replace'):
+            skip_it = False
+            obj_ptr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            self.mem_something.dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x pos: %d length: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+               self.mem_something.pos, self.mem_something.length))
+            buf_start = self.findRange(self.mem_something.src)
+            mark = self.watchMarks.replaceMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.pos, self.mem_something.length, buf_start)
+            self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -983,6 +994,23 @@ class DataWatch():
         #                                     (fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None): 
         SIM_run_alone(self.getMemParams, False)
 
+
+    def get4CallParams(self, sp):
+        retval1 = None
+        retval2 = None
+        retval3 = None
+        retval4 = None
+        if self.cpu.architecture == 'arm':
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
+            retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
+            retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
+            retval4 = self.mem_utils.getRegValue(self.cpu, 'r3')
+        else:
+            retval1 = self.mem_utils.readPtr(self.cpu, sp)
+            retval2 = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
+            retval3 = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
+            retval4 = self.mem_utils.readWord32(self.cpu, sp+3*self.mem_utils.WORD_SIZE)
+        return retval1, retval2, retval3, retval4
 
     def getCallParams(self, sp):
         retval1 = None
@@ -1183,9 +1211,10 @@ class DataWatch():
 
             elif self.mem_something.fun == 'inet_ntop':
                 dumb1, dumb2, self.mem_something.dest = self.getCallParams(sp)
-            elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'replace']:
+            elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
                 self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
                 self.mem_something.src, dumb1, dumb = self.getCallParams(sp)
+
             elif self.mem_something.fun == 'string_std':
                 dumb, src_addr, dumb2 = self.getCallParams(sp)
                 self.mem_something.src = self.mem_utils.readPtr(self.cpu, src_addr)
@@ -1195,6 +1224,15 @@ class DataWatch():
                 dumb, self.mem_something.src, dumb2 = self.getCallParams(sp)
                 self.lgr.debug('dataWatch getMemParms %s src(r1) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
 
+            elif self.mem_something.fun == 'replace_std':
+                this, self.mem_something.pos, self.mem_something.length, src_addr = self.get4CallParams(sp)
+                self.mem_something.src = self.mem_utils.readPtr(self.cpu, src_addr)
+                self.lgr.debug('dataWatch getMemParms %s src([r3]) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
+                
+            elif self.mem_something.fun == 'replace_chr':
+                this, self.mem_something.pos, self.mem_something.length, self.mem_something.src = self.get4CallParams(sp)
+                self.mem_something.length = self.getStrLen(self.mem_something.src)        
+                self.lgr.debug('dataWatch getMemParms %s src(r3) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
 
@@ -2735,6 +2773,7 @@ class DataWatch():
             if fun.startswith('std::string::'):
                 fun = fun[len('std::string::'):]
                 if '(' in fun:
+                    ''' TBD generalize/test for ghidra? '''
                     fun, param1 = fun.split('(',1)
                     if fun == 'string': 
                         if param1.startswith('char const*'):
@@ -2743,6 +2782,12 @@ class DataWatch():
                             fun = 'string_std'
                         else:
                             self.lgr.error('unknown string constructor %s' % fun)
+                    elif fun == 'replace': 
+                        if 'char' in param1:
+                            fun = 'replace_chr'
+                        else:
+                            fun = 'replace_std'
+
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy'):
                 #self.lgr.debug('is destroy')
