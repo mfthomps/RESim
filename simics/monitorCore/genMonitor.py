@@ -2405,7 +2405,7 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, was_watching=False):
         if not self.debug_breaks_set:
-            self.lgr.debug('restoreDebugBreaks')
+            #self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2422,20 +2422,20 @@ class GenMonitor():
             self.context_manager[self.target].setExitBreaks()
             self.debug_breaks_set = True
             self.watchPageFaults()
-            self.lgr.debug('restoreDebugBreaks back page')
+            #self.lgr.debug('restoreDebugBreaks back page')
             if self.trace_malloc is not None:
                 self.trace_malloc.setBreaks()
-            self.lgr.debug('restoreDebugBreaks back  malloc')
+            #self.lgr.debug('restoreDebugBreaks back  malloc')
             if self.injectIOInstance is not None:
                 self.injectIOInstance.restoreCallHap()
-            self.lgr.debug('restoreDebugBreaks back  inject')
+            #self.lgr.debug('restoreDebugBreaks back  inject')
             if self.user_break is not None:
                 self.user_break.doBreak()
-            self.lgr.debug('restoreDebugBreaks back  break')
+            #self.lgr.debug('restoreDebugBreaks back  break')
             if self.target in self.magic_origin:
-                self.lgr.debug('restoreDebugBreaks set magic?')
+                #self.lgr.debug('restoreDebugBreaks set magic?')
                 self.magic_origin[self.target].setMagicHap()
-            self.lgr.debug('restoreDebugBreaks return')
+            #self.lgr.debug('restoreDebugBreaks return')
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
