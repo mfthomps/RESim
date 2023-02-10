@@ -23,13 +23,13 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string_chr', 'string_std', 'string', 'ostream_insert', 'regcomp', 
-            'replace_chr', 'replace_std', 'replace']
+            'replace_chr', 'replace_std', 'replace', 'append_chr_n', 'assign_chr', 'compare_chr']
 funs_need_addr = ['ostream_insert']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
 ''' TBD confirm end_cleanup is a good choice for free'''
-free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup']
+free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new']
 class MemSomething():
     def __init__(self, fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -894,7 +894,34 @@ class DataWatch():
             buf_start = self.findRange(self.mem_something.src)
             mark = self.watchMarks.replaceMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.pos, self.mem_something.length, buf_start)
             self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
+        elif self.mem_something.fun.startswith('append'):
+            obj_ptr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            self.mem_something.dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x length: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+               self.mem_something.length))
+            buf_start = self.findRange(self.mem_something.src)
+            mark = self.watchMarks.appendMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.length, buf_start)
+            self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
+        elif self.mem_something.fun.startswith('assign'):
+            obj_ptr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
+            dest_start = self.findRange(dest)
+            src_start = self.findRange(self.mem_something.src)
+            if src_start is None and dest_start is not None:
+                self.lgr.debug('dataWatch returnHap assigning unknown buffer to known buffer, remove the destination')
+                self.rmRange(dest)
+            elif src_start is not None and dest_start is None:
+                self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x length: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+                   self.mem_something.length))
+                buf_start = self.findRange(self.mem_something.src)
+                mark = self.watchMarks.assignMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.length, buf_start)
+                self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
 
+        elif self.mem_something.fun.startswith('compare'):
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x length: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+               self.mem_something.length))
+            buf_start = self.findRange(self.mem_something.src)
+            self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.length, buf_start)
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
             self.lgr.debug('dataWatch returnHap, return from %s string: %s count %d ' % (self.mem_something.fun, self.mem_something.the_string, 
@@ -1231,8 +1258,23 @@ class DataWatch():
                 
             elif self.mem_something.fun == 'replace_chr':
                 this, self.mem_something.pos, self.mem_something.length, self.mem_something.src = self.get4CallParams(sp)
+                if self.mem_something.length == 0:
+                    self.mem_something.length = self.getStrLen(self.mem_something.src)        
+                self.lgr.debug('dataWatch getMemParms %s src(r3) is 0x%x len %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.length))
+            elif self.mem_something.fun == 'append_chr_n':
+                this, self.mem_something.src, self.mem_something.length = self.getCallParams(sp)
+                self.lgr.debug('dataWatch getMemParms %s src(r1) is 0x%x len %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.length))
+            elif self.mem_something.fun == 'assign_chr':
+                ''' TBD extend for (char *, len)'''
+                this, self.mem_something.src, dumb = self.getCallParams(sp)
                 self.mem_something.length = self.getStrLen(self.mem_something.src)        
-                self.lgr.debug('dataWatch getMemParms %s src(r3) is 0x%x' % (self.mem_something.fun, self.mem_something.src))
+                self.lgr.debug('dataWatch getMemParms %s src(r1) is 0x%x len %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.length))
+            elif self.mem_something.fun == 'compare_chr':
+                ''' TBD extend for (char *, len)'''
+                obj_ptr, self.mem_something.src, dumb = self.getCallParams(sp)
+                self.mem_something.length = self.getStrLen(self.mem_something.src)        
+                self.mem_something.dest = self.mem_utils.readPtr(self.cpu, obj_ptr)
+                self.lgr.debug('dataWatch getMemParms %s 0x%x to 0x%x len %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.length))
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
 
@@ -2039,14 +2081,14 @@ class DataWatch():
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
-        ''' 
+    
         if op_type != Sim_Trans_Load:
             self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
         else:
             self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip))
-        ''' 
+   
    
         #if self.watchMarks.markCount() == 186:
         #    print('is 186')
@@ -2787,11 +2829,27 @@ class DataWatch():
                             fun = 'replace_chr'
                         else:
                             fun = 'replace_std'
+                    elif fun == 'append': 
+                        if 'char' in param1 and 'uint' in param1:
+                            fun = 'append_chr_n'
+                        else:
+                            self.lgr.warning('TBD build out c++ append')
+                    elif fun == 'assign': 
+                        if 'char' in param1:
+                            fun = 'assign_chr'
+                    elif fun == 'compare': 
+                        if 'char' in param1:
+                            fun = 'compare_chr'
+
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy'):
                 #self.lgr.debug('is destroy')
                 fun = 'destroy'
+            elif fun.startswith('operator new'):
+                ''' TBD, happens in unwind code segments, just look for unwind instead?'''
+                #self.lgr.debug('is new')
+                fun = 'new'
             elif fun.startswith('operator delete'):
                 #self.lgr.debug('is destroy')
                 fun = 'delete'
@@ -2840,7 +2898,7 @@ class DataWatch():
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
+                self.lgr.debug('dataWatch memsomething fun is %s' % fun)
                 if fun is not None and fun == prev_fun and fun != 'None':
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue

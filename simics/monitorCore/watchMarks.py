@@ -423,6 +423,32 @@ class ReplaceMark():
             self.msg = '%s from 0x%08x (unknown buffer?) to 0x%08x pos %d, %d bytes' % (fun, src, dest, pos, length)
     def getMsg(self):
         return self.msg
+class AppendMark():
+    def __init__(self, fun, src, dest, length, start):
+        self.addr = src
+        self.dest = dest
+        self.length = length
+        self.start = start
+        if start is not None:
+            offset = src - start
+            self.msg = '%s from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x %d bytes' % (fun, src, offset, start, dest, length)
+        else:
+            self.msg = '%s from 0x%08x (unknown buffer?) to 0x%08x %d bytes' % (fun, src, dest, length)
+    def getMsg(self):
+        return self.msg
+class AssignMark():
+    def __init__(self, fun, src, dest, length, start):
+        self.addr = src
+        self.dest = dest
+        self.length = length
+        self.start = start
+        if start is not None:
+            offset = src - start
+            self.msg = '%s from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x %d bytes' % (fun, src, offset, start, dest, length)
+        else:
+            self.msg = '%s from 0x%08x (unknown buffer?) to 0x%08x %d bytes' % (fun, src, dest, length)
+    def getMsg(self):
+        return self.msg
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
@@ -454,13 +480,13 @@ class WatchMarks():
             i = 1
             for mark in self.stale_marks:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
+                fh.write('%d %s  ip:0x%x cycle: 0x%x\n' % (i, the_str, mark.ip, mark.cycle))
                 i += 1
             fh.write('\n\nBegin active watch marks.\n\n')
             i = 1
             for mark in self.mark_list:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x\n' % (i, the_str, mark.ip))
+                fh.write('%d %s  ip:0x%x cycle: 0x%x\n' % (i, the_str, mark.ip, mark.cycle))
                 i += 1
 
     def showMarks(self, old=False, verbose=False):
@@ -911,6 +937,14 @@ class WatchMarks():
         fm = ReplaceMark(fun, src, dest, pos, length, start)
         self.addWatchMark(fm)
 
+    def appendMark(self, fun, src, dest, length, start):
+        fm = AppendMark(fun, src, dest, length, start)
+        self.addWatchMark(fm)
+
+    def assignMark(self, fun, src, dest, length, start):
+        fm = AppendMark(fun, src, dest, length, start)
+        self.addWatchMark(fm)
+
     def mscMark(self, fun, src):
         fm = MscMark(fun, src)
         self.addWatchMark(fm)
@@ -1195,10 +1229,20 @@ class WatchMarks():
                 entry['dest'] = mark.mark.dest
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, ReplaceMark):
-                entry['mark_type'] = 'string' 
+                entry['mark_type'] = 'replace' 
                 entry['src'] = mark.mark.addr
                 entry['dest'] = mark.mark.dest
                 entry['pos'] = mark.mark.pos
+                entry['length'] = mark.mark.length
+            elif isinstance(mark.mark, AppendMark):
+                entry['mark_type'] = 'append' 
+                entry['src'] = mark.mark.addr
+                entry['dest'] = mark.mark.dest
+                entry['length'] = mark.mark.length
+            elif isinstance(mark.mark, AssignMark):
+                entry['mark_type'] = 'assign' 
+                entry['src'] = mark.mark.addr
+                entry['dest'] = mark.mark.dest
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, MscMark):
                 entry['mark_type'] = 'msc' 
