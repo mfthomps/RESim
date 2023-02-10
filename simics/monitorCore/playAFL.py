@@ -347,7 +347,7 @@ class PlayAFL():
                             print('New hit found at 0x%x' % hit)
                             gotone = True
                             count = count+1
-                    if not count == 0:
+                    if count == 0:
                         print('No new hits.')
                     else:
                         print('Found %d new hits that were not in %s' % all_prev_hits_path)
