@@ -9,7 +9,7 @@ import aflPath
 def main():
     parser = argparse.ArgumentParser(prog='addInput.py', description='Manually add a file to fuzzing results.')
     parser.add_argument('path', action='store', help='Path to the file to add.')
-    parser.add_argument('name', action='store', help='Name to give the file (descriptive).')
+    parser.add_argument('name', action='store', help='Name to give the file (descriptive, no spaces please).')
     parser.add_argument('-f', '--force', action='store_true', help='Overwrite file if it already exists.')
     args = parser.parse_args()
     if os.path.isfile(args.path):

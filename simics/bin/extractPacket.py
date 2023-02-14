@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import sys
+if len(sys.argv) != 4:
+    print('extractPacket.py file hdr packet-number')
+    exit(0)
 fname = sys.argv[1]
 hdr = sys.argv[2]
 pnum = int(sys.argv[3])
@@ -9,11 +12,14 @@ with open(fname, 'br') as fh:
     hdr = hdr.encode()
     count = data.count(hdr)
     print('see %d headers' % count)
-    if count > pnum:
-        index = data.find(hdr, pnum)
-        next_hdr = pnum+1
-        end = data.find(hdr, next_hdr)
-        newdata = data[index:end]
+    ''' ui is 1 relative '''
+    if pnum <= 0:
+        print('packet number is 1 relative')
+    elif count > pnum:
+        parts = data.split(hdr)
+        newdata = hdr+parts[pnum]
         with open('/tmp/extracted.io', 'bw') as out:
             out.write(newdata)
             print('wrote %d bytes to /tmp/extracted.io' % (len(newdata)))
+    else:
+        print('not that many packets')
