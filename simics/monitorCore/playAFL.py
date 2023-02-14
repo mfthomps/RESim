@@ -350,7 +350,7 @@ class PlayAFL():
                     if count == 0:
                         print('No new hits.')
                     else:
-                        print('Found %d new hits that were not in %s' % all_prev_hits_path)
+                        print('Found %d new hits that were not in %s' % (count, all_prev_hits_path))
                         
                 else:
                     print('no hits file at %s ?' % all_prev_hits_path)
