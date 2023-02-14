@@ -46,7 +46,8 @@ class InjectToWM():
         result = self.findOneTrack(addr)
         if result is not None:
             self.mark_index = result.mark['index']
-            self.lgr.debug('InjectToWM inject %d bytes and %d packets, Watch Mark: %d from %s' % (result.size, result.mark['packet'], self.mark_index, result.path))
+            self.lgr.debug('InjectToWM inject %d bytes and %d packets at ip: 0x%x, Watch Mark: %d from %s' % (result.size, result.mark['packet'], result.mark['ip'], 
+                self.mark_index, result.path))
             print('InjectToWM inject %d bytes and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
