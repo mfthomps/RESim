@@ -809,7 +809,7 @@ class StackTrace():
                                     cur_fun_name = None
                                 instruct = '%s   %s' % (self.callmn, fun)
                         if fun_hex is not None:
-                            self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct))
+                            #self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct))
                             self.soCheck(fun_hex)
                                 
                         #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct, ptr, call_ip))
@@ -818,7 +818,7 @@ class StackTrace():
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
                             frame = self.FrameEntry(call_ip, 'unknown', instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                             self.addFrame(frame)
-                            self.lgr.debug('stackTrace fname none added frame %s' % frame.dumpString())
+                            #self.lgr.debug('stackTrace fname none added frame %s' % frame.dumpString())
                         else:
                             ''' ad-hoc detect clib ghost frames, assume clib does not call other libraries.  exceptions?  TBD '''
                             #if fname.startswith('clib'):
@@ -831,10 +831,10 @@ class StackTrace():
                                     call_to = self.getCallTo(call_ip)
                                     if call_to is not None:
                                         if self.soMap.isMainText(call_to):
-                                            self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail')
+                                            #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail')
                                             if call_to not in self.relocate_funs:
                                                 skip_this = True
-                                                self.lgr.debug('stackTrace not a PLT, skipped it')
+                                                #self.lgr.debug('stackTrace not a PLT, skipped it')
 
                             if not skip_this:
                                 if self.cpu.architecture == 'arm':
@@ -844,7 +844,7 @@ class StackTrace():
                                     self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
                                     frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=fun_hex, fun_name=fun)
                                 self.addFrame(frame)
-                                self.lgr.debug('stackTrace fname %s added frame %s' % (fname, frame.dumpString()))
+                                #self.lgr.debug('stackTrace fname %s added frame %s' % (fname, frame.dumpString()))
                             else:
                                 pass
                                 self.lgr.debug('stackTrace told to skip %s' % frame.dumpString())
