@@ -421,12 +421,12 @@ class GenContextMgr():
         rec = self.task_utils.getCurTaskRec() 
         if rec in self.nowatch_list:
             self.nowatch_list.remove(rec)
-            self.lgr.debug('contextManager rmNoWatch, rec 0x%x removed from nowatch list' % rec)
+            #self.lgr.debug('contextManager rmNoWatch, rec 0x%x removed from nowatch list' % rec)
             if len(self.nowatch_list) == 0 and len(self.watch_rec_list) == 0:
                 ''' stop all task watching '''
                 self.stopWatchTasks()
                 SIM_run_alone(self.setAllHap, False)
-                self.lgr.debug('contextManager addNoWatch stopped watching tasks, enabled all HAPs')
+                #self.lgr.debug('contextManager addNoWatch stopped watching tasks, enabled all HAPs')
             else:
                 ''' restart watching '''
                 SIM_run_alone(self.setAllHap, False)
@@ -788,15 +788,15 @@ class GenContextMgr():
                 self.pid_cache.remove(pid)
         
     def stopWatchTasks(self):
-        self.lgr.debug('stopWatchTasks')
+        #self.lgr.debug('stopWatchTasks')
         self.stopWatchTasksAlone(None)
         #SIM_run_alone(self.stopWatchTasksAlone, None)
 
     def stopWatchTasksAlone(self, dumb):
         if self.task_break is None:
-            self.lgr.debug('stopWatchTasks already stopped')
+            #self.lgr.debug('stopWatchTasks already stopped')
             return
-        self.lgr.debug('stopWatchTasks delete hap')
+        #self.lgr.debug('stopWatchTasks delete hap')
         RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -823,17 +823,17 @@ class GenContextMgr():
 
         cpu, dumb, dumb2  = self.task_utils.curProc()
         cpu.current_context = self.default_context
-        self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
+        #self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
-        self.lgr.debug('resetWatchTasks')
+        #self.lgr.debug('resetWatchTasks')
         self.stopWatchTasks()
         self.watchTasks(set_debug_pid = True)
         if not self.watch_only_this:
             ctask = self.task_utils.getCurTaskRec()
             pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
-            self.lgr.debug('resetWatchTasks pid %d' % pid)
+            #self.lgr.debug('resetWatchTasks pid %d' % pid)
             if pid == 1:
                 self.lgr.debug('resetWatchTasks got leader pid of 1, skip')
                 return
@@ -852,7 +852,7 @@ class GenContextMgr():
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
             #self.lgr.debug('genContextManager setTaskHap bp %d' % self.task_break)
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
-            self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
+            #self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
 
     def restoreWatchTasks(self):
         self.watching_tasks = True
@@ -873,14 +873,14 @@ class GenContextMgr():
             self.setTaskHap()
         self.watching_tasks = True
         if len(self.watch_rec_list) == 0:
-            self.lgr.debug('watchTasks, call restoreDebug')
+            #self.lgr.debug('watchTasks, call restoreDebug')
             self.restoreDebug()
         if self.watchExit():
             #self.pageFaultGen.recordPageFaults()
             if ctask in self.watch_rec_list:
-                self.lgr.debug('watchTasks, current task already being watched')
+                #self.lgr.debug('watchTasks, current task already being watched')
                 return
-            self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
+            #self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
             self.watch_rec_list[ctask] = pid
         else:
             self.lgr.warning('watchTasks, call to watchExit failed pid %d' % pid)
@@ -908,12 +908,12 @@ class GenContextMgr():
 
     def setDebugPid(self):
         if self.debugging_pid is not None:
-            self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
+            #self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
+        #self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         if comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
