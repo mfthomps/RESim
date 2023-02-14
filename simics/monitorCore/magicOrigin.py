@@ -45,11 +45,11 @@ class MagicOrigin():
         if self.did_magic:
             return
         self.magic_hap = RES_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
-        self.lgr.debug('magicOrigin setMagicHap')
+        #self.lgr.debug('magicOrigin setMagicHap')
 
     def deleteMagicHap(self):
         if self.magic_hap is not None:
-            self.lgr.debug('magicOrigin deleteMagicHap')
+            #self.lgr.debug('magicOrigin deleteMagicHap')
             SIM_run_alone(self.deleteMagicHapAlone, None)
 
     def deleteMagicHapAlone(self, dumb):
@@ -93,7 +93,7 @@ class MagicOrigin():
         SIM_run_command(cmd)
         self.did_magic = True
         self.deleteMagicHap()
-        self.lgr.debug('MagicOrigin to pid and then set origin')
+        #self.lgr.debug('MagicOrigin to pid and then set origin')
         self.top.toPid(-1, callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
         #self.lgr.debug('MagicOrigin, continue')
