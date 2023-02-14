@@ -1837,9 +1837,9 @@ class GenMonitor():
 
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
-        self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
+        #self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
-        self.lgr.debug('genMonitor watchPageFaults back')
+        #self.lgr.debug('genMonitor watchPageFaults back')
 
     def stopWatchPageFaults(self, pid=None):
         self.lgr.debug('genMonitor stopWatchPageFaults')
@@ -2372,8 +2372,8 @@ class GenMonitor():
                        self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
                        call_list=['exit_group'], soMap=somap, compat32=self.is_compat32, name="debugExitHap")
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
-               cpu.current_context))
+        #self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
+        #       cpu.current_context))
 
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
