@@ -8,6 +8,7 @@ class IDAFuns():
         self.did_paths = []
         self.lgr.debug('IDAFuns for path %s' % path)
         self.mangle = {}
+        self.unwind = {}
         if path.endswith('funs'):
             mpath = path[:-4]+'mangle' 
             if os.path.isfile(mpath):
@@ -16,6 +17,13 @@ class IDAFuns():
                    lgr.debug('Loaded mangle from %s' % mpath)
             else:
                 lgr.debug('no mangle file at %s' % mpath)
+            upath = path[:-4]+'unwind' 
+            if os.path.isfile(upath):
+               with open(upath) as fh:
+                   self.unwind = json.load(fh)
+                   lgr.debug('Loaded unwind from %s' % upath)
+            else:
+                lgr.debug('no mangle file at %s' % upath)
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
@@ -59,6 +67,7 @@ class IDAFuns():
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     self.funs[fun]['name'] = newfuns[f]['name']
+                   
                     #self.lgr.debug('idaFun add %s was %s %x %x   now %x %x %x' % (newfuns[f]['name'], f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
         else:
             self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
@@ -115,10 +124,19 @@ class IDAFuns():
                     print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
             else:
                 print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
-        
 
     def demangle(self, fun):
         if fun in self.mangle:
             return self.mangle[fun]
         else:
             return fun
+
+    def isUnwind(self, ip):
+        retval = False
+        if ip in self.funs:
+            fun = ip
+        else:
+            fun = self.getFun(ip)
+        if fun in self.unwind:
+            retval = True
+        return retval
