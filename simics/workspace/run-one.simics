@@ -1,0 +1,6 @@
+#
+# Example Simics script for starting a simics target
+# using the qsp-x86 platform
+#
+$machine_name="board0"
+run-command-file targets/qsp-x86/qsp-clear-linux.simics
