@@ -1013,6 +1013,8 @@ class GenMonitor():
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s' % prog_name)
+            if self.ida_funs is None:
+                rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
         else:
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
@@ -2443,7 +2445,7 @@ class GenMonitor():
 
  
     def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
-        self.lgr.debug('genMon removeDebugBreaks')
+        #self.lgr.debug('genMon removeDebugBreaks')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         self.stopWatchPageFaults(pid)
         if not keep_watching:
@@ -2461,15 +2463,15 @@ class GenMonitor():
         if self.coverage is not None and not keep_coverage:
             self.coverage.stopCover(keep_hits=True)
         if self.trace_malloc is not None:
-            self.lgr.debug('genMon removeDebugBreaks trace_malloc')
+            #self.lgr.debug('genMon removeDebugBreaks trace_malloc')
             self.trace_malloc.stopTrace()
         if self.injectIOInstance is not None:
-            self.lgr.debug('genMon removeDebugBreaks inject delcallhap')
+            #self.lgr.debug('genMon removeDebugBreaks inject delcallhap')
             self.injectIOInstance.delCallHap()
         if self.user_break is not None:
             self.user_break.stopBreak()
         if self.target in self.magic_origin:
-            self.lgr.debug('genMon removeDebugBreaks magic')
+            #self.lgr.debug('genMon removeDebugBreaks magic')
             self.magic_origin[self.target].deleteMagicHap()
 
     def revToText(self):

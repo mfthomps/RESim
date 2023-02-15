@@ -1387,6 +1387,7 @@ class reverseToCall():
                     SIM_run_alone(SIM_run_command, command)
                  
                     if cpu.architecture == 'arm':
+                        ''' TBD much too ugly'''
                         ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
                         self.the_breaks.append(ret_break_num)

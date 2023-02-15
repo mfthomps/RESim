@@ -758,7 +758,7 @@ class GenContextMgr():
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
         self.cpu.current_context = self.resim_context
-        self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
+        #self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchPid(self, pid):
         SIM_run_alone(self.stopWatchPidAlone, pid)
@@ -857,7 +857,7 @@ class GenContextMgr():
     def restoreWatchTasks(self):
         self.watching_tasks = True
         if self.debugging_pid is not None:
-            self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
+            #self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
             self.cpu.current_context = self.resim_context
 
     def watchTasks(self, set_debug_pid = False):
@@ -993,7 +993,7 @@ class GenContextMgr():
         print('Process %d exited.' % pid)
 
     def resetAlone(self, pid):
-        self.lgr.debug('contextManager resetAlone')
+        #self.lgr.debug('contextManager resetAlone')
         dead_rec = self.task_utils.getRecAddrForPid(pid)
         if dead_rec is not None:
             list_addr = self.task_utils.getTaskListPtr(dead_rec)
@@ -1151,7 +1151,7 @@ class GenContextMgr():
         SIM_run_alone(self.clearExitBreaksAlone, None)
 
     def clearExitBreaksAlone(self, dumb):
-        self.lgr.debug('contextManager clearExitBreaks')
+        #self.lgr.debug('contextManager clearExitBreaks')
         for pid in self.task_rec_bp:
             if self.task_rec_bp[pid] is not None:
                 RES_delete_breakpoint(self.task_rec_bp[pid])

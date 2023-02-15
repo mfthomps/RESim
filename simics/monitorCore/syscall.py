@@ -323,10 +323,10 @@ class Syscall():
         ''' Note cell may be None, leaving it up to the context manager '''
         self.cell_name = cell_name
         self.cell = cell
-        if cell is not None:
-            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is not none, cell.name: %s' % (cell_name, name, str(call_params), cell.name))
-        else:
-            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is none.' % (cell_name, name, str(call_params)))
+        #if cell is not None:
+        #    self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is not none, cell.name: %s' % (cell_name, name, str(call_params), cell.name))
+        #else:
+        #    self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is none.' % (cell_name, name, str(call_params)))
         self.top = top
         self.param = param
         self.sharedSyscall = sharedSyscall

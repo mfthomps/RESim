@@ -123,7 +123,7 @@ class SharedSyscall():
         else:
             use_context = self.cpu.current_context
         if use_context not in self.exit_pids:
-            self.lgr.debug('rmExitHap context %s not in exit_pids, do nothing?' % str(use_context))
+            #self.lgr.debug('rmExitHap context %s not in exit_pids, do nothing?' % str(use_context))
             return
         my_exit_pids = self.exit_pids[use_context]
         if pid is not None:

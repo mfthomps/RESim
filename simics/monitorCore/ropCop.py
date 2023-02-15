@@ -47,7 +47,7 @@ class RopCop():
             self.callmn = 'call'
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
             self.rop_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.ropHap, None, proc_break, 'rop_hap')
-        self.lgr.debug('ropCop setHap done on 0x%x size 0x%x' % (self.text, self.size))
+        #self.lgr.debug('ropCop setHap done on 0x%x size 0x%x' % (self.text, self.size))
 
     def ropHap(self, dumb, third, forth, memory):
         ''' callback when ret or pop executed'''
@@ -152,8 +152,8 @@ class RopCop():
     def clearHap(self):
         if self.rop_hap is not None:
             #self.context_manager.genDeleteHap(self.rop_hap, immediate=False)
-            self.lgr.debug('ropCop clear hap %d' % self.rop_hap)
+            #self.lgr.debug('ropCop clear hap %d' % self.rop_hap)
             self.context_manager.genDeleteHap(self.rop_hap, immediate=True)
-            self.lgr.debug('ropCop cleared hap %d' % self.rop_hap)
+            #self.lgr.debug('ropCop cleared hap %d' % self.rop_hap)
             self.rop_hap = None
         self.did_these = []
