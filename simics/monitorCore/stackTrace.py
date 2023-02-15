@@ -675,6 +675,8 @@ class StackTrace():
                 cur_fun_name = self.ida_funs.getName(cur_fun)
                 if cur_fun_name.startswith('.'):
                     cur_fun_name = cur_fun_name[1:]
+                elif cur_fun_name.startswith('_'):
+                    cur_fun_name = cur_fun_name[1:]
                 #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
 
         if self.cpu.architecture != 'arm':
