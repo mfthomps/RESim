@@ -89,8 +89,9 @@ def getRelocate(path, lgr, ida_funs):
                 fun_name = fun_name[1:]
                 if '@' in fun_name:
                     fun_name = fun_name.split('@')[0]
-            fun_name = ida_funs.demangle(fun_name)
-            retval[addr] = fun_name
+            if ida_funs is not None:
+                fun_name = ida_funs.demangle(fun_name)
+                retval[addr] = fun_name
         else:
             pass
             #lgr.debug('getRelocate not 5 %s' % line)
