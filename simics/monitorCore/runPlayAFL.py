@@ -143,8 +143,8 @@ def runPlay(args, lgr):
     return do_restart
 
 def main():
-    lgr = resimUtils.getLogger('runPlayAFL', '/tmp/', level=None)
-    parser = argparse.ArgumentParser(prog='runPlayAFL', description='Run AFL sessions in parallel to collect coverage data.')
+    lgr = resimUtils.getLogger('runPlay', '/tmp/', level=None)
+    parser = argparse.ArgumentParser(prog='runPlay', description='Run AFL sessions in parallel to collect coverage data.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
