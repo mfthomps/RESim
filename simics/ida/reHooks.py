@@ -446,6 +446,30 @@ class ShowPtrHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+class ShowAsciiMapHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        def activate(self, ctx):
+            ref_addr = getRefAddr()
+            print('Show ascii  ref_addr 0x%x' % ref_addr)
+            if ref_addr is not None:
+                outstring = ''
+                for i in range(256):
+                    addr = ref_addr + i
+                    val = idaversion.get_wide_byte(addr)
+                    if val != 1:
+                        hexval = '0x%x' % i
+                        if i < 127 and i > 19:
+                            cval = '(%s)' % str(unichr(i))
+                        else:
+                            cval = ''
+                        outstring = outstring + ' '+ hexval+cval
+                print('looking for %s' % outstring)
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     rev_to_action_desc = idaapi.action_desc_t(
        'rev:action',
@@ -507,6 +531,11 @@ def register(isim):
        'Show ptr',
        ShowPtrHandler(isim)
        )
+    show_ascii_map_action_desc = idaapi.action_desc_t(
+       'showAsciiMap:action',
+       'Show ascii map',
+       ShowAsciiMapHandler(isim)
+       )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
@@ -519,6 +548,7 @@ def register(isim):
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
     idaapi.register_action(show_ptr_action_desc)
+    idaapi.register_action(show_ascii_map_action_desc)
     print('reHooks did register')
 
 class Hooks(UI_Hooks):
@@ -552,6 +582,8 @@ class Hooks(UI_Hooks):
                     else:
                         addr = getHex(highlighted)
                         if addr is not None or regFu.isHighlightedEffective():
+                            idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/data/')
+                            idaapi.attach_action_to_popup(form, popup, "showAsciiMap:action", 'RESim/data/')
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "addDataWatch:action", 'RESim/')
@@ -561,8 +593,9 @@ class Hooks(UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "backtraceData:action", 'RESim/')
                 opnum = idaapi.get_opnum()
                 if opnum >= 0:
-                    idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/')
-                    idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/')
+                    idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/data/')
+                    idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/data/')
+                    idaapi.attach_action_to_popup(form, popup, "showAsciiMap:action", 'RESim/data/')
                             
 
 #register()
