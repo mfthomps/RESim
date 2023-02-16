@@ -247,6 +247,7 @@ class findKernelWrite():
         SIM_run_alone(self.deleteBroken, None)
         orig_cycle = self.bookmarks.getFirstCycle()
         eip = self.top.getEIP(self.cpu)
+        bm = None
         if self.cpu.cycles == orig_cycle:
             self.lgr.debug('findKernelWrite brokenHap at origin')
             if not self.checkInitialBuffer(self.addr):
@@ -259,6 +260,8 @@ class findKernelWrite():
             self.lgr.debug('findKernelWrite brokenHap NOT at origin')
             bm = "eip:0x%x maybe follows kernel paging of memory:0x%x?" % (eip, self.addr)
             self.bookmarks.setBacktrackBookmark(bm)
+        if bm is not None:
+            self.context_manager.setIdaMessage(bm)
         SIM_run_alone(self.cleanup, False)
         self.lgr.debug('findKernelWrite brokenHap now skip')
         self.top.skipAndMail()
