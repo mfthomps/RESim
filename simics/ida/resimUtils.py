@@ -35,6 +35,7 @@ def dumpFuns(fname=None):
         end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
         for function_ea in idautils.Functions(start,  end):
             funs[function_ea] = {}
+            #unwind = idc.find_text(function_ea, 1, 0, 0, "unwind")
             try:
                 fun_end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)-1
                 funs[function_ea]['start'] = function_ea
@@ -48,6 +49,7 @@ def dumpFuns(fname=None):
         json.dump(funs, fh)
         print('Wrote functions to %s.funs' % fname)
     demangle(fname)
+    unwind(fname)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
@@ -95,3 +97,29 @@ def getHex(s):
         pass
     return retval
 
+def unwind(fname):
+    flag = idc.SEARCH_DOWN | idc.SEARCH_NEXT
+    unwind_list = []
+    count = 0
+    prev_next = 0
+    for ea in idautils.Segments():
+        start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
+        done = False
+        while not done:
+            next = idc.find_text(ea, flag, 0, 0, "unwind")
+            if next == prev_next:
+                break
+            if next is None or next == 0:
+                break
+            if next not in unwind_list:
+                unwind_list.append(next) 
+            #print('unwind at 0x%x' % next)
+            ea = next+8
+            count = count + 1
+            if count > 10000:
+                break
+            prev_next = next 
+    s = json.dumps(unwind_list, indent=4)
+    with open(fname+'.unwind', 'w') as fh:
+        fh.write(s)
+    print('Wrote unwind addresses to %s.unwind' % fname)

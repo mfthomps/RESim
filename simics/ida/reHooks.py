@@ -28,15 +28,20 @@ def getHex(s):
         pass
     return retval
 
-def getRegOffset(eax, reg, opnum):
+def getRegOffset(ea, reg, opnum):
     reg_val = idaversion.getRegVarValue(reg)
     #except: 
     #    ''' reg is a symbol, get its value and read memory at that address '''
     #    x = idc.get_name_ea_simple(reg)
     #    reg_val = idc.read_dbg_dword(x)
     #    print('reg %s is symbol, got x of 0x%x, read that to get 0x%x' % (reg, x, reg_val))
-    offset = idaversion.get_operand_value(eax, opnum)
-    retval = reg_val+offset
+    #print('getRegOffset reg %s  got reg_val 0x%x  ea 0x%x opnum %d' % (reg, reg_val, ea, opnum))
+    offset = idaversion.get_operand_value(ea, opnum)
+    if offset is None: 
+        print('got offset of none?')
+        retval = reg_val
+    else:
+        retval = reg_val+offset
     return retval 
 
 def getRefAddr():
@@ -422,6 +427,25 @@ class StructFieldHandler(idaapi.action_handler_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+class ShowPtrHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        def activate(self, ctx):
+            ref_addr = getRefAddr()
+            print('Show Ptr ref_addr 0x%x' % ref_addr)
+            if ref_addr is not None:
+                ptr = idaversion.get_wide_dword(ref_addr)
+                print('Show Ptr ptr is 0x%x' % ptr)
+                form = idaversion.get_cust_viewer('Hex View-1')
+                if form is not None:
+                    idaapi.jumpto(ptr)
+                else:
+                    print('did not find Hex View-1 form')
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
 def register(isim):
     rev_to_action_desc = idaapi.action_desc_t(
        'rev:action',
@@ -478,6 +502,11 @@ def register(isim):
        'Structure field',
        StructFieldHandler(isim)
        )
+    show_ptr_action_desc = idaapi.action_desc_t(
+       'showPtr:action',
+       'Show ptr',
+       ShowPtrHandler(isim)
+       )
     idaapi.register_action(rev_to_action_desc)
     idaapi.register_action(dis_action_desc)
     idaapi.register_action(rev_cursor_action_desc)
@@ -489,6 +518,7 @@ def register(isim):
     idaapi.register_action(mod_memory_action_desc)
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
+    idaapi.register_action(show_ptr_action_desc)
     print('reHooks did register')
 
 class Hooks(UI_Hooks):
@@ -532,6 +562,7 @@ class Hooks(UI_Hooks):
                 opnum = idaapi.get_opnum()
                 if opnum >= 0:
                     idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/')
+                    idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/')
                             
 
 #register()

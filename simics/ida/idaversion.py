@@ -10,6 +10,7 @@ else:
     import ida_nalt
     import idc
     import ida_bytes
+    import ida_funcs
 
 def refresh_debugger_memory():
     if idaapi.IDA_SDK_VERSION <= 699:
@@ -84,6 +85,7 @@ def getRegVarValue(reg):
         if fn:
             for rv in fn.regvars:
                 regvar_map[rv.user] = rv.canon
+                #print('set regvar_map[%s] to %s' % (rv.user, rv.canon))
         if reg in regvar_map:
             reg = regvar_map[reg]
         else:
@@ -202,6 +204,15 @@ def get_current_widget():
         form = ida_kernwin.get_current_widget()
     return form
 
+def get_cust_viewer(title):
+    retval = None
+    form = find_widget(title)
+    if form is not None:
+        activate_widget(form, True)
+        retval = ida_kernwin.get_current_viewer()
+    return retval
+        
+
 def grab_focus(title):
     done = False
     limit = 10
@@ -285,17 +296,18 @@ def get_screen_ea():
         cursor = idc.get_screen_ea()
     return cursor
 
-def get_operand_value(eax, opnum):
+def get_operand_value(ea, opnum):
     if idaapi.IDA_SDK_VERSION <= 699:
-        offset = idc.GetOperandValue(eax, opnum)
+        offset = idc.GetOperandValue(ea, opnum)
     else:
-        offset = idc.get_operand_value(eax, opnum)
+        offset = idc.get_operand_value(ea, opnum)
+    return offset
 
-def get_operand_type(eax, opnum):
+def get_operand_type(ea, opnum):
     if idaapi.IDA_SDK_VERSION <= 699:
-        offset = idc.GetOpType(eax, opnum)
+        offset = idc.GetOpType(ea, opnum)
     else:
-        offset = idc.get_operand_type(eax, opnum)
+        offset = idc.get_operand_type(ea, opnum)
     return offset
 
 def get_func_name(ea):
