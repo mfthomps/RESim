@@ -235,6 +235,8 @@ class StackTrace():
             except ValueError:
                 #self.lgr.debug('getFunName, %s not a hex' % parts[1])
                 pass
+        if fun is not None and (fun.startswith('.') or fun.startswith('_')):
+            fun = fun[1:]
         return call_addr, fun
 
     def isCallToMe(self, fname, eip):
@@ -594,7 +596,7 @@ class StackTrace():
                     #fun_name = self.ida_funs.getName(faddr)
                     fun_name = self.funFromAddr(faddr)
                 if fun_name is not None:
-                    if fun_name.startswith('.'):
+                    if fun_name.startswith('.') or fun_name.startswith('_'):
                         fun_name = fun_name[1:]
                     retval = '%s %s' % (self.callmn, fun_name)
             except ValueError:
@@ -785,8 +787,6 @@ class StackTrace():
                         fun_hex, fun = self.getFunName(instruct)
                         if fun is not None:
                             if cur_fun_name is not None:
-                                if fun.startswith('.'):
-                                    fun = fun[1:]
                                 if not self.funMatch(fun, cur_fun_name): 
                                     if self.cpu.architecture != 'arm':
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
