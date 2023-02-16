@@ -173,6 +173,9 @@ class DataWatch():
         ''' optimization to avoid hunt for memsomething on iterations '''
         self.not_mem_something = []
 
+        ''' Optimize check for character lookup tables '''
+        self.recent_char_lookup = None
+
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
@@ -1977,6 +1980,7 @@ class DataWatch():
     def loopAdHoc(self, addr, trans_size, start, length, instruct, our_reg, eip, orig_ip):
             ''' Loop through the next several instructions to see if our reg is stored to memory,
                 or pushed onto the stack for a call'''
+            ''' TBD this will miss copies and such that occur in branches.  It assumes no branching between the start and the next'''
             adhoc = False
             next_ip = eip
             next_instruct = instruct
@@ -2118,6 +2122,57 @@ class DataWatch():
             our_reg = self.mem_utils.regs['syscall_ret']
             adhoc = self.loopAdHoc(move_stuff.addr, move_stuff.trans_size, move_stuff.start, move_stuff.length, instruct, our_reg, eip, move_stuff.ip)
 
+    def isCharLookup(self, our_reg, ip, instruct):
+        retval = None
+        if self.recent_char_lookup == ip:
+            retval = 'same char lookup'
+        else:
+            next_ip = ip + instruct[0]
+            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+            for i in range(3):
+                self.lgr.debug('dataWatch isCharLookup ip: 0x%x %d %s' % (next_ip, i, next_instruct[1]))
+                op2, op1 = self.decode.getOperands(next_instruct[1])
+                if self.decode.isReg(op1) and op1 == our_reg and  next_instruct[1].startswith('add') \
+                          and our_reg in op2 and ',' in op2:
+                    self.lgr.debug('dataWatch isCharLookup may be character table lookup at 0x%x' % next_ip)
+                    parts = op2.split(',')
+                    base_reg = parts[0] 
+                    next_ip = next_ip + next_instruct[0]
+                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+      
+                    self.lgr.debug('dataWatch isCharLookup next instruct is %s' % next_instruct[1])
+                    next_op2, next_op1 = self.decode.getOperands(next_instruct[1])
+                    if next_instruct[1].startswith('ldrb') and our_reg in next_op2:
+                        ''' TBD generalize, and add support for x86'''
+                        base_val = self.mem_utils.getRegValue(self.cpu, base_reg) 
+                        inbracket = self.decode.inBracket(next_op2)
+                        if inbracket is not None and ',' in inbracket:
+                            offset_str = inbracket.split(',')[1]
+                            offset = self.decode.getValue(offset_str, self.cpu)
+                            base_val = base_val + offset
+                            outstring = ''
+                            base_val
+                            for i in range(256):
+                                addr = base_val + i
+                                val = self.mem_utils.readByte(self.cpu, addr)
+                                if val != 1:
+                                    hexval = '0x%x' % i
+                                    if i < 127 and i > 19:
+                                        cval = '(%s)' % chr(i)
+                                    else:
+                                        cval = ''
+                                    if len(outstring) == 0:
+                                        outstring = 'Looking for '
+                                    outstring = outstring + ' '+hexval+cval
+    
+                            retval = 'Base value of char map is 0x%x %s' % (base_val, outstring)
+                            self.lgr.debug(retval)
+                    break
+                else:
+                    next_ip = next_ip + next_instruct[0]
+                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+        return retval
+
     def checkMove(self, addr, trans_size, start, length, eip, instruct):
         ''' Does this look like a move from memA=>reg=>memB ? '''
         ''' If so, return dest '''
@@ -2129,7 +2184,7 @@ class DataWatch():
         if instruct[1].startswith('mov') or instruct[1].startswith('ldr'):
             op2, op1 = self.decode.getOperands(instruct[1])
             if self.decode.isReg(op1):
-                #self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
+                self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
                 our_reg = op1
                 adhoc = self.loopAdHoc(addr, trans_size, start, length, instruct, our_reg, eip, orig_ip)
         elif instruct[1].startswith('ldm'):
@@ -2137,8 +2192,21 @@ class DataWatch():
             reg_set = op2
             adhoc = self.loopAdHocMult(addr, trans_size, start, length, instruct, reg_set, eip, orig_ip)
         if not adhoc:
-            #self.lgr.debug('dataWatch checkMove, not adHoc, std data read')
-            self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
+            is_char_lookup = None
+            if instruct[1].startswith('ldrb'):
+                self.lgr.debug('dataWatch is ldrb %s' % instruct[1])
+                op2, op1 = self.decode.getOperands(instruct[1])
+                if self.decode.isReg(op1):
+                    our_reg = op1
+                    is_char_lookup = self.isCharLookup(our_reg, eip, instruct)
+            if is_char_lookup is None:        
+                #self.lgr.debug('dataWatch checkMove, not adHoc, std data read')
+                self.recent_char_lookup = None 
+                self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
+            else:
+                self.recent_char_lookup = eip
+                self.lgr.debug('datawatch checkMove found character lookup')
+                self.watchMarks.charLookupMark(addr, is_char_lookup)
         return retval
 
     def isReuse(self, eip):

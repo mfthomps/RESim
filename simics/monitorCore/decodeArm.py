@@ -251,8 +251,11 @@ def isJump(cpu, instruct, ignore_flags=False):
     return False
 
 def inBracket(op):
-    res = re.find(r'\[.*?\]', op) 
-    return res
+    retval = None
+    op = op.strip()
+    if op.startswith('[') and op.endswith(']'):
+        retval = op[1:-1]
+    return retval
 
 def isBranch(cpu, instruct):
     if instruct.startswith('b') or isCall(cpu, instruct):

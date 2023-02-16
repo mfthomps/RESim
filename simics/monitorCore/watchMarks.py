@@ -449,6 +449,17 @@ class AssignMark():
             self.msg = '%s from 0x%08x (unknown buffer?) to 0x%08x %d bytes' % (fun, src, dest, length)
     def getMsg(self):
         return self.msg
+class CharLookupMark():
+    def __init__(self, addr, stuff):
+        self.addr = addr
+        self.end_addr = addr
+        self.stuff = stuff
+    def extend(self):
+        self.end_addr = self.end_addr+1
+    def getMsg(self):
+        length = self.end_addr - self.addr
+        msg = 'Char Lookup buffer at 0x%x len %d, %s' % (self.addr, length, self.stuff)
+        return msg
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
@@ -579,8 +590,6 @@ class WatchMarks():
         elif ad_hoc:
             if len(self.mark_list) > 0:
                 pm = self.mark_list[-1]
-                if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None:
-                    self.lgr.debug('dataRead previous mark end_addr 0x%x  addr is 0x%x' % (pm.mark.end_addr, addr))
                 if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
                     end_addr = addr + trans_size - 1
                     #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
@@ -942,12 +951,24 @@ class WatchMarks():
         self.addWatchMark(fm)
 
     def assignMark(self, fun, src, dest, length, start):
-        fm = AppendMark(fun, src, dest, length, start)
+        fm = AssignMark(fun, src, dest, length, start)
         self.addWatchMark(fm)
 
+    def charLookupMark(self, addr, msg):
+        add_mark = True
+        if len(self.mark_list) > 0:
+            pm = self.mark_list[-1]
+            if isinstance(pm.mark, CharLookupMark) and addr == (pm.mark.end_addr+1):
+                pm.mark.extend()
+                add_mark = False
+        if add_mark:
+            cm = CharLookupMark(addr, msg)
+            self.addWatchMark(cm)
+        
     def mscMark(self, fun, src):
         fm = MscMark(fun, src)
         self.addWatchMark(fm)
+        self.lgr.debug(fm.getMsg())
 
     def clearWatchMarks(self, record_old=False): 
         self.lgr.debug('watchMarks clearWatchMarks, entered with %d marks and %d stale marks' % (len(self.mark_list), len(self.stale_marks)))
