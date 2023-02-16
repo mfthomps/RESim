@@ -1752,14 +1752,14 @@ class GenMonitor():
         simics_status = SIM_simics_is_running()
         resim_status = self.is_monitor_running.isRunning()
         debug_pid, cpu = self.context_manager[self.target].getDebugPid() 
+        eip = self.getEIP(cpu)
+        retval = None
         if not resim_status and debug_pid is None:
             retval = 'mailbox:exited'
             self.lgr.debug('getEIPWhenStopped debug_pid is gone, return %s' % retval)
             print(retval)
-            return retval
 
-        eip = self.getEIP(cpu)
-        if resim_status and not simics_status:
+        elif resim_status and not simics_status:
             self.lgr.debug('getEIPWhenStopped Simics not running, RESim thinks it is running.  Perhaps gdb breakpoint?')
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             SIM_run_command('pselect %s' % cpu.name)
@@ -1769,35 +1769,29 @@ class GenMonitor():
         elif not resim_status:
             if cpu is None:
                 self.lgr.error('no cpu defined in context manager')
-                return
-            cell_name = self.getTopComponentName(cpu)
-            dum_cpu, comm, pid  = self.task_utils[self.target].curProc()
-            self.lgr.debug('getEIPWhenStopped, pid %d' % (pid)) 
-            if self.gdb_mailbox is not None:
-                self.lgr.debug('getEIPWhenStopped mbox is %s pid is %d (%s) cycle: 0x%x' % (self.gdb_mailbox, pid, comm, cpu.cycles))
-                retval = 'mailbox:%s' % self.gdb_mailbox
-                print(retval)
-                return retval
-            else:
-                self.lgr.debug('getEIPWhenStopped, mbox must be empty?')
-            cpl = memUtils.getCPL(cpu)
-            if cpl == 0 and not kernel_ok:
-                self.lgr.debug('getEIPWhenStopped in kernel pid:%d (%s) eip is %x' % (pid, comm, eip))
-                retval = 'in kernel'
-                print(retval)
-                return retval
-            self.lgr.debug('getEIPWhenStopped pid:%d (%s) eip is %x' % (pid, comm, eip))
-            #if debug_pid != pid:
-            if not self.context_manager[self.target].amWatching(pid):
-                self.lgr.debug('getEIPWhenStopped not watching process pid:%d (%s) eip is %x' % (pid, comm, eip))
-                retval = 'wrong process'
-                print(retval)
-                return retval
-            #SIM_run_command('pselect cpu-name = %s' % cpu.name)
-            retval = 'mailbox:0x%x' % eip
-            print(retval)
-            #print 'cmd is %s' % cmd
-            #SIM_run_command(cmd)
+            else: 
+                dum_cpu, comm, pid  = self.task_utils[self.target].curProc()
+                self.lgr.debug('getEIPWhenStopped, pid %d' % (pid)) 
+                if self.gdb_mailbox is not None:
+                    self.lgr.debug('getEIPWhenStopped mbox is %s pid is %d (%s) cycle: 0x%x' % (self.gdb_mailbox, pid, comm, cpu.cycles))
+                    retval = 'mailbox:%s' % self.gdb_mailbox
+                    print(retval)
+                else:
+                    self.lgr.debug('getEIPWhenStopped, mbox must be empty?')
+                    cpl = memUtils.getCPL(cpu)
+                    if cpl == 0 and not kernel_ok:
+                        self.lgr.debug('getEIPWhenStopped in kernel pid:%d (%s) eip is %x' % (pid, comm, eip))
+                        retval = 'in kernel'
+                        print(retval)
+                    else:
+                        self.lgr.debug('getEIPWhenStopped pid:%d (%s) eip is %x' % (pid, comm, eip))
+                        if not self.context_manager[self.target].amWatching(pid):
+                            self.lgr.debug('getEIPWhenStopped not watching process pid:%d (%s) eip is %x' % (pid, comm, eip))
+                            retval = 'wrong process'
+                            print(retval)
+                        else:
+                            retval = 'mailbox:0x%x' % eip
+                            print(retval)
         else:
             self.lgr.debug('call to getEIPWhenStopped, not stopped at 0x%x' % eip)
             print('not stopped')
