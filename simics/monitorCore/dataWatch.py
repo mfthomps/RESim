@@ -2020,6 +2020,9 @@ class DataWatch():
                     # TBD fix for arm
                     #self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
                     our_reg_list.remove(op1)
+                elif self.cpu.architecture == 'arm' and self.decode.isReg(op1) and op1 in our_reg_list and \
+                     (next_instruct[1].startswith('mov') or next_instruct[1].startswith('sub') or next_instruct[1].startswith('add')):
+                        our_reg_list.remove(op1)
 
                 elif new_sp is not None:
                     #self.lgr.debug('dataWatch loopAdHoc is stack adjust, now 0x%x' % new_sp)
