@@ -450,15 +450,25 @@ class AssignMark():
     def getMsg(self):
         return self.msg
 class CharLookupMark():
-    def __init__(self, addr, stuff):
+    def __init__(self, addr, stuff, length):
         self.addr = addr
         self.end_addr = addr
+        self.length = length
         self.stuff = stuff
     def extend(self):
         self.end_addr = self.end_addr+1
     def getMsg(self):
-        length = self.end_addr - self.addr
+        if self.length is not None:
+            length = self.length
+        else:
+            length = self.end_addr - self.addr
         msg = 'Char Lookup buffer at 0x%x len %d, %s' % (self.addr, length, self.stuff)
+        return msg
+class CharPtrMark():
+    def __init__(self, addr):
+        self.addr = addr
+    def getMsg(self):
+        msg = 'Char Ptr reference at 0x%x' % self.addr
         return msg
 class MscMark():
     def __init__(self, fun, addr):
@@ -954,16 +964,21 @@ class WatchMarks():
         fm = AssignMark(fun, src, dest, length, start)
         self.addWatchMark(fm)
 
-    def charLookupMark(self, addr, msg):
+    def charLookupMark(self, addr, msg, length=None):
         add_mark = True
-        if len(self.mark_list) > 0:
-            pm = self.mark_list[-1]
-            if isinstance(pm.mark, CharLookupMark) and addr == (pm.mark.end_addr+1):
-                pm.mark.extend()
-                add_mark = False
+        if length is None:        
+            if len(self.mark_list) > 0:
+                pm = self.mark_list[-1]
+                if isinstance(pm.mark, CharLookupMark) and addr == (pm.mark.end_addr+1):
+                    pm.mark.extend()
+                    add_mark = False
         if add_mark:
-            cm = CharLookupMark(addr, msg)
+            cm = CharLookupMark(addr, msg, length)
             self.addWatchMark(cm)
+
+    def charPtrMark(self, addr):
+        cm = CharPtrMark(addr)
+        self.addWatchMark(cm)
         
     def mscMark(self, fun, src):
         fm = MscMark(fun, src)
