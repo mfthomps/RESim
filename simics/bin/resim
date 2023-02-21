@@ -13,7 +13,7 @@ fi
 #  Define path to the local RESim repo
 # compatibility...
 export RESIM=$RESIM_DIR
-if [ "$#" -lt 1 ]; then
+if [ "$#" -lt 1 ] || [[ "$#" -eq 1 && "$1" = "-h" ]]; then
     echo "usage: resim <target> [-n] [-b]"
     echo "   Where <target> is the base name of a RESim ini file"
     echo "   Use the -n option to supress the gui and terminal windows."

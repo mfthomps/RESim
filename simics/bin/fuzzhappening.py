@@ -23,12 +23,15 @@ def main():
     afldir = os.getenv('AFL_DIR')
     wu = os.path.join(afldir, 'afl-whatsup')
     parser = argparse.ArgumentParser(prog='fuzzhappening', description='Show fuzzing status of sync dirs')
-    #parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='The include details of fuzzing sessins.')
     args = parser.parse_args()
     here=os.getcwd()
     base=os.path.basename(here)
     sync_dir = aflPath.getTargetPath(base)
-    cmd = '%s -s %s' % (wu, sync_dir)
+    if args.verbose:
+        cmd = '%s %s' % (wu, sync_dir)
+    else:
+        cmd = '%s -s %s' % (wu, sync_dir)
     whatsup = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     output = whatsup.communicate()
     for line in output[1].decode("utf-8").splitlines():
