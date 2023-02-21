@@ -237,13 +237,13 @@ def runAFLTilRestart(args, lgr):
                 afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                       master_slave, fuzzid, port, dict_path, afl_name)
                 lgr.debug('afl_cmd %s' % afl_cmd) 
-                if args.remote or (args.quiet and master_slave == '-S'):
+                if args.remote or ((args.quiet or args.background) and master_slave == '-S'):
                     afllog = '/tmp/%s.log' % fuzzid 
                     fh = open(afllog, 'w')
                     cmd = '%s &' % (afl_cmd)
                     #afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,stderr=fh)
                     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=fh,stderr=fh)
-                elif args.quiet and master_slave == '-M':
+                elif (args.quiet or args.background) and master_slave == '-M':
                     afllog = '../master-%s.log' % fuzzid 
                     fh = open(afllog, 'w')
                     cmd = '%s &' % (afl_cmd)
@@ -315,6 +315,7 @@ def main():
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')
     parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Redirect afl output to file in workspace directory')
+    parser.add_argument('-b', '--background', action='store_true', default=False, help='Run locally in background.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
