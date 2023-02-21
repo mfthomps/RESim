@@ -899,6 +899,7 @@ The following files may be missing from some versions of Simics 6:
 Contact Wind River to get those files (or contact mfthomps at nps.edu).
 
 \subsubsection{IDA Pro installation}
+\label{ida-install}
 The following steps augment a standard IDA installation (which is not covered here.)
 \begin{itemize}
 \item The IDA Pro installation should be configured to use Python 2.7, which must be
@@ -914,7 +915,10 @@ IDA\_DIR variables as described above.
 \item In your {\tt \$IDA\_DIR/cfg} directory, there are a number of xml files that need to be replaced with those found
 in {\tt \$RESIM\_DIR/simics/ida/cfg}.  Backup the original xmls first.
 
-\item Start Ida and configure the debugger to use remote gdb, and configure the Debugger process options to use localhost and port 9123.
+\item Start Ida and configure the debugger to use remote gdb, and configure the Debugger process options to use localhost and port 9123.  Alternately,
+if IDA is run on a different computer than Simics, and the Simics machine can bind to an external 9123 port, set the host to name the server
+on which Simics is running.  Otherwise, communication between the IDA computer and the Simics computer will be via an ssh tunnel, which can be vary slow
+when large amounts of GDB data are exchanged.
 
 \end{itemize}
 
@@ -970,9 +974,11 @@ Once you have identified a program to be analyzed, e.g., by reviewing a system t
 {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
 
 Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
-If IDA will run on a different computer than where Simics is running, include the host name as a command line option.
+If IDA will run on a different computer than where Simics is running, and that remote computer can only be reached via SSH, include the host 
+name as a command line option.  See section \ref{ida-install} for additional information.
 
-The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is localhost and the port is 9123.  Save those as 
+The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is either localhost, or the name of the remote host
+on which Simics is running, and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
 and to only log the exception.  Save the settings.  You should only need to do this step once.
 
@@ -1034,7 +1040,16 @@ newly created program.target.hits file to the program.hits file.
 
 The last option provided to the runIDA command can name a server on which RESim is running. The script will create an ssh tunnel to that
 server using port 9123.  Note that some programs require a lot of data exchange between the gdb server and the client, and using an ssh 
-tunnel can result in poor response times.  Consider using the IDA Debugger/Process options to set the the host explicitl.
+tunnel can result in poor response times.  Consider using the IDA Debugger/Process options to set the host explicitly.
+
+\subsubsection{IDA data decoding}
+A few data decoding options are available on the right-click on a register or memory address.
+\begin{itemize}
+\item Structure Field -- interpret the data as an IDA structure
+\item Show Ptr -- Read an address from the address found in a register and then set the {\tt IDA Hex View-1} window to display the content at that address
+\item Show Ascii Map -- Interpret the next 256 bytes as a regx-type map and display characters corresponding to positions having a value of zero.  Intended
+for use within regx type parsers that refer to compiled expressions.
+\end{itemize}
 
 \subsection{Ghidra}
 A preliminay RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
@@ -1363,7 +1378,7 @@ redundancy because of the way that AFL determines uniqueness.  When fuzzing UPD 
 e.g., if AFL gets 2 UDP packets for one session, and each of result in hit sets already covered by different other sessions, AFL will treat that as a execution
 new path.  For this reason, the quantity of UPD headers is bounded as described in TBD.  
 
-The {\tt dedupCoverage.py} script creates a list of coverage files that are, in some sense, unique.  First, removes duplicate coverage files resulting from
+The {\tt dedupCoverage.py} script creates a list of coverage files that are, in some sense, unique.  First, it removes duplicate coverage files resulting from
 parallel fuzzing.  Next it removes any file whose hits are a subset of another coverage file.  When UDP headers are used, the script first assesses all files from
 sessions having a single UDP packet.  It then considers multi-packet sessions that result in new hits.  And where these match or are subsets, it removes files 
 giving preference to those whose hits occur on the earliest session.
@@ -1786,6 +1801,14 @@ Use the dedupCoverage.py utility to identify unique coverage sets.  If you find 
 deduping yields four, it is worth going back and looking if AFL is observing extraneous processing, either in another thread or
 crude read loops.  TBD if the latter, add switch to force ending at next read?  However that precludes byte-at-a-time receives.
 
+\subsection{Fuzzing in background}
+The {\tt runAFL} command creates an xterminal for each session when run on a single server.  Use {\tt nohup} and the {\tt --background} option to 
+run in the background, e.g., if your X11 server is a local VM that may be interrupted.
+\begin{verbatim}
+    nohup runAFL some.ini -b &
+\end{verbatim}
+Then use the {\tt fuzzhappening.py} script to observe the status of the fuzzing sessions.
+
 \section{Example workflows}
 \label{example-workflows}
 \subsection{Watch consumption of a UDP packet}
@@ -1976,6 +1999,7 @@ instead of the full tracking.
 \section{Data Stores}
 This section describes how RESim stores and accesses different data stores.
 
+\section{IDA data and hits files}
 One goal is to simplify sharing between the RESim platform and the IDA platform,
 which may be the same, or different.
 
@@ -1994,14 +2018,29 @@ and RESim platforms using scp. Each analyzed program has a subdirectory in the {
 directory.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
 a file with a ".prog" extension that identifies the path to program that was analyzed. 
 
-The hits files are stored as lists of basic block addresses.  When {\tt playAFL} is run the hits
-file includes the name of the target.  Per session hits files are also stored in the AFL output
-directory.  These are dictionaries keyed with the basic block address and the values are the
-cpu cycle at which the hit occurs.
+If IDA and Simics run on different computers, and the {\tt runIDA.py} command is given the name of a remote 
+computer, i.e., the IDA computer and the Simics computer communicate via an SSH tunnel, 
+then the system will copy the RESim-generated hits files to the local {\tt RESim\_IDA\_data} directory.  
+Otherwise, you are responsible for running syncIda.sh from the IDA computer.  Provide the optional user name
+if the user IDs differ on the two machines.
+
+
+\subsection{Coverage files}
+The hits files are stored as lists of basic block addresses.  When {\tt playAFL} (or {\tt runPlay} is run the hits
+file includes the name of the target.  Per session coverage files are also stored in the AFL output
+directory.  Coverage files are dictionaries keyed with the basic block address and the values are the
+cpu cycle at which the hit occurs.  When the {\tt playAFL} command is given a single file, RESim will
+display the location of the resulting hits file and the resulting coverage file, as well as any new
+hits that were found.
 
 The addresses in hits files will be based on the static program addresses, i.e., not adjusted
 by the load offset.  Other data sets that include instruction pointers, e.g., trackio records, 
 should include SO map information so that their instruction pointer values can be normalized.
+
+The {\tt dedupeCoverage} utility reads all of the coverage files under an AFL target and generates
+a file with a suffix of \textit{.unique} in the target directory containing a list of sessions that
+create unique sets of execution paths.
+
 
 \section{Utility scripts}
 \label{utilities}
@@ -2328,50 +2367,55 @@ optimization schemes should not try to reduce breakpoint counts on the fly.
 
 \section{ToDo}
 \subsection {Msc}
-Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
+\begin{itemize}
+\item Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
 break on this like we do for execve.
 
-Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
+\item Catching kill of process uses breakpoints on task record next field that points to the subject process's task rec.  Fails if the
 process whose record is watched is killed.  Need to also watch "prev" on the subject process?
 
-Convert traces to csv and explore data presentation strategies for navigating processes and IPC.
+\item Convert traces to csv and explore data presentation strategies for navigating processes and IPC.
 
-Feature to flexibly identify user-space libraries to be traced.
+\item Feature to flexibly identify user-space libraries to be traced.
 
-Enhance the {\tt dataWatch} function improve detection of generic C++ string allocator, and expand watch.
+\item Enhance the {\tt dataWatch} function improve detection of generic C++ string allocator, and expand watch.  Still missing some destroy/dallocation
+of string.
 
-Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap function call and somehow determine it is mmio purposed.  Then
+\item Tracking memory-mapped IO is not directly supported.  Perhaps catch the mmap function call and somehow determine it is mmio purposed.  Then
 set breakpoints...
 
-sscanf data tracking not right for some arm, if 1 or 2 values, r2 and r3 will point to where those go rather than using a pointer list.
+\item sscanf data tracking not right for some arm, if 1 or 2 values, r2 and r3 will point to where those go rather than using a pointer list.
 
-The playAFL function could disable reverse execution, also have it set jumpers to not clear bookmarks.
+\item The playAFL function could disable reverse execution, also have it set jumpers to not clear bookmarks.
 
-Confirm crashReport uses jumpers.
+\item Confirm crashReport uses jumpers.
 
-Add read counts to data watches.
+\item Add read counts to data watches.
 
-dMod scriptReplace sets an lseek DMod to adjust future lseek calls.  The dmod sticks around until the file is closed (even then?, would 
+\item dMod scriptReplace sets an lseek DMod to adjust future lseek calls.  The dmod sticks around until the file is closed (even then?, would 
 have to track pid/FD).
 
-Add fuzzing/coverage option to instrument main program and a lib(s).
+\item Add fuzzing/coverage option to instrument main program and a lib(s).
 
-IDA hotkey to go to address adjusted by the start of the LOAD segment.
+\item IDA hotkey to go to address adjusted by the start of the LOAD segment.
 
-Ad-hoc copies in dataWatch not robust for arm, ignoring register overwrite until we can eliminate case where register is overwritten
+\item Ad-hoc copies in dataWatch not robust for arm, ignoring register overwrite until we can eliminate case where register is overwritten
 with a value derived from its value (x86 has same robustness issue, but it is not ignored).
 
-Investigate ways of limiting IDA debug data sent between client and Simics.  Causes slow responses on remote debugs?
+\item Investigate ways of limiting IDA debug data sent between client and Simics.  Causes slow responses on remote debugs?
 
-Extend maze exit to ARM.
+\item Extend maze exit to ARM.
 
-Error handling when running AFL.  Filter failures cause a hang with no messages.  Simics crashes sometimes seen in /tmp/resim.log
+\item Error handling when running AFL.  Filter failures cause a hang with no messages.  Simics crashes sometimes seen in /tmp/resim.log
 
-writeData has no fallback for a page fault.  Add a hap on the page table to complete the write?  NO, force big prepInject data
+\item writeData has no fallback for a page fault.  Add a hap on the page table to complete the write?  NO, force big prepInject data
 
-Use of debugSnap after having run a while loses state information about threads waiting in syscalls.  Add warnings if simulation is
+\item Use of debugSnap after having run a while loses state information about threads waiting in syscalls.  Add warnings if simulation is
 continued without debugging if there is a snapshot.  Use hap that catches continue?
 
+\item The ida .idb files are per-user, but the function dumps are shared.  Thus function names may not match.  Add tool to upate idb based
+on function list?
+\end{itemize}
 
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
