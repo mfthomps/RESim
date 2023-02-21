@@ -248,6 +248,12 @@ def main():
     for f in hit_dict:
         full = os.path.join(prefix, f)
         full_queue = full.replace('coverage', 'queue')
+        if not os.path.isfile(full_queue):
+            full_queue = full.replace('coverage', 'manual')
+            if not os.path.isfile(full_queue):
+                print('Error, could not find queue file for %s' % full)
+                continue
+            
         count_str = ''
         if udp_header is not None:
             with open(full_queue, 'br') as fh:
