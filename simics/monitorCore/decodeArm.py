@@ -17,7 +17,11 @@ def isReg(reg):
         return False 
 
 def getMn(instruct):
-    return instruct.split()[0]
+    retval = instruct.split()[0]
+    if retval.startswith('ldr') and retval.endswith('b') and len(retval)>4:
+        ''' at&t all over again'''
+        retval = 'ldrb'+retval[3:-1]
+    return retval
 
 def getOperands(instruct):
     mn, rest = instruct.split(' ',1)
@@ -287,3 +291,25 @@ def regCount(op):
         regs = list(regs)
         retval = len(regs)
     return retval 
+
+def isLDRB(cpu, instruct):
+    retval = False
+    mn = getMn(instruct)
+    if mn == 'ldrb':
+        retval = True
+    elif mn.startswith('ldrb') and armCond.condMet(cpu, mn):
+        retval = True
+    return retval
+
+def isAdd(cpu, instruct, lgr=None):
+    retval = False
+    mn = getMn(instruct)
+    if mn == 'add':
+        retval = True
+    elif mn.startswith('add'):
+        N, Z, C, V = armCond.flags(cpu)
+        if lgr is not None:
+            lgr.debug('decodeArm %s isAdd starts with add, flags N: %r Z: %r C: %r V: %r' % (instruct, N,Z,C,V))
+        if armCond.condMet(cpu, mn):
+            retval = True
+    return retval

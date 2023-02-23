@@ -1,5 +1,6 @@
 from simics import *
 import dataWatch
+import armCond
 '''
 Detect and watch regx searches.
 Preliminary, tested with arm and one boost library
@@ -39,14 +40,16 @@ class REWatch(object):
     def isCharLookup(cls, addr, ip, instruct, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr):
         retval = None
         op2, op1 = decode.getOperands(instruct[1])
-        if instruct[1].startswith('ldrb') and decode.isReg(op1):
+        #lgr.debug('reWatch isCharLookup evaluate hit addr 0x%x ip: 0x%x %s' % (addr, ip, instruct[1]))
+        if decode.isLDRB(cpu, instruct[1]) and decode.isReg(op1):
             our_reg = op1
             next_ip = ip + instruct[0]
             next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+            #lgr.debug('reWatch isCharLookup is ldrb our reg is %s' % our_reg)
             for i in range(3):
                 #lgr.debug('reWatch isCharLookup ip: 0x%x %d %s' % (next_ip, i, next_instruct[1]))
                 op2, op1 = decode.getOperands(next_instruct[1])
-                if decode.isReg(op1) and op1 == our_reg and  next_instruct[1].startswith('add') \
+                if decode.isReg(op1) and decode.isAdd(cpu, next_instruct[1]) \
                           and our_reg in op2 and ',' in op2:
                     lgr.debug('reWatch isCharLookup may be character table lookup at 0x%x' % next_ip)
                     parts = op2.split(',')
@@ -56,7 +59,7 @@ class REWatch(object):
       
                     lgr.debug('reWatch isCharLookup next instruct is %s' % next_instruct[1])
                     next_op2, next_op1 = decode.getOperands(next_instruct[1])
-                    if next_instruct[1].startswith('ldrb') and our_reg in next_op2:
+                    if decode.isLDRB(cpu, next_instruct[1]) and op1 in next_op2:
                         ''' TBD generalize, and add support for x86'''
                         base_val = mem_utils.getRegValue(cpu, base_reg) 
                         inbracket = decode.inBracket(next_op2)
@@ -259,7 +262,7 @@ class REWatch(object):
         if ptr is not None:
             value = self.mem_utils.readByte(self.cpu, ptr)
             if value is not None:
-                self.watch_marks.charPtrMark(addr)
+                self.watch_marks.charPtrMark(addr, ptr, value)
                 self.lgr.debug('reWatch resultReadHap hit 0x%x ptr to 0x%x value 0x%x' % (addr, ptr, value))
             else:
                 self.lgr.debug('reWatch resultReadHap, got None reading ptr 0x%x from addr 0x%x, TBD basis for removing hap?' % (ptr, addr))
