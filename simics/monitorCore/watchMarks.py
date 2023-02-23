@@ -465,10 +465,12 @@ class CharLookupMark():
         msg = 'Char Lookup buffer at 0x%x len %d, %s' % (self.addr, length, self.stuff)
         return msg
 class CharPtrMark():
-    def __init__(self, addr):
+    def __init__(self, addr, ptr, value):
         self.addr = addr
+        self.ptr = ptr
+        self.value = value
     def getMsg(self):
-        msg = 'Char Ptr reference at 0x%x' % self.addr
+        msg = 'Char Ptr reference at 0x%x, pointer to 0x%x value: 0x%x' % (self.addr, self.ptr, self.value)
         return msg
 class MscMark():
     def __init__(self, fun, addr):
@@ -976,8 +978,8 @@ class WatchMarks():
             cm = CharLookupMark(addr, msg, length)
             self.addWatchMark(cm)
 
-    def charPtrMark(self, addr):
-        cm = CharPtrMark(addr)
+    def charPtrMark(self, addr, ptr, value):
+        cm = CharPtrMark(addr, ptr, value)
         self.addWatchMark(cm)
         
     def mscMark(self, fun, src):
@@ -1287,6 +1289,17 @@ class WatchMarks():
                 entry['mark_type'] = 'len' 
                 entry['src'] = mark.mark.src
                 entry['count'] = mark.mark.count
+            elif isinstance(mark.mark, CharLookupMark):
+                entry['mark_type'] = 'char_lookup' 
+                entry['addr'] = mark.mark.addr
+                entry['length'] = mark.mark.length
+                entry['stuff'] = mark.mark.stuff
+            elif isinstance(mark.mark, CharPtrMark):
+                entry['mark_type'] = 'char_ptr' 
+                entry['addr'] = mark.mark.addr
+                entry['ptr'] = mark.mark.ptr
+                entry['value'] = mark.mark.value
+
 
             elif isinstance(mark.mark, IteratorMark) or isinstance(mark.mark, KernelModMark) or isinstance(mark.mark, SetMark):
                 continue
