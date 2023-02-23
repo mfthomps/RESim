@@ -3638,6 +3638,7 @@ class GenMonitor():
             self.coverage.saveCoverage()
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
+        print('Tracking complete.')
 
     def clearWatches(self, cycle=None):
         self.dataWatch[self.target].clearWatches(cycle=cycle)
@@ -3918,6 +3919,7 @@ class GenMonitor():
         self.watchPageFaults(pid)
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
+        self.rmDebugWarnHap()
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
@@ -4343,6 +4345,7 @@ class GenMonitor():
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
+        self.rmDebugWarnHap()
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
@@ -4564,9 +4567,7 @@ class GenMonitor():
 
     def debugSnap(self, final_fun=None):
         retval = True
-        if self.snap_warn_hap is not None:
-            SIM_run_alone(self.rmWarnHap, self.snap_warn_hap)
-            self.snap_warn_hap = None
+        self.rmDebugWarnHap()
         if self.debug_info is not None and 'pid' in self.debug_info:
             self.debugPidGroup(self.debug_info['pid'], to_user=False, final_fun=final_fun)
             self.lgr.debug('debugSnap did debugPidGroup for pid %d' % self.debug_info['pid'])
@@ -4890,10 +4891,16 @@ class GenMonitor():
         fname = self.ida_funs.getFunName(addr)
         print('fun for 0x%x is %s' % (addr, fname))
 
+    def rmDebugWarnHap(self):
+        if self.snap_warn_hap is not None:
+            self.rmWarnHap(self.snap_warn_hap)
+            self.snap_warn_hap = None
+
     def rmWarnHap(self, hap):
         RES_hap_delete_callback_id("Core_Continuation", hap)
 
     def warnSnapshotHap(self, stop_action, one):
+        self.lgr.debug('warnSnapShot')
         if self.snap_warn_hap is None:
             return
         debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
