@@ -136,7 +136,7 @@ def getAFLCoverageList(target, get_all=False, host=None):
             glist = [f for f in glob.glob(glob_mask) if 'src' in f or 'orig' in f]
         else:
             ''' this is where manual adds store their coverage '''
-            manual = os.path.join(afl_dir, 'coverage')
+            manual = os.path.join(afl_dir, 'manual_coverage')
             if os.path.isdir(manual):
                 manual_list = os.listdir(manual)
                 for f in manual_list:
@@ -176,7 +176,7 @@ def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
             grand = os.path.dirname(os.path.dirname(full))
             new = os.path.join(grand, 'queue', base)
             if not os.path.isfile(new):
-                new = os.path.join(grand, 'manual', base)
+                new = os.path.join(grand, 'manual_queue', base)
                 if not os.path.isfile(new):
                     print('ERROR: %s not found' % base)
                     continue
@@ -200,7 +200,7 @@ def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
             qdir = os.path.join(afl_dir, 'queue')
             if os.path.isdir(qdir):
                 afl_list = [os.path.join(qdir, f) for f in os.listdir(qdir) if os.path.isfile(os.path.join(qdir, f))]
-    manual = os.path.join(afl_dir, 'manual')
+    manual = os.path.join(afl_dir, 'manual_queue')
     if os.path.isdir(manual):
         manual_list = os.listdir(manual)
         for f in manual_list:
