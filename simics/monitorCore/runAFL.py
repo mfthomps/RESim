@@ -49,19 +49,22 @@ def ioHandler(read_array, stop, lgr):
                     fh.flush()
                    
 
-def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
+def handleClose(resim_procs, read_array, duration, background, fifo_list, lgr):
     stop_threads = False
     io_handler = threading.Thread(target=ioHandler, args=(read_array, lambda: stop_threads, lgr))
     io_handler.start()
     total_time = 0
     sleep_time = 4
     do_restart = False
-    if duration is None:
-        print('any key to quit')
+    if not background:
+        if duration is None:
+            print('any key to quit')
+        else:
+            print('any key to quit, or will exit in %d seconds' % duration)
     else:
-        print('any key to quit, or will exit in %d seconds' % duration)
+        print('Running in background.  Use kill-afl.sh to stop it.')
     while (duration is None or total_time < duration) and not os.path.isfile('/tmp/resimdie.txt'):
-        if remote:
+        if background:
             time.sleep(sleep_time)
         else:
             i, o, e = select.select( [sys.stdin], [], [], sleep_time )
@@ -103,7 +106,7 @@ def handleClose(resim_procs, read_array, duration, remote, fifo_list, lgr):
         fd.close()
     return do_restart
 
-def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, lgr):
+def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, background, lgr):
 
     try:
         os.remove('resim_ctl.fifo')
@@ -138,7 +141,7 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     fh = os.open('resim_ctl.fifo', os.O_WRONLY)
     lgr.debug('doOne back from open fifo')
     fifo_list.append(fh)
-    do_restart = handleClose(resim_procs, read_array, timeout, False, fifo_list, lgr)
+    do_restart = handleClose(resim_procs, read_array, timeout, background, fifo_list, lgr)
 
     return do_restart
     
@@ -281,11 +284,12 @@ def runAFLTilRestart(args, lgr):
             os.chdir(here)
             master_slave = '-S'
             port = port + 1
-
-        do_restart = handleClose(resim_procs, read_array, args.seconds, args.remote, fifo_list, lgr)
+        background = args.remote | args.background
+        do_restart = handleClose(resim_procs, read_array, args.seconds, background, fifo_list, lgr)
     else:
         lgr.debug('Running single instance')
-        do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, lgr)
+        background = args.remote | args.background
+        do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, background, lgr)
     return do_restart
 
 def runAFL(args, lgr):
