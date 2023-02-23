@@ -31,8 +31,6 @@ def findBB(target, bb, quiet=False):
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
                 if not os.path.isfile(queue):
-                    queue = cover.replace('coverage', 'manual')
-                    if not os.path.isfile(queue):
                         queuereal = cover.replace('coverage', 'queue')
                         print('Could not find file at %s' % queue)
                         print('or at %s' % queuereal)
@@ -71,12 +69,12 @@ def getWatchMark(trackio, bb, prog, quiet=False):
     if not os.path.isfile(trackio):
         if not quiet:
             print('ERROR: no trackio file at %s' % trackio)
-        return None
+        return retval
     try:
         tjson = json.load(open(trackio))
     except:
-        #print('ERROR: failed reading json from %s' % trackio)
-        return None
+        print('ERROR: failed reading json from %s' % trackio)
+        return retval
     index = 1
     somap = tjson['somap']
     wrong_file = False

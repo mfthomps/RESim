@@ -14,12 +14,18 @@ splits = {}
 def getTrack(f):
     base = os.path.basename(f)
     cover = os.path.dirname(f)
-    track = os.path.join(os.path.dirname(cover), 'trackio', base)
+    if os.path.basename(cover).startswith ('manual_'):
+        track = os.path.join(os.path.dirname(cover), 'manual_trackio', base)
+    else:
+        track = os.path.join(os.path.dirname(cover), 'trackio', base)
     return track
 def getQueue(f):
     base = os.path.basename(f)
     cover = os.path.dirname(f)
-    track = os.path.join(os.path.dirname(cover), 'queue', base)
+    if os.path.basename(cover).startswith ('manual_'):
+        track = os.path.join(os.path.dirname(cover), 'manual_queue', base)
+    else:
+        track = os.path.join(os.path.dirname(cover), 'queue', base)
     return track
 
 class TrackResult():

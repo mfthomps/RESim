@@ -60,7 +60,7 @@ def getQFile(f):
         instance = os.path.dirname(parent)
         queue = os.path.join(instance, 'queue', base)
         if not os.path.isfile(queue):
-            queue = os.path.join(instance, 'manual', base)
+            queue = os.path.join(instance, 'manual_queue', base)
             if not os.path.isfile(queue):
                 realqueue = os.path.join(instance, 'queue', base)
                 print('No file at %s' % queue)
