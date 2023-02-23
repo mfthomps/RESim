@@ -87,10 +87,11 @@ class IDAFuns():
         return None, None
  
     def getName(self, fun):
+        retval = None
         if fun in self.funs:
-            return self.funs[fun]['name']
-        else:
-            return None
+            retval = self.funs[fun]['name']
+            
+        return retval
 
     def inFun(self, ip, fun):
         #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
