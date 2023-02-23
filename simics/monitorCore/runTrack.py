@@ -44,17 +44,22 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, in
     with open(log, 'wb') as fh:
         for f in afl_list:
             #os.chdir(here)
+            lgr.debug('oneTrack, f: %s' % f)
             now_here = os.getcwd()
-            lgr.debug('oneTrack, here: %s, cwd says %s' % (here, now_here))
+            #lgr.debug('oneTrack, here: %s, cwd says %s' % (here, now_here))
             os.environ['ONE_DONE_PATH'] = f
             base = os.path.basename(f)
-            tdir = os.path.dirname(os.path.dirname(f))
-            trackdir = os.path.join(tdir, 'trackio')
+            pdir = os.path.dirname(f)
+            tdir = os.path.dirname(pdir)
+            if os.path.basename(pdir) == 'manual_queue':
+                trackdir = os.path.join(tdir, 'manual_trackio')
+            else:
+                trackdir = os.path.join(tdir, 'trackio')
             try:
                 os.mkdir(trackdir)
             except:
                 pass
-            trackoutput = os.path.join(tdir, 'trackio', base)
+            trackoutput = os.path.join(trackdir, base)
             if os.path.isfile(trackoutput):
                 lgr.debug('%s path exists, skip it %s' % (workspace, trackoutput))
                 continue

@@ -378,7 +378,10 @@ class PlayAFL():
     def getHitsPath(self, index):
         queue_dir = os.path.dirname(self.afl_list[index])
         queue_parent = os.path.dirname(queue_dir)
-        coverage_dir = os.path.join(queue_parent, 'coverage')
+        if os.path.basename(queue_dir) == 'manual_queue':
+            coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+        else:
+            coverage_dir = os.path.join(queue_parent, 'coverage')
         try:
             os.makedirs(coverage_dir)
         except:
