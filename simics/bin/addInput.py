@@ -17,7 +17,7 @@ def main():
          target = os.path.basename(here)
          target_path = aflPath.getTargetPath(target) 
          if os.path.isdir(target_path):
-             manual = os.path.join(target_path, 'manual')
+             manual = os.path.join(target_path, 'manual_queue')
              try:
                  os.mkdir(manual)
              except:
@@ -28,7 +28,7 @@ def main():
                  print('%s copied to %s' % (args.path, dest))
                  if args.force:
                      ''' remove any coverage file '''
-                     coverage = dest.replace('manual', 'coverage')
+                     coverage = dest.replace('_queue', '_coverage')
                      try:
                          os.remove(coverage)
                      except:
