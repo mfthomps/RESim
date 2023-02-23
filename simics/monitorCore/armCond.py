@@ -26,6 +26,9 @@ def condMet(cpu, mn):
     N, Z, C, V = flags(cpu)
     if mn.endswith('fd') or mn.endswith('fa') or mn.endswith('ed') or mn.endswith('ea'):
         mn = mn[:-2]
+    if mn.endswith('b'):
+        ' $#!&^^! why divergent mnemonics?'
+        mn = mn[:-1]
     if mn.endswith('eq'):
         return Z
     elif mn.endswith('ne'):
