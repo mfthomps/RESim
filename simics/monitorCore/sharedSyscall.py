@@ -29,11 +29,17 @@ import net
 import ipc
 import allWrite
 import syscall
+import epoll
 from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
 matched parameters are handled by the stopHap in the syscall module that handled the call.
 '''
+def isPrintable(thebytes):
+    for b in thebytes:
+        if b > 0x7f:
+            return False
+    return True
 class SharedSyscall():
     def __init__(self, top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_execve = []
@@ -402,15 +408,19 @@ class SharedSyscall():
             s = ''
             if eax >= 0:
                 msghdr = exit_info.msghdr
-                trace_msg = ('\treturn from socketcall %s pid:%d FD: %d count: %d %s' % (socket_callname, pid, exit_info.old_fd, eax, msghdr.getString()))
+                if msghdr is None:
+                    trace_msg = ('\treturn from socketcall %s pid:%d FD: %s count: %d no msghdr' % (socket_callname, pid, str(exit_info.old_fd), eax))
+                else:
+                    trace_msg = ('\treturn from socketcall %s pid:%d FD: %s count: %d %s' % (socket_callname, pid, str(exit_info.old_fd), eax, msghdr.getString()))
                 if pid in self.trace_procs:
                     if self.traceProcs.isExternal(pid, exit_info.old_fd):
                         trace_msg = trace_msg +' EXTERNAL'
                 trace_msg = trace_msg + '\n'
-                s =msghdr.getBytes()
-                trace_msg = trace_msg+'\t'+s+'\n'
+                if msghdr is not None:
+                    s =msghdr.getBytes()
+                    trace_msg = trace_msg+'\t'+s+'\n'
             else:
-                trace_msg = ('\terror return from socketcall %s pid:%d, FD: %d, exception: %d\n' % (socket_callname, pid, exit_info.old_fd, eax))
+                trace_msg = ('\terror return from socketcall %s pid:%d, FD: %s, exception: %d\n' % (socket_callname, pid, str(exit_info.old_fd), eax))
             if exit_info.call_params is not None:
                 if syscall.DEST_PORT in exit_info.call_params.param_flags: 
                     self.lgr.debug('sharedSyscall sendmsg found dest port match.')
@@ -554,7 +564,7 @@ class SharedSyscall():
                 rcount = min(count, 80)
                 thebytes, dumb = self.mem_utils.getBytes(self.cpu, rcount, exit_info.retval_addr)
                 optval_val = 'optlen: %d option: %s' % (count, thebytes)
-            trace_msg = ('\treturn from getsockopt %s result %d\n' % (optval_val, eax))
+            trace_msg = ('\treturn from getsockopt pid:%d %s result %d\n' % (pid, optval_val, eax))
           
         else:
             #fd = self.mem_utils.readWord32(self.cpu, params)
@@ -598,7 +608,8 @@ class SharedSyscall():
         else:
             trace_msg = ('\treturn from fcntl64  pid %d, old_fd: %d retval: %d\n' % (pid, exit_info.old_fd, eax))
             return trace_msg
-        
+       
+            
     def handleExit(self, exit_info, pid, comm):
         ''' 
            Invoked on (almost) return to user space after a system call.
@@ -805,7 +816,10 @@ class SharedSyscall():
                 if self.traceFiles is not None:
                     self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 if byte_array is not None:
-                    s = ''.join(map(chr,byte_array))
+                    if isPrintable(byte_array):
+                        s = ''.join(map(chr,byte_array))
+                    else:
+                        s = byte_string
                     if self.traceFiles is not None:
                         byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                         self.traceFiles.read(pid, exit_info.old_fd, byte_array)
@@ -866,9 +880,11 @@ class SharedSyscall():
                     max_len = min(eax, 1024)
                     byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                     if byte_array is not None:
-                        s = ''.join(map(chr,byte_array[:max_len]))
+                        if isPrintable(byte_array[:max_len]):
+                            s = ''.join(map(chr,byte_array[:max_len]))
+                        else:
+                            s = byte_string[:max_len]
                         if self.traceFiles is not None:
-                            byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                             self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     else:
                         s = '<<NOT MAPPED>>'
@@ -1041,6 +1057,17 @@ class SharedSyscall():
                 self.rmPendingExecve(pid)
         elif callname == 'socketcall' or callname.upper() in net.callname:
             trace_msg = self.doSockets(exit_info, eax, pid)
+        elif callname == 'epoll_wait' or callname == 'epoll_pwait':
+             cur_ptr = exit_info.epoll_wait.events
+             trace_msg = ('\treturn from %s pid:%d epfd: %d eax %d maxevents: %d cur_ptr: 0x%x\n' % (callname, pid, exit_info.old_fd, eax, exit_info.epoll_wait.maxevents, cur_ptr))
+             self.lgr.debug(trace_msg)
+             for i in range(eax):
+                 trace_msg = trace_msg+epoll.getEvent(self.cpu, self.mem_utils, cur_ptr, self.lgr)
+                 cur_ptr = cur_ptr+4+self.mem_utils.WORD_SIZE+12
+        elif callname == 'eventfd' or callname == 'eventfd2':
+             trace_msg = ('\treturn from %s pid:%d  FD: %d\n' % (callname, pid, eax))
+        elif callname == 'timerfd_create':
+             trace_msg = ('\treturn from %s pid:%d  FD: %d\n' % (callname, pid, eax))
         else:
             trace_msg = ('\treturn from call %s code: 0x%x  pid:%d\n' % (callname, ueax, pid))
 
