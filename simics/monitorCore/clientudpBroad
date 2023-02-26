@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-#  Send multiple UDP packets as read from a file found
-#  at /tmp/sendudp, with packets delimited by RrUdP
+#  Broadcast multiple UDP packets as read from a file found
+#  at /tmp/sendudp, with packets delimited by a given header
 #
 import sys
 import time
