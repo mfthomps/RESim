@@ -91,7 +91,7 @@ class SOMap():
             cpu, comm, pid = self.task_utils.curProc() 
             #self.lgr.debug('SOMap isCode, regot pid after getSOPid failed, pid:%d missing from so_file_map' % pid)
             return False
-        if pid in self.prog_start and address >= self.prog_start[pid] and address <= self.prog_end[pid]:
+        if pid in self.prog_start and self.prog_start[pid] is not None and address >= self.prog_start[pid] and address <= self.prog_end[pid]:
             return True
         if pid not in self.so_file_map:
             pid = self.task_utils.getCurrentThreadLeaderPid()
@@ -168,7 +168,7 @@ class SOMap():
                 pid = in_pid
         if pid is None:
             self.lgr.error('soMap setContext found for any input pids %s' % (str(pid_list)))
-        elif pid in self.prog_start:
+        elif pid in self.prog_start and self.prog_start[pid] is not None:
             self.context_manager.recordText(self.prog_start[pid], self.prog_end[pid])
         else:
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
@@ -227,7 +227,7 @@ class SOMap():
 
     def listSO(self):
         for pid in self.so_file_map:
-            if pid in self.prog_start:
+            if pid in self.prog_start and self.prog_start[pid] is not None:
                 print('pid:%d  0x%x - 0x%x   %s' % (pid, self.prog_start[pid], self.prog_end[pid], self.text_prog[pid]))
             else:
                 print('pid:%d  no text found' % pid)
@@ -242,7 +242,7 @@ class SOMap():
             print('no so map for %d' % pid)
         print('SO Map for threads led by group leader pid: %d' % pid)
         if pid in self.so_file_map:
-            if pid in self.prog_start:
+            if pid in self.prog_start and self.prog_start[pid] is not None:
                 print('0x%x - 0x%x   %s' % (self.prog_start[pid], self.prog_end[pid], self.text_prog[pid]))
             else:
                 print('pid %d not in text sections' % pid)
@@ -268,7 +268,7 @@ class SOMap():
             cpu, comm, pid = self.task_utils.curProc() 
         retval['group_leader'] = pid
         if pid in self.so_file_map:
-            if pid in self.prog_start:
+            if pid in self.prog_start and self.prog_start[pid] is not None:
                 retval['prog_start'] = self.prog_start[pid]
                 retval['prog_end'] = self.prog_end[pid]
                 retval['prog'] = self.text_prog[pid]
@@ -312,7 +312,7 @@ class SOMap():
                         if pid in self.so_addr_map:
                             self.so_addr_map[tpid] = self.so_addr_map[pid]
                             self.so_file_map[tpid] = self.so_file_map[pid]
-                        if pid in self.prog_start:
+                        if pid in self.prog_start and self.prog_start[pid] is not None:
                             self.prog_start[tpid] = self.prog_start[pid]
                             self.prog_end[tpid] = self.prog_end[pid]
                             self.text_prog[tpid] = self.text_prog[pid]
@@ -389,8 +389,11 @@ class SOMap():
         if pid is None:
             return None
         if pid in self.so_file_map:
-            if pid not in self.prog_start:
+            if pid not in self.prog_start and self.prog_start[pid] is not None:
                 self.lgr.warning('SOMap getSOFile pid %d in so_file map but not text_start' % pid)
+                return None
+            if self.prog_end[pid] is None:
+                self.lgr.warning('SOMap getSOFile pid %d in so_file map but None for text_end' % pid)
                 return None
             if addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
                 retval = self.text_prog[pid]
@@ -415,7 +418,7 @@ class SOMap():
         if pid is None:
             return None
         if pid in self.so_file_map:
-            if addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
+            if pid in self.prog_start and self.prog_start[pid] is not None and addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
                 retval = self.text_prog[pid], self.prog_start[pid], self.prog_end[pid]
             else:
                 #for text_seg in sorted(self.so_file_map[pid]):
