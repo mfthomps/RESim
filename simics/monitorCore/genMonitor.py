@@ -2040,14 +2040,20 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname):
+    def runToCall(self, callname, pid=None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
-        call_params = []
+        if pid is not None:
+            pid_match = syscall.PidFilter(pid)
+            pid_param = syscall.CallParams('callname', pid_match, break_simulation=True) 
+            call_params = [pid_param]
+            self.lgr.debug('runToCall %s set pid filter' % callname)
+        else:
+            call_params = []
         self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                  self.mem_utils[self.target], self.task_utils[self.target], 
                  self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
-                 call_params=call_params, stop_on_call=True, targetFS=self.targetFS[self.target])
+                 call_params=call_params, stop_on_call=True, targetFS=self.targetFS[self.target], name=callname)
 
     def runToSyscall(self, callnum = None):
         cell = self.cell_config.cell_context[self.target]
