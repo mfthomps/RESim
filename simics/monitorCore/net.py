@@ -1,6 +1,7 @@
 import pickle
 import os
 from simics import *
+import resimUtils
 SOCKET      =1 
 BIND        =2
 CONNECT     =3
@@ -299,8 +300,8 @@ class Msghdr():
                 length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
                 limit = min(length, 80)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, limit, base)
-                s = ''.join(map(chr,byte_array))
+                byte_array = self.mem_utils.getBytes(self.cpu, limit, base)
+                s = resimUtils.getHexDump(byte_array[:1024])
                 self.lgr.debug('base 0x%x length %d str: %s' % (base, length, s))
                 retval = retval + s
                 iov_addr = iov_addr+iov_size

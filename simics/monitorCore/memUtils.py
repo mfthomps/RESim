@@ -604,12 +604,11 @@ class memUtils():
 
     def getBytes(self, cpu, num_bytes, addr, phys_in=False):
         '''
-        Get a hex string of num_bytes from the given address using Simics physical memory reads, which return tuples.
+        Get a byte array of length num_bytes from the given address using Simics physical memory reads, which return tuples.
         '''
         done = False
         curr_addr = addr
         bytes_to_go = num_bytes
-        retval = ''
         retbytes = ()
         #print 'in getBytes for 0x%x bytes' % (num_bytes)
         while not done and bytes_to_go > 0 and curr_addr is not None:
@@ -639,7 +638,7 @@ class memUtils():
                 print('trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
                 print('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
-                return retval, retbytes
+                return retbytes
             holder = ''
             count = 0
             for v in read_data:
@@ -648,11 +647,60 @@ class memUtils():
                 #self.lgr.debug('add v of %2x holder now %s' % (v, holder))
             retbytes = retbytes+read_data
             del read_data
+            bytes_to_go = bytes_to_go - bytes_to_read
+            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
+            curr_addr = curr_addr + bytes_to_read
+        return retbytes
+
+    def getBytesHex(self, cpu, num_bytes, addr, phys_in=False):
+        '''
+        Get a hex string of num_bytes from the given address using Simics physical memory reads, which return tuples.
+        '''
+        done = False
+        curr_addr = addr
+        bytes_to_go = num_bytes
+        retval = ''
+        #print 'in getBytes for 0x%x bytes' % (num_bytes)
+        while not done and bytes_to_go > 0 and curr_addr is not None:
+            bytes_to_read = bytes_to_go
+            remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
+            #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
+            if remain_in_page < bytes_to_read:
+                bytes_to_read = remain_in_page
+            if bytes_to_read > 1024:
+                bytes_to_read = 1024
+            #phys_block = cpu.iface.processor_info.logical_to_physical(curr_addr, Sim_Access_Read)
+            if phys_in:
+                phys = curr_addr
+            else:
+                phys = self.v2p(cpu, curr_addr)
+            if phys is None:
+                self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
+                #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
+                return None, None
+            #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
+            try:
+                #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
+                read_data = readPhysBytes(cpu, phys, bytes_to_read)
+            except ValueError:
+            #except:
+                #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
+                print('trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
+                print('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
+                self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
+                return retval
+            holder = ''
+            count = 0
+            for v in read_data:
+                count += 1
+                holder = '%s%02x' % (holder, v)
+                #self.lgr.debug('add v of %2x holder now %s' % (v, holder))
+            del read_data
             retval = '%s%s' % (retval, holder)
             bytes_to_go = bytes_to_go - bytes_to_read
             #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
             curr_addr = curr_addr + bytes_to_read
-        return retval, retbytes
+        return retval
 
     def writeWord(self, cpu, address, value):
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)

@@ -11,6 +11,7 @@ import pageUtils
 import elfText
 import dmod
 import epoll
+import resimUtils
 import sys
 import copy
 from resimHaps import *
@@ -1335,7 +1336,7 @@ class Syscall():
             optval_val = ''
             if socket_callname == 'setsockopt' and optval != 0:
                 rcount = min(optlen, 80)
-                thebytes, dumb =  self.mem_utils.getBytes(self.cpu, rcount, optval)
+                thebytes =  self.mem_utils.getBytesHex(self.cpu, rcount, optval)
                 if thebytes is not None:
                     optval_val = 'option: %s' % thebytes
                 else:
@@ -1653,6 +1654,17 @@ class Syscall():
             count = frame['param3']
             ida_msg = 'write pid:%d (%s) FD: %d buf: 0x%x count: %d' % (pid, comm, frame['param1'], frame['param2'], count)
             exit_info.retval_addr = frame['param2']
+            '''
+            max_len = min(count, 1024)
+            byte_string, byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+            if byte_array is not None:
+                if resimUtils.isPrintable(byte_array):
+                    s = ''.join(map(chr,byte_array))
+                else:
+                    s = byte_string
+                exit_info.fname = s
+            '''
+
             ''' check runToIO '''
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):

@@ -29,17 +29,13 @@ import net
 import ipc
 import allWrite
 import syscall
+import resimUtils
 import epoll
 from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
 matched parameters are handled by the stopHap in the syscall module that handled the call.
 '''
-def isPrintable(thebytes):
-    for b in thebytes:
-        if b > 0x7f:
-            return False
-    return True
 class SharedSyscall():
     def __init__(self, top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, lgr):
         self.pending_execve = []
@@ -378,11 +374,10 @@ class SharedSyscall():
         elif socket_callname == "send" or socket_callname == "sendto": 
             if eax >= 0:
                 nbytes = min(eax, 256)
-                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
+                byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                 if byte_array is not None:
-                    s = ''.join(map(chr,byte_array))
+                    s = resimUtils.getHexDump(byte_array[:nbytes])
                     if self.traceFiles is not None:
-                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                         self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
@@ -436,11 +431,10 @@ class SharedSyscall():
                 eax = self.read_fixup_callback(exit_info.old_fd)
             if eax >= 0:
                 nbytes = min(eax, 256)
-                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, nbytes, exit_info.retval_addr)
+                byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                 if byte_array is not None:
-                    s = ''.join(map(chr,byte_array))
+                    s = resimUtils.getHexDump(byte_array[:nbytes])
                     if self.traceFiles is not None:
-                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                         self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
@@ -562,7 +556,7 @@ class SharedSyscall():
                 ''' note exit_info.count is ptr to returned count '''
                 count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                 rcount = min(count, 80)
-                thebytes, dumb = self.mem_utils.getBytes(self.cpu, rcount, exit_info.retval_addr)
+                thebytes = self.mem_utils.getBytesHex(self.cpu, rcount, exit_info.retval_addr)
                 optval_val = 'optlen: %d option: %s' % (count, thebytes)
             trace_msg = ('\treturn from getsockopt pid:%d %s result %d\n' % (pid, optval_val, eax))
           
@@ -810,18 +804,12 @@ class SharedSyscall():
                         break
 
             if eax >= 0 and exit_info.retval_addr is not None:
-                limit = min(eax, 80)
-                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                byte_string, byte_array = self.mem_utils.getBytes(self.cpu, limit, exit_info.retval_addr)
-                if self.traceFiles is not None:
-                    self.traceFiles.read(pid, exit_info.old_fd, byte_array)
+
+                max_len = min(eax, 1024)
+                byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                 if byte_array is not None:
-                    if isPrintable(byte_array):
-                        s = ''.join(map(chr,byte_array))
-                    else:
-                        s = byte_string
+                    s = resimUtils.getHexDump(byte_array[:max_len])
                     if self.traceFiles is not None:
-                        byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                         self.traceFiles.read(pid, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
@@ -878,12 +866,15 @@ class SharedSyscall():
         elif callname == 'write':
             if eax >= 0 and exit_info.retval_addr is not None:
                     max_len = min(eax, 1024)
-                    byte_string, byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                    byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
                     if byte_array is not None:
-                        if isPrintable(byte_array[:max_len]):
-                            s = ''.join(map(chr,byte_array[:max_len]))
-                        else:
-                            s = byte_string[:max_len]
+                        s = resimUtils.getHexDump(byte_array[:max_len])
+                        '''
+                        if s != exit_info.fname[:max_len]:
+                            self.lgr.error('write is not what was written cycles: 0x%x' % self.cpu.cycles)
+                            self.lgr.error('at call time: %s' % exit_info.fname)
+                            self.lgr.error('now         : %s' % s)
+                        '''
                         if self.traceFiles is not None:
                             self.traceFiles.write(pid, exit_info.old_fd, byte_array)
                     else:

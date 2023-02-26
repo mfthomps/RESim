@@ -75,7 +75,6 @@ class PrepInject():
                 length = self.getLength()
                 ''' TBD if this falls on a page boundary, cannot get all original bytes?  be sure to run the service first!'''
                 orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length)
-                #orig_buffer, dumb = self.mem_utils.getBytes(self.cpu, length, retval_addr_phys, phys_in=True)
                 if orig_buffer is not None:
                     self.lgr.debug('prepInject instrumentAlone got orig buffer from phys memory len %d syscall len was %d' % (len(orig_buffer), length))
                 else:

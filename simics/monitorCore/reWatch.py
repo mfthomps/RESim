@@ -41,6 +41,7 @@ class REWatch(object):
         retval = None
         op2, op1 = decode.getOperands(instruct[1])
         #lgr.debug('reWatch isCharLookup evaluate hit addr 0x%x ip: 0x%x %s' % (addr, ip, instruct[1]))
+        ''' TBD generalize for x86 '''
         if decode.isLDRB(cpu, instruct[1]) and decode.isReg(op1):
             our_reg = op1
             next_ip = ip + instruct[0]

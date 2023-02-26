@@ -235,7 +235,7 @@ class Dmod():
     def checkString(self, cpu, addr, count, pid=None, fd=None):
         ''' Modify content at the given addr if content meets the Dmod criteria '''
         retval = False
-        byte_string, byte_array = self.mem_utils.getBytes(cpu, count, addr)
+        byte_array = self.mem_utils.getBytes(cpu, count, addr)
         if byte_array is None:
             self.lgr.debug('Dmod checkstring bytearray None from 0x%x' % addr)
             return retval
