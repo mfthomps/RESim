@@ -118,6 +118,12 @@ extended to support alternate architectures, e.g., 64-bit ARM, supported by Simi
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 See section \ref{divergence} for information on potential divergence of simulations from real systems.
 
+RESim and Simics are not ``record-and-replay'' tools (though Simics has that features to support that.)  We run, instrument and observe simulations of real systems.
+These simulations can and will diverge from real world results and multiple runs of what seem to be the same simulation will diverge from each other (as will
+multiple runs of real systems, even though they consume the same data.)  Sometimes the divergence is minimal, e.g., different timestamps within data.  Other times
+the divergence can be substantial.  The point is that you should not always expect the same results across multiple runs.  For example, full system traces
+may contain different data even though they commence from the same snapshot.  
+
 \subsection{Development and Availability}
 In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
@@ -253,6 +259,9 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 
 \subsection{Process tracing}
 \label{process_tracing}
+The tracing commands described below are applied to the currently selected target system.  If you wish to trace multiple simulated computers, select
+each using {\tt setTarget} and issue the {\tt traceAll} command.  Note traces are not necessarily repeatable, i.e., there is usually execution 
+divergence between different runs, even when starting at the same snapshot.
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls.  If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
 See the scripts in {\tt RESim/postscripts} to parse system call logs and create reports on file, network and IPC (System V) usage.
@@ -2575,7 +2584,7 @@ The driver device has 4 ethernet interfaces.  The mac addresses below are as def
 \end{itemize}
 Note that use of the ethernet 82559 device changes ethernet device names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
 
-Use {\tt ip addr} commands within the driver script to modify these addresses are required.
+Use {\tt ip addr} commands within the driver-script.sh to modify these addresses are required.
 
 The mapping of RESim ethernet names to Linux device names in the driver is: 
 
@@ -2605,20 +2614,18 @@ ssh keys used by localhost, e.g.,:
   ssh-keygen -f "/home/mike/.ssh/known_hosts" -R [localhost]:4022
 \end{verbatim}
 
-
-To update the driver, e.g., with new packages, use the driver.ini configuration (after fist adding eh {\tt DRIVER\_WAIT} directive.  Then use mapdriver.simics to connect to the real network.
-You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and the do\_merge.sh to
-created a merged craff.  \textbf{Do not} forget to shutdown or sync before saving state!.  Give the driver craff a name that does not conflict with exising names.
+\subsection{Using the driver component}
+The driver is a simulated computer that is intended to interact with simulated targets.  This is typically
+achieved by either using SSH to establish a shell on the driver, or by using the {\tt drive-driver.py}
+script to send files to the driver along with directives describing where and how to send those files to
+targets.
 
 Large scp operations may stall.  Consider using the simics-agent to move files to the driver.  However,
 these only happen one file at a time, so use tar.
 
-Add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
-driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
-and execute the driver-script.sh from the workspace.
-
-Smaller scp and ssh sessions seem to work well with drivers.  Add an authorized\_keys file to what the driver-script.sh to facilitate xfer of scripts/data to the driver
+Smaller scp and ssh sessions seem to work well with drivers.  Add an authorized\_keys file to the driver-script.sh to facilitate xfer of scripts/data to the driver
 during the simulation.  Take care to reset the reversing origin after you are done with the real-networ (see the trackIO reset option.)
+
 
 \subsection{Notes on updating the driver}
 If building a new driver, use the DRIVER\_WAIT directive in the ini file to prevent RESim from waiting for the driver to finish 
@@ -2630,10 +2637,19 @@ Be prepared to kill apt-gets and retry multiple times.  It will eventually work.
 The Python world uses SSL certificates in a manner that leads to breakage.  If pip fails on SSL validation, use the -v option
 to find which new python.org server is causing the problem, and use the --trusted-host dog.pythonwhatever.org option on pip.
 
+To update the driver, e.g., with new packages, use the driver.ini configuration (after fist adding eh {\tt DRIVER\_WAIT} directive.  Then use mapdriver.simics to connect to the real network.
+You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and the do\_merge.sh to
+created a merged craff.  \textbf{Do not} forget to shutdown or sync before saving state!.  Give the driver craff a name that does not conflict with exising names.
+
+Add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
+driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
+and execute the driver-script.sh from the workspace.
+
 \section{Simics user notes}
 This section includes ad-hoc suggestions for users with little Simics experience.
 \begin{itemize}
-\item Simics documentation is in the doc directory relative to workspace directories.
+\item Simics documentation is browser-based and can be generated using the documentation command in the workspace director.  On older Simics versions,
+e.g., 4 and 5, documentation is in PDF in the doc directory relative to workspace directories.
 
 \item See the \textit{ethernet...} manual for connecting real networks.
 
