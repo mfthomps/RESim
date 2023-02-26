@@ -37,6 +37,7 @@ def main():
     parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
     parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
+    parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
     args = parser.parse_args()
     sshport = args.port
     print('Drive driver')
@@ -50,26 +51,28 @@ def main():
     elif args.tcpx:
         client_cmd = 'clientTCPnoread'
         args.tcp = True
+    elif args.replay:
+        client_cmd = None
     elif args.broadcast:
         client_cmd = 'clientudpBroad'
     else:
         client_cmd = 'clientudpMult'
-    client_mult_path = os.path.join(core_path, client_cmd)
-
-    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, client_mult_path)
-    result = -1
-    count = 0
-    while result != 0:
-        result = os.system(cmd)
-        #print('result is %s' % result)
-        if result != 0:
-            print('scp of %s failed, wait a bit' % client_mult_path)
-            time.sleep(3)
-            count += 1
-            if count > 10:
-                print('Time out, more than 10 failures trying to scp to driver.')
-                sys.exit(1)
-    exit
+    if client_cmd is not None:
+        client_mult_path = os.path.join(core_path, client_cmd)
+    
+        cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, client_mult_path)
+        result = -1
+        count = 0
+        while result != 0:
+            result = os.system(cmd)
+            #print('result is %s' % result)
+            if result != 0:
+                print('scp of %s failed, wait a bit' % client_mult_path)
+                time.sleep(3)
+                count += 1
+                if count > 10:
+                    print('Time out, more than 10 failures trying to scp to driver.')
+                    sys.exit(1)
     if args.disconnect:
         magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
         cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, magic_path)
@@ -100,14 +103,21 @@ def main():
             if len(parts) == 2 and parts[0] == 'sleep':
                 driver_file.write(line)
             elif len(parts) == 1:
+                ''' multiple data files to be sent, last line will include directive info'''
                 iofile = parts[0].strip()
                 file_list.append(iofile)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
-            elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast:
+            elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast and not args.replay:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')
                 exit(1)
+            elif args.replay:
+                pcap = parts[0].strip()
+                interface = parts[1].strip()
+                file_list.append(pcap)
+                cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, pcap)
+                directive = '/usr/bin/tcpreplay -i %s %s' % (interface, pcap)
             else:
                 iofile = parts[0]
                 file_list.append(iofile)
