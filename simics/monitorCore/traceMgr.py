@@ -1,3 +1,4 @@
+import cli
 class TraceMgr():
     def __init__(self, lgr):
         self.trace_fh = None
@@ -25,3 +26,12 @@ class TraceMgr():
             
         self.trace_fh = open(fname, 'w') 
         self.cpu = cpu
+        time, ret = cli.quiet_run_command('ptime -t')
+        msg = 'Trace start time: %s\n' % time
+        self.write(msg)
+        cmd = '%s.info' % cpu.name
+        #print('cmd is %s' % cmd)
+        info, ret = cli.quiet_run_command(cmd)
+        for line in ret.splitlines():
+            if 'frequency' in line:
+                self.write(line.strip()+'\n') 
