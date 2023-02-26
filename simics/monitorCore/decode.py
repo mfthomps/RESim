@@ -304,3 +304,5 @@ def isDirectMove(instruct):
                 pass
     return retval
         
+def isLDRB(cpu, instruct):
+    return False
