@@ -299,7 +299,10 @@ class findKernelWrite():
                 self.lgr.debug('checkWriteValue, We are near _start+1 desired value came from loader?')
                 return True
             #self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is 0x%x  skip forward until correct write' % (self.value, value))
-            self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is 0x%x  bail' % (self.value, value))
+            if val is not None:
+                self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is 0x%x  bail' % (self.value, value))
+            else:
+                self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is none from reading addr  0x%x  bail' % (self.value, self.addr))
             SIM_run_alone(self.cleanup, False)
             return False 
             #!!!!!!!!!!!!!!!!!!!
