@@ -70,6 +70,7 @@ import traceFiles
 import stackTrace
 import exitMaze
 import net
+import ipc
 import sharedSyscall
 import idaFuns
 import traceMgr
@@ -2040,20 +2041,34 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, pid=None):
+    def runToCall(self, callname, pid=None, subcall=None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         if pid is not None:
             pid_match = syscall.PidFilter(pid)
-            pid_param = syscall.CallParams('callname', pid_match, break_simulation=True) 
+            pid_param = syscall.CallParams(callname, pid_match, break_simulation=True) 
             call_params = [pid_param]
             self.lgr.debug('runToCall %s set pid filter' % callname)
+        elif subcall is not None:
+            if callname == 'ipc':
+                if subcall in ipc.call_name:
+                    ipc_call = syscall.IPCFilter(ipc.call_name[subcall])
+                    ipc_param = syscall.CallParams(callname, ipc_call, break_simulation=True) 
+                    call_params = [ipc_param]
+                    self.lgr.debug('runToCall %s set pid filter' % callname)
+                else:
+                    self.lgr.error('syscall runToCall, subcall %s unknown' % subcall)
+                    return
+            else:
+                self.lgr.error('syscall runTocall subcall %s not handled for call %s' % (subcall, callname))
+                return
         else:
             call_params = []
         self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                  self.mem_utils[self.target], self.task_utils[self.target], 
                  self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
                  call_params=call_params, stop_on_call=True, targetFS=self.targetFS[self.target], name=callname)
+        SIM_continue(0)
 
     def runToSyscall(self, callnum = None):
         cell = self.cell_config.cell_context[self.target]
@@ -4959,6 +4974,10 @@ class GenMonitor():
     def setPacketNumber(self, packet_number):
         if self.coverage is not None:
             self.coverage.setPacketNumber(packet_number)
+    def getPhys(self, linear):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        phys_block = cpu.iface.processor_info.logical_to_physical(linear, Sim_Access_Read)
+        print('0x%x' % phys_block.address)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
