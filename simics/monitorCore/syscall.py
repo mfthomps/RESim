@@ -303,6 +303,7 @@ class ExitInfo():
         self.syscall_instance = syscall_instance
         ''' stop and reset reversing origin if set '''
         self.origin_reset = False
+        self.bytes_to_write = None
 
 
 EXTERNAL = 1
@@ -324,6 +325,10 @@ class CallParams():
 class PidFilter():
     def __init__(self, pid):
         self.pid = pid
+
+class IPCFilter():
+    def __init__(self, call):
+        self.call = call
 
 ''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
 record_fd_list = ['connect', 'bind', 'accept', 'open', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
@@ -1357,6 +1362,10 @@ class Syscall():
         return ida_msg
 
     def syscallParse(self, callnum, callname, frame, cpu, pid, comm, syscall_info, quiet=False):
+        '''
+        Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
+        syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
+        '''
         exit_info = ExitInfo(self, cpu, pid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
@@ -1493,11 +1502,32 @@ class Syscall():
                 ida_msg = 'ipc %s pid:%d key: 0x%x size: %d  flags: 0x%x\n %s' % (callname, pid, key, frame['param3'], frame['param4'],
                        taskUtils.stringFromFrame(frame)) 
             elif call == ipc.MSGSND or call == ipc.MSGRCV:
-                ida_msg = 'ipc %s pid:%d quid: 0x%x size: %d addr: 0x%x' % (callname, pid, frame['param4'], frame['param3'], frame['param5'])
+                exit_info.retval_addr = frame['param5']
+                exit_info.count = frame['param3']
+                exit_info.fname = frame['param4']
+                if call == ipc.MSGSND:
+                    exit_info.bytes_to_write = self.mem_utils.getBytes(self.cpu, frame['param3'], frame['param5'])
+                    ida_msg = 'ipc %s pid:%d quid: 0x%x size: %d addr: 0x%x' % (callname, pid, frame['param4'], frame['param3'], frame['param5'])
+                    call_name = 'MSGSND'
+                else:
+                    ida_msg = 'ipc %s pid:%d quid: 0x%x size: %d addr: 0x%x' % (callname, pid, frame['param4'], frame['param3'], frame['param5'])
+                    call_name = 'MSGRCV'
+                #self.lgr.debug(ida_msg)
+                #SIM_break_simulation(call_name)    
             elif call == ipc.SHMAT:
                 ida_msg = 'ipc %s pid:%d segid: 0x%x ret_addr: 0x%x' % (callname, pid, frame['param2'], frame['param4'])
             else:
                 ida_msg = 'ipc %s pid:%d %s' % (callname, pid, taskUtils.stringFromFrame(frame) )
+            #self.lgr.debug(ida_msg)
+            for call_param in syscall_info.call_params:
+                if call_param.match_param.__class__.__name__ == 'IPCFilter':
+                    if call_param.match_param.call != call:
+                        #self.lgr.debug('ipc subcall %d does not match filter %d' % (call, call_param.match_param.call))
+                        exit_info = None
+                    else: 
+                        #self.lgr.debug('ipc subcall match, set call_param')
+                        exit_info.call_params = call_param
+                    break
 
         elif callname == 'ioctl':        
             fd = frame['param1']
@@ -2118,12 +2148,12 @@ class Syscall():
                                         cp = CallParams(None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                                    #if syscall_info.call_params is not None:
-                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, 
-                                    #       self.cell_name, pid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
-                                    #else:
-                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, self.cell, 
-                                    #       pid, syscall_info.callnum, tracing_all))
+                                    if syscall_info.call_params is not None:
+                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, 
+                                           self.cell_name, pid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
+                                    else:
+                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, self.cell, 
+                                           pid, syscall_info.callnum, tracing_all))
                                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                     #self.sharedSyscall.addExitHap(cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:

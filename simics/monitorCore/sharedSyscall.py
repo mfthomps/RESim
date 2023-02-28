@@ -1010,11 +1010,31 @@ class SharedSyscall():
                 ret_addr = exit_info.frame['param4']
                 mem_addr = self.mem_utils.readPtr(self.cpu, ret_addr)
                 trace_msg = ('\treturn from ipc %s pid:%d mem_addr: 0x%x\n' % (callname, pid, mem_addr)) 
-            else:
-                if eax < 0:
+            elif eax < 0:
                     trace_msg = ('\treturn ERROR from ipc %s pid:%d result: %d\n' % (callname, pid, eax)) 
+            elif call == ipc.MSGSND:
+                nbytes = min(exit_info.count, 1024)
+                if exit_info.bytes_to_write is not None:
+                    s = resimUtils.getHexDump(exit_info.bytes_to_write[:nbytes])
+                    trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x size %d from 0x%x %s\n' % (callname, pid, ueax, exit_info.count, exit_info.retval_addr, s)) 
                 else:
-                    trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
+                    trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x but not bytes written?\n' % (callname, pid, ueax)) 
+                #self.lgr.debug(trace_msg)
+                #SIM_break_simulation('return MSGSND')    
+            elif call == ipc.MSGRCV:
+                nbytes = min(eax, 1024)
+                msg_ptr = self.mem_utils.readPtr(self.cpu, exit_info.retval_addr)
+                byte_array = self.mem_utils.getBytes(self.cpu, eax, msg_ptr)
+                #self.lgr.debug('MSGRCV retval_addr 0x%x got %d bytes, nbytes is %d' % (exit_info.retval_addr, len(byte_array), nbytes))
+                if byte_array is not None:
+                    s = resimUtils.getHexDump(byte_array[:nbytes])
+                    trace_msg = ('\treturn from ipc %s pid:%d received: %d bytes from 0x%x %s\n' % (callname, pid, ueax, exit_info.retval_addr, s)) 
+                else:
+                    trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x but not bytes read?\n' % (callname, pid, ueax)) 
+                #self.lgr.debug(trace_msg)
+                #SIM_break_simulation('return MSGRCV')    
+            else:
+                trace_msg = ('\treturn from ipc %s pid:%d result: 0x%x\n' % (callname, pid, ueax)) 
 
         elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':
             if exit_info.select_info is not None:
