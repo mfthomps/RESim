@@ -24,6 +24,20 @@ call[22]='SHMDT'
 call[23]='SHMGET'
 call[24]='SHMCTL'
 
+call_name = {}
+call_name['SEMOP']=1
+call_name['SEMGET']=2
+call_name['SEMCTL']=3
+call_name['SEMTIMEDOP']=4
+call_name['MSGSND']=11
+call_name['MSGRCV']=12
+call_name['MSGGET']=13
+call_name['MSGCTL']=14
+call_name['SHMAT']=21
+call_name['SHMDT']=22
+call_name['SHMGET']=23
+call_name['SHMCTL']=24
+
 IPC_CREAT  =  0O00001000  
 IPC_EXCL   =  0O00002000 
 IPC_NOWAIT =  0O00004000
