@@ -837,7 +837,8 @@ class StackTrace():
                                     if call_to is not None:
                                         if self.soMap.isMainText(call_to):
                                             #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail')
-                                            if call_to not in self.relocate_funs:
+                                            first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
+                                            if call_to not in self.relocate_funs and not first_instruct.startswith('jmp'):
                                                 skip_this = True
                                                 #self.lgr.debug('stackTrace not a PLT, skipped it')
 
