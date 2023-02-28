@@ -615,6 +615,7 @@ class GenContextMgr():
     def catchPid(self, pid, callback):
         self.catch_pid = pid
         self.catch_callback = callback 
+        self.setTaskHap()
 
     def watchAll(self):
         self.watch_only_this = False
