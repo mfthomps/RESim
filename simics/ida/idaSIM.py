@@ -778,12 +778,13 @@ class IdaSIM():
    
     def isReg(self, reg): 
         ''' TBD must be better way to get list of registers from ida '''
-        if len(reg) == 3 and reg.startswith('e'):
-            reg = reg[1:]
-        if reg in self.reg_list:
-            return True 
-        else:
-            return False
+        retval = False
+        if reg is not None:
+            if len(reg) == 3 and reg.startswith('e'):
+                reg = reg[1:]
+            if reg in self.reg_list:
+                retval = True 
+        return retval
 
     def registerMath(self): 
         retval = None
