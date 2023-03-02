@@ -834,21 +834,21 @@ class SharedSyscall():
                   exit_info.call_params = None
                   if eax < 16000:
                     call_params = exit_info.syscall_instance.getCallParams()
-                    #self.lgr.debug('read dmod check %d params' % len(call_params))
+                    self.lgr.debug('read dmod check %d params' % len(call_params))
                     tmp_params = list(call_params)
                     for call_param in tmp_params:
-                        #self.lgr.debug('dmod check %s' % call_param.match_param.__class__.__name__) 
+                        self.lgr.debug('dmod check %s' % call_param.match_param.__class__.__name__) 
                         if call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
                             #self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
                             if dmod is not None and dmod.getComm() is not None and dmod.getComm() != comm:
                                 self.lgr.debug('sharedSyscall read is dmod, but wrong comm, wanted %s, this is %s' % (dmod.getComm(), comm))
                             elif dmod.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
-                                self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
+                                #self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
                                 if dmod.getCount() == 0:
-                                    self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
+                                    #self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
                                     exit_info.syscall_instance.rmCallParam(call_param)
-                                    if not exit_info.syscall_instance.remainingDmod():
+                                    if not exit_info.syscall_instance.remainingDmod() and exit_info.syscall_instance.name != 'traceAll':
                                         self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
                                         if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
