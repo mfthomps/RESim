@@ -253,12 +253,19 @@ def isPrintable(thebytes):
     return retval
 
 def getHexDump(b):
+    if len(b) == 0:
+        return ""
     s2 = "".join([chr(i) if 32 <= i <= 127 else "." for i in b])
     if not isPrintable(b):
-        s1 = "".join([f"{i:02x}" for i in b])
+        s1 = ''
+        for i in b:
+            val = '%02x' % i
+            s1 = s1+ val
+        #s1 = "".join([f"{i:02x}" for i in b])
         #s1 = s1[0:23] + " " + s1[23:]
         width = 48
-        return (f"{s1:<{width}}  |{s2}|") # parameterized width
+        #return (f"{s1:<{width}}  |{s2}|") # parameterized width
+        return '%s |%s|' % (s1, s2)
     else:
         return s2
 
