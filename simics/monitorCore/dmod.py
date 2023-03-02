@@ -146,7 +146,7 @@ class Dmod():
             if was is not None:
                 self.lgr.debug('Dmod cell: %s replace %s with %s in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, s))
                 new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
-                self.mem_utils.writeString(cpu, addr, new_string)
+                self.top.writeString(addr, new_string)
             else:
                 #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
                 pass
@@ -181,7 +181,7 @@ class Dmod():
             self.lgr.debug('Dmod replace %s with %s in \n%s' % (self.fiddle.was, self.fiddle.becomes, checkline))
             new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
             #self.lgr.debug('newstring is: %s' % new_string)
-            self.mem_utils.writeString(cpu, addr, new_string)
+            self.top.writeString(addr, new_string)
             new_line = re.sub(self.fiddle.was, self.fiddle.becomes, checkline)
             if len(checkline) != len(new_line):
                 ''' Adjust future _lseek calls, which are caught in syscall.py '''
@@ -204,12 +204,17 @@ class Dmod():
 
     def fullReplace(self, cpu, s, addr):
         rm_this = False
+        #self.lgr.debug('dmod fullReplace is %s in %s' % (self.fiddle.match, s))
         if self.fiddle.match in s:
+            self.lgr.debug('dmod got match')
             count = len(self.fiddle.becomes)
             self.mem_utils.writeString(cpu, addr, self.fiddle.becomes)
-            esp = self.mem_utils.getRegValue(cpu, 'esp')
-            count_addr = esp + 3*self.mem_utils.WORD_SIZE
-            self.mem_utils.writeWord(cpu, count_addr, count)
+            if self.operation == 'write':
+                esp = self.mem_utils.getRegValue(cpu, 'esp')
+                count_addr = esp + 3*self.mem_utils.WORD_SIZE
+                self.top.writeWord(count_addr, count)
+            else:
+                self.top.writeRegValue('syscall_ret', count)
             #cpu.iface.int_register.write(reg_num, count)
             self.lgr.debug('dmod fullReplace %s in %s wrote %d bytes' % (self.fiddle.match, s, count))
             rm_this = True
