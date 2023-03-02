@@ -3159,7 +3159,8 @@ class GenMonitor():
             return False
        
         self.bookmarks.clearMarks()
-        self.resetOrigin(cpu)
+        SIM_run_alone(self.resetOrigin, cpu)
+        #self.resetOrigin(cpu)
         self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         #self.stopTrackIO()
