@@ -3199,15 +3199,16 @@ class GenMonitor():
             self.clearBookmarks()
 
     def writeString(self, address, string):
-        ''' NOTE: wipes out bookmarks! '''
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.lgr.debug('writeString 0x%x %s' % (address, string))
-        self.mem_utils[self.target].writeString(cpu, address, string)
-        if self.reverseEnabled():
-            self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
-            self.clearBookmarks()
-        else:
-            self.lgr.debug('writeString reverse execution was not enabled.')
+        if self.target in self.task_utils:
+            ''' NOTE: wipes out bookmarks! '''
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            self.lgr.debug('writeString 0x%x %s' % (address, string))
+            self.mem_utils[self.target].writeString(cpu, address, string)
+            if self.reverseEnabled():
+                self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
+                self.clearBookmarks()
+            else:
+                self.lgr.debug('writeString reverse execution was not enabled.')
 
     def stopDataWatch(self):
         self.lgr.debug('genMonitor stopDataWatch')
