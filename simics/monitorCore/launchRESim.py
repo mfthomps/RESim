@@ -267,7 +267,13 @@ class LaunchRESim():
                 count = 0
                 if interact is not None:
                     print('Will run interact %s' % interact)
-                    run_command('run-command-file %s' % interact)
+                    if interact.endswith('.simics'):
+                        run_command('run-command-file %s' % interact)
+                    elif interact.endswith('.py'):
+                        run_command('run-python-file %s' % interact)
+                    else:
+                        lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
+                        return
                 while not done and not DRIVER_WAIT: 
                     #print('***RUN SOME **')
                     #run_command('c 50000000000')
