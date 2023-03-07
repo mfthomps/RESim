@@ -11,6 +11,7 @@ fi
 here=$( pwd )
 files=$( find . -maxdepth 1 -type f )
 dirs=$( find . -maxdepth 1 -type d )
+links=$( find . -maxdepth 1 -type l )
 count=$1
 for (( i=1; i<=$count; i++ )); do
     newdir="resim_$i"
@@ -23,6 +24,13 @@ for (( i=1; i<=$count; i++ )); do
     for d in $dirs; do
         target="$(basename -- $d)"
         if [ $target != "logs" ] && [ $target != "." ]; then
+            echo "target is $target"
+            ln -s ../$target
+        fi
+    done
+    for l in $links; do
+        target="$(basename -- $l)"
+        if [ $target != "logs" ] && [ $target != "." ] && [ $target != "doc" ]; then
             echo "target is $target"
             ln -s ../$target
         fi
