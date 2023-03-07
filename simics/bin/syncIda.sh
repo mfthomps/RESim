@@ -3,8 +3,8 @@
 # use rsync to copy ida_data files for a program from a remove server (e.g., blade)
 # to the local machine, e.g., where IDA runs.
 #
-if [ -z "$IDA_DIR" ]; then
-    echo "IDA_DIR not defined."
+if [ -z "$RESIM_IDA_DATA" ]; then
+    echo "RESIM_IDA_DATA not defined."
     exit
 fi
 if [ $# -lt 2 ] || [ $1 = "-h" ]; then
