@@ -19,6 +19,15 @@ def nextLine(fh):
        retval = line.strip('\n')
    return retval
 
+def getKeyValue(item):
+    key = None
+    value = None
+    if '=' in item:
+        parts = item.split('=', 1)
+        key = parts[0].strip()
+        value = parts[1].strip()
+    return key, value
+
 class DmodSeek():
     def __init__(self, delta, pid, fd):
         self.delta = delta
@@ -60,13 +69,29 @@ class Dmod():
                else:
                    self.lgr.error('Dmod command missing operation %s' % kind_line)
                    return
-               if len(parts) > 2:
+               start_part = 2
+               if len(parts) > start_part:
                    try:
-                       self.count = int(parts[2])
+                       self.count = int(parts[start_part])
+                       start_part = start_part + 1
                    except:
-                       self.lgr.error('Expected count in kind line: %s' % kind_line)
-                       return
-               self.lgr.debug('Dmod of kind %s  cell is %s count is %d' % (self.kind, self.cell_name, self.count))
+                       if '=' not in parts[2]:
+                           self.lgr.error('Expected count in kind line: %s' % kind_line)
+                           return
+                   self.lgr.debug('dmod start_part is %d len %d' % (start_part, len(parts)))
+                   if len(parts) > start_part:
+                       for item in parts[start_part:]:
+                           key, value = getKeyValue(item)
+                           self.lgr.debug('dmod key <%s> value %s' % (key, value))
+                           if key is None:
+                               self.lgr.error('Expected key=value in %s' % item)
+                               return
+                           if key == 'count':
+                               self.count = value
+                           elif key == 'comm':
+                               self.comm = value
+
+               self.lgr.debug('Dmod of kind %s  cell is %s count is %d comm: %s' % (self.kind, self.cell_name, self.count, self.comm))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
