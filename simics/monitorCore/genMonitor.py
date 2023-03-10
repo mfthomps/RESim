@@ -108,6 +108,7 @@ import reverseTrack
 import jumpers
 import kbuffer
 import funMgr
+import readReplace
 #import fsMgr
 import json
 import pickle
@@ -260,6 +261,9 @@ class GenMonitor():
         ''' Get valid FS base values for locating current task '''
         self.fs_mgr = None
 
+        ''' ReadReplace module if any '''
+        self.read_replace = None
+
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
         exit_hap = RES_hap_add_callback("Core_At_Exit", self.simicsQuitting, None)
@@ -381,7 +385,7 @@ class GenMonitor():
                     self.lgr.debug('loaded net_list from %s' % net_file)
 
     def runPreScripts(self):
-        ''' run the PRE_INIT_SCRIPT and the one_done module, if iany '''
+        ''' run the PRE_INIT_SCRIPT and the one_done module, if any '''
         init_script = os.getenv('PRE_INIT_SCRIPT')
         if init_script is not None:
             cmd = 'run-command-file %s' % init_script
@@ -1031,6 +1035,8 @@ class GenMonitor():
             if self.target not in self.jumper_dict:
                 self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
+        if self.read_replace is not None:
+             self.read_replace.swapContext()
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1262,6 +1268,7 @@ class GenMonitor():
             print('Need a proc name as a string')
             return
         self.lgr.debug('genMonitor debugProc')
+        self.rmDebugWarnHap()
         #self.stopTrace()
         plist = self.task_utils[self.target].getPidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitPid()):
@@ -1862,15 +1869,23 @@ class GenMonitor():
     def getTarget(self):
         return self.target
 
-    def getCPU(self):
-        return self.cell_config.cpuFromCell(self.target)
+    def getCPU(self, cell_name=None):
+        if cell_name is None:
+            target = self.target
+        else:
+            target = cell_name
+        return self.cell_config.cpuFromCell(target)
 
     def getPID(self):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         return this_pid
 
-    def getCurrentProc(self):
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
+    def getCurrentProc(self, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        cpu, comm, pid = self.task_utils[target].curProc() 
         return cpu, comm, pid
 
     def getCPL(self): 
@@ -2626,6 +2641,7 @@ class GenMonitor():
                     return True
         return False
 
+
     def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None):
         retval = None
@@ -2650,7 +2666,10 @@ class GenMonitor():
             call_params_list = [call_params]
 
         if cell_name not in self.trace_all or self.trace_all[cell_name] is None:
-            if call_name not in self.call_traces[cell_name]:
+            debug_pid = None
+            if self.target in self.context_manager:
+                debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid()
+            if call_name not in self.call_traces[cell_name] or (self.call_traces[cell_name][call_name].background and debug_pid is not None):
                 retval = syscall.Syscall(self, cell_name, cell, self.param[cell_name], self.mem_utils[cell_name], 
                                self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
                                self.lgr, self.traceMgr[cell_name],
@@ -2691,7 +2710,7 @@ class GenMonitor():
         call_params.nth = nth
         self.runTo(call, call_params, name='connect')
 
-    def runToDmod(self, dfile, cell_name=None, background=False, comm=None):
+    def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False):
         retval = True
         if not os.path.isfile(dfile):
             print('No file found at %s' % dfile)
@@ -2700,7 +2719,7 @@ class GenMonitor():
             cell_name = self.target
         mod = dmod.Dmod(self, dfile, self.mem_utils[cell_name], cell_name, self.lgr, comm=comm)
         operation = mod.getOperation()
-        call_params = syscall.CallParams(operation, mod, break_simulation=True)        
+        call_params = syscall.CallParams(operation, mod, break_simulation=break_simulation)        
         if cell_name is None:
             cell_name = self.target
             run = True
@@ -3168,9 +3187,13 @@ class GenMonitor():
         self.rev_to_call[self.target].resetStartCycles()
         return True
 
-    def writeRegValue(self, reg, value, alone=False, reuse_msg=False):
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.mem_utils[self.target].setRegValue(cpu, reg, value)
+    def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        cpu, comm, pid = self.task_utils[target].curProc() 
+        self.mem_utils[target].setRegValue(cpu, reg, value)
         #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if self.reverseEnabled():
             if alone:
@@ -3178,32 +3201,44 @@ class GenMonitor():
             else:
                 self.clearBookmarks(reuse_msg=reuse_msg)
 
-    def writeWord(self, address, value):
+    def writeWord(self, address, value, target_cpu=None):
         ''' NOTE: wipes out bookmarks! '''
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.mem_utils[self.target].writeWord(cpu, address, value)
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        cpu, comm, pid = self.task_utils[target].curProc() 
+        self.mem_utils[target].writeWord(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
         if self.reverseEnabled():
             self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
             self.clearBookmarks()
 
-    def writeByte(self, address, value):
+    def writeByte(self, address, value, target_cpu=None):
         ''' NOTE: wipes out bookmarks! '''
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.mem_utils[self.target].writeByte(cpu, address, value)
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        cpu, comm, pid = self.task_utils[target].curProc() 
+        self.mem_utils[target].writeByte(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
         if self.reverseEnabled():
             self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
             self.clearBookmarks()
 
-    def writeString(self, address, string):
-        if self.target in self.task_utils:
+    def writeString(self, address, string, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        if target in self.task_utils:
             ''' NOTE: wipes out bookmarks! '''
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            cpu, comm, pid = self.task_utils[target].curProc() 
             self.lgr.debug('writeString 0x%x %s' % (address, string))
-            self.mem_utils[self.target].writeString(cpu, address, string)
+            self.mem_utils[target].writeString(cpu, address, string)
             if self.reverseEnabled():
                 self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
                 self.clearBookmarks()
@@ -4980,6 +5015,11 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         phys_block = cpu.iface.processor_info.logical_to_physical(linear, Sim_Access_Read)
         print('0x%x' % phys_block.address)
+
+    def readReplace(self, fname):
+        self.lgr.debug('readReplace %s' % fname)
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.read_replace = readReplace.ReadReplace(self, cpu, fname, self.lgr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
