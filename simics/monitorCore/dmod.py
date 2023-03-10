@@ -171,7 +171,7 @@ class Dmod():
             if was is not None:
                 self.lgr.debug('Dmod cell: %s replace %s with %s in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, s))
                 new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
-                self.top.writeString(addr, new_string)
+                self.top.writeString(addr, new_string, target_cpu=cpu)
             else:
                 #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
                 pass
@@ -206,7 +206,7 @@ class Dmod():
             self.lgr.debug('Dmod replace %s with %s in \n%s' % (self.fiddle.was, self.fiddle.becomes, checkline))
             new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
             #self.lgr.debug('newstring is: %s' % new_string)
-            self.top.writeString(addr, new_string)
+            self.top.writeString(addr, new_string, target_cpu=cpu)
             new_line = re.sub(self.fiddle.was, self.fiddle.becomes, checkline)
             if len(checkline) != len(new_line):
                 ''' Adjust future _lseek calls, which are caught in syscall.py '''
@@ -233,7 +233,7 @@ class Dmod():
         if self.fiddle.match in s:
             self.lgr.debug('dmod got match')
             count = len(self.fiddle.becomes)
-            self.mem_utils.writeString(cpu, addr, self.fiddle.becomes)
+            self.mem_utils.writeString(cpu, addr, self.fiddle.becomes, target_cpu=cpu)
             if self.operation == 'write':
                 esp = self.mem_utils.getRegValue(cpu, 'esp')
                 count_addr = esp + 3*self.mem_utils.WORD_SIZE
