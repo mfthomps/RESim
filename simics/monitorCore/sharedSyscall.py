@@ -840,15 +840,16 @@ class SharedSyscall():
                         self.lgr.debug('dmod check %s' % call_param.match_param.__class__.__name__) 
                         if call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
-                            #self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
+                            self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
                             if dmod is not None and dmod.getComm() is not None and dmod.getComm() != comm:
                                 self.lgr.debug('sharedSyscall read is dmod, but wrong comm, wanted %s, this is %s' % (dmod.getComm(), comm))
                             elif dmod.checkString(self.cpu, exit_info.retval_addr, eax, pid, exit_info.old_fd):
-                                #self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
+                                self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
                                 if dmod.getCount() == 0:
-                                    #self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
+                                    self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
                                     exit_info.syscall_instance.rmCallParam(call_param)
                                     if not exit_info.syscall_instance.remainingDmod() and exit_info.syscall_instance.name != 'traceAll':
+                                        self.lgr.debug('sharedSyscall read Dmod stopping trace')
                                         self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
                                         if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
@@ -856,6 +857,8 @@ class SharedSyscall():
                                             SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                                 else:
                                     print('%s performed' % dmod.getPath())
+                                if call_param.break_simulation:
+                                    SIM_break_simulation('dmod break simulation')
 
                 
 
@@ -917,17 +920,33 @@ class SharedSyscall():
 
         elif callname == 'ioctl':
             if exit_info.retval_addr is not None:
-                result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-                if result is not None:
-                    trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x written to 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result, exit_info.retval_addr))
+                if exit_info.cmd == 0x720:
+                    ''' i2c bus xfer '''
+                    xfer_byte_addr = exit_info.retval_addr+2*self.mem_utils.WORD_SIZE
+                    result_ptr = self.mem_utils.readPtr(self.cpu, xfer_byte_addr)
+                    result = self.mem_utils.readByte(self.cpu, result_ptr)
+                    if result is not None:
+                        trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x retval_addr: 0x%x result: 0x%x written to 0x%x\n' % (pid, 
+                            exit_info.old_fd, exit_info.cmd, exit_info.retval_addr, result, result_ptr))
+                    else:
+                        trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x could not read bye written to 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result, result_ptr))
+
                 else:
-                    self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
-                if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
-                    ''' in case we want to break on a read of waiting bytes '''
-                    self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
-                    if exit_info.syscall_instance.linger: 
-                        self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False, no_backstop=True, i_am_alone=True)
+                    result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
+                    if result is not None:
+                        trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x result: 0x%x written to 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, result, exit_info.retval_addr))
+                    else:
+                        self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
+                        trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
+                    if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
+                        ''' in case we want to break on a read of waiting bytes '''
+                        self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
+                        if exit_info.syscall_instance.linger: 
+                            self.dataWatch.stopWatch() 
+                            self.dataWatch.watch(break_simulation=False, no_backstop=True, i_am_alone=True)
+            elif exit_info.cmd == 0x703:
+                ''' i2c slave address '''
+                trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x slave_addr 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, exit_info.flags)) 
             else:
                 trace_msg = ('\treturn from ioctl pid:%d FD: %d cmd: 0x%x eax: 0x%x\n' % (pid, exit_info.old_fd, exit_info.cmd, eax))
 

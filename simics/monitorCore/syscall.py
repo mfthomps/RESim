@@ -427,6 +427,7 @@ class Syscall():
         self.epolls = {}
       
         self.syscall_context = None 
+        self.background = background
         break_list, break_addrs = self.doBreaks(compat32, background)
  
         if flist_in is not None:
@@ -545,16 +546,18 @@ class Syscall():
                 syscall_info = SyscallInfo(self.cpu, None, callnum, entry, self.trace, self.call_params)
                 syscall_info.compat32 = compat32
                 self.syscall_info = syscall_info
-                if not background:
+                debug_pid, dumb = self.context_manager.getDebugPid() 
+                if not background or debug_pid is not None:
                     #self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r call_params %s' % (callnum, call, entry, compat32, str(syscall_info)))
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     proc_break1 = None
                     break_list.append(proc_break)
                     break_addrs.append(entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, call))
-                else:
-                    self.lgr.debug('doBreaks set background break at 0x%x' % entry)
-                    self.background_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+                if background:
+                    dc = self.context_manager.getDefaultContext()
+                    self.lgr.debug('doBreaks set background breaks at 0x%x' % entry)
+                    self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     self.background_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, syscall_info, self.background_break)
 
         return break_list, break_addrs
@@ -1373,11 +1376,16 @@ class Syscall():
         for call_param in syscall_info.call_params:
             if call_param.match_param.__class__.__name__ == 'PidFilter':
                 if pid != call_param.match_param.pid:
-                    self.lgr.debug('syscall syscallParse, pid filter did not match')
+                    #self.lgr.debug('syscall syscallParse, pid filter did not match')
                     return
                 else:
                     exit_info.call_params = call_param
-                    self.lgr.debug('syscall syscallParse, pid filter matched, added call_param')
+                    self.lgr.debug('syscall syscallParse %s, pid filter matched, added call_param' % callname)
+            elif call_param.match_param.__class__.__name__ == 'Dmod' and len(syscall_info.call_params) == 1:
+                if call_param.match_param.comm is not None and call_param.match_param.comm != comm:
+                    if comm == 'alarmsub':
+                        self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
+                    return
         if callname == 'open' or callname == 'openat':        
             #self.lgr.debug('syscallParse, is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
@@ -1541,8 +1549,13 @@ class Syscall():
             elif cmd == net.FIONREAD:
                 ida_msg = 'ioctl pid:%d FD: %d FIONREAD ptr: 0x%x' % (pid, fd, param) 
                 exit_info.retval_addr = param
+            elif cmd == 0x703:
+                ida_msg = 'ioctl pid:%d FD: %d slave address: 0x%x' % (pid, fd, param) 
+                exit_info.flags = param
             else:
-                ida_msg = 'ioctl pid:%d FD: %d cmd: 0x%x' % (pid, fd, cmd) 
+                ida_msg = 'ioctl pid:%d FD: %d cmd: 0x%x ptr: 0x%x' % (pid, fd, cmd, param) 
+                exit_info.retval_addr = param
+            self.lgr.debug(ida_msg)
             for call_param in syscall_info.call_params:
                 if call_param.match_param == fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     exit_info.call_params = call_param
@@ -1884,6 +1897,7 @@ class Syscall():
                 ''' TBD when would we want to close it?'''
                 if self.traceMgr is not None:
                     self.traceMgr.flush()
+                self.top.idaMessage() 
                 ''' Run the stop action, which is a hapCleaner class '''
                 self.stop_action.run(cb_param=msg)
 
