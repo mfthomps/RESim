@@ -520,8 +520,10 @@ i.e., from a trackIO, these are deleted except for any that are equal to the cur
 and then rerun a trackIO, do so while at the first datamark.
 \item {\tt writeString} - Write a string to an addrss. Use double escapes, e.g., two backslashes and an n for a newline. (Note: deletes existing bookmarks.)
 
-\item {\tt runToDmod()} – Run until a specified read or write system call is encountered, and modify system memory such
+\item {\tt runToDmod(dmod\_file)} – Run until a specified read or write system call is encountered, and modify system memory such
 that the result of the read or write is augmented by a named Dmod directive file.  See \ref{dmod}
+
+\item {\tt readReplace(readrelace\_file)} – Replace memory content with a given hex string when that memory address if first read by the program.
 
 \item {\tt modFunction(fun, offset, word)} Write the given word at an offset from the start of the named function.  Intended for use in setting return
 values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD accept an assembly statement?
@@ -1098,13 +1100,41 @@ load alternate modules, e.g., those for which you have modeled devices.  Modifyi
 image itself is not always convenient, e.g., \textit{tripwire} functions might manage checksums of
 configuration files.  It is therefore sometimes preferable to dynamically augment the software's perception of what is read.
 
+There are two mechanisms for dynamic modifications: one that modifies system memory content the first time an address is
+read (known as a \textit{ReadReplace}; and a \textit{Dmod} that modifies results of file read, write or open operations.
+
+Additionally, there is an experimental {\tt modFunction to write a given word at an offset from the start of a named function.  
+Intended for use in setting return values, e.g., force eax to zero upon return.  Bring your own machine code.  
+
+\subsubsection{ReadReplace}
+The RESim {\tt readReplace} function triggers on the first reading of selected memory addresses
+by named programs and replace memory content with a given hexidecimal string.  The function takes as an
+input the name of a file containing one or more directives of the format:
+\begin{verbatim}
+    comm addr hexstring
+\end{verbatim}
+Where "comm" is the process comm name; addr is the address; and hexstring
+is a hexidecimal string that will be unhexified and written to the given
+address the first time the address is read.
+
+The {\tt ReadReplace} is generally simpler than using Dmods.  Consider an example in which a program
+repeatedly opens and reads from a file and compares the data read with a constant string in memory.
+And assume you'd like the compare operation to reflect a match despite the fact that the content of
+the file does not match the memory constant.  One approach is to use a Dmod to alter the value of what
+is read from the file each time the file is read.  However, if the program repeatedly re-reads the file,
+then the Dmod will occur repeatedly, resulting in a reset of the reverse execution origin (if enabled).
+An alternative is to use readReplace to replace the constant value the first time it is read.  
+
+\subsubsection{Dmods}
 The {\tt runToDmod} function triggers on the reading or writing of a specified
-regular expression via the {\tt write} or {\tt read} system calls.  
+regular expression via the {\tt write} or {\tt read} system calls, or due to a failure
+when opening a file.    
 The {\tt runToDmod} function includes a parameter that names a file containing
-Dmod directives.  In all subfunctions listed
+Dmod directives.  In the \textit{read} and \textit{write} subfunctions listed
 below, the {\tt match} string identifies the read or write operation that triggers the action. 
 The format of directive files depend on the subfunction.  Each subfunction also identifies whether it is
-triggered on a {\tt read} or {\tt write} operation. 
+triggered on a {\tt read} or {\tt write} operation or {\tt open} operation, and may include an optional count value to control when
+the Dmod is removed from processing.
  
 \begin{itemize}
 \item {\tt sub\_replace $<$operation$>$}-- Replace a substring within a read or write buffer (specified by the
