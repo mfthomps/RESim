@@ -1091,6 +1091,7 @@ class DataWatch():
         elif self.mem_something.fun == 'charLookup':
             retval = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             return_ptr = self.mem_utils.readPtr(self.cpu, self.mem_something.ret_addr_addr)
+            length = 0
             if retval == 0:
                 self.lgr.debug('dataWatch returnHap charLookup nothing found return_ptr is 0x%x' % return_ptr)
                 end_ptr = self.mem_utils.readPtr(self.cpu, return_ptr)
@@ -1099,20 +1100,27 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap charLookup addr: 0x%x nothing found return_ptr is 0x%x end_ptr 0x%x length %d' % (self.mem_something.addr,
                    return_ptr, end_ptr, length))
                 self.lgr.debug(msg)
+            elif return_ptr is None:
+                msg = 'charLookup error could not read return_ptr'
+                self.lgr.debug(return_ptr)
+
             else:
                 self.mem_something.re_watch.watchCharReference(self.mem_something.ret_addr_addr)
                 found_ptr = self.mem_utils.readPtr(self.cpu, return_ptr)
-                length = found_ptr - self.mem_something.addr
-                range_len = len(self.start)
-                ''' TBD wag '''
-                #block_start = return_ptr + 0x20
-                #self.setRange(block_start, 0x20)
-                #if range_len < len(self.start):
-                #    ''' added the range, note it is a char pointer '''
-                #    self.char_ptrs.append(range_len)
-                msg = 'Match found. Search chars: %s  found: %s' % (self.mem_something.re_watch.getSearchChars(), ' '.join(self.mem_something.re_watch.getFoundChars()))
-                self.lgr.debug('dataWatch returnHap charLookup addr: 0x%x match found return_ptr is 0x%x found_ptr 0x%x length %d' % (self.mem_something.addr,
-                   return_ptr, found_ptr, length))
+                if found_ptr is None:
+                    msg = 'charLookuperror could not read found_ptr from 0x%x' % return_ptr
+                else:
+                    length = found_ptr - self.mem_something.addr
+                    range_len = len(self.start)
+                    ''' TBD wag '''
+                    #block_start = return_ptr + 0x20
+                    #self.setRange(block_start, 0x20)
+                    #if range_len < len(self.start):
+                    #    ''' added the range, note it is a char pointer '''
+                    #    self.char_ptrs.append(range_len)
+                    msg = 'Match found. Search chars: %s  found: %s' % (self.mem_something.re_watch.getSearchChars(), ' '.join(self.mem_something.re_watch.getFoundChars()))
+                    self.lgr.debug('dataWatch returnHap charLookup addr: 0x%x match found return_ptr is 0x%x found_ptr 0x%x length %d' % (self.mem_something.addr,
+                       return_ptr, found_ptr, length))
                 self.lgr.debug(msg)
             self.watchMarks.charLookupMark(self.mem_something.addr, msg, length)
             self.mem_something.re_watch.stopMapWatch()
@@ -1776,7 +1784,10 @@ class DataWatch():
         lost to the vagaries of the implementation by the time we hit the breakpoint.  We need to stop; Reverse to the call; record the parameters;
         set a break on the return; and continue.  We'll assume not too many instructions between us and the call, so manually walk er back.
         '''
-        self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
+        if self.mem_something.ret_ip is not None and self.mem_something.called_from_ip is not None:
+            self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
+        else:
+            self.lgr.debug('handleMemStuff got none for either ret_addr or called_from_ip')
         if self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
             if self.mem_something.src is not None:
@@ -2195,12 +2206,12 @@ class DataWatch():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             our_reg = self.mem_utils.regs['syscall_ret']
             adhoc = self.loopAdHoc(move_stuff.addr, move_stuff.trans_size, move_stuff.start, move_stuff.length, instruct, our_reg, eip, move_stuff.ip)
+
     def checkMove(self, addr, trans_size, start, length, eip, instruct, pid):
         ''' Does this look like a move from memA=>reg=>memB ? '''
         ''' If so, return dest '''
         ''' The given eip is where the read happened.'''
         #self.lgr.debug('dataWatch checkMove')
-        retval = None
         adhoc = False
         orig_ip = self.top.getEIP(self.cpu)
         if instruct[1].startswith('mov') or instruct[1].startswith('ldr'):
@@ -2223,9 +2234,9 @@ class DataWatch():
                     SIM_run_alone(self.handleMemStuff, None)
                 else:
                     self.lgr.error('dataWatch checkMove failed to get mem_something from re_watch')
+                    self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
             else: 
                 self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
-        return retval
 
     def isReuse(self, eip):
         ''' guess is a data buffer is being recycled, e.g., loaded with zeros'''

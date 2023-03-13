@@ -120,10 +120,13 @@ class REWatch(object):
         else:
             frames = st.getFrames(2)
             f = frames[1]
-            self.lgr.debug('handleCharLookup using 2nd frame frame %s' % f.dumpString())
-            mem_something = dataWatch.MemSomething('charLookup', addr, f.ret_addr, None, None, None, f.ip, None, None, None)
-            mem_something.re_watch = self
-            retval =  mem_something 
+            self.lgr.debug('handleCharLookup addr 0x%x using 2nd frame frame %s' % (addr, f.dumpString()))
+            if f.ret_addr is None:
+                self.lgr.error('reWatch getMemSomething f.ret_addr is None')
+            else:
+                mem_something = dataWatch.MemSomething('charLookup', addr, f.ret_addr, None, None, None, f.ip, None, None, None)
+                mem_something.re_watch = self
+                retval =  mem_something 
         return retval
 
     def setMapBreakRange(self, i_am_alone=False):
@@ -210,7 +213,13 @@ class REWatch(object):
     def watchCharReference(self, ret_addr):
         self.lgr.debug('reWatch watchCharReference')
         return_ptr = self.mem_utils.readPtr(self.cpu, ret_addr)
+        if return_ptr is None:
+            self.lgr.debug('reWatch watchCharReference got none reading reaturn_ptr from 0x%x' % ret_addr)
+            return
         found_ptr = self.mem_utils.readPtr(self.cpu, return_ptr)
+        if found_ptr is None:
+            self.lgr.debug('reWatch watchCharReference got none reading found_ptr from 0x%x' % return_ptr)
+            return
         length = found_ptr - self.addr
         self.lgr.debug('reWatch watchCharReference length %d' % length)
         for i in range(length):
