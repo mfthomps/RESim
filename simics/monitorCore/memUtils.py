@@ -464,45 +464,67 @@ class memUtils():
 
     def adjustParam(self, delta):
         ''' Adjust parameters for ASLR '''
-        self.param.current_task = self.param.current_task + delta
+        if self.WORD_SIZE == 4:
+            self.param.current_task = self.param.current_task + delta
         if self.param.sysenter is not None:
-            self.param.sysenter = self.param.sysenter + delta
+            self.lgr.debug('sysenter was to 0x%x' % self.param.sysenter)
+            if self.WORD_SIZE == 4:
+                self.param.sysenter = self.param.sysenter + delta
+            else:
+                # TBD remove if
+                self.param.sysenter = self.param.sysenter + delta
+            self.lgr.debug('sysenter adjusted to 0x%x' % self.param.sysenter)
         if self.param.sysexit is not None:
             self.param.sysexit = self.param.sysexit + delta
-        self.param.sys_entry = self.param.sys_entry + delta
         self.param.iretd = self.param.iretd + delta
         self.param.page_fault = self.param.page_fault + delta
         self.param.syscall_compute = self.param.syscall_compute + delta
+
         ''' This value seems to get adjusted the other way.  TBD why? '''
+        self.lgr.debug('syscall_jump was 0x%x' % self.param.syscall_jump)
         self.param.syscall_jump = self.param.syscall_jump - delta
         self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+
+        if self.param.sys_entry is not None and self.param.sys_entry != 0:
+            self.lgr.debug('sys_entry was to 0x%x' % self.param.sys_entry)
+            self.param.sys_entry = self.param.sys_entry + delta
+            self.lgr.debug('sys_entry adjusted to 0x%x' % self.param.sys_entry)
         
 
     def getCurrentTask(self, cpu):
         retval = None 
-        if self.WORD_SIZE == 4:
-            if cpu.architecture == 'arm':
-                retval = self.getCurrentTaskARM(self.param, cpu)
-            elif self.param.fs_base is None:
+        if self.WORD_SIZE == 4 and cpu.architecture == 'arm':
+            retval = self.getCurrentTaskARM(self.param, cpu)
+        else:
+            if self.WORD_SIZE == 4:
+                param_xs_base = self.param.fs_base
+                new_xs_base = cpu.ia32_fs_base
+            else:
+                param_xs_base = self.param.gs_base
+                new_xs_base = cpu.ia32_gs_base
+            if param_xs_base is None:
                 cur_ptr = self.getCurrentTaskX86(self.param, cpu)
                 retval = cur_ptr
             else:
-                new_fs_base = cpu.ia32_fs_base
                 ''' TBD generalize this, will it always be such? '''
-                if new_fs_base != 0 and new_fs_base != 0x10000:
+                if new_xs_base != 0 and new_xs_base != 0x10000:
                     ''' TBD, this seems the wrong way around, but runs of getKernelParams shows delta is the same, but for the sign.'''
                     '''
                     current_task is the offset into the FS segment
                     '''
                     if self.param.delta is None:
-                        self.param.delta = self.param.fs_base - new_fs_base
-                        self.lgr.debug('getCurrentTask param.fs_base 0x%x new_fs_base 0x%x delta is 0x%x, current_task was 0x%x' % (self.param.fs_base, 
-                              new_fs_base, self.param.delta, self.param.current_task))
+                        self.param.delta = param_xs_base - new_xs_base
+                        self.lgr.debug('getCurrentTask param.xs_base 0x%x new_xs_base 0x%x delta is 0x%x, current_task was 0x%x' % (param_xs_base, 
+                              new_xs_base, self.param.delta, self.param.current_task))
                         self.adjustParam(self.param.delta)
                         self.lgr.debug('getCurrentTask now 0x%x' % self.param.current_task)
                     cpl = getCPL(cpu)
                     #current_task = self.param.current_task + self.param.delta
-                    ct_addr = new_fs_base + (self.param.current_task-self.param.kernel_base)
+                    if self.WORD_SIZE == 4:
+                        ct_addr = new_xs_base + (self.param.current_task-self.param.kernel_base)
+                    else:
+                        va = cpu.ia32_gs_base + self.param.current_task
+                        ct_addr = self.v2p(cpu, va)
                     try:
                         retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
                     except:
@@ -514,27 +536,9 @@ class memUtils():
                     if retval is None or retval == 0:
                         self.param.delta = None
                     else:
-                        self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x fs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
-                              self.param.current_task, new_fs_base, ct_addr, retval))
+                        self.lgr.debug('getCurrentTask cpl: %d  adjusted current_task: 0x%x xs_base: 0x%x phys of ct_addr(phys) is 0x%x retval: 0x%x  ' % (cpl, 
+                              self.param.current_task, new_xs_base, ct_addr, retval))
   
-        elif self.WORD_SIZE == 8:
-            ''' TBD generalze for all x86-64'''
-            gs_b700 = self.getGSCurrent_task_offset(cpu)
-            #phys_addr = self.v2p(cpu, gs_b700)
-            #self.current_task[cpu] = phys_addr
-            #self.current_task_virt[cpu] = gs_b700
-            ct_addr = self.v2p(cpu, gs_b700)
-            if ct_addr is None:
-                self.lgr.debug('getCurrentTask finds no phys for 0x%x' % gs_b700)
-            else:
-                self.lgr.debug('memUtils getCurrentTask cell %s gs_b700 is 0x%x phys is 0x%x' % (self.cell_name, gs_b700, ct_addr))
-                try:
-                    retval = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
-                    self.lgr.debug('getCurrentTask ct_addr 0x%x ct 0x%x' % (ct_addr, retval))
-                except:
-                    self.lgr.debug('getCurrentTask ct_addr 0x%x not mapped?' % ct_addr)
-        else:
-            print('unknown word size %d' % self.WORD_SIZE)
 
         return retval
 

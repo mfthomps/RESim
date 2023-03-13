@@ -503,6 +503,7 @@ class Syscall():
                     if self.param.sys_entry is not None and self.param.sys_entry != 0:
                         ''' Has sys_entry as well. '''
                         #self.lgr.debug('Syscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
+                        self.lgr.debug('Syscall no callnum, set sys_entry break at 0x%x ' % (self.param.sys_entry))
                         proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                         break_addrs.append(self.param.sys_entry)
                         break_list.append(proc_break1)

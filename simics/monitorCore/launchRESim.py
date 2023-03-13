@@ -148,7 +148,7 @@ def linkSwitches(target, comp_dict, link_names):
     return switch_map
  
    
-def createDict(config, not_a_target): 
+def createDict(config, not_a_target, lgr): 
     comp_dict = {}
     if config.has_section('driver'):
         comp_dict['driver'] = {}
@@ -159,12 +159,21 @@ def createDict(config, not_a_target):
             continue
         comp_dict[section] = {}
         print('assign %s CLI variables' % section)
+        lgr.debug('assign %s CLI variables' % section)
         ''' hack defaults, Simics CLI has no undefine operation '''
         comp_dict[section]['ETH0_SWITCH'] = 'switch0'
         comp_dict[section]['ETH1_SWITCH'] = 'switch1'
         comp_dict[section]['ETH2_SWITCH'] = 'switch2'
         comp_dict[section]['ETH3_SWITCH'] = 'switch3'
         for name, value in config.items(section):
+            #lgr.debug('name %s value %s' % (name, value))
+            if value.startswith('$'):
+                if os.path.sep in value:
+                    env_var, rest = value.split(os.path.sep,1)
+                    expanded = os.getenv(env_var[1:])
+                    value = os.path.join(expanded, rest)
+                else:
+                    value = os.getenv(value[1:])
             comp_dict[section][name] = value
     return comp_dict
 
@@ -240,7 +249,7 @@ class LaunchRESim():
         
         self.not_a_target=['ENV', 'driver']
         
-        self.comp_dict = createDict(self.config, self.not_a_target)
+        self.comp_dict = createDict(self.config, self.not_a_target, lgr)
         self.link_dict = {}
 
         if RUN_FROM_SNAP is None:
