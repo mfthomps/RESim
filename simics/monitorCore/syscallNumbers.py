@@ -19,7 +19,7 @@ class SyscallNumbers():
 
     def fromInclude(self, fpath):
         hackvals = {}
-        if not os.path.isfile:
+        if not os.path.isfile(fpath):
             print('Could not find unistd file at %s' % fpath)
             return
         with open(fpath) as fh:

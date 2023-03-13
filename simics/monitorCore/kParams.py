@@ -81,6 +81,7 @@ class Kparams():
         self.fs_base = None
         self.delta = None
 
+        self.gs_base = None
 
     def printParams(self):
         print('Kernel parameters:')

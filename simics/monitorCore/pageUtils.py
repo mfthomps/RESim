@@ -309,7 +309,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None):
         return findPageTableArm(cpu, addr, lgr, use_sld)
 
     elif isIA32E(cpu):
-        lgr.debug('findPageTable is IA32E')
+        #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr) 
     else:
         #lgr.debug('findPageTable not IA32E')

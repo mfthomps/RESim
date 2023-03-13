@@ -179,6 +179,7 @@ class memUtils():
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
         except:
+            self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             return None
 
         if phys_block.address != 0:
@@ -187,8 +188,8 @@ class memUtils():
 
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
-            if v < self.param.kernel_base and not ptable_info.page_exists:
-                #self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
+            if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
+                self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
                 return None
             #self.lgr.debug('phys addr for 0x%x return 0' % (v))
             if cpu.architecture == 'arm':
@@ -199,7 +200,7 @@ class memUtils():
                 if v < self.param.kernel_base and mode == 8:
                 #if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('get unsigned of 0x%x mode %d' % (v, mode))
+                    #self.lgr.debug('memUtils get unsigned of 0x%x mode %d' % (v, mode))
                     return self.getUnsigned(phys_addr)
                 else:
                     phys_addr = v & ~self.param.kernel_base 

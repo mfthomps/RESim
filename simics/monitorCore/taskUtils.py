@@ -98,6 +98,9 @@ class TaskUtils():
 
             if self.param.current_task_fs:
                 phys = cpu.ia32_fs_base + (self.param.current_task-self.param.kernel_base)
+            elif self.param.current_task_gs:
+                va = cpu.ia32_gs_base + self.param.current_task
+                phys = self.mem_utils.v2p(self.cpu, va)
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
@@ -105,11 +108,16 @@ class TaskUtils():
                     phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
                 else:
                     phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
-                self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
-            #self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
+                if phys is not None:
+                    pass
+                    #self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+                else:
+                    self.lgr.error('TaskUtils init phys of current_task 0x%x is None' % self.param.current_task)
+                    return None
+            self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
 
-            if self.phys_current_task > 0xffffffff:
+            if self.mem_utils.WORD_SIZE == 4 and self.phys_current_task > 0xffffffff:
                 self.lgr.debug('TaskUtils cell %s phys address for 0x%x is too large' % (self.cell_name, param.current_task))
                 self.phys_current_task = 0
                 return None
@@ -151,8 +159,11 @@ class TaskUtils():
     def curProc(self):
         #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
+        #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
+        #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+        #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
         phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid 

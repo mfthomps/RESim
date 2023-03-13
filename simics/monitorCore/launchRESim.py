@@ -336,6 +336,9 @@ class LaunchRESim():
             run_command('$eth_dev=i82543gc')
             run_command('$mac_address_3=None')
             
+            cmd = '$machine_name=%s' % section
+            run_command (cmd)
+
             params=''
             script = self.getSimicsScript(section)
             if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
