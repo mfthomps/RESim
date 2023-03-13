@@ -47,7 +47,7 @@ def getFirstReadCycle(trackio, quiet=False):
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     if not os.path.isfile(trackio):
         if not quiet:
-            print('ERROR: no trackio file at %s' % trackio)
+            print('ERROR: getFirstReadCycle no trackio file at %s' % trackio)
         return None
     try:
         tjson = json.load(open(trackio))
@@ -68,7 +68,7 @@ def getWatchMark(trackio, bb, prog, quiet=False):
     ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
     if not os.path.isfile(trackio):
         if not quiet:
-            print('ERROR: no trackio file at %s' % trackio)
+            print('ERROR: getWatchMark no trackio file at %s' % trackio)
         return retval
     try:
         tjson = json.load(open(trackio))
