@@ -174,7 +174,7 @@ class PageFaultGen():
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, cr2, self.lgr)
         elif pageUtils.isIA32E(cpu):
-            page_info = pageUtils.findPageTableIA32E(self.cpu, cr2, self.lgr)
+            page_info = pageUtils.findPageTableIA32E(self.cpu, cr2, self.lgr, self.mem_utils.getKernelSavedCR3())
         else:
             page_info = pageUtils.findPageTable(self.cpu, cr2, self.lgr)
         prec = Prec(self.cpu, comm, pid, cr2, cur_pc)

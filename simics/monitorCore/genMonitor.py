@@ -726,20 +726,34 @@ class GenMonitor():
                             unistd32 = self.unistd32[cell_name]
                         task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
                             self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
-                        self.task_utils[cell_name] = task_utils
-                        self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
-                        self.finishInit(cell_name)
-                        run_cycles = self.getBootCycleChunk()
-                        if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
-                            self.is_monitor_running.setRunning(False)
-                            dlist = self.comp_dict[cell_name]['DMOD'].split(';')
-                            for dmod in dlist:
-                                dmod = dmod.strip()
-                                if self.runToDmod(dmod, cell_name=cell_name):
-                                    print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                                else:
-                                    print('Dmod is missing, cannot continue.')
-                                    self.quit()
+                        swapper = task_utils.findSwapper()
+                        if swapper is None:
+                            self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
+                            done = False
+                        else: 
+                            tasks = task_utils.getTaskStructs()
+                            if len(tasks) == 1:
+                                self.lgr.debug('doInit cell %s taskUtils got swapper, but no other process, hack harder' % cell_name)
+                                done = False
+                        
+                            else:
+                                self.task_utils[cell_name] = task_utils
+                                saved_cr3 = self.mem_utils[cell_name].getKernelSavedCR3()
+                                if saved_cr3 is not None:
+                                    self.lgr.debug('doInit saved_cr3 is 0x%x' % saved_cr3)
+                                self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
+                                self.finishInit(cell_name)
+                                run_cycles = self.getBootCycleChunk()
+                                if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
+                                    self.is_monitor_running.setRunning(False)
+                                    dlist = self.comp_dict[cell_name]['DMOD'].split(';')
+                                    for dmod in dlist:
+                                        dmod = dmod.strip()
+                                        if self.runToDmod(dmod, cell_name=cell_name):
+                                            print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                                        else:
+                                            print('Dmod is missing, cannot continue.')
+                                            self.quit()
                     else:
                         self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -902,8 +916,10 @@ class GenMonitor():
             t = plist[pid]
             uid, e_uid = self.task_utils[self.target].getCred(t)
             id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
-            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%s leader: 0x%s parent: 0x%s tgid: %s %s' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].state, str(tasks[t].next), str(tasks[t].group_leader), str(tasks[t].real_parent), str(tasks[t].tgid), id_str))
+            #print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
+            #    tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -4069,7 +4085,7 @@ class GenMonitor():
 
     def pageInfo(self, addr, quiet=False):
         cpu = self.cell_config.cpuFromCell(self.target)
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr)
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=self.mem_utils.getKernelSavedCR3())
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)

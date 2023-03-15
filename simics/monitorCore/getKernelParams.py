@@ -803,7 +803,7 @@ class GetKernelParams():
                         SIM_break_simulation('found sysexit and iretd and sysret64')
                 '''
             else:
-                self.lgr.debug('entryModeChanged, wtf 0x%x in hits?' % eip)
+                self.lgr.debug('entryModeChanged, 0x%x in already hits?' % eip)
         elif old == Sim_CPU_Mode_Supervisor and compat32:
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
@@ -970,7 +970,8 @@ class GetKernelParams():
             #SIM_run_alone(self.findCompute, None)
             
         if (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
-                 and (self.param.sysexit is not None or self.skip_sysenter) and self.param.iretd is not None:
+                 and (self.param.sysexit is not None or self.skip_sysenter) and self.param.iretd is not None \
+                 and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None):
             SIM_run_alone(self.deleteHaps, None)
 
             self.lgr.debug('kernel entry and exits found')
@@ -987,7 +988,7 @@ class GetKernelParams():
         ''' called when mode hap determines this is a kernel entry '''
         self.lgr.debug('entryStopHap cycles: 0x%x exception %s  error_string %s' % (self.cpu.cycles, str(exception), error_string))
         if not self.hack_stop:
-            self.lgr.debug('wtf, hack stop not set')
+            self.lgr.debug('entryStopHap, hack stop not set')
             return
         if self.cpu.cycles == self.hack_cycles:
             self.lgr.debug('entryStopHap, got nowhere before stop, continue and ignore?')

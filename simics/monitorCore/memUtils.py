@@ -135,6 +135,8 @@ class memUtils():
         self.param = param
         self.cell_name = cell_name
         self.lgr = lgr
+        self.hacked_v2p_offset = None
+        self.kernel_saved_cr3 = None
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
         self.ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
@@ -176,36 +178,54 @@ class memUtils():
             return False    
 
     def v2p(self, cpu, v):
+        retval = None
+        cpl = getCPL(cpu)
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
         except:
-            self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+            #self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             return None
 
         if phys_block.address != 0:
-            #self.lgr.debug('get unsigned of of phys 0x%x' % phys_block.address)
-            return self.getUnsigned(phys_block.address)
+            #self.lgr.debug('memUtils v2p iface worked cpl %d get unsigned of of phys 0x%x' % (cpl, phys_block.address))
+            if self.WORD_SIZE == 8:
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
+                #if not ptable_info.page_exists:
+                #    self.lgr.debug('memUtils cpl %d v2p iface worked but page tables do not for phys 0x%x' % (cpl, phys_block.address))
+                #elif ptable_info.page_addr != phys_block.address:
+                #    self.lgr.debug('memUtils cpl %d v2p iface worked but page value 0x%x does not match 0x%x' % (cpl, ptable_info.page_addr, phys_block.address))
+                #else:
+                #    self.lgr.debug('memUtils cpl %d v2p iface AND page tables worked  0x%x' % (cpl, ptable_info.page_addr))
+            retval = self.getUnsigned(phys_block.address)
 
         else:
-            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
+            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
             if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
-                self.lgr.debug('phys addr for 0x%x not mapped per page tables' % (v))
+                self.lgr.debug('memUtils v2p phys addr for 0x%x not mapped per page tables' % (v))
                 return None
-            #self.lgr.debug('phys addr for 0x%x return 0' % (v))
+            #self.lgr.debug('memUtils v2p ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
-                return self.getUnsigned(phys_addr)
+                retval = self.getUnsigned(phys_addr)
             else:
                 mode = cpu.iface.x86_reg_access.get_exec_mode()
                 if v < self.param.kernel_base and mode == 8:
                 #if v < self.param.kernel_base:
                     phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('memUtils get unsigned of 0x%x mode %d' % (v, mode))
-                    return self.getUnsigned(phys_addr)
+                    #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x mode %d' % (cpl, v, mode))
+                    retval = self.getUnsigned(phys_addr)
                 else:
-                    phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('memUtils v2p  32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (mode, self.param.kernel_base, v, phys_addr))
-                    return phys_addr
+                    if self.WORD_SIZE == 8 and ptable_info.page_exists:
+                        #self.lgr.debug('memUtils v2p mode is %d ptables page exists? phys 0x%x' % (mode, ptable_info.page_addr))
+                        retval = ptable_info.page_addr
+                    else:
+                        if self.WORD_SIZE == 8:
+                            retval = None
+                            self.lgr.error('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                        else:
+                            retval = v & ~self.param.kernel_base 
+                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
+        return retval
                     
 
     def readByte(self, cpu, vaddr):
@@ -317,7 +337,7 @@ class memUtils():
     def readWord32(self, cpu, vaddr):
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
-            #self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
+            self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
             return None
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
@@ -466,16 +486,21 @@ class memUtils():
         ''' Adjust parameters for ASLR '''
         if self.WORD_SIZE == 4:
             self.param.current_task = self.param.current_task + delta
+        #else:
+        #    self.param.current_task = self.param.current_task + abs(delta)
+
         if self.param.sysenter is not None:
             self.lgr.debug('sysenter was to 0x%x' % self.param.sysenter)
             if self.WORD_SIZE == 4:
                 self.param.sysenter = self.param.sysenter + delta
             else:
                 # TBD remove if
-                self.param.sysenter = self.param.sysenter + delta
+                #self.param.sysenter = self.param.sysenter + delta
+                pass
             self.lgr.debug('sysenter adjusted to 0x%x' % self.param.sysenter)
         if self.param.sysexit is not None:
-            self.param.sysexit = self.param.sysexit + delta
+            if self.WORD_SIZE == 4:
+                self.param.sysexit = self.param.sysexit + delta
         self.param.iretd = self.param.iretd + delta
         self.param.page_fault = self.param.page_fault + delta
         self.param.syscall_compute = self.param.syscall_compute + delta
@@ -793,3 +818,11 @@ class memUtils():
             return True
         else:
             return False
+
+    def saveKernelCR3(self, cpu):
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+        self.lgr.debug('memUtils saveKernelCR3 saved cr3 to 0x%x' % (self.kernel_saved_cr3))
+
+    def getKernelSavedCR3(self):
+        return self.kernel_saved_cr3
