@@ -171,6 +171,9 @@ def createDict(config, not_a_target, lgr):
                 if os.path.sep in value:
                     env_var, rest = value.split(os.path.sep,1)
                     expanded = os.getenv(env_var[1:])
+                    if expanded is None:
+                        print('Could not expand %s' % value)
+                        continue
                     value = os.path.join(expanded, rest)
                 else:
                     value = os.getenv(value[1:])
