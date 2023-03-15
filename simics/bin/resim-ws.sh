@@ -14,9 +14,14 @@ if [[ -z "$RESIM_DIR" ]]; then
 fi
 $SIMDIR/bin/project-setup  || exit
 cp $RESIM_DIR/simics/workspace/mytarget.ini .
+cp $RESIM_DIR/simics/workspace/clear-linux.ini .
+cp $RESIM_DIR/simics/workspace/clear64.param .
 cp $RESIM_DIR/simics/workspace/driver-script.sh .
 cp $RESIM_DIR/simics/workspace/ubuntu.param .
 cp $RESIM_DIR/simics/workspace/ubuntu.ini .
 cp $RESIM_DIR/simics/workspace/authorized_keys .
 here=`pwd`
 echo "Workspace setup at $here."
+if [ ! -d ./targets/qsp-x86 ]; then
+    $RESIM_DIR/simics/bin/free-ws.sh
+fi
