@@ -49,7 +49,7 @@ load-module isa-components
 load-module pci-components
 load-module std-comp
 load-module x86-comp
-load-module x86-nehalem-comp
+#load-module x86-nehalem-comp
 load-module x58-ich10-comp
 load-module memory-comp
 load-module os-awareness

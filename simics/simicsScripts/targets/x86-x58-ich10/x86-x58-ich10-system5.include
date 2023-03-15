@@ -64,7 +64,7 @@ load-module isa-comp
 load-module pci-comp
 load-module std-comp
 load-module x86-comp
-load-module x86-nehalem-comp
+#load-module x86-nehalem-comp
 load-module x58-ich10-comp
 load-module memory-comp
 load-module i82574-v2-comp
