@@ -1,4 +1,13 @@
 README for default RESim workspace
+
+The clear-linux.ini is an example RESim ini file that works with the x86 QSP clear linux platform
+that Intel includes with their free version of Simics.
+
+The information below does not yet apply to that free Simics.  However you can work with
+the QSP platform and whatever systems you can get to boot on it.
+
+The information below assumes you have a general Simics license.
+
 The mytarget.ini is an example RESim ini file that creates and monitors a single ubuntu system.
 
 
