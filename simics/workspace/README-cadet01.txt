@@ -12,7 +12,18 @@ from simics/workspace into your local ~/.ssh directory.   This is
 needed to ssh into one of the simulated computers.  Be sure to set
 the mode on the id_rsa file to 400.
 
-You should have two terminals on the system that is running Simics.
+The example uses 2 disk images
+The image from
+   https://nps.box.com/s/t88gkonktje8xuer3qnwnl5gl05rhbl5
+should be copied to:
+    $RESIM_IMAGES/cadet01/viper.disk.hd_image.craff
+
+And the image from
+   https://nps.box.com/s/pzdljc8fvijx3nga87bveusgjp7yv4tb
+should be copied to:
+   $RESIM_IMAGES/driver/driver2.disk.hd_image.craff
+
+You should have at least two terminals on the system that is running Simics.
 One should be in the workspace directory.  The workspace should
 have been created with:
     resim-ws.sh -e 
