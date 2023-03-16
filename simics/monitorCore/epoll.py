@@ -14,8 +14,17 @@ EPOLLET = (1 << 31)
 def getEvent(cpu, mem_utils, events_ptr, lgr):
     retval = ''
     events = mem_utils.readWord32(cpu, events_ptr)
+    if events is None:
+        lgr.debug('epoll getEvent, events is None, reading from 0x%x' % ((events_ptr)))
+        return retval
     data_ptr = mem_utils.readPtr(cpu, events_ptr+4)
+    if data_ptr is None:
+        lgr.debug('epoll getEvent, data_ptr is None, reading from 0x%x' % ((events_ptr+4)))
+        return retval
     data_ptr2 = mem_utils.readPtr(cpu, events_ptr+8)
+    if data_ptr2 is None:
+        lgr.debug('epoll getEvent, data_ptr2 is None, reading from 0x%x' % ((events_ptr+8)))
+        return retval
     value = mem_utils.readWord32(cpu, data_ptr)
     value2 = mem_utils.readWord32(cpu, data_ptr2)
     if data_ptr is not None:
