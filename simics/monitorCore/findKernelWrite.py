@@ -621,19 +621,15 @@ class findKernelWrite():
                 self.lgr.error('backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
             orig_eip = eip
-            self.lgr.debug('wtf, current cycle 0x%x eip 0x%x   skip to previous 0x%x' % (self.cpu.cycles, eip, previous))
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('wtf, after skip current cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
             eip = self.top.getEIP(self.cpu)
             if eip == orig_eip:
                 self.lgr.warning('Simics 2 step fu, go forward then reskip...')
                 cli.quiet_run_command('rev 1')
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('wtf, after rev 1 cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
                 resimUtils.skipToTest(self.cpu, previous, self.lgr)
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('wtf, after skip current cycle 0x%x eip 0x%x' % (self.cpu.cycles, eip))
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
