@@ -164,7 +164,7 @@ class SharedSyscall():
             current_context = self.cpu.current_context
         else:
             current_context = context_override
-        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s current_context %s' % (pid, name, str(current_context)))
+        #self.lgr.debug('sharedSyscall addExitHap pid:%d name %s current_context %s' % (pid, name, str(current_context)))
         if current_context not in self.exit_pids:
             self.exit_pids[current_context] = {}
         my_exit_pids = self.exit_pids[current_context]
@@ -177,7 +177,7 @@ class SharedSyscall():
                 #self.lgr.debug('sharedSyscall addExitHap, cell is None, is dmod, set cell to %s' % cell) 
 
         if exit_eip1 is not None: 
-            self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
+            #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
             if len(my_exit_pids[exit_eip1]) == 0:
                 #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d cell: %s' % (exit_eip1, pid, cell))
                 exit_break = self.context_manager.genBreakpoint(cell, 
@@ -186,10 +186,10 @@ class SharedSyscall():
                                    None, exit_break, 'exit hap')
                 #self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
             my_exit_pids[exit_eip1].append(pid)
-            self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
+            #self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
         else:
             pass
-            self.lgr.debug('sharedSyscall addExitHap exit_eip1 is None')
+            #self.lgr.debug('sharedSyscall addExitHap exit_eip1 is None')
 
         if exit_eip2 is not None:
             if exit_eip2 not in my_exit_pids:
@@ -233,7 +233,7 @@ class SharedSyscall():
             self.lgr.debug('exit_info was None for name: %s' % name)
 
 
-        self.lgr.debug('sharedSyscall addExitHap return pid %d' % pid)
+        #self.lgr.debug('sharedSyscall addExitHap return pid %d' % pid)
 
 
     def addPendingExecve(self, pid):
