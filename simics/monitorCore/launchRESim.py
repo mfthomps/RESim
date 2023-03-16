@@ -6,7 +6,7 @@ except:
 RESIM_REPO = os.getenv('RESIM')
 CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
 if CORE not in sys.path:
-    print("using CORE of %s" % CORE)
+    #print("using CORE of %s" % CORE)
     sys.path.append(CORE)
 import genMonitor
 import getKernelParams
@@ -48,7 +48,7 @@ class LinkObject():
         self.name = name
         cmd = '%s' % name
         self.obj = SIM_run_command(cmd)
-        print('self.name is %s self.obj is %s' % (self.name, self.obj))
+        #print('self.name is %s self.obj is %s' % (self.name, self.obj))
 
 def doEthLink(target, eth):
     name = '$%s_%s' % (target, eth)
@@ -109,7 +109,7 @@ def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
     return link_names
 
 def doConnect(switch, eth, switch_map, index):
-    print('do connect switch %s eth %s' % (switch, eth))
+    #print('do connect switch %s eth %s' % (switch, eth))
     #cmd = '$%s' % eth
     #dog = run_command(cmd)
     #print('dog is %s' % dog)
@@ -126,13 +126,13 @@ def doConnect(switch, eth, switch_map, index):
             cmd = '%s.get-free-connector %d' % (switch, group)
     else:
         cmd = '%s.get-free-connector' % switch
-    print('doConect cmd is %s' % cmd)
+    #print('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
     cmd = 'connect $%s cnt1 = %s' % (eth, con)
-    print('doConnect cmd: %s' % cmd)
+    #print('doConnect cmd: %s' % cmd)
     run_command(cmd)
     switch_n = 'switch%d' % index
-    print('adding %s to map as %s' % (switch_n, con))
+    #print('adding %s to map as %s' % (switch_n, con))
     switch_map[switch_n] = con
 
 def linkSwitches(target, comp_dict, link_names):
@@ -227,7 +227,7 @@ class LaunchRESim():
         
         RESIM_TARGET = 'NONE'
         DRIVER_WAIT = False
-        print('assign ENV variables')
+        #print('assign ENV variables')
         lgr.debug('assign ENV variables')
         for name, value in self.config.items('ENV'):
             os.environ[name] = value
@@ -343,7 +343,7 @@ class LaunchRESim():
         for section in self.config.sections():
             if section in self.not_a_target:
                 continue
-            print('assign %s CLI variables' % section)
+            #print('assign %s CLI variables' % section)
             ''' hack defaults, Simics CLI has no undefine operation '''
             run_command('$eth_dev=i82543gc')
             run_command('$mac_address_3=None')
@@ -376,7 +376,7 @@ class LaunchRESim():
                 cmd='run-command-file "./targets/%s"' % (script)
             else:
                 cmd='run-command-file "./targets/%s" %s' % (script, params)
-            print('cmd is %s' % cmd)
+            #print('cmd is %s' % cmd)
             run_command(cmd)
             #print('assign eth link names')
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
