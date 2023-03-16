@@ -537,7 +537,7 @@ class Syscall():
             for call in self.call_list:
                 # TBD fix for compat 32
                 callnum = self.task_utils.syscallNumber(call, compat32)
-                #self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
+                self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
                 if callnum is not None and callnum < 0:
                     self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
@@ -549,7 +549,7 @@ class Syscall():
                 self.syscall_info = syscall_info
                 debug_pid, dumb = self.context_manager.getDebugPid() 
                 if not background or debug_pid is not None:
-                    #self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r call_params %s' % (callnum, call, entry, compat32, str(syscall_info)))
+                    self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r call_params %s' % (callnum, call, entry, compat32, str(syscall_info)))
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                     proc_break1 = None
                     break_list.append(proc_break)
@@ -966,7 +966,7 @@ class Syscall():
             except:
                 self.lgr.debug('syscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
         sock_params = SockParams(domain, sock_type, protocol)
-        self.lgr.debug('syscall getSockParams returning %s' % sock_params.getString())
+        #self.lgr.debug('syscall getSockParams returning %s' % sock_params.getString())
         return sock_params
 
     def bindFDToSocket(self, pid, fd):
@@ -1406,14 +1406,14 @@ class Syscall():
                     self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[pid])
                 else:
                     if pageUtils.isIA32E(cpu):
-                        ptable_info = pageUtils.findPageTableIA32E(cpu, exit_info.fname_addr, self.lgr, self.mem_utils.getKernelSavedCR3())
+                        ptable_info = pageUtils.findPageTableIA32E(cpu, exit_info.fname_addr, self.lgr)
                         if not ptable_info.ptable_exists:
-                            self.lgr.debug('syscallParse, open pid %d filename not yet here... set ptable break at 0x%x ' % (pid, ptable_info.table_addr))
-                            self.finish_break[pid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.table_addr, 1, 0)
+                            self.lgr.debug('syscallParse, open pid %d filename not yet here... set ptable break at 0x%x ' % (pid, ptable_info.ptable_addr))
+                            self.finish_break[pid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.ptable_addr, 1, 0)
                             self.finish_hap_table[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnameTable, exit_info, self.finish_break[pid])
                         elif not ptable_info.page_exists:
-                            self.lgr.debug('syscallParse, open pid %d filename not yet here... set page break at 0x%x ' % (pid, ptable_info.page_addr))
-                            self.finish_break[pid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.page_addr, 1, 0)
+                            self.lgr.debug('syscallParse, open pid %d filename not yet here... set page break at 0x%x ' % (pid, ptable_info.page_base_addr))
+                            self.finish_break[pid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.page_base_addr, 1, 0)
                             self.finish_hap_page[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnamePage, exit_info, self.finish_break[pid])
                         
                 #SIM_break_simulation('fname is none...')
@@ -1447,6 +1447,7 @@ class Syscall():
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info)
+            ''' TBD why not set exit hap even though we don't yet have the params?'''
             if not retval:
                 exit_info = None
         elif callname == 'close':        
@@ -1926,10 +1927,10 @@ class Syscall():
             exit_eip2 = self.param.iretd
             try:
                 exit_eip3 = self.param.sysret64
-                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
+                #self.lgr.debug('syscall getExitAddrs has sysret64 exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
             except AttributeError:
                 exit_eip3 = None
-                #self.lgr.debug('sysenter exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
+                #self.lgr.debug('syscall getExitAddrs no sysret64 exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
             
         elif break_eip == self.param.sys_entry:
             if frame is None:
@@ -2005,7 +2006,7 @@ class Syscall():
                 self.hack_cycle = cpu.cycles
 
         callnum = self.mem_utils.getCallNum(cpu)
-        self.lgr.debug('syscallHap callnum %d' % callnum)
+        #self.lgr.debug('syscallHap callnum %d' % callnum)
         if syscall_info.callnum is None:
            ''' tracing all'''
            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
@@ -2036,8 +2037,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-             pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
+        #     pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
@@ -2190,7 +2191,7 @@ class Syscall():
         else:
             ''' tracing all syscalls, or watching for any syscall, e.g., during debug '''
             exit_info = self.syscallParse(callnum, callname, frame, cpu, pid, comm, syscall_info)
-            self.lgr.debug('syscall looking for any, got %d from %d (%s) at 0x%x ' % (callnum, pid, comm, break_eip))
+            #self.lgr.debug('syscall looking for any, got %d from %d (%s) at 0x%x ' % (callnum, pid, comm, break_eip))
 
             if exit_info is not None:
                 if comm != 'tar':
@@ -2221,7 +2222,7 @@ class Syscall():
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
             debugging_pid, dumb = self.context_manager.getDebugPid()
-            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r' % (self.name, pid, last_one, self.debugging, retain_so))
+            #self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r' % (self.name, pid, last_one, self.debugging, retain_so))
             if (last_one or (exit_group and pid == debugging_pid)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
