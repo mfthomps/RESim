@@ -109,6 +109,7 @@ import jumpers
 import kbuffer
 import funMgr
 import readReplace
+import testSnap
 #import fsMgr
 import json
 import pickle
@@ -342,6 +343,10 @@ class GenMonitor():
                     self.param[cell_name].delta = None
                 if not hasattr(self.param[cell_name], 'fs_base'):
                     self.param[cell_name].fs_base = None
+                if not hasattr(self.param[cell_name], 'current_task_gs'):
+                    self.param[cell_name].current_task_gs = False
+                if not hasattr(self.param[cell_name], 'gs_base'):
+                    self.param[cell_name].gs_base = None
 
                 ''' always true? TBD '''
                 self.param[cell_name].ts_state = 0
@@ -416,7 +421,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         self.lgr.debug('stopModeChanged eip 0x%x %s' % (eip, instruct[1]))
-        SIM_continue(0)
+        #SIM_run_alone(SIM_continue, 0)
 
     def modeChangeReport(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -424,14 +429,18 @@ class GenMonitor():
             #self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
         new_mode = 'user'
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+        #self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x' % (new_mode, eip))
+        phys = self.mem_utils[self.target].v2p(cpu, eip)
+        if phys is not None:
+            instruct = SIM_disassemble_address(cpu, phys, 0, 0)
+            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
+        else:
+            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
         if new == Sim_CPU_Mode_Supervisor:
             new_mode = 'kernel'
             SIM_break_simulation('mode changed')
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
-        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
-        phys = self.mem_utils[self.target].v2p(cpu, eip)
-        instruct = SIM_disassemble_address(cpu, phys, 0, 0)
-        self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
 
     def modeChanged(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -916,10 +925,8 @@ class GenMonitor():
             t = plist[pid]
             uid, e_uid = self.task_utils[self.target].getCred(t)
             id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
-            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%s leader: 0x%s parent: 0x%s tgid: %s %s' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].state, str(tasks[t].next), str(tasks[t].group_leader), str(tasks[t].real_parent), str(tasks[t].tgid), id_str))
-            #print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
-            #    tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
+                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -2095,6 +2102,7 @@ class GenMonitor():
                 return
         else:
             call_params = []
+        self.lgr.debug('runToCall %s' % callname)
         self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                  self.mem_utils[self.target], self.task_utils[self.target], 
                  self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
@@ -5036,6 +5044,13 @@ class GenMonitor():
         self.lgr.debug('readReplace %s' % fname)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.read_replace = readReplace.ReadReplace(self, cpu, fname, self.lgr)
+
+    def testSnap(self):
+        self.debugSnap()
+        ts = testSnap.TestSnap(self, self.coverage, self.back_stop[self.target], self.lgr) 
+        ts.go()
+        self.lgr.debug('done')
+        print('done')
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
