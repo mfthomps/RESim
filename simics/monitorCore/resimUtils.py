@@ -6,7 +6,6 @@ import subprocess
 import imp 
 import elfText
 import json
-from simics import *
 try:
     import cli
     from simics import *
