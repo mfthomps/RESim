@@ -1,0 +1,7 @@
+#
+# example of getting cpu wihtin a simics python script
+# replace system_name with the platform name from your RESim ini file
+#
+cmd = 'system_name.get-processor-list'
+proclist = SIM_run_command(cmd)
+cpu = SIM_get_object(proclist[0])

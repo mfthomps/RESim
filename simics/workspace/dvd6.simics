@@ -1,0 +1,2 @@
+$iso_image=/home/mike/Downloads/ubuntu-16.04.6-desktop-i386.iso
+run-command-file targets/x58-ich10/x58-ich10-dvdboot.simics

@@ -1,87 +1,14 @@
 README for default RESim workspace
 
-The clear-linux.ini is an example RESim ini file that works with the x86 QSP clear linux platform
+This directory includes a number of files that may be useful within a RESim Simics workspace,
+and it includes some example ini files.
+
+The commonly used files are automatically copied to your new workspace (project) directory when
+you run resim-ws.sh.  The example files are copied when you provide the "-e" falg.
+
+The clear-linux.ini is an example RESim ini file that works with the 64-bit x86 QSP clear linux platform
 that Intel includes with their free version of Simics.
 
-The information below does not yet apply to that free Simics.  However you can work with
-the QSP platform and whatever systems you can get to boot on it.
+The mytarget.ini is an example RESim ini file that creates and monitors a single 32-bit ubuntu system.
 
-The information below assumes you have a general Simics license.
-
-The mytarget.ini is an example RESim ini file that creates and monitors a single ubuntu system.
-
-
-Summary of CADET01 example.
-
-This example requires that you put the id_rsa  and id_rsa.pub files
-from simics/workspace into your local ~/.ssh directory.   This is
-needed to ssh into one of the simulated computers.  Be sure to set
-the mode on the id_rsa file to 400.
-
-You should have two terminals on the system that is running Simics.
-One should be in the workspace directory.  
-
-Use the ubuntu_driver.ini configuration script to start RESim.  And
-use the "-n" option to not display X11 console windows, which may slow down the system:  
-   resim ubuntu_driver.ini -n
-
-This includes a driver computer and the
-target "ubuntu" system that runs the vulnerable cadet service.
-
-Watch the messages on the terminal as the driver boots, and once the driver
-is running ssh to it.  You can do this as soon as you see this message:
-    Host TCP port 4022 -> 10.20.200.91:22
-
-Use this ssh command from your 2nd terminal to ssh to the driver:
-    ssh -p 4022 mike@localhost
-
-Once you are on the driver, tee up the ./client.py script
-
-When RESim presents the "simics>"  prompt, direct it to debug cadet01:
-   @cgc.debugProc('cadet01')
-
-Save snapshot for future runs without having to boot
-   @cgc.writeConfig('cadet')
-
-Direct RESim to watch for ROP:
-   @cgc.watchROP()
-
-Then continue the simulation and hit <enter> on the ./client.py command.
-
-RESim will stop the simulation when it detects a ROP caused by an overwrite of an return
-address from the cgc_check function (which used to return to main).
-
-Copy the cadet01 executable to your local maching running IDA (if not the Simics server).
-Start IDA using the runIDA.sh script. The first time you run IDA for a target binary,
-use the dumpFuns.py and findBlocks.py scripts to generate database files used by RESim for
-the target (File / script files; or View / recent scripts).  Use shift R to attach to 
-the process and load the RESim plugins.
-
-View the stack and observe the return address is to somewhere within the cgc_check function.
-
-Use the reverse track address function to trace content of stack in IDA.  Note IDA output window
-identifies bytes written to address by kernel (during receive operation).  
-Use "stack trace" window to view call frames.  Double click
-the call to cgc_receive_delim, then reverse to cursor.  Note return pointer was written at offset 92
-into the buffer address stored at (esp+4).    Note esp+8 is the max count (128).  Then in the function preface,
-note the buffer is only 0x40 (0x58-0x18) (64)bytes.  The vars will get trashed during any overflow, so the
-content of the buffer matters.
-
-A notional view of the stack (aslr will vary it):
-
-Low memory
-
-
-   bfdd05fc   080489e1     ret to cgc_check from cgc_receive_delim
-
-
-   bfdd0610   rec buffer
-
-
-   bfdd066c    08048912    ret to main from cgc_check
-
-
-High memory
-
-
-
+Also see the simics/examples/network_file_system for a more complete example.

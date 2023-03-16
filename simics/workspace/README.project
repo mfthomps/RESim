@@ -1,0 +1,10 @@
+README hints for modifying Simics models.
+
+Use project-setup --copy-device to get a copy of a module.
+
+When doing that for ICH10, go to the modules/ICH10 and run
+ln -s /eems_images/ubuntu_img/simics6/install/simics-6/simics-6.0.89/src/devices/dml-lib/usb
+
+
+Add a config-user.mk file to the project directory and include:
+   USER_BUILD_ID = somthing:4848
