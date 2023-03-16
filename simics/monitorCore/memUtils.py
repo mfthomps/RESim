@@ -221,7 +221,7 @@ class memUtils():
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
-                            self.lgr.error('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                            #self.lgr.error('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
                         else:
                             retval = v & ~self.param.kernel_base 
                             #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
@@ -337,7 +337,7 @@ class memUtils():
     def readWord32(self, cpu, vaddr):
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
-            self.lgr.error('readWord32 phys of 0x%x is none' % vaddr)
+            self.lgr.debug('readWord32 phys of 0x%x is none' % vaddr)
             return None
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
@@ -501,16 +501,17 @@ class memUtils():
         if self.param.sysexit is not None:
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
-        self.param.iretd = self.param.iretd + delta
-        self.param.page_fault = self.param.page_fault + delta
-        self.param.syscall_compute = self.param.syscall_compute + delta
+        if self.WORD_SIZE == 4:
+            self.param.iretd = self.param.iretd + delta
+            self.param.page_fault = self.param.page_fault + delta
+            self.param.syscall_compute = self.param.syscall_compute + delta
 
-        ''' This value seems to get adjusted the other way.  TBD why? '''
-        self.lgr.debug('syscall_jump was 0x%x' % self.param.syscall_jump)
-        self.param.syscall_jump = self.param.syscall_jump - delta
-        self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            ''' This value seems to get adjusted the other way.  TBD why? '''
+            self.lgr.debug('syscall_jump was 0x%x' % self.param.syscall_jump)
+            self.param.syscall_jump = self.param.syscall_jump - delta
+            self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
 
-        if self.param.sys_entry is not None and self.param.sys_entry != 0:
+        if self.param.sys_entry is not None and self.param.sys_entry != 0 and self.WORD_SIZE==4:
             self.lgr.debug('sys_entry was to 0x%x' % self.param.sys_entry)
             self.param.sys_entry = self.param.sys_entry + delta
             self.lgr.debug('sys_entry adjusted to 0x%x' % self.param.sys_entry)
