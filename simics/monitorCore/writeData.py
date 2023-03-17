@@ -137,6 +137,9 @@ class WriteData():
             self.read_count = 0
         ''' keep afl from running amuck'''
         self.udp_header_limit = 10
+        self.no_call_hap = os.getenv('AFL_NO_CALL_HAP')
+        if self.no_call_hap:
+            self.lgr.debug('Preventing set of callHap')
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -160,7 +163,8 @@ class WriteData():
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
             #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             #self.lgr.debug('writeData writeKdata, call setCallHap')
-            self.setCallHap()
+            if not self.no_call_hap:
+                self.setCallHap()
             while remain > 0:
                  count = min(self.k_buf_len, remain)
                  end = offset + count
@@ -424,12 +428,12 @@ class WriteData():
             return
         #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            if self.closed_fd:
-                #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
-                pass
-            else:
-                #self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
-                pass
+            #if self.closed_fd:
+            #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
+            #    pass
+            #else:
+            #    self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
+            #    pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
@@ -544,7 +548,8 @@ class WriteData():
                      rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                  self.kernel_buf_consumed = True
-                 #self.setCallHap()
+                 if self.no_call_hap:
+                     self.setCallHap()
                  self.setSelectStopHap()
                  SIM_run_alone(self.delRetHap, None)
                  #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)

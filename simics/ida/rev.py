@@ -511,6 +511,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
 
 
     reHooks.register(isim)
+    re_hooks.setIdaSim(isim)
 
     dbg_hooks.setRESim(isim)
     idb_hooks.setRESim(isim)

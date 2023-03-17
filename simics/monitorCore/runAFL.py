@@ -106,7 +106,7 @@ def handleClose(resim_procs, read_array, duration, background, fifo_list, lgr):
         fd.close()
     return do_restart
 
-def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, background, lgr):
+def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read_array, resim_path, resim_procs, dict_path, timeout, background, dirty, lgr):
 
     try:
         os.remove('resim_ctl.fifo')
@@ -120,7 +120,12 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
 
 
     fifo_list = []
-    afl_cmd = '%s -i %s -o %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, port, dict_path, afl_name)
+    dirty_str = ''
+    if dirty:
+        dirty_str = '-d'
+    afl_cmd = '%s -i %s -o %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, dirty_str, port, dict_path, afl_name)
+    #if dirty:
+    #    afl_cmd = afl_cmd+' -d'
     print('afl_cmd %s' % afl_cmd) 
     lgr.debug('afl_cmd %s' % afl_cmd) 
 
@@ -237,8 +242,11 @@ def runAFLTilRestart(args, lgr):
                 continue
             os.chdir(instance)
             if not args.no_afl:
-                afl_cmd = '%s -i %s -o %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
-                      master_slave, fuzzid, port, dict_path, afl_name)
+                dirty_str = ''
+                if args.dirty:
+                    dirty_str = '-d'
+                afl_cmd = '%s -i %s -o %s %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
+                      master_slave, fuzzid, dirty_str, port, dict_path, afl_name)
                 lgr.debug('afl_cmd %s' % afl_cmd) 
                 if args.remote or ((args.quiet or args.background) and master_slave == '-S'):
                     afllog = '/tmp/%s.log' % fuzzid 
@@ -289,7 +297,8 @@ def runAFLTilRestart(args, lgr):
     else:
         lgr.debug('Running single instance')
         background = args.remote | args.background
-        do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, resim_path, resim_procs, dict_path, args.seconds, background, lgr)
+        do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, 
+                           resim_path, resim_procs, dict_path, args.seconds, background, args.dirty, lgr)
     return do_restart
 
 def runAFL(args, lgr):
@@ -320,6 +329,7 @@ def main():
     parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')
     parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Redirect afl output to file in workspace directory')
     parser.add_argument('-b', '--background', action='store_true', default=False, help='Run locally in background.')
+    parser.add_argument('-k', '--dirty', action='store_true', default=False, help='Run AFL with quick & dirty mode, skipping deterministic step.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:

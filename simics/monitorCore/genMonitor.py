@@ -109,6 +109,7 @@ import jumpers
 import kbuffer
 import funMgr
 import readReplace
+import testSnap
 #import fsMgr
 import json
 import pickle
@@ -342,6 +343,10 @@ class GenMonitor():
                     self.param[cell_name].delta = None
                 if not hasattr(self.param[cell_name], 'fs_base'):
                     self.param[cell_name].fs_base = None
+                if not hasattr(self.param[cell_name], 'current_task_gs'):
+                    self.param[cell_name].current_task_gs = False
+                if not hasattr(self.param[cell_name], 'gs_base'):
+                    self.param[cell_name].gs_base = None
 
                 ''' always true? TBD '''
                 self.param[cell_name].ts_state = 0
@@ -416,7 +421,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         self.lgr.debug('stopModeChanged eip 0x%x %s' % (eip, instruct[1]))
-        SIM_continue(0)
+        #SIM_run_alone(SIM_continue, 0)
 
     def modeChangeReport(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -424,14 +429,18 @@ class GenMonitor():
             #self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
         new_mode = 'user'
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+        #self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x' % (new_mode, eip))
+        phys = self.mem_utils[self.target].v2p(cpu, eip)
+        if phys is not None:
+            instruct = SIM_disassemble_address(cpu, phys, 0, 0)
+            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
+        else:
+            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
         if new == Sim_CPU_Mode_Supervisor:
             new_mode = 'kernel'
             SIM_break_simulation('mode changed')
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
-        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
-        phys = self.mem_utils[self.target].v2p(cpu, eip)
-        instruct = SIM_disassemble_address(cpu, phys, 0, 0)
-        self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
 
     def modeChanged(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -726,20 +735,34 @@ class GenMonitor():
                             unistd32 = self.unistd32[cell_name]
                         task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
                             self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
-                        self.task_utils[cell_name] = task_utils
-                        self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
-                        self.finishInit(cell_name)
-                        run_cycles = self.getBootCycleChunk()
-                        if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
-                            self.is_monitor_running.setRunning(False)
-                            dlist = self.comp_dict[cell_name]['DMOD'].split(';')
-                            for dmod in dlist:
-                                dmod = dmod.strip()
-                                if self.runToDmod(dmod, cell_name=cell_name):
-                                    print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                                else:
-                                    print('Dmod is missing, cannot continue.')
-                                    self.quit()
+                        swapper = task_utils.findSwapper()
+                        if swapper is None:
+                            self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
+                            done = False
+                        else: 
+                            tasks = task_utils.getTaskStructs()
+                            if len(tasks) == 1:
+                                self.lgr.debug('doInit cell %s taskUtils got swapper, but no other process, hack harder' % cell_name)
+                                done = False
+                        
+                            else:
+                                self.task_utils[cell_name] = task_utils
+                                saved_cr3 = self.mem_utils[cell_name].getKernelSavedCR3()
+                                if saved_cr3 is not None:
+                                    self.lgr.debug('doInit saved_cr3 is 0x%x' % saved_cr3)
+                                self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
+                                self.finishInit(cell_name)
+                                run_cycles = self.getBootCycleChunk()
+                                if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
+                                    self.is_monitor_running.setRunning(False)
+                                    dlist = self.comp_dict[cell_name]['DMOD'].split(';')
+                                    for dmod in dlist:
+                                        dmod = dmod.strip()
+                                        if self.runToDmod(dmod, cell_name=cell_name):
+                                            print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                                        else:
+                                            print('Dmod is missing, cannot continue.')
+                                            self.quit()
                     else:
                         self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -2079,6 +2102,7 @@ class GenMonitor():
                 return
         else:
             call_params = []
+        self.lgr.debug('runToCall %s' % callname)
         self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
                  self.mem_utils[self.target], self.task_utils[self.target], 
                  self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],call_list=[callname], 
@@ -4069,7 +4093,7 @@ class GenMonitor():
 
     def pageInfo(self, addr, quiet=False):
         cpu = self.cell_config.cpuFromCell(self.target)
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr)
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=self.mem_utils.getKernelSavedCR3())
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5020,6 +5044,13 @@ class GenMonitor():
         self.lgr.debug('readReplace %s' % fname)
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.read_replace = readReplace.ReadReplace(self, cpu, fname, self.lgr)
+
+    def testSnap(self):
+        self.debugSnap()
+        ts = testSnap.TestSnap(self, self.coverage, self.back_stop[self.target], self.lgr) 
+        ts.go()
+        self.lgr.debug('done')
+        print('done')
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

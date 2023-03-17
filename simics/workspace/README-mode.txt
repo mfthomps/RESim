@@ -35,7 +35,7 @@ Use "x" to examine memory, e.g. to look at the content of the stack,
 Use can also use absolute addresses (prefix with 0x)
 
 The modetest.py script can then be run:
-    run-python-script modetest.py
+    run-python-file modetest.py
 That will set the hap.  Then continue a few times and observe the output.
 
 The modetest.py defines an object "mt" as being an instance of our ModeTest class.

@@ -17,7 +17,7 @@ decl{
 }
 
 add-directory "%script%"
-$cpu_class="core-i7-single"
+#$cpu_class="core-i7-single"
 
 $use_bcm_nic = "NO"
 

@@ -126,7 +126,7 @@ def getInBrackets(cpu, s, lgr):
 
 def getMn(instruct):
     parts = instruct.split(' ')
-    return parts[0]
+    return parts[0].strip()
 
 def getOperands(instruct):
     ret1 = None
@@ -144,14 +144,14 @@ def getOperands(instruct):
         elif len(parts) > 1:
             ''' TBD this is half-assed '''
             if parts[1] == 'dword' and parts[2] == 'ptr':
-                ret1 = parts[3]
+                ret1 = parts[3].strip()
             else:
-                ret1 = parts[1]
+                ret1 = parts[1].strip()
     else:
-        ret2 = parts[1]
+        ret2 = parts[1].strip()
         #parts = parts[0].split(' ')
         #ret1 = parts[len(parts) - 1]
-        ret1 = parts[0].split(' ',1)[1]
+        ret1 = parts[0].split(' ',1)[1].strip()
     return ret2, ret1
 
 def isIndirect(reg):

@@ -24,6 +24,7 @@ class Kparams():
             #self.cur_task_offset_into_gs = 0xa780
             #self.cur_task_offset_into_gs = 0xb780
             # TBD fix getKernelParams for x86-64
+            # should be able to remove this now
             self.cur_task_offset_into_gs = 0xc280
 
 
@@ -47,10 +48,14 @@ class Kparams():
         # vdr
         #self.current_task = 0xc2001454
         self.current_task = None
-        if word_size == 4:
-            self.current_task_fs = True
-        else:
-            self.current_task_fs = False
+       
+        self.current_task_fs = False
+        self.current_task_gs = False
+        if cpu.architecture != 'arm': 
+            if word_size == 4:
+                self.current_task_fs = True
+            else:
+                self.current_task_gs = True
         # int80 goes here
         self.sys_entry = None
         # sysenter instruction vectors here
@@ -81,6 +86,7 @@ class Kparams():
         self.fs_base = None
         self.delta = None
 
+        self.gs_base = None
 
     def printParams(self):
         print('Kernel parameters:')

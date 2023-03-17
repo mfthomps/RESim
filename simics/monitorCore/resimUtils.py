@@ -93,7 +93,11 @@ def skipToTest(cpu, cycle, lgr):
             if now != cycle:
                 lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
                 retval = False
-        cli.quiet_run_command('enable-vmp')
+        try:
+            cli.quiet_run_command('enable-vmp')
+        #except cli_impl.CliError:
+        except:
+            pass
         return retval
 
 def getFree():

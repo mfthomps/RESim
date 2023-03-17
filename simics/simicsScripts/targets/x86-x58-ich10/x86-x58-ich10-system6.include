@@ -212,13 +212,16 @@ load-module isa-comp
 load-module pci-comp
 load-module std-comp
 load-module x86-comp
-load-module x86-nehalem-comp
+##load-module x86-nehalem-comp
 load-module x58-ich10-comp
 load-module memory-comp
 load-module os-awareness
 load-module textcon
 load-module graphcon
 load-module console-components
+
+$proc_mod = "processor-" + $cpu_class
+load-module class = $proc_mod
 
 #$system = (create-chassis-x58-ich10 name = $machine_name)
 $system = (create-chassis-x58-ich10 name = $host_name)

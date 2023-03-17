@@ -63,7 +63,7 @@ if ($cortex_hack) {
 #
 echo "kernel image is "+$kernel_image
 $cpu.load-binary -pa offset = -0xc0000000 filename = $kernel_image
-$phys_mem.load-file offset = 0x7000000 filename = $initrd_image
+$phys_mem.load-file offset = 0xa000000 filename = $initrd_image
 
 #ATAG_CORE
 $phys_mem.write 0x100 0x5          4
@@ -75,22 +75,22 @@ $phys_mem.write 0x110 0x0          4
 #ATAG_MEM
 $phys_mem.write 0x114 0x4          4
 $phys_mem.write 0x118 0x54410002   4
-$phys_mem.write 0x11c 0x8000000    4
-#$phys_mem.write 0x11c 0x10000000   4
+$phys_mem.write 0x11c 0xf000000    4
 $phys_mem.write 0x120 0x0          4
 
 #ATAG_RAMDISK
 $phys_mem.write 0x124 0x5          4
 $phys_mem.write 0x128 0x54410004   4
 $phys_mem.write 0x12c 0x0          4
-$phys_mem.write 0x130 0x8000       4
-$phys_mem.write 0x134 0x4000000    4
+$phys_mem.write 0x130 0xff000       4
+#$phys_mem.write 0x134 0x4000000    4
+$phys_mem.write 0x134 0x0    4
 
 #ATAG_INITRD2
 $phys_mem.write 0x138 0x4          4
 $phys_mem.write 0x13c 0x54420005   4
-$phys_mem.write 0x140 0x7000000    4
-$phys_mem.write 0x144 0x800000     4
+$phys_mem.write 0x140 0xa000000    4
+$phys_mem.write 0x144 0xf00000     4
 
 #ATAG_NONE
 $phys_mem.write 0x148 0x0          4

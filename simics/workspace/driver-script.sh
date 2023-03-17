@@ -3,6 +3,8 @@
 # It will download this script from your workspace, and will then run the script.
 # This allows you to easily change the content of the driver on each boot.
 # 
+# This instance of the script is intended to support the CADET01 example
+# by uploading the client.py script to the driver.
 #
 #/usr/bin/simics-agent --executable --overwrite --download server --to /usr/bin
 usermod -aG sudo mike

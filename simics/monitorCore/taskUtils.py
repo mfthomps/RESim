@@ -84,6 +84,7 @@ class TaskUtils():
         self.exit_pid = 0
         self.exec_addrs = {}
         self.swapper = None
+        self.ia32_gs_base = None
 
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
@@ -98,6 +99,10 @@ class TaskUtils():
 
             if self.param.current_task_fs:
                 phys = cpu.ia32_fs_base + (self.param.current_task-self.param.kernel_base)
+            elif self.param.current_task_gs:
+                va = cpu.ia32_gs_base + self.param.current_task
+                phys = self.mem_utils.v2p(self.cpu, va)
+                self.mem_utils.saveKernelCR3(self.cpu)
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
@@ -105,11 +110,16 @@ class TaskUtils():
                     phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
                 else:
                     phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
-                self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
-            #self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
+                if phys is not None:
+                    pass
+                    #self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
+                else:
+                    self.lgr.error('TaskUtils init phys of current_task 0x%x is None' % self.param.current_task)
+                    return None
+            self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
             self.phys_current_task = phys
 
-            if self.phys_current_task > 0xffffffff:
+            if self.mem_utils.WORD_SIZE == 4 and self.phys_current_task > 0xffffffff:
                 self.lgr.debug('TaskUtils cell %s phys address for 0x%x is too large' % (self.cell_name, param.current_task))
                 self.phys_current_task = 0
                 return None
@@ -130,12 +140,38 @@ class TaskUtils():
     def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0
+        '''
+        cpl = memUtils.getCPL(self.cpu)
+        if self.mem_utils.WORD_SIZE == 8 and cpl == 0:
+            va = self.cpu.ia32_gs_base + self.param.current_task
+            phys = self.mem_utils.v2p(self.cpu, va)
+            if phys is None:
+                self.lgr.error('memUtils getCurTaskRec cpl: %d failed to get phys for 0x%x' % (cpl, v))
+                cur_task_rec = 0
+            else:
+                cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, phys)
+            if cur_task_rec is None:
+                self.lgr.error('memUtils getCurTaskRec cpl: %d failed to get cur_task_rec phys 0x%x' % (cpl, phys))
+            if cur_task_rec == 0:
+                cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
+                self.lgr.debug('taskUtils cpl: %d FAILED on new phys, did NOT reset gs_base 0x%x and va 0x%x phys 0x%x cur_task_rec 0x%x' % (cpl, self.cpu.ia32_gs_base, va, phys, cur_task_rec))
+                #SIM_break_simulation('failed remove me')
+                #return 0
+            else:
+                if phys != self.phys_current_task:
+                    self.lgr.debug('taskUtils cpl: %d reset gs_base 0x%x and va 0x%x phys 0x%x cur_task_rec 0x%x' % (cpl, self.cpu.ia32_gs_base, va, phys, cur_task_rec))
+                    self.phys_current_task = phys
+                    offset = va - phys
+                    self.mem_utils.setHackedPhysOffset(offset)
+        '''
         #self.lgr.debug('taskUtils getCurTaskRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         #if cur_task_rec is None:
         #    self.lgr.debug('FAILED')
         #else:
         #    self.lgr.debug('taskUtils curTaskRec got task rec 0x%x' % cur_task_rec)
+
+
         return cur_task_rec
 
     def pickleit(self, fname):
@@ -151,38 +187,45 @@ class TaskUtils():
     def curProc(self):
         #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
+        #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
+        #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+        #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
         phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid 
 
     def findSwapper(self):
-        if self.swapper is not None:
-            task = self.swapper
-        else: 
+        task = None
+        cpl = memUtils.getCPL(self.cpu)
+        if True: 
             task = self.getCurTaskRec()
-            #self.lgr.debug('taskUtils findSwapper got 0x%x' % task)
-            cpu = self.cpu
-            #task = self.mem_utils.getCurrentTask(self.param, cpu)
-            done = False
-            while not done and task is not None:
-                comm = self.mem_utils.readString(cpu, task + self.param.ts_comm, self.COMM_SIZE)
-                pid = self.mem_utils.readWord32(cpu, task + self.param.ts_pid)
-                #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
-                ts_real_parent = self.mem_utils.readPtr(cpu, task + self.param.ts_real_parent)
-                if ts_real_parent == task:
-                    #print 'parent is same as task, done?'
-                    done = True
-                else:
-                    if ts_real_parent != 0:
-                        task = ts_real_parent
-                    else:
-                        #print 'got zero for ts_real_parent'
-                        #SIM_break_simulation('got zero for ts_real parent')
-                        task = None
+            if task is not None:
+                done = False
+                while not done and task is not None:
+                    #self.lgr.debug('taskUtils findSwapper read comm task is 0x%x' % task)
+                    comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.COMM_SIZE)
+                    pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
+                    #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
+                    ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
+                    if ts_real_parent == task:
+                        #print 'parent is same as task, done?'
+                        #self.lgr.debug('findSwapper real parent same as task, assume done')
                         done = True
-            self.swapper = task
+                    else:
+                        if ts_real_parent != 0:
+                            task = ts_real_parent
+                            #self.lgr.debug('findSwapper got 0x%x for ts_real_parent' % task)
+                        else:
+                            #print 'got zero for ts_real_parent'
+                            #SIM_break_simulation('got zero for ts_real parent')
+                            #self.lgr.debug('findSwapper got zero for ts_real_parent, callit done')
+                            task = None
+                            done = True
+                self.swapper = task
+            else:
+                self.lgr.error('taskUtils getCurTaskRect got none')
         return task    
     
     def is_kernel_virtual(self, addr):
@@ -307,6 +350,7 @@ class TaskUtils():
         cpu = self.cpu
         swapper_addr = self.findSwapper() 
         if swapper_addr is None:
+            self.lgr.debug('taskUtils getTaskStructs failed to get swapper')
             return tasks
         #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []

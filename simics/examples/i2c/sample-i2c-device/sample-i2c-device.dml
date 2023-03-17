@@ -1,0 +1,86 @@
+/*
+  sample-i2c-device.dml - sample code for a Simics I2C device (v1)
+
+  This Software is part of Simics. The rights to copy, distribute,
+  modify, or otherwise make use of this Software may be licensed only
+  pursuant to the terms of an applicable license agreement.
+  
+  Copyright 2010-2021 Intel Corporation
+*/
+/*
+The stock simics sample was modified to use a v1 i2c_link, which occurs on the
+southbridge of x86 platforms.  This example is intended to be registered (added)
+to that link via the i2c.py script in this directory.
+TBD, port to dml 1.4 or whatever?
+*/
+dml 1.2;
+
+device sample_i2c_device;
+parameter desc = "sample I2C device";
+parameter documentation = "The is the <class>" + $classname + "</class> class"
+    + " which is an example of how I2C slave devices can be written in Simics.";
+
+import "simics/devs/i2c.dml";
+
+loggroup lg_common;
+
+// I2C link connection
+// This name aligns with the names referenced in the methods below.
+connect i2c_link {
+    parameter desc = "I2C link Connection";
+    parameter configuration = "optional";
+    interface i2c_link;
+}
+implement i2c_slave {
+    method start_request(uint32 address) {
+        log "info", 4:
+            "i2c slave IF: a start request with an address 0x%x", address;
+        $i2c_link.i2c_link.start_response($dev.obj, I2C_status_success);
+
+    }
+    method read_request() {
+        local uint8 val;
+        log "info", 4:
+            "i2c read request";
+        $i2c_link.i2c_link.read_response($dev.obj, 44);
+        // wrong answer?
+    }
+    method ack_read_request(i2c_status_t ack) {
+        log "info", 4:
+            "i2c ack read request";
+        $i2c_link.i2c_link.ack_read_response($dev.obj);
+    }
+
+
+    method write_request(uint8 value) {
+        log "info", 4:
+            "i2c write_request value 0x%x", value;
+        $i2c_link.i2c_link.write_response($dev.obj, I2C_status_success);
+
+    }
+    method stop(uint8 repeated_start) {
+        // explicit STOP
+        log "info", 4:
+            "i2c stop";
+        
+    }
+
+}
+
+attribute address {
+    parameter documentation = "7-bit address on the i2c bus. It can be any "
+        + "valid i2c address in range of [0, 127].";
+    parameter configuration = "required";
+    parameter allocate_type = "uint8";
+}
+
+attribute read_value {
+    parameter documentation = "Value to return on reads.";
+    parameter allocate_type = "uint8";
+}
+
+attribute written_value {
+    parameter documentation = "Last byte written to this device.";
+    parameter allocate_type = "uint8";
+}
+

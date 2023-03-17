@@ -1,6 +1,7 @@
 import idc
 import idautils
 import idaapi
+import ida_auto
 import idaversion
 import os
 import json
@@ -89,7 +90,7 @@ class OrigAnalysis():
                 for i in range(self.funs[fun]['start'], self.funs[fun]['end']):
                     idaversion.del_items(i, 1)
                 idaapi.auto_mark_range(self.funs[fun]['start'], self.funs[fun]['end'], 25)
-                idaapi.autoWait()
+                ida_auto.auto_wait()
                 return fun
         return None
 

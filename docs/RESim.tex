@@ -125,12 +125,16 @@ the divergence can be substantial.  The point is that you should not always expe
 may contain different data even though they commence from the same snapshot.  
 
 \subsection{Development and Availability}
-In addition to running on a local Simics installation, RESim is intended to be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
+In addition to running on a local Simics installation, RESim can be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  
+
+
+The tool is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
 RESim is implemented in Python, primarily using Simics breakpoints and callbacks, and does not rely on 
 Simics “OS Awareness” or Eclipse-based interfaces.   
 \begin{itemize}
 \item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
-\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}
+\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}  RESim has be exended to work with this
+free versoin.
 
 \item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
 \url{https://github.com/mfthomps/RESim/simics/ida}  
@@ -697,6 +701,8 @@ and thus queue files and records of recent data, e.g., the ihung file, will not 
 \item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
 \item {\tt AFL\_STOP\_ON\_READ} -- Stop fuzzing or tracking if the a read system call is encountered for the target FD after the fuzzed data is consumed.
 \item {\tt AFL\_STOP\_ON\_CLOSE} -- Stop fuzzing or tracking if the FD is closed.  AFL queue files will be given a suffix of \textit{closed}.
+\item {\tt AFL\_NO\_CALL\_HAP} -- An optimization applicable only to TCP sessions (kernel buffers) that prevents an AFL session 
+from using a callHap until the buffer is consumed.  This can speed up AFL about 30 percent, depending on the application.
 \item {\tt AFL\_SKIP\_READ\_N} -- Experimental... Cause every Nth read/recv to cause RESim to skip over that kernel call.  The intended use is odd
 cases where a TCP session does a series of reads, then a read with a large length, but then goes back and reads a deterministic amount of data.
 
@@ -863,9 +869,10 @@ computers, e.g., ssh'ing to a driver computer, requires that the simulation be r
 \subsection{Installation}
 \label{installation}
 RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8, 5 and 6 are supported.
-It also assumes you have IDA Pro. See the \textit{RESim Remote Access Guide} for information on remote access to RESim
-servers.  RESim can be used without IDA Pro, though you are limited to the command line and don't benefit from
-function analysis provided by IDA.
+And the free version of Simics from Intel is also supported.
+It also assumes you have IDA Pro or Ghidra. See the \textit{RESim Remote Access Guide} for information on remote access to RESim
+servers.  RESim can be used without IDA Pro or Ghidra, though you are limited to the command line and don't benefit from
+function analysis provided by IDA or Ghidra.
 
 Note if you are using an NPS-provided RESim server, this RESim installation will have already been done.  But
 see the IDA Pro installation below for information on installing IDA. 
@@ -892,6 +899,9 @@ non-interactive return so they are picked up by ssh):
 \item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
+\item RESIM\_IMAGES Path to directory containing disk images.  This is a convenience for canned example ini files,
+you may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
+wish to download and place in this directory.
 \end{itemize}
 \item Add \$RESIM\_DIR/simics/bin to your path, e.g. by adding to your .profile,
 \begin{verbatim}
@@ -932,21 +942,47 @@ on which Simics is running.  Otherwise, communication between the IDA computer a
 when large amounts of GDB data are exchanged.
 
 \end{itemize}
+\subsubsection{Ghidra installation}
+See section \ref{ghidra} for information on installation and use of Ghidra with RESim.
 
 \subsection{Getting started}
 \label{getting-started}
-Steps to define and run an example RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
-computer upon which Simics is installed with a x86-x58-ich10 platform.
+This section describes steps for creating and running RESim simulations.
+It is best to start with one of the examples.
+
+\subsubsection{Example systems}
+RESim includes a few examples to help you get familiar with the tool.  
+The simplest example is {\tt cadet01}.  Create this example simulation as follows:
+\begin{itemize}
+\item Create a Simics workspace using the {\tt resim\_ws.sh} script usin the {\tt -e} flag to get the cadet example:
+\begin{verbatim}
+mkdir mywork; cd mywork
+    resim_ws.sh -e
+\end{verbatim}
+\item Refer to the information in the file at:
+\begin{verbatim}
+  $RESIM_DIR/simics/workspace/README-cadet.txt
+\end{verbatim}
+\end{itemize}
+
+Another example can be found in
+\begin{verbatim}
+  $RESIM_DIR/simics/examples/network_file_system
+\end{verbatim}
+
+\subsubsection{Defining your own simulation}
+Steps to define and run your own RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
+computer upon which Simics is installed and you've set your .bashrc to include environment variables defined above.
 \begin{enumerate}
 \item Create a Simics workspace using the {\tt resim\_ws.sh} script:
 \begin{verbatim}
 mkdir mywork; cd mywork
-resim_ws.sh
+    resim_ws.sh 
 \end{verbatim}
 
 \item Copy any desired files from {\tt \$RESIM/simics/workspace} or other workspaces into the new workspace.  You may also create links
 to checkpoint directories in other workspaces.
-\item Modify the mytarget.ini as follows:
+\item Rename the mytarget.ini file and modify it as follows:
 \begin{itemize}
 \item Set the {\tt disk\_image} entry to name paths to your target disk image.
 \item Obtain the {\tt unistd\_32.h} or equivalent, for your target's kernel -- this is used match system call numbers to calls.  Name
@@ -1063,6 +1099,7 @@ for use within regx type parsers that refer to compiled expressions.
 \end{itemize}
 
 \subsection{Ghidra}
+\label{ghidra}
 A preliminay RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
 See that repo's README for installation instructions.  It is assumed that the user has experience with the Ghidra platform.
 
@@ -1103,7 +1140,7 @@ configuration files.  It is therefore sometimes preferable to dynamically augmen
 There are two mechanisms for dynamic modifications: one that modifies system memory content the first time an address is
 read (known as a \textit{ReadReplace}; and a \textit{Dmod} that modifies results of file read, write or open operations.
 
-Additionally, there is an experimental {\tt modFunction to write a given word at an offset from the start of a named function.  
+Additionally, there is an experimental {\tt modFunction} to write a given word at an offset from the start of a named function.  
 Intended for use in setting return values, e.g., force eax to zero upon return.  Bring your own machine code.  
 
 \subsubsection{ReadReplace}
@@ -1540,7 +1577,8 @@ The setup steps create a snapshot and associated data that dictate the starting 
 to which data will be written.  
 
 Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  But you must first prepare and
-test a single fuzzing instance as described below.
+test a single fuzzing instance as described below.  If you are limited to running a single instance of Simics, consider using
+the {\tt --dirty} option to the runAFL command.
 
 \begin{itemize}
 \item Clone the AFL repo (\url{https://github.com/mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
@@ -1953,6 +1991,28 @@ and binary files used within the example.
 
 \section{Example targets}
 \label{example-targets}
+\subsection{CADET01 Example}
+Using the {\tt resim-ws.sh -e} command will create a workspace that includes files used in the CADET01 example.
+See the README-cadet01.txt files in {\tt simics/workspace}.
+The example requires two disk images located relative to your {\tt \$RESIM\_IMAGES} directory.  The image from: 
+\begin{verbatim}
+   https://nps.box.com/s/t88gkonktje8xuer3qnwnl5gl05rhbl5
+\end{verbatim}
+\noindent should be copied to:
+\begin{verbatim}
+$RESIM_IMAGES/cadet01/viper.disk.hd_image.craff
+\end{verbatim}
+And
+\begin{verbatim}
+   https://nps.box.com/s/pzdljc8fvijx3nga87bveusgjp7yv4tb
+\end{verbatim}
+\noindent should be copied to:
+\begin{verbatim}
+$RESIM_IMAGES/driver/driver2.disk.hd_image.craff
+\end{verbatim}
+
+
+
 \subsection{Cyber Grand Challenge Services}
 Vulnerable services from the DARPA Cyber Grand Challenge are available as described in the
 README in {\tt simics/examples/network\_file\_system} in your repo.
@@ -2375,6 +2435,8 @@ Instead of tracing all from a boot, consider running ahead until the systemd-log
 
 Pay attention to the {\tt BACK\_STOP\_CYCLES} environment variable in the ini.  A large value may be needed during initial testing,
 but that may need to be greatly reduced for fuzzing.
+
+If you are limited to a single instance of Simics, try using the {\tt -k} option to runAFL to force use of AFL's quick and dirty mode.
 
 Some system may take a long time to create the process you are interested in.  This may be exacerbated by monitoring such as occurs during
 a runTo or debugProc (e.g., some script is in a loop failing on create of a process, which may happen millions of times.)  Consider using
