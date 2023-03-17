@@ -19,13 +19,14 @@ import setAddrString
 
 def getHex(s):
     retval = None
-    hs = s
-    if not hs.startswith('0x'):
-        hs = '0x'+s
-    try:
-        retval = int(hs, 16)
-    except:
-        pass
+    if s is not None:
+        hs = s
+        if not hs.startswith('0x'):
+            hs = '0x'+s
+        try:
+            retval = int(hs, 16)
+        except:
+            pass
     return retval
 
 def getRegOffset(ea, reg, opnum):
@@ -434,15 +435,38 @@ class ShowPtrHandler(idaapi.action_handler_t):
 
         def activate(self, ctx):
             ref_addr = getRefAddr()
-            print('Show Ptr ref_addr 0x%x' % ref_addr)
+            #print('Show Ptr ref_addr 0x%x' % ref_addr)
             if ref_addr is not None:
                 ptr = idaversion.get_wide_dword(ref_addr)
-                print('Show Ptr ptr is 0x%x' % ptr)
                 form = idaversion.get_cust_viewer('Hex View-1')
                 if form is not None:
                     idaapi.jumpto(ptr)
+                    print('jump to 0x%x' % ptr)
                 else:
                     print('did not find Hex View-1 form')
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
+class ShowAddrHandler(idaapi.action_handler_t):
+        def __init__(self, isim):
+            idaapi.action_handler_t.__init__(self)
+            self.isim = isim
+
+        def activate(self, ctx):
+            h = idaversion.getHighlight()
+            if h is not None:
+                parts = h.split(' ')
+                s = ''
+                for p in reversed(parts):
+                    s = s+p
+                x = getHex(s)
+                if x is not None:
+                    form = idaversion.get_cust_viewer('Hex View-1')
+                    if form is not None:
+                        idaapi.jumpto(x)
+                        print('jump to 0x%x' % x)
+                    else:
+                        print('did not find Hex View-1 form')
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
@@ -531,6 +555,11 @@ def register(isim):
        'Show ptr',
        ShowPtrHandler(isim)
        )
+    show_addr_action_desc = idaapi.action_desc_t(
+       'showAddr:action',
+       'Show addr',
+       ShowAddrHandler(isim)
+       )
     show_ascii_map_action_desc = idaapi.action_desc_t(
        'showAsciiMap:action',
        'Show ascii map',
@@ -548,6 +577,7 @@ def register(isim):
     idaapi.register_action(string_memory_action_desc)
     idaapi.register_action(struct_field_action_desc)
     idaapi.register_action(show_ptr_action_desc)
+    idaapi.register_action(show_addr_action_desc)
     idaapi.register_action(show_ascii_map_action_desc)
     print('reHooks did register')
 
@@ -594,9 +624,13 @@ class Hooks(UI_Hooks):
                 opnum = idaapi.get_opnum()
                 if opnum >= 0:
                     idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/data/')
-                    idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/data/')
-                    idaapi.attach_action_to_popup(form, popup, "showAsciiMap:action", 'RESim/data/')
+                    if self.isim.isReg(highlighted):        
+                        idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/data/')
+                    else:
+                        idaapi.attach_action_to_popup(form, popup, "showAddr:action", 'RESim/data/')
                             
+        def setIdaSim(self, isim):
+            self.isim = isim
 
 #register()
 #hooks = Hooks()
