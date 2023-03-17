@@ -275,6 +275,7 @@ class LaunchRESim():
                 lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
+                run_command('driver.mb.log-level 0 -r')
                 done = False
                 count = 0
                 if interact is not None:

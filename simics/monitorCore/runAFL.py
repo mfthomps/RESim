@@ -243,7 +243,7 @@ def runAFLTilRestart(args, lgr):
             os.chdir(instance)
             if not args.no_afl:
                 dirty_str = ''
-                if dirty:
+                if args.dirty:
                     dirty_str = '-d'
                 afl_cmd = '%s -i %s -o %s %s %s %s %s -p %d %s -R %s' % (afl_path, afl_seeds, afl_out, size_str, 
                       master_slave, fuzzid, dirty_str, port, dict_path, afl_name)
