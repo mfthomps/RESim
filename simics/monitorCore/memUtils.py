@@ -91,10 +91,12 @@ def clearBit(int_value, bit):
     return(int_value & ~mask)
 
 def bitRange(value, start, end):
-    shifted = value >> start
-    num_bits = (end - start) + 1 
-    mask = 2**num_bits - 1
-    retval = shifted & mask
+    retval = None
+    if value is not None:
+        shifted = value >> start
+        num_bits = (end - start) + 1 
+        mask = 2**num_bits - 1
+        retval = shifted & mask
     return retval
 
 def setBitRange(initial, value, start):

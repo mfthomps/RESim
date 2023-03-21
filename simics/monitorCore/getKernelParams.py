@@ -38,6 +38,10 @@ import cellConfig
 import pickle
 import decode
 import os
+
+import w7Params
+import win7Tasks
+
 class GetKernelParams():
     def __init__(self, comp_dict):
         #self.cpu = SIM_current_processor()
@@ -52,8 +56,9 @@ class GetKernelParams():
         if self.os_type is None:
             self.os_type = 'LINUX32'
         word_size = 4
-        if self.os_type == 'LINUX64':
+        if self.os_type == 'LINUX64' or self.os_type == 'WIN7':
             word_size = 8
+  
         print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
 
         self.log_dir = '/tmp'
@@ -125,6 +130,9 @@ class GetKernelParams():
         self.fs_base = None
         self.search_count = 0
         self.test_count = 0
+
+        self.win7_tasks = []
+        self.win7_count = 0
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -306,9 +314,10 @@ class GetKernelParams():
             self.delTaskModeAlone(None)
             SIM_run_command('enable-reverse-execution')
 
+            eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             self.gs_start_cycle = self.cpu.cycles
-            self.lgr.debug('gsEnableReverse, , now continue %d cycles' % self.gs_cycles)
-            ''' tbd point of going forward?'''
+            self.lgr.debug('gsEnableReverse should be at kernel entry. eip is 0x%x, , now continue %d cycles' % (eip, self.gs_cycles))
+            ''' tbd point of going forward? to let us reverse?'''
             SIM_continue(self.gs_cycles)
             self.gsFindAlone()
 
@@ -384,7 +393,10 @@ class GetKernelParams():
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
-                self.findSwapper()
+                if self.os_type == 'WIN7':
+                    self.findWin7Idle()
+                else:
+                    self.findSwapper()
                 break
                 
     def lookForFS(self, dumb):
@@ -556,6 +568,24 @@ class GetKernelParams():
         self.lgr.debug('swapperStopHap')
         SIM_run_alone(self.getInitAlone, None)
 
+    def changedThreadWin7(self, cpu, third, forth, memory):
+        pid_off = 960
+        next_off = 1064
+        cur_task = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
+        pid_ptr = cur_task + pid_off
+        pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+        next_ptr = cur_task + next_off + 8
+        next_head = self.mem_utils.readWord(self.cpu, next_ptr)
+        print('task 0x%x pid: %d next_head 0x%x' % (cur_task, pid, next_head))
+
+        if cur_task not in self.win7_tasks:
+            self.win7_tasks.append(cur_task) 
+        self.win7_count = self.win7_count+1
+        if self.win7_count > 10000:
+            pickle.dump( self.win7_tasks, open( 'task_list.pickle', "wb" ) )
+            SIM_break_simulation('changed x thread')
+
+
     def changedThread(self, cpu, third, forth, memory):
         #self.lgr.debug('changed thread')
         ''' does the current thread look like swapper? would have consecutive pointers to itself '''
@@ -577,6 +607,11 @@ class GetKernelParams():
                 SIM_break_simulation('found swapper')
                 SIM_delete_breakpoint(self.task_break)
                 self.task_break = None 
+
+    def findWin7Idle(self):
+        pcell = self.cpu.physical_memory
+        self.task_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, self.current_task_phys, self.mem_utils.WORD_SIZE, 0)
+        self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThreadWin7, self.cpu, self.task_break)
 
     def findSwapper(self):
         self.trecs = []
@@ -1281,6 +1316,15 @@ class GetKernelParams():
                 pass
         else:
             self.lgr.debug('continueAhead was running')
+
+    def w7FindRecordSize(self):
+        w7Params.findRecordSize(self.cpu, self.mem_utils)
+
+    def w7FindParams(self):
+        w7Params.findParams(self.cpu, self.mem_utils)
+
+    def w7Tasks(self):
+        w7tasks = win7Tasks.Win7Tasks(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.lgr)
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
