@@ -8,8 +8,8 @@ pointer. Note this list was dynamically created and will not necessarily
 match the single state of the current machine, e.g., tasks may have been
 created and deleted.
 '''
-def findRecordSize(cpu, mem_utils):
-    task_list = pickle.load(open('task_list.pickle', 'rb'))
+def findRecordSize(cpu, mem_utils, task_list):
+    #task_list = pickle.load(open('task_list.pickle', 'rb'))
     first_task = 0xffffffffffffffff
     record_size = 0xffffffffff
     retval = []
@@ -30,8 +30,8 @@ def findRecordSize(cpu, mem_utils):
     #print('first_task 0x%x size 0x%x' % (first_task, record_size))
     return first_task, sorted(retval)
 
-def showRecordStarts(cpu, mem_utils):
-    orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
+def showRecordStarts(cpu, mem_utils, orig_task_list):
+    #orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
     task_list = sorted(orig_task_list)[3:150]
     prev = None
     delta = 0
@@ -41,8 +41,8 @@ def showRecordStarts(cpu, mem_utils):
         print('task: 0x%x dalte 0x%x' % (task, delta))
         prev = task
 
-def findAdjacentRecords(cpu, mem_utils, record_size):
-    orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
+def findAdjacentRecords(cpu, mem_utils, record_size, orig_task_list):
+    #orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
     task_list = sorted(orig_task_list)[3:150]
     task1 = []
     task2 = []
@@ -87,13 +87,13 @@ def unused(cpu, mem_utils):
         for val in words[i]:
             print('unique at %d 0x%x' % (i, val))
 
-def walkList(cpu, mem_utils, task, offsets):
+def walkList(cpu, mem_utils, task, offsets, orig_task_list):
     '''
     Given a task address and a list of offsets to what we think are HEAD link lists,
-    walk each task list and record the tasks in a json named by the offset
+    walk each task list and record and return the tasks.
 
     '''
-    orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
+    #orig_task_list = pickle.load(open('task_list.pickle', 'rb'))
     task_list = sorted(orig_task_list, reverse=True)
 
     record_count = {}
@@ -108,12 +108,13 @@ def walkList(cpu, mem_utils, task, offsets):
         for i in range(1000):
             task_next = next_head+8
             val = mem_utils.readWord(cpu, task_next)
-            #print('task_ptr 0x%x next_head 0x%x, task_next 0x%x read val 0x%x' % (task_ptr, next_head, task_next, val))
             if val is None:
                 #print('died on task_next 0x%x' % task_next)
                 break
             else:
                 next_head = val
+            
+            next_ptr = next_head - head_off
             task_ptr = next_head - head_off
             #for task in task_list:
             #    if task < task_ptr:
@@ -173,11 +174,11 @@ def findHeads(cpu, mem_utils, task1, task2):
         cur = task1 + t1offset
     return retval
   
-def findUnique(cpu, mem_utils, offset): 
+def findUnique(cpu, mem_utils, offset, task_list): 
     #task_list = pickle.load(open('head-768.pickle', 'rb'))
-    pfile = 'head-%d.pickle' % offset
-    print('Unique for offset %d' % offset)
-    task_list = pickle.load(open(pfile, 'rb'))
+    #pfile = 'head-%d.pickle' % offset
+    #print('Unique for offset %d' % offset)
+    #task_list = pickle.load(open(pfile, 'rb'))
     words = {}
     dup_words = []
     delta = 0
@@ -252,7 +253,8 @@ def dogmeat(cpu, mem_utils, off):
            got.append(val)
     print('len of got is %d' % len(got))
 
-def walkTasks(cpu, mem_utils, task, offset):
+def walkTasks(cpu, mem_utils, task, offset, smallest_record_size):
+    retval = True
     #pfile = 'head-%d.pickle' % offset
     #print('Unique for offset %d' % offset)
     #task_list = pickle.load(open(pfile, 'rb'))
@@ -260,6 +262,7 @@ def walkTasks(cpu, mem_utils, task, offset):
     done = False
     got = []
     heads = []
+    prev_task = None
     print('start task 0x%x offset %d' % (task, offset))
     cur_task = task
     while not done: 
@@ -274,11 +277,19 @@ def walkTasks(cpu, mem_utils, task, offset):
         else:
             print('walkTasks already saw 0x%x' % cur_task)
             break
+        if prev_task is not None:
+            delta = abs(prev_task - cur_task)
+            if delta < smallest_record_size:
+                print('walkTasks with offset %d led to small record sizes' % offset)
+                retval = False
+                break
+        prev_task = cur_task
+    return retval
 
-def findPid(cpu, mem_utils, offsets, best_offset): 
-    retva = None
-    pfile = 'head-%d.pickle' % best_offset
-    task_list = pickle.load(open(pfile, 'rb'))
+def findPid(cpu, mem_utils, offsets, best_offset, task_list): 
+    retval = None
+    #pfile = 'head-%d.pickle' % best_offset
+    #task_list = pickle.load(open(pfile, 'rb'))
     for offset in offsets:
         too_big = False
         for task in task_list:
@@ -298,10 +309,17 @@ def dumpOffsets(cpu, mem_utils, offsets, task):
         ptr = task + off
         ref_ptr = mem_utils.readPtr(cpu, ptr)
         if ref_ptr is not None and ref_ptr > 0xffff000000000000:
+        
+            b = mem_utils.readBytes(cpu, ref_ptr, 80)
+            if b is not None:
+                x = b.decode('utf-16le', errors='ignore')
+                print('decoded %s' % x)
+            '''
             byte_array = mem_utils.getBytes(cpu, 80, ref_ptr)
             if byte_array is not None and len(byte_array)>0:
                 s = resimUtils.getHexDump(byte_array)
                 print(s)
+            '''
    
 def findString(cpu, mem_utils, task): 
     num_words = 158
@@ -310,22 +328,27 @@ def findString(cpu, mem_utils, task):
         ptr = task + offset
         ref_ptr = mem_utils.readPtr(cpu, ptr)
         if ref_ptr is not None and ref_ptr > 0xffff000000000000:
-            s = mem_utils.readString(cpu, ref_ptr, 80)
-            if s is not None:
-                print(s)
+            b = mem_utils.readBytes(cpu, ref_ptr, 80)
+
+            if b is not None:
+                x = b.decode('utf-16', errors='ignore')
+                print('decoded %s' % x)
     
    
-def findParams(cpu, mem_utils):
+def findParams(cpu, mem_utils, task_list, param):
     head_list = []
-    first_task, record_sizes  = findRecordSize(cpu, mem_utils)
+    first_task, record_sizes  = findRecordSize(cpu, mem_utils, task_list)
     bad_tasks = []
     task_maybe = []
+    smallest_record_size = 0xfffffffff
     for size in record_sizes[:4]:
-        task1, task2 = findAdjacentRecords(cpu, mem_utils, size)
+        task1, task2 = findAdjacentRecords(cpu, mem_utils, size, task_list)
+        if size < smallest_record_size:
+            smallest_record_size = size
         print('first task 0x%x, record_size 0x%x (%d) found %d adjacents' % (first_task, size, size, len(task1)))
         #for i in range(len(task1)):
         #    print('Adjacent task1 0x%x task2 0x%x' % (task1[i], task2[i]))
-        #showRecordStarts(cpu, mem_utils)
+        #showRecordStarts(cpu, mem_utils, task_list)
         for i in range(len(task1)):
             delta = task2[i] - task1[i]
             print('Adjacent task1 0x%x task2 0x%x delta: %d' % (task1[i], task2[i], delta))
@@ -338,36 +361,39 @@ def findParams(cpu, mem_utils):
                 print('\t\tHead offset %d' % head)
                 if head not in head_list:
                     head_list.append(head)
-       
+    print('Smallest record size: %d' % smallest_record_size)   
     for head in head_list:
         print('head %d 0x%x' % (head, head))
+    ''' smallest offset seems to be a deadwood list '''
+    new_head_list = sorted(head_list)[1:]
     good_tasks = []
     for task in task_maybe:
         if task not in bad_tasks:
             print('maybe task 0x%x' % task)
             good_tasks.append(task) 
-    good_offsets = []
     got_tasks = {} 
     most_recs = 0
     best_task = None
     best_offset = None
     for task in good_tasks:
-        record_count, task_matches, got_tasks[task] = walkList(cpu, mem_utils, task, head_list)
+        record_count, task_matches, got_tasks[task] = walkList(cpu, mem_utils, task, new_head_list, task_list)
         for offset in record_count:
             if record_count[offset] > 10 and task_matches[offset] > 5:
-                if offset not in good_offsets:
-                    good_offsets.append(offset)
                 if record_count[offset] > most_recs:
                     most_recs = record_count[offset]
                     best_task = task
                     best_offset = offset
+    best_task_list = got_tasks[best_task][best_offset]
     print('best task 0x%x, most recs %d best_offset %d' % (best_task, most_recs, best_offset))
-    pfile = 'head-%d.pickle' % best_offset
-    pickle.dump(got_tasks[best_task][best_offset], open(pfile, 'wb'))
-    walkTasks(cpu, mem_utils, best_task, best_offset)
+    #pfile = 'head-%d.pickle' % best_offset
+    #pickle.dump(got_tasks[best_task][best_offset], open(pfile, 'wb'))
+    #walkTasks(cpu, mem_utils, best_task, best_offset)
     #compareOffsets(760, 1064)
-    #unique_offsets = findUnique(cpu, mem_utils, best_offset) 
-    #findPid(cpu, mem_utils, unique_offsets, best_offset)
+    unique_offsets = findUnique(cpu, mem_utils, best_offset, best_task_list) 
+    pid = findPid(cpu, mem_utils, unique_offsets, best_offset, best_task_list)
     #dumpOffsets(cpu, mem_utils, unique_offsets, best_task) 
-    findString(cpu, mem_utils, best_task)
+    #findString(cpu, mem_utils, best_task)
+    param.ts_pid = pid
+    param.ts_next = best_offset+8
+    param.ts_prev = best_offset
 

@@ -375,6 +375,7 @@ class SharedSyscall():
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                ''' byte_array is a tuple of bytes'''
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:nbytes])
                     if self.traceFiles is not None:

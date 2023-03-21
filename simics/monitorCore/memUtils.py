@@ -637,7 +637,7 @@ class memUtils():
 
     def getBytes(self, cpu, num_bytes, addr, phys_in=False):
         '''
-        Get a byte array of length num_bytes from the given address using Simics physical memory reads, which return tuples.
+        Get a tuple of bytes of length num_bytes from the given address using Simics physical memory reads, which return tuples.
         '''
         done = False
         curr_addr = addr
