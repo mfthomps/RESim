@@ -40,8 +40,9 @@ import decode
 import os
 
 import w7Params
-import win7Tasks
+import win7CallParams
 import winKParams
+import win7Syscalls
 
 class GetKernelParams():
     def __init__(self, comp_dict):
@@ -139,6 +140,7 @@ class GetKernelParams():
 
         self.win7_tasks = []
         self.win7_count = 0
+        self.w7_call_params = None
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -1467,17 +1469,44 @@ class GetKernelParams():
     def w7FindParams(self):
         w7Params.findParams(self.cpu, self.mem_utils)
 
-    def w7Tasks(self):
+    def getWin7CallParams(self):
         cell_name = self.target 
         if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
             param_file = self.comp_dict[cell_name]['RESIM_PARAM']
             if os.path.isfile(param_file):
                 self.param = pickle.load(open(param_file, 'rb'))
                 self.lgr.debug('w7Tasks loaded params from %s' % param_file)
-        w7tasks = win7Tasks.Win7Tasks(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr)
+        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr)
+
+    def showW7CallParams(self):
+        self.w7_call_params.showParams()
+
     def test(self):
-        rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-        print('rip is 0x%x' % rip)
+        rbx = self.mem_utils.getRegValue(self.cpu, 'rdi')
+        ref_ptr = rbx
+        #ref_ptr = self.mem_utils.readPtr(self.cpu, rsp)
+        print('rbx is 0x%x ref_ptr 0x%x' % (rbx, ref_ptr))
+        if ref_ptr is not None:
+            b = self.mem_utils.readBytes(self.cpu, ref_ptr, 80)
+            if b is not None:
+                x = b.decode('utf-16be', errors='ignore')
+                print('decoded be %s' % x)
+                x = b.decode('utf-16le', errors='ignore')
+                print('decoded le %s' % x)
+                x = b.decode('utf-8', errors='ignore')
+                print('decoded 8 %s' % x)
+                x = b.decode('ascii', errors='ignore')
+                print('decoded ascii %s' % x)
+
+    def win7Syscalls(self, run_to=None):
+        cell_name = self.target 
+        if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
+            param_file = self.comp_dict[cell_name]['RESIM_PARAM']
+            if os.path.isfile(param_file):
+                self.param = pickle.load(open(param_file, 'rb'))
+                self.lgr.debug('w7Tasks loaded params from %s' % param_file)
+        self.win7Syscalls = win7Syscalls.Win7Syscalls(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, run_to=run_to)
+    
 
 if __name__ == '__main__':
     gkp = GetKernelParams()

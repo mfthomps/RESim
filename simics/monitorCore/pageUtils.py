@@ -92,7 +92,8 @@ def readPhysMemory(cpu, addr, length, lgr):
     try:
         retval = SIM_read_phys_memory(cpu, addr, length)                
     except:
-        lgr.debug('pageUtils error reading physical addr 0x%x' % addr)
+        #lgr.debug('pageUtils error reading physical addr 0x%x' % addr)
+        pass
     return retval
 
 ''' return start and end adjusted to be on page boundaries '''
