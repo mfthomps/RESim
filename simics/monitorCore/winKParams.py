@@ -10,3 +10,12 @@ class WinKParams():
         self.sysexit = None
         self.iretd = None
         self.sysret64 = None
+        self.syscall_compute = None
+        self.syscall_jump = None
+        self.page_fault = None
+    def printParams(self):
+        print('Windows Kernel parameters:')
+        for k in self.__dict__.keys():
+            v = self.__dict__.__getitem__(k)
+            if v is not None:
+                print('\t%-30s  %s' % (k, v))

@@ -149,6 +149,7 @@ class memUtils():
             for ia32_reg in self.ia32_regs:
                 self.regs[ia32_reg] = ia32_reg
                 if self.WORD_SIZE == 8:
+                    #print('assigning regs[%s] value %s' % (ia32_reg, self.ia64_regs[i]))
                     self.regs[ia32_reg] = self.ia64_regs[i]
                 i+=1    
             self.regs['syscall_num'] = self.regs['eax']
@@ -434,6 +435,7 @@ class memUtils():
     def getRegValue(self, cpu, reg):
         if reg in self.regs:
             reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+            #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
         else:
             reg_num = cpu.iface.int_register.get_number(reg)
         reg_value = cpu.iface.int_register.read(reg_num)
