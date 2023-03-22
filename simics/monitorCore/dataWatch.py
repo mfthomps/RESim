@@ -23,8 +23,9 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'mempcpy', 
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 'string_chr', 'string_std', 'string', 'str', 'ostream_insert', 'regcomp', 
-            'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup']
+            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec'] 
+            #'string_chr', 'string_std', 'string', 'str', 'ostream_insert', 'regcomp', 
+            #'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -111,6 +112,8 @@ class DataWatch():
         self.recent_reused_index=None
         ''' control trace of malloc calls, e.g., within xml parsing '''
         self.me_trace_malloc = False
+
+        self.save_cycle = None
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -1101,9 +1104,10 @@ class DataWatch():
                    return_ptr, end_ptr, length))
                 self.lgr.debug(msg)
             elif return_ptr is None:
-                msg = 'charLookup error could not read return_ptr'
-                self.lgr.debug(return_ptr)
-
+                msg = 'charLookup error could not read return_ptr from 0x%x UNDO' % self.mem_something.ret_addr_addr
+                self.lgr.debug(msg)
+                SIM_run_alone(self.startUndoAlone, None)
+                return
             else:
                 self.mem_something.re_watch.watchCharReference(self.mem_something.ret_addr_addr)
                 found_ptr = self.mem_utils.readPtr(self.cpu, return_ptr)
@@ -1535,7 +1539,7 @@ class DataWatch():
                     self.lgr.debug('dataWatch getMemParms %s addr 0x%x r0 0x%x ret_addr_addr 0x%x' % (self.mem_something.fun, self.mem_something.addr, 
                         r0, self.mem_something.ret_addr_addr))
                 else:
-                    self.lgr.error('dataWatch getMemParms %s addr %s ret_addr_addr is ?' % (self.mem_something.fun, str(self.mem_something.addr)))
+                    self.lgr.error('dataWatch getMemParms %s addr %s ret_addr_addr is unknown?' % (self.mem_something.fun, str(self.mem_something.addr)))
                     return
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
@@ -2225,8 +2229,19 @@ class DataWatch():
             reg_set = op2
             adhoc = self.loopAdHocMult(addr, trans_size, start, length, instruct, reg_set, eip, orig_ip)
         if not adhoc:
-            re_watch = reWatch.REWatch.isCharLookup(addr, eip, instruct, self.decode, self.cpu, pid, self.mem_utils, 
-                  self.context_manager, self.watchMarks, self.top, self.lgr)
+            ''' make sure we are not back here due to an UNDO '''
+            seen_movie = False
+            if self.save_cycle is not None:
+                delta = self.cpu.cycles - self.save_cycle
+                if delta < 4:
+                    seen_movie = True 
+            re_watch = None
+            #  FIX THIS
+            seen_movie = True
+            if not seen_movie:
+                self.save_cycle = self.cpu.cycles - 1
+                re_watch = reWatch.REWatch.isCharLookup(addr, eip, instruct, self.decode, self.cpu, pid, self.mem_utils, 
+                      self.context_manager, self.watchMarks, self.top, self.lgr)
             if re_watch is not None:
                 self.re_watch_list.append(re_watch)
                 self.mem_something = re_watch.getMemSomething(addr) 
@@ -2236,6 +2251,7 @@ class DataWatch():
                     self.lgr.error('dataWatch checkMove failed to get mem_something from re_watch')
                     self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
             else: 
+                #self.lgr.debug('dataWatch checkMove not a reWatch')
                 self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
 
     def isReuse(self, eip):
