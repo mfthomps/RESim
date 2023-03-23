@@ -412,6 +412,7 @@ class InjectIO():
                     self.lgr.debug('injectiO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
             if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
+                self.lgr.debug('injectiO load max_len read %d' % self.max_len)
             if 'addr_addr' in so_pickle:
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']

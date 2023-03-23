@@ -116,17 +116,19 @@ class REWatch(object):
         retval = None
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
         if st is None:
-            self.lgr.debug('REMap handleCharLookup, stack not found???')
+            self.lgr.debug('reWatch getMemSomething handleCharLookup, stack not found???')
         else:
             frames = st.getFrames(2)
             f = frames[1]
-            self.lgr.debug('handleCharLookup addr 0x%x using 2nd frame frame %s' % (addr, f.dumpString()))
+            self.lgr.debug('reWatch getMemSomething addr 0x%x using 2nd frame frame %s' % (addr, f.dumpString()))
             if f.ret_addr is None:
                 self.lgr.error('reWatch getMemSomething f.ret_addr is None')
             else:
                 mem_something = dataWatch.MemSomething('charLookup', addr, f.ret_addr, None, None, None, f.ip, None, None, None)
                 mem_something.re_watch = self
                 retval =  mem_something 
+                self.lgr.error('reWatch getMemSomething returning mem_something')
+                
         return retval
 
     def setMapBreakRange(self, i_am_alone=False):
