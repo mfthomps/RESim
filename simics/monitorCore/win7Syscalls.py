@@ -129,7 +129,7 @@ class Win7Syscalls():
             return
         if cur_task is not None:
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-            if pid is not None:
-                self.lgr.debug('exitHap cur_task: 0x%x pid:%d' % (cur_task, pid))
-            else:
-                self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))
+            #if pid is not None:
+            #    self.lgr.debug('exitHap cur_task: 0x%x pid:%d' % (cur_task, pid))
+            #else:
+            #    self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))

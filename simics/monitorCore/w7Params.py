@@ -2,8 +2,7 @@ import pickle
 import resimUtils
 '''
 Routines to tease out Windows 7 kernel parameters for use by RESim
-Assumes a task_list.pickle file was created identifying addresses of
-some set of task records, obtained by watching the current task
+Assumes a task_list obtained by watching the current task
 pointer. Note this list was dynamically created and will not necessarily
 match the single state of the current machine, e.g., tasks may have been
 created and deleted.

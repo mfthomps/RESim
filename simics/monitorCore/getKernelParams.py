@@ -1463,13 +1463,8 @@ class GetKernelParams():
         else:
             self.lgr.debug('continueAhead was running')
 
-    def w7FindRecordSize(self):
-        w7Params.findRecordSize(self.cpu, self.mem_utils)
-
-    def w7FindParams(self):
-        w7Params.findParams(self.cpu, self.mem_utils)
-
     def getWin7CallParams(self):
+        ''' Use breakpoints set on the stack to identify call parameter offsets from the stack pointer'''
         cell_name = self.target 
         if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
             param_file = self.comp_dict[cell_name]['RESIM_PARAM']
@@ -1479,6 +1474,7 @@ class GetKernelParams():
         self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr)
 
     def showW7CallParams(self):
+        ''' Show results of getWin7CallParams '''
         self.w7_call_params.showParams()
 
     def test(self):
@@ -1499,6 +1495,7 @@ class GetKernelParams():
                 print('decoded ascii %s' % x)
 
     def win7Syscalls(self, run_to=None):
+        ''' either trace all syscalls or run to the given call name and stop. '''
         cell_name = self.target 
         if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
             param_file = self.comp_dict[cell_name]['RESIM_PARAM']
