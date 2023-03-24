@@ -49,9 +49,12 @@ class Win7Syscalls():
 
     def doBreaks(self):
         ''' set breaks on syscall entries and exits '''
+        call_num = None
         if self.run_to is None:
+            self.lgr.debug('Win7Syscalls doBreaks, no call given, hit all syscalls')
             self.entry_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
         else:
+            self.lgr.debug('Win7Syscalls doBreaks, run to call %s' % self.run_to)
             call_name = 'Nt%s' % self.run_to
             if call_name in self.call_num_map:
                 call_num = self.call_num_map[call_name]
@@ -61,7 +64,7 @@ class Win7Syscalls():
                 self.lgr.error('%s not in call_num_map' % call_name)
                 return
                 
-        self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, None, self.entry_break)
+        self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, call_num, self.entry_break)
         self.exit_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
         self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break)
 
@@ -93,31 +96,44 @@ class Win7Syscalls():
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
         return cur_task, pid
  
-    def syscallHap(self, dumb, third, forth, memory):
+    def syscallHap(self, call_num, third, forth, memory):
         ''' hit when kernel is entered due to sysenter '''
         #self.lgr.debug('sycallHap')
         cur_task, pid = self.getCurPid()
         if pid is None:
             return
         if cur_task is not None:
-            eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-            ''' Use the call map to get the call name, and strip off "nt" '''
-            if eax in self.call_map:
-                self.current_call_num = eax
-                call_name = self.call_map[eax][2:]
-                if self.run_to is None:
-                    if pid is not None:
-                        entry = self.getComputed(eax)     
-                        self.lgr.debug('syscallHap x cur_task 0x%x pid %d eax: %d computed: 0%x call: %s' % (cur_task, pid, eax, entry, call_name)) 
-                        if call_name == 'OpenFile':
-                            SIM_break_simulation('open')
-                else:
-                    self.lgr.debug('syscallHap computed cur_task 0x%x pid %d eax: %d call: %s' % (cur_task, pid, eax, call_name)) 
-                    rsi = self.mem_utils.getRegValue(self.cpu, 'rsi')
-                    param_stack = (rsi - 0x20) + 0x28
-                    param1 = self.mem_utils.readPtr(self.cpu, param_stack)
-                    self.lgr.debug('first param is 0x%x' % param1)
-                    SIM_break_simulation('computed') 
+            if self.run_to is None:
+                eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
+                ''' Use the call map to get the call name, and strip off "nt" '''
+                if eax in self.call_map:
+                    self.current_call_num = eax
+                    call_name = self.call_map[eax][2:]
+                    if self.run_to is None:
+                        if pid is not None:
+                            entry = self.getComputed(eax)     
+                            self.lgr.debug('syscallHap x cur_task 0x%x pid %d eax: %d computed: 0%x call: %s' % (cur_task, pid, eax, entry, call_name)) 
+                            if call_name == 'OpenFile':
+                                SIM_break_simulation('open')
+                                rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
+                                param_start = rsp + 40
+                                first_param = self.mem_utils.readPtr(self.cpu, param_start)
+                                second_param = self.mem_utils.readPtr(self.cpu, param_start+8)
+                                third_param = self.mem_utils.readPtr(self.cpu, param_start+16)
+                                forth_param = self.mem_utils.readPtr(self.cpu, param_start+24)
+                                print('syscall OpenFile, p1: 0x%x p2: 0x%x p3: 0x%x p4 0x%x' % (first_param, second_param, third_param, forth_param))
+                                self.lgr.debug('syscall OpenFile, p1: 0x%x p2: 0x%x p3: 0x%x p4 0x%x' % (first_param, second_param, third_param, forth_param))
+                                
+                               
+            else:
+                call_name = self.call_map[call_num][2:]
+                rip = self.mem_utils.getRegValue(self.cpu, 'rip')
+                self.lgr.debug('syscallHap computed cur_task 0x%x rip: 0x%x pid %d call_num: %d call: %s' % (cur_task, rip, pid, call_num, call_name)) 
+                rsi = self.mem_utils.getRegValue(self.cpu, 'rsi')
+                param_stack = (rsi - 0x20) + 0x28
+                param1 = self.mem_utils.readPtr(self.cpu, param_stack)
+                self.lgr.debug('rsi 0x%x param_stack 0x%x first param is 0x%x' % (rsi, param_stack, param1))
+                SIM_break_simulation('computed') 
 
 
 
@@ -128,8 +144,8 @@ class Win7Syscalls():
         if pid is None:
             return
         if cur_task is not None:
-            eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-            #if pid is not None:
-            #    self.lgr.debug('exitHap cur_task: 0x%x pid:%d' % (cur_task, pid))
-            #else:
-            #    self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))
+            rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+            if pid is not None:
+                self.lgr.debug('exitHap cur_task: 0x%x pid:%d rax 0x%x' % (cur_task, pid, rax))
+            else:
+                self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))

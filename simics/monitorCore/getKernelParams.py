@@ -1463,15 +1463,16 @@ class GetKernelParams():
         else:
             self.lgr.debug('continueAhead was running')
 
-    def getWin7CallParams(self):
-        ''' Use breakpoints set on the stack to identify call parameter offsets from the stack pointer'''
+    def getWin7CallParams(self, stop_on=None):
+        ''' Use breakpoints set on the stack to identify call parameter offsets from the stack pointer.
+            Optional stop_on will stop on exit from call'''
         cell_name = self.target 
         if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
             param_file = self.comp_dict[cell_name]['RESIM_PARAM']
             if os.path.isfile(param_file):
                 self.param = pickle.load(open(param_file, 'rb'))
                 self.lgr.debug('w7Tasks loaded params from %s' % param_file)
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr)
+        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on)
 
     def showW7CallParams(self):
         ''' Show results of getWin7CallParams '''

@@ -330,6 +330,8 @@ class memUtils():
                     except ValueError:
                         self.lgr.error('memUtils readBytes, second read %d bytes from  0x%x' % (count, ps))
                     #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+            #else:
+            #    self.lgr.error('memUtils readBytes addr 0x%x not mapped?' % vaddr)
             #self.lgr.debug('readBytes got %d' % len(retval))
             start = start+count
             remain = remain - count
@@ -412,7 +414,7 @@ class memUtils():
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
             try:
-                return self.getUnsigned(SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size))
+                return self.getUnsigned(SIM_read_phys_memory(cpu, phys, size))
             except:
                 return None
         else:
@@ -421,14 +423,14 @@ class memUtils():
     def readWord(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE)
+            return SIM_read_phys_memory(cpu, phys, self.WORD_SIZE)
         else:
             return None
 
     def readMemory(self, cpu, vaddr, size):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size)
+            return SIM_read_phys_memory(cpu, phys, size)
         else:
             return None
 
