@@ -13,9 +13,8 @@ The physical address of the current task record is passed in,
 e.g., from getKernelParam.  A real system would compute that from
 the param, using gs_base and logic to account for aslr.
 
-DO NOT rely on this for full traces -- it deliberately only looks
-at one process at a time to keep it simple.
 '''
+watch_stack_params = 6
 class Win7CallParams():
     def __init__(self, cpu, cell, mem_utils, current_task_phys, param, lgr, stop_on=None):
         self.param = param
@@ -33,9 +32,12 @@ class Win7CallParams():
         self.stack_param_hap = {}
         self.open_file_break = {}
         self.open_file_hap = {}
+        self.open_file_break2 = {}
+        self.open_file_hap2 = {}
         self.current_call = {}
         self.current_call_params = {}
-        self.current_rsp = {}
+        self.entry_rsp = {}
+        self.all_reg_values = {}
         self.mem_utils = mem_utils
         self.cell = cell
         self.cpu = cpu
@@ -97,6 +99,7 @@ class Win7CallParams():
         return cur_task, pid
  
     def parseOpen(self, rsp, pid):
+        ''' not used '''
         retval = ''
         offset = 40
         msg = 'OpenFile pid:%d ' % pid
@@ -147,7 +150,7 @@ class Win7CallParams():
                     self.current_call_params[pid] = {}
                     self.current_call[pid] = rax
                     rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
-                    self.current_rsp[pid] = rsp
+                    self.entry_rsp[pid] = rsp
                     self.lgr.debug('syscallHap cur_task 0x%x pid:%d rsp: 0x%x rax: %d call: %s' % (cur_task, pid, rsp, rax, call_name)) 
                     #if call_name == 'OpenFile':
                     #    msg = self.parseOpen(rsp, pid)
@@ -163,6 +166,7 @@ class Win7CallParams():
                     if rax not in self.call_param_offsets:
                         self.call_param_offsets[rax] = []
                     self.watchStackParams(pid, call_name)
+                    self.all_reg_values[pid] = self.allRegValues()
                 else:
                     self.lgr.debug('got none for pid task 0x%x' % cur_task)
             elif pid is not None:
@@ -170,38 +174,51 @@ class Win7CallParams():
             else:
                 self.lgr.debug('got none for pid and no bad call num %d for task 0x%x' % (rax, cur_task))
 
+    def allRegValues(self):
+        msg = ''
+        for reg in self.mem_utils.ia64_regs:
+            value = self.mem_utils.getRegValue(self.cpu, reg)
+            msg_add = '%s: 0x%x ' % (reg, value)
+            msg = msg+msg_add
+        return msg
+ 
     def recordOpen(self, pid):
+        ''' gather values of what might be parameters to the open syscall'''
         retval = ''
-        msg = 'return from OpenFile pid:%d rsp: 0x%x ' % (pid, self.current_rsp[pid])
+        msg = 'return from OpenFile pid:%d rsp: 0x%x ' % (pid, self.entry_rsp[pid])
         for offset in self.current_call_params[pid]:
             if self.current_call_params[pid][offset] is not None:
                 orig_bytes = self.current_call_params[pid][offset]
                 #orig_bytes.reverse()
                 hexstring = binascii.hexlify(orig_bytes)
-                msg_add = ' offset 0x%x (%d) value 0x%s' % (offset, offset, hexstring)
+                msg_add = ' offset 0x%x (%d) value 0x%x' % (offset, offset, int(hexstring,16))
             else:
                 msg_add = ' offset 0x%x (%d) value is None' % (offset, offset)
             msg = msg + ' '+msg_add
-        if 64 in self.current_call_params[pid] and self.current_call_params[pid][64] is not None:
-            orig_bytes = self.current_call_params[pid][64]
-            param_ptr = None
-            if len(orig_bytes) == 8:
-                param_ptr = struct.unpack("<Q", orig_bytes)[0]
-            elif len(orig_bytes) == 4:
-                param_ptr = struct.unpack("<L", orig_bytes)[0]
-            else:
-                self.lgr.debug('len of orig_bytes is %d, does not look like a pointer?' % len(orig_bytes))
-                stuff = 'Kernel only read %d bytes from offset 64 of what should be an address' % len(orig_bytes)
-            if param_ptr is not None:
-                self.lgr.debug('recordOpen param_ptr 0x%x' % param_ptr)
-                barray = self.mem_utils.readBytes(self.cpu, param_ptr, 80)
-                if len(barray) == 0:
-                    stuff = 'Address 0x%x not mapped' % param_ptr 
+        offset_list = [64, 72]
+        for offset in offset_list:
+            if offset in self.current_call_params[pid] and self.current_call_params[pid][offset] is not None:
+                orig_bytes = self.current_call_params[pid][offset]
+                orig_bytes.reverse()
+                param_ptr = None
+                fname_maybe = ''
+                if len(orig_bytes) == 8:
+                    param_ptr = struct.unpack("<Q", orig_bytes)[0]
+                elif len(orig_bytes) == 4:
+                    param_ptr = struct.unpack("<L", orig_bytes)[0]
                 else:
-                    stuff = barray.decode('utf-16le', errors='replace')
-                    string = self.mem_utils.readString(self.cpu, param_ptr, 80)
-                    stuff = stuff + '\n' + string
-            msg = msg + '\n\t ' + stuff
+                    self.lgr.debug('offset %d len of orig_bytes is %d, does not look like a pointer?' % (offset, len(orig_bytes)))
+                    fname_maybe = 'Kernel only read %d bytes from offset %d of what should be an address' % (len(orig_bytes), offset)
+                if param_ptr is not None:
+                    self.lgr.debug('recordOpen offset %d param_ptr 0x%x' % (offset, param_ptr))
+                    barray = self.mem_utils.readBytes(self.cpu, param_ptr, 80)
+                    if len(barray) == 0:
+                        fname_maybe = 'offset %d Address 0x%x not mapped' % (offset, param_ptr) 
+                    else:
+                        fname_maybe = 'offset %d: %s' % (offset, barray.decode('utf-16le', errors='replace'))
+                        #string = 'offset %d %s' % (offset, self.mem_utils.readString(self.cpu, param_ptr, 80))
+                msg = msg + '\n\t ' + fname_maybe
+        msg = msg + '\n'+self.all_reg_values[pid]
         return msg
 
     class DelRec():
@@ -231,12 +248,12 @@ class Win7CallParams():
  
             if pid in self.current_call and self.current_call[pid] in self.call_map:
                 call_name = self.call_map[self.current_call[pid]][2:]
-                self.lgr.debug('exitHap callname %s' % call_name)
+                #self.lgr.debug('exitHap callname %s' % call_name)
                 if call_name == 'OpenFile':
                     msg = self.recordOpen(pid)
                     self.lgr.debug(msg)
-                    if 'not mapped' in msg:
-                        SIM_break_simulation('not mapped')
+                    #if 'not mapped' in msg:
+                    #    SIM_break_simulation('not mapped')
             if self.stop_on is not None:
                 #self.lgr.debug('exitHap stopon is %s and pid' % self.stop_on)
                 if call_name is not None:
@@ -248,10 +265,13 @@ class Win7CallParams():
             user space stack '''
         rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
         self.lgr.debug('watchStackParams set break on sp 0x%x' % rsp)
-        self.stack_param_break[pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, rsp, 80, 0)
+        stack_param_start = rsp+40
+        stack_param_bytes = watch_stack_params * 8
+        self.stack_param_break[pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, stack_param_start, stack_param_bytes, 0)
         self.stack_param_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.stackParamHap, call_name, self.stack_param_break[pid])
 
     def stopWatchStack(self, del_rec):
+        ''' Stop watching stack references, e.g., because we are exiting the kernel '''
         ''' the self.stack_param_hap and break were removed in the main thread to avoid a race '''
         self.lgr.debug('stopWatchStack')
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", del_rec.hap)
@@ -261,6 +281,16 @@ class Win7CallParams():
             SIM_delete_breakpoint(self.open_file_break[del_rec.pid])
             del self.open_file_hap[del_rec.pid]
             del self.open_file_break[del_rec.pid]
+        if del_rec.pid in self.open_file_break2:
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.open_file_hap2[del_rec.pid])
+            SIM_delete_breakpoint(self.open_file_break2[del_rec.pid])
+            del self.open_file_hap2[del_rec.pid]
+            del self.open_file_break2[del_rec.pid]
+ 
+    class PidAddr():
+        def __init__(self, pid, addr):
+            self.pid = pid
+            self.addr = addr
 
     def stackParamHap(self, call_name, third, forth, memory):
         ''' Hit when kernel reads values in user space stack, implying they are parameters. '''
@@ -269,18 +299,22 @@ class Win7CallParams():
         cur_task, pid = self.getCurPid()
         if pid in self.stack_param_hap:
             addr = memory.logical_address
-            offset = addr - self.current_rsp[pid] 
+            offset = addr - self.entry_rsp[pid] 
             rip = self.mem_utils.getRegValue(self.cpu, 'rip')
             orig_value = self.mem_utils.readBytes(self.cpu, addr, memory.size)
             if orig_value is not None:
-                if call_name == 'OpenFile' and offset == 64:
-                    self.watchOpenFilePtr(pid, addr)
                 value = orig_value
                 value.reverse()
                 hexstring = binascii.hexlify(value)
-                self.lgr.debug('stackParamHap pid:%d rip: 0x%x read value 0x%s from 0x%x, offset 0x%x (%d) from sp 0x%x' % (pid, rip, hexstring, addr, offset, offset, self.current_rsp[pid]))
+                self.lgr.debug('stackParamHap pid:%d rip: 0x%x read value 0x%s from 0x%x, offset 0x%x (%d) from sp 0x%x cycles:0x%x' % (pid, rip, hexstring, addr, offset, offset, self.entry_rsp[pid], self.cpu.cycles))
+                if call_name == 'OpenFile': 
+                    pid_addr = self.PidAddr(pid, addr)
+                    if offset == 64:
+                        SIM_run_alone(self.watchOpenFilePtr, pid_addr)
+                    elif offset == 72:
+                        SIM_run_alone(self.watchOpenFilePtr2, pid_addr)
             else:
-                self.lgr.debug('stackParamHap pid:%d rip: 0x%x could not read value from 0x%x, offset %d from sp 0x%x' % (pid, rip, addr, offset, self.current_rsp[pid]))
+                self.lgr.debug('stackParamHap pid:%d rip: 0x%x could not read value from 0x%x, offset %d from sp 0x%x' % (pid, rip, addr, offset, self.entry_rsp[pid]))
             ''' for every pid and every call '''
             if offset not in self.current_call_params[pid]:
                 self.current_call_params[pid][offset] = orig_value
@@ -291,13 +325,26 @@ class Win7CallParams():
             if offset not in self.call_param_offsets[self.current_call[pid]]:
                 self.call_param_offsets[self.current_call[pid]].append(offset) 
 
-    def watchOpenFilePtr(self, pid, addr):
-        self.lgr.debug('watchOpenFilePtr for pid:%d addr: 0x%x' % (pid, addr))
-        file_ptr = self.mem_utils.readPtr(self.cpu, addr)
-        self.open_file_break[pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, file_ptr, 8, 0)
-        self.open_file_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openFilePtr, pid, self.open_file_break[pid])
+    def watchOpenFilePtr(self, pid_addr):
+        ''' set a break/hap on reads of file names? '''
+        if pid_addr.pid not in self.open_file_break:
+            file_ptr = self.mem_utils.readPtr(self.cpu, pid_addr.addr)
+            if file_ptr is not None and file_ptr != 0:
+                self.lgr.debug('watchOpenFilePtr for pid:%d addr: 0x%x file_ptr: 0x%x' % (pid_addr.pid, pid_addr.addr, file_ptr))
+                self.open_file_break[pid_addr.pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, file_ptr, 8, 0)
+                self.open_file_hap[pid_addr.pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openFilePtr, pid_addr.pid, self.open_file_break[pid_addr.pid])
+
+    def watchOpenFilePtr2(self, pid_addr):
+        ''' set a break/hap on reads of file names from offset 72 '''
+        if pid_addr.pid not in self.open_file_break2:
+            file_ptr = self.mem_utils.readPtr(self.cpu, pid_addr.addr)
+            if file_ptr is not None and file_ptr != 0:
+                self.lgr.debug('watchOpenFilePtr2 for pid:%d addr: 0x%x file_ptr: 0x%x' % (pid_addr.pid, pid_addr.addr, file_ptr))
+                self.open_file_break2[pid_addr.pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, file_ptr, 8, 0)
+                self.open_file_hap2[pid_addr.pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openFilePtr2, pid_addr.pid, self.open_file_break2[pid_addr.pid])
 
     def showParams(self):
+        ''' dump the collected parameter offsets for each syscall '''
         jd = json.dumps(self.call_param_offsets, indent=4)
         with open('syscall_params.json', 'w') as fh:
             fh.write(jd)
@@ -308,5 +355,12 @@ class Win7CallParams():
                 print('\t%d' % offset) 
 
     def openFilePtr(self, pid, third, forth, memory):
+        ''' Hit when file name pointers are read '''
         if pid in self.open_file_break:
-            self.lgr.debug('openFilePtr pid:%d  addr: 0x%x' % (pid, memory.logical_address))
+            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
+            self.lgr.debug('openFilePtr FILE READ pid:%d  rip: 0x%x addr: 0x%x' % (pid, rip, memory.logical_address))
+
+    def openFilePtr2(self, pid, third, forth, memory):
+        if pid in self.open_file_break2:
+            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
+            self.lgr.debug('openFilePtr2 FILE READ pid:%d  rip: 0x%x addr: 0x%x' % (pid, rip, memory.logical_address))
