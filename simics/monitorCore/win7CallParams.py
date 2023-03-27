@@ -231,6 +231,7 @@ class Win7CallParams():
         ''' hit when kernel is about to exit back to user space via sysret64 '''
         #self.lgr.debug('exitHap')
         cur_task, pid = self.getCurPid()
+        call_name = None
         if pid is None:
             return
         if cur_task is not None:
@@ -239,6 +240,8 @@ class Win7CallParams():
                 self.lgr.debug('exitHap cur_task: 0x%x pid:%d rax: 0x%x' % (cur_task, pid, rax))
             else:
                 self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))
+            if pid in self.all_reg_values:
+                self.lgr.debug(self.all_reg_values[pid])
             if pid in self.stack_param_hap:
                 del_rec = self.DelRec(self.stack_param_break[pid], self.stack_param_hap[pid], pid)
                 del self.stack_param_hap[pid]
