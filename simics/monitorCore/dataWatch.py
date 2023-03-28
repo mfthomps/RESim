@@ -1248,7 +1248,7 @@ class DataWatch():
         if r0 in self.string_this:
             self.rmRange(self.string_this[r0])
             self.lgr.debug('dataWatch destroyEntry removed buffer 0x%x' % self.string_this[r0])
-            del self.string_this.[r0] 
+            del self.string_this[r0] 
         else:
             ''' TBD assumption? '''
             char_start = r0+0xc 
