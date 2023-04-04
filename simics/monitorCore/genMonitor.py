@@ -263,7 +263,7 @@ class GenMonitor():
         self.fs_mgr = None
 
         ''' ReadReplace module if any '''
-        self.read_replace = None
+        self.read_replace = {}
 
         ''' ****NO init data below here**** '''
         self.genInit(comp_dict)
@@ -314,7 +314,6 @@ class GenMonitor():
                     self.lgr.debug(self.param[cell_name].getParamString())
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
-                
                          
         for cell_name in comp_dict:
             if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
@@ -626,6 +625,7 @@ class GenMonitor():
                     dmod_dict = pickle.load( open(dmod_file, 'rb') )
                     for dmod_path in dmod_dict[cell_name]:
                         self.runToDmod(dmod_path, cell_name=cell_name)
+            self.handleMods(cell_name)
 
 
     def getBootCycleChunk(self):
@@ -753,16 +753,6 @@ class GenMonitor():
                                 self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
                                 self.finishInit(cell_name)
                                 run_cycles = self.getBootCycleChunk()
-                                if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
-                                    self.is_monitor_running.setRunning(False)
-                                    dlist = self.comp_dict[cell_name]['DMOD'].split(';')
-                                    for dmod in dlist:
-                                        dmod = dmod.strip()
-                                        if self.runToDmod(dmod, cell_name=cell_name):
-                                            print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                                        else:
-                                            print('Dmod is missing, cannot continue.')
-                                            self.quit()
                     else:
                         self.lgr.debug('doInit cell %s taskUtils got task rec of zero' % cell_name)
                         done = False
@@ -776,6 +766,30 @@ class GenMonitor():
                 dumb, ret = cli.quiet_run_command(cmd)
                 #self.lgr.debug('back from continue')
         self.runScripts()
+
+    def handleMods(self, cell_name):
+        ''' Load DMODs.  Snapshot contains dmod state, so only load if not a snapshot '''
+        if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
+            self.is_monitor_running.setRunning(False)
+            dlist = self.comp_dict[cell_name]['DMOD'].split(';')
+            for dmod in dlist:
+                dmod = dmod.strip()
+                if self.runToDmod(dmod, cell_name=cell_name):
+                    print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                else:
+                    print('Dmod is missing, cannot continue.')
+                    self.quit()
+        ''' Load readReplace items. '''
+        if 'READ_REPLACE' in self.comp_dict[cell_name]:
+            self.is_monitor_running.setRunning(False)
+            dlist = self.comp_dict[cell_name]['READ_REPLACE'].split(';')
+            for read_replace in dlist:
+                read_replace = read_replace.strip()
+                if self.readReplace(read_replace, cell_name=cell_name, snapshot=self.run_from_snap):
+                    print('ReadReplace %s set for cell %s' % (read_replace, cell_name))
+                else:
+                    print('ReadReplace file %s is missing, cannot continue.' % read_replace)
+                    self.quit()
        
     def getDbgFrames(self):
         retval = {}
@@ -1058,8 +1072,8 @@ class GenMonitor():
             if self.target not in self.jumper_dict:
                 self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
-        if self.read_replace is not None:
-             self.read_replace.swapContext()
+        if self.target in self.read_replace:
+             self.read_replace[self.target].swapContext()
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1399,12 +1413,13 @@ class GenMonitor():
 
     def runToProc(self, prec, third, forth, memory):
         ''' callback when current_task is updated.  new value is in memory parameter '''
+        self.lgr.debug('runToProc ')
         if self.cur_task_hap is None:
             return
         cpu = prec.cpu
         cur_task_rec = SIM_get_mem_op_value_le(memory)
         pid = self.mem_utils[self.target].readWord32(cpu, cur_task_rec + self.param[self.target].ts_pid)
-        #self.lgr.debug('runToProc look for %s pid is %d' % (prec.proc, pid))
+        self.lgr.debug('runToProc look for %s pid is %d' % (prec.proc, pid))
         if pid != 0:
             comm = self.mem_utils[self.target].readString(cpu, cur_task_rec + self.param[self.target].ts_comm, 16)
             if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
@@ -3442,6 +3457,9 @@ class GenMonitor():
                     
 
     def writeConfig(self, name):
+        if '-' in name:
+            print('Avoid use of - in snapshot names.')
+            return
         cmd = 'write-configuration %s' % name 
         SIM_run_command(cmd)
         for cell_name in self.cell_config.cell_context:
@@ -3472,6 +3490,8 @@ class GenMonitor():
 
                 param_file = os.path.join('./', name, cell_name, 'param.pickle')
                 pickle.dump(self.param[cell_name], open(param_file, 'wb'))
+                if cell_name in self.read_replace:
+                    self.read_replace[cell_name].pickleit(name)
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
@@ -3713,6 +3733,7 @@ class GenMonitor():
                 
         if 'runToIO' in self.call_traces[self.target]:
             self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
+            print('Tracking complete.')
         self.stopDataWatch()
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
@@ -3720,7 +3741,6 @@ class GenMonitor():
             self.coverage.saveCoverage()
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
-        print('Tracking complete.')
 
     def clearWatches(self, cycle=None):
         self.dataWatch[self.target].clearWatches(cycle=cycle)
@@ -4368,6 +4388,9 @@ class GenMonitor():
             fd -- will runToIOish on that FD and will record the buffer address for use by injectIO or fuzzing.
             snap_name -- will writeConfig to that snapshot.  Use that snapshot for fuzz and afl commands. '''
         if self.reverseEnabled():
+            if '-' in snap_name:
+               print('Avoid use of - in snapshot names.')
+               return
             cpu = self.cell_config.cpuFromCell(self.target)
             cell_name = self.getTopComponentName(cpu)
             debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
@@ -4384,6 +4407,9 @@ class GenMonitor():
     def prepInjectWatch(self, watch_mark, snap_name):
         ''' Like prepInject, but goes to given watchmark records the kernel buffers identified by using trackIO(kbuf=True) '''
         if self.reverseEnabled():
+            if '-' in snam_name:
+               print('Avoid use of - in snapshot names.')
+               return
             cpu = self.cell_config.cpuFromCell(self.target)
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('prepInjectWatch')
@@ -5040,10 +5066,15 @@ class GenMonitor():
         phys_block = cpu.iface.processor_info.logical_to_physical(linear, Sim_Access_Read)
         print('0x%x' % phys_block.address)
 
-    def readReplace(self, fname):
+    def readReplace(self, fname, cell_name=None, snapshot=None):
+        if not os.path.isfile(fname):
+            return False
+        if cell_name is None:
+            cell_name = self.target
         self.lgr.debug('readReplace %s' % fname)
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.read_replace = readReplace.ReadReplace(self, cpu, fname, self.lgr)
+        cpu, comm, pid = self.task_utils[cell_name].curProc() 
+        self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.lgr, snapshot=snapshot)
+        return True
 
     def testSnap(self):
         self.debugSnap()
@@ -5051,6 +5082,12 @@ class GenMonitor():
         ts.go()
         self.lgr.debug('done')
         print('done')
+
+    def curTaskTest(self):
+        if self.param[self.target].current_task_fs:
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            phys = cpu.ia32_fs_base + (self.param[self.target].current_task-self.param[self.target].kernel_base)
+            print('current task phys addr is 0x%x' % phys)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
