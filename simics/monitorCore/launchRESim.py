@@ -309,6 +309,7 @@ class LaunchRESim():
             print('run from checkpoint %s' % RUN_FROM_SNAP)
             run_command('read-configuration %s' % RUN_FROM_SNAP)
             #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
+        self.doAlways()
         run_command('log-level 0 -all')
         ''' dummy logging object to support script branches for automated tests '''
         try:
@@ -372,6 +373,8 @@ class LaunchRESim():
                         params = params + " "+cmd
                         if self.SIMICS_VER.startswith('4'):
                            run_command('$'+cmd)
+
+
    
             if self.SIMICS_VER.startswith('4'):
                 cmd='run-command-file "./targets/%s"' % (script)
@@ -386,12 +389,33 @@ class LaunchRESim():
             #print('assign switch link names')
             addSwitchLinkNames(section, self.comp_dict[section], self.link_dict[section], switch_map)
 
-    def go(self):
-        global cgc, gkp, cfg_file
-        self.doSections()
-        cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file)
-        cgc.doInit()
-
+            for name in self.comp_dict[section]:
+                if name == 'INTERACT_SCRIPT':
+                    interact = self.comp_dict[section][name]
+                    print('Will run interact %s for target %s' % (interact, section))
+                    if interact.endswith('.simics'):
+                        run_command('run-command-file %s' % interact)
+                    elif interact.endswith('.py'):
+                        run_command('run-python-file %s' % interact)
+                    else:
+                        lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
+                        return
+    def doAlways(self):
+        ''' scripts to run regardless of whether starting from a snapshot'''
+        for section in self.config.sections():
+            if section in self.not_a_target:
+                continue
+            for name in self.comp_dict[section]:
+                if name == 'ALWAYS_SCRIPT':
+                    always = self.comp_dict[section][name]
+                    print('Will run always %s for target %s' % (always, section))
+                    if always.endswith('.simics'):
+                        run_command('run-command-file %s' % always)
+                    elif always.endswith('.py'):
+                        run_command('run-python-file %s' % always)
+                    else:
+                        lgr.error('Did not know what to do with ALWAYS_SCRIPT %s' % always)
+                        return
 if __name__ == '__main__':
     global cgc
     cgc = None 
