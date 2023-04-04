@@ -128,8 +128,10 @@ def doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, resim_ini, read
     #    afl_cmd = afl_cmd+' -d'
     print('afl_cmd %s' % afl_cmd) 
     lgr.debug('afl_cmd %s' % afl_cmd) 
-
-    cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+    if not background:
+        cmd = 'xterm -geometry 80x25 -e "%s;sleep 10"' % (afl_cmd)
+    else:
+        cmd = afl_cmd
     afl_ps = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     print('created afl')
     lgr.debug('created afl')
