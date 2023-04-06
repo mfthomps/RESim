@@ -405,6 +405,8 @@ class InjectIO():
             #print('start %s' % str(so_pickle['text_start']))
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
+            else:
+                self.lgr.debug('injectIO no addr in pickle?')
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
@@ -418,6 +420,8 @@ class InjectIO():
                 self.addr_size = so_pickle['addr_size']
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
+        else:
+            self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
 
     def saveJson(self, save_file=None, packet=None):
         if packet is None:
