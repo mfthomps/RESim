@@ -759,7 +759,8 @@ The default value is 900,000,000, which is too large for some ARM implementation
 {\tt BOOT\_CHUNKS} value assigned to any component that has not yet completed its boot.
 \item {\tt DMOD} Optional file to pass to the {\tt runToDmod} command once the component has booted.  See \ref{dmod}.
 \item {\tt PLATFORM} One of the following: x86; arm; or arm5
-\item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded.
+\item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded, which only occurs during boot, i.e., these are not run with snapshots.
+\item {\tt ALWAYS\_SCRIPT} Simics command script to be run on each startup, reqardless of whether the run is from a snapshot.
 \end{itemize}
 
 \subsection{Target platforms}
@@ -882,7 +883,7 @@ see the IDA Pro installation below for information on installing IDA.
 \begin{verbatim}
    git clone https://github.com/mfthomps/RESim.git
 \end{verbatim}
-\item Install python-magic from gz file:  pip install $<$path$>$
+\item Install python-magic.  If on Simics 6, install the standard python3-magic.  If on Simcs 4, install it from gz file:  pip install $<$path$>$
 \begin{verbatim}
    sudo pip install /mnt/re_images/python_pkgs/python-magic-0.4.15.tar.gz
 \end{verbatim}
@@ -1018,9 +1019,11 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 \subsection{IDA Pro}
 \label{ida}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
-{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
+{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration (ini) file.  
 
-Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
+Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).  Start IDA from the
+{\tt RESIM\_ROOT\_PREFIX} directory, providing the path to the executable realative to that root prefix directory.
+
 If IDA will run on a different computer than where Simics is running, and that remote computer can only be reached via SSH, include the host 
 name as a command line option.  See section \ref{ida-install} for additional information.
 
@@ -2113,9 +2116,12 @@ be on an NFS share so that the same ini file can be used on multiple RESim platf
 
 The idb and hits files will be per-user, stored in a local writable directory relative to path 
 named by the {\tt RESIM\_IDA\_DATA} environment varible.  Files will be copied between IDA
-and RESim platforms using scp. Each analyzed program has a subdirectory in the {\tt RESIM\_IDA\_DATA}
-directory.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
+and RESim platforms using scp. Each analyzed program has a subdirectory relative to the {\tt RESIM\_IDA\_DATA}
+directory, under a directory whose name matches the {\tt RESIM\_ROOT\_PREFIX} directory
+named in the ini file.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
 a file with a ".prog" extension that identifies the path to program that was analyzed. 
+(The extra {\tt RESIM\_ROOT\_PREFIX} subdirectory is intended to avoid name collisions, e.g., for libc libraries from
+different systems.)
 
 If IDA and Simics run on different computers, and the {\tt runIDA.py} command is given the name of a remote 
 computer, i.e., the IDA computer and the Simics computer communicate via an SSH tunnel, 
