@@ -1046,8 +1046,9 @@ class GenMonitor():
                     else:
                         self.lgr.error('debug, text segment None for %s' % full_path)
                     self.lgr.debug('create coverage module')
-                    ida_path = resimUtils.getIdaData(full_path)
+                    ida_path = self.getIdaData(full_path)
                     if ida_path is not None:
+                        self.lgr.debug('debug, create Coverage ida_path %s' % ida_path)
                         self.coverage = coverage.Coverage(self, full_path, ida_path, self.context_manager[self.target], 
                            cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                     if self.coverage is None:
@@ -1165,7 +1166,9 @@ class GenMonitor():
     def getIDAFuns(self, full_path):
         fun_path = full_path+'.funs'
         iterator_path = full_path+'.iterators'
-        self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr)
+        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
+        root_dir = os.path.basename(root_prefix)
+        self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
             if os.path.islink(full_path):
@@ -4407,7 +4410,7 @@ class GenMonitor():
     def prepInjectWatch(self, watch_mark, snap_name):
         ''' Like prepInject, but goes to given watchmark records the kernel buffers identified by using trackIO(kbuf=True) '''
         if self.reverseEnabled():
-            if '-' in snam_name:
+            if '-' in snap_name:
                print('Avoid use of - in snapshot names.')
                return
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -4561,7 +4564,7 @@ class GenMonitor():
                             print('function: %s branch 0x%x from 0x%x not in hits' % (fun_blocks['name'], branch, bb_hit))
 
     def aflBNT(self, target, fun_name=None):
-        ida_path = resimUtils.getIdaData(self.full_path)
+        ida_path = self.getIdaData(self.full_path)
         if ida_path is not None:
             if target is None:
                 fname = '%s.hits' % ida_path
@@ -4619,7 +4622,7 @@ class GenMonitor():
 
     def addJumper(self, from_bb, to_bb):
         ''' Add a jumper for use in code coverage and AFL, e.g., to skip a CRC '''
-        ida_path = resimUtils.getIdaData(self.full_path)
+        ida_path = self.getIdaData(self.full_path)
         jname = ida_path+'.jumpers'
         if os.path.isfile(jname):
             with open(jname) as fh:
@@ -4993,7 +4996,16 @@ class GenMonitor():
             return True
 
     def showFuns(self, search=None):
-        self.ida_funs.showFuns(search = search)
+        if self.ida_funs is not None:
+            self.ida_funs.showFuns(search = search)
+        else:
+            print('No IDA functions loaded.')
+
+    def showMangle(self, search=None):
+        if self.ida_funs is not None:
+            self.ida_funs.showMangle(search = search)
+        else:
+            print('No IDA functions loaded.')
 
     def getFun(self, addr):
         fname = self.ida_funs.getFunName(addr)
@@ -5088,6 +5100,12 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             phys = cpu.ia32_fs_base + (self.param[self.target].current_task-self.param[self.target].kernel_base)
             print('current task phys addr is 0x%x' % phys)
+
+    def getIdaData(self, path):
+        #self.lgr.debug('getIdaData path %s' % path)
+        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
+        ida_path = resimUtils.getIdaData(path, root_prefix)
+        return ida_path
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

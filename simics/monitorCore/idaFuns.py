@@ -1,5 +1,12 @@
 import os
 import json
+def rmPrefix(fun):
+    if fun.startswith('.'):
+        fun = fun[1:]
+    if fun.startswith('_'):
+        fun = fun[1:]
+    return fun
+
 class IDAFuns():
 
     def __init__(self, path, lgr):
@@ -13,8 +20,11 @@ class IDAFuns():
             mpath = path[:-4]+'mangle' 
             if os.path.isfile(mpath):
                with open(mpath) as fh:
-                   self.mangle = json.load(fh)
+                   mangle_file = json.load(fh)
                    lgr.debug('Loaded mangle from %s' % mpath)
+                   for m in mangle_file:
+                       fun = rmPrefix(m)
+                       self.mangle[fun] = mangle_file[m]
             else:
                 lgr.debug('no mangle file at %s' % mpath)
             upath = path[:-4]+'unwind' 
@@ -23,7 +33,8 @@ class IDAFuns():
                    self.unwind = json.load(fh)
                    lgr.debug('Loaded unwind from %s' % upath)
             else:
-                lgr.debug('no mangle file at %s' % upath)
+                #lgr.debug('no unwind file at %s' % upath)
+                pass
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
@@ -33,6 +44,8 @@ class IDAFuns():
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
                         fun_name = fun_name[7:]
+                    else:
+                        fun_name = rmPrefix(fun_name)
                     if fun_name in self.mangle:
                         #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
                         fun_rec['name'] = self.mangle[fun_name]
@@ -57,6 +70,20 @@ class IDAFuns():
         else:
             self.did_paths.append(path)
         funfile = self.getFunPath(path)
+
+        add_mangle = []
+        mpath = funfile[:-4]+'mangle' 
+        if os.path.isfile(mpath):
+           with open(mpath) as fh:
+               add_mangle = json.load(fh)
+               for m in add_mangle:
+                   fun = rmPrefix(m)
+                   if fun not in self.mangle:
+                       self.mangle[fun] = add_mangle[m]
+               self.lgr.debug('Loaded additional mangle from %s' % mpath)
+        else:
+            self.lgr.debug('no mangle file at %s' % mpath)
+
         if os.path.isfile(funfile):
             with open(funfile) as fh:
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
@@ -66,9 +93,17 @@ class IDAFuns():
                     self.funs[fun] = {}
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
-                    self.funs[fun]['name'] = newfuns[f]['name']
+                    fun_name = newfuns[f]['name']
+                    self.funs[fun]['name'] = fun_name
+                    fun_name = rmPrefix(fun_name)
+                    if fun_name in add_mangle:
+                        #self.lgr.debug('****************** %s in add mangle as %s' % (fun_name, add_mangle[fun_name]))
+                        self.funs[fun]['name'] = add_mangle[fun_name]
+                    elif fun_name.startswith('_ZNK'):
+                        self.lgr.debug('#################### %s not in mangle? ' % fun_name)
                    
                     #self.lgr.debug('idaFun add %s was %s %x %x   now %x %x %x' % (newfuns[f]['name'], f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
+
         else:
             self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
             pass
@@ -126,11 +161,33 @@ class IDAFuns():
             else:
                 print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
 
+
     def demangle(self, fun):
-        if fun in self.mangle:
-            return self.mangle[fun]
-        else:
-            return fun
+        ''' Return the demangled function name based on IDA analysis. '''
+        retval = fun
+        if fun is not None:
+            if fun in self.mangle:
+                retval = self.mangle[fun]
+                
+            elif len(fun) > 4:
+                if '_traits' in fun:
+                    ''' TBD what level of matching matters?'''
+                    fun = fun.split('_traits')[0]
+                    fun = rmPrefix(fun)
+                    #self.lgr.debug('demangle look for fun %s' % fun)
+                for mf in self.mangle:
+                    if mf.startswith(fun) or fun.startswith(mf):
+                        retval = self.mangle[mf]
+                        #self.lgr.debug('demangle got match %s' % retval)
+                        break
+                
+        return retval
+
+    def showMangle(self, search=None):
+        with open('/tmp/mangle.txt', 'w') as fh:
+            for fun in self.mangle:
+                print('mangle %s to %s' % (fun, self.mangle[fun]))
+                fh.write('mangle %s to %s\n' % (fun, self.mangle[fun]))
 
     def isUnwind(self, ip):
         retval = False

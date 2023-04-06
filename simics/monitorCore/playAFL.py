@@ -145,6 +145,7 @@ class PlayAFL():
             self.lgr.debug('playAFL call enableCoverage')
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=full_path)
+            self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
             if linear:
                 self.physical = False
@@ -334,9 +335,13 @@ class PlayAFL():
                     os.makedirs(os.path.dirname(hits_path))
                 except:
                     pass
-                with open(save_name, 'w') as fh:
-                    fh.write(s)
-                    fh.flush()
+                try:
+                    with open(save_name, 'w') as fh:
+                        fh.write(s)
+                        fh.flush()
+                except:
+                    self.lgr.error('Failed creating %s.  Is the directory correct?' % save_name)
+                    return
                 print('%d Hits file written to %s' % (len(self.all_hits), save_name))
                 all_prev_hits_path = '%s.hits' % hits_path
                 if os.path.isfile(all_prev_hits_path):

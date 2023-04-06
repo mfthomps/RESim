@@ -862,11 +862,13 @@ class Coverage():
         self.no_save = no_save
         self.record_hits = record_hits
         self.only_thread = only_thread
+        #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
             self.full_path = fname
-            self.hits_path = resimUtils.getIdaData(fname)
+            self.hits_path = self.top.getIdaData(fname)
+            #self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
         
-        ida_path = resimUtils.getIdaData(self.full_path)
+        ida_path = self.top.getIdaData(self.full_path)
         # dynamically alter control flow, e.g., to avoid CRC checks
         self.loadJumpers(ida_path)
 

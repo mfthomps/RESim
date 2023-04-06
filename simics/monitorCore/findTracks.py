@@ -3,8 +3,8 @@ import os
 import resimUtils
 class FindTracks():
     ''' Find watch marks within given basic blocks '''
-    def __init__(self, prog):
-        self.prog_path = resimUtils.getProgPath(prog)
+    def __init__(self, prog, ini):
+        self.prog_path = resimUtils.getProgPath(prog, ini)
         self.track_data = {}
         self.track_bb = {}
         self.bb_cache = {}

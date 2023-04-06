@@ -17,6 +17,10 @@ try:
 except:
     ''' must be py 2.7 '''
     pass
+try:
+    import ConfigParser
+except:
+    import configparser as ConfigParser
 
 def getLogger(name, logdir, level=None):
     os.umask(000)
@@ -129,20 +133,50 @@ def isParallel():
     else:
         return False
 
-def getIdaData(full_path):
+def getIdaDataFromIni(prog, ini):
+    retval = None
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('ERROR: RESIM_IDA_DATA not defined')
+    else:
+        root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        base = os.path.basename(root_fs)
+        retval = os.path.join(resim_ida_data, base, prog, prog)
+    return retval
+
+def getIdaData(full_path, root_prefix):
+    ''' get the ida data path, providing backward compatability with old style paths '''
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
     else: 
+        print('full_path %s' % full_path)
         base = os.path.basename(full_path)
-        retval = os.path.join(resim_ida_data, base, base)
+        root_base = os.path.basename(root_prefix)
+        print('root_prefix %s' % root_prefix)
+        new_path = os.path.join(resim_ida_data, root_base, base)
+        old_path = os.path.join(resim_ida_data, base)
+        print('old %s' % old_path)
+        print('new %s' % new_path)
+        if not os.path.isdir(new_path): 
+            if os.path.isdir(old_path):
+                ''' Use old path style '''
+                retval = os.path.join(old_path, base)
+                print('Using old style ida data path %s' % retval)
+            else:
+                retval = os.path.join(new_path, base)
+                print('Using new style ida data path %s' % retval)
+        else:
+            retval = os.path.join(new_path, base)
+            print('no existing ida data path %s' % retval)
+        
     return retval
 
-def getProgPath(prog):
+def getProgPath(prog, ini):
     ''' read the .prog file to get the path of the analyzed program, i.e., the program
         whose basic blocks were watched.'''
-    ida_path = getIdaData(prog)
+    ida_path = getIdaDataFromIni(prog, ini)
     data_path = ida_path+'.prog'
     prog_file = None
     if not os.path.isfile(data_path):
@@ -183,9 +217,9 @@ def getPacketFilter(packet_filter, lgr):
                 raise Exception('failed to find filter at %s' % packet_filter)
     return retval
 
-def getBasicBlocks(prog):
+def getBasicBlocks(prog, ini):
     blocks = None
-    prog_file = getProgPath(prog)
+    prog_file = getProgPath(prog, ini)
     prog_elf = None
     if prog_file is not None:
         prog_elf = elfText.getTextOfText(prog_file)
@@ -273,3 +307,29 @@ def getHexDump(b):
     else:
         return s2
 
+
+def getIniTargetValue(input_ini_file, field):
+    retval = None
+    config = ConfigParser.ConfigParser()
+    config.optionxform = str
+    if not input_ini_file.endswith('.ini'):
+        ini_file = '%s.ini' % input_ini_file
+    else:
+        ini_file = input_ini_file
+    if not os.path.isfile(ini_file):
+        print('File not found: %s' % ini_file)
+        exit(1)
+    config.read(ini_file)
+    target = None
+    for name, value in config.items('ENV'):
+        if name == 'RESIM_TARGET':
+            target = value
+            break
+    if target is not None:
+        for section in config.sections():
+            if section == target:
+                for name, value in config.items(section):
+                    if name == field:
+                        retval = value 
+                        break
+    return retval
