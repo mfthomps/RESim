@@ -197,10 +197,6 @@ def main():
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
-    ida_data = os.getenv('RESIM_IDA_DATA')
-    if ida_data is None:
-        print('RESIM_IDA_DATA not defined')
-        exit(1)
 
     udp_header = getHeader(args.ini)
     if udp_header is not None:

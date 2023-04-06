@@ -14,6 +14,7 @@ except:
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
+import resimUtils
 
 all_funs = []
 all_hits = []
@@ -68,7 +69,8 @@ def main():
     if ida_data is None:
         print('RESIM_IDA_DATA not defined')
         exit(1)
-    data_path = os.path.join(ida_data, args.prog, args.prog+'.prog')
+    root_dir = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX'):
+    data_path = os.path.join(ida_data, root_dir, args.prog, args.prog+'.prog')
     funs = None
     with open(data_path) as fh:
         lines = fh.read().strip().splitlines()

@@ -12,14 +12,16 @@ try:
 except:
     import configparser as ConfigParser
 def main():
-    parser = argparse.ArgumentParser(prog='showHits', description='Show program hits file as hex')
+    parser = argparse.ArgumentParser(prog='showHits', description='Show program hits file as hex.  Must be run from RESIM_ROOT_PREFIX per ini file.')
     parser.add_argument('prog', action='store', help='The program that was fuzzed. ') 
     args = parser.parse_args()
     ida_data = os.getenv('RESIM_IDA_DATA')
     if ida_data is None:
         print('RESIM_IDA_DATA not defined')
         exit(1)
-    hits = os.path.join(ida_data, args.prog, args.prog+'.hits')
+    here = os.path.getcwd()
+    root_dir = os.path.basename(here)
+    hits = os.path.join(ida_data, root_dir, args.prog, args.prog+'.hits')
     jhits = json.load(open(hits))
     print('hits from %s:' % hits)
     for hit in jhits:

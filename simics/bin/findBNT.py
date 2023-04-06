@@ -90,9 +90,10 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                     #    print('branch 0x%x in hits' % branch)
     return retval
 
-def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False):
-    ida_path = resimUtils.getIdaData(prog)
-    print('prog: %s  ida_path is %s' % (prog, ida_path))
+def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False):
+    #ida_path = resimUtils.getIdaData(prog)
+    ida_path = resimUtils.getIdaDataFromIni(prog, ini)
+    #print('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
         fname = '%s.hits' % ida_path
@@ -100,10 +101,13 @@ def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False)
         fname = '%s.%s.hits' % (ida_path, target)
         print('Using hits file %s' % fname)
     ''' hits are now just flat lists without functions '''
+    if not os.path.isfile(fname):
+        print('No file at %s.  Did you forget to specific the --target?' % fname)
+        return None
     with open(fname) as fh:
         hits = json.load(fh)
 
-    blocks, prog_elf = resimUtils.getBasicBlocks(prog)
+    blocks, prog_elf = resimUtils.getBasicBlocks(prog, ini)
     if blocks is None:
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
         return bnt_list
@@ -129,13 +133,15 @@ def aflBNT(prog, target, read_marks, fun_name=None, no_print=False, quiet=False)
 def main():
     parser = argparse.ArgumentParser(prog='findBNT', description='Show branches not taken for a given program.')
     parser.add_argument('prog', action='store', help='The target program')
+    parser.add_argument('ini', action='store', help='The ini file')
     parser.add_argument('-t', '--target', action='store', help='Optional target name, e.g., name of the workspace.')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')
     args = parser.parse_args()
-    bnt_list = aflBNT(args.prog, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
-    print('Found %d branches not taken.' % len(bnt_list))
+    bnt_list = aflBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
+    if bnt_list is not None:
+        print('Found %d branches not taken.' % len(bnt_list))
 
 if __name__ == '__main__':
     sys.exit(main())
