@@ -170,11 +170,11 @@ class IDAFuns():
                 retval = self.mangle[fun]
                 
             elif len(fun) > 4:
-                if '_traits' in fun:
-                    ''' TBD what level of matching matters?'''
-                    fun = fun.split('_traits')[0]
-                    fun = rmPrefix(fun)
-                    #self.lgr.debug('demangle look for fun %s' % fun)
+                #if '_traits' in fun:
+                #    ''' TBD what level of matching matters?'''
+                #    fun = fun.split('_traits')[0]
+                #    fun = rmPrefix(fun)
+                #    #self.lgr.debug('demangle look for fun %s' % fun)
                 for mf in self.mangle:
                     if mf.startswith(fun) or fun.startswith(mf):
                         retval = self.mangle[mf]
