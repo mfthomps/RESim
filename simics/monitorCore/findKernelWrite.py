@@ -90,14 +90,19 @@ class findKernelWrite():
             self.lgr.debug('findKernelWrite using arm decoder')
         else:
             self.decode = decode
+        self.start_cycles = None
+        self.stop_cycles = None
 
         self.go(addr)
 
 
     def go(self, addr):
         ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
+        self.start_cycles = self.cpu.cycles
         cli.quiet_run_command('si')
         self.addr = addr
+
+
         phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
             self.lgr.error('findKernelWrite requested address %x, not mapped?' % addr)
@@ -109,12 +114,12 @@ class findKernelWrite():
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         dumb, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
+        self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
 
-        #self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
+        self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
@@ -122,7 +127,7 @@ class findKernelWrite():
 		    self.brokenHap, self.cpu.cycles)
 
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
-        #self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
+        self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         SIM_run_alone(SIM_run_command, 'reverse')
 
     def checkInitialBufferAlone(self, addr):
@@ -204,6 +209,10 @@ class findKernelWrite():
             self.context_manager.setIdaMessage(ida_message)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
+        elif self.cpu.cycles == self.start_cycles:
+            self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
+            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
+            self.vt_handler(my_memory)
         else:
             location = memory.logical_address
             phys = memory.physical_address
@@ -217,7 +226,8 @@ class findKernelWrite():
 		    self.stopToCheckWriteCallback, offset)
         #SIM_run_command('reverse')
         SIM_break_simulation('vt_handler')
-        self.lgr.debug('addStopHapForWriteAlone')
+        self.stop_cycles = self.cpu.cycles
+        self.lgr.debug('addStopHapForWriteAlone cycles 0x%x' % self.cpu.cycles)
 
 
     def writeCallback(self, cpu, third, forth, memory):
@@ -233,6 +243,7 @@ class findKernelWrite():
         self.lgr.debug('writeCallback location 0x%x phys 0x%x len %d  type %s' % (location, physical, length, type_name))
 
         self.lgr.debug('writeCallback')
+        self.stop_cycles = self.cpu.cycles
         SIM_run_alone(self.thinkWeWrote, 0)
 
     def deleteBroken(self, dumb):
@@ -269,6 +280,7 @@ class findKernelWrite():
     def stopToCheckWriteCallback(self, offset, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('stopToCheckWriteCallback, eip: 0x%x params %s %s %s  cycle: 0x%x' % (eip, one, exception, error_string, self.cpu.cycles))
+            
         if self.rev_write_hap is not None:
             self.lgr.warning('stopToCheckWrite hit but rev_write_hap set, ignore')
             return
@@ -436,6 +448,10 @@ class findKernelWrite():
         address and continue to user space.
     '''
     def thinkWeWrote(self, offset):
+        ''' TBD hacking drift on break_simulation?'''
+        if self.cpu.cycles != self.stop_cycles:
+            self.lgr.debug('thinkWeWrote, bad cycle.  fix it?')
+            self.rev_to_call.skipToTest(self.stop_cycles)
         #if self.stop_write_hap is None:
         #    return
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')

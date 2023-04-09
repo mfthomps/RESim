@@ -1964,7 +1964,7 @@ class GenMonitor():
                 self.lgr.error('stopAtKernelWrite failed to read from addr 0x%x' % addr)
                 self.skipAndMail()
                 return
-            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d' % (value, addr, num_bytes))
+            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d cycles: 0x%x' % (value, addr, num_bytes, cpu.cycles))
             cell = self.cell_config.cell_context[self.target]
             if self.find_kernel_write is None:
                 self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
