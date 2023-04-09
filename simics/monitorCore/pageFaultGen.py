@@ -567,6 +567,7 @@ class PageFaultGen():
 
     def hasPendingPageFault(self, pid):
         if pid in self.pending_faults:
+            self.lgr.debug('pageFaultGen pending fault cr2 0x%x' % self.pending_faults[pid].cr2)
             return True
         else:
             return False
