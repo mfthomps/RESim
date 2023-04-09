@@ -44,7 +44,7 @@ def ioHandler(read_array, stop, lgr):
                 except:
                     lgr.debug('read error, must be closed.')
                     return
-                if len(data.decode().strip()) > 0:
+                if len(data.decode(errors='ignore').strip()) > 0:
                     fh.write(data+b'\n')
                     fh.flush()
                    
