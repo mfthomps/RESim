@@ -1373,7 +1373,7 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, pid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
+        #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
             if call_param.match_param.__class__.__name__ == 'PidFilter':
                 if pid != call_param.match_param.pid:
@@ -1739,7 +1739,7 @@ class Syscall():
                     self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
  
         elif callname == 'mmap' or callname == 'mmap2':        
-            self.lgr.debug('syscall mmap')
+            #self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
             '''
             if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0:
@@ -1770,19 +1770,19 @@ class Syscall():
                 prot = frame['param3']
                 ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
-                self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
+                #self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
             else:
                 fd = frame['param5']
                 prot = frame['param3']
                 ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
-                if self.watch_first_mmap is not None:
-                    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
-                else:
-                    self.lgr.debug('syscall mmap watch_first_mmap is none')
+                #if self.watch_first_mmap is not None:
+                #    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
+                #else:
+                #    self.lgr.debug('syscall mmap watch_first_mmap is none')
                 self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
             is_ex = prot & 4
-            self.lgr.debug('is exec? %d' % is_ex)
+            #self.lgr.debug('is exec? %d' % is_ex)
             if self.watch_first_mmap == fd and is_ex:
                 self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % fd)
                 exit_info.fname = self.mmap_fname
@@ -2166,12 +2166,12 @@ class Syscall():
                                         cp = CallParams(None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                                    if syscall_info.call_params is not None:
-                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, 
-                                           self.cell_name, pid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
-                                    else:
-                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, self.cell, 
-                                           pid, syscall_info.callnum, tracing_all))
+                                    #if syscall_info.call_params is not None:
+                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d len %d trace_all %r' % (self.name, 
+                                    #       self.cell_name, pid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
+                                    #else:
+                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for pid %d call  %d no params trace_all %r' % (self.name, self.cell, 
+                                    #       pid, syscall_info.callnum, tracing_all))
                                     #self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                     #self.sharedSyscall.addExitHap(cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
