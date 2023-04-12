@@ -1384,8 +1384,8 @@ class Syscall():
                     self.lgr.debug('syscall syscallParse %s, pid filter matched, added call_param' % callname)
             elif call_param.match_param.__class__.__name__ == 'Dmod' and len(syscall_info.call_params) == 1:
                 if call_param.match_param.comm is not None and call_param.match_param.comm != comm:
-                    if comm == 'alarmsub':
-                        self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
+                    #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
+                    #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                     return
         if callname == 'open' or callname == 'openat':        
             #self.lgr.debug('syscallParse, is %s' % callname)
@@ -1981,11 +1981,11 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        self.lgr.debug('syscallHap %s context %s break_num %s cpu is %s t is %s' % (self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        cpu, comm, pid = self.task_utils.curProc() 
+        #self.lgr.debug('syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        cpu, comm, pid = self.task_utils.curProc() 
         if syscall_info.cpu != cpu:
             self.lgr.error('syscallHap wrong cell, cur: %s, expected %s' % (cpu.name, syscall_info.cpu.name))
             return
@@ -2150,8 +2150,8 @@ class Syscall():
 
 
         if syscall_info.callnum is not None:
-            self.lgr.debug('syscallHap cell %s callnum %d syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
-                 callnum, syscall_info.callnum, self.stop_on_call))
+            #self.lgr.debug('syscallHap cell %s callnum %d syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
+            #     callnum, syscall_info.callnum, self.stop_on_call))
             if syscall_info.callnum == callnum:
                 exit_info = self.syscallParse(callnum, callname, frame, cpu, pid, comm, syscall_info)
                 if exit_info is not None:

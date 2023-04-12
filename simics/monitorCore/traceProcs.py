@@ -394,7 +394,8 @@ class TraceProcs():
             if len(self.plist[pid].sockets[s]) > 0:
                 sockets = sockets + ' %s(S%s)' % (s, str(self.plist[pid].sockets[s]))
             else:
-                sockets = sockets + ' %s' % (s)
+                #sockets = sockets + ' %s' % (s)
+                pass
 
         ftype = ''
         if self.plist[pid].ftype is not None:
