@@ -323,6 +323,9 @@ gather its data prior to the process being loaded.
 
 \item {\tt debugProc(process name)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
 
+The process name is searched against the comm names, which are fifteen characters.  RESim will trucate input names to 15 characters.
+                                                               
+
 Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator.  Most of the commands listed below have analogs available from within IDA Pro, once the RESim {\tt rev.py} plugin is loaded.
 
 If execution transfers to a shared object library of interest, the associated library file can be found via the getSOFile command described below.  Load that file into IDA Pro and rebase to the SO address
@@ -1797,6 +1800,10 @@ execution paths to be missed.
 When using the UDP\_HEADER to fuzz with multiple packets, AFL may run amuck, generating lots of packets because it observes what it considers
 to be unique paths or unique crashes.  Consider putting a cap on the number of packets with the AFL\_MAX\_PACKETS ENV value. 
 
+\subsection{False crash reports}
+The primary means of detecting SEGV relies on looking for unresolved page faults when an AFL cycle ends, e.g., due to a backstop.
+False crash reports may be the result of a backstop that is too small, i.e., a large backstop will let the kernel complete the
+mapping of the page.
 
 \subsection{Why fuzz with full system simulation?}
 Fuzzing a binary often requires the binary to be led to a state in which it is prepared
@@ -2097,6 +2104,10 @@ Reverse track of data might go off the rails for a variety of reasons.  When thi
 If an AFL session seems to hang, stopping it will cause the most recent AFL data to be written to the last\_afl.io file, which can then
 be analyzed.
 instead of the full tracking.
+
+If Simics stops for no apparent reason, e.g., while doing in injectIO, view the PC and the breakpoints (list-breakpoints -all)
+and look at the logs to see if some Hap is defined for that breakpoint.  Use showHaps to see if the breakpoint is part of a hap
+managed by the genContextManager.  It may be an ad-hock break/hap, such as those used by the writeData module.
 
 \section{Data Stores}
 This section describes how RESim stores and accesses different data stores.
@@ -2477,6 +2488,9 @@ optimization schemes should not try to reduce breakpoint counts on the fly.
 \section{ToDo}
 \subsection {Msc}
 \begin{itemize}
+\item Add duration option to traceAll so it can run quitely and stop when given duration has been reached.  But must deal with
+autoMaze stops!  Prompt user to allow automaze.
+
 \item Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
 break on this like we do for execve.
 
