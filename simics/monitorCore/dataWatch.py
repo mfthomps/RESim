@@ -2884,12 +2884,13 @@ class DataWatch():
                     found = index
                     break
             if found is not None and len(self.start)>index:
-                self.lgr.debug('clearWatches, before list reset start[%d] is 0x%x, len %d' % (index, self.start[index], self.length[index]))
+                if self.start[index] is not None:
+                    self.lgr.debug('clearWatches, before list reset start[%d] is 0x%x, len %d' % (index, self.start[index], self.length[index]))
                 del self.start[index+1:]
                 del self.length[index+1:]
                 del self.hack_reuse[index+1:]
                 del self.cycle[index+1:]
-                self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x, len %d' % (index, index, self.start[index], self.length[index]))
+                #self.lgr.debug('clearWatches, reset list, index %d start[%d] is 0x%x, len %d' % (index, index, self.start[index], self.length[index]))
 
 
     def resetOrigin(self, cycle, reuse_msg=False, record_old=False):
