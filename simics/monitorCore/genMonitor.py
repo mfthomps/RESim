@@ -1020,6 +1020,9 @@ class GenMonitor():
             if prog_name is None or prog_name == 'unknown':
                 prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
                 self.lgr.debug('genMonitor debug pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
+                if prog_name is None:
+                    prog_name = self.task_utils[self.target].getCommFromPid(pid) 
+                    self.lgr.debug('genMonitor debug pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
             if self.targetFS[self.target] is not None and prog_name is not None:
                 sindex = 0
                 full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
@@ -1031,7 +1034,8 @@ class GenMonitor():
                     ''' TBD alter stackTrace to use this and buid it out'''
                     self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
-                    elf_info = self.soMap[self.target].addText(full_path, prog_name, pid)
+                    real_path = self.realPath(full_path)
+                    elf_info = self.soMap[self.target].addText(real_path, prog_name, pid)
                     if elf_info is not None:
                         self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setIdaFuns(self.ida_funs)
@@ -1057,6 +1061,7 @@ class GenMonitor():
                     self.lgr.error('Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s' % prog_name)
             if self.ida_funs is None:
+                self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
         else:
             ''' already debugging as current process '''
@@ -1162,17 +1167,29 @@ class GenMonitor():
         status = self.is_monitor_running.isRunning()
         if not status:
             SIM_continue(0)
-    
+   
+    def realPath(self, full_path):
+        retval = full_path
+        if os.path.islink(full_path):
+            parent = os.path.dirname(full_path)
+            actual = os.readlink(full_path)
+            retval = os.path.join(parent, actual)
+        return retval
+ 
     def getIDAFuns(self, full_path):
+        full_path = self.realPath(full_path)
         fun_path = full_path+'.funs'
         iterator_path = full_path+'.iterators'
         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
         root_dir = os.path.basename(root_prefix)
         self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
         if not os.path.isfile(fun_path):
-            ''' No functions file, check for symbolic links '''
+            ''' TBD REMOVE THIS...        No functions file, check for symbolic links '''
             if os.path.islink(full_path):
+                parent = os.path.dirname(full_path)
                 actual = os.readlink(full_path)
+                actual = os.path.join(parent, actual)
+                self.lgr.debug('getIDAFuns is link, actual %s' % actual)
                 fun_path = actual+'.funs'
             
         if os.path.isfile(fun_path):
