@@ -1308,6 +1308,9 @@ class GenMonitor():
             print('Need a proc name as a string')
             return
         self.lgr.debug('genMonitor debugProc')
+        if len(proc) > 15:
+            proc = proc[:16]
+            print('Process name truncated to %s to match Linux comm name' % proc)
         self.rmDebugWarnHap()
         #self.stopTrace()
         plist = self.task_utils[self.target].getPidsForComm(proc)
