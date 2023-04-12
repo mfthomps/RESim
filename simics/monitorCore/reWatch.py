@@ -127,7 +127,7 @@ class REWatch(object):
                 mem_something = dataWatch.MemSomething('charLookup', addr, f.ret_addr, None, None, None, f.ip, None, None, None)
                 mem_something.re_watch = self
                 retval =  mem_something 
-                self.lgr.error('reWatch getMemSomething returning mem_something')
+                #self.lgr.error('reWatch getMemSomething returning mem_something')
                 
         return retval
 
