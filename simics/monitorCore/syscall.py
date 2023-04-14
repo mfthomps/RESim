@@ -310,7 +310,8 @@ EXTERNAL = 1
 AF_INET = 2
 DEST_PORT = 3
 class CallParams():
-    def __init__(self, subcall, match_param, break_simulation=False, proc=None):
+    def __init__(self, name, subcall, match_param, break_simulation=False, proc=None):
+        self.name = name
         self.subcall = subcall
         self.match_param = match_param
         self.param_flags = []
@@ -318,6 +319,7 @@ class CallParams():
         self.proc = proc
         self.nth = None
         self.count = 0
+        self.call_list = []
     def toString(self):
         retval = 'subcall %s  match_param %s' % (self.subcall, str(self.match_param))
         return retval
@@ -355,10 +357,10 @@ class Syscall():
         ''' Note cell may be None, leaving it up to the context manager '''
         self.cell_name = cell_name
         self.cell = cell
-        #if cell is not None:
-        #    self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is not none, cell.name: %s' % (cell_name, name, str(call_params), cell.name))
-        #else:
-        #    self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is none.' % (cell_name, name, str(call_params)))
+        if cell is not None:
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is not none, cell.name: %s' % (cell_name, name, str(call_params), cell.name))
+        else:
+            self.lgr.debug('syscall _init_ cell_name %s, name: %s, param: %s cell is none.' % (cell_name, name, str(call_params)))
         self.top = top
         self.param = param
         self.sharedSyscall = sharedSyscall
@@ -599,7 +601,7 @@ class Syscall():
         #self.lgr.debug('do call to alone')
         SIM_run_alone(self.stopTraceAlone, None)
         #self.lgr.debug('did call to alone')
-        if self.top is not None and not self.top.remainingCallTraces():
+        if self.top is not None and not self.top.remainingCallTraces(cell_name=self.cell_name):
             self.sharedSyscall.stopTrace()
 
         for pid in self.first_mmap_hap:
@@ -1729,8 +1731,9 @@ class Syscall():
                                 self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
                                 self.syscall_info.callparams.remove(call_param)
                                 if not self.remainingDmod():
-                                    self.top.stopTrace(cell_name=self.cell_name, syscall=self)
-                                    if not self.top.remainingCallTraces() and SIM_simics_is_running():
+                                    #self.top.stopTrace(cell_name=self.cell_name, syscall=self)
+                                    self.top.rmTrace(call_param.name)
+                                    if not self.top.remainingCallTraces(cell_name=self.cell_name) and SIM_simics_is_running():
                                         self.top.notRunning(quiet=True)
                                         SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
                                     else:
@@ -1982,7 +1985,7 @@ class Syscall():
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
         cpu, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug('syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        self.lgr.debug('syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -2431,11 +2434,13 @@ class Syscall():
             if call not in self.syscall_info.call_params:
                 self.syscall_info.call_params.append(call)
                 gotone = True
+        ''' TBD inconsistent stop actions????'''
         if gotone:
-            f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
-            flist = [f1]
-            hap_clean = hapCleaner.HapCleaner(self.cpu)
-            self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+            if self.stop_action is None:
+                f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+                flist = [f1]
+                hap_clean = hapCleaner.HapCleaner(self.cpu)
+                self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
             self.lgr.debug('syscall addCallParams added params')
         else:
             pass
@@ -2456,6 +2461,18 @@ class Syscall():
         else: 
             self.lgr.error('sycall rmCallParam, but param does not exist?')
 
+    def rmCallParamName(self, call_param_name):
+        return_list = []
+        rm_list = []
+        for cp in self.syscall_info.call_params:
+            if cp.name == call_param_name:
+                rm_list.append(cp)
+            else:
+                return_list.append(cp)
+        for cp in rm_list:
+            self.syscall_info.call_params.remove(cp)
+        return return_list
+
     def getCallParams(self):
         return self.syscall_info.call_params
 
@@ -2464,6 +2481,14 @@ class Syscall():
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  return True
         return False
+
+    def hasCallParam(self, param_name):
+        retval = False
+        for call_param in self.syscall_info.call_params:
+            if call_param.name == param_name:
+                retval = True
+                break 
+        return retval
 
     def getDmods(self):
         retval = []
@@ -2511,6 +2536,7 @@ class Syscall():
                     retval = True
                     break
         return retval 
+
 
     def stopOnExit(self):
         self.stop_on_exit=True

@@ -1,0 +1,324 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+   Manage instances of the Syscall modules in different contexts.
+'''
+import syscall
+class SyscallInstance():
+    ''' Track Syscall module instances '''
+    def __init__(self, name, call_names, syscall, call_param_name, lgr):
+        ''' most recently assigned name, do not read too much into it'''
+        self.name = name
+        ''' the list of syscall names handled by the syscall instance '''
+        self.call_names = call_names
+        ''' the syscall instance '''
+        self.syscall = syscall
+        self.param_call_list = {}
+        self.param_call_list[call_param_name] = call_names
+        self.lgr = lgr
+
+    def toString(self):
+        retval = 'Name: %s  calls: %s' % (self.name, str(self.call_names))
+        return retval
+
+    def hasCall(self, name):
+        if name in self.call_names:
+            return True
+        else:
+            return False
+
+    def callsMatch(self, call_list):
+        retval = True
+        if len(call_list) == len(self.call_names):
+            for call in call_list:
+                if call not in self.call_names:
+                    retval = False
+                    break
+        else:
+            retval = False
+        return retval
+
+    def hasParamName(self, param_name):
+        return self.syscall.hasCallParam(param_name)
+
+    def stopTrace(self, immediate=False):
+        self.syscall.stopTrace(immediate=immediate)
+
+    def addCallParams(self, call_params, call_names):
+        call_param_name = call_params[0].name
+        if call_param_name in self.param_call_list:
+            self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % call_param_name)
+        else:
+            self.param_call_list[call_param_name] = call_names
+
+    def hasOtherCalls(self, call_param_name):
+        retval = []
+        for param_name in self.param_call_list:
+            if param_name == call_param_name:
+                continue
+            for call in self.param_call_list[param_name]:
+                if call not in self.param_call_list[call_param_name]:
+                    if call not in retval:
+                        retval.append(call)
+        return retval
+
+class SyscallManager():
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
+                   traceMgr, soMap, compat32, targetFS):
+        self.top = top
+        self.param = param
+        self.cpu = cpu
+        self.cell_name = cell_name
+        self.task_utils = task_utils
+        self.mem_utils = mem_utils
+        self.context_manager = context_manager
+        ''' TBD maybe traceProcs passed in for each instance if it is to be traced? or other mechanism '''
+        self.traceProcs = traceProcs
+        self.sharedSyscall = sharedSyscall
+        self.lgr = lgr
+        self.traceMgr = traceMgr
+        self.soMap = soMap
+        self.targetFS = targetFS
+        self.compat32 = compat32
+
+        self.syscall_dict = {}
+        self.trace_all = {}
+
+    def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
+                         trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None):
+   
+        if compat32 is None:
+            compat32 = self.compat32
+
+        if context is None:
+            context = self.context_manager.getContextName(self.cpu.current_context)
+            
+        cell = self.context_manager.getCellFromContext(context)
+
+        retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, None, self.sharedSyscall, 
+                               self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
+                               stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, 
+                               netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)
+        self.trace_all[context] = retval
+        return retval
+
+
+    def watchSyscall(self, context, call_list, call_params_list, name, linger=False, background=False, flist=None, 
+                     callback=None, compat32=False, stop_on_call=False):
+        ''' Create a syscall instance.  Intended for use by other modules, not by this module.
+            Assumes all of the call_params have the same call parameter name for purposes of managing the
+            call instances, e.g, an open watched for a dmod and a SO mapping.
+        '''
+        retval = None 
+        if context is None:
+            context = self.context_manager.getContextName(self.cpu.current_context)
+
+        cell = self.context_manager.getCellFromContext(context)
+
+        if len(call_params_list) == 0:
+            ''' For use in deleting syscall instances '''
+            dumb_param = syscall.CallParams(name, None, None)
+            call_params_list.append(dumb_param)
+            self.lgr.debug('syscallManager watchSyscall context %s, added dummy parameter with name %s' % (context, name))
+
+        call_instance = self.findCalls(call_list, context)
+        if call_instance is None:
+            retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
+                               call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
+            self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s' % (context, name))
+            ''' will have at least one call parameter, perhaps the dummy. '''
+            call_param_name = call_params_list[0].name
+            call_instance = SyscallInstance(name, call_list, retval, call_param_name, self.lgr)
+            if context not in self.syscall_dict:
+                self.syscall_dict[context] = {}
+            self.syscall_dict[context][name] = call_instance
+        else:
+            if call_instance.callsMatch(call_list):
+                call_instance.addCallParams(call_params_list, call_list)
+                self.lgr.debug('syscallManager watchSyscall, did not create new instance for %s, added params to %s' % (name, call_instance.name))
+                retval = call_instance.syscall
+            else:
+                self.lgr.debug('syscallManager watchSyscall given call list is superset of existing calls.  Delete and recreate')
+                existing_call_params = call_instance.syscall.getCallParams()
+                for cp in call_params_list:
+                    existing_call_params.append(cp)
+                call_instance.syscall.stopTrace()
+                ''' TBD what about flist and stop action?'''
+                retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
+                               call_list=call_list, call_params=existing_call_params_list, targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
+                call_instance.syscall = retval
+                call_instance.addCallParams(call_params_list, call_list)
+
+ 
+        return retval
+
+    def rmSyscall(self, call_param_name, immediate=False, context=None):
+        ''' Find and rmeove the syscall having the given call parameters name (unless it has additional call params,
+            in which case just removed the named params).
+            If the syscall instance has additional calls, remove the instance and recreate it having only 
+            the other calls.
+        '''
+        if context is None:
+            context = self.context_manager.getContextName(self.cpu.current_context)
+        call_instance = self.findInstanceByParams(call_param_name, context)
+        if call_instance is None:
+            self.lgr.debug('syscallManager rmSyscall did not find syscall instance with context %s and param name %s' % (context, call_param_name))
+        else:
+            remaining_params = call_instance.syscall.rmCallParamName(call_param_name)       
+            other_calls = call_instance.hasOtherCalls(call_param_name)
+            if len(other_calls) == 0:
+                if len(remaining_params) == 0:
+                    call_instance.stopTrace(immediate=immediate) 
+                    del self.syscall_dict[context][call_instance.name]
+                    self.lgr.debug('syscallManager rmSyscall context %s.  Removed call params %s, nothing left, remove syscall instance' % (context, call_param_name))
+                else:
+                    self.lgr.debug('syscallManager rmSyscall context %s.  Removed call params %s, syscall remains, must be other params' % (context, call_param_name))
+            else:
+                ''' Other syscalls.  Delete and recreate with other syscalls. '''
+                call_instance.stopTrace(immediate=immediate) 
+                del self.syscall_dict[context][call_instance.name]
+                ''' TBD what about the flist? '''
+                compat32 = call_instance.compat32
+                new_call_instance = self.watchSyscall(context, other_calls, remaining_params, call_instance.name, compat32=compat32) 
+                self.syscall_dict[context][call_instance.name] = new_call_instance
+                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call-instance.name))
+
+    def findInstanceByParams(self, call_param_name, context):
+        ''' Return the Syscallinstance that contains params having the given name.   Assumes only one. '''
+       
+        retval = None
+        if context in self.syscall_dict:
+            for instance_name in self.syscall_dict[context]:
+                call_instance = self.syscall_dict[context][instance_name]
+                if call_instance.hasParamName(call_param_name):
+                    retval = call_instance
+                    break
+        return retval 
+
+    def findCalls(self, call_list, context):
+        ''' Return the Syscallinstance that contains the given call list if any.'''
+       
+        retval = None
+        if context in self.syscall_dict:
+            for instance_name in self.syscall_dict[context]:
+                call_instance = self.syscall_dict[context][instance_name]
+                got_one = None
+                ok = True
+                for call in call_list:
+                    if not call_instance.hasCall(call):
+                        ok = False
+                        if got_one is not None:
+                            self.lgr.error('syscallManager findCalls instance %s has call %s but not %s.  Not handled.' % (call_instance.name, got_one, call))
+                        break
+                    else:
+                        got_one = True
+                if ok:
+                    retval = call_instance
+                    break
+        return retval 
+
+    def rmAllSyscalls(self):
+        self.lgr.debug('syscallManager rmAllSyscalls')
+        retval = False
+        rm_list = {}
+        for context in self.syscall_dict:
+            rm_list[context] = []
+            for instance_name in self.syscall_dict[context]:
+                rm_list[context].append(instance_name)
+                self.syscall_dict[context][instance_name].stopTrace()
+                self.lgr.debug('syscallManager rmAllSyscalls remove %s' % instance_name)
+                retval = True
+        for context in rm_list:
+            for instance_name in rm_list[context]:
+                del self.syscall_dict[context][instance_name]
+            del self.syscall_dict[context]
+
+        rm_context = []
+        for context in self.trace_all:
+            self.lgr.debug('syscallManager rmAllSyscalls remove trace_all for context %s' % context)
+            self.trace_all[context].stopTrace()
+            rm_context.append(context)
+            retval = True
+        for context in rm_context:
+            del self.trace_all[context]
+        return retval
+        
+
+    #def stopTrace(self, param_name):
+
+    def stopTracexx(self, syscall):
+        ''' TBD not done'''
+        dup_traces = self.call_traces[cell_name].copy()
+        for call in dup_traces:
+            syscall_trace = dup_traces[call]
+            if syscall is None or syscall_trace == syscall: 
+                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
+                syscall_trace.stopTrace(immediate=True)
+                #self.lgr.debug('genMonitor back from stopTrace')
+                self.rmCallTrace(cell_name, call)
+
+        if cell_name in self.trace_all and (syscall is None or self.trace_all[cell_name]==syscall):
+            self.lgr.debug('call stopTrace for trace_all')
+            self.trace_all[cell_name].stopTrace(immediate=False)
+            del self.trace_all[cell_name]
+
+            for exit in self.exit_maze:
+                exit.rmAllBreaks()
+        if cell_name not in self.trace_all and len(self.call_traces[cell_name]) == 0:
+            self.traceMgr[cell_name].close()
+
+        #if self.instruct_trace is not None:
+        #    self.stopInstructTrace()
+
+    def remainingCallTraces(self, exception=None, context=None):
+        retval = False
+        if context is None:
+            context = self.context_manager.getContextName(self.cpu.current_context)
+        if exception is None:
+            if context in self.syscall_dict and len(self.syscall_dict[context])>0:
+                retval = True 
+        else:
+            if context in self.syscall_dict:
+                if len(self.syscall_dict[context]) == 1:
+                    instance = self.findCalls([exception], context)
+                    if instance is None:
+                        retval = True
+                elif len(self.syscall_dict[context]) > 1:
+                        retval = True
+                   
+        return retval 
+
+    def showSyscalls(self):
+        for context in self.syscall_dict:
+            print('\tcontext: %s' % context)
+            for instance in self.syscall_dict[context]:
+                out_string = self.syscall_dict[context][instance].toString()
+                print('\t\t%s' % out_string)
