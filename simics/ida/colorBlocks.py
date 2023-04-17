@@ -117,38 +117,34 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
                 ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
                 #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
 
-def colorBlocks(in_path=None):
+def colorBlocks():
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
         print('RESIM_IDA_DATA not defined.')
     else:
-        #in_path = idaapi.get_root_filename()
-        if in_path is None:
-            ''' TBD this is broken, argv1 is sometimes other param, e.g., color'''
-            in_path = idc.eval_idc("ARGV[1]")
-        base = os.path.basename(in_path)
-        fname = os.path.join(resim_ida_data, base, base)
-        latest_hits_file = fname+'.hits' 
-        #print('latest_hits_file is %s' % latest_hits_file)
-        if not os.path.isfile(latest_hits_file):
-            ida_db_path = os.getenv('IDA_DB_PATH')
-            if ida_db_path is not None:
-                base = os.path.basename(ida_db_path)
-                base = base.rsplit('.',1)[0]
-                fname = os.path.join(resim_ida_data, base, base)
-                latest_hits_file = fname+'.hits' 
-            else:
-                print('no latest hits file at %s, and no IDA_DB_PATH env variable defined' % latest_hits_file)
+        here = os.getcwd()
+        print('here is %s' % here)
+        if here.startswith(resim_ida_data):
+            less_ida_data = here[len(resim_ida_data):]
+            print('less_ida_data is %s' % less_ida_data)
+            root = less_ida_data.split(os.path.sep)[1]
+            print('root is %s' % root)
+            fname = idaversion.get_input_file_path()
+            base = os.path.basename(fname)
+            base = base.rsplit('.',1)[0]
+            fname = os.path.join(resim_ida_data, root, base, base)
+            latest_hits_file = fname+'.hits' 
                 
             
-        if os.path.isfile(latest_hits_file):
-            print('Using latest_hits_file is %s' % latest_hits_file)
-            all_hits_file = fname+'.all.hits'
-            pre_hits_file = fname+'.pre.hits'
-            doColor(latest_hits_file, all_hits_file, pre_hits_file)
+            if os.path.isfile(latest_hits_file):
+                print('Using latest_hits_file is %s' % latest_hits_file)
+                all_hits_file = fname+'.all.hits'
+                pre_hits_file = fname+'.pre.hits'
+                doColor(latest_hits_file, all_hits_file, pre_hits_file)
+            else:
+                print('no latest hits file at %s' % latest_hits_file)
         else:
-            print('no latest hits file at %s' % latest_hits_file)
+            print('IDA must be started from the RESIM_ROOT_PREFIX directory per your ini file.')
 
 if __name__ == '__main__':
-    fname = idaversion.get_root_file_name()
-    colorBlocks(fname)
+    colorBlocks()
