@@ -2356,6 +2356,7 @@ class GenMonitor():
         if target in self.trace_all:
             self.trace_all[target].setRecordFD(record_fd)
             print('Was tracing.  Limit to FD recording? %r' % (record_fd))
+            self.lgr.debug('traceAll Was tracing.  Limit to FD recording? %r' % (record_fd))
         else:
             context = self.context_manager[target].getDefaultContext()
             cell = self.cell_config.cell_context[target]
@@ -2461,7 +2462,7 @@ class GenMonitor():
             cpu = self.cell_config.cpuFromCell(self.target)
             self.traceMgr[self.target].open('/tmp/execve.txt', cpu)
 
-        self.syscallManager[self.target].watchSyscall(None, ['execve'], call_params, 'execve')
+        self.syscallManager[self.target].watchSyscall(None, ['execve'], call_params, 'execve', flist=flist)
         ''' create own syscall instance if watching tasks or not tracing all calls '''
         #if self.target not in self.trace_all or self.trace_all[self.target] is None or self.context_manager[self.target].watchingTasks():
         #    self.call_traces[self.target]['execve'] = syscall.Syscall(self, self.target, cell, self.param[self.target], self.mem_utils[self.target], 
@@ -2996,7 +2997,7 @@ class GenMonitor():
                 if kbuf:
                     kbuffer_mod = self.kbuffer[self.target] 
                     self.sharedSyscall[self.target].setKbuffer(kbuffer_mod)
-                the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, [call_params], name, linger=linger, background=background, flist_in=flist_in, 
+                the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
                 #the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
                 #                       self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
@@ -3059,7 +3060,7 @@ class GenMonitor():
             ''' Given callback functions, use those instead of skip_and_mail '''
             skip_and_mail = False
 
-        the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToInput', linger=linger, flist_in=flist_in, 
+        the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToInput', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail)
         #the_syscall = syscall.Syscall(self, self.target, None, self.param[self.target], self.mem_utils[self.target], self.task_utils[self.target], 
         #                       self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target],
@@ -4250,7 +4251,8 @@ class GenMonitor():
         self.lgr.debug('watchROP')
         for t in self.ropCop:
             self.lgr.debug('ropcop instance %s' % t)
-        self.ropCop[self.target].watchROP(watching=watching)
+        if self.target in self.ropCop:
+            self.ropCop[self.target].watchROP(watching=watching)
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''

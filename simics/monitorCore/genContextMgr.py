@@ -1254,6 +1254,7 @@ class GenContextMgr():
         return retval
 
     def getContexts(self):
+        ''' return context names '''
         retval = []
         for c in self.map_context:
             retval.append(c)

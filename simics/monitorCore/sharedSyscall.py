@@ -454,6 +454,7 @@ class SharedSyscall():
                     return trace_msg 
                 trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, pid, 
                      exit_info.old_fd, exit_info.sock_struct.length, eax, exit_info.retval_addr, src, s))
+                self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length was the given length, changed to count'''

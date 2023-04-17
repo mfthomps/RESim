@@ -758,7 +758,7 @@ class Syscall():
         if self.targetFS is not None and prog_string is not None:
             full_path = self.targetFS.getFull(prog_string, self.lgr)
             if full_path is None:
-                self.lgr.debug('Unable to get full path for %s' % prog_string)
+                #self.lgr.debug('Unable to get full path for %s' % prog_string)
                 return
             if os.path.isfile(full_path):
                 elf_info = None
@@ -777,7 +777,8 @@ class Syscall():
                         self.soMap.noText(prog_string, pid)
                     retval = False
                     ftype = magic.from_file(full_path)
-                    self.traceProcs.setFileType(pid, ftype) 
+                    if self.traceProcs is not None:
+                        self.traceProcs.setFileType(pid, ftype) 
             else:
                 self.lgr.debug('addElf, no file at %s' % full_path)
                 if self.soMap is not None:
@@ -851,7 +852,7 @@ class Syscall():
                     base = prog_string
                 else:
                     base = os.path.basename(prog_string)
-                self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
+                #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
                 if base.startswith(cp.match_param):
                     ''' is program file we are looking for.  do we care if it is a binary? '''
                     self.lgr.debug('matches base')
@@ -1211,13 +1212,13 @@ class Syscall():
             else:
                 ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
-                #self.lgr.debug('syscall parse socket rec... subcall is %s ss.fd is %s match_param is %s' % (call_param.subcall, str(ss.fd), str(call_param.match_param)))
+                self.lgr.debug('syscall parse socket rec... subcall is %s ss.fd is %s match_param is %s' % (call_param.subcall, str(ss.fd), str(call_param.match_param)))
                 if (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
-                        self.lgr.debug('call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
+                        self.lgr.debug('syscall parse socket recv call_param.nth not none, is %d, count incremented to  %d' % (call_param.nth, call_param.count))
                         if call_param.count >= call_param.nth:
-                            self.lgr.debug('count >= param, set it')
+                            self.lgr.debug('count >= param, set exit_info.call_params to catch return')
                             exit_info.call_params = call_param
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
@@ -1349,7 +1350,7 @@ class Syscall():
                 rcount = min(optlen, 80)
                 thebytes =  self.mem_utils.getBytesHex(self.cpu, rcount, optval)
                 if thebytes is not None:
-                    optval_val = 'option: %s' % thebytes
+                    optval_val = 'option: %s' % str(thebytes)
                 else:
                     optval_val = 'option: page not mapped'
             ida_msg = '%s - %s pid:%d FD: %d level: %d  optname: %d optval: 0x%x  oplen %d  %s' % (callname, 
@@ -1889,7 +1890,7 @@ class Syscall():
                         #self.lgr.debug('will delete hap %s' % str(hc.hap))
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
-                #self.lgr.debug('will delete hap %s' % str(self.stop_hap))
+                self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
                 for bp in self.stop_action.breakpoints:
                     self.context_manager.genDeleteBreakpoint(bp)
                 ''' check functions in list '''
@@ -1905,6 +1906,7 @@ class Syscall():
                     self.traceMgr.flush()
                 self.top.idaMessage() 
                 ''' Run the stop action, which is a hapCleaner class '''
+                self.lgr.debug('syscall stopHap run stop_action')
                 self.stop_action.run(cb_param=msg)
 
                 if self.call_list is not None:

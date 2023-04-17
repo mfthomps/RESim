@@ -113,12 +113,12 @@ class SyscallManager():
             compat32 = self.compat32
 
         if context is None:
-            context = self.context_manager.getContextName(self.cpu.current_context)
+            context = self.getDebugContextName()
             
         cell = self.context_manager.getCellFromContext(context)
-
+        self.lgr.debug('syscallManager watchAllSyscalls name %s context %s' % (name, context))
         retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, None, self.sharedSyscall, 
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
                                self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
                                stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, 
@@ -126,16 +126,24 @@ class SyscallManager():
         self.trace_all[context] = retval
         return retval
 
+    def getDebugContextName(self):
+        ''' return the debugging context if debugging.  Otherwise return default context '''
+        debug_pid, debug_cpu = self.context_manager.getDebugPid()
+        if debug_pid is not None:
+            context = self.context_manager.getRESimContextName()
+        else:
+            context = self.context_manager.getDefaultContextName()
+        return context 
 
     def watchSyscall(self, context, call_list, call_params_list, name, linger=False, background=False, flist=None, 
-                     callback=None, compat32=False, stop_on_call=False):
+                     callback=None, compat32=False, stop_on_call=False, skip_and_mail=True, kbuffer=None):
         ''' Create a syscall instance.  Intended for use by other modules, not by this module.
             Assumes all of the call_params have the same call parameter name for purposes of managing the
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
         retval = None 
         if context is None:
-            context = self.context_manager.getContextName(self.cpu.current_context)
+            context = self.getDebugContextName()
 
         cell = self.context_manager.getCellFromContext(context)
 
@@ -148,9 +156,10 @@ class SyscallManager():
         call_instance = self.findCalls(call_list, context)
         if call_instance is None:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
-                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
+                               stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
             self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s' % (context, name))
             ''' will have at least one call parameter, perhaps the dummy. '''
             call_param_name = call_params_list[0].name
@@ -171,7 +180,7 @@ class SyscallManager():
                 call_instance.syscall.stopTrace()
                 ''' TBD what about flist and stop action?'''
                 retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, None, self.sharedSyscall, self.lgr, self.traceMgr,
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=existing_call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
                 call_instance.syscall = retval
@@ -187,7 +196,7 @@ class SyscallManager():
             the other calls.
         '''
         if context is None:
-            context = self.context_manager.getContextName(self.cpu.current_context)
+            context = self.getDebugContextName()
         call_instance = self.findInstanceByParams(call_param_name, context)
         if call_instance is None:
             self.lgr.debug('syscallManager rmSyscall did not find syscall instance with context %s and param name %s' % (context, call_param_name))
@@ -301,7 +310,7 @@ class SyscallManager():
     def remainingCallTraces(self, exception=None, context=None):
         retval = False
         if context is None:
-            context = self.context_manager.getContextName(self.cpu.current_context)
+            context = self.getDebugContextName()
         if exception is None:
             if context in self.syscall_dict and len(self.syscall_dict[context])>0:
                 retval = True 
