@@ -151,25 +151,25 @@ def getIdaData(full_path, root_prefix):
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
     else: 
-        print('full_path %s' % full_path)
+        #print('full_path %s' % full_path)
         base = os.path.basename(full_path)
         root_base = os.path.basename(root_prefix)
-        print('root_prefix %s' % root_prefix)
+        #print('root_prefix %s' % root_prefix)
         new_path = os.path.join(resim_ida_data, root_base, base)
         old_path = os.path.join(resim_ida_data, base)
-        print('old %s' % old_path)
-        print('new %s' % new_path)
+        #print('old %s' % old_path)
+        #print('new %s' % new_path)
         if not os.path.isdir(new_path): 
             if os.path.isdir(old_path):
                 ''' Use old path style '''
                 retval = os.path.join(old_path, base)
-                print('Using old style ida data path %s' % retval)
+                #print('Using old style ida data path %s' % retval)
             else:
                 retval = os.path.join(new_path, base)
-                print('Using new style ida data path %s' % retval)
+                #print('Using new style ida data path %s' % retval)
         else:
             retval = os.path.join(new_path, base)
-            print('no existing ida data path %s' % retval)
+            #print('no existing ida data path %s' % retval)
         
     return retval
 
