@@ -2139,6 +2139,8 @@ class Syscall():
             self.lgr.debug('syscallHap %s exit of pid:%d stop_on_exit: %r' % (self.name, pid, self.stop_on_exit))
             if callname == 'exit_group':
                 self.handleExit(pid, ida_msg, exit_group=True)
+            elif callname == 'tgkill' and sig == 6:
+                self.handleExit(pid, ida_msg, killed=True)
             else:
                 self.handleExit(pid, ida_msg)
             self.context_manager.stopWatchPid(pid)
@@ -2227,13 +2229,13 @@ class Syscall():
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
             debugging_pid, dumb = self.context_manager.getDebugPid()
-            #self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r' % (self.name, pid, last_one, self.debugging, retain_so))
-            if (last_one or (exit_group and pid == debugging_pid)) and self.debugging:
+            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r exit_group %r debugging_pid %d' % (self.name, pid, last_one, self.debugging, retain_so, exit_group, debugging_pid))
+            if (killed or last_one or (exit_group and pid == debugging_pid)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
                     self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
                     SIM_run_alone(self.top.undoDebug, None)
-                self.lgr.debug('syscall handleExit exit or exit_group pid:%d' % pid)
+                self.lgr.debug('syscall handleExit exit or exit_group or tgkill pid:%d' % pid)
                 self.sharedSyscall.stopTrace()
                 ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
                 self.task_utils.setExitPid(pid)

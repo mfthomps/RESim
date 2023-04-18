@@ -1661,6 +1661,11 @@ class GenMonitor():
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
             SIM_run_alone(self.command_callback, self.command_callback_param)
         else:
+            cpl = memUtils.getCPL(cpu)
+            if cpl == 0:
+                SIM_run_alone(self.skipBackToUser, 1)
+                self.lgr.debug('skipAndMail, back from skip')
+                
             self.restoreDebugBreaks()
 
     def goToOrigin(self, debugging=True):
@@ -1979,12 +1984,15 @@ class GenMonitor():
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         cpl = memUtils.getCPL(cpu)
 
-    def skipBackToUser(self):
+    def skipBackToUser(self, extra=0):
         self.lgr.debug('skipBackToUser')
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         self.rev_to_call[self.target].jumpOverKernel(pid)
 
-    def reverseToUser(self):
+    def reverseToUser(self, force=False):
+        if not force:
+            print('Try using skipBackToUser instead.  Or force=True if you insist, but it may not return and may end in the wrong pid.')
+            return
         ''' Note: may not stop in current pid, see skipBacktoUser '''
         self.removeDebugBreaks()
         cell = self.cell_config.cell_context[self.target]
@@ -2519,7 +2527,10 @@ class GenMonitor():
             self.lgr.debug('debugExitHap no so map for %s' % self.target)
         
         context=self.context_manager[self.target].getRESimContextName()
-        self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, ['exit_group'], [], 'debugExit')
+
+        exit_calls = ['exit_group', 'tgkill']
+        self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
+
 
         #self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, None, self.param[self.target], 
         #               self.mem_utils[self.target], self.task_utils[self.target], 
