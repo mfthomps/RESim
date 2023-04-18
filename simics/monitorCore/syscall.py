@@ -2229,7 +2229,7 @@ class Syscall():
                 self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
             last_one = self.context_manager.rmTask(pid, killed) 
             debugging_pid, dumb = self.context_manager.getDebugPid()
-            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r exit_group %r debugging_pid %d' % (self.name, pid, last_one, self.debugging, retain_so, exit_group, debugging_pid))
+            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r exit_group %r debugging_pid %s' % (self.name, pid, last_one, self.debugging, retain_so, exit_group, str(debugging_pid)))
             if (killed or last_one or (exit_group and pid == debugging_pid)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
