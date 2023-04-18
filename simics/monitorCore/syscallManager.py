@@ -181,7 +181,7 @@ class SyscallManager():
                 ''' TBD what about flist and stop action?'''
                 retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
-                               call_list=call_list, call_params=existing_call_params_list, targetFS=self.targetFS, linger=linger, 
+                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
                 call_instance.syscall = retval
                 call_instance.addCallParams(call_params_list, call_list)
@@ -233,25 +233,18 @@ class SyscallManager():
         return retval 
 
     def findCalls(self, call_list, context):
-        ''' Return the Syscallinstance that contains the given call list if any.'''
+        ''' Return the Syscallinstance that contains at least one call in the given call list if any.
+            Does not look for multiple instances with same call.  TBD?
+        '''
        
         retval = None
         if context in self.syscall_dict:
             for instance_name in self.syscall_dict[context]:
                 call_instance = self.syscall_dict[context][instance_name]
-                got_one = None
-                ok = True
                 for call in call_list:
-                    if not call_instance.hasCall(call):
-                        ok = False
-                        if got_one is not None:
-                            self.lgr.error('syscallManager findCalls instance %s has call %s but not %s.  Not handled.' % (call_instance.name, got_one, call))
+                    if call_instance.hasCall(call):
+                        retval = call_instance
                         break
-                    else:
-                        got_one = True
-                if ok:
-                    retval = call_instance
-                    break
         return retval 
 
     def rmAllSyscalls(self):
@@ -308,6 +301,9 @@ class SyscallManager():
         #    self.stopInstructTrace()
 
     def remainingCallTraces(self, exception=None, context=None):
+        ''' Are there any call traces remaining, if so return True
+            unless the only remaining trace is named by the given exception '''
+            
         retval = False
         if context is None:
             context = self.getDebugContextName()
@@ -319,6 +315,7 @@ class SyscallManager():
                 if len(self.syscall_dict[context]) == 1:
                     instance = self.findCalls([exception], context)
                     if instance is None:
+                        ''' only one, but not the exception '''
                         retval = True
                 elif len(self.syscall_dict[context]) > 1:
                         retval = True
