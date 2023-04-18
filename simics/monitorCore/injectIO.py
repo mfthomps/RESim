@@ -254,6 +254,8 @@ class InjectIO():
                 self.lgr.debug('injectIO enabled coverage')
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
+            if self.max_len < bytes_wrote:
+                self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
             if not self.stay:
                 if self.break_on is not None:
                     self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
