@@ -32,8 +32,9 @@ else:
         print(glist[0]) 
     hits1 = json.load(open(glist[0]))
 
-sorted_hits = sorted(hits1.items(), key=lambda x:x[1])
+sorted_hits = sorted(hits1.items(), key=lambda x:x[1]['cycle'])
 for hitkey in sorted_hits:
     hit = int(hitkey[0])
     print('hit: 0x%x' % hit)
+print('Total %d blocks' % len(sorted_hits))
 
