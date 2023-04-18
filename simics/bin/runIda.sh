@@ -34,7 +34,7 @@ old_dir=$RESIM_IDA_DATA/$target_base
 new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
     echo "Sorry, paths relative to RESIM_IDA_DATA have changed."
-    echo "Also, runIda.sh assume you are running from the file system root (per your ini file)."
+    echo "Also, runIda.sh assumes you are running from the file system root (per your ini file)."
     echo "If $old_dir is where the ida data is, rename it to $new_dir"
     echo "Or, if $old_dir is from some other system, fix its path, change its name, or remove it."
     exit
