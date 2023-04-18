@@ -543,7 +543,7 @@ class reverseToCall():
         self.tryBackOne(my_args)
 
     def jumpOverKernel(self, pid):
-        ''' returns True if skip works and reg unchanged, False if changed or None if left in kernel'''
+        ''' Jump backwards over the kernel.  Returns True if skip works and reg unchanged, False if changed or None if left in kernel'''
         ''' We were stepping backwards and entered the kernel.  '''
         self.pid = pid
         retval = False
@@ -672,11 +672,11 @@ class reverseToCall():
         frame, closest_call = self.getPreviousCycleFrame(pid)
         if closest_fault is None or closest_call > closest_fault:
             self.lgr.debug('tryRecentCycle skipping to recent call')
-            self.skipToTest(closest_call)
+            self.skipToTest(closest_call-1)
             retval = True
         elif closet_fault is not None: 
             self.lgr.debug('tryRecentCycle skipping to recent fault')
-            self.skipToTest(closest_fault)
+            self.skipToTest(closest_fault-1)
             retval = True
         return retval
         
