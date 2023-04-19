@@ -27,6 +27,7 @@ class REWatch(object):
         self.map_length = []
         self.map_read_hap = []
         self.result_read_hap = {}
+        self.result_block_hap = {}
         self.result_watch_list = []
         self.hit_list = []
         self.char_addr_list = []
@@ -166,6 +167,9 @@ class REWatch(object):
                 pass
         #self.lgr.debug('REMap stopWatch removed read haps')
         del self.map_read_hap[:]
+        if self.result_block_hap is not None:
+            self.context_manager.genDeleteHap(self.result_block_hap)
+            self.result_block_hap = None
 
     def mapReadHap(self, index, an_object, breakpoint, memory):
         addr = memory.logical_address
@@ -200,27 +204,29 @@ class REWatch(object):
         elif addr in self.result_watch_list:
             ''' assume over-write or free? remove the watch '''
             
-            self.lgr.debug('reWatch resultBlockHap assume over-write or free? remove the watch on addr 0x%x' % addr)
-            SIM_run_alone(self.stopResultWatch,addr)
+            if addr in self.result_read_hap:
+                self.lgr.debug('reWatch resultBlockHap assume over-write or free? remove the watch on addr 0x%x' % addr)
+                SIM_run_alone(self.stopResultWatch,addr)
 
-    def watchResultBlock(self, return_ptr):
-        ''' TBD wag '''
-        start = return_ptr + 20
-        length = 80
-        self.lgr.debug('reWatch watchResultBlock set write hap on 0x%x %d bytes' % (start, length))
-        context = self.context_manager.getRESimContext()
-        break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Write, start, length, 0)
-        self.result_block_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.resultBlockHap, None, break_num, 'reWatchResultBlock')
+    def watchResultBlock(self):
+        if self.result_block_hap is not None and self.return_ptr is not None:
+            ''' TBD wag '''
+            start = self.return_ptr + 20
+            length = 80
+            self.lgr.debug('reWatch watchResultBlock set write hap on 0x%x %d bytes' % (start, length))
+            context = self.context_manager.getRESimContext()
+            break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Write, start, length, 0)
+            self.result_block_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.resultBlockHap, None, break_num, 'reWatchResultBlock')
 
     def watchCharReference(self, ret_addr):
         self.lgr.debug('reWatch watchCharReference')
-        return_ptr = self.mem_utils.readPtr(self.cpu, ret_addr)
-        if return_ptr is None:
+        self.return_ptr = self.mem_utils.readPtr(self.cpu, ret_addr)
+        if self.return_ptr is None:
             self.lgr.debug('reWatch watchCharReference got none reading reaturn_ptr from 0x%x' % ret_addr)
             return
-        found_ptr = self.mem_utils.readPtr(self.cpu, return_ptr)
+        found_ptr = self.mem_utils.readPtr(self.cpu, self.return_ptr)
         if found_ptr is None:
-            self.lgr.debug('reWatch watchCharReference got none reading found_ptr from 0x%x' % return_ptr)
+            self.lgr.debug('reWatch watchCharReference got none reading found_ptr from 0x%x' % self.return_ptr)
             return
         length = found_ptr - self.addr
         self.lgr.debug('reWatch watchCharReference length %d' % length)
@@ -240,7 +246,7 @@ class REWatch(object):
                         if points_to == (char_addr+1):
                             self.lgr.debug('DING DING DING 0x%x' % char_addr)
                     '''
-        self.watchResultBlock(return_ptr) 
+        self.watchResultBlock() 
 
     def setResultBreakRange(self, i_am_alone=False):
         #self.lgr.debug('reWatch setResultBreakRange')
@@ -261,6 +267,8 @@ class REWatch(object):
             self.context_manager.genDeleteHap(self.result_read_hap[addr], immediate=immediate)
 
         self.result_read_hap = {}
+
+        self.watchResultBlock()
 
     def resultReadHap(self, addr, an_object, breakpoint, memory):
         if addr not in self.result_read_hap:
