@@ -125,7 +125,7 @@ class REWatch(object):
             if f.ret_addr is None:
                 self.lgr.error('reWatch getMemSomething f.ret_addr is None')
             else:
-                mem_something = dataWatch.MemSomething('charLookup', addr, f.ret_addr, None, None, None, f.ip, None, None, None)
+                mem_something = dataWatch.MemSomething('charLookup', f.fun_addr, addr, f.ret_addr, None, None, None, f.ip, None, None, None)
                 mem_something.re_watch = self
                 retval =  mem_something 
                 #self.lgr.error('reWatch getMemSomething returning mem_something')
