@@ -1838,6 +1838,7 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
             self.removeDebugBreaks()
+            self.stopTrackIO()
             reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
                            self.lgr, extra_back=extra_back)
             self.lgr.debug('back from reverseToAddr')
@@ -2520,25 +2521,19 @@ class GenMonitor():
 
     def debugExitHap(self, flist=None): 
         ''' intended to stop simultion if the threads we are debugging all exit '''
-        somap = None
-        if self.target in self.soMap:
-            somap = self.soMap[self.target]
-        else:
-            self.lgr.debug('debugExitHap no so map for %s' % self.target)
+        if self.target not in self.exit_group_syscall:
+            somap = None
+            if self.target in self.soMap:
+                somap = self.soMap[self.target]
+            else:
+                self.lgr.debug('debugExitHap no so map for %s' % self.target)
         
-        context=self.context_manager[self.target].getRESimContextName()
+            context=self.context_manager[self.target].getRESimContextName()
 
-        exit_calls = ['exit_group', 'tgkill']
-        self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
+            exit_calls = ['exit_group', 'tgkill']
+            self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
+            #self.lgr.debug('debugExitHap')
 
-
-        #self.exit_group_syscall[self.target] = syscall.Syscall(self, self.target, None, self.param[self.target], 
-        #               self.mem_utils[self.target], self.task_utils[self.target], 
-        #               self.context_manager[self.target], None, self.sharedSyscall[self.target], self.lgr, self.traceMgr[self.target], 
-        #               call_list=['exit_group'], soMap=somap, compat32=self.is_compat32, name="debugExitHap")
-        cpu = self.cell_config.cpuFromCell(self.target)
-        #self.lgr.debug('debugExitHap compat32: %r syscall is %s context: %s ' % (self.is_compat32, str(self.exit_group_syscall[self.target]),
-        #       cpu.current_context))
 
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
@@ -2572,7 +2567,7 @@ class GenMonitor():
     def restoreDebugBreaks(self, was_watching=False):
          
         if not self.debug_breaks_set:
-            #self.lgr.debug('restoreDebugBreaks')
+            self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
             self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
@@ -2620,6 +2615,7 @@ class GenMonitor():
             self.track_threads[self.target].stopTrack(immediate=immediate)
         if self.target in self.exit_group_syscall:
             self.syscallManager[self.target].rmSyscall('debugExit', immediate=immediate, context=self.context_manager[self.target].getRESimContextName())
+            self.lgr.debug('genMon removeDebugBreaks removed debugExit')
             #self.exit_group_syscall[self.target].stopTrace(immediate=immediate)
             del self.exit_group_syscall[self.target]
         if self.target in self.ropCop:
@@ -3863,6 +3859,7 @@ class GenMonitor():
             self.coverage.saveCoverage()
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
+        self.dataWatch[self.target].pickleFunEntries(self.run_from_snap)
 
     def clearWatches(self, cycle=None):
         self.dataWatch[self.target].clearWatches(cycle=cycle)

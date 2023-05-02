@@ -1,3 +1,27 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 from simics import *
 import cli
 import pageUtils
@@ -15,6 +39,7 @@ import readLibTrack
 import net
 import os
 import sys
+import pickle
 import traceback
 import reWatch
 from resimHaps import *
@@ -103,11 +128,12 @@ class DataWatch():
         self.move_cycle = 0
         self.ida_funs = None
         self.fun_mgr = None
+        ''' optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
+        self.mem_fun_entries = {}
+        self.added_mem_fun_entry = False
+
         self.resetState()
-        ''' hack to avoid multiple call_haps?'''
-        self.vt_cycle = 0
-        ''' hack to get around what looks like a Simics reversing bug '''
-        self.last_good_vt = None
+
         ''' hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
         self.recent_fgets = None
         self.recent_reused_index=None
@@ -115,6 +141,7 @@ class DataWatch():
         self.me_trace_malloc = False
 
         self.save_cycle = None
+        self.loadFunEntryPickle(run_from_snap)
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -154,8 +181,6 @@ class DataWatch():
         self.stack_buf_hap = {}
         self.stack_this = {}
         self.stack_this_hap = {}
-        ''' optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
-        self.mem_fun_entries = {}
         ''' watch for string destroy?'''
         self.destroy_entry = None
         self.destroy_hap = None
@@ -189,6 +214,7 @@ class DataWatch():
         #self.char_ptrs = []
         self.stop_hap = None
 
+        self.skip_entries = []
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
@@ -218,6 +244,7 @@ class DataWatch():
 
     def freadCallback(self, dumb, one, exception, error_string):
         self.lgr.debug('dataWatch freadCallback')
+        SIM_run_command('enable-vmp') 
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
             #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
@@ -571,13 +598,18 @@ class DataWatch():
         self.watchMarks.markCall(msg, None, None, fd=fd)
        
     def watchFunEntries(self): 
-        #self.lgr.debug('watchFunEntries')
+        #self.lgr.debug('watchFunEntries, %d entries' % len(self.mem_fun_entries))
         for fun in self.mem_fun_entries:
+            #self.lgr.debug('watchFunEntries, fun %s %d entries' % (fun, len(self.mem_fun_entries)))
             for eip in self.mem_fun_entries[fun]:
                 if self.mem_fun_entries[fun][eip].hap is None:
+                    phys_block = self.cpu.iface.processor_info.logical_to_physical(eip, Sim_Access_Execute)
+                    if phys_block is None:
+                        self.lgr.warning('dataWatch watchFunEntries, code at 0x%x not mapped, will not catch entry' % eip)
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, eip, 1, 0)
                     hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.memSomethingEntry, fun, proc_break, 'mem_fun_entry') 
                     self.mem_fun_entries[fun][eip].hap = hap
+                    #self.lgr.debug('dataWatch watchFunEntries set fun entry break on 0x%x for fun %s' % (eip, fun))
         if self.destroy_entry is not None and self.destroy_hap is None:
             #self.lgr.debug('dataWatch watchFunEntries add destroy entry hap')
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.destroy_entry, 1, 0)
@@ -651,7 +683,7 @@ class DataWatch():
                 continue
             if index < len(self.read_hap):
                 if self.read_hap[index] is not None:
-                    #self.lgr.debug('dataWatch stopWatch delete hap %d' % self.read_hap[index])
+                    #self.lgr.debug('dataWatch stopWatch delete read_hap %d' % self.read_hap[index])
                     self.context_manager.genDeleteHap(self.read_hap[index], immediate=immediate)
             else:
                 #self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
@@ -666,8 +698,9 @@ class DataWatch():
         if not leave_fun_entries:
             for fun in self.mem_fun_entries:
                 for eip in self.mem_fun_entries[fun]:
-                    self.context_manager.genDeleteHap(self.mem_fun_entries[fun][eip].hap, immediate=immediate)
-                    self.mem_fun_entries[fun][eip].hap = None
+                    if self.mem_fun_entries[fun][eip].hap is not None:
+                        self.context_manager.genDeleteHap(self.mem_fun_entries[fun][eip].hap, immediate=immediate)
+                        self.mem_fun_entries[fun][eip].hap = None
             if self.destroy_hap is not None:
                 self.context_manager.genDeleteHap(self.destroy_hap, immediate=immediate)
                 self.destroy_hap = None
@@ -683,6 +716,9 @@ class DataWatch():
         #    self.lgr.debug('DataWatch stopWatch delete finish_check_move_hap')
         #    self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
         #    self.finish_check_move_hap = None
+        if self.call_stop_hap is not None:
+            SIM_run_alone(self.delStopHap, self.call_stop_hap)
+            self.call_stop_hap = None
 
     def resetWatch(self):
         #self.lgr.debug('dataWatch resetWatch')
@@ -753,7 +789,7 @@ class DataWatch():
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         SIM_run_alone(self.deleteReturnHap, None)
-        #self.lgr.debug('dataWatch kernelReturn reset watch')
+        self.lgr.debug('dataWatch kernelReturn reset watch')
         ''' TBD was true'''
         self.watch(i_am_alone=False)
 
@@ -1181,7 +1217,13 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, str1, str2, self.mem_something.length, buf_start)
         elif self.mem_something.fun == 'charLookup':
             if self.mem_something.ret_addr_addr is None:
-                self.lgr.debug()
+                self.lgr.debug('dataWatch returnHap charLookup ret_addr_addr is None')
+                return
+            elif self.mem_something.addr is None:
+                self.lgr.debug('dataWatch returnHap charLookup addr is None')
+                return
+            else:
+                self.lgr.debug('dataWatch returnHap charLookup ret_addr_addr is 0x%x' % self.mem_something.ret_addr_addr)
             retval = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             return_ptr = self.mem_utils.readPtr(self.cpu, self.mem_something.ret_addr_addr)
             length = 0
@@ -1282,7 +1324,7 @@ class DataWatch():
             self.lgr.error('dataWatch returnHap no handler for %s' % self.mem_something.fun)
         #SIM_break_simulation('return hap')
         #return
-        #self.lgr.debug('dataWatch returnHap call watch')
+        self.lgr.debug('dataWatch returnHap call watch')
         self.watch(i_am_alone=True)
         
         ''' See if this return should result in deletion of temp stack buffers '''
@@ -1315,7 +1357,13 @@ class DataWatch():
 
     def memSomethingEntry(self, fun, third, forth, memory):
         eip = memory.logical_address
-        self.lgr.debug('memSomethingEntry, fun %s eip 0x%x' % (fun, eip))
+        if eip in self.skip_entries:
+            return
+        if self.pending_call:
+            self.lgr.debug('dataWatch memSomethingEntry but pending call, bail')
+            return
+        cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
+        self.lgr.debug('memSomethingEntry, pid:%d fun %s eip 0x%x cycle: 0x%x' % (pid, fun, eip, self.cpu.cycles))
         if fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[fun] or self.mem_fun_entries[fun][eip].hap is None:
             self.lgr.debug('memSomethingEntry, fun %s eip 0x%x not in mem_fun_entries haps' % (fun, eip))
             return
@@ -1386,12 +1434,19 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             if data_hit:
                 next_instruct = self.cpu.cycles+1
+                status = SIM_simics_is_running() 
+                self.lgr.debug('dataWatch getMemParams, try skipToTest to get to 0x%x simics running? %r' % (next_instruct, status)) 
                 if not resimUtils.skipToTest(self.cpu, next_instruct, self.lgr):
                     self.lgr.error('getMemParams, tried going forward, failed')
                     return
                 eip = self.top.getEIP(self.cpu)
                 ''' TBD parse the va_list and look for sources so we can handle sprintf'''
-                if (self.mem_something.fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[fun]) and 'printf' not in self.mem_something.fun and \
+                fun = self.mem_something.fun
+                if fun in self.mem_fun_entries and eip in self.mem_fun_entries[fun]:
+                    self.lgr.debug('dataWatch getMemParams data hit but 0x%x already in mem_fun_entries for %s' % (eip, fun))
+                    skip_fun = True
+
+                if (self.mem_something.fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[self.mem_something.fun]) and 'printf' not in self.mem_something.fun and \
                                      'syslog' not in self.mem_something.fun and 'fgets' not in self.mem_something.fun:
                     ret_addr_offset = None
                     if self.mem_something.ret_addr_addr is not None:
@@ -1410,7 +1465,11 @@ class DataWatch():
                     self.lgr.debug('dataWatch getMemParams add mem_something_entry addr %s eip 0x%x' % (self.mem_something.fun, eip))
                     if self.mem_something.fun not in self.mem_fun_entries:
                         self.mem_fun_entries[self.mem_something.fun] = {}
-                    self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
+                    if eip not in self.mem_fun_entries[self.mem_something.fun]:
+                        self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
+                        self.added_mem_fun_entry = True
+                    else:
+                        self.lgr.debug('dataWatch getMemParms eip 0x%x already in mem_fun_entries' % eip)
                 #else:
                 #    self.lgr.debug('dataWatch getMemParams, fun %s in mem_fun_entries? will return' % self.mem_something.fun)
                 #    return
@@ -1440,7 +1499,7 @@ class DataWatch():
                     else:
                         self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
                 if self.mem_something.count == 0:
-                    #self.lgr.debug('dataWatch getMemParams sees 0 count for copy, skip this function.')
+                    self.lgr.debug('dataWatch getMemParams sees 0 count for copy, skip this function.')
                     self.pending_call = False
                     skip_fun = True
                 else:
@@ -1611,12 +1670,13 @@ class DataWatch():
                     maybe_this = self.start[index] - 0xc
                     maybe_len = self.mem_utils.readWord32(self.cpu, maybe_this)
                     if maybe_len == self.length[index]:
-                        self.lgr.debug('dataWatch getMemParams smells like an object pointer, adjust start to include it')
+                        self.lgr.debug('dataWatch getMemParams smells like an object pointer, adjust start to include it.  start[%d] now 0x%x' % (index, maybe_this))
                         self.start[index] = maybe_this
 
                 if self.mem_something.length == 0:
                     self.mem_something.length = self.getStrLen(self.mem_something.src)        
                 self.lgr.debug('dataWatch getMemParms 0x%x %s src(r3) is 0x%x len %d, this: 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, self.mem_something.length, this))
+
             elif self.mem_something.fun == 'append_chr_n':
                 this, self.mem_something.src, self.mem_something.length = self.getCallParams(sp)
                 self.lgr.debug('dataWatch getMemParms %s src(r1) is 0x%x len %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.length))
@@ -1643,12 +1703,22 @@ class DataWatch():
             elif self.mem_something.fun == 'charLookup':
                 r0 = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
                 self.mem_something.ret_addr_addr = self.mem_utils.readPtr(self.cpu, r0)
-                if self.mem_something.ret_addr_addr is not None and self.mem_something.addr is not None:
-                    self.lgr.debug('dataWatch getMemParms %s addr 0x%x r0 0x%x ret_addr_addr 0x%x' % (self.mem_something.fun, self.mem_something.addr, 
-                        r0, self.mem_something.ret_addr_addr))
+                if self.mem_something.ret_addr_addr is not None and (self.mem_something.addr is not None or not data_hit):
+                    if self.mem_something.addr is not None:
+                        self.lgr.debug('dataWatch getMemParms %s addr 0x%x r0 0x%x ret_addr_addr 0x%x' % (self.mem_something.fun, self.mem_something.addr, 
+                            r0, self.mem_something.ret_addr_addr))
+                    else:
+                        self.lgr.debug('dataWatch getMemParms %s (not a data hit) r0 0x%x ret_addr_addr 0x%x' % (self.mem_something.fun, r0, self.mem_something.ret_addr_addr))
+                elif self.mem_something.ret_addr_addr is None:
+                    self.skip_entries.append(self.mem_something.fun_addr)
+                    self.added_mem_fun_entry = True
+                    self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is None? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
+                    skip_it = True
                 else:
-                    self.lgr.error('dataWatch getMemParms %s addr %s ret_addr_addr is unknown?' % (self.mem_something.fun, str(self.mem_something.addr)))
-                    return
+                    self.skip_entries.append(self.mem_something.fun_addr)
+                    self.added_mem_fun_entry = True
+                    self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is unknown? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
+                    skip_it = True
             #elif self.mem_something.fun == 'fgets':
             #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
 
@@ -1718,6 +1788,7 @@ class DataWatch():
                 if data_hit:
                     SIM_run_command('c')
             else:
+                self.lgr.debug('dataWatch getMemParams skip fun.')
                 self.pending_call = False
                 is_running = self.top.isRunning()
                 if not is_running:
@@ -1785,6 +1856,7 @@ class DataWatch():
         SIM_run_alone(self.hitCallStopHapAlone, vt_stuff)
  
     def hitCallStopHapAlone(self, vt_stuff):
+        SIM_run_command('enable-vmp') 
         if vt_stuff is not None and vt_stuff.simics_fail:
             resimUtils.skipToTest(self.cpu, vt_stuff.cycle, self.lgr)
             self.lgr.debug('dataWatch hitStopHap alone, simics rev failure, skipped to cycle 0x%x' % vt_stuff.cycle)
@@ -1818,7 +1890,7 @@ class DataWatch():
                     self.undo_pending = True
                     SIM_run_alone(self.undoAlone, self.mem_something)
                 else:
-                    #self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (self.mem_something.fun, eip))
+                    self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (self.mem_something.fun, eip))
                     SIM_run_alone(self.getMemParams, True)
             else:
                 self.lgr.error('hitCallStopHap, latest_cycle is None')
@@ -1832,6 +1904,19 @@ class DataWatch():
         if self.mem_something is None:
             self.lgr.error('dataWatch revAlone with mem_something of None')
             return
+        if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun]:
+            self.lgr.error('dataWatch revAlone but entry 0x%x already in mem_fun_entires', self.mem_something.fun_addr)
+            return
+
+        self.cycles_was = self.cpu.cycles
+        self.save_cycle = self.cycles_was - 1
+        ''' Simics broken TBD '''
+        if True:
+            resimUtils.skipToTest(self.cpu, self.save_cycle, self.lgr)
+            resimUtils.skipToTest(self.cpu, self.cycles_was, self.lgr)
+            self.lgr.debug('dataWatch revAlone, did Simics 2 step')
+          
+        
         phys_block = self.cpu.iface.processor_info.logical_to_physical(self.mem_something.called_from_ip, Sim_Access_Read)
         #cell = self.top.getCell()
         #self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.called_from_ip, 1, 0)
@@ -1839,26 +1924,19 @@ class DataWatch():
         self.call_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
 
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
-        self.save_cycle = self.cpu.cycles - 1
         #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call_hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
         #   self.mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
         self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d), now reverse' % (self.call_break, 
            self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle))
         #self.lgr.debug('cell is %s  cpu context %s' % (cell, self.cpu.current_context))
-        self.cycles_was = self.save_cycle+1
         #SIM_run_command('list-breakpoints')
         if alternate_callback is None:
             callback = self.hitCallStopHap
         else:
             callback = alternate_callback
+        SIM_run_command('disable-vmp') 
         self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", callback, None)
-        #SIM_run_command('reverse')
-        '''
-        if self.save_cycle not in [0x17b6c3aeb9, 0x17b6a5ea4a, 0x17b6a5e883]:
-            SIM_run_command('reverse')
-        else:
-            print('cycles as 0x%x' % self.save_cycle)
-        '''
+        SIM_run_command('reverse')
 
 
     def ghostStopHap(self, dumb, one, exception, error_string):
@@ -1914,20 +1992,24 @@ class DataWatch():
             self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
         else:
             self.lgr.debug('handleMemStuff got none for either ret_addr or called_from_ip')
-        if self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
+        
+        if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun]:
+            self.lgr.warning('dataWatch handleMemStuff but entry already in mem_fun_entires')
+
+        elif self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
             if self.mem_something.src is not None:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, src: 0x%x  %s clear backstop' % (self.mem_something.src, self.cpu.current_context))
+                self.pending_call = True
+                ''' iterator may take  while to return? '''
+                ''' iterator mark will be recorded on return '''
+                #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
+                self.back_stop.clearCycle()
+                #SIM_break_simulation('handle memstuff')
+                SIM_run_alone(self.runToReturnAlone, None)
             else:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
-            self.pending_call = True
-            ''' iterator may take  while to return? '''
-            ''' iterator mark will be recorded on return '''
-            #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
-            self.back_stop.clearCycle()
-            #SIM_break_simulation('handle memstuff')
-            SIM_run_alone(self.runToReturnAlone, None)
         else: 
             ''' run back to the call '''
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -2335,7 +2417,7 @@ class DataWatch():
 
     def checkMove(self, addr, trans_size, start, length, eip, instruct, pid):
         ''' Does this look like a move from memA=>reg=>memB ? '''
-        ''' If so, return dest '''
+        ''' If so, return dest.  Also checks for regex references using reWatch module '''
         ''' The given eip is where the read happened.'''
         #self.lgr.debug('dataWatch checkMove')
         adhoc = False
@@ -2366,7 +2448,34 @@ class DataWatch():
                 self.re_watch_list.append(re_watch)
 
                 new_mem_something = re_watch.getMemSomething(addr) 
-                if self.mem_something is not None and self.mem_something.fun_addr == new_mem_something.fun_addr:
+                if new_mem_something is None:
+                    if self.mem_something.fun_addr is not None:
+                        self.lgr.debug('re_watch got no fun addr, mem_something fun addr 0x%x' % self.mem_something.fun_addr)
+                        
+                    else:
+                        self.lgr.debug('re_watch got no fun addr, mem_something fun addr none also')
+                       
+                
+                if new_mem_something.fun_addr in self.skip_entries:
+                    self.lgr.debug('dataWatch checkMove pid:%d is re watch, 0x%x in skip_entries, bail' % (pid, new_mem_something.fun_addr))
+                    return
+                ''' crude test to see if function call is to GOT, which makes actual function call'''
+                hack_match = None
+                if self.mem_something is not None and self.mem_something.fun_addr is not None and self.mem_something.fun_addr != new_mem_something.fun_addr:
+                    fun_instruct = SIM_disassemble_address(self.cpu, self.mem_something.fun_addr, 1, 0)[1]
+                    self.lgr.debug('dataWatch checkMove re_watch look for got in instruct %s' % fun_instruct)
+                    ''' TBD generalize this'''
+                    if self.cpu.architecture == 'arm' and fun_instruct.startswith('b'):
+                        parts = fun_instruct.split()
+                        try:
+                            hack_match = int(parts[1].strip(), 16)
+                            self.lgr.debug('dataWatch checkMove re_watch GOT call, generalize this 0x%x' % hack_match)
+                        except:
+                            self.lgr.debug('dataWatch checkMove re_watch GOT crapped out, instruct %s' % fun_instruct)
+                            pass
+                        
+                if self.mem_something is not None and self.mem_something.fun_addr is not None and (self.mem_something.fun_addr == new_mem_something.fun_addr or \
+                          (hack_match is not None and hack_match == new_mem_something.fun_addr)):
                     ''' We already gathered ret_addr_addr on our way in.  Do not need to reverse '''
                     ret_addr_addr = self.mem_something.ret_addr_addr
                     src = self.mem_something.src
@@ -2375,9 +2484,16 @@ class DataWatch():
                     ''' TBD fix.  generalize? '''
                     if self.mem_something.fun == 'ostream_insert':
                         self.mem_something.src = src
-                    ''' mftmft do run to return here '''
+                    self.lgr.debug('dataWatch checkMove pid:%d is re watch, we already gathered ret_addr_addr on our way in at fun entry 0x%x.  Do not need to reverse. cycles: 0x%x ' %(pid, self.mem_something.fun_addr, self.cpu.cycles))
                     self.runToReturn()
                 else:
+                    if self.mem_something.fun_addr is None:
+                        self.lgr.debug('dataWatch checkMove pid:%d is re watch, funs do not match, fun addr NONE' % (pid)) 
+                    elif new_mem_something.fun_addr is None:
+                        self.lgr.debug('dataWatch checkMove pid:%d is re watch, funs do not match, new_mem_something.fun_addr is none' % (pid))
+                    else:
+                        self.lgr.debug('dataWatch checkMove pid:%d is re watch, funs do not match, fun addr 0x%x  new fun addr 0x%x  cycles: 0x%x ' %(pid, self.mem_something.fun_addr,
+                            new_mem_something.fun_addr, self.cpu.cycles))
                     self.mem_something = new_mem_something
 
                     if self.mem_something is not None:
@@ -3547,3 +3663,31 @@ class DataWatch():
                 valptr = valptr + len(argval)+1
                 index = index + 1
             self.setBreakRange()
+
+    def showFunEntries(self):
+        for fun in self.mem_fun_entries:
+            for eip in self.mem_fun_entries[fun]:
+                print('%s  0x%x' % (fun, eip))
+                self.lgr.debug('%s  0x%x' % (fun, eip))
+
+    def loadFunEntryPickle(self, name):
+        if name is not None:
+            entries_file = os.path.join('./', name, self.cell_name, 'funEntry.pickle')
+            if os.path.isfile(entries_file):
+                entries = pickle.load( open(entries_file, 'rb') ) 
+                if 'fun_entries' in entries:
+                    self.mem_fun_entries = entries['fun_entries']
+                    self.skip_entries = entries['skip_entries']
+                    self.lgr.debug('dataWatch loadFunEntryPickle loaded for %d functions' % len(self.mem_fun_entries))
+                else:
+                    self.lgr.debug('dataWatch loadFunEntryPickle, no fun_entries, nothing loaded.')
+        #self.showFunEntries()
+
+    def pickleFunEntries(self, name):
+        if self.added_mem_fun_entry:
+            entries_file = os.path.join('./', name, self.cell_name, 'funEntry.pickle')
+            entries = {}
+            entries['fun_entries'] = self.mem_fun_entries
+            self.lgr.debug('dataWatch pickleFunEntries saved %d fun entries' % len(self.mem_fun_entries))
+            entries['skip_entries'] = self.skip_entries
+            pickle.dump(entries, open( entries_file, "wb") ) 
