@@ -866,6 +866,13 @@ class StackTrace():
                         if fun_hex is not None:
                             #self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct))
                             self.soCheck(fun_hex)
+                        else:
+                            if prev_ip is not None:
+                                fun_hex = self.ida_funs.getFun(prev_ip)
+                                if fun_hex is not None:
+                                    #self.lgr.debug('stackTrace fun_hex hacked to 0x%x using prev_ip.  TBD generalize this' % fun_hex)
+                                    pass
+
                                 
                         #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct, ptr, call_ip))
                         fname = self.soMap.getSOFile(val)
