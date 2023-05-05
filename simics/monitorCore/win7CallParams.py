@@ -97,13 +97,16 @@ class Win7CallParams():
         cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
         if cur_thread is not None:
             cur_proc = self.mem_utils.readPtr(self.cpu, cur_thread+self.param.proc_ptr)
-            pid_ptr = cur_proc + self.param.ts_pid
-            pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-            if pid is not None:
-                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
-                comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+            if cur_proc is not None:
+                pid_ptr = cur_proc + self.param.ts_pid
+                pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+                if pid is not None:
+                    #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+                    comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+            else:
+                self.lgr.debug('getCurPid cur_proc is None reading cur_thread 0x%x' % cur_thread)
         else:
-            self.lgr.debug('pid is None')
+            self.lgr.debug('getCurPid cur_thread is None')
         return cur_proc, pid, comm
  
     def parseOpen(self, rsp, pid):
