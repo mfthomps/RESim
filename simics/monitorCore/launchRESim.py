@@ -324,7 +324,7 @@ class LaunchRESim():
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-                    gkp = getKernelParams.GetKernelParams(self.comp_dict)
+                    gkp = getKernelParams.GetKernelParams(self.comp_dict, RUN_FROM_SNAP)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
                     lgr.debug('genMonitor for target %s' % RESIM_TARGET)

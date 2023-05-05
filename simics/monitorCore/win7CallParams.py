@@ -17,12 +17,14 @@ the param, using gs_base and logic to account for aslr.
 watch_stack_params = 6
 class Win7CallParams():
     def __init__(self, cpu, cell, mem_utils, current_task_phys, param, lgr, stop_on=None):
+        self.lgr = lgr
         self.param = param
-        self.pid_offset = param.ts_pid
-        ''' TBD NOT YET COMPUTED. aslr?'''
-        self.current_task_phys = 0x3634188
-        #self.current_task_phys = current_task_phys
-        self.entry = 0xfffff80003622bc0
+        
+        #self.current_task_phys = 0x3634188
+        self.current_task_phys = current_task_phys
+        self.entry = param.sysenter
+        #self.entry = 0xfffff80003622bc0
+        self.lgr.debug('Win7CallParams current task phys 0x%x sysenter 0x%x' % (self.current_task_phys, self.entry))
         self.entry_break = None
         self.entry_hap = None
         self.exit_break = None
@@ -41,7 +43,6 @@ class Win7CallParams():
         self.mem_utils = mem_utils
         self.cell = cell
         self.cpu = cpu
-        self.lgr = lgr
         self.stop_on = stop_on
         resim_dir = os.getenv('RESIM_DIR')
         self.call_map = {}
@@ -92,11 +93,18 @@ class Win7CallParams():
 
     def getCurPid(self):
         pid = None
-        cur_task = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
-        if cur_task is not None:
-            pid_ptr = cur_task + self.pid_offset
+        comm = None
+        cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
+        if cur_thread is not None:
+            cur_proc = self.mem_utils.readPtr(self.cpu, cur_thread+self.param.proc_ptr)
+            pid_ptr = cur_proc + self.param.ts_pid
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-        return cur_task, pid
+            if pid is not None:
+                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+                comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+        else:
+            self.lgr.debug('pid is None')
+        return cur_proc, pid, comm
  
     def parseOpen(self, rsp, pid):
         ''' not used '''
@@ -124,9 +132,12 @@ class Win7CallParams():
     def syscallHap(self, dumb, third, forth, memory):
         ''' hit when kernel is entered due to sysenter '''
         #self.lgr.debug('sycallHap')
-        cur_task, pid = self.getCurPid()
-        if pid is None:
-            return
+        cur_task, pid, comm = self.getCurPid()
+        #SIM_break_simulation(pid)
+        #return
+        #if pid is None:
+        #    print('oh no')
+        #    return
         if cur_task is not None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             ''' Use the call map to get the call name, and strip off "nt" '''
@@ -151,7 +162,7 @@ class Win7CallParams():
                     self.current_call[pid] = rax
                     rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
                     self.entry_rsp[pid] = rsp
-                    self.lgr.debug('syscallHap cur_task 0x%x pid:%d rsp: 0x%x rax: %d call: %s' % (cur_task, pid, rsp, rax, call_name)) 
+                    self.lgr.debug('syscallHap cur_task 0x%x pid:%d (%s) rsp: 0x%x rax: %d call: %s' % (cur_task, pid, comm, rsp, rax, call_name)) 
                     #if call_name == 'OpenFile':
                     #    msg = self.parseOpen(rsp, pid)
                     #    self.lgr.debug(msg)
@@ -230,14 +241,14 @@ class Win7CallParams():
     def exitHap(self, dumb, third, forth, memory):
         ''' hit when kernel is about to exit back to user space via sysret64 '''
         #self.lgr.debug('exitHap')
-        cur_task, pid = self.getCurPid()
+        cur_task, pid, comm = self.getCurPid()
         call_name = None
         if pid is None:
             return
         if cur_task is not None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             if pid is not None:
-                self.lgr.debug('exitHap cur_task: 0x%x pid:%d rax: 0x%x' % (cur_task, pid, rax))
+                self.lgr.debug('exitHap cur_task: 0x%x pid:%d (%s) rax: 0x%x' % (cur_task, pid, comm, rax))
             else:
                 self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))
             if pid in self.all_reg_values:
@@ -299,7 +310,7 @@ class Win7CallParams():
         ''' Hit when kernel reads values in user space stack, implying they are parameters. '''
         ''' me thinks there are race conditions here '''
         #self.lgr.debug('stackParamHap') 
-        cur_task, pid = self.getCurPid()
+        cur_task, pid, comm = self.getCurPid()
         if pid in self.stack_param_hap:
             addr = memory.logical_address
             offset = addr - self.entry_rsp[pid] 
@@ -309,7 +320,7 @@ class Win7CallParams():
                 value = orig_value
                 value.reverse()
                 hexstring = binascii.hexlify(value)
-                self.lgr.debug('stackParamHap pid:%d rip: 0x%x read value 0x%s from 0x%x, offset 0x%x (%d) from sp 0x%x cycles:0x%x' % (pid, rip, hexstring, addr, offset, offset, self.entry_rsp[pid], self.cpu.cycles))
+                self.lgr.debug('stackParamHap pid:%d (%s) rip: 0x%x read value 0x%s from 0x%x, offset 0x%x (%d) from sp 0x%x cycles:0x%x' % (pid, comm, rip, hexstring, addr, offset, offset, self.entry_rsp[pid], self.cpu.cycles))
                 if call_name == 'OpenFile': 
                     pid_addr = self.PidAddr(pid, addr)
                     if offset == 64:

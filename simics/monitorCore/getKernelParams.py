@@ -45,7 +45,7 @@ import winKParams
 import win7Syscalls
 
 class GetKernelParams():
-    def __init__(self, comp_dict):
+    def __init__(self, comp_dict, run_from_snap):
         #self.cpu = SIM_current_processor()
         self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()))
         self.target = os.getenv('RESIM_TARGET')
@@ -55,6 +55,7 @@ class GetKernelParams():
 
         self.hack_cycles = 0
         self.hack_stop = False
+        self.run_from_snap = run_from_snap
 
         if self.os_type is None:
             self.os_type = 'LINUX32'
@@ -64,7 +65,8 @@ class GetKernelParams():
   
         print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
 
-        self.log_dir = '/tmp'
+        #self.log_dir = '/tmp'
+        self.log_dir = './logs'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
         self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
         platform = None
@@ -260,6 +262,7 @@ class GetKernelParams():
                 self.lgr.debug('taskModeChanged64 not a syscall, page fault, continue')
             else:
                 self.lgr.debug('taskModeChanged64 must be a call, look for GS')
+                #self.lookForFS(None)
                 self.lookForGS(None)
                 SIM_run_alone(self.delTaskModeAlone, None)
                 #SIM_break_simulation('got it?')
@@ -402,6 +405,11 @@ class GetKernelParams():
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
                 if self.os_type == 'WIN7':
+                    next_eip = eip + instruct[0]
+                    next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                    next_mn = decode.getMn(next_instruct[1])
+                    next_op2, op1 = decode.getOperands(next_instruct[1])
+ 
                     self.findWin7Params()
                 else:
                     self.findSwapper()
@@ -588,8 +596,12 @@ class GetKernelParams():
         SIM_run_alone(self.getWin7Params, None)
 
     def getWin7Params(self, dumb):
-        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param)
-        print('got pid %d' % self.param.ts_pid)
+        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.lgr)
+        if self.param.ts_pid is not None:
+            print('got pid %d' % self.param.ts_pid)
+        else:
+            print('ts_pid is None!!!!')
+            return
         self.checkKernelEntry(None)
 
     def changedThreadWin7(self, cpu, third, forth, memory):
@@ -1262,6 +1274,10 @@ class GetKernelParams():
         pickle.dump( self.param, open( fname, "wb" ) )
         self.param.printParams()
         print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
+        if self.run_from_snap is not None:
+             pfile = os.path.join(self.run_from_snap, 'phys.pickle')
+             pickle.dump(self.current_task_phys, open(pfile, 'wb'))
+             print('current task phys addr written to %s' % pfile)
 
     def deleteStopTaskHap(self, dumb):
         self.lgr.debug('deleteStopTaskHap')
@@ -1472,6 +1488,13 @@ class GetKernelParams():
             if os.path.isfile(param_file):
                 self.param = pickle.load(open(param_file, 'rb'))
                 self.lgr.debug('w7Tasks loaded params from %s' % param_file)
+                if self.run_from_snap is not None:
+                    pfile = os.path.join(self.run_from_snap, 'phys.pickle')
+                    if os.path.isfile(pfile):
+                        self.current_task_phys = pickle.load(open(pfile, 'rb'))
+                    else:
+                        self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
+                        return
         self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on)
 
     def showW7CallParams(self):

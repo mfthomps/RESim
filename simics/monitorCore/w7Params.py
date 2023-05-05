@@ -7,6 +7,8 @@ pointer. Note this list was dynamically created and will not necessarily
 match the single state of the current machine, e.g., tasks may have been
 created and deleted.
 '''
+comm_offset = 0x2e0
+proc_ptr_offset = 0x210
 def findRecordSize(cpu, mem_utils, task_list):
     #task_list = pickle.load(open('task_list.pickle', 'rb'))
     first_task = 0xffffffffffffffff
@@ -37,7 +39,7 @@ def showRecordStarts(cpu, mem_utils, orig_task_list):
     for task in task_list:
         if prev is not None:
             delta = task - prev
-        print('task: 0x%x dalte 0x%x' % (task, delta))
+        print('task: 0x%x delta 0x%x' % (task, delta))
         prev = task
 
 def findAdjacentRecords(cpu, mem_utils, record_size, orig_task_list):
@@ -86,7 +88,7 @@ def unused(cpu, mem_utils):
         for val in words[i]:
             print('unique at %d 0x%x' % (i, val))
 
-def walkList(cpu, mem_utils, task, offsets, orig_task_list):
+def walkList(cpu, mem_utils, task, offsets, orig_task_list, smallest_record_size, pid_offset, lgr):
     '''
     Given a task address and a list of offsets to what we think are HEAD link lists,
     walk each task list and record and return the tasks.
@@ -125,14 +127,24 @@ def walkList(cpu, mem_utils, task, offsets, orig_task_list):
                 match_count += 1
             if task_ptr in got:
                 #print('already got')
+                #lgr.debug('already got')
                 break
             else:
                 got.append(task_ptr)
+                #lgr.debug('append got 0x%x' % task_ptr)
+            pid = mem_utils.readWord32(cpu, task_ptr+pid_offset)
+            if pid == 0:
+                lgr.debug('got pid 0')
+                break
         if match_count > 1 and len(got) > 5:
-            print('walkList task 0x%x offset %d walked(got) %d records, with %d matches in task_list' % (task, head_off, len(got), match_count))
-            record_count[head_off] = len(got)
-            task_matches[head_off] = match_count
-            got_tasks[head_off] = got
+            lgr.debug('walk list task 0x%x offset %d' % (task, head_off))
+            walkTasks(cpu, mem_utils, task, head_off, smallest_record_size, pid_offset, lgr)
+            if True:
+                print('walkList task 0x%x offset %d walked(got) %d records, with %d matches in task_list' % (task, head_off, len(got), match_count))
+                lgr.debug('walkList task 0x%x offset %d walked(got) %d records, with %d matches in task_list' % (task, head_off, len(got), match_count))
+                record_count[head_off] = len(got)
+                task_matches[head_off] = match_count
+                got_tasks[head_off] = got
     return record_count, task_matches, got_tasks
 
 
@@ -173,7 +185,7 @@ def findHeads(cpu, mem_utils, task1, task2):
         cur = task1 + t1offset
     return retval
   
-def findUnique(cpu, mem_utils, offset, task_list): 
+def findUnique(cpu, mem_utils, offset, task_list, rec_size, pid_offset, lgr): 
     #task_list = pickle.load(open('head-768.pickle', 'rb'))
     #pfile = 'head-%d.pickle' % offset
     #print('Unique for offset %d' % offset)
@@ -182,22 +194,26 @@ def findUnique(cpu, mem_utils, offset, task_list):
     dup_words = []
     delta = 0
     prev = None
-    num_words = 158
+    #val_size = 4
+    val_size = 2
+    rec_size = min(rec_size, 2000)
+    num_words = int(rec_size/val_size)
     retval = []
     for i in range(num_words):
         words[i] = []
+    lgr.debug('findUnique rec size %d, %d words' % (rec_size, num_words))
 
-
-    look_for = offset + 8
+    #look_for = offset + 8
+    look_for = offset + val_size
 
     for task in task_list:
         #print('task 0x%x' % cur)
         for i in range(num_words):
             if i in dup_words: 
                 continue
-            off = i*8
+            off = i*val_size
             cur = task + off
-            val = mem_utils.readWord(cpu, cur)
+            val = mem_utils.readWord32(cpu, cur)
             if val not in words[i]:
                 words[i].append(val)
             elif val != 0:
@@ -208,20 +224,22 @@ def findUnique(cpu, mem_utils, offset, task_list):
     for i in range(num_words):
         if i in dup_words:
             continue
-        offset = i*8
+        offset = i*val_size
         zero_count = 0
         for task in task_list:
             ptr = task+offset
-            val = mem_utils.readWord(cpu, ptr)
+            val = mem_utils.readWord32(cpu, ptr)
             if val == 0:
                 zero_count += 1
 
+        #if zero_count < 50:
         if zero_count < 5:
             for task in task_list:
                 ptr = task+offset
-                val = mem_utils.readWord(cpu, ptr)
+                val = mem_utils.readWord32(cpu, ptr)
                 if val is not None:
-                    #print('\ttask 0x%x offset %d has unique value 0x%x' % (task, offset, val))
+                    print('\ttask 0x%x offset %d has unique value 0x%x (%d)' % (task, offset, val, val))
+                    lgr.debug('\ttask 0x%x offset %d has unique value 0x%x (%d)' % (task, offset, val, val))
                     if offset not in retval:
                         retval.append(offset)
                 else:
@@ -252,7 +270,7 @@ def dogmeat(cpu, mem_utils, off):
            got.append(val)
     print('len of got is %d' % len(got))
 
-def walkTasks(cpu, mem_utils, task, offset, smallest_record_size):
+def walkTasks(cpu, mem_utils, task, offset, smallest_record_size, pid_offset, lgr):
     retval = True
     #pfile = 'head-%d.pickle' % offset
     #print('Unique for offset %d' % offset)
@@ -263,42 +281,53 @@ def walkTasks(cpu, mem_utils, task, offset, smallest_record_size):
     heads = []
     prev_task = None
     print('start task 0x%x offset %d' % (task, offset))
+    lgr.debug('start task 0x%x offset %d' % (task, offset))
     cur_task = task
     while not done: 
-        next_rec_ptr = cur_task + offset + 8
+        next_rec_ptr = cur_task + offset 
         next_head = mem_utils.readPtr(cpu, next_rec_ptr)
         cur_task = next_head - offset
-        print('cur_task now 0x%x next_head 0x%x' % (cur_task, next_head))
+        comm = mem_utils.readString(cpu, cur_task+comm_offset, 16)
+        pid = mem_utils.readWord32(cpu, cur_task+pid_offset)
+        print('cur_task now 0x%x next_head 0x%x comm %s pid %d' % (cur_task, next_head, comm, pid))
+        lgr.debug('cur_task now 0x%x next_head 0x%x comm %s pid %d' % (cur_task, next_head, comm, pid))
         if cur_task not in got:
             got.append(cur_task)
             #if cur_task not in task_list:
             #    print('0x%x not in task list' % cur_task)
         else:
             print('walkTasks already saw 0x%x' % cur_task)
+            log.debug('walkTasks already saw 0x%x' % cur_task)
             break
         if prev_task is not None:
             delta = abs(prev_task - cur_task)
             if delta < smallest_record_size:
                 print('walkTasks with offset %d led to small record sizes' % offset)
+                lgr.debug('walkTasks with offset %d led to small record sizes' % offset)
                 retval = False
                 break
         prev_task = cur_task
+        if pid == 0:
+            break
     return retval
 
-def findPid(cpu, mem_utils, offsets, best_offset, task_list): 
+def findPid(cpu, mem_utils, offsets, best_offset, task_list, lgr): 
     retval = None
     #pfile = 'head-%d.pickle' % best_offset
     #task_list = pickle.load(open(pfile, 'rb'))
+    too_big_count = 0
+    lgr.debug('findPid')
     for offset in offsets:
+        lgr.debug('findPid offset %d' % offset)
         too_big = False
         for task in task_list:
             ptr = task + offset
             val = mem_utils.readWord(cpu, ptr)
             if val > 0xffff:
-                too_big = True
-                break
-        if not too_big:
-            print('PID at offset %d' % offset)
+                too_big_count = too_big_count + 1
+        if too_big_count < 2:
+            print('PID at offset %d  but %d too big' % (offset, too_big_count))
+            lgr.debug('PID at offset %d  but %d too big' % (offset, too_big_count))
             retval = offset
     return retval
 
@@ -333,24 +362,105 @@ def findString(cpu, mem_utils, task):
                 x = b.decode('utf-16', errors='ignore')
                 print('decoded %s' % x)
     
-   
-def findParams(cpu, mem_utils, task_list, param):
+def getNewTaskList(task_list, mem_utils, cpu):
+    retval = []
+    for task in task_list:
+        ptr = task + proc_ptr_offset
+        ref_ptr = mem_utils.readPtr(cpu, ptr)
+        if ref_ptr not in retval:
+            retval.append(ref_ptr)
+    return retval
+
+def hackpid(cpu, mem_utils, task_list, lgr):
+    words = {}
+    dup_words = []
+    delta = 0
+    prev = None
+    #val_size = 4
+    val_size = 2
+    rec_size = 2000
+    num_words = int(rec_size/val_size)
+    retval = []
+    for i in range(num_words):
+        offset = i*val_size
+        words[offset] = []
+    for offset in words:
+        zero_count = 0
+        for task in task_list:
+            cur_ptr = task + offset
+            val = mem_utils.readWord32(cpu, cur_ptr)
+            #print('offset %d val %d' % (offset, val))
+            if val not in words[offset]:
+                words[offset].append(val)
+            else:
+                if val == 0 and zero_count < 5:
+                    zero_count = zero_count + 1
+                    pass 
+                else:
+                    #print('val %d already in words[%d]' % (val, offset))
+                    dup_words.append(offset)
+                    break
+          
+    too_big = [] 
+    for offset in words:
+        if offset in dup_words:
+            continue
+        else:
+            for value in words[offset]:
+                #print('Unique offset 0x%x value %d' % (offset, value)) 
+                if value > 0xffff:
+                    too_big.append(offset)
+    smallest_offset = None
+    for offset in words:
+        if offset in too_big or offset in dup_words:
+            continue
+        else:
+            if smallest_offset is None:
+                smallest_offset = offset
+            for value in words[offset]:
+                print('Smallish Unique offset 0x%x value %d' % (offset, value)) 
+    print('Smallest offset is %d (0x%x)' % (smallest_offset, smallest_offset))
+    return smallest_offset
+    
+
+def findParams(cpu, mem_utils, task_list, param, lgr):
+    #log_dir = './logs'
+    #lgr = resimUtils.getLogger('findParams', log_dir)
+
+    # TBD fix this
+    param.ts_comm = comm_offset
+    param.proc_ptr = proc_ptr_offset
+
+    new_task_list = getNewTaskList(task_list, mem_utils, cpu)
+    print('Got %d tasks from %d collected current task values' % (len(new_task_list), len(task_list)))
+    lgr.debug('Got %d tasks from %d collected current task values' % (len(new_task_list), len(task_list)))
+    for task in new_task_list:
+            comm = mem_utils.readString(cpu, task+comm_offset, 16)
+            print('comm is %s' % comm)
+            lgr.debug('comm is %s' % comm)
+    pid_offset = hackpid(cpu, mem_utils, new_task_list, lgr) 
+    param.ts_pid = pid_offset
+    lgr.debug('hackpid got pid offset of %d (0x%x)' % (pid_offset, pid_offset)) 
+
+ 
     head_list = []
-    first_task, record_sizes  = findRecordSize(cpu, mem_utils, task_list)
+    first_task, record_sizes  = findRecordSize(cpu, mem_utils, new_task_list)
     bad_tasks = []
     task_maybe = []
     smallest_record_size = 0xfffffffff
     for size in record_sizes[:4]:
-        task1, task2 = findAdjacentRecords(cpu, mem_utils, size, task_list)
+        task1, task2 = findAdjacentRecords(cpu, mem_utils, size, new_task_list)
         if size < smallest_record_size:
             smallest_record_size = size
         print('first task 0x%x, record_size 0x%x (%d) found %d adjacents' % (first_task, size, size, len(task1)))
+        lgr.debug('first task 0x%x, record_size 0x%x (%d) found %d adjacents' % (first_task, size, size, len(task1)))
         #for i in range(len(task1)):
         #    print('Adjacent task1 0x%x task2 0x%x' % (task1[i], task2[i]))
         #showRecordStarts(cpu, mem_utils, task_list)
         for i in range(len(task1)):
             delta = task2[i] - task1[i]
             print('Adjacent task1 0x%x task2 0x%x delta: %d' % (task1[i], task2[i], delta))
+            lgr.debug('Adjacent task1 0x%x task2 0x%x delta: %d' % (task1[i], task2[i], delta))
             heads = findHeads(cpu, mem_utils, task1[i], task2[i])
             if len(heads) == 0 and task1 not in bad_tasks:
                 bad_tasks.append(task1[i])
@@ -360,39 +470,37 @@ def findParams(cpu, mem_utils, task_list, param):
                 print('\t\tHead offset %d' % head)
                 if head not in head_list:
                     head_list.append(head)
+    lgr.debug('Smallest record size: %d' % smallest_record_size)   
     print('Smallest record size: %d' % smallest_record_size)   
     for head in head_list:
         print('head %d 0x%x' % (head, head))
+        lgr.debug('head %d 0x%x' % (head, head))
     ''' smallest offset seems to be a deadwood list '''
     new_head_list = sorted(head_list)[1:]
     good_tasks = []
     for task in task_maybe:
         if task not in bad_tasks:
             print('maybe task 0x%x' % task)
+            lgr.debug('maybe task 0x%x' % task)
             good_tasks.append(task) 
     got_tasks = {} 
     most_recs = 0
     best_task = None
     best_offset = None
     for task in good_tasks:
-        record_count, task_matches, got_tasks[task] = walkList(cpu, mem_utils, task, new_head_list, task_list)
+        record_count, task_matches, got_tasks[task] = walkList(cpu, mem_utils, task, new_head_list, new_task_list, smallest_record_size, pid_offset, lgr)
+        lgr.debug('back from walkList task 0x%x len record_count %d task_matches %d' % (task, len(record_count), len(task_matches)))
         for offset in record_count:
-            if record_count[offset] > 10 and task_matches[offset] > 5:
+            lgr.debug('from walkList task 0x%x offset %d len record_count %d task_matches %d' % (task, offset, record_count[offset], task_matches[offset]))
+            if record_count[offset] > 10 and task_matches[offset] > 4:
                 if record_count[offset] > most_recs:
                     most_recs = record_count[offset]
                     best_task = task
                     best_offset = offset
     best_task_list = got_tasks[best_task][best_offset]
     print('best task 0x%x, most recs %d best_offset %d' % (best_task, most_recs, best_offset))
-    #pfile = 'head-%d.pickle' % best_offset
-    #pickle.dump(got_tasks[best_task][best_offset], open(pfile, 'wb'))
-    #walkTasks(cpu, mem_utils, best_task, best_offset)
-    #compareOffsets(760, 1064)
-    unique_offsets = findUnique(cpu, mem_utils, best_offset, best_task_list) 
-    pid = findPid(cpu, mem_utils, unique_offsets, best_offset, best_task_list)
-    #dumpOffsets(cpu, mem_utils, unique_offsets, best_task) 
-    #findString(cpu, mem_utils, best_task)
-    param.ts_pid = pid
+    lgr.debug('best task 0x%x, most recs %d best_offset %d' % (best_task, most_recs, best_offset))
+
     param.ts_next = best_offset+8
     param.ts_prev = best_offset
 

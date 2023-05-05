@@ -3,6 +3,7 @@ class WinKParams():
         kernel_base = 0xffff000000000000
         self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
         self.current_task = None
+        self.proc_ptr = None
         self.ts_next = None
         self.ts_prev = None
         self.ts_pid = None
