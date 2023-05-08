@@ -3,6 +3,7 @@ import os
 import json
 import struct
 import binascii
+import resimUtils
 '''
 Functions for experimenting with Win7 
 to determine how parameters are passed to the kernel.
@@ -33,18 +34,15 @@ class Win7CallParams():
        
         self.user_break = None
         self.user_hap = None
+        self.user_write_break = None
+        self.user_write_hap = None
+        self.param_ref_tracker = None
 
-        ''' break/hap to collect parameters by pid '''
-        self.stack_param_break = {}
-        self.stack_param_hap = {}
-        self.open_file_break = {}
-        self.open_file_hap = {}
-        self.open_file_break2 = {}
-        self.open_file_hap2 = {}
         self.current_call = {}
-        self.current_call_params = {}
         self.entry_rsp = {}
         self.all_reg_values = {}
+
+
         self.mem_utils = mem_utils
         self.cell = cell
         self.cell_name = cell_name
@@ -76,6 +74,7 @@ class Win7CallParams():
         self.lgr.debug('context_manager cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
         self.default_context = self.cpu.current_context
       
+        self.one_entry = None
         if only is not None:
             if only in self.call_num_map:
                 call_num = self.call_num_map[only]
@@ -85,6 +84,168 @@ class Win7CallParams():
                 print('%s' % str(self.call_num_map))
                 return
         self.doBreaks()
+
+    class ParamRefTracker():
+        ''' Track kernel references to user space during a system call '''        
+        def __init__(self, rsp, rcx, rdx, r8, r9, mem_utils, cpu, lgr):
+            ''' will include rsp rcx, rdx, r8, r9 '''
+            self.mem_utils = mem_utils
+            self.cpu = cpu
+            self.lgr = lgr
+            self.base_params = {}
+            self.base_params['rsp'] = rsp
+            value = self.mem_utils.readWord32(self.cpu, rcx)
+            if value is not None:
+                self.base_params['rcx'] = rcx
+            value = self.mem_utils.readWord32(self.cpu, rdx)
+            if value is not None:
+                self.base_params['rcx'] = rdx
+            value = self.mem_utils.readWord32(self.cpu, r8)
+            if value is not None:
+                self.base_params['r8'] = r8
+            value = self.mem_utils.readWord32(self.cpu, r9)
+            if value is not None:
+                self.base_params['r9'] = r9
+            self.other_addrs = {}
+            self.refs = []
+            self.wrote_values = {}
+
+        def toString(self):
+            retval = ''
+            for reference in self.refs:
+                retval = retval + reference.toString()+'\n'
+
+            for addr in self.wrote_values:
+                entry = 'wrote 0x%x to 0x%x' % (self.wrote_values[addr], addr)
+                retval = retval + entry + '\n'
+            return retval
+            
+
+        class ParamRef():
+            def __init__(self, addr, value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base):
+                self.addr = addr
+                self.hexstring = hexstring
+                self.value = value
+                self.other_ptr = other_ptr
+                self.size = size
+                self.best_base = best_base
+                self.best_base_of_base = best_base_of_base
+                self.best_base_delta = best_base_delta
+
+            def hackEncode(self, the_bytes):
+                retval = ''
+                for b in the_bytes:
+                    if b > 0:
+                       c = chr(b)
+                       retval = retval + c
+                return retval
+
+            def toString(self):
+                if len(self.value) > 24:
+                   #bstring = binascii.unhexlify(bytes(self.breakmap[break_num].hexstring.encode())) 
+                   #bstring = binascii.unhexlify(self.hexstring)
+                   #bs = resimUtils.getHexDump(self.hexstring)
+                   hexs = self.hackEncode(self.value)
+                else:
+                   hexs = self.hexstring
+                
+                if type(self.best_base) is str:
+                    retval = 'addr: 0x%x value: 0x%s size: %d best_base: %s  best_base_delta: 0x%x' % (self.addr, hexs, self.size, self.best_base, self.best_base_delta)
+                else:
+                    if self.best_base_of_base is None:
+                        retval = 'addr: 0x%x value: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x' % (self.addr, 
+                           hexs, self.size, self.best_base, self.best_base_delta)
+                    else:
+                        if type(self.best_base_of_base) is str:
+                            retval = 'addr: 0x%x value: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: %s' % (self.addr, 
+                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base)
+                        else:
+                            retval = 'addr: 0x%x value: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: 0x%x' % (self.addr, 
+                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base)
+                return retval
+
+        def addRef(self, addr, value, hexstring, size, other_ptr):
+            ''' Record a reference to user space during a system call '''
+            best_base_delta = None
+            best_base_of_base = None
+            for base in self.base_params:
+                if addr >= self.base_params[base]:
+                    delta = addr - self.base_params[base]
+                    if best_base_delta is None or delta < best_base_delta:
+                        best_base_delta = delta
+                        best_base = base
+
+            for other in self.other_addrs:
+                if addr >= other:
+                    delta = addr - other
+                    if best_base_delta is None or delta < best_base_delta:
+                        best_base_delta = delta
+                        best_base = other
+                        best_base_of_base = self.other_addrs[other]
+
+            best_base = best_base
+            base_offset = best_base_delta 
+            new_ref = self.ParamRef(addr, value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base)
+            self.refs.append(new_ref)
+            if other_ptr is not None:
+                self.lgr.debug('addRef append 0x%x to other_ptr' % other_ptr)
+                self.other_addrs[other_ptr] = best_base
+
+        def mergeRef(self):
+            ''' Go through all reference records and merge obvious strings into a single reference '''
+            self.lgr.debug('mergeRef')
+            candidate = {}
+            current_base = None
+            current_base_of_base = None
+            current_base_delta = None
+            current_addr = None
+            running_count = 0
+            running_size = 0
+            running_hexstring = ''
+            running_value = None
+            index = 0
+            running_start = None
+            add_these = []
+            rm_these = {}
+            for reference in self.refs:
+                if current_base is None or reference.best_base != current_base or reference.addr != (current_addr - reference.size):
+                    ''' TBD clean up any open runs ''' 
+                    if running_count > 3:
+                        start_addr = current_start - (running_size - 1)
+                        new_ref = self.ParamRef(start_addr, running_value, running_hexstring, None, running_size, current_base, current_base_delta, current_base_of_base)
+                        add_these.append(new_ref)
+                        rm_these[running_start] = running_count
+
+                    current_start = reference.addr
+                    current_base = reference.best_base
+                    current_base_of_base = reference.best_base_of_base
+                    current_base_delta = reference.best_base_delta
+                    current_addr = reference.addr 
+                    running_size = reference.size
+                    running_count = 0
+                    running_hexstring = reference.hexstring
+                    running_value = reference.value
+                    running_start = index
+                  
+                else:
+                    self.lgr.debug('mergeRef ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
+                    current_addr = reference.addr 
+                    running_count = running_count+1
+                    running_size = running_size + reference.size
+                    running_hexstring = reference.hexstring+running_hexstring
+                    running_value = reference.value+running_value
+                    current_base_delta = reference.best_base_delta
+
+                index = index + 1
+            for rm_index in rm_these:
+                end = rm_index + rm_these[rm_index] + 1
+                self.lgr.debug('mergeRef rm %d to %d' % (rm_index, end))
+                del self.refs[rm_index:end]
+            for add_ref in add_these:
+                self.refs.append(add_ref)
+
+        def addWrote(self, addr, value):
+            self.wrote_values[addr] = value
 
     def doBreaks(self):
         ''' set breaks on syscall entries and exits '''
@@ -135,30 +296,9 @@ class Win7CallParams():
             self.lgr.debug('getCurPid cur_thread is None')
         return cur_proc, pid, comm
  
-    def parseOpen(self, rsp, pid):
-        ''' not used '''
-        retval = ''
-        offset = 40
-        msg = 'OpenFile pid:%d ' % pid
-        params = []
-        for i in range(4):
-            offset = 40 + i*8
-            sp_off = rsp + offset 
-            value = self.mem_utils.readWord(self.cpu, sp_off)
-            params.append(value)
-            add = 'offset_%d  value: 0x%x' % (offset, value) 
-            msg = msg + add + ' '
-        if params[0] == 3:
-            fname_off = rsp + 64
-            fname_ptr = self.mem_utils.readPtr(self.cpu, fname_off)
-            if fname_ptr is not None:
-                barray = self.mem_utils.readBytes(self.cpu, fname_ptr, 80)
-                if barray is not None:
-                    stuff = barray.decode('utf-16le', errors='replace')
-                    msg = msg + '\n\t ' + stuff
-        return msg
 
     def oneCallHap(self, dumb, third, forth, memory):
+        ''' Invoked when the "only" system call is hit at its computed entry '''
         cur_task, pid, comm = self.getCurPid()
         self.lgr.debug('oneCallHap only: %s pid:%d (%s)' % (self.only, pid, comm))
 
@@ -179,6 +319,11 @@ class Win7CallParams():
 
         self.user_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Read, 0, (self.param.kernel_base-1),  0)
         self.user_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userReadHap, None, self.user_break)
+
+        self.user_write_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1),  0)
+        self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, None, self.user_write_break)
+
+        self.param_ref_tracker = self.ParamRefTracker(user_stack, rcx, rdx, r8, r9, self.mem_utils, self.cpu, self.lgr)
 
     def syscallHap(self, dumb, third, forth, memory):
         ''' hit when kernel is entered due to sysenter '''
@@ -206,28 +351,13 @@ class Win7CallParams():
                 #    return
                 #self.got_one = True
                 if pid is not None:
-                    if pid in self.stack_param_hap:
-                        self.lgr.error('syscallHap pid:%d still has entry in stack_param_hap.  Fix this race!' % pid)
-                    #entry = self.getComputed(rax)     
-                    self.current_call_params[pid] = {}
                     self.current_call[pid] = rax
                     rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
                     self.entry_rsp[pid] = rsp
                     self.lgr.debug('syscallHap cur_task 0x%x pid:%d (%s) rsp: 0x%x rax: %d call: %s' % (cur_task, pid, comm, rsp, rax, call_name)) 
-                    #if call_name == 'OpenFile':
-                    #    msg = self.parseOpen(rsp, pid)
-                    #    self.lgr.debug(msg)
                     if call_name == self.stop_on:
                         SIM_break_simulation('syscall stop on call')
 
-                    if call_name == 'OpenFile':
-                        SIM_break_simulation('is open')
-                        entry = self.getComputed(rax)     
-                        self.lgr.debug('computed entry would be 0x%x' % entry)
-
-                    if rax not in self.call_param_offsets:
-                        self.call_param_offsets[rax] = []
-                    self.watchStackParams(pid, call_name)
                     self.all_reg_values[pid] = self.allRegValues()
                 else:
                     self.lgr.debug('got none for pid task 0x%x' % cur_task)
@@ -244,45 +374,6 @@ class Win7CallParams():
             msg = msg+msg_add
         return msg
  
-    def recordOpen(self, pid):
-        ''' gather values of what might be parameters to the open syscall'''
-        retval = ''
-        msg = 'return from OpenFile pid:%d rsp: 0x%x ' % (pid, self.entry_rsp[pid])
-        for offset in self.current_call_params[pid]:
-            if self.current_call_params[pid][offset] is not None:
-                orig_bytes = self.current_call_params[pid][offset]
-                #orig_bytes.reverse()
-                hexstring = binascii.hexlify(orig_bytes)
-                msg_add = ' offset 0x%x (%d) value 0x%x' % (offset, offset, int(hexstring,16))
-            else:
-                msg_add = ' offset 0x%x (%d) value is None' % (offset, offset)
-            msg = msg + ' '+msg_add
-        offset_list = [64, 72]
-        for offset in offset_list:
-            if offset in self.current_call_params[pid] and self.current_call_params[pid][offset] is not None:
-                orig_bytes = self.current_call_params[pid][offset]
-                orig_bytes.reverse()
-                param_ptr = None
-                fname_maybe = ''
-                if len(orig_bytes) == 8:
-                    param_ptr = struct.unpack("<Q", orig_bytes)[0]
-                elif len(orig_bytes) == 4:
-                    param_ptr = struct.unpack("<L", orig_bytes)[0]
-                else:
-                    self.lgr.debug('offset %d len of orig_bytes is %d, does not look like a pointer?' % (offset, len(orig_bytes)))
-                    fname_maybe = 'Kernel only read %d bytes from offset %d of what should be an address' % (len(orig_bytes), offset)
-                if param_ptr is not None:
-                    self.lgr.debug('recordOpen offset %d param_ptr 0x%x' % (offset, param_ptr))
-                    barray = self.mem_utils.readBytes(self.cpu, param_ptr, 80)
-                    if len(barray) == 0:
-                        fname_maybe = 'offset %d Address 0x%x not mapped' % (offset, param_ptr) 
-                    else:
-                        fname_maybe = 'offset %d: %s' % (offset, barray.decode('utf-16le', errors='replace'))
-                        #string = 'offset %d %s' % (offset, self.mem_utils.readString(self.cpu, param_ptr, 80))
-                msg = msg + '\n\t ' + fname_maybe
-        msg = msg + '\n'+self.all_reg_values[pid]
-        return msg
-
     class DelRec():
         def __init__(self, break_num, hap, pid):
             self.break_num = break_num
@@ -297,13 +388,31 @@ class Win7CallParams():
         if self.user_hap is not None:
             SIM_run_alone(self.rmUserHap, self.user_hap)
             self.user_hap = None
+            SIM_run_alone(self.rmUserWriteHap, self.user_write_hap)
+            self.user_write_hap = None
+            params = self.param_ref_tracker.toString()
+            #print(params)
+            self.lgr.debug(params)
+            self.param_ref_tracker.mergeRef()
+            self.lgr.debug('after merge')
+            params = self.param_ref_tracker.toString()
+            cur_task, pid, comm = self.getCurPid()
+            print('%s pid:%d (%s)' % (self.only, pid, comm))
+            print(params)
+            self.lgr.debug(params)
+            SIM_break_simulation('exitOneHap')
 
     def rmUserHap(self, user_hap):
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", user_hap)
         if self.user_break is not None:
             SIM_delete_breakpoint(self.user_break)
             self.user_break = None
-
+     
+    def rmUserWriteHap(self, user_write_hap):
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", user_write_hap)
+        if self.user_write_break is not None:
+            SIM_delete_breakpoint(self.user_write_break)
+            self.user_write_break = None
      
  
     def exitHap(self, dumb, third, forth, memory):
@@ -323,36 +432,16 @@ class Win7CallParams():
                 self.lgr.debug('exitHap PID is none for cur_task: 0x%x' % (cur_task))
             if pid in self.all_reg_values:
                 self.lgr.debug(self.all_reg_values[pid])
-            if pid in self.stack_param_hap:
-                del_rec = self.DelRec(self.stack_param_break[pid], self.stack_param_hap[pid], pid)
-                del self.stack_param_hap[pid]
-                del self.stack_param_break[pid]
-                ''' Cannot delete HAPS from main Simics thread, must "run alone" '''
-                SIM_run_alone(self.stopWatchStack, del_rec)
- 
+
             if pid in self.current_call and self.current_call[pid] in self.call_map:
                 call_name = self.call_map[self.current_call[pid]][2:]
                 #self.lgr.debug('exitHap callname %s' % call_name)
-                if call_name == 'OpenFile':
-                    msg = self.recordOpen(pid)
-                    self.lgr.debug(msg)
-                    #if 'not mapped' in msg:
-                    #    SIM_break_simulation('not mapped')
             if self.stop_on is not None:
                 #self.lgr.debug('exitHap stopon is %s and pid' % self.stop_on)
                 if call_name is not None:
                     if call_name == self.stop_on:
                         SIM_break_simulation('exitHap stop on call')
 
-    def watchStackParams(self, pid, call_name):
-        ''' Set a break on 80 bytes starting at the user-space sp to record kernel references to the
-            user space stack '''
-        rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
-        self.lgr.debug('watchStackParams set break on sp 0x%x' % rsp)
-        stack_param_start = rsp+40
-        stack_param_bytes = watch_stack_params * 8
-        self.stack_param_break[pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, stack_param_start, stack_param_bytes, 0)
-        self.stack_param_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.stackParamHap, call_name, self.stack_param_break[pid])
 
     def stopWatchExit(self, exit_hap):
         self.cpu.current_context = self.default_context
@@ -361,110 +450,32 @@ class Win7CallParams():
         if self.exit_break is not None:
             SIM_delete_breakpoint(self.exit_break)
             self.exit_break = None
-
-    def stopWatchStack(self, del_rec):
-        ''' Stop watching stack references, e.g., because we are exiting the kernel '''
-        ''' the self.stack_param_hap and break were removed in the main thread to avoid a race '''
-        self.lgr.debug('stopWatchStack')
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", del_rec.hap)
-        SIM_delete_breakpoint(del_rec.break_num)
-        if del_rec.pid in self.open_file_break:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.open_file_hap[del_rec.pid])
-            SIM_delete_breakpoint(self.open_file_break[del_rec.pid])
-            del self.open_file_hap[del_rec.pid]
-            del self.open_file_break[del_rec.pid]
-        if del_rec.pid in self.open_file_break2:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.open_file_hap2[del_rec.pid])
-            SIM_delete_breakpoint(self.open_file_break2[del_rec.pid])
-            del self.open_file_hap2[del_rec.pid]
-            del self.open_file_break2[del_rec.pid]
  
-    class PidAddr():
-        def __init__(self, pid, addr):
-            self.pid = pid
-            self.addr = addr
-
-    def stackParamHap(self, call_name, third, forth, memory):
-        ''' Hit when kernel reads values in user space stack, implying they are parameters. '''
-        ''' me thinks there are race conditions here '''
-        #self.lgr.debug('stackParamHap') 
-        cur_task, pid, comm = self.getCurPid()
-        if pid in self.stack_param_hap:
-            addr = memory.logical_address
-            offset = addr - self.entry_rsp[pid] 
-            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-            orig_value = self.mem_utils.readBytes(self.cpu, addr, memory.size)
-            if orig_value is not None:
-                value = orig_value
-                value.reverse()
-                hexstring = binascii.hexlify(value)
-                self.lgr.debug('stackParamHap pid:%d (%s) rip: 0x%x read value 0x%s from 0x%x, offset 0x%x (%d) from sp 0x%x cycles:0x%x' % (pid, comm, rip, hexstring, addr, offset, offset, self.entry_rsp[pid], self.cpu.cycles))
-                if call_name == 'OpenFile': 
-                    pid_addr = self.PidAddr(pid, addr)
-                    if offset == 64:
-                        SIM_run_alone(self.watchOpenFilePtr, pid_addr)
-                    elif offset == 72:
-                        SIM_run_alone(self.watchOpenFilePtr2, pid_addr)
-            else:
-                self.lgr.debug('stackParamHap pid:%d rip: 0x%x could not read value from 0x%x, offset %d from sp 0x%x' % (pid, rip, addr, offset, self.entry_rsp[pid]))
-            ''' for every pid and every call '''
-            if offset not in self.current_call_params[pid]:
-                self.current_call_params[pid][offset] = orig_value
-            else:
-                self.lgr.debug('offset %d already in current_call_params for pid %d' % (offset, pid))
-
-            ''' record once for reference'''
-            if offset not in self.call_param_offsets[self.current_call[pid]]:
-                self.call_param_offsets[self.current_call[pid]].append(offset) 
-
-    def watchOpenFilePtr(self, pid_addr):
-        ''' set a break/hap on reads of file names? '''
-        if pid_addr.pid not in self.open_file_break:
-            file_ptr = self.mem_utils.readPtr(self.cpu, pid_addr.addr)
-            if file_ptr is not None and file_ptr != 0:
-                self.lgr.debug('watchOpenFilePtr for pid:%d addr: 0x%x file_ptr: 0x%x' % (pid_addr.pid, pid_addr.addr, file_ptr))
-                self.open_file_break[pid_addr.pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, file_ptr, 8, 0)
-                self.open_file_hap[pid_addr.pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openFilePtr, pid_addr.pid, self.open_file_break[pid_addr.pid])
-
-    def watchOpenFilePtr2(self, pid_addr):
-        ''' set a break/hap on reads of file names from offset 72 '''
-        if pid_addr.pid not in self.open_file_break2:
-            file_ptr = self.mem_utils.readPtr(self.cpu, pid_addr.addr)
-            if file_ptr is not None and file_ptr != 0:
-                self.lgr.debug('watchOpenFilePtr2 for pid:%d addr: 0x%x file_ptr: 0x%x' % (pid_addr.pid, pid_addr.addr, file_ptr))
-                self.open_file_break2[pid_addr.pid] = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Read, file_ptr, 8, 0)
-                self.open_file_hap2[pid_addr.pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.openFilePtr2, pid_addr.pid, self.open_file_break2[pid_addr.pid])
-
-    def showParams(self):
-        ''' dump the collected parameter offsets for each syscall '''
-        jd = json.dumps(self.call_param_offsets, indent=4)
-        with open('syscall_params.json', 'w') as fh:
-            fh.write(jd)
-        for call_num in self.call_param_offsets:
-            call_name = self.call_map[call_num][2:]
-            print('%s' % call_name)
-            for offset in sorted(self.call_param_offsets[call_num]):
-                print('\t%d' % offset) 
-
-    def openFilePtr(self, pid, third, forth, memory):
-        ''' Hit when file name pointers are read '''
-        if pid in self.open_file_break:
-            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-            self.lgr.debug('openFilePtr FILE READ pid:%d  rip: 0x%x addr: 0x%x' % (pid, rip, memory.logical_address))
-
-    def openFilePtr2(self, pid, third, forth, memory):
-        if pid in self.open_file_break2:
-            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-            self.lgr.debug('openFilePtr2 FILE READ pid:%d  rip: 0x%x addr: 0x%x' % (pid, rip, memory.logical_address))
-
-    def userReadHap(self, call_name, third, forth, memory):
+    def userReadHap(self, dumb, third, forth, memory):
         cur_task, pid, comm = self.getCurPid()
         #self.lgr.debug('userReadHap memory 0x%x len %d' % (memory.logical_address, memory.size))
         orig_value = self.mem_utils.readBytes(self.cpu, memory.logical_address, memory.size)
         if orig_value is not None:
-            value = orig_value
+            value = bytearray(orig_value)
             value.reverse()
+            other_ptr = None
+            if memory.size == 8:
+                param_ptr = struct.unpack(">Q", value)[0]
+                self.lgr.debug('userReadHap paramPtr  0x%x' % param_ptr)
+                if param_ptr is not None and param_ptr != 0:
+                    test = self.mem_utils.readWord(self.cpu, param_ptr)
+                    if test is not None:
+                        self.lgr.debug('userReadHap good paramPtr 0x%x' % param_ptr)
+                        other_ptr = param_ptr    
+                
             hexstring = binascii.hexlify(value)
             self.lgr.debug('userReadHap pid:%d (%s) read value 0x%s from 0x%x, cycles:0x%x' % (pid, comm, hexstring, 
                   memory.logical_address, self.cpu.cycles))
+            self.param_ref_tracker.addRef(memory.logical_address, orig_value, hexstring, memory.size, other_ptr)
 
+
+    def userWriteHap(self, dumb, third, forth, memory):
+        cur_task, pid, comm = self.getCurPid()
+        new_value = SIM_get_mem_op_value_le(memory)
+        self.lgr.debug('userWriteHap pid: %d (%s) wrote 0x%x to memory address 0x%x len %d' % (pid, comm, new_value, memory.logical_address, memory.size))
+        self.param_ref_tracker.addWrote(memory.logical_address, new_value)
