@@ -1479,7 +1479,7 @@ class GetKernelParams():
         else:
             self.lgr.debug('continueAhead was running')
 
-    def getWin7CallParams(self, stop_on=None):
+    def getWin7CallParams(self, stop_on=None, only=None):
         ''' Use breakpoints set on the stack to identify call parameter offsets from the stack pointer.
             Optional stop_on will stop on exit from call'''
         cell_name = self.target 
@@ -1495,7 +1495,7 @@ class GetKernelParams():
                     else:
                         self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
                         return
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on)
+        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, cell_name, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on, only=only)
 
     def showW7CallParams(self):
         ''' Show results of getWin7CallParams '''
