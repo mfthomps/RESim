@@ -1052,7 +1052,13 @@ class GetKernelParams():
         SIM_run_alone(self.stepCompute, compat32)
 
     def computeDoStop(self, dumb, third, forth, memory):
-        self.lgr.debug('computeDoStop must be at sys_entry')
+        if self.cpu.architecture != 'arm' and self.os_type == 'WIN7':
+            rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+            ''' TBD handle different windows syscall jump tables '''
+            if rax > 500:
+                self.lgr.debug('skip this call...')
+                return
+        self.lgr.debug('computeDoStop must be at sys_entry rax is %d' % rax)
         SIM_break_simulation('computeDoStop')
 
     def testComputeHap(self, dumb, third, forth, memory):
