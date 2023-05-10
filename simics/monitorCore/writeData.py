@@ -352,7 +352,7 @@ class WriteData():
                 if self.select_call_ip is not None:
                     self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
                     self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
-                    #self.lgr.debug('writeData set selectHap on select_call_ip 0x%x, cell is %s' % (self.select_call_ip, str(self.cell)))
+                    self.lgr.debug('writeData set selectHap on select_call_ip 0x%x, cell is %s' % (self.select_call_ip, str(self.cell)))
 
     def setSelectStopHap(self):
         if self.select_hap is None:
@@ -386,18 +386,21 @@ class WriteData():
                 SIM_run_alone(self.write_callback, 0)
             else:
                 #self.lgr.debug('writeData selectHap break simulation')
-                SIM_break_simulation('writeData selectHap stop on read')
+                SIM_break_simulation('writeData selectHap stop on read callback is None')
             return
         pid = self.top.getPID()
         if self.stop_on_read and len(self.in_data) == 0:
-            #self.lgr.debug('writeData selectHap stop on read')
-            SIM_break_simulation('writeData selectHap stop on read')
+            if self.write_callback is not None:
+                SIM_run_alone(self.write_callback, 0)
+            else:
+                self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
+                SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
         if pid != self.pid:
-            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            #self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             pass
         else:
             if self.limit_one:
@@ -407,7 +410,7 @@ class WriteData():
             else:
                 ''' Skip over kernel to the return ip '''
                 self.cpu.iface.int_register.write(self.pc_reg, self.select_return_ip)
-                #self.lgr.debug('writeData selectHap, skipped over kernel')
+                self.lgr.debug('writeData selectHap, skipped over kernel')
 
     def callHap(self, dumb, third, break_num, memory):
         ''' Hit a call to recv '''

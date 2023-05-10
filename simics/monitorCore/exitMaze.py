@@ -97,6 +97,10 @@ class ExitMaze():
     def mazeReturn(self, was_running=False):
         if self.function_ret is None:
             print('no function return set.')
+            self.lgr.error('exitMaze mazeReturn no function return has been set.  was_running %r' % was_running)
+            if not was_running:
+                self.lgr.error('exitMaze mazeReturn was not running, try to continue anyway (better than a dead stop)')
+                SIM_continue(0)
             return
         self.just_return = True
         self.break_addrs = []

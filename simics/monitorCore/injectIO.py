@@ -254,6 +254,8 @@ class InjectIO():
                 self.lgr.debug('injectIO enabled coverage')
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
+            if self.max_len is not None and self.max_len < bytes_wrote:
+                self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
             if not self.stay:
                 if self.break_on is not None:
                     self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
@@ -405,6 +407,8 @@ class InjectIO():
             #print('start %s' % str(so_pickle['text_start']))
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
+            else:
+                self.lgr.debug('injectIO no addr in pickle?')
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
@@ -418,6 +422,8 @@ class InjectIO():
                 self.addr_size = so_pickle['addr_size']
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
+        else:
+            self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
 
     def saveJson(self, save_file=None, packet=None):
         if packet is None:

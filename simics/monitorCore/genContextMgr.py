@@ -175,14 +175,21 @@ class GenContextMgr():
         ''' experiment with tracking task switches among watched pids '''
         self.task_switch = {}
 
+        self.context_map = {}
+        self.map_context = {}
+
         obj = SIM_get_object(cell_name)
         self.default_context = obj.cell_context
+        self.context_map[obj.cell_context] = cell_name
+        self.map_context[cell_name] = obj.cell_context
 
         context = 'RESim_%s' % cell_name
         cmd = 'new-context %s' % context
         SIM_run_command(cmd)
         obj = SIM_get_object(context)
         self.resim_context = obj
+        self.context_map[obj] = context
+        self.map_context[context] = obj
         self.lgr.debug('context_manager cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
 
         ignore = 'ignore_%s' % cell_name
@@ -473,7 +480,7 @@ class GenContextMgr():
                 ''' Should watch new task '''
                 if new_task not in self.nowatch_list:
                     ''' should watch all but maze ''' 
-                    SIM_run_alone(self.setAllHap, False)
+                    #SIM_run_alone(self.setAllHap, False)
                     #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list, watch all but maze')
                 else:
                     ''' should only watch maze breaks '''
@@ -491,8 +498,9 @@ class GenContextMgr():
                         #self.lgr.debug('contextManager DEBUG, was not watching, no debug list but task in maze breakout, watch ONLY maze breaks')
                     else:
                         ''' Set all but the maze breaks '''
-                        SIM_run_alone(self.setAllHap, False)
+                        #SIM_run_alone(self.setAllHap, False)
                         #self.lgr.debug('contextManager DEBUG, was not watching, no debug list not in maze breakout, watch all but maze')
+                        pass
                 else:
                     ''' Some other tasks are in the debug list '''
                     if new_task in self.nowatch_list:
@@ -530,7 +538,7 @@ class GenContextMgr():
                     ''' New task not in maze breakout'''
                     #self.lgr.debug('contextManager DEBUG, was watching, task %d rec 0x%x NOT in debug list; task not in maze breakout.  Delete all haps.' % (pid, new_task))
                     self.restoreDefaultContext() 
-                    SIM_run_alone(self.clearAllHap, False)
+                    #SIM_run_alone(self.clearAllHap, False)
                     self.watching_tasks = False
                     if len(self.watch_rec_list) == 0 and len(self.nowatch_list) == 0:
                         #self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
@@ -538,7 +546,10 @@ class GenContextMgr():
         
     def changedThread(self, cpu, third, forth, memory):
         ''' guts of context managment.  set or remove breakpoints/haps 
-            depending on whether we are tracking the newly scheduled process '''
+            depending on whether we are tracking the newly scheduled process.
+            Also manages breakpoints/haps for maze exits.  TBD alter so that if 
+            maze is not an issue, no breakpoints are deleted or restored and we
+            only rely on context. '''
         if self.task_hap is None:
             return
         # get the value that will be written into the current thread address
@@ -1186,6 +1197,12 @@ class GenContextMgr():
     def getDefaultContext(self):
         return self.default_context
 
+    def getRESimContextName(self):
+        return self.context_map[self.resim_context]
+
+    def getDefaultContextName(self):
+        return self.context_map[self.default_context]
+
     def watchPageFaults(self, watching):
         self.watching_page_faults = watching
 
@@ -1223,3 +1240,22 @@ class GenContextMgr():
 
     def getIgnoredProgs(self):
             return list(self.ignore_progs)
+
+    def getContextName(self, cell):
+        retval = None
+        if cell in self.context_map:
+            retval = self.context_map[cell]
+        return retval
+        
+    def getCellFromContext(self, context_name):
+        retval = None
+        if context_name in self.map_context:
+            retval = self.map_context[context_name]
+        return retval
+
+    def getContexts(self):
+        ''' return context names '''
+        retval = []
+        for c in self.map_context:
+            retval.append(c)
+        return retval 

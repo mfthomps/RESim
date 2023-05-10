@@ -1,6 +1,6 @@
 import os
 class UserIterators():
-    def __init__(self, path, lgr):
+    def __init__(self, path, lgr, root_dir):
         self.path = path
         self.lgr = lgr
         self.iterators = []
@@ -11,7 +11,7 @@ class UserIterators():
             self.lgr.error('RESIM_IDA_DATA not defined')
             return
         base = os.path.basename(self.path).rsplit('.', )[0]
-        self.new_path = os.path.join(ida_data, base, base+'.iterators')
+        self.new_path = os.path.join(ida_data, root_dir, base, base+'.iterators')
         if os.path.isfile(self.new_path):
             self.load(self.new_path)
             self.lgr.debug('userIterators count now %d from %s' % (len(self.iterators), self.new_path))

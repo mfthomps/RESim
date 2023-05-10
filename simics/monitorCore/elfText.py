@@ -68,8 +68,8 @@ def getText(path, lgr):
     return retval
 
 def getRelocate(path, lgr, ida_funs):
-    cmd = 'readelf -r %s' % path
-    #lgr.debug('getRelocate %s' % path)
+    cmd = 'readelf -r %s -W' % path
+    lgr.debug('getRelocate %s' % path)
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = proc1.communicate()
     retval = {}
@@ -83,15 +83,14 @@ def getRelocate(path, lgr, ida_funs):
                 continue
             if addr == 0:
                 addr = int(parts[0], 16)
-            #lgr.debug('getRelocate add entry for 0x%x' % addr)
             fun_name = parts[4]
             if fun_name.startswith('_'):
                 fun_name = fun_name[1:]
                 if '@' in fun_name:
                     fun_name = fun_name.split('@')[0]
             if ida_funs is not None:
-                fun_name = ida_funs.demangle(fun_name)
-                retval[addr] = fun_name
+                fun_name_dm = ida_funs.demangle(fun_name)
+                retval[addr] = fun_name_dm
         else:
             pass
             #lgr.debug('getRelocate not 5 %s' % line)

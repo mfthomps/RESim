@@ -52,7 +52,7 @@ class TraceProcs():
     def loadPickle(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
         if os.path.isfile(proc_file):
-            self.lgr.debug('traceProcs pickle from %s' % proc_file)
+            self.lgr.debug('traceProcs %s pickle from %s' % (self.cell_name, proc_file))
             proc_pickle = pickle.load( open(proc_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
             self.plist = proc_pickle['plist']
@@ -60,7 +60,7 @@ class TraceProcs():
             self.socket_handle = proc_pickle['socket_handle']
             self.latest_pid_instance = proc_pickle['latest_pid_instance']
             self.init_proc_list = proc_pickle['init_proc_list']
-            self.lgr.debug('traceProcs loaded %d pids' % len(self.plist))
+            self.lgr.debug('traceProcs %s loaded %d pids' % (self.cell_name, len(self.plist)))
             
 
     def pickleit(self, name):
@@ -153,10 +153,13 @@ class TraceProcs():
             self.plist[parent].children.append(pid)
         newproc = Pinfo(pid, clone=clone, parent=parent)
         self.plist[pid] = newproc 
+        #self.lgr.debug('procTrace addProc pid:%s parent:%s clone: %r comm: %s' % (pid, parent, clone, comm))
         if clone:
             if parent is not None and self.plist[parent].prog is not None:
                 self.plist[pid].prog = '%s' % self.plist[parent].prog
+                #self.lgr.debug('procTrace addProc plist[%s].prog set to %s' % (pid, self.plist[parent].prog))
             else:
+                #self.lgr.debug('procTrace addProc plist[%s].prog set to <clone>' % (pid))
                 self.plist[pid].prog = '<clone>'
         elif comm is not None:  
             self.plist[pid].prog = comm
@@ -394,7 +397,8 @@ class TraceProcs():
             if len(self.plist[pid].sockets[s]) > 0:
                 sockets = sockets + ' %s(S%s)' % (s, str(self.plist[pid].sockets[s]))
             else:
-                sockets = sockets + ' %s' % (s)
+                #sockets = sockets + ' %s' % (s)
+                pass
 
         ftype = ''
         if self.plist[pid].ftype is not None:

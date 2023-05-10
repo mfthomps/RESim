@@ -323,6 +323,9 @@ gather its data prior to the process being loaded.
 
 \item {\tt debugProc(process name)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
 
+The process name is searched against the comm names, which are fifteen characters.  RESim will trucate input names to 15 characters.
+                                                               
+
 Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator.  Most of the commands listed below have analogs available from within IDA Pro, once the RESim {\tt rev.py} plugin is loaded.
 
 If execution transfers to a shared object library of interest, the associated library file can be found via the getSOFile command described below.  Load that file into IDA Pro and rebase to the SO address
@@ -759,7 +762,8 @@ The default value is 900,000,000, which is too large for some ARM implementation
 {\tt BOOT\_CHUNKS} value assigned to any component that has not yet completed its boot.
 \item {\tt DMOD} Optional file to pass to the {\tt runToDmod} command once the component has booted.  See \ref{dmod}.
 \item {\tt PLATFORM} One of the following: x86; arm; or arm5
-\item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded.
+\item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded, which only occurs during boot, i.e., these are not run with snapshots.
+\item {\tt ALWAYS\_SCRIPT} Simics command script to be run on each startup, reqardless of whether the run is from a snapshot.
 \end{itemize}
 
 \subsection{Target platforms}
@@ -882,7 +886,7 @@ see the IDA Pro installation below for information on installing IDA.
 \begin{verbatim}
    git clone https://github.com/mfthomps/RESim.git
 \end{verbatim}
-\item Install python-magic from gz file:  pip install $<$path$>$
+\item Install python-magic.  If on Simics 6, install the standard python3-magic.  If on Simcs 4, install it from gz file:  pip install $<$path$>$
 \begin{verbatim}
    sudo pip install /mnt/re_images/python_pkgs/python-magic-0.4.15.tar.gz
 \end{verbatim}
@@ -1018,9 +1022,11 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 \subsection{IDA Pro}
 \label{ida}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
-{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration file.  
+{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration (ini) file.  
 
-Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).
+Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).  Start IDA from the
+{\tt RESIM\_ROOT\_PREFIX} directory, providing the path to the executable realative to that root prefix directory.
+
 If IDA will run on a different computer than where Simics is running, and that remote computer can only be reached via SSH, include the host 
 name as a command line option.  See section \ref{ida-install} for additional information.
 
@@ -1794,6 +1800,10 @@ execution paths to be missed.
 When using the UDP\_HEADER to fuzz with multiple packets, AFL may run amuck, generating lots of packets because it observes what it considers
 to be unique paths or unique crashes.  Consider putting a cap on the number of packets with the AFL\_MAX\_PACKETS ENV value. 
 
+\subsection{False crash reports}
+The primary means of detecting SEGV relies on looking for unresolved page faults when an AFL cycle ends, e.g., due to a backstop.
+False crash reports may be the result of a backstop that is too small, i.e., a large backstop will let the kernel complete the
+mapping of the page.
 
 \subsection{Why fuzz with full system simulation?}
 Fuzzing a binary often requires the binary to be led to a state in which it is prepared
@@ -2095,6 +2105,10 @@ If an AFL session seems to hang, stopping it will cause the most recent AFL data
 be analyzed.
 instead of the full tracking.
 
+If Simics stops for no apparent reason, e.g., while doing in injectIO, view the PC and the breakpoints (list-breakpoints -all)
+and look at the logs to see if some Hap is defined for that breakpoint.  Use showHaps to see if the breakpoint is part of a hap
+managed by the genContextManager.  It may be an ad-hock break/hap, such as those used by the writeData module.
+
 \section{Data Stores}
 This section describes how RESim stores and accesses different data stores.
 
@@ -2113,9 +2127,12 @@ be on an NFS share so that the same ini file can be used on multiple RESim platf
 
 The idb and hits files will be per-user, stored in a local writable directory relative to path 
 named by the {\tt RESIM\_IDA\_DATA} environment varible.  Files will be copied between IDA
-and RESim platforms using scp. Each analyzed program has a subdirectory in the {\tt RESIM\_IDA\_DATA}
-directory.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
+and RESim platforms using scp. Each analyzed program has a subdirectory relative to the {\tt RESIM\_IDA\_DATA}
+directory, under a directory whose name matches the {\tt RESIM\_ROOT\_PREFIX} directory
+named in the ini file.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
 a file with a ".prog" extension that identifies the path to program that was analyzed. 
+(The extra {\tt RESIM\_ROOT\_PREFIX} subdirectory is intended to avoid name collisions, e.g., for libc libraries from
+different systems.)
 
 If IDA and Simics run on different computers, and the {\tt runIDA.py} command is given the name of a remote 
 computer, i.e., the IDA computer and the Simics computer communicate via an SSH tunnel, 
@@ -2471,6 +2488,11 @@ optimization schemes should not try to reduce breakpoint counts on the fly.
 \section{ToDo}
 \subsection {Msc}
 \begin{itemize}
+\item Standardize syscall trace output so that each entry includes the comm.
+
+\item Add duration option to traceAll so it can run quitely and stop when given duration has been reached.  But must deal with
+autoMaze stops!  Prompt user to allow automaze.
+
 \item Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
 break on this like we do for execve.
 

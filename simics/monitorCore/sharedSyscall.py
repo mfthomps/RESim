@@ -455,6 +455,7 @@ class SharedSyscall():
                     return trace_msg 
                 trace_msg = ('\treturn from socketcall %s pid:%d, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, pid, 
                      exit_info.old_fd, exit_info.sock_struct.length, eax, exit_info.retval_addr, src, s))
+                self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length was the given length, changed to count'''
@@ -698,9 +699,10 @@ class SharedSyscall():
                     if exit_info.call_params.nth >= 0:
                         self.lgr.debug('exitHap clone, run to pid %d' % eax)
                         SIM_run_alone(self.top.toProcPid, eax)
+                        self.top.rmSyscall(self.exit_info.call_params.name, cell_name=self.cell_name)
                         exit_info.call_params = None
-                        my_syscall = exit_info.syscall_instance
-                        my_syscall.stopTrace()
+                        #my_syscall = exit_info.syscall_instance
+                        #my_syscall.stopTrace()
             
             #dumb_pid, dumb, dumb2 = self.context_manager.getDebugPid() 
             #if dumb_pid is not None:
@@ -750,7 +752,7 @@ class SharedSyscall():
                     dmod.setFD(99)
                     dmod.setPid(pid)
                     #self.top.runToRead(dmod, ignore_running=True)
-                    call_params = syscall.CallParams('read', dmod, break_simulation=False)        
+                    call_params = syscall.CallParams('sharedSyscall', 'read', dmod, break_simulation=False)        
                     cell_name = dmod.getCellName()
                     cell = self.top.getCell(cell_name = cell_name)
                     self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True, 
@@ -851,9 +853,11 @@ class SharedSyscall():
                                     exit_info.syscall_instance.rmCallParam(call_param)
                                     if not exit_info.syscall_instance.remainingDmod() and exit_info.syscall_instance.name != 'traceAll':
                                         self.lgr.debug('sharedSyscall read Dmod stopping trace')
-                                        self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
+                                        self.top.rmSyscall(call_param.name, cell_name=self.cell_name)
+                                        #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
-                                        if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
+                                        #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
+                                        if not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
                                             self.top.notRunning(quiet=True)
                                             SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                                 else:
@@ -983,10 +987,11 @@ class SharedSyscall():
                 self.top.writeRegValue('syscall_ret', 0, alone=True)
                 trace_msg = ('\terror return from close DMOD! pid:%d, FD: %d  eax: 0x%x\n' % (pid, exit_info.old_fd, eax))
                 exit_info.call_params.match_param.resetOpen()
-                exit_info.call_params = None
                 if exit_info.syscall_instance.name == 'read-dmod':
                     self.lgr.debug('sharedSyscall close stopping read-dmod syscall')
-                    exit_info.syscall_instance.stopTrace()
+                    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                    #exit_info.syscall_instance.stopTrace()
+                exit_info.call_params = None
             else:
                 trace_msg = ('\terror return from close pid:%d, FD: %d  eax: 0x%x\n' % (pid, exit_info.old_fd, eax))
             

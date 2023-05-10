@@ -59,7 +59,7 @@ def handleClose(resim_procs, read_array, remote, lgr):
     return do_restart
 
 
-def runPlay(args, lgr):
+def runPlay(args, lgr, prog_path):
     here= os.path.dirname(os.path.realpath(__file__))
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
     resim_dir = os.getenv('RESIM_DIR')
@@ -130,9 +130,10 @@ def runPlay(args, lgr):
                 hit_i = int(hit)
                 if hit_i not in all_hits:
                     all_hits.append(hit_i)
+
         ida_data = os.getenv('RESIM_IDA_DATA')
         hits_file = '%s.%s.hits' % (args.program, afl_name)
-        hits_path = os.path.join(ida_data, args.program, hits_file)
+        hits_path = os.path.join(prog_path, hits_file)
         s = json.dumps(all_hits)
         with open(hits_path, 'w') as fh:
             fh.write(s)
@@ -157,17 +158,19 @@ def main():
     args = parser.parse_args()
 
     ida_data = os.getenv('RESIM_IDA_DATA')
-    prog_path = os.path.join(ida_data, args.program)
+    root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
+    root_name = os.path.basename(root_prefix)
+    prog_path = os.path.join(ida_data, root_name, args.program)
     os.makedirs(prog_path, exist_ok=True)
 
-    do_restart = runPlay(args, lgr)
+    do_restart = runPlay(args, lgr, prog_path)
     #time.sleep(20)
     if do_restart:
         print('restarting resim in 10')
         os.remove('/tmp/resim_restart.txt')
         time.sleep(10)
         args.no_afl = True
-        do_restart = runPlay(args, lgr)
+        do_restart = runPlay(args, lgr, prog_path)
   
 if __name__ == '__main__':
     sys.exit(main())

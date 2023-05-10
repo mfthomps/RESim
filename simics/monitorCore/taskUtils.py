@@ -837,10 +837,13 @@ class TaskUtils():
             return None, None
 
     def swapExecPid(self, old, new):
-        self.exec_addrs[new] = self.exec_addrs[old]
-        self.exec_addrs[new].pid = new
-        del self.exec_addrs[old]
-        self.lgr.debug('taskUtils, set exec pid from %d to %d  TBD deep copy/delete' % (old, new))
+        if old in self.exec_addrs and new in self.exec_addrs:
+            self.exec_addrs[new] = self.exec_addrs[old]
+            self.exec_addrs[new].pid = new
+            del self.exec_addrs[old]
+            self.lgr.debug('taskUtils, swapExecPid set exec pid from %d to %d  TBD deep copy/delete' % (old, new))
+        else:
+            self.lgr.error('taskUtils, swapExecPid some pid not in exec_addrs?  %d to %d  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32):
         if self.cpu.architecture == 'arm':

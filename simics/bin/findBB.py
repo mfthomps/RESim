@@ -15,9 +15,9 @@ import findBB
 Return a list of queue files that hit a given BB start address
 '''
 read_marks = ['read', 'compare', 'scan', 'sprint', 'strchr', 'strt']
-def findBB(target, bb, quiet=False):
+def findBB(target, bb, quiet=False, get_all=False):
     retval = []
-    cover_list = aflPath.getAFLCoverageList(target)
+    cover_list = aflPath.getAFLCoverageList(target, get_all=get_all)
     if len(cover_list) == 0:
         print('No coverage found for %s' % target)
     for cover in cover_list:
@@ -130,10 +130,11 @@ def main():
     parser = argparse.ArgumentParser(prog='findBBB', description='Show AFL queue entries that lead to a given basic block address.')
     parser.add_argument('target', action='store', help='The target, e.g., the name of the workspace.')
     parser.add_argument('bb', action='store', help='The address of the basic block.')
+    parser.add_argument('-a', '--all', action='store_true', help='Look at all queue files, no just unique list.')
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
-    findBB(args.target, int(args.bb, 16))
+    findBB(args.target, int(args.bb, 16), args.all)
 
 if __name__ == '__main__':
     sys.exit(main())

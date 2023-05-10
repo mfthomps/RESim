@@ -117,7 +117,9 @@ def main():
                 interface = parts[1].strip()
                 file_list.append(pcap)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, pcap)
-                directive = '/usr/bin/tcpreplay -i %s %s' % (interface, pcap)
+                os.system(cmd)
+                directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (interface, pcap)
+                driver_file.write(directive+'\n')
             else:
                 iofile = parts[0]
                 file_list.append(iofile)

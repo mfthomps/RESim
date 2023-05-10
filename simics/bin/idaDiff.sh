@@ -1,8 +1,9 @@
 #
-# Start IDA for a given target...
+# Start IDA for a given program name
 #
-# The target file (to be disassembled) must be the first argument.
+# The program file (to be disassembled) must be the first argument.
 # The next 2 arguments are coverage files.
+# Must be run from the RESIM_ROOT_PREFIX directory (per the init file)
 #
 if [ -z "$IDA_DIR" ]; then
     echo "IDA_DIR not defined."
@@ -23,10 +24,12 @@ fi
 idacmd=$IDA_DIR/ida
 target=$1
 target_base="$(basename -- $target)"
+here="$(pwd)"
+root_dir="$(basename --  $here)"
 shift 1
 
 target_path=$(realpath $target)
-ida_db_path=$RESIM_IDA_DATA/$target_base/$target_base.idb
+ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
 echo "target is $target"
 echo "dbpath $ida_db_path"
 remain="$@"

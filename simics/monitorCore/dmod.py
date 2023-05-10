@@ -213,7 +213,7 @@ class Dmod():
                 delta = len(checkline) - len(new_line)
                 diddle_lseek = DmodSeek(delta, pid, fd)
                 operation = ['_llseek', 'close']
-                call_params = syscall.CallParams(operation, diddle_lseek)        
+                call_params = syscall.CallParams('DmodReplace', operation, diddle_lseek)        
                 cell = self.top.getCell(cell_name=self.cell_name)
                 ''' Provide explicit cell to avoid defaulting to the contextManager.  Cell is typically None.'''
                 self.top.runTo(operation, call_params, run=False, ignore_running=True, cell_name=self.cell_name, cell=cell)

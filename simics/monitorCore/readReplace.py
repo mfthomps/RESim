@@ -31,10 +31,15 @@ per target.  The format of the file is:
 Where "comm" is the process comm name; addr is the address; and hexstring
 is a hexidecimal string that will be unhexified and written to the given
 address the first time the address is read.
+
+To handle snapshots, the module keeps a list of each comm/address pair
+and pickles that.  Those entries are then skipped when the snapshot 
+is restored.
 '''
 from simics import *
 from resimHaps import *
 import os
+import pickle
 import binascii
 class BreakRec():
     def __init__(self, addr, comm, hexstring, hap):
@@ -44,14 +49,18 @@ class BreakRec():
         self.hexstring = hexstring
 
 class ReadReplace():
-    def __init__(self, top, cpu, fname, lgr):
+    def __init__(self, top, cpu, cell_name, fname, lgr, snapshot=None):
         self.cpu = cpu
+        self.cell_name = cell_name
         self.top = top
         self.lgr = lgr
         self.breakmap = {}
+        self.done_list = []
         if not os.path.isfile(fname):
             self.lgr.error('ReadReplace: Could not find readReplace file %s' % fname)
             return
+        if snapshot is not None:
+            self.pickleLoad(snapshot)
         with open (fname) as fh:
             for line in fh:
                 if line.strip().startswith('#'):
@@ -66,12 +75,16 @@ class ReadReplace():
                 except:
                     self.lgr.error('ReadReplace: bad addr in %s' % line)
                     return
-                hexstring = parts[2]
-                self.addBreak(addr, comm, hexstring)
+                ''' Set break unless comm/addr pair appears in the pickled list '''
+                comm_addr = '%s:0x%x' % (comm, addr)
+                if comm_addr not in self.done_list:
+                    hexstring = parts[2]
+                    self.addBreak(addr, comm, hexstring)
         self.lgr.debug('ReadReplace: set %d breaks' % len(self.breakmap))
 
     def addBreak(self, addr, comm, hexstring):
                 breakpt = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Read, addr, 1, 0)
+                self.lgr.debug('readReplace addBreak %d addr 0x%x context %s' % (breakpt, addr, self.cpu.current_context))
                 hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.readHap, None, breakpt)
                 self.breakmap[breakpt] = BreakRec(addr, comm, hexstring, hap)
          
@@ -87,6 +100,8 @@ class ReadReplace():
             self.lgr.debug('ReadReplace comm %s would write %s to 0x%x' % (comm, bstring, memory.logical_address)) 
             self.top.writeString(memory.logical_address, bstring, target_cpu=self.cpu)
             #SIM_break_simulation('remove me')
+            done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
+            self.done_list.append(done) 
             SIM_run_alone(self.rmHap, break_num)
 
     def rmHap(self, break_num):
@@ -102,6 +117,17 @@ class ReadReplace():
             if self.breakmap[break_num].comm == comm:
                 swap_list.append(break_num)
         for break_num in swap_list:
+            self.lgr.debug('readReplace swapContext for comm %s current context %s' % (self.breakmap[break_num].comm, self.cpu.current_context))
             self.addBreak(self.breakmap[break_num].addr, self.breakmap[break_num].comm, self.breakmap[break_num].hexstring)
             SIM_run_alone(self.rmHap, break_num)
              
+    def pickleit(self, name):
+        done_file = os.path.join('./', name, self.cell_name, 'read_replace.pickle')
+        fd = open(done_file, "wb") 
+        pickle.dump( self.done_list, fd)
+        self.lgr.debug('ReadReplace done_list pickleit to %s ' % (done_file))
+
+    def pickleLoad(self, name):
+        done_file = os.path.join('./', name, self.cell_name, 'read_replace.pickle')
+        if os.path.isfile(done_file):
+            self.done_list = pickle.load( open(done_file, 'rb') ) 
