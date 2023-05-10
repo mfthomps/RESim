@@ -557,3 +557,89 @@ class Win7CallParams():
         self.lgr.debug('userWriteHap pid: %d (%s) wrote 0x%x to memory address 0x%x len %d' % (pid, comm, new_value, memory.logical_address, memory.size))
         hexstring = '0x%x' % new_value
         self.param_ref_tracker.addWrote(memory.logical_address, new_value, hexstring, memory.size)
+
+
+    def tasks(self):
+        self.lgr.debug('tasks ts_next is 0x%x (%d)' % (self.param.ts_next, self.param.ts_next))
+        got = []
+        done = False
+        cur_proc = None
+        cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
+        if cur_thread is not None:
+            ptr = cur_thread+self.param.proc_ptr
+            cur_proc = self.mem_utils.readPtr(self.cpu, ptr)
+            if cur_proc is None:
+                print('failed getting current proc from cur_thread 0x%x ptr 0x%x' % (cur_thread, ptr))
+                return
+        else:
+            print('failed getting current thread')
+            return
+        task_ptr = cur_proc
+        while not done:
+            pid_ptr = task_ptr + self.param.ts_pid
+            pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+            if pid is not None:
+                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+                comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
+                print('pid:%d  %s' % (pid , comm))
+                if pid == 0:
+                    break
+            else:
+                print('got no pid for pid_ptr 0x%x' % pid_ptr)
+                break
+            task_next = task_ptr + self.param.ts_next
+            val = self.mem_utils.readWord(self.cpu, task_next)
+            if val is None:
+                print('died on task_next 0x%x' % task_next)
+                break
+            else:
+                next_head = val
+            
+            task_ptr = next_head - self.param.ts_prev
+
+            if task_ptr in got:
+                print('already got')
+                #lgr.debug('already got')
+                break
+            else:
+                got.append(task_ptr)
+                #lgr.debug('append got 0x%x' % task_ptr)
+
+        task_next = cur_proc + self.param.ts_prev
+        val = self.mem_utils.readWord(self.cpu, task_next)
+        if val is None:
+            print('died on task_prev 0x%x' % task_next)
+            return
+        else:
+            next_head = val
+            
+        task_ptr = next_head - self.param.ts_prev
+        while not done:
+            pid_ptr = task_ptr + self.param.ts_pid
+            pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+            if pid is not None:
+                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+                comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
+                print('pid:%d  %s' % (pid , comm))
+                if pid == 0:
+                    break
+            else:
+                print('got no pid for pid_ptr 0x%x' % pid_ptr)
+                break
+            task_next = task_ptr + self.param.ts_prev
+            val = self.mem_utils.readWord(self.cpu, task_next)
+            if val is None:
+                print('died on task_next 0x%x' % task_next)
+                break
+            else:
+                next_head = val
+            
+            task_ptr = next_head - self.param.ts_prev
+
+            if task_ptr in got:
+                print('already got')
+                #lgr.debug('already got')
+                break
+            else:
+                got.append(task_ptr)
+                #lgr.debug('append got 0x%x' % task_ptr)
