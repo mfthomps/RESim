@@ -133,7 +133,7 @@ class Win7CallParams():
             
 
         class ParamRef():
-            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base):
+            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base, best_base_of_base_delta):
                 self.addr = addr
                 self.operator = operator
                 self.hexstring = hexstring
@@ -143,6 +143,7 @@ class Win7CallParams():
                 self.best_base = best_base
                 self.best_base_of_base = best_base_of_base
                 self.best_base_delta = best_base_delta
+                self.best_base_of_base_delta = best_base_of_base_delta
 
             def hackEncode(self, the_bytes):
                 retval = ''
@@ -169,16 +170,17 @@ class Win7CallParams():
                            hexs, self.size, self.best_base, self.best_base_delta)
                     else:
                         if type(self.best_base_of_base) is str:
-                            retval = 'addr: 0x%x %s: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: %s' % (self.addr, self.operator,
-                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base)
+                            retval = 'addr: 0x%x %s: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: %s base_of_base_delta: 0x%x' % (self.addr, self.operator,
+                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base, self.best_base_of_base_delta)
                         else:
-                            retval = 'addr: 0x%x %s: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: 0x%x' % (self.addr, self.operator,
-                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base)
+                            retval = 'addr: 0x%x %s: 0x%s size: %d best_base(other): 0x%x best_base_delta: 0x%x base_of_base: 0x%x base_of_base_delta: 0x%x' % (self.addr, self.operator,
+                               hexs, self.size, self.best_base, self.best_base_delta, self.best_base_of_base, self.best_base_of_base_delta)
                 return retval
 
         def getBestBase(self, addr):
             best_base_delta = None
             best_base_of_base = None
+            best_base_of_base_delta = None
             best_base = None
             for base in self.base_params:
                 if addr >= self.base_params[base]:
@@ -193,24 +195,32 @@ class Win7CallParams():
                     if best_base_delta is None or delta < best_base_delta:
                         best_base_delta = delta
                         best_base = other
-                        best_base_of_base = self.other_addrs[other]
+                        best_base_of_base, best_base_of_base_delta = self.other_addrs[other]
 
             if best_base is None:
                 best_base = 'unknown'
                 best_base_delta = 0
                 self.lgr.error('addRef best_base is not set?  addr 0x%x hexstring %s' % (addr, hexstring))
-            return best_base, best_base_delta, best_base_of_base
+            return best_base, best_base_delta, best_base_of_base, best_base_of_base_delta
  
         def addRef(self, addr, value, hexstring, size, other_ptr):
             ''' Record a reference to user space during a system call '''
-            best_base, best_base_delta, best_base_of_base = self.getBestBase(addr)
-            new_ref = self.ParamRef(addr, 'read', value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base)
+            retval = True
+            best_base, best_base_delta, best_base_of_base, best_base_of_base_delta = self.getBestBase(addr)
+            new_ref = self.ParamRef(addr, 'read', value, hexstring, other_ptr, size, best_base, best_base_delta, best_base_of_base, best_base_of_base_delta)
             self.refs.append(new_ref)
+            ''' maybe done doing real work?? '''
+            if best_base_delta > 0x1000000:
+                retval = False
 
             if other_ptr is not None:
                 self.lgr.debug('addRef append 0x%x to other_ptr' % other_ptr)
-                self.other_addrs[other_ptr] = best_base
+                self.other_addrs[other_ptr] = (best_base, best_base_delta)
+            return retval
+
+        def numRefs(self):
             return len(self.refs)
+ 
 
         def mergeRef(self):
             ''' Go through all reference records and merge obvious strings into a single reference '''
@@ -218,6 +228,7 @@ class Win7CallParams():
             candidate = {}
             current_base = None
             current_base_of_base = None
+            current_base_of_base_delta = None
             current_base_delta = None
             current_addr = None
             running_count = 0
@@ -233,7 +244,8 @@ class Win7CallParams():
                     ''' TBD clean up any open runs ''' 
                     if running_count > 3:
                         start_addr = current_start - (running_size - 1)
-                        new_ref = self.ParamRef(start_addr, current_operator, running_value, running_hexstring, None, running_size, current_base, current_base_delta, current_base_of_base)
+                        new_ref = self.ParamRef(start_addr, current_operator, running_value, running_hexstring, None, running_size, 
+                             current_base, current_base_delta, current_base_of_base, current_base_of_base_delta)
                         add_these.append(new_ref)
                         rm_these[running_start] = running_count
 
@@ -241,6 +253,7 @@ class Win7CallParams():
                     current_operator = reference.operator
                     current_base = reference.best_base
                     current_base_of_base = reference.best_base_of_base
+                    current_base_of_base_delta = reference.best_base_of_base_delta
                     current_base_delta = reference.best_base_delta
                     current_addr = reference.addr 
                     running_size = reference.size
@@ -267,8 +280,8 @@ class Win7CallParams():
                 self.refs.append(add_ref)
 
         def addWrote(self, addr, value, hexstring, size):
-            best_base, best_base_delta, best_base_of_base = self.getBestBase(addr)
-            new_ref = self.ParamRef(addr, 'wrote', value, hexstring, None, size, best_base, best_base_delta, best_base_of_base)
+            best_base, best_base_delta, best_base_of_base, best_base_of_base_delta = self.getBestBase(addr)
+            new_ref = self.ParamRef(addr, 'wrote', value, hexstring, None, size, best_base, best_base_delta, best_base_of_base, best_base_of_base_delta)
             self.wrote_values[addr] = new_ref
 
     def doBreaks(self):
@@ -440,7 +453,8 @@ class Win7CallParams():
         self.lgr.debug('after merge')
         params = self.param_ref_tracker.toString()
         cur_task, pid, comm = self.getCurPid()
-        print('%s pid:%d (%s)' % (self.only, pid, comm))
+        if pid is not None:
+            print('%s pid:%d (%s)' % (self.only, pid, comm))
         print(params)
         self.lgr.debug(params)
         SIM_break_simulation('exitOneHap')
@@ -518,11 +532,12 @@ class Win7CallParams():
                 
             hexstring = binascii.hexlify(value)
             rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-            ref_count = self.param_ref_tracker.addRef(memory.logical_address, orig_value, hexstring, memory.size, other_ptr)
+            ok = self.param_ref_tracker.addRef(memory.logical_address, orig_value, hexstring, memory.size, other_ptr)
+            ref_count = self.param_ref_tracker.numRefs()
             self.lgr.debug('userReadHap pid:%d (%s) read value 0x%s from 0x%x, cycles:0x%x rip: 0x%x ref_count %d' % (pid, comm, hexstring, 
                   memory.logical_address, self.cpu.cycles, rip, ref_count))
-            if ref_count > 200:
-                self.lgr.debug('userReadHap addRef says it is full, remove breaks')
+            if not ok:
+                self.lgr.debug('userReadHap addRef says it is got a reference on the moon, bail')
                 self.rmUserBreaks()
 
 
