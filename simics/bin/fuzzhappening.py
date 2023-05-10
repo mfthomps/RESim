@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# given a an AFL session named by target, compare all of the coverage
+# given a an AFL session named by the current target (workspace), compare all of the coverage
 # files and de-dupe them, creating a list of the smallest queue files
 # generate unique a set of hits.
 #
