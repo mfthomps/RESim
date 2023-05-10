@@ -14,9 +14,18 @@ class WinKParams():
         self.syscall_compute = None
         self.syscall_jump = None
         self.page_fault = None
+        self.arm_entry = None
+
     def printParams(self):
         print('Windows Kernel parameters:')
         for k in self.__dict__.keys():
             v = self.__dict__.__getitem__(k)
             if v is not None:
                 print('\t%-30s  %s' % (k, v))
+    def getParamString(self):
+        retval = 'Windows Kernel parameters:\n'
+        for k in self.__dict__.keys():
+            v = self.__dict__.__getitem__(k)
+            if v is not None:
+                retval = retval + '\t%-30s  %s\n' % (k, v)
+        return retval

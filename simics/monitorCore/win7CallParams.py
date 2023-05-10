@@ -67,10 +67,12 @@ class Win7CallParams():
 
 
         context = 'RESim_%s' % self.cell_name
-        cmd = 'new-context %s' % context
-        self.lgr.debug('cmd is %s' % cmd)
-        SIM_run_command(cmd)
         obj = SIM_get_object(context)
+        if obj is None:
+            cmd = 'new-context %s' % context
+            self.lgr.debug('cmd is %s' % cmd)
+            SIM_run_command(cmd)
+            obj = SIM_get_object(context)
         self.resim_context = obj
         self.lgr.debug('defining context cell %s resim_context defined as obj %s' % (self.cell_name, str(obj)))
         self.default_context = self.cpu.current_context
@@ -106,7 +108,7 @@ class Win7CallParams():
                 self.base_params['rcx'] = rcx
             value = self.mem_utils.readWord32(self.cpu, rdx)
             if value is not None:
-                self.base_params['rcx'] = rdx
+                self.base_params['rdx'] = rdx
             value = self.mem_utils.readWord32(self.cpu, r8)
             if value is not None:
                 self.base_params['r8'] = r8
@@ -122,13 +124,15 @@ class Win7CallParams():
 
         def toString(self):
             retval = 'rcx: 0x%x rdx: 0x%x r8: 0x%x r9: 0x%x r10: 0x%x sp: 0x%x\n' % (self.rcx, self.rdx, self.r8, self.r9, self.r10, self.rsp)
+            index = 1
             for reference in self.refs:
-                retval = retval + reference.toString()+'\n'
-
+                retval = '%s %d %s\n' % (retval, index, reference.toString())
+                index = index+1
             retval = retval + '\nWrote:\n'
             for addr in self.wrote_values:
                 reference = self.wrote_values[addr]
-                retval = retval + reference.toString()+'\n'
+                retval = '%s %d %s\n' % (retval, index, reference.toString())
+                index = index+1
             return retval
             
 
@@ -182,9 +186,12 @@ class Win7CallParams():
             best_base_of_base = None
             best_base_of_base_delta = None
             best_base = None
+            self.lgr.debug('getBestBase for 0x%x' % addr)
             for base in self.base_params:
+                #self.lgr.debug('getBestBase compare 0x%x to base_paras[%s] 0x%x' % (addr, base, self.base_params[base]))
                 if addr >= self.base_params[base]:
                     delta = addr - self.base_params[base]
+                    #self.lgr.debug('getBestBase delta 0x%x, best_base_delta %s' % (delta, str(best_base_delta)))
                     if best_base_delta is None or delta < best_base_delta:
                         best_base_delta = delta
                         best_base = base

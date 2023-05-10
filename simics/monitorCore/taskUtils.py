@@ -1,3 +1,30 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+Linux task information, e.g., task lists.
+'''
 from simics import *
 import os
 import pickle
@@ -9,13 +36,6 @@ def stringFromFrame(frame):
     if frame is not None:
         return 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
             frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
-    else:
-        return None
-def stringFromFrameXXX(frame):
-    if frame is not None:
-        return 'eax:0x%x ebx:0x%x ecx:0x%x edx:0x%x ebp:0x%x edi:0x%x esi:0x%x eip:0x%x esp:0x%x orig_ax:0x%x flags:0x%x' % (frame['eax'], 
-            frame['ebx'], frame['ecx'], frame['edx'], frame['ebp'], frame['edi'], frame['esi'],
-            frame['eip'], frame['esp'], frame['orig_ax'], frame['flags'])
     else:
         return None
 class ListHead(object):

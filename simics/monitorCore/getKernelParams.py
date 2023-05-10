@@ -1534,24 +1534,6 @@ class GetKernelParams():
                 self.lgr.debug('w7Tasks loaded params from %s' % param_file)
         self.win7Syscalls = win7Syscalls.Win7Syscalls(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, run_to=run_to)
 
-    def tasks(self):
-        cell_name = self.target 
-        if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
-            param_file = self.comp_dict[cell_name]['RESIM_PARAM']
-            if os.path.isfile(param_file):
-                self.param = pickle.load(open(param_file, 'rb'))
-                self.lgr.debug('w7Tasks loaded params from %s' % param_file)
-                if self.run_from_snap is not None:
-                    pfile = os.path.join(self.run_from_snap, 'phys.pickle')
-                    if os.path.isfile(pfile):
-                        self.current_task_phys = pickle.load(open(pfile, 'rb'))
-                    else:
-                        self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
-                        return
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, cell_name, self.mem_utils, self.current_task_phys, self.param, self.lgr)
-        self.w7_call_params.tasks() 
-    
-
 if __name__ == '__main__':
     gkp = GetKernelParams()
     #gkp.runUntilSwapper()

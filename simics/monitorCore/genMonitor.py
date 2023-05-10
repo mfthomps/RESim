@@ -111,6 +111,9 @@ import funMgr
 import readReplace
 import syscallManager
 import testSnap
+import winTaskUtils
+import winMonitor
+
 #import fsMgr
 import json
 import pickle
@@ -271,15 +274,19 @@ class GenMonitor():
         ''' ReadReplace module if any '''
         self.read_replace = {}
 
+        self.os_type = {}
+
+        ''' catch-all for windows monitoring commands '''
+        self.winMonitor = {}
+
         ''' ****NO init data below here**** '''
+        self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
         exit_hap = RES_hap_add_callback("Core_At_Exit", self.simicsQuitting, None)
 
+        ''' ****NO init data here**** '''
 
     def genInit(self, comp_dict):
-        '''
-        remove all previous breakpoints.  
-        '''
         self.is_monitor_running = isMonitorRunning.isMonitorRunning(self.lgr)
         SIM_run_command("bp.delete -all")
         self.target = os.getenv('RESIM_TARGET')
@@ -322,6 +329,7 @@ class GenMonitor():
                     self.lgr.debug('No param pickle at %s' % param_file)
                          
         for cell_name in comp_dict:
+            self.lgr.debug('genInit for cell %s' % cell_name)
             if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
                 print('Cell %s using params from %s' % (cell_name, param_file))
@@ -363,23 +371,25 @@ class GenMonitor():
                 continue 
             word_size = 4
             if 'OS_TYPE' in comp_dict[cell_name]:
-                if comp_dict[cell_name]['OS_TYPE'] == 'LINUX64':
+                self.os_type[cell_name] = comp_dict[cell_name]['OS_TYPE']
+                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN'):
                     word_size = 8
 
             cpu = self.cell_config.cpuFromCell(cell_name)
             self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
             self.traceMgr[cell_name] = traceMgr.TraceMgr(self.lgr)
-            if 'RESIM_UNISTD' not in comp_dict[cell_name]:
-                print('Target is missing RESIM_UNISTD path')
-                self.quit()
-                return
-            self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
-            if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
-                self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
-            if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
-                print('Target missing RESIM_ROOT_PREFIX path')
-                self.quit()
-                return;
+            if self.os_type[cell_name].startswith('LINUX'):
+                if 'RESIM_UNISTD' not in comp_dict[cell_name]:
+                    print('Target is missing RESIM_UNISTD path')
+                    self.quit()
+                    return
+                self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
+                if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
+                    self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
+                if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
+                    print('Target missing RESIM_ROOT_PREFIX path')
+                    self.quit()
+                    return;
             root_prefix = comp_dict[cell_name]['RESIM_ROOT_PREFIX']
             self.targetFS[cell_name] = targetFS.TargetFS(root_prefix)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
@@ -625,10 +635,13 @@ class GenMonitor():
 
             self.syscallManager[cell_name] = syscallManager.SyscallManager(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name],
                                      self.context_manager[cell_name], self.traceProcs[cell_name], self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name], self.soMap[cell_name], 
-                                     self.is_compat32, self.targetFS[cell_name])
+                                     self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name])
 
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
+            if self.isWindows():
+                self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
+                                               self.syscallManager[cell_name], self.traceMgr[cell_name], self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
@@ -664,12 +677,18 @@ class GenMonitor():
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 self.snap_start_cycle[cpu] = cpu.cycles
-                unistd32 = None
-                if cell_name in self.unistd32:
-                    unistd32 = self.unistd32[cell_name]
-                task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                    self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
-                self.task_utils[cell_name] = task_utils
+                if self.os_type[cell_name].startswith('LINUX'):
+                    unistd32 = None
+                    if cell_name in self.unistd32:
+                        unistd32 = self.unistd32[cell_name]
+                    task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
+                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                    self.task_utils[cell_name] = task_utils
+                elif self.isWindows():
+                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                else:
+                    self.lgr.error('snapInit unknown os type %s' % self.os_type)
+                    return
                 self.lgr.debug('snapInit for cell %s, now call to finishInit' % cell_name)
                 self.finishInit(cell_name)
 
@@ -942,16 +961,23 @@ class GenMonitor():
     def tasks(self):
         self.lgr.debug('tasks')
         print('Tasks on cell %s' % self.target)
-        tasks = self.task_utils[self.target].getTaskStructs()
-        plist = {}
-        for t in tasks:
-            plist[tasks[t].pid] = t 
-        for pid in sorted(plist):
-            t = plist[pid]
-            uid, e_uid = self.task_utils[self.target].getCred(t)
-            id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
-            print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
-                tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+
+        if self.isWindows:
+            self.winMonitor[self.target].tasks()
+        else:
+            tasks = self.task_utils[self.target].getTaskStructs()
+            plist = {}
+            for t in tasks:
+                plist[tasks[t].pid] = t 
+            for pid in sorted(plist):
+                t = plist[pid]
+                uid, e_uid = self.task_utils[self.target].getCred(t)
+                if uid is not None:
+                    id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
+                else:
+                    id_str = ''
+                print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
+                    tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -1341,6 +1367,10 @@ class GenMonitor():
         '''
         
     def debugProc(self, proc, final_fun=None, pre_fun=None):
+        if self.isWindows():
+            self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun)
+            return
+
         if type(proc) is not str:
             print('Need a proc name as a string')
             return
@@ -5147,7 +5177,7 @@ class GenMonitor():
         if self.snap_warn_hap is None:
             return
         debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
-        if debug_pid is None and 'pid' in self.debug_info:
+        if debug_pid is None and self.debug_info is not None and 'pid' in self.debug_info:
             print('Warning snapshot exists but not debugging.  Running will lose state (e.g., threads waiting in the kernel.')
             print('Continue again to go on.  Will not be warned again this session.')
             SIM_break_simulation('stopped')
@@ -5229,6 +5259,20 @@ class GenMonitor():
         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
         ida_path = resimUtils.getIdaData(path, root_prefix)
         return ida_path
+
+    def isWindows(self, target=None):
+        retval = False
+        if target is None:
+            target = self.target
+        if self.os_type[target].startswith('WIN'):
+            retval = True
+        return retval
+
+    def getWin7CallParams(self, stop_on=None, only=None):
+        ''' Use breakpoints set on the user space to identify call parameter 
+            Optional stop_on will stop on exit from call'''
+        if self.target in self.winMonitor:
+            self.winMonitor[self.target].getWin7CallParams(stop_on, only)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
