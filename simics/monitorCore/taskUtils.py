@@ -736,6 +736,7 @@ class TaskUtils():
         return prog_string, arg_string_list
 
     def getProcArgsFromStack(self, pid, at_enter, cpu):
+        ''' NOTE side effect of populating exec_addrs '''
         if pid is None:
             return None, None
 
@@ -886,7 +887,7 @@ class TaskUtils():
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
         if self.cpu.architecture == 'arm':
-            frame = self.frameFromRegs(self.cpu)
+            frame = self.frameFromRegs()
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             regs_addr = esp + self.mem_utils.WORD_SIZE
@@ -927,29 +928,29 @@ class TaskUtils():
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
         return retval
 
-    def frameFromRegs(self, cpu, compat32=False):
+    def frameFromRegs(self, compat32=False):
         frame = {}
-        if cpu.architecture == 'arm':
+        if self.cpu.architecture == 'arm':
             for p in memUtils.param_map['arm']:
-                frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['arm'][p])
-            cpl = memUtils.getCPL(cpu)
+                frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
+            cpl = memUtils.getCPL(self.cpu)
             if cpl == 0:
-                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp_usr')
-                frame['pc'] = self.mem_utils.getRegValue(cpu, 'lr')
-                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr_usr')
+                frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp_usr')
+                frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+                frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr_usr')
             else:
-                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
-                frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
-                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr')
+                frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+                frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
+                frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
         else:
-            frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
-            frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+            frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.WORD_SIZE == 8 and not compat32:
                 for p in memUtils.param_map['x86_64']:
-                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_64'][p])
+                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_64'][p])
             else:
                 for p in memUtils.param_map['x86_32']:
-                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_32'][p])
+                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_32'][p])
         
         return frame
 

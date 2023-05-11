@@ -31,6 +31,11 @@ import pickle
 import json
 import osUtils
 import memUtils
+class TaskStruct():
+    def __init__(self, pid, comm):
+        self.pid = pid
+        self.comm = comm
+
 class WinTaskUtils():
     COMM_SIZE = 16
     def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
@@ -41,6 +46,11 @@ class WinTaskUtils():
         self.mem_utils = mem_utils
         self.run_from_snap = run_from_snap
         self.phys_current_task = None
+
+        self.program_map = {}
+        self.exit_cycles = 0
+        self.exit_pid = 0
+
         resim_dir = os.getenv('RESIM_DIR')
         self.call_map = {}
         self.call_num_map = {}
@@ -70,26 +80,32 @@ class WinTaskUtils():
 
             exec_addrs_file = os.path.join('./', run_from_snap, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
-                self.exec_addrs = pickle.load( open(exec_addrs_file, 'rb') ) 
+                self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
 
     def getPhysCurrentTask(self):
         return self.current_task_phys
 
-    def getCurTaskRec(self):
+    def getCurTaskRec(self, cur_thread=None):
         retval = None
-        cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
-        if cur_thread is not None:
-            retval = self.mem_utils.readPtr(self.cpu, cur_thread+self.param.proc_ptr)
+        if cur_thread is None:
+            cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
+        if cur_thread is None:
+            self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.current_task_phys)
+        else:
+            ptr = cur_thread + self.param.proc_ptr
+            retval = self.mem_utils.readPtr(self.cpu, ptr)
+            if retval is None:
+                self.lgr.error('winTaskUtils getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x' % (self.cur_thread, ptr))
         return retval
 
     def getMemUtils(self):
         return self.mem_utils
 
-    def syscallNumber(self, call):
+    def syscallNumber(self, call, dumb=None):
         retval = self.call_num_map[call]
         return retval 
 
-    def syscallName(self, call_num):
+    def syscallName(self, call_num, dumb=None):
         retval = self.call_map[call_num][2:]
         return retval 
 
@@ -128,7 +144,7 @@ class WinTaskUtils():
             self.lgr.debug('getCurPid cur_thread is None')
         return self.cpu, comm, pid
 
-    def frameFromRegs(self):
+    def frameFromRegs(self, compat32=None):
         frame = {}
         if self.cpu.architecture == 'arm':
             for p in memUtils.param_map['arm']:
@@ -171,3 +187,111 @@ class WinTaskUtils():
         #r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
         #r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
         return frame
+
+    def pickleit(self, fname):
+        phys_current_task_file = os.path.join('./', fname, self.cell_name, 'phys_current_task.pickle')
+        try:
+            os.mkdir(os.path.dirname(phys_current_task_file))
+        except:
+            pass
+        pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
+        exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
+        pickle.dump( self.program_map, open( exec_addrs_file, "wb" ) )
+
+    def getExecMode(self):
+        mode = None
+        if self.cpu.iface != 'arm':
+            mode = self.cpu.iface.x86_reg_access.get_exec_mode()
+        return mode
+
+    def currentProcessInfo(self, cpu=None):
+        cur_addr = self.getCurTaskRec()
+        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
+        pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
+        return self.cpu, cur_addr, comm, pid
+
+    def getTaskListPtr(self, rec=None):
+        ''' return address of the task list "next" entry that points to the current task '''
+        if rec is None:
+            task_rec_addr = self.getCurTaskRec()
+        else:
+            task_rec_addr = rec
+        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.COMM_SIZE)
+        pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
+        seen = set()
+        tasks = {}
+        ''' TBD'''
+        return None
+
+    def getGroupLeaderPid(self, pid):
+        ''' TBD '''
+        return pid
+
+    def walk(self, task_ptr_in, offset):
+        done = False
+        got = []
+        task_ptr = task_ptr_in
+        while not done:
+            pid_ptr = task_ptr + self.param.ts_pid
+            pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+            if pid is not None:
+                got.append(task_ptr)
+            else:
+                self.lgr.debug('got no pid for pid_ptr 0x%x' % pid_ptr)
+                #print('got no pid for pid_ptr 0x%x' % pid_ptr)
+                break
+            task_next = task_ptr + offset
+            val = self.mem_utils.readWord(self.cpu, task_next)
+            if val is None:
+                print('died on task_next 0x%x' % task_next)
+                break
+            else:
+                next_head = val
+            
+            task_ptr = next_head - self.param.ts_prev
+
+            if task_ptr in got:
+                print('already got task_ptr 0x%x' % task_ptr)
+                self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
+                break
+        return got
+
+    def getTaskList(self):
+        got = []
+        done = False
+        task_ptr = self.getCurTaskRec()
+        got = self.walk(task_ptr, self.param.ts_next)
+        self.lgr.debug('getTaskList returning %d tasks' % len(got))
+        return got
+    
+    def getTaskStructs(self):
+        retval = {}
+        task_list = self.getTaskList()
+        for task in task_list:
+            comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.COMM_SIZE)
+            pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
+            retval[task] = TaskStruct(pid, comm)
+
+        return retval
+
+    def getCommFromPid(self, pid):
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+           if ts_list[ts].pid == pid:
+               return ts_list[ts].comm
+        return None
+
+    def addProgram(self, pid, program):
+        self.program_map[pid] = program
+
+    def getProgName(self, pid):
+        retval = None
+        if pid in self.program_map:
+            retval = self.program_map[pid]
+        ''' TBD find arg list? '''
+        return retval, []
+
+    def clearExitPid(self):
+        self.exit_pid = 0
+        self.exit_cycles = 0
+

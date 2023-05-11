@@ -641,7 +641,7 @@ class GenMonitor():
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
             if self.isWindows():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
-                                               self.syscallManager[cell_name], self.traceMgr[cell_name], self.lgr)
+                                               self.syscallManager[cell_name], self.traceMgr[cell_name], self.context_manager[cell_name], self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
@@ -958,20 +958,22 @@ class GenMonitor():
             retval.append(pid_state)
         print(json.dumps(retval))
 
-    def tasks(self):
+    def tasks(self, target=None):
         self.lgr.debug('tasks')
-        print('Tasks on cell %s' % self.target)
+        if target is None:
+            target = self.target
+        print('Tasks on cell %s' % target)
 
         if self.isWindows:
-            self.winMonitor[self.target].tasks()
+            self.winMonitor[target].tasks()
         else:
-            tasks = self.task_utils[self.target].getTaskStructs()
+            tasks = task_utils[target].getTaskStructs()
             plist = {}
             for t in tasks:
                 plist[tasks[t].pid] = t 
             for pid in sorted(plist):
                 t = plist[pid]
-                uid, e_uid = self.task_utils[self.target].getCred(t)
+                uid, e_uid = task_utils[target].getCred(t)
                 if uid is not None:
                     id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
                 else:
@@ -1050,12 +1052,13 @@ class GenMonitor():
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            self.track_threads[self.target] = trackThreads.TrackThreads(cpu, self.target, cell, pid, self.context_manager[self.target], 
+            if not self.isWindows():
+                self.track_threads[self.target] = trackThreads.TrackThreads(cpu, self.target, cell, pid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.is_compat32, self.lgr)
 
-            ''' By default, no longer watch for new SO files '''
-            self.track_threads[self.target].stopSOTrack()
+                ''' By default, no longer watch for new SO files '''
+                self.track_threads[self.target].stopSOTrack()
 
             self.watchPageFaults(pid)
 
@@ -1131,18 +1134,19 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cpl = memUtils.getCPL(cpu)
         eip = self.getEIP(cpu)
-        #cur_task_rec = self.task_utils.getCurTaskRec()
-        #addr = cur_task_rec+self.param.ts_group_leader
-        #val = self.mem_utils.readPtr(cpu, addr)
-        #print('current task 0x%x gl_addr 0x%x group_leader 0x%s' % (cur_task_rec, addr, val))
-        print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpu.current_context, 
-               cpl, pid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
-        pfamily = self.pfamily[self.target].getPfamily()
-        tabs = ''
-        while len(pfamily) > 0:
-            prec = pfamily.pop()
-            print('%s%5d  %s' % (tabs, prec.pid, prec.proc))
-            tabs += '\t'
+        if self.isWindows():
+            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x' % (cpu.name, cpu.current_context, 
+                   cpl, pid, comm, eip, self.param[self.target].current_task))
+        
+        else: 
+            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpu.current_context, 
+                   cpl, pid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
+            pfamily = self.pfamily[self.target].getPfamily()
+            tabs = ''
+            while len(pfamily) > 0:
+                prec = pfamily.pop()
+                print('%s%5d  %s' % (tabs, prec.pid, prec.proc))
+                tabs += '\t'
 
 
 
@@ -2392,6 +2396,11 @@ class GenMonitor():
         if target not in self.cell_config.cell_context:
             print('Unknown target %s' % target)
             return
+
+        if self.isWindows():
+            self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
+            return
+
         if target in self.trace_all:
             self.trace_all[target].setRecordFD(record_fd)
             print('Was tracing.  Limit to FD recording? %r' % (record_fd))
@@ -3281,7 +3290,7 @@ class GenMonitor():
         else:
             stack_base = self.stack_base[self.target][pid]
         if pid == cur_pid:
-            reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+            reg_frame = self.task_utils[self.target].frameFromRegs()
         else:
             reg_frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
        
@@ -3306,7 +3315,7 @@ class GenMonitor():
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
-        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        reg_frame = self.task_utils[self.target].frameFromRegs()
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
                 reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
@@ -3330,7 +3339,7 @@ class GenMonitor():
             stack_base = None
         else:
             stack_base = self.stack_base[self.target][pid]
-        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        reg_frame = self.task_utils[self.target].frameFromRegs()
         st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
                   self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
                   self.relocate_funs, reg_frame, self.lgr)
@@ -4791,8 +4800,8 @@ class GenMonitor():
             retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
         return retval 
 
-    def frameFromRegs(self, cpu):
-        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+    def frameFromRegs(self):
+        reg_frame = self.task_utils[self.target].frameFromRegs()
         return reg_frame
 
     def getPidsForComm(self, comm):
@@ -5111,7 +5120,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         callnum = self.mem_utils[self.target].getCallNum(cpu)
         callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
-        reg_frame = self.task_utils[self.target].frameFromRegs(cpu)
+        reg_frame = self.task_utils[self.target].frameFromRegs()
         if callname in ['read', 'recv', 'recfrom']:
             retval = reg_frame['param2']
             length = reg_frame['param3']

@@ -67,7 +67,11 @@ class Win7CallParams():
 
 
         context = 'RESim_%s' % self.cell_name
-        obj = SIM_get_object(context)
+        try:
+            obj = SIM_get_object(context)
+        except:
+            obj = None
+  
         if obj is None:
             cmd = 'new-context %s' % context
             self.lgr.debug('cmd is %s' % cmd)
@@ -207,7 +211,7 @@ class Win7CallParams():
             if best_base is None:
                 best_base = 'unknown'
                 best_base_delta = 0
-                self.lgr.error('addRef best_base is not set?  addr 0x%x hexstring %s' % (addr, hexstring))
+                self.lgr.error('addRef best_base is not set?  addr 0x%x ' % (addr))
             return best_base, best_base_delta, best_base_of_base, best_base_of_base_delta
  
         def addRef(self, addr, value, hexstring, size, other_ptr):

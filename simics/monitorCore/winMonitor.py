@@ -30,10 +30,12 @@ import os
 import pickle
 import osUtils
 import memUtils
+import stopFunction
 import win7CallParams
 import syscall
+from resimHaps import *
 class WinMonitor():
-    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscall_manager, trace_manager, lgr):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscall_manager, trace_manager, context_manager, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -43,7 +45,19 @@ class WinMonitor():
         self.task_utils = task_utils
         self.trace_manager = trace_manager
         self.syscall_manager = syscall_manager
+        self.context_manager = context_manager
         self.cell = self.top.getCell(cell_name)
+
+        ''' Used when finding newly created tasks '''
+        self.cur_task_break = None
+        self.cur_task_hap = None
+        self.current_tasks = []
+
+        ''' dict of dict of syscall.SysCall keyed cell and context'''
+        ''' TBD remove these '''
+        self.call_traces = {}
+        self.trace_all = {}
+
 
     def getWin7CallParams(self, stop_on, only):
         current_task_phys = self.task_utils.getPhysCurrentTask()
@@ -60,84 +74,109 @@ class WinMonitor():
             self.trace_manager.open('/tmp/execve.txt', self.cpu)
 
         self.syscall_manager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
+        #self.top.setCommandCallback(self.toNewProc)
+        #self.top.setCommandCallbackParam(comm)
         SIM_continue(0)
 
     def debugProc(self, proc, final_fun=None, pre_fun=None):
-        self.lgr.debug('winMonitor toCreateProc %s' % proc)
-        self.toCreateProc(proc) 
+        self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
+        f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
+        f2 = stopFunction.StopFunction(self.top.debug, [], nest=False)
+        #flist = [f1, f2]
+        flist = [f1]
+        self.toCreateProc(proc, flist=flist) 
 
 
     def tasks(self):
+        plist = {}
         self.lgr.debug('tasks ts_next is 0x%x (%d)' % (self.param.ts_next, self.param.ts_next))
-        got = []
-        done = False
-        cur_proc = self.task_utils.getCurTaskRec()
-        task_ptr = cur_proc
-        while not done:
+        got = self.task_utils.getTaskList()
+        self.lgr.debug('tasks ts_next is 0x%x (%d) got %d tasks' % (self.param.ts_next, self.param.ts_next, len(got)))
+        for task_ptr in got:
             pid_ptr = task_ptr + self.param.ts_pid
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-            if pid is not None:
-                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+            ''' TBD need better test for undefined pid '''
+            if pid is not None and pid < 0xfffff:
+                #self.lgr.debug('getCurPid task_ptr, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (task_ptr, self.param.ts_pid, pid_ptr, pid))
                 comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
-                print('pid:%d  %s' % (pid , comm))
-                if pid == 0:
-                    break
+                if pid in plist and pid != 0:
+                    #print('pid %d already in plist' % pid)
+                    self.lgr.debug('pid %d already in plist as comm %s' % (pid, plist[pid]))
+                plist[pid] = comm
+                #print('pid:%d  %s' % (pid , comm))
             else:
                 print('got no pid for pid_ptr 0x%x' % pid_ptr)
-                break
-            task_next = task_ptr + self.param.ts_next
-            val = self.mem_utils.readWord(self.cpu, task_next)
-            if val is None:
-                print('died on task_next 0x%x' % task_next)
-                break
-            else:
-                next_head = val
-            
-            task_ptr = next_head - self.param.ts_prev
+                #break
+        for pid in sorted(plist):
+            print('pid: %d  %s' % (pid, plist[pid]))
 
-            if task_ptr in got:
-                print('already got')
-                #lgr.debug('already got')
-                break
-            else:
-                got.append(task_ptr)
-                #lgr.debug('append got 0x%x' % task_ptr)
+    def toNewProc(self, proc):
+        self.lgr.debug('toNewProc %s' % proc)
+        phys_current_task = self.task_utils.getPhysCurrentTask()
+        self.cur_task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
+                             phys_current_task, self.mem_utils.WORD_SIZE, 0)
+        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.toNewProcHap, proc, self.cur_task_break)
+        self.current_tasks = self.task_utils.getTaskList()
+        SIM_run_alone(SIM_continue, 0)
 
-        task_next = cur_proc + self.param.ts_prev
-        val = self.mem_utils.readWord(self.cpu, task_next)
-        if val is None:
-            print('died on task_prev 0x%x' % task_next)
+    def toNewProcHap(self, proc, third, forth, memory):
+        if self.cur_task_hap is None:
             return
-        else:
-            next_head = val
-            
-        task_ptr = next_head - self.param.ts_prev
-        while not done:
-            pid_ptr = task_ptr + self.param.ts_pid
-            pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-            if pid is not None:
-                if pid == 0:
-                    break
-                #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
-                comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
-                print('pid:%d  %s' % (pid , comm))
-            else:
-                print('got no pid for pid_ptr 0x%x' % pid_ptr)
-                break
-            task_next = task_ptr + self.param.ts_prev
-            val = self.mem_utils.readWord(self.cpu, task_next)
-            if val is None:
-                print('died on task_next 0x%x' % task_next)
-                break
-            else:
-                next_head = val
-            
-            task_ptr = next_head - self.param.ts_prev
+        #self.lgr.debug('winMonitor toNewProcHap for proc %s' % proc)
+        cur_thread = SIM_get_mem_op_value_le(memory)
+        cur_proc = self.task_utils.getCurTaskRec(cur_thread=cur_thread)
+        if cur_proc not in self.current_tasks:
+            comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+            self.lgr.debug('winMonitor does %s start with %s?' % (proc, comm))
+            if proc.startswith(comm):
+                pid_ptr = cur_proc + self.param.ts_pid
+                pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+                self.lgr.debug('winMonitor toNewProcHap got new %s pid:%d' % (comm, pid))
+                SIM_run_alone(self.rmNewProcHap, self.cur_task_hap)
+                self.cur_task_hap = None
+                self.task_utils.addProgram(pid, proc)
+                SIM_run_alone(self.top.toUser, None)
+                #SIM_break_simulation('got new proc %s' % proc)
 
-            if task_ptr in got:
-                print('already got')
-                #lgr.debug('already got')
-                break
+    def rmNewProcHap(self, newproc_hap):
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", newproc_hap)
+        if self.cur_task_break is not None:
+            SIM_delete_breakpoint(self.cur_task_break)
+            self.cur_task_break = None
+
+    def traceAll(self, record_fd=False, swapper_ok=False):
+
+        ''' trace all system calls. if a program selected for debugging, watch only that program '''
+        self.lgr.debug('traceAll')
+        if True:
+            context = self.context_manager.getDefaultContext()
+            pid, cpu = self.context_manager.getDebugPid() 
+            if pid is not None:
+                tf = '/tmp/syscall_trace-%s-%d.txt' % (self.cell_name, pid)
+                context = self.context_manager.getRESimContext()
             else:
-                got.append(task_ptr)
-                #lgr.debug('append got 0x%x' % task_ptr)
+                tf = '/tmp/syscall_trace-%s.txt' % self.cell_name
+                cpu, comm, pid = self.task_utils.curProc() 
+
+            self.traceMgr.open(tf, cpu)
+            if not self.context_manager.watchingTasks():
+                self.traceProcs.watchAllExits()
+            self.lgr.debug('traceAll, create syscall hap')
+            self.trace_all = self.syscallManager.watchAllSyscalls(None, 'traceAll', trace=True, 
+                                      record_fd=record_fd, linger=True, swapper_ok=swapper_ok)
+
+            if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
+                ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
+                p_file = os.path.join('./', self.run_from_snap, self.cell_name, 'sharedSyscall.pickle')
+                if os.path.isfile(p_file):
+                    exit_info_list = pickle.load(open(p_file, 'rb'))
+                    if exit_info_list is None:
+                        self.lgr.error('No data found in %s' % p_file)
+                    else:
+                        ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
+                        self.trace_all.setExits(exit_info_list, context_override = context)
+
+            frames = self.getDbgFrames()
+            self.lgr.debug('traceAll, call to setExits')
+            self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
+            ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''

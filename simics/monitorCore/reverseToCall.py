@@ -1441,7 +1441,7 @@ class reverseToCall():
                     self.sysenter_cycles[pid] = {}
                 if cycles not in self.sysenter_cycles[pid]:
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
-                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
+                    frame = self.task_utils.frameFromRegs(compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
                     self.lgr.debug('sysenterHap pid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (pid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))

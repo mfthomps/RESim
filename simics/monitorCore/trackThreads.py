@@ -166,7 +166,7 @@ class TrackThreads():
             return
         cpu, comm, pid = self.task_utils.curProc() 
         if cpu.architecture == 'arm':
-            frame = self.task_utils.frameFromRegs(cpu)
+            frame = self.task_utils.frameFromRegs()
         else:
             frame = self.task_utils.frameFromStackSyscall()
         flags = frame['param1']

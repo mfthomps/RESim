@@ -13,6 +13,7 @@ import resimUtils
 import syscall
 import sys
 import copy
+import ntpath
 from resimHaps import *
 from resimUtils import rprint
 class WinSyscall():
@@ -109,7 +110,7 @@ class WinSyscall():
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
-            #self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
+            self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif self.debugging and not self.breakOnExecve() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
@@ -124,7 +125,7 @@ class WinSyscall():
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
-            #self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
+            self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 
         self.exit_calls = []
         ''' TBD '''
@@ -278,7 +279,7 @@ class WinSyscall():
             return
 
         ''' catch stray calls from wrong pid.  Allow calls if the syscall instance's cell is not None, which means it is not up to the context manager
-            to watch or not.  An example is execve, which must be watched for all processes to provide a toExecve function. '''
+            to watch or not.  TBD needed for windows?'''
         if self.debugging and not self.context_manager.amWatching(pid) and syscall_info.callnum is not None and self.background_break is None and self.cell is None:
             self.lgr.debug('syscallHap name: %s pid:%d missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
                  pid, syscall_info.callnum))
@@ -303,15 +304,16 @@ class WinSyscall():
             return
 
         if callnum > 400:
-            self.lgr.debug('syscallHap callnum is too big... %d' % callnum)
+            self.lgr.warning('syscallHap callnum is too big... %d' % callnum)
             return
         
         if self.sharedSyscall.isPendingExecve(pid):
+            ''' TBD fix for windows '''
             if callname == 'close':
                 self.lgr.debug('syscallHap must be a close on exec? pid:%d' % pid)
                 return
-            elif callname == 'execve':
-                self.lgr.debug('syscallHap must be a execve in execve? pid:%d' % pid)
+            elif callname == 'CreateUserProcess':
+                self.lgr.debug('syscallHap must be a CreateUserProcess in CreateUserProcess? pid:%d' % pid)
                 return
             elif callname == 'exit_group':
                 self.lgr.debug('syscallHap exit_group called from within execve %d' % pid)
@@ -439,8 +441,12 @@ class WinSyscall():
             b_of_b_delta = 0x8e8
             ptr = b_of_b + b_of_b_delta
             base = self.mem_utils.readPtr(self.cpu, ptr)
-            self.lgr.debug('Windows syscallParse, got it  %s b_of_b(rcx) 0x%x delta 0x%x ptr 0x%x base 0x%x' % (callname, b_of_b, b_of_b_delta, ptr, base))
-            SIM_break_simulation('CreateUserProcess 0x%x' % base)
+            prog = self.mem_utils.readWinString(self.cpu, base, 100)
+            self.lgr.debug('Windows syscallParse, got it  %s b_of_b(rcx) 0x%x delta 0x%x ptr 0x%x base 0x%x prog %s' % (callname, b_of_b, b_of_b_delta, ptr, base, prog))
+            if not self.checkProg(prog, pid, exit_info):
+                exit_info = None
+            #SIM_run_alone(self.top.tasks, None)
+            #SIM_break_simulation('CreateUserProcess 0x%x' % base)
         else:
             self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
             exit_info = None
@@ -496,3 +502,118 @@ class WinSyscall():
                 frame_string = taskUtils.stringFromFrame(frame)
             self.lgr.debug('frame string %s' % frame_string)
         return frame, exit_eip1, exit_eip2, exit_eip3
+
+    def checkProg(self, prog_string, pid, exit_info):
+        retval = True
+        self.lgr.debug('checkProg syscall %s  %s' % (self.name, prog_string))
+        cp = None
+        for call in self.call_params:
+            #self.lgr.debug('checkProg call %s' % call)
+            if call.subcall == 'CreateUserProcess':
+                cp = call
+                break
+        if cp is None:
+            for call in self.syscall_info.call_params:
+                self.lgr.debug('checkProg traceall call %s' % call)
+                if call.subcall == 'CreateUserProcess':
+                    cp = call
+                    break
+        
+            
+        if cp is not None: 
+            if cp.match_param.__class__.__name__ == 'Dmod':
+               self.task_utils.modExecParam(pid, self.cpu, cp.match_param)
+            else: 
+
+                retval = False
+                if '\\' in cp.match_param:
+                    ''' compare full path '''
+                    base = prog_string
+                else:
+                    base = ntpath.basename(prog_string)
+                self.lgr.debug('checkProg base %s against %s' % (base, cp.match_param))
+                if base.startswith(cp.match_param):
+                    ''' is program file we are looking for.  do we care if it is a binary? '''
+                    self.lgr.debug('matches base')
+                    wrong_type = False
+                    if self.traceProcs is not None:
+                        ftype = self.traceProcs.getFileType(pid)
+                        if ftype is None:
+                            full_path = self.targetFS.getFull(prog_string, self.lgr)
+                            if full_path is not None and os.path.isfile(full_path):
+                                ftype = magic.from_file(full_path)
+                                if ftype is None:
+                                    self.lgr.error('checkProg failed to find file type for %s pid:%d' % (prog_string, pid))
+                                    return
+                        if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
+                            wrong_type = True
+                    if not wrong_type:
+                        self.lgr.debug('checkProg CreateUserProc of %s now stop alone ' % prog_string)
+                        retval = True
+                        exit_info.call_params = cp 
+                        SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
+                    else:
+                        self.lgr.debug('checkProg, got %s when looking for binary %s, skip' % (ftype, prog_string))
+        return retval
+
+    def stopAlone(self, msg):
+        ''' NOTE: this is also called by sharedSyscall '''
+        eip = self.top.getEIP()
+        if self.stop_action is not None:
+            self.stop_action.setExitAddr(eip)
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+            	     self.stopHap, msg)
+        #self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+        SIM_break_simulation(msg)
+
+    def stopHap(self, msg, one, exception, error_string):
+        '''  Invoked when a syscall (or more typically its exit back to user space) triggers
+             a break in the simulation
+        '''
+        if self.stop_hap is not None:
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+            eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+            if self.stop_action is not None:
+                self.lgr.debug('syscall stopHap name: %s cycle: 0x%x eip: 0x%x exception %s error %s linger: %r' % (self.name, self.stop_action.hap_clean.cpu.cycles, eip, str(exception), str(error_string), self.linger))
+            else:
+                self.lgr.debug('syscall stopHap, no stop_action') 
+            if not self.linger:
+                break_list = self.stop_action.getBreaks()
+                if eip not in break_list and eip != self.stop_action.getExitAddr():
+                    self.lgr.debug('syscall stopHap 0x%x not in break list, not our stop %s' % (eip, ' '.join(hex(x) for x in break_list)))
+                    #self.top.skipAndMail()
+                    return
+       
+                for hc in self.stop_action.hap_clean.hlist:
+                    if hc.hap is not None:
+                        #self.lgr.debug('will delete hap %s' % str(hc.hap))
+                        self.context_manager.genDeleteHap(hc.hap)
+                        hc.hap = None
+                self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
+                for bp in self.stop_action.breakpoints:
+                    self.context_manager.genDeleteBreakpoint(bp)
+                ''' check functions in list '''
+                self.lgr.debug('syscall stopHap call to rmExitHap')
+                self.sharedSyscall.rmExitHap(None)
+
+                ''' TBD do this as a stop function? '''
+                cpu, comm, pid = self.task_utils.curProc() 
+                self.sharedSyscall.rmPendingExecve(pid)
+
+                ''' TBD when would we want to close it?'''
+                if self.traceMgr is not None:
+                    self.traceMgr.flush()
+                self.top.idaMessage() 
+                ''' Run the stop action, which is a hapCleaner class '''
+                self.lgr.debug('syscall stopHap run stop_action')
+                self.stop_action.run(cb_param=msg)
+
+                if self.call_list is not None:
+                    for callname in self.call_list:
+                        #self.top.rmCallTrace(self.cell_name, callname)
+                        self.top.rmCallTrace(self.cell_name, self.name)
+            else:
+                self.lgr.debug('syscall will linger and catch next occurance')
+                self.top.skipAndMail()
+

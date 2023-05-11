@@ -230,9 +230,11 @@ class PageFaultGen():
                 #self.lgr.debug('watch ptable address of 0x%x' % page_info.ptable_addr)
                 #self.lgr.debug('watch ptable address of 0x%x' % page_info.page_addr)
                 self.watchPtable(page_info.page_addr, prec)
-            else:
+            elif page_info.ptable_addr is not None:
                 #self.lgr.debug('pageFaultGen pageFaultHapAlone page_addr was None')
                 self.watchPtable(page_info.ptable_addr, prec)
+            else:
+                self.lgr.error('pageFaultGen pageFaultHapAlone go zilch')
 
 
     def watchPageFaults(self, pid=None, compat32=False):

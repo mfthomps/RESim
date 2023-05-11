@@ -1925,7 +1925,7 @@ class Syscall():
         if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
             ''' caller frame will be in regs'''
             if frame is None:
-                frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 frame_string = taskUtils.stringFromFrame(frame)
             exit_eip1 = self.param.sysexit
             ''' catch interrupt returns such as wait4 '''
@@ -1939,7 +1939,7 @@ class Syscall():
             
         elif break_eip == self.param.sys_entry:
             if frame is None:
-                frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
+                frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 ''' fix up regs based on eip and esp found on stack '''
                 reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
                 esp = self.cpu.iface.int_register.read(reg_num)
@@ -1952,7 +1952,7 @@ class Syscall():
             exit_eip1 = self.param.arm_ret
             exit_eip2 = self.param.arm_ret2
             if frame is None:
-                frame = self.task_utils.frameFromRegs(self.cpu)
+                frame = self.task_utils.frameFromRegs()
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
         elif break_eip == syscall_info.calculated:
@@ -1960,14 +1960,14 @@ class Syscall():
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture == 'arm':
                 if frame is None:
-                    frame = self.task_utils.frameFromRegs(self.cpu)
+                    frame = self.task_utils.frameFromRegs()
                 exit_eip1 = self.param.arm_ret
                 exit_eip2 = self.param.arm_ret2
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                    frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
                 exit_eip3 = self.param.sysret64

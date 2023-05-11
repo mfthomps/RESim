@@ -297,7 +297,21 @@ class memUtils():
             return s
         else: 
             return None
-    
+   
+    def readWinString(self,  cpu, vaddr, maxlen):
+        bstring = self.readBytes(cpu, vaddr, maxlen)
+        retval = ''
+        null_count = 0
+        for b in bstring:
+            if b == 0:
+                null_count = null_count + 1
+            else:
+                retval = retval + chr(b)
+                null_count = 0
+            if null_count > 2:
+                break
+        return retval
+ 
     def readBytes(self, cpu, vaddr, maxlen):
         ''' return a bytearray of maxlen read from vaddr '''
         remain = maxlen
