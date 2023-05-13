@@ -35,7 +35,7 @@ import win7CallParams
 import syscall
 from resimHaps import *
 class WinMonitor():
-    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscall_manager, trace_manager, context_manager, lgr):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, run_from_snap, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -43,9 +43,15 @@ class WinMonitor():
         self.param = param
         self.mem_utils = mem_utils
         self.task_utils = task_utils
-        self.trace_manager = trace_manager
-        self.syscall_manager = syscall_manager
+        self.traceMgr = traceMgr
+        self.traceProcs = traceProcs
+        self.syscallManager = syscallManager
         self.context_manager = context_manager
+        self.run_from_snap = run_from_snap
+        if run_from_snap is not None:
+            self.snap_start_cycle = cpu.cycles
+        else:
+            self.snap_start_cycle = None
         self.cell = self.top.getCell(cell_name)
 
         ''' Used when finding newly created tasks '''
@@ -56,12 +62,19 @@ class WinMonitor():
         ''' dict of dict of syscall.SysCall keyed cell and context'''
         ''' TBD remove these '''
         self.call_traces = {}
-        self.trace_all = {}
+        self.trace_all = None
+        self.w7_call_params = None
 
 
-    def getWin7CallParams(self, stop_on, only):
+    def getWin7CallParams(self, stop_on, only, only_proc, track_params):
         current_task_phys = self.task_utils.getPhysCurrentTask()
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, self.cell_name, self.mem_utils, current_task_phys, self.param, self.lgr, stop_on=stop_on, only=only)
+        self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, current_task_phys, self.param, self.lgr, 
+                stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params)
+
+    def rmCallParamBreaks(self):
+        self.lgr.debug('winMonitor rmCallparamBreaks')
+        self.w7_call_params.rmAllBreaks()
+ 
 
     def toCreateProc(self, comm=None, flist=None, binary=False):
         if comm is not None:    
@@ -71,9 +84,9 @@ class WinMonitor():
             call_params = [params]
         else:
             call_params = []
-            self.trace_manager.open('/tmp/execve.txt', self.cpu)
+            self.traceMgr.open('/tmp/execve.txt', self.cpu)
 
-        self.syscall_manager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
+        self.syscallManager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
         #self.top.setCommandCallback(self.toNewProc)
         #self.top.setCommandCallbackParam(comm)
         SIM_continue(0)
@@ -82,8 +95,8 @@ class WinMonitor():
         self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
         f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
         f2 = stopFunction.StopFunction(self.top.debug, [], nest=False)
-        #flist = [f1, f2]
-        flist = [f1]
+        flist = [f1, f2]
+        #flist = [f1]
         self.toCreateProc(proc, flist=flist) 
 
 
@@ -165,7 +178,7 @@ class WinMonitor():
             self.trace_all = self.syscallManager.watchAllSyscalls(None, 'traceAll', trace=True, 
                                       record_fd=record_fd, linger=True, swapper_ok=swapper_ok)
 
-            if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
+            if self.run_from_snap is not None and self.snap_start_cycle == cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
                 p_file = os.path.join('./', self.run_from_snap, self.cell_name, 'sharedSyscall.pickle')
                 if os.path.isfile(p_file):
@@ -176,7 +189,7 @@ class WinMonitor():
                         ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
                         self.trace_all.setExits(exit_info_list, context_override = context)
 
-            frames = self.getDbgFrames()
+            frames = self.top.getDbgFrames()
             self.lgr.debug('traceAll, call to setExits')
             self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
