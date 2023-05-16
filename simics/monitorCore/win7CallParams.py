@@ -136,8 +136,7 @@ class Win7CallParams():
             self.wrote_values = {}
 
         def toString(self):
-            hack_delta = self.rdx - self.rcx
-            retval = 'rcx: 0x%x rdx: 0x%x r8: 0x%x r9: 0x%x sp: 0x%x  hack_delta: 0x%x\n' % (self.rcx, self.rdx, self.r8, self.r9, self.rsp, hack_delta)
+            retval = 'rcx: 0x%x rdx: 0x%x r8: 0x%x r9: 0x%x sp: 0x%x\n' % (self.rcx, self.rdx, self.r8, self.r9, self.rsp)
             index = 1
             for reference in self.refs:
                 retval = '%s %d %s\n' % (retval, index, reference.toString())
@@ -304,7 +303,7 @@ class Win7CallParams():
                              current_base, current_base_delta, ref_of_base)
                         add_these[running_start] = new_ref
                         rm_these[running_start] = running_count
-                    if reference.best_base == 'rsp' and reference.other_ptr is not None:
+                    if reference.best_base == 'rsp':
                         index = index + 1 
                         continue
 
@@ -421,8 +420,9 @@ class Win7CallParams():
         self.lgr.debug('win7CallParams setReverseBreaks on 0x%x' % self.param.sysenter)
         self.rev_entry_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
         self.rev_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stoppedAtSyscall, None)
-        dumb, cur_addr, comm, pid = self.task_utils.currentProcessInfo()
-        #print('would reverse here cur 0x%x comm %s pid:%d' % (cur_addr, comm, pid))
+        dumb, comm, pid = self.task_utils.curProc()
+        #dumb, cur_addr, comm, pid = self.task_utils.currentProcessInfo()
+        self.lgr.debug('setReverseBreaks do reverse comm %s pid:%d' % (comm, pid))
         SIM_run_command('reverse')
 
     def stoppedAtSyscall(self, stop_action, one, exception, error_string):
@@ -430,8 +430,8 @@ class Win7CallParams():
         dumb, comm, pid = self.task_utils.curProc()
         if pid is None:
             self.lgr.error('win7CallParams stoppedAtSyscall, pid is None?')
-            dumb, cur_addr, comm, pid = self.task_utils.currentProcessInfo()
-            self.lgr.debug('win7CallParams stoppedAtSyscall, TRIED again and pid is %s?' % pid)
+            #dumb, cur_addr, comm, pid = self.task_utils.currentProcessInfo()
+            #self.lgr.debug('win7CallParams stoppedAtSyscall, TRIED again and pid is %s?' % pid)
         else:
             rip = self.mem_utils.getRegValue(self.cpu, 'rip')
             self.lgr.debug('win7CallParams stoppedAtSyscall pid:%d (%s) rip: 0x%x' % (pid,comm,rip))
