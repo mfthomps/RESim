@@ -631,7 +631,7 @@ class SharedSyscall():
                             return    
                 '''
                 leader_pid = self.task_utils.getCurrentThreadLeaderPid()
-                self.lgr.debug('sharedSyscall handleExit maybe clone child return no parent pid %d (%s)  group leader is %s' % (pid, comm, leader_pid))
+                self.lgr.debug('sharedSyscall handleExit maybe clone child return no parent pid %s (%s)  group leader is %s' % (pid, comm, leader_pid))
                 if leader_pid != pid:
                     self.traceProcs.addProc(pid, leader_pid, comm=comm)
                     if self.context_manager.amWatching(leader_pid):

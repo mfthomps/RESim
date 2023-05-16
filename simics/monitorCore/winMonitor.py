@@ -54,10 +54,6 @@ class WinMonitor():
             self.snap_start_cycle = None
         self.cell = self.top.getCell(cell_name)
 
-        ''' Used when finding newly created tasks '''
-        self.cur_task_break = None
-        self.cur_task_hap = None
-        self.current_tasks = []
 
         ''' dict of dict of syscall.SysCall keyed cell and context'''
         ''' TBD remove these '''
@@ -68,7 +64,7 @@ class WinMonitor():
 
     def getWin7CallParams(self, stop_on, only, only_proc, track_params):
         current_task_phys = self.task_utils.getPhysCurrentTask()
-        self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, current_task_phys, self.param, self.lgr, 
+        self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, self.task_utils, current_task_phys, self.param, self.lgr, 
                 stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params)
 
     def rmCallParamBreaks(self):
@@ -93,10 +89,10 @@ class WinMonitor():
 
     def debugProc(self, proc, final_fun=None, pre_fun=None):
         self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
-        f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
-        f2 = stopFunction.StopFunction(self.top.debug, [], nest=False)
-        flist = [f1, f2]
-        #flist = [f1]
+        #f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
+        f1 = stopFunction.StopFunction(self.top.debug, [], nest=False)
+        #flist = [f1, f2]
+        flist = [f1]
         self.toCreateProc(proc, flist=flist) 
 
 
@@ -122,40 +118,6 @@ class WinMonitor():
                 #break
         for pid in sorted(plist):
             print('pid: %d  %s' % (pid, plist[pid]))
-
-    def toNewProc(self, proc):
-        self.lgr.debug('toNewProc %s' % proc)
-        phys_current_task = self.task_utils.getPhysCurrentTask()
-        self.cur_task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
-                             phys_current_task, self.mem_utils.WORD_SIZE, 0)
-        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.toNewProcHap, proc, self.cur_task_break)
-        self.current_tasks = self.task_utils.getTaskList()
-        SIM_run_alone(SIM_continue, 0)
-
-    def toNewProcHap(self, proc, third, forth, memory):
-        if self.cur_task_hap is None:
-            return
-        #self.lgr.debug('winMonitor toNewProcHap for proc %s' % proc)
-        cur_thread = SIM_get_mem_op_value_le(memory)
-        cur_proc = self.task_utils.getCurTaskRec(cur_thread=cur_thread)
-        if cur_proc not in self.current_tasks:
-            comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
-            self.lgr.debug('winMonitor does %s start with %s?' % (proc, comm))
-            if proc.startswith(comm):
-                pid_ptr = cur_proc + self.param.ts_pid
-                pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-                self.lgr.debug('winMonitor toNewProcHap got new %s pid:%d' % (comm, pid))
-                SIM_run_alone(self.rmNewProcHap, self.cur_task_hap)
-                self.cur_task_hap = None
-                self.task_utils.addProgram(pid, proc)
-                SIM_run_alone(self.top.toUser, None)
-                #SIM_break_simulation('got new proc %s' % proc)
-
-    def rmNewProcHap(self, newproc_hap):
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", newproc_hap)
-        if self.cur_task_break is not None:
-            SIM_delete_breakpoint(self.cur_task_break)
-            self.cur_task_break = None
 
     def traceAll(self, record_fd=False, swapper_ok=False):
 
@@ -193,3 +155,16 @@ class WinMonitor():
             self.lgr.debug('traceAll, call to setExits')
             self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
+
+    def getSyscall(self, callname):
+        ''' find the most specific syscall for the given callname '''
+        retval = None
+        if  callname == 'exit_group':
+            #self.lgr.debug('is exit group')
+            retval = self.exit_group_syscall
+        elif callname in self.call_traces:
+            #self.lgr.debug('is given callname %s' % callname)
+            retval = self.call_traces[callname]
+        else:
+            retval = self.trace_all
+        return retval

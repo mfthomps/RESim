@@ -111,7 +111,7 @@ class WinSyscall():
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
-        elif self.debugging and not self.breakOnExecve() and not trace and skip_and_mail:
+        elif self.debugging and not self.breakOnProg() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
@@ -131,6 +131,17 @@ class WinSyscall():
         ''' TBD '''
         self.stop_on_exit = False
 
+        ''' Used when finding newly created tasks '''
+        self.cur_task_break = None
+        self.cur_task_hap = None
+        self.current_tasks = []
+
+    def breakOnProg(self):
+        for call in self.call_params:
+            if call is not None and call.subcall == 'CreateUserProcess' and call.break_simulation:
+                return True
+        return False
+
     def doBreaks(self, background):
         break_list = []
         break_addrs = []
@@ -139,7 +150,7 @@ class WinSyscall():
         self.lgr.debug('winSyscall cell_name %s doBreaks.  reset timeofdaycount' % (self.cell_name))
         if self.call_list is None:
             ''' trace all calls '''
-            self.syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
+            self.syscall_info = syscall.SyscallInfo(self.cpu, None, None, None, self.trace)
             if self.cpu.architecture == 'arm':
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
                 #self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
@@ -184,6 +195,9 @@ class WinSyscall():
                     self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
                 entry = self.task_utils.getSyscallEntry(callnum)
+                if entry is None:
+                    self.lgr.error('Failed to get entry for callnum %d' % callnum)
+                    return None, None
                 #phys = self.mem_utils.v2p(cpu, entry)
                 #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                 syscall_info = syscall.SyscallInfo(self.cpu, None, callnum, entry, self.trace, self.call_params)
@@ -436,20 +450,35 @@ class WinSyscall():
                     #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
                     self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                     return
+        frame_string = taskUtils.stringFromFrame(frame)
+        ida_msg = 'pid:%d (%s) %s %s' % (pid, comm, callname, frame_string)
         if callname == 'CreateUserProcess':
-            b_of_b = frame['param2']
-            b_of_b_delta = 0x8e8
-            ptr = b_of_b + b_of_b_delta
+            rsp = frame['rsp']
+            ptr = rsp + 0x58
             base = self.mem_utils.readPtr(self.cpu, ptr)
-            prog = self.mem_utils.readWinString(self.cpu, base, 100)
-            self.lgr.debug('Windows syscallParse, got it  %s b_of_b(rcx) 0x%x delta 0x%x ptr 0x%x base 0x%x prog %s' % (callname, b_of_b, b_of_b_delta, ptr, base, prog))
-            if not self.checkProg(prog, pid, exit_info):
-                exit_info = None
-            #SIM_run_alone(self.top.tasks, None)
-            #SIM_break_simulation('CreateUserProcess 0x%x' % base)
+            if base is not None:
+                ptr2 = base + 0x18
+                ptr3 = self.mem_utils.readPtr(self.cpu, ptr2)
+
+                prog = self.mem_utils.readWinString(self.cpu, ptr3, 100)
+                ida_msg = 'pid:%d (%s) %s %s %s' % (pid, comm, callname, prog, frame_string)
+                self.lgr.debug('Windows syscallParse, got it  %s ptr: 0x%x, base 0x%x, ptr2: 0x%x ptr3 0x%x  prog %s' % (callname, ptr, base, ptr2, ptr3, prog))
+                want_to_debug = self.checkProg(prog, pid, exit_info)
+                if want_to_debug:
+                    ''' remove param '''
+                    exit_info.call_params = None
         else:
-            self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
-            exit_info = None
+            self.lgr.debug(ida_msg)
+        #else:
+        #    self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
+        #    exit_info = None
+        if ida_msg is not None and not quiet:
+            #self.lgr.debug(ida_msg.strip()) 
+            
+            #if ida_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
+            if ida_msg is not None and self.traceMgr is not None:
+                if len(ida_msg.strip()) > 0:
+                    self.traceMgr.write(ida_msg+'\n')
         return exit_info
 
     def getExitAddrs(self, break_eip, syscall_info, frame = None):
@@ -490,8 +519,8 @@ class WinSyscall():
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    frame_string = taskUtils.stringFromFrame(frame)
                     frame = self.task_utils.frameFromRegsComputed()
+                    frame_string = taskUtils.stringFromFrame(frame)
                     self.lgr.debug('frame computed string %s' % frame_string)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
@@ -518,7 +547,6 @@ class WinSyscall():
                 if call.subcall == 'CreateUserProcess':
                     cp = call
                     break
-        
             
         if cp is not None: 
             if cp.match_param.__class__.__name__ == 'Dmod':
@@ -548,10 +576,12 @@ class WinSyscall():
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
                     if not wrong_type:
-                        self.lgr.debug('checkProg CreateUserProc of %s now stop alone ' % prog_string)
+                        self.lgr.debug('checkProg CreateUserProc of %s call toNewProc' % prog_string)
                         retval = True
-                        exit_info.call_params = cp 
-                        SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
+                        #exit_info.call_params = cp 
+                        exit_info.call_params = None
+                        self.toNewProc(base)
+                        #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
                     else:
                         self.lgr.debug('checkProg, got %s when looking for binary %s, skip' % (ftype, prog_string))
         return retval
@@ -616,4 +646,76 @@ class WinSyscall():
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
+
+    def setExits(self, frames, origin_reset=False, context_override=None):
+        ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
+        for pid in frames:
+            self.lgr.debug('setExits frame of pid %d is %s' % (pid, taskUtils.stringFromFrame(frames[pid])))
+            if frames[pid] is None:
+                continue
+            pc = frames[pid]['pc']
+            callnum = frames[pid]['syscall_num']
+            syscall_info = SyscallInfo(self.cpu, None, callnum, pc, self.trace, self.call_params)
+            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
+
+            frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[pid])
+
+            exit_info = ExitInfo(self, self.cpu, pid, callnum, syscall_info.compat32, frame)
+            exit_info.retval_addr = frames[pid]['param2']
+            exit_info.count = frames[pid]['param3']
+            exit_info.old_fd = frames[pid]['param1']
+            self.lgr.debug('setExits set count to parm3 now 0x%x' % exit_info.count)
+
+            the_callname = callname
+            ''' tbd for socket calls and selectish calls...'''
+            if callname == 'socketcall' or callname.upper() in net.callname:
+                the_callname = self.handleReadOrSocket(callname, frames[pid], exit_info, syscall_info)
+            elif callname in ['select','_newselect', 'pselect6']:        
+                self.handleSelect(callname, pid, frames[pid], exit_info, syscall_info)
+
+            if exit_info.call_params is not None:
+                exit_info.origin_reset = origin_reset
+                if exit_info.retval_addr is not None:
+                    self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))
+                else:
+                    self.lgr.debug('setExits almost done for pid %d call %d retval_addr is None' % (pid, callnum))
+                exit_info_name = '%s-%s-exit' % (the_callname, self.name)
+                self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
+            else:
+                self.lgr.debug('setExits call_param is none')
+
+    def toNewProc(self, proc):
+        self.lgr.debug('toNewProc %s' % proc)
+        phys_current_task = self.task_utils.getPhysCurrentTask()
+        self.cur_task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
+                             phys_current_task, self.mem_utils.WORD_SIZE, 0)
+        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.toNewProcHap, proc, self.cur_task_break)
+        self.current_tasks = self.task_utils.getTaskList()
+        #SIM_run_alone(SIM_continue, 0)
+
+    def toNewProcHap(self, proc, third, forth, memory):
+        if self.cur_task_hap is None:
+            return
+        #self.lgr.debug('winMonitor toNewProcHap for proc %s' % proc)
+        cur_thread = SIM_get_mem_op_value_le(memory)
+        cur_proc = self.task_utils.getCurTaskRec(cur_thread=cur_thread)
+        if cur_proc not in self.current_tasks:
+            comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+            self.lgr.debug('winMonitor does %s start with %s?' % (proc, comm))
+            if proc.startswith(comm):
+                pid_ptr = cur_proc + self.param.ts_pid
+                pid = self.mem_utils.readWord(self.cpu, pid_ptr)
+                self.lgr.debug('winMonitor toNewProcHap got new %s pid:%d' % (comm, pid))
+                SIM_run_alone(self.rmNewProcHap, self.cur_task_hap)
+                self.cur_task_hap = None
+                self.task_utils.addProgram(pid, proc)
+                f1 = stopFunction.StopFunction(self.context_manager.setDebugPid, [], nest=False)
+                SIM_run_alone(self.top.toUser, [f1])
+                #SIM_break_simulation('got new proc %s' % proc)
+
+    def rmNewProcHap(self, newproc_hap):
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", newproc_hap)
+        if self.cur_task_break is not None:
+            SIM_delete_breakpoint(self.cur_task_break)
+            self.cur_task_break = None
 

@@ -143,6 +143,7 @@ class GetKernelParams():
         self.win7_tasks = []
         self.win7_count = 0
         self.w7_call_params = None
+        self.win7_saved_cr3_phys = None
 
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -618,9 +619,12 @@ class GetKernelParams():
 
         if cur_task not in self.win7_tasks:
             self.win7_tasks.append(cur_task) 
+            print('num tasks now %d,  changed threads %d times' % (len(self.win7_tasks), self.win7_count))
         self.win7_count = self.win7_count+1
-        if self.win7_count > 1000:
+        #if self.win7_count > 1000:
+        if len(self.win7_tasks) > 50:
             #pickle.dump( self.win7_tasks, open( 'task_list.pickle', "wb" ) )
+            print('Did enough tasks? num tasks %d,  changed threads %d times' % (len(self.win7_tasks), self.win7_count))
             SIM_break_simulation('changed thread enough')
             SIM_delete_breakpoint(self.task_break)
 
@@ -988,7 +992,7 @@ class GetKernelParams():
             #             cs:0xfffff800034f1e24 p:0x0034f1e24  sar r11,4
             #             cs:0xfffff800034f1e28 p:0x0034f1e28  add r10,r11
 
-
+            ptr2stack_prefix = 'mov rsp,qword ptr gs:'
             prefix = 'movsx r11,dword ptr [r10'
             while True:
                 SIM_run_command('si -q')
@@ -998,7 +1002,23 @@ class GetKernelParams():
                 if not self.mem_utils.isKernel(rip):
                     self.lgr.error('stepCompute returned to user space rip 0x%X  kernel_base 0x%x' % (rip, self.param.kernel_base))
                     return
-                if instruct[1].startswith(prefix):
+                ''' TBD tenuous '''
+                if instruct[1].startswith(ptr2stack_prefix):
+                    last = instruct[1].split()[-1].strip()
+                    content = last.split('[', 1)[1].split(']')[0]
+                    value = int(content, 16)
+                    if self.param.saved_cr3 is None:
+                        self.param.saved_cr3 = value
+                        gs_base = self.cpu.ia32_gs_base
+                        ptr = gs_base + value
+                        phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+                        self.win7_saved_cr3_phys = phys_block.address
+                    elif self.param.ptr2stack is None:
+                        self.param.ptr2stack = value
+                    else:
+                        self.lgr.error('stepCompute confused')
+                       
+                elif instruct[1].startswith(prefix):
                     self.param.syscall_compute = rip
                     self.param.syscall_jump = self.mem_utils.getRegValue(self.cpu, 'r10')
                     self.lgr.debug('stepCompute win7 syscall_compute 0x%x syscall_jump 0x%x' % (self.param.syscall_compute, self.param.syscall_jump))
@@ -1282,7 +1302,10 @@ class GetKernelParams():
         print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
         if self.run_from_snap is not None:
              pfile = os.path.join(self.run_from_snap, 'phys.pickle')
-             pickle.dump(self.current_task_phys, open(pfile, 'wb'))
+             prec = {}
+             prec['current_task_phys'] = self.current_task_phys
+             prec['saved_cr3_phys'] = self.win7_saved_cr3_phys
+             pickle.dump(prec, open(pfile, 'wb'))
              print('current task phys addr written to %s' % pfile)
 
     def deleteStopTaskHap(self, dumb):
@@ -1497,7 +1520,11 @@ class GetKernelParams():
                 if self.run_from_snap is not None:
                     pfile = os.path.join(self.run_from_snap, 'phys.pickle')
                     if os.path.isfile(pfile):
-                        self.current_task_phys = pickle.load(open(pfile, 'rb'))
+                        value = pickle.load(open(pfile, 'rb'))
+                        if type(value) is int:
+                            self.current_task_phys = pickle.load(open(pfile, 'rb'))
+                        else:
+                            self.current_task_phys = value['current_task_phys']
                     else:
                         self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
                         return

@@ -641,7 +641,8 @@ class GenMonitor():
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
             if self.isWindows():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
-                                               self.syscallManager[cell_name], self.traceMgr[cell_name], self.context_manager[cell_name], self.lgr)
+                                               self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
+                                               self.run_from_snap, self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
@@ -1132,6 +1133,10 @@ class GenMonitor():
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
+        if cpu is None:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.lgr.error('show failed to get cpu from taskUtils curProc.  target cpu is %s %s' % (cpu.name, str(cpu.current_context)))
+            return
         cpl = memUtils.getCPL(cpu)
         eip = self.getEIP(cpu)
         if self.isWindows():
@@ -2700,20 +2705,24 @@ class GenMonitor():
 
     def getSyscall(self, cell_name, callname):
         ''' find the most specific syscall for the given callname '''
-        if cell_name in self.exit_group_syscall and callname == 'exit_group':
-            #self.lgr.debug('is exit group')
-            return self.exit_group_syscall[cell_name]
-        elif cell_name in self.call_traces: 
-            if callname in self.call_traces[cell_name]:
-                #self.lgr.debug('is given callname %s' % callname)
-                return self.call_traces[cell_name][callname]
-            elif cell_name in self.trace_all:
-                #self.lgr.debug('is trace all')
-                return self.trace_all[cell_name]
-            else:
-                self.lgr.debug('genMonitor getSyscall, not able to return instance for call %s len self.call_traces %d' % (callname, 
-                           len(self.call_traces[cell_name])))
-        return None
+        retval = None
+        if self.isWindows(target=cell_name):
+            retval = self.winMonitor[cell_name].getSyscall(callname)
+        else:
+            if cell_name in self.exit_group_syscall and callname == 'exit_group':
+                #self.lgr.debug('is exit group')
+                retval = self.exit_group_syscall[cell_name]
+            elif cell_name in self.call_traces: 
+                if callname in self.call_traces[cell_name]:
+                    #self.lgr.debug('is given callname %s' % callname)
+                    retval = self.call_traces[cell_name][callname]
+                elif cell_name in self.trace_all:
+                    #self.lgr.debug('is trace all')
+                    retval = self.trace_all[cell_name]
+                else:
+                    self.lgr.debug('genMonitor getSyscall, not able to return instance for call %s len self.call_traces %d' % (callname, 
+                               len(self.call_traces[cell_name])))
+        return retval
 
     def tracingAll(self, cell_name, pid):
         ''' are we tracing all syscalls for the given pid? '''
@@ -3658,6 +3667,7 @@ class GenMonitor():
         debug_info_file = os.path.join('./', name, 'debug_info.pickle')
         debug_info = {}
         debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid()
+        self.lgr.debug('writeConfig got from contextManager debug_pid %s cpu %s' % (debug_pid, debug_cpu.name))
         if debug_pid is not None:
             debug_info['pid'] = debug_pid
             debug_info['cpu'] = debug_cpu.name
@@ -5277,11 +5287,15 @@ class GenMonitor():
             retval = True
         return retval
 
-    def getWin7CallParams(self, stop_on=None, only=None):
+    def getWin7CallParams(self, stop_on=None, only=None, only_proc=None, track_params=False):
         ''' Use breakpoints set on the user space to identify call parameter 
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
-            self.winMonitor[self.target].getWin7CallParams(stop_on, only)
+            self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params)
+
+    def rmCallParamBreaks(self):
+        self.lgr.debug('rmCallparamBreaks (genMonitor)')
+        self.winMonitor[self.target].rmCallParamBreaks()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

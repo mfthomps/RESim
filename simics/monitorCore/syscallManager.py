@@ -125,7 +125,7 @@ class SyscallManager():
                                self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, 
                                stop_on_call=stop_on_call, trace=trace, 
-                               netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)
+                               record_fd=record_fd, swapper_ok=swapper_ok)
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 

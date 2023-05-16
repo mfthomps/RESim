@@ -31,6 +31,7 @@ import pickle
 import json
 import osUtils
 import memUtils
+import pageUtils
 class TaskStruct():
     def __init__(self, pid, comm):
         self.pid = pid
@@ -46,6 +47,7 @@ class WinTaskUtils():
         self.mem_utils = mem_utils
         self.run_from_snap = run_from_snap
         self.phys_current_task = None
+        self.phys_saved_cr3 = None
 
         self.program_map = {}
         self.exit_cycles = 0
@@ -69,11 +71,18 @@ class WinTaskUtils():
             phys_current_task_file = os.path.join('./', run_from_snap, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
+                self.lgr.debug('loaded phys_current_task from %s' % phys_current_task_file)
+                self.lgr.debug('value 0x%x' % self.phys_current_task)
             else:
                 ''' temporary hack TBD '''
                 pfile = os.path.join(self.run_from_snap, 'phys.pickle')
                 if os.path.isfile(pfile):
-                    self.current_task_phys = pickle.load(open(pfile, 'rb'))
+                    value = pickle.load(open(pfile, 'rb'))
+                    if type(value) is int:
+                        self.phys_current_task = pickle.load(open(pfile, 'rb'))
+                    else:
+                        self.phys_current_task = value['current_task_phys']
+                        self.phys_saved_cr3 = value['saved_cr3_phys']
                 else:
                     self.lgr.error('winTaskUtils did not find %s' % pfile)
                     return
@@ -83,19 +92,54 @@ class WinTaskUtils():
                 self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
 
     def getPhysCurrentTask(self):
-        return self.current_task_phys
+        return self.phys_current_task
+
+    def getCurTaskRecPhys(self):
+        retval = None
+        cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        if cur_thread is None:
+            self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.phys_current_task)
+        else:
+            ptr = cur_thread + self.param.proc_ptr
+            saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+            self.lgr.debug('winTaskUtils getCurTaskRec phys_saved_cr3  0x%x saved_cr3 0x%x' % (self.phys_saved_cr3, saved_cr3))
+            pt = pageUtils.findPageTable(self.cpu, ptr, self.lgr, force_cr3=saved_cr3)
+            self.lgr.debug('winTaskUtils getCurTaskRec got pt.page_addr 0x%x' % pt.page_addr)
+            retval = pt.page_addr
+            if retval is None:
+                self.lgr.error('winTaskUtils getPhysCurTaskRec got None from page table 0x%x ptr 0x%x phys_current is 0x%x' % (cur_thread, ptr, self.phys_current_task))
+                
+        return retval
+
 
     def getCurTaskRec(self, cur_thread=None):
         retval = None
         if cur_thread is None:
-            cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
+            cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
         if cur_thread is None:
-            self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.current_task_phys)
+            self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.phys_current_task)
         else:
             ptr = cur_thread + self.param.proc_ptr
             retval = self.mem_utils.readPtr(self.cpu, ptr)
             if retval is None:
-                self.lgr.error('winTaskUtils getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x' % (self.cur_thread, ptr))
+                self.lgr.debug('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x, try saved CR3' % (cur_thread, ptr, self.phys_current_task))
+                ''' Try getting phys addr of saved cr3'''
+                #gs_base = self.cpu.ia32_gs_base
+                #saved_cr3_addr = gs_base+self.param.saved_cr3
+                #saved_cr3 = self.mem_utils.readPtr(self.cpu, saved_cr3_addr)
+                saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                self.lgr.debug('winTaskUtils getCurTaskRec phys_saved_cr3  0x%x saved_cr3 0x%x' % (self.phys_saved_cr3, saved_cr3))
+                pt = pageUtils.findPageTable(self.cpu, ptr, self.lgr, force_cr3=saved_cr3)
+                self.lgr.debug('winTaskUtils getCurTaskRec got pt.page_addr 0x%x' % pt.page_addr)
+                retval = SIM_read_phys_memory(self.cpu, pt.page_addr, self.mem_utils.WORD_SIZE)
+                if retval is None:
+                    self.lgr.error('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (cur_thread, ptr, self.phys_current_task))
+                else:
+                    self.lgr.debug('winTaskUtils getCurTaskRec VIA saved CR3, got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                
+            else:
+                self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                pass
         return retval
 
     def getMemUtils(self):
@@ -106,7 +150,11 @@ class WinTaskUtils():
         return retval 
 
     def syscallName(self, call_num, dumb=None):
-        retval = self.call_map[call_num][2:]
+        retval = None
+        if call_num not in self.call_map:
+            self.lgr.error('winTaskUtils, no map for call number %d' % call_num)
+        else:
+            retval = self.call_map[call_num][2:]
         return retval 
 
     def getSyscallEntry(self, callnum):
@@ -131,15 +179,34 @@ class WinTaskUtils():
         self.lgr.debug('getComputed call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
         return computed
 
-    def curProc(self):
+    def curProcXX(self):
         pid = None
         comm = None
         cur_proc = self.getCurTaskRec()
+        if cur_proc is None:
+            self.lgr.error('winTaskUtils curProc gotNone from getCurTaskRec')
+            return None, None, None
         pid_ptr = cur_proc + self.param.ts_pid
         pid = self.mem_utils.readWord(self.cpu, pid_ptr)
         if pid is not None:
             #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
             comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
+        else:
+            self.lgr.debug('getCurPid cur_thread is None')
+        return self.cpu, comm, pid
+
+    def curProc(self):
+        pid = None
+        comm = None
+        cur_proc = self.getCurTaskRecPhys()
+        if cur_proc is None:
+            self.lgr.error('winTaskUtils curProc gotNone from getCurTaskRec')
+            return None, None, None
+        pid_ptr = cur_proc + self.param.ts_pid
+        pid = SIM_read_phys_memory(self.cpu, pid_ptr, self.mem_utils.WORD_SIZE)
+        if pid is not None:
+            #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
+            comm = self.mem_utils.readStringPhys(self.cpu, cur_proc+self.param.ts_comm, 16)
         else:
             self.lgr.debug('getCurPid cur_thread is None')
         return self.cpu, comm, pid
@@ -172,16 +239,22 @@ class WinTaskUtils():
         frame = self.frameFromRegs()
 
         gs_base = self.cpu.ia32_gs_base
-        ptr2stack = gs_base+0x6008
+        #ptr2stack = gs_base+0x6008
+        ptr2stack = gs_base+self.param.ptr2stack
         stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
+        self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
         user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
+        self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x' % (user_stack))
         frame['sp'] = user_stack
+        frame['rsp'] = user_stack
         ''' TBD sometimes stepped on???
             r10 is hid in rcx.  don't ask me...
         '''
         frame['param5'] = self.mem_utils.getRegValue(self.cpu, 'rcx')
         frame['param6'] = user_stack
         frame['param1'] = self.mem_utils.readPtr(self.cpu, stack_val-40)
+        if frame['param1'] is None:
+            self.lgr.error('frameFromRegsComputed got none reading from 0x%x -40' % stack_val)
         #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
         #rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
         #r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
@@ -206,9 +279,13 @@ class WinTaskUtils():
 
     def currentProcessInfo(self, cpu=None):
         cur_addr = self.getCurTaskRec()
-        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
-        pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
-        return self.cpu, cur_addr, comm, pid
+        if cur_addr is not None:
+            comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
+            pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
+            return self.cpu, cur_addr, comm, pid
+        else:
+            self.lgr.error('winTaskUtils currentProcessInfo got None for cur_addr')
+            return self.cpu, None, None, None
 
     def getTaskListPtr(self, rec=None):
         ''' return address of the task list "next" entry that points to the current task '''
@@ -251,7 +328,7 @@ class WinTaskUtils():
             task_ptr = next_head - self.param.ts_prev
 
             if task_ptr in got:
-                print('already got task_ptr 0x%x' % task_ptr)
+                #print('already got task_ptr 0x%x' % task_ptr)
                 self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
                 break
         return got
@@ -294,4 +371,18 @@ class WinTaskUtils():
     def clearExitPid(self):
         self.exit_pid = 0
         self.exit_cycles = 0
+
+    def getCurrentThreadLeaderPid(self):
+        ''' TBD see taskUtils'''
+        dumb, comm, pid = self.curProc()
+        return pid
+
+    def getRecAddrForPid(self, pid):
+        #self.lgr.debug('getRecAddrForPid %d' % pid)
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+           if ts_list[ts].pid == pid:
+               return ts
+        #self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
+        return None
 

@@ -15,6 +15,8 @@ class WinKParams():
         self.syscall_jump = None
         self.page_fault = None
         self.arm_entry = None
+        self.ptr2stack = None
+        self.saved_cr3 = None
 
     def printParams(self):
         print('Windows Kernel parameters:')

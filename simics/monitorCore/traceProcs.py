@@ -79,7 +79,10 @@ class TraceProcs():
         if str(pid) in self.plist:
             return True
         else:
-            self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (pid, len(self.plist)))
+            if pid is not None:
+                self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (pid, len(self.plist)))
+            else:
+                self.lgr.error('traceProcs given pid is None')
             return False
 
     def exit(self, pid):

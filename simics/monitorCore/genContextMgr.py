@@ -428,7 +428,7 @@ class GenContextMgr():
         rec = self.task_utils.getCurTaskRec() 
         if rec in self.nowatch_list:
             self.nowatch_list.remove(rec)
-            #self.lgr.debug('contextManager rmNoWatch, rec 0x%x removed from nowatch list' % rec)
+            self.lgr.debug('contextManager rmNoWatch, rec 0x%x removed from nowatch list' % rec)
             if len(self.nowatch_list) == 0 and len(self.watch_rec_list) == 0:
                 ''' stop all task watching '''
                 self.stopWatchTasks()
@@ -541,7 +541,7 @@ class GenContextMgr():
                     #SIM_run_alone(self.clearAllHap, False)
                     self.watching_tasks = False
                     if len(self.watch_rec_list) == 0 and len(self.nowatch_list) == 0:
-                        #self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
+                        self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
                         self.stopWatchTasks()
         
     def changedThread(self, cpu, third, forth, memory):
@@ -554,6 +554,10 @@ class GenContextMgr():
             return
         # get the value that will be written into the current thread address
         new_addr = SIM_get_mem_op_value_le(memory)
+        if self.top.isWindows(target=self.cell_name):
+            ptr = new_addr + self.param.proc_ptr
+            new_addr = self.mem_utils.readPtr(self.cpu, ptr)
+        
         prev_task = self.task_utils.getCurTaskRec()
 
         
@@ -675,7 +679,7 @@ class GenContextMgr():
                
                 if len(self.pending_watch_pids) > 0:
                     self.debugging_pid = self.pending_watch_pids[0]
-                    #self.lgr.debug('contextManager rmTask, list empty but found pending watch pid %d, make it the debug pid' % self.debugging_pid)
+                    self.lgr.debug('contextManager rmTask, list empty but found pending watch pid %d, make it the debug pid' % self.debugging_pid)
                 else:
                     #self.debugging_comm = None
                     #self.debugging_cell = None
@@ -770,7 +774,7 @@ class GenContextMgr():
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
         self.cpu.current_context = self.resim_context
-        #self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
+        self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchPid(self, pid):
         SIM_run_alone(self.stopWatchPidAlone, pid)
@@ -800,7 +804,7 @@ class GenContextMgr():
                 self.pid_cache.remove(pid)
         
     def stopWatchTasks(self):
-        #self.lgr.debug('stopWatchTasks')
+        self.lgr.debug('stopWatchTasks')
         self.stopWatchTasksAlone(None)
         #SIM_run_alone(self.stopWatchTasksAlone, None)
 
@@ -808,7 +812,7 @@ class GenContextMgr():
         if self.task_break is None:
             #self.lgr.debug('stopWatchTasks already stopped')
             return
-        #self.lgr.debug('stopWatchTasks delete hap')
+        self.lgr.debug('stopWatchTasks delete hap')
         RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -839,7 +843,7 @@ class GenContextMgr():
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
-        #self.lgr.debug('resetWatchTasks')
+        self.lgr.debug('resetWatchTasks')
         self.stopWatchTasks()
         self.watchTasks(set_debug_pid = True)
         if not self.watch_only_this:
@@ -925,8 +929,9 @@ class GenContextMgr():
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
         self.cpu.current_context = self.resim_context
-        #self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
+        self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
+        self.debugging_pid_saved = self.debugging_pid
         if comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
         self.debugging_cell = self.top.getCell()
@@ -1181,6 +1186,7 @@ class GenContextMgr():
         return self.ida_message
 
     def getDebugPid(self):
+        self.lgr.debug('contextManager return debugging_pid of %s' % self.debugging_pid)
         return self.debugging_pid, self.cpu
 
     def showIdaMessage(self):
