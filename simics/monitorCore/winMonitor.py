@@ -168,3 +168,7 @@ class WinMonitor():
         else:
             retval = self.trace_all
         return retval
+
+    def flushTrace(self):
+        if self.w7_call_params is not None: 
+            self.w7_call_params.flushTrace()

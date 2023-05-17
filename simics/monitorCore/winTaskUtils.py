@@ -36,6 +36,8 @@ class TaskStruct():
     def __init__(self, pid, comm):
         self.pid = pid
         self.comm = comm
+        ''' TBD fix for windows so we know who is waiting in the kernel when setting exit haps'''
+        self.state = 0
 
 class WinTaskUtils():
     COMM_SIZE = 16
@@ -128,23 +130,24 @@ class WinTaskUtils():
             ptr = cur_thread + self.param.proc_ptr
             retval = self.mem_utils.readPtr(self.cpu, ptr)
             if retval is None:
-                self.lgr.debug('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x, try saved CR3' % (cur_thread, ptr, self.phys_current_task))
+                #self.lgr.debug('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x, try saved CR3' % (cur_thread, ptr, self.phys_current_task))
                 ''' Try getting phys addr of saved cr3'''
                 #gs_base = self.cpu.ia32_gs_base
                 #saved_cr3_addr = gs_base+self.param.saved_cr3
                 #saved_cr3 = self.mem_utils.readPtr(self.cpu, saved_cr3_addr)
                 saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                self.lgr.debug('winTaskUtils getCurTaskRec phys_saved_cr3  0x%x saved_cr3 0x%x' % (self.phys_saved_cr3, saved_cr3))
+                #self.lgr.debug('winTaskUtils getCurTaskRec phys_saved_cr3  0x%x saved_cr3 0x%x' % (self.phys_saved_cr3, saved_cr3))
                 pt = pageUtils.findPageTable(self.cpu, ptr, self.lgr, force_cr3=saved_cr3)
                 self.lgr.debug('winTaskUtils getCurTaskRec got pt.page_addr 0x%x' % pt.page_addr)
                 retval = SIM_read_phys_memory(self.cpu, pt.page_addr, self.mem_utils.WORD_SIZE)
                 if retval is None:
                     self.lgr.error('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (cur_thread, ptr, self.phys_current_task))
                 else:
-                    self.lgr.debug('winTaskUtils getCurTaskRec VIA saved CR3, got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                    #self.lgr.debug('winTaskUtils getCurTaskRec VIA saved CR3, got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                    pass
                 
             else:
-                self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                #self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
                 pass
         return retval
 
@@ -212,7 +215,7 @@ class WinTaskUtils():
         pid_ptr = cur_proc_phys + self.param.ts_pid
         pid = SIM_read_phys_memory(self.cpu, pid_ptr, self.mem_utils.WORD_SIZE)
         if pid is not None:
-            self.lgr.debug('getCurPid cur_proc_phys 0x%x linear was 0x%x,  pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc_phys, cur_proc, self.param.ts_pid, pid_ptr, pid))
+            #self.lgr.debug('getCurPid cur_proc_phys 0x%x linear was 0x%x,  pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc_phys, cur_proc, self.param.ts_pid, pid_ptr, pid))
             comm = self.mem_utils.readStringPhys(self.cpu, cur_proc_phys+self.param.ts_comm, 16)
         else:
             self.lgr.debug('getCurPid cur_thread is None')
@@ -238,6 +241,7 @@ class WinTaskUtils():
             if self.mem_utils.WORD_SIZE == 8:
                 for p in memUtils.param_map['x86_64']:
                     frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.win_param_map['x86_64'][p])
+                frame['param1'] = self.mem_utils.getRegValue(self.cpu, 'r10')
             else:
                 self.lgr.error('winTaskUtils frameFromRegs bad word size?') 
         return frame
@@ -257,9 +261,8 @@ class WinTaskUtils():
         ''' TBD sometimes stepped on???
             r10 is hid in rcx.  don't ask me...
         '''
-        frame['param5'] = self.mem_utils.getRegValue(self.cpu, 'rcx')
-        frame['param6'] = user_stack
-        frame['param1'] = self.mem_utils.readPtr(self.cpu, stack_val-40)
+        frame['param5'] = user_stack
+        #frame['param1'] = self.mem_utils.readPtr(self.cpu, stack_val-40)
         if frame['param1'] is None:
             self.lgr.error('frameFromRegsComputed got none reading from 0x%x -40' % stack_val)
         #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')

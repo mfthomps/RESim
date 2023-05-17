@@ -59,6 +59,9 @@ class StopAction():
     def getExitAddr(self):
         return self.exit_addr
 
+    def getFlist(self):
+        return self.flist
+
     def addFun(self, fun):
         self.flist.append(fun)
 

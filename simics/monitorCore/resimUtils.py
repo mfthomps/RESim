@@ -277,15 +277,19 @@ def findEndBB(blocks, addr):
         exit(1)
     return retval
  
-def isPrintable(thebytes):
+def isPrintable(thebytes, ignore_zero=False):
     gotone=False
     retval = True
+    zcount = 0
     for b in thebytes:
-        if b is None or b > 0x7f or (b < 0x20 and b != 0xa and b != 0xd):
+        if ignore_zero and b == 0 and zcount == 0:
+            zcount = zcount + 1 
+        elif b is None or b > 0x7f or (b < 0x20 and b != 0xa and b != 0xd):
             retval = False
             break
         elif b > 0x20:
             gotone=True
+            zcount = 0
     if not gotone:
         retval = False 
     return retval

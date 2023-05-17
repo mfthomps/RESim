@@ -133,8 +133,9 @@ win_param_map['x86_64']['param1'] = 'rcx'
 win_param_map['x86_64']['param2'] = 'rdx'
 win_param_map['x86_64']['param3'] = 'r8'
 win_param_map['x86_64']['param4'] = 'r9'
-win_param_map['x86_64']['param5'] = 'r10'
-win_param_map['x86_64']['param6'] = 'rsp'
+win_param_map['x86_64']['param5'] = 'rsp'
+# not used
+win_param_map['x86_64']['param6'] = 'r10'
 class memUtils():
     def __init__(self, word_size, param, lgr, arch='x86-64', cell_name='unknown'):
         self.WORD_SIZE = word_size

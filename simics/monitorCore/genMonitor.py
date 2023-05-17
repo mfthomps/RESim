@@ -391,7 +391,7 @@ class GenMonitor():
                     self.quit()
                     return;
             root_prefix = comp_dict[cell_name]['RESIM_ROOT_PREFIX']
-            self.targetFS[cell_name] = targetFS.TargetFS(root_prefix)
+            self.targetFS[cell_name] = targetFS.TargetFS(self, root_prefix)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
 
             self.netInfo[cell_name] = net.NetAddresses(self.lgr)
@@ -997,7 +997,8 @@ class GenMonitor():
             if self.bookmarks is None:
                 if cpu.architecture == 'arm':
                     cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
-                elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+                #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+                elif not self.isWindows() and self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
                     cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
                 else:
                     cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
@@ -1080,12 +1081,21 @@ class GenMonitor():
                 if full_path is not None:
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
                     self.getIDAFuns(full_path)
-                    self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+                    if self.isWindows():
+                        ''' TBD fix for windows'''
+                        self.relocate_funs = []
+                    else:
+                        self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
                     ''' TBD alter stackTrace to use this and buid it out'''
                     self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
                     real_path = self.realPath(full_path)
-                    elf_info = self.soMap[self.target].addText(real_path, prog_name, pid)
+                    if self.isWindows():
+                        ''' TBD fix for windows'''
+                        elf_info = None
+                        pass
+                    else:
+                        elf_info = self.soMap[self.target].addText(real_path, prog_name, pid)
                     if elf_info is not None:
                         self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setIdaFuns(self.ida_funs)
@@ -3740,6 +3750,8 @@ class GenMonitor():
     def flushTrace(self):
         if self.target in self.traceMgr:
             self.traceMgr[self.target].flush()
+        if self.target in self.winMonitor:
+            self.winMonitor[self.target].flushTrace()
 
     def getCurrentThreadLeaderPid(self):
         pid = self.task_utils[self.target].getCurrentThreadLeaderPid()

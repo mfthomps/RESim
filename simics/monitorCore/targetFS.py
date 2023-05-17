@@ -1,7 +1,8 @@
 import os
 import glob
 class TargetFS():
-    def __init__(self, root_prefix):
+    def __init__(self, top, root_prefix):
+        self.top = top
         self.root_prefix = root_prefix
 
     def find(self, name):
@@ -16,6 +17,11 @@ class TargetFS():
  
     def getFull(self, path, lgr=None):
         retval = None
+        if self.top.isWindows():
+            path = path.replace('\\', '/')
+            if lgr is not None:
+                 lgr.debug('getFull windows, new path is %s' % path)
+            
         if path.startswith('./'):
              base = os.path.basename(path)
              fun_file = base+'.funs'
@@ -27,7 +33,13 @@ class TargetFS():
              else:
                  retval = self.find(base)
         else:     
-            if path.startswith('/'):
+            if lgr is not None:
+                lgr.debug('getFull look at %s' % path) 
+            if path.startswith('/??/C:/'):
+                path = path[7:]
+                if lgr is not None:
+                    lgr.debug('getFull changed to %s' % path) 
+            elif path.startswith('/'):
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)
             if os.path.islink(full):

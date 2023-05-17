@@ -31,6 +31,7 @@ import allWrite
 import syscall
 import resimUtils
 import epoll
+import winCallExit
 from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
@@ -74,6 +75,11 @@ class SharedSyscall():
         self.kbuffer = None
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
+
+        if self.top.isWindows():
+            self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, dataWatch, traceMgr, lgr)
+        else:
+            self.win_call_exit = None
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -179,7 +185,7 @@ class SharedSyscall():
         if exit_eip1 is not None: 
             #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit pids is %d' % (exit_eip1, len(my_exit_pids[exit_eip1])))
             if len(my_exit_pids[exit_eip1]) == 0:
-                #self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d cell: %s' % (exit_eip1, pid, cell))
+                self.lgr.debug('addExitHap new exit EIP1 0x%x for pid %d cell: %s' % (exit_eip1, pid, cell))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
@@ -583,9 +589,15 @@ class SharedSyscall():
                 except:
                     continue
                 #self.lgr.debug('exitHap pid:%d name: %s' % (pid, name))
-                did_exit = self.handleExit(exit_info, pid, comm)
+                if self.win_call_exit is not None:
+                    did_exit = self.win_call_exit.handleExit(exit_info, pid, comm)
+                else:
+                    did_exit = self.handleExit(exit_info, pid, comm)
         else:
-            did_exit = self.handleExit(None, pid, comm)
+            if self.win_call_exit is not None:
+                did_exit = self.win_call_exit.handleExit(exit_info, pid, comm)
+            else:
+                did_exit = self.handleExit(None, pid, comm)
         if did_exit:
             #self.lgr.debug('sharedSyscall exitHap remove exitHap for %d' % pid)
             self.rmExitHap(pid)
