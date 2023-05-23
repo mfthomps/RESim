@@ -212,7 +212,7 @@ class TaskUtils():
         #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
-        phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
+        #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid 
 

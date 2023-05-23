@@ -6,6 +6,9 @@ class TargetFS():
         self.root_prefix = root_prefix
 
     def find(self, name):
+        if self.top.isWindows():
+            ''' TBD avoid searching forever'''
+            return None
         for root, dirs, files in os.walk(self.root_prefix):
             if name in files:
                 retval = os.path.join(root, name)
@@ -19,8 +22,8 @@ class TargetFS():
         retval = None
         if self.top.isWindows():
             path = path.replace('\\', '/')
-            if lgr is not None:
-                 lgr.debug('getFull windows, new path is %s' % path)
+            #if lgr is not None:
+            #     lgr.debug('getFull windows, new path is %s' % path)
             
         if path.startswith('./'):
              base = os.path.basename(path)
@@ -29,16 +32,16 @@ class TargetFS():
              full_fun = self.find(fun_file)
              if full_fun is not None:              
                  retval = os.path.join(os.path.dirname(full_fun), base)
-                 lgr.debug('getFull found file %s' % retval)
+                 #lgr.debug('getFull found file %s' % retval)
              else:
                  retval = self.find(base)
         else:     
-            if lgr is not None:
-                lgr.debug('getFull look at %s' % path) 
+            #if lgr is not None:
+            #    lgr.debug('getFull look at %s' % path) 
             if path.startswith('/??/C:/'):
                 path = path[7:]
-                if lgr is not None:
-                    lgr.debug('getFull changed to %s' % path) 
+                #if lgr is not None:
+                #    lgr.debug('getFull changed to %s' % path) 
             elif path.startswith('/'):
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)

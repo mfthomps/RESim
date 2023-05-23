@@ -555,6 +555,7 @@ class GenContextMgr():
         # get the value that will be written into the current thread address
         new_addr = SIM_get_mem_op_value_le(memory)
         if self.top.isWindows(target=self.cell_name):
+            win_thread = new_addr
             ptr = new_addr + self.param.proc_ptr
             new_addr = self.mem_utils.readPtr(self.cpu, ptr)
         
@@ -567,8 +568,12 @@ class GenContextMgr():
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
 
-        #self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
-        #    prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        if self.top.isWindows():
+            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x windows thread addr: 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
+                prev_comm, pid, comm, new_addr, win_thread, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        else:
+            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
+                prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
 
        
         if len(self.ignore_progs) > 0:
@@ -588,7 +593,8 @@ class GenContextMgr():
                 self.pending_watch_pids.remove(pid)
                 self.watchExit(rec=new_addr, pid=pid)
         add_task = False
-        if pid not in self.pid_cache and comm in self.debugging_comm and pid not in self.no_watch:
+        if not self.top.isWindows() and pid not in self.pid_cache and comm in self.debugging_comm and pid not in self.no_watch:
+           ''' TBD fix for windows '''
            group_leader = self.mem_utils.readPtr(cpu, new_addr + self.param.ts_group_leader)
            leader_pid = self.mem_utils.readWord32(cpu, group_leader + self.param.ts_pid)
            add_task = False
@@ -1082,6 +1088,8 @@ class GenContextMgr():
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
         #self.lgr.debug('contextManager watchExit')
+        if self.top.isWindows():
+            return
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')

@@ -377,7 +377,7 @@ def getNewTaskList(task_list, mem_utils, cpu):
             retval.append(ref_ptr)
     return retval
 
-def hackpid(cpu, mem_utils, task_list, lgr):
+def hackpid(cpu, mem_utils, task_list, lgr, max_zeros=5):
     words = {}
     dup_words = []
     delta = 0
@@ -403,7 +403,7 @@ def hackpid(cpu, mem_utils, task_list, lgr):
                     lgr.debug('hackpid words[%d] append %d' % (offset, val))
                     words[offset].append(val)
                 else:
-                    if val == 0 and zero_count < 5:
+                    if val == 0 and zero_count < max_zeros:
                         zero_count = zero_count + 1
                         pass 
                     else:

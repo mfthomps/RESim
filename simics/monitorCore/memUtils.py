@@ -179,7 +179,16 @@ class memUtils():
             self.regs['esp'] = 'sp'
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
-        
+       
+    def wordSize(self, cpu):
+        retval = self.WORD_SIZE
+        if cpu.architecture != 'arm':
+            ''' see api-help x86_exec_mode_t '''
+            mode = cpu.iface.x86_reg_access.get_exec_mode()
+            if mode == 3:
+                retval = 4
+        return retval
+
     def isReg(self, reg):
         if reg.upper() in self.regs:
             return True
@@ -190,12 +199,14 @@ class memUtils():
             return False    
 
     def v2p(self, cpu, v):
+        if v is None:
+            return None
         retval = None
         cpl = getCPL(cpu)
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
         except:
-            #self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+            self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             return None
 
         if phys_block.address != 0:
@@ -233,7 +244,7 @@ class memUtils():
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
-                            #self.lgr.error('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
                         else:
                             retval = v & ~self.param.kernel_base 
                             #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
@@ -443,10 +454,30 @@ class memUtils():
         else:
             return None
 
+    def readAppPtr(self, cpu, vaddr):
+        size = self.wordSize(cpu)
+        #if vaddr < self.param.kernel_base:
+        #    size = min(size, 6)
+        phys = self.v2p(cpu, vaddr)
+        if phys is not None:
+            try:
+                return self.getUnsigned(SIM_read_phys_memory(cpu, phys, size))
+            except:
+                return None
+        else:
+            return None
+
     def readWord(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
             return SIM_read_phys_memory(cpu, phys, self.WORD_SIZE)
+        else:
+            return None
+
+    def readAppWord(self, cpu, vaddr):
+        phys = self.v2p(cpu, vaddr)
+        if phys is not None:
+            return SIM_read_phys_memory(cpu, phys, self.wordSize(cpu))
         else:
             return None
 
@@ -849,9 +880,12 @@ class memUtils():
         else:
             return False
 
-    def saveKernelCR3(self, cpu):
-        reg_num = cpu.iface.int_register.get_number("cr3")
-        self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+    def saveKernelCR3(self, cpu, cr3=None):
+        if cr3 is None:
+            reg_num = cpu.iface.int_register.get_number("cr3")
+            self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+        else:
+            self.kernel_saved_cr3 = cr3
         self.lgr.debug('memUtils saveKernelCR3 saved cr3 to 0x%x' % (self.kernel_saved_cr3))
 
     def getKernelSavedCR3(self):

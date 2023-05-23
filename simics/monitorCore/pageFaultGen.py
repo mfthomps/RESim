@@ -233,14 +233,17 @@ class PageFaultGen():
             elif page_info.ptable_addr is not None:
                 #self.lgr.debug('pageFaultGen pageFaultHapAlone page_addr was None')
                 self.watchPtable(page_info.ptable_addr, prec)
-            else:
-                self.lgr.error('pageFaultGen pageFaultHapAlone go zilch')
+            elif not self.top.isWindows():
+                self.lgr.error('pageFaultGen pageFaultHapAlone got zilch')
 
 
     def watchPageFaults(self, pid=None, compat32=False):
         if self.fault_hap1 is not None or self.fault_hap is not None:
             self.lgr.debug('pageFaultGen watchPageFaults, already watching.  Do nothing.')
             return
+        if self.top.isWindows():
+            ''' TBD fix for windows '''
+            return 
         self.debugging_pid = pid
         if self.cpu.architecture == 'arm':
             '''

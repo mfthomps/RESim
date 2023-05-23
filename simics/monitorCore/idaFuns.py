@@ -54,6 +54,8 @@ class IDAFuns():
                 self.did_paths.append(path[:-5])
 
     def getFunPath(self, path):
+        if path is None:
+            return None
         fun_path = path+'.funs'
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
@@ -65,7 +67,7 @@ class IDAFuns():
         return fun_path
             
     def add(self, path, offset):
-        if path in self.did_paths:
+        if path is None or path in self.did_paths:
             return
         else:
             self.did_paths.append(path)

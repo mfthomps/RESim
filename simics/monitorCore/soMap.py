@@ -10,6 +10,11 @@ Manage maps of shared object libraries
 Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
+class CodeSection():
+    def __init__(self, addr, size):
+        self.addr = addr
+        self.size = size
+    
 class SOMap():
     def __init__(self, top, cell_name, cell, context_manager, task_utils, targetFS, run_from_snap, lgr):
         self.context_manager = context_manager
@@ -416,7 +421,7 @@ class SOMap():
         cpu, comm, pid = self.task_utils.curProc() 
         pid = self.getSOPid(pid)
         if pid is None:
-            return None
+            return retval
         if pid in self.so_file_map:
             if pid in self.prog_start and self.prog_start[pid] is not None and addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
                 retval = self.text_prog[pid], self.prog_start[pid], self.prog_end[pid]

@@ -54,7 +54,6 @@ class WinSyscall():
         self.first_mmap_hap = {}
         self.soMap = soMap
         self.proc_hap = []
-        ''' lists of sockets by pid that we are watching for selected tracing '''
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
         self.call_list = call_list
@@ -393,9 +392,11 @@ class WinSyscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, pid)
                             if self.callback is None:
-                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
+                                #if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
+                                if not syscall.hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
+
                                     if self.stop_on_call:
-                                        cp = CallParams(None, None, break_simulation=True)
+                                        cp = syscall.CallParams('stop_on_call', None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
@@ -422,11 +423,14 @@ class WinSyscall():
                     name = callname+'-exit' 
                     #self.lgr.debug('syscallHap call to addExitHap for pid %d' % pid)
                     if self.stop_on_call:
-                        cp = CallParams(None, None, break_simulation=True)
+                        cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params = cp
+                    self.lgr.debug('syscallHap pid:%d call addExitHap' % pid)
                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
                 else:
                     self.lgr.debug('syscallHap pid:%d skip exitHap for tar' % pid)
+            else:
+                self.lgr.debug('winSyscall syscallHap pid:%d trace all got exit_info of none' % pid)
 
 
     def syscallParse(self, callnum, callname, frame, cpu, pid, comm, syscall_info, quiet=False):
@@ -454,8 +458,9 @@ class WinSyscall():
                     return
         frame_string = taskUtils.stringFromFrame(frame)
         ida_msg = 'pid:%d (%s) %s %s' % (pid, comm, callname, frame_string)
+        #self.lgr.debug('winSyscall syscallParse '+ida_msg)
         if callname == 'CreateUserProcess':
-            rsp = frame['rsp']
+            rsp = frame['param5']
             ptr = rsp + 0x58
             base = self.mem_utils.readPtr(self.cpu, ptr)
             if base is not None:
@@ -475,18 +480,51 @@ class WinSyscall():
             count_ptr = self.stackParam(1, frame)
             count_val = self.mem_utils.readWord(self.cpu, count_ptr)
             ida_msg = 'pid:%d (%s) %s FD: %d buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (pid, comm, callname, exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
-        elif callname == 'OpenFile':
-            exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
-            exit_info.retval_addr = frame['param1']
-            self.lgr.debug('inSyscall syscallParse got fname addr 0x%x' % exit_info.fname_addr)
-            ida_msg = 'pid:%d (%s) %s fname addr: 0x%x fd return addr 0x%x' % (pid, comm, callname, exit_info.fname_addr, exit_info.retval_addr)
-            #SIM_break_simulation('remove this')
-        elif callname == 'ConnectPort':
+        elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
+            object_attr = frame['param3']
+            str_size_addr = self.paramOffPtr(3, [0x10], frame) 
+            str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+            if str_size is not None:
+                self.lgr.debug('winSyscall Openfile str_size_addr 0x%x size %d' % (str_size_addr, str_size))
+
+                exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
+                exit_info.retval_addr = frame['param1']
+                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
+                self.lgr.debug('inSyscall syscallParse got fname addr 0x%x  %s' % (exit_info.fname_addr, exit_info.fname))
+                ida_msg = 'pid:%d (%s) %s fname addr: 0x%x fd return addr 0x%x' % (pid, comm, callname, exit_info.fname_addr, exit_info.retval_addr)
+                if True:
+                    for call_param in syscall_info.call_params:
+                        #self.lgr.debug('got param type %s' % type(call_param.match_param))
+                        if call_param.match_param.__class__.__name__ == 'Dmod':
+                             mod = call_param.match_param
+                             #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
+                             #if mod.fname_addr is None:
+                             if mod.getMatch() == exit_info.fname:
+                                 self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
+                                 exit_info.call_params = call_param
+                        if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
+                            self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
+                            exit_info.call_params = call_param
+                            
+                            break
+            #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
+        elif callname in ['ConnectPort', 'AlpcConnectPort']:
             exit_info.fname_addr = self.paramOffPtr(2, [8], frame)
             exit_info.retval_addr = frame['param1']
             self.lgr.debug('inSyscall syscallParse got fname addr 0x%x' % exit_info.fname_addr)
             ida_msg = 'pid:%d (%s) %s fname addr: 0x%x fd return addr 0x%x' % (pid, comm, callname, exit_info.fname_addr, exit_info.retval_addr)
+        elif callname == 'Continue':
+            pass
+        
+            #if comm == 'TeamViewer_Ser':
+            #    SIM_break_simulation('team viewer')
+        elif callname == 'QueryValueKey':
+            exit_info.old_fd = frame['param1']
+            ida_msg = 'pid:%d (%s) %s FD: %d' % (pid, comm, callname, exit_info.old_fd)
 
+        elif callname in ['CreateThread', 'CreateThreadEx']:
+            exit_info.retval_addr = frame['param1']
+            ida_msg = 'pid:%d (%s) %s handle addr 0x%x' % (pid, comm, callname, exit_info.retval_addr)
 
 
         #elif callname == 'QueryInformationProcess':
@@ -510,10 +548,18 @@ class WinSyscall():
         return exit_info
 
     def stackParam(self, pnum, frame):
-        rsp = frame['rsp']
+        rsp = frame['param5']
         offset = 0x20 + (pnum * self.mem_utils.WORD_SIZE)
         ptr = rsp + offset
         value = self.mem_utils.readPtr(self.cpu, ptr)
+        return value
+
+    def stackParamPtr(self, pnum, ptr_offset, frame):
+        rsp = frame['param5']
+        offset = 0x20 + (pnum * self.mem_utils.WORD_SIZE)
+        ptr = rsp + offset
+        new_ptr = self.mem_utils.readPtr(self.cpu, ptr)+ptr_offset
+        value = self.mem_utils.readWord(self.cpu, new_ptr) 
         return value
         
     def paramOffPtr(self, pnum, offset_list, frame):
@@ -793,6 +839,10 @@ class WinSyscall():
             self.background_break = None
             self.background_hap = None
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
+
+        if self.cur_task_hap is not None:
+            rmNewProcHap(self.cur_task_hap)
+            self.cur_task_hap = None
         #self.lgr.debug('stopTraceAlone done')
 
 
@@ -825,3 +875,72 @@ class WinSyscall():
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
         #self.lgr.debug('syscall stopTrace return for %s' % self.name)
+
+    def resetTimeofdayCount(self, pid):
+        self.timeofday_count[pid] = 0
+
+    def getTimeofdayCount(self, pid):
+        return self.timeofday_count[pid]
+
+    def stopMazeHap(self, syscall, one, exception, error_string):
+        if self.stop_maze_hap is not None:
+            SIM_run_alone(self.top.exitMaze, syscall)
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_maze_hap)
+            self.stop_maze_hap = None
+
+    def stopForMazeAlone(self, syscall):
+        self.stop_maze_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopMazeHap, syscall)
+        self.lgr.debug('Syscall added stopMazeHap Now stop, syscall: %s' % (syscall))
+        SIM_break_simulation('automaze')
+
+    def checkMaze(self, syscall):
+        cpu, comm, pid = self.task_utils.curProc() 
+        self.lgr.debug('Syscall checkMaze pid:%d in timer loop' % pid)
+        #maze_exit = self.top.checkMazeReturn()
+        #if False and maze_exit is not None:
+        #    self.lgr.debug('mazeExit checkMaze pid:%d found existing maze exit that matches' % pid)
+        #    maze_exit.mazeReturn(True)
+        #else:
+        if True:
+            if self.top.getAutoMaze():
+                SIM_run_alone(self.stopForMazeAlone, syscall)
+            else:
+                rprint("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
+                SIM_break_simulation('timer loop?')
+   
+ 
+    def modeChanged(self, fun_arg, one, old, new):
+        the_fun, arg = fun_arg
+        if self.mode_hap is None:
+            return
+        self.lgr.debug('syscall modeChanged old %d new %d' % (old, new))
+        if old == Sim_CPU_Mode_Supervisor:
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
+            SIM_run_alone(the_fun, arg)
+            
+
+    def checkTimeLoop(self, callname, pid):
+        if self.cpu.architecture == 'arm':
+            return
+        limit = 800
+        delta_limit = 0x12a05f200
+        if pid not in self.timeofday_count:
+            self.timeofday_count[pid] = 0
+        self.lgr.debug('checkTimeLoop pid:%d timeofday_count: %d' % (pid, self.timeofday_count[pid]))
+        ''' crude measure of whether we are in a delay loop '''
+        if self.timeofday_count[pid] == 0:
+            self.timeofday_start_cycle[pid] = self.cpu.cycles
+        self.timeofday_count[pid] = self.timeofday_count[pid] + 1
+        if self.timeofday_count[pid] >= limit:
+            now = self.cpu.cycles
+            delta = now - self.timeofday_start_cycle[pid]
+            self.lgr.debug('timeofday pid:%d count is %d, now 0x%x was 0x%x delta 0x%x' % (pid, self.timeofday_count[pid], now, self.timeofday_start_cycle[pid], delta))
+            #if delta < 0x2540be40:
+            if delta < delta_limit:
+                self.timeofday_count[pid] = 0
+                self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, (self.checkMaze, callname))
+            else:
+                self.timeofday_count[pid] = 0
+                self.lgr.debug('checkTimeLoop pid:%d reset tod count' % pid)
+

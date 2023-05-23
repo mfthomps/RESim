@@ -527,7 +527,7 @@ class Win7CallParams():
             new_value = SIM_get_mem_op_value_le(memory)
         else:
             self.lgr.error('Simics error reading memory, size %d' % memory.size)
-            new_value = bytes(0)
+            new_value = 0
         #self.lgr.debug('userWriteHap pid:%d (%s) wrote 0x%x to memory address 0x%x len %d context %s' % (pid, comm, new_value, memory.logical_address, memory.size, str(self.cpu.current_context)))
         hexstring = '0x%x' % new_value
         ok = self.param_ref_tracker.addWrote(memory.logical_address, new_value, hexstring, memory.size)

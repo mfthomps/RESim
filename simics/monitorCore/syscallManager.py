@@ -119,6 +119,8 @@ class SyscallManager():
             
         cell = self.context_manager.getCellFromContext(context)
         self.lgr.debug('syscallManager watchAllSyscalls name %s context %s' % (name, context))
+        # TBD gather parameters first and stuff them into traceall
+        self.rmSyscallByContext(context)
         if self.top.isWindows(self.cell_name):
             retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
@@ -296,6 +298,26 @@ class SyscallManager():
             del self.trace_all[context]
         return retval
         
+    def rmSyscallByContext(self, context):
+        self.lgr.debug('syscallManager rmSyscallByContext')
+        retval = False
+        rm_list = []
+        for instance_name in self.syscall_dict[context]:
+            rm_list.append(instance_name)
+            self.syscall_dict[context][instance_name].stopTrace()
+            self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
+            retval = True
+
+        for instance_name in rm_list:
+            del self.syscall_dict[context][instance_name]
+        del self.syscall_dict[context]
+
+        if context in self.trace_all:
+            self.lgr.debug('syscallManager mrSyscallByContext remove trace_all for context %s' % context)
+            self.trace_all[context].stopTrace()
+            retval = True
+            del self.trace_all[context]
+        return retval
 
     #def stopTrace(self, param_name):
 

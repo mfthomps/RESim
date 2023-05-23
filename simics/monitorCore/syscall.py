@@ -332,6 +332,15 @@ class IPCFilter():
     def __init__(self, call):
         self.call = call
 
+def hasParamMatchRequest(syscall_info):
+    retval = True
+    if len(syscall_info.call_params) == 0:
+        retval = False
+    elif len(syscall_info.call_params) == 1:
+        if syscall_info.call_params[0].subcall is None and syscall_info.call_params[0].match_param is None:
+            retval = False
+    return retval
+
 ''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
 record_fd_list = ['connect', 'bind', 'accept', 'open', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
 skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
@@ -1434,7 +1443,6 @@ class Syscall():
                     if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
                         self.lgr.debug('syscall open, found match_param %s' % call_param.match_param)
                         exit_info.call_params = call_param
-                             
                         
                         break
 
@@ -2168,9 +2176,9 @@ class Syscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, pid)
                             if self.callback is None:
-                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
+                                if not hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
                                     if self.stop_on_call:
-                                        cp = CallParams(None, None, break_simulation=True)
+                                        cp = CallParams('stop_on_call', None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
                                     #if syscall_info.call_params is not None:
@@ -2205,7 +2213,7 @@ class Syscall():
                     name = callname+'-exit' 
                     self.lgr.debug('syscallHap call to addExitHap for pid %d' % pid)
                     if self.stop_on_call:
-                        cp = CallParams(None, None, break_simulation=True)
+                        cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params = cp
                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
                 else:

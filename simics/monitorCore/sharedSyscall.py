@@ -77,7 +77,8 @@ class SharedSyscall():
         self.read_fixup_callback = None
 
         if self.top.isWindows():
-            self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, dataWatch, traceMgr, lgr)
+            self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, 
+                      context_manager, traceProcs, traceFiles, self.soMap, dataWatch, traceMgr, self.lgr)
         else:
             self.win_call_exit = None
 
@@ -170,7 +171,7 @@ class SharedSyscall():
             current_context = self.cpu.current_context
         else:
             current_context = context_override
-        #self.lgr.debug('sharedSyscall addExitHap pid:%d name %s current_context %s' % (pid, name, str(current_context)))
+        self.lgr.debug('sharedSyscall addExitHap pid:%d name %s current_context %s' % (pid, name, str(current_context)))
         if current_context not in self.exit_pids:
             self.exit_pids[current_context] = {}
         my_exit_pids = self.exit_pids[current_context]
@@ -580,7 +581,7 @@ class SharedSyscall():
 
     def exitHap(self, dumb, context, break_num, memory):
         cpu, comm, pid = self.task_utils.curProc() 
-        #self.lgr.debug('sharedSyscall exitHap %d (%s) context: %s  break_num: %s' % (pid, comm, str(context), str(break_num)))
+        self.lgr.debug('sharedSyscall exitHap %d (%s) context: %s  break_num: %s' % (pid, comm, str(context), str(break_num)))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:
@@ -595,7 +596,8 @@ class SharedSyscall():
                     did_exit = self.handleExit(exit_info, pid, comm)
         else:
             if self.win_call_exit is not None:
-                did_exit = self.win_call_exit.handleExit(exit_info, pid, comm)
+                self.lgr.debug('sharedSyscall exitHap pid %d not in exit_info' % pid)
+                did_exit = self.win_call_exit.handleExit(None, pid, comm)
             else:
                 did_exit = self.handleExit(None, pid, comm)
         if did_exit:
