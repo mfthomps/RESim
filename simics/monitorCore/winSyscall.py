@@ -440,7 +440,7 @@ class WinSyscall():
         '''
         exit_info = syscall.ExitInfo(self, cpu, pid, callnum, None, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
-        ida_msg = None
+        trace_msg = None
         frame_string = taskUtils.stringFromFrame(frame)
         self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
@@ -457,8 +457,10 @@ class WinSyscall():
                     self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                     return
         frame_string = taskUtils.stringFromFrame(frame)
-        ida_msg = 'pid:%d (%s) %s %s' % (pid, comm, callname, frame_string)
-        #self.lgr.debug('winSyscall syscallParse '+ida_msg)
+        #trace_msg = 'pid:%d (%s) %s %s' % (pid, comm, callname, frame_string)
+        #self.lgr.debug('winSyscall syscallParse '+trace_msg)
+        pid_thread = self.task_utils.getPidAndThread()
+        trace_msg = 'pid:%s (%s) %s' % (pid_thread, comm, callname)
         if callname == 'CreateUserProcess':
             rsp = frame['param5']
             ptr = rsp + 0x58
@@ -468,8 +470,8 @@ class WinSyscall():
                 ptr3 = self.mem_utils.readPtr(self.cpu, ptr2)
 
                 prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
-                ida_msg = 'pid:%d (%s) %s %s %s' % (pid, comm, callname, prog, frame_string)
-                self.lgr.debug('Windows syscallParse, got it  %s ptr: 0x%x, base 0x%x, ptr2: 0x%x ptr3 0x%x  prog %s' % (callname, ptr, base, ptr2, ptr3, prog))
+                trace_msg = trace_msg+' %s %s' % (prog, frame_string)
+                self.lgr.debug('winSyscall syscallparse %s' % trace_msg)
                 want_to_debug = self.checkProg(prog, pid, exit_info)
                 if want_to_debug:
                     ''' remove param '''
@@ -479,7 +481,7 @@ class WinSyscall():
             exit_info.retval_addr = self.stackParam(2, frame)
             count_ptr = self.stackParam(1, frame)
             count_val = self.mem_utils.readWord(self.cpu, count_ptr)
-            ida_msg = 'pid:%d (%s) %s FD: %d buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (pid, comm, callname, exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
+            trace_msg = trace_msg+' Handle: %d buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
             object_attr = frame['param3']
             str_size_addr = self.paramOffPtr(3, [0x10], frame) 
@@ -490,8 +492,7 @@ class WinSyscall():
                 exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
                 exit_info.retval_addr = frame['param1']
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
-                self.lgr.debug('inSyscall syscallParse got fname addr 0x%x  %s' % (exit_info.fname_addr, exit_info.fname))
-                ida_msg = 'pid:%d (%s) %s fname addr: 0x%x fd return addr 0x%x' % (pid, comm, callname, exit_info.fname_addr, exit_info.retval_addr)
+                trace_msg = trace_msg+' fname: %s fname addr: 0x%x fd return addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
                 if True:
                     for call_param in syscall_info.call_params:
                         #self.lgr.debug('got param type %s' % type(call_param.match_param))
@@ -510,9 +511,10 @@ class WinSyscall():
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
         elif callname in ['ConnectPort', 'AlpcConnectPort']:
             exit_info.fname_addr = self.paramOffPtr(2, [8], frame)
+            str_size = self.paramOffPtr(2, [0], frame)
+            exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
             exit_info.retval_addr = frame['param1']
-            self.lgr.debug('inSyscall syscallParse got fname addr 0x%x' % exit_info.fname_addr)
-            ida_msg = 'pid:%d (%s) %s fname addr: 0x%x fd return addr 0x%x' % (pid, comm, callname, exit_info.fname_addr, exit_info.retval_addr)
+            trace_msg = trace_msg+' fname addr: 0x%x fd return addr 0x%x' % (exit_info.fname_addr, exit_info.retval_addr)
         elif callname == 'Continue':
             pass
         
@@ -520,11 +522,23 @@ class WinSyscall():
             #    SIM_break_simulation('team viewer')
         elif callname == 'QueryValueKey':
             exit_info.old_fd = frame['param1']
-            ida_msg = 'pid:%d (%s) %s FD: %d' % (pid, comm, callname, exit_info.old_fd)
+            trace_msg = trace_msg+' Handle: %d' % (exit_info.old_fd)
+
+        elif callname == 'Close':
+            exit_info.old_fd = frame['param1']
+            trace_msg = trace_msg+' Handle: %d' % (exit_info.old_fd)
+
+        elif callname == 'CreateSection':
+            exit_info.old_fd = self.stackParam(3, frame) 
+            trace_msg = trace_msg+' Handle: %d' % (exit_info.old_fd)
+
+        elif callname == 'MapViewOfSection':
+            exit_info.old_fd = frame['param1']
+            trace_msg = trace_msg+' Handle: %d' % (exit_info.old_fd)
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             exit_info.retval_addr = frame['param1']
-            ida_msg = 'pid:%d (%s) %s handle addr 0x%x' % (pid, comm, callname, exit_info.retval_addr)
+            trace_msg = trace_msg+' handle addr 0x%x' % (exit_info.retval_addr)
 
 
         #elif callname == 'QueryInformationProcess':
@@ -532,19 +546,19 @@ class WinSyscall():
         #    SIM_break_simulation('query information process computed 0x%x' % entry)
            
         else:
-            #self.lgr.debug(ida_msg)
+            #self.lgr.debug(trace_msg)
             pass
-        self.lgr.debug('winSyscall syscallParse %s' % ida_msg)
+        self.lgr.debug('winSyscall syscallParse %s' % trace_msg)
         #else:
         #    self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
         #    exit_info = None
-        if ida_msg is not None and not quiet:
-            #self.lgr.debug(ida_msg.strip()) 
+        if trace_msg is not None and not quiet:
+            #self.lgr.debug(trace_msg.strip()) 
             
-            #if ida_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
-            if ida_msg is not None and self.traceMgr is not None:
-                if len(ida_msg.strip()) > 0:
-                    self.traceMgr.write(ida_msg+'\n')
+            #if trace_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
+            if trace_msg is not None and self.traceMgr is not None:
+                if len(trace_msg.strip()) > 0:
+                    self.traceMgr.write(trace_msg+'\n')
         return exit_info
 
     def stackParam(self, pnum, frame):
