@@ -2,6 +2,7 @@ from simics import *
 from resimHaps import *
 import soMap
 import glob
+''' TBD extend for multiple concurrent threads and multiple skip SO files '''
 class RunTo():
     def __init__(self, top, cpu, cell, task_utils, context_manager, so_map, lgr):
         self.top = top
@@ -120,15 +121,14 @@ class RunTo():
 
     def breakOnSkip(self):
         if self.skip_dll_section is not None:
-           cpu, comm, cur_pid = self.task_utils.curProc() 
+           pid_and_thread = self.task_utils.getPidAndThread()
            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.skip_dll_section.addr, self.skip_dll_section.size, 0)
-           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipHap, cur_pid, proc_break, 'breakOnSkip'))
-           self.lgr.debug('runToIO breakOnSkip set break on main skip dll addr 0x%x' % self.skip_dll_section.addr)
+           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipHap, pid_and_thread, proc_break, 'breakOnSkip'))
+           self.lgr.debug('runToIO pid-thread: %s breakOnSkip set break on main skip dll addr 0x%x' % (pid_and_thread, self.skip_dll_section.addr))
         
-    def skipHap(self, pid, third, forth, memory):
+    def skipHap(self, pid_and_thread, third, forth, memory):
         if len(self.hap_list) > 0:
-            cpu, comm, cur_pid = self.task_utils.curProc() 
-            if pid == cur_pid: 
+            if self.task_utils.matchPidThread(pid_and_thread):
                 value = memory.logical_address
                 ''' remove haps and then set the breaks on all DLLs except the skip list '''
                 SIM_run_alone(self.rmHaps, self.setSkipBreaks) 
@@ -138,9 +138,11 @@ class RunTo():
         self.skip_list.append(self.skip_dll_section.addr) 
         for other in self.skip_dll_other_section:
             self.skip_list.append(other.addr) 
+        pid_and_thread = self.task_utils.getPidAndThread()
         cpu, comm, cur_pid = self.task_utils.curProc() 
         code_section_list = self.so_map.getCodeSections(cur_pid)
-        self.lgr.debug('runTo setSkipBreaks pid:%d got %d code sections' % (cur_pid, len(code_section_list)))
+        self.lgr.debug('runTo setSkipBreaks pid-thread:%s got %d code sections' % (pid_and_thread, len(code_section_list)))
+        self.context_manager.addSuspendWatch()
         for section in code_section_list:
            if section.addr in self.skip_list:
                continue
@@ -148,13 +150,13 @@ class RunTo():
                continue
            end = section.addr+section.size
            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
-           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, cur_pid, proc_break, 'runToKnown'))
+           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, pid_and_thread, proc_break, 'runToKnown'))
            self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x' % (section.addr, section.size))
 
-    def skipBreakoutHap(self, pid, third, forth, memory):
+    def skipBreakoutHap(self, pid_and_thread, third, forth, memory):
         if len(self.hap_list) > 0:
-            cpu, comm, cur_pid = self.task_utils.curProc() 
-            if pid == cur_pid: 
+            if self.task_utils.matchPidThread(pid_and_thread):
                 eip = self.top.getEIP(self.cpu)
                 self.lgr.debug('runTo skipBreakoutHap eip: 0x%x' % eip)
-                SIM_break_simulation('remove this')
+                self.context_manager.rmSuspendWatch()
+                SIM_run_alone(self.rmHaps, self.breakOnSkip)

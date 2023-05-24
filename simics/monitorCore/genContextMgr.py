@@ -150,6 +150,7 @@ class GenContextMgr():
         self.watch_rec_list_saved = {}
         self.pending_watch_pids = []
         self.nowatch_list = []
+        self.suspend_watch_list = []
         self.watching_tasks = False
         self.single_thread = False
         self.lgr = lgr
@@ -410,22 +411,56 @@ class GenContextMgr():
     def getNoWatchList(self):
         return self.nowatch_list
 
+    def addSuspendWatch(self):
+        ''' suspend watching of specific pid or thread '''
+        #self.lgr.debug('contextManager cell %s addSuspendWatch' % self.cell_name)
+        if self.top.isWindows():
+            rec = self.task_utils.getCurThreadRec()
+        else:
+            rec = self.task_utils.getCurTaskRec() 
+        self.suspend_watch_list.append(rec)
+        self.restoreDefaultContext()
+        self.lgr.debug('contextManager addSuspendWatch for rec 0x%x' % rec)
+        #SIM_run_alone(self.clearAllHap, True)
+
+    def rmSuspendWatch(self):
+        ''' suspend watching of specific pid or thread '''
+        if self.top.isWindows():
+            rec = self.task_utils.getCurThreadRec()
+        else:
+            rec = self.task_utils.getCurTaskRec() 
+        if rec in self.suspend_watch_list:
+            self.suspend_watch_list.remove(rec)
+            self.context_manager.restoreDebugContext()
+            self.lgr.debug('contextManager rmSuspendWatch for rec 0x%x' % rec)
+        else:
+            self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
+            SIM_break_simulation('fix this')
+        #SIM_run_alone(self.clearAllHap, True)
+
     def addNoWatch(self):
         ''' only watch maze exits for the current task. NOTE: assumes those are set after call to this function'''
+        ''' TBD remove nowatch_list after testing maze '''
         self.lgr.debug('contextManager cell %s addNoWatch' % self.cell_name)
         if len(self.nowatch_list) == 0 and len(self.watch_rec_list) == 0:
             ''' had not been watching and tasks.  start so we can not watch this one '''
             self.setTaskHap()
             self.watching_tasks=True
             self.lgr.debug('contextManager addNoWatch began watching tasks')
-        rec = self.task_utils.getCurTaskRec() 
+        if self.top.isWindows():
+            rec = self.task_utils.getCurThreadRec()
+        else:
+            rec = self.task_utils.getCurTaskRec() 
         self.nowatch_list.append(rec)
         self.lgr.debug('contextManager addNoWatch for rec 0x%x' % rec)
-        SIM_run_alone(self.clearAllHap, True)
+        #SIM_run_alone(self.clearAllHap, True)
 
     def rmNoWatch(self):
         ''' restart watching the current task, assumes it was added via addNoWatch '''
-        rec = self.task_utils.getCurTaskRec() 
+        if self.top.isWindows():
+            rec = self.task_utils.getCurThreadRec()
+        else:
+            rec = self.task_utils.getCurTaskRec() 
         if rec in self.nowatch_list:
             self.nowatch_list.remove(rec)
             self.lgr.debug('contextManager rmNoWatch, rec 0x%x removed from nowatch list' % rec)
@@ -433,117 +468,39 @@ class GenContextMgr():
                 ''' stop all task watching '''
                 self.stopWatchTasks()
                 SIM_run_alone(self.setAllHap, False)
-                #self.lgr.debug('contextManager addNoWatch stopped watching tasks, enabled all HAPs')
+                self.lgr.debug('contextManager addNoWatch stopped watching tasks, enabled all HAPs')
             else:
                 ''' restart watching '''
                 SIM_run_alone(self.setAllHap, False)
         else:
             self.lgr.error('contextManager rmNoWatch, rec 0x%x not in nowatch list' % rec)
 
-    def alterWatches(self, new_task, prev_task, pid):
-        ''' Determine what type of context and breakpoints to set 
-            
-                self.watch_rec_list -- tasks that we are watching.  When these tasks are scheduled
-                                       the cpu should be given the resim context.
-                self.nowatch_list -- List of tasks currently trying to break out of mazes.
-
-                self.watching_tasks -- were we watching any tasks?
-            If watch_rec_list is empty, we are not watching any specific task and all haps are
-            set using the default context and the cpu should have the default context.  Otherwise,
-            the cpu should have the resim context when those tasks are scheduled.
-  
-            The toExecve function sets haps using the default context.  
-
-            Maze breakpoints and context
-               Maze breakpoints, e.g., those used to find breakout points should have default context
-               if not debugging (watch_list empty), and resim context if watch_rec_list is not empty.  
-       
-               Haps used for breakout attempts are named "exitMaze". 
-               During breakout attempts the thread of interest will be in the nowatch_list.
-               When not sheduled, all exitMaze haps should be disabled.
-               When scheduled exitMaze haps are enabled but all other haps for that context are disabled.
-
-            self.watching_tasks --  Was the previous task being watched?
-      
-            setAllHap(only_maze_breaks)
-            clearAllHap(keep_maze_breaks)
-
-            
-        '''
-        if not self.watching_tasks:
-            #self.lgr.debug('contextManager DEBUG, was not watching')
-            ''' Was not watching any task '''
-            if new_task in self.watch_rec_list:
-                #self.lgr.debug('contextManager DEBUG, task in watch_rec_list')
-                self.watching_tasks = True
-                self.restoreDebugContext()
-                ''' Should watch new task '''
-                if new_task not in self.nowatch_list:
-                    ''' should watch all but maze ''' 
-                    #SIM_run_alone(self.setAllHap, False)
-                    #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list, watch all but maze')
-                else:
-                    ''' should only watch maze breaks '''
-                    SIM_run_alone(self.setAllHap, True)
-                    #self.lgr.debug('contextManager DEBUG, was not watching, new task in debug list but in maze breakout, watch ONLY maze breaks')
-            else:
-                #self.lgr.debug('contextManager DEBUG, task pid:%d rec: 0x%x NOT in watch_rec_list' % (pid, new_task))
-                '''New task not in watch_rec_list'''
-                if len(self.watch_rec_list) == 0:
-                    ''' no debug tasks '''
-                    if new_task in self.nowatch_list:
-                        ''' Set only the maze break '''
-                        ''' Was not watching anything, so set current task break '''
-                        SIM_run_alone(self.setAllHap, True)
-                        #self.lgr.debug('contextManager DEBUG, was not watching, no debug list but task in maze breakout, watch ONLY maze breaks')
-                    else:
-                        ''' Set all but the maze breaks '''
-                        #SIM_run_alone(self.setAllHap, False)
-                        #self.lgr.debug('contextManager DEBUG, was not watching, no debug list not in maze breakout, watch all but maze')
-                        pass
-                else:
-                    ''' Some other tasks are in the debug list '''
-                    if new_task in self.nowatch_list:
-                        SIM_run_alone(self.setAllHap, True)
-                        #self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task in maze breakout, watch ONLY maze breaks')
-                    else:
-                        #self.lgr.debug('contextManager DEBUG, was not watching, has a debug list; task NOT in maze breakout, keep not watching')
-                        pass
+    def isSuspended(self, task, thread):
+        retval = False
+        if self.top.isWindows():
+            if thread in self.suspend_watch_list:
+                retval = True
         else:
-            ''' was watching tasks '''
-            if new_task in self.watch_rec_list:
-                ''' should be watching new tasks '''
-                if new_task in self.nowatch_list:
-                    ''' but it is in  the nowatch list clear all but maze'''
-                    SIM_run_alone(self.clearAllHap, True)
-                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; task in maze breakout, delete all but maze breaks')
-                elif prev_task in self.nowatch_list:
-                    SIM_run_alone(self.clearAllHap, False)
-                    SIM_run_alone(self.setAllHap, False)
-                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous was in maze, delete haps and create all but maze')
-                else:
-                    #self.lgr.debug('contextManager DEBUG, was watching, task in debug list; not in maze breakout, previous not in maze, haps should be good as is.')
-                    pass
-            else:
-                ''' New task not in debug list '''
-                if new_task in self.nowatch_list:
-                    if prev_task in self.nowatch_list:
-                        #self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, as was the previous task, should be good as is.')
-                        pass
+            if task in self.suspend_watch_list:
+                retval = True
+        return retval
+
+    def alterWatches(self, new_task, prev_task, pid, win_thread):
+        if new_task in self.watch_rec_list:
+            if self.isSuspended(new_task, win_thread):
+                if self.isDebugContext():
+                    if self.top.isWindows():
+                        self.lgr.debug('contextManager alterWatches pid:%d thread: 0x%x changed to default context due to suspend' % (pid, win_thread))
                     else:
-                        #self.lgr.debug('contextManager DEBUG, was watching, task NOT in debug list; task in maze breakout, previous task was not, delete all and set only maze.')
-                        SIM_run_alone(self.clearAllHap, False)
-                        SIM_run_alone(self.setAllHap, True)
-                else:
-                    ''' New task not in maze breakout'''
-                    #self.lgr.debug('contextManager DEBUG, was watching, task %d rec 0x%x NOT in debug list; task not in maze breakout.  Delete all haps.' % (pid, new_task))
-                    self.restoreDefaultContext() 
-                    #SIM_run_alone(self.clearAllHap, False)
-                    self.watching_tasks = False
-                    if len(self.watch_rec_list) == 0 and len(self.nowatch_list) == 0:
-                        self.lgr.debug('contextManager DEBUG, nothing else to watch, stop task rec monitoring') 
-                        self.stopWatchTasks()
-        
+                        self.lgr.debug('contextManager alterWatches pid:%d changed to default context due to suspend' % pid)
+                    self.restoreDefaultContext()
+            elif not self.isDebugContext():
+                self.lgr.debug('contextManager alterWatches pid:%d restored debug context' % pid)
+                self.restoreDebugContext()
+        elif self.isDebugContext():
+            self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
+            self.restoreDefaultContext()
+      
     def changedThread(self, cpu, third, forth, memory):
         ''' guts of context managment.  set or remove breakpoints/haps 
             depending on whether we are tracking the newly scheduled process.
@@ -554,6 +511,7 @@ class GenContextMgr():
             return
         # get the value that will be written into the current thread address
         new_addr = SIM_get_mem_op_value_le(memory)
+        win_thread = None
         if self.top.isWindows(target=self.cell_name):
             win_thread = new_addr
             ptr = new_addr + self.param.proc_ptr
@@ -621,7 +579,7 @@ class GenContextMgr():
         elif pid in self.pid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
-        self.alterWatches(new_addr, prev_task, pid)
+        self.alterWatches(new_addr, prev_task, pid, win_thread)
         if add_task:
             self.top.addProc(pid, leader_pid, comm, clone=True)
             self.watchExit(new_addr, pid)
@@ -1204,6 +1162,12 @@ class GenContextMgr():
     def setIdaMessage(self, message):
         #self.lgr.debug('ida message set to %s' % message)
         self.ida_message = message
+
+    def isDebugContext(self):
+        if self.cpu.current_context == self.resim_context:
+            return True
+        else:
+            return False
 
     def getRESimContext(self):
         return self.resim_context

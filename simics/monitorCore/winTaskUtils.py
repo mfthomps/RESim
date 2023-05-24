@@ -42,6 +42,7 @@ class TaskStruct():
 
 class WinTaskUtils():
     COMM_SIZE = 16
+    THREAD_ID_OFFSET = 0x3c0
     def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
@@ -132,9 +133,15 @@ class WinTaskUtils():
                 
         return retval
 
+    def getCurThreadRec(self):
+        cur_thread_rec = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        return cur_thread_rec
+
     def getCurThread(self):
-        cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
-        return cur_thread
+        rec = self.getCurThreadRec()
+        ptr = rec + self.THREAD_ID_OFFSET
+        retval = self.mem_utils.readWord32(self.cpu, ptr)
+        return retval
 
     def getCurTaskRec(self, cur_thread=None):
         retval = None
@@ -467,6 +474,19 @@ class WinTaskUtils():
             retval[ts_list[ts].pid] = ts_list[ts].comm
         return retval
 
+    def getPidAndThread(self):
+        dum, dum1, pid = self.curProc()
+        thread = self.getCurThread()
+        retval = '%d-%d' % (pid, thread)
+        return retval
+
+    def matchPidThread(self, pid_thread):
+        cur = self.getPidAndThread()
+        if pid_thread == cur:
+            return True
+        else:
+            return False
+        
     def findThreads(self):
         cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
         if cur_thread is None:
@@ -479,6 +499,9 @@ class WinTaskUtils():
 
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + 0x328)
             self.lgr.debug('findThreads cur_thread 0x%x  ptr 0x%x  cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_thread, ptr, cur_proc, pid, comm, active_threads))
+            if active_threads < 4:
+                print('not enough threads %d' % active_threads)
+                return
             thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + 0x308)
             self.lgr.debug('thread list head is 0x%x' % thread_list_head)
 
@@ -505,4 +528,6 @@ class WinTaskUtils():
             return
 
 
-         
+        
+
+     
