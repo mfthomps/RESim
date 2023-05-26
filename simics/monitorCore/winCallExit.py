@@ -93,7 +93,7 @@ class WinCallExit():
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
-        self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
+        #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) return from %s' % (pid_thread, comm, callname)
         if eax != 0:
@@ -105,7 +105,7 @@ class WinCallExit():
                 if fd is None:
                      SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                      return
-                trace_msg = trace_msg + ' fname_addr 0x%x fname %s handle: %d' % (exit_info.fname_addr, exit_info.fname, fd)
+                trace_msg = trace_msg + ' fname_addr 0x%x fname %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
                 if self.soMap is not None and (exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
@@ -121,11 +121,23 @@ class WinCallExit():
                 else:
                     self.lgr.debug('winCallExit got match')
                     SIM_break_simulation('remove this')
+
+        elif callname == 'CreateFile':
+            if exit_info.retval_addr is not None:
+                fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
+                if fd is not None:
+                    trace_msg = trace_msg + ' fname_addr 0x%x fname %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
+                    self.lgr.debug('winCallExit %s' % (trace_msg))
+                else:
+                    self.lgr.debug('%s handle is none' % trace_msg)
+            else:
+                self.lgr.debug('%s retval addr is none' % trace_msg)
+
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
             section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
             self.soMap.createSection(fd, section_handle, pid)
-            trace_msg = trace_msg+' handle: %d section_handle: 0x%x' % (fd, section_handle)
+            trace_msg = trace_msg+' handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
             self.lgr.debug('winCallExit '+trace_msg)
 
         elif callname == 'MapViewOfSection':
@@ -139,14 +151,26 @@ class WinCallExit():
             else:
                 self.lgr.debug('winCallExit %s pid:%d (%s) returned bad load address or size?' % (callname, pid, comm))
 
+        elif callname in ['CreateEvent', 'OpenProcessToken']:
+            fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
+            if fd is not None:
+                trace_msg = trace_msg+' handle: 0x%x' % (fd)
+            else:
+                self.lgr.debug('%s handle is none' % trace_msg)
+
         elif callname in ['ConnectPort', 'AlpcConnectPort']:
-            self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
+            #self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
             if fd is None:
                  SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                  return
-            trace_msg = trace_msg+' fname_addr 0x%x fname %s handle: %d' % (exit_info.fname_addr, exit_info.fname, fd)
-            self.lgr.debug('winCallExit %s' % (trace_msg))
+            trace_msg = trace_msg+' fname_addr 0x%x fname %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
+            #self.lgr.debug('winCallExit %s' % (trace_msg))
+
+        elif callname in ['AlpcSendWaitReceivePort']:
+            got_count = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
+            if exit_info.count is not None:
+                trace_msg = trace_msg+' returned count: 0x%x' % got_count
             
         elif callname == 'QueryValueKey': 
             timer_syscall = self.top.getSyscall(self.cell_name, 'QueryValueKey')
@@ -158,15 +182,15 @@ class WinCallExit():
                 self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is None:
-                     SIM_break_simulation('bad handle read from 0x%x' % exit_info.retval_addr)
-                     return
-                trace_msg = trace_msg+' handle: %d' % (fd)
-                self.lgr.debug('winCallExit %s' % (trace_msg))
+                     self.lgr.warning('bad handle read from 0x%x' % exit_info.retval_addr)
+                else:
+                    trace_msg = trace_msg+' handle: 0x%x' % (fd)
+                    self.lgr.debug('winCallExit %s' % (trace_msg))
             else:
                 self.lgr.debug('winCallExit %s bad retval_addr?' % (trace_msg))
 
         else:
-            self.lgr.debug('winCallExit %s returned: %d' % (trace_msg, eax)) 
+            self.lgr.debug('winCallExit %s returned: 0x%x' % (trace_msg, eax)) 
         trace_msg=trace_msg+'\n'
 
         if exit_info.call_params is not None and exit_info.call_params.break_simulation:
@@ -185,7 +209,7 @@ class WinCallExit():
                 SIM_run_alone(my_syscall.stopAlone, callname)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
-            self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
+            #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
 
         return True

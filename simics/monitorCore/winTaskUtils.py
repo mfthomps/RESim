@@ -33,6 +33,7 @@ import osUtils
 import memUtils
 import pageUtils
 import w7Params
+import taskUtils
 class TaskStruct():
     def __init__(self, pid, comm):
         self.pid = pid
@@ -41,7 +42,6 @@ class TaskStruct():
         self.state = 0
 
 class WinTaskUtils():
-    COMM_SIZE = 16
     THREAD_ID_OFFSET = 0x3c0
     def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
         self.cpu = cpu
@@ -281,11 +281,11 @@ class WinTaskUtils():
         #ptr2stack = gs_base+0x6008
         ptr2stack = gs_base+self.param.ptr2stack
         stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
-        self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
+        #self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
         user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
         
         r10 = self.mem_utils.getRegValue(self.cpu, 'r10')
-        self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (user_stack, frame['param1'], r10))
+        #self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (user_stack, frame['param1'], r10))
         frame['sp'] = user_stack
         frame['rsp'] = user_stack
         ''' TBD sometimes stepped on???
@@ -324,7 +324,7 @@ class WinTaskUtils():
         cur_addr = self.getCurTaskRec()
         #self.lgr.debug('currentProcessInfo cur_addr is 0x%x' % cur_addr)
         if cur_addr is not None:
-            comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, taskUtils.COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
             return self.cpu, cur_addr, comm, pid
         else:
@@ -337,7 +337,7 @@ class WinTaskUtils():
             task_rec_addr = self.getCurTaskRec()
         else:
             task_rec_addr = rec
-        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, taskUtils.COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
         seen = set()
         tasks = {}
@@ -389,7 +389,7 @@ class WinTaskUtils():
         retval = {}
         task_list = self.getTaskList()
         for task in task_list:
-            comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, taskUtils.COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
             retval[task] = TaskStruct(pid, comm)
 
@@ -459,7 +459,7 @@ class WinTaskUtils():
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
-            if comm == ts_list[ts].comm or (len(comm)>self.COMM_SIZE and len(ts_list[ts].comm) == self.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            if comm == ts_list[ts].comm or (len(comm)>taskUtils.COMM_SIZE and len(ts_list[ts].comm) == taskUtils.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
@@ -494,7 +494,7 @@ class WinTaskUtils():
         else:
             ptr = cur_thread + self.param.proc_ptr
             cur_proc = self.mem_utils.readPtr(self.cpu, ptr)
-            comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, taskUtils.COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
 
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + 0x328)

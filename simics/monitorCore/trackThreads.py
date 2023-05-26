@@ -3,14 +3,13 @@ import syscall
 import elfText
 from resimHaps import *
 class TrackThreads():
-    def __init__(self, top, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
+    def __init__(self, top, cpu, cell_name, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
         self.top = top
         self.traceProcs = traceProcs
         self.parent_pid = pid
-        self.pid_list = [pid]
+        if pid is not None:
+            self.pid_list = [pid]
         self.cpu = cpu
-        ''' tbd, cell not used.  future ability to watch multiple task SO? '''
-        self.cell = cell
         self.cell_name = cell_name
         self.param = param
         self.context_manager = context_manager
@@ -31,7 +30,6 @@ class TrackThreads():
         self.execve_hap = None
         self.finish_hap = {}
         self.finish_break = {}
-        self.open_syscall = None
         self.first_mmap_hap = {}
         self.compat32 = compat32
         self.clone_hap = None
@@ -56,17 +54,10 @@ class TrackThreads():
 
         self.trackSO()
         #self.trackClone()
-        if self.open_syscall is None:
-            self.lgr.error('trackThreads startTrack, open_syscall is none')
 
     def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
-        if self.open_syscall is not None:
-            #self.lgr.debug('TrackThreads stopTrack stop open trace')
-            self.open_syscall.stopTrace(immediate=immediate)
-            self.open_syscall = None
-        else:
-            self.lgr.debug('TrackThreads stopTrack no open syscall for %s' % self.cell_name)
+        pass
 
     def stopTrack(self, immediate=False):
         #self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
@@ -162,6 +153,7 @@ class TrackThreads():
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
         self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False)
+        self.lgr.debug('TrackThreads trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 
     def cloneHap(self, dumb, third, forth, memory):

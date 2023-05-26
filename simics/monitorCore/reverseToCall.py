@@ -547,6 +547,9 @@ class reverseToCall():
         ''' We were stepping backwards and entered the kernel.  '''
         self.pid = pid
         retval = False
+        if self.cpu is None:
+            self.lgr.debug('reverseToCall cannot jump, cpu not yet defined.')
+            return
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)

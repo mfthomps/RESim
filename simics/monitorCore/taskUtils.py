@@ -91,8 +91,8 @@ class TaskStruct(object):
         return self.tasks.prev
 
 
+COMM_SIZE = 16
 class TaskUtils():
-    COMM_SIZE = 16
     def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
@@ -225,7 +225,7 @@ class TaskUtils():
                 done = False
                 while not done and task is not None:
                     #self.lgr.debug('taskUtils findSwapper read comm task is 0x%x' % task)
-                    comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.COMM_SIZE)
+                    comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, COMM_SIZE)
                     pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
                     #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                     ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
@@ -315,7 +315,7 @@ class TaskUtils():
             task.tgid = self.mem_utils.readWord32(cpu, addr + self.param.ts_tgid)
         if self.param.ts_comm != None:
             caddr = addr + self.param.ts_comm
-            task.comm = self.mem_utils.readString(cpu, addr + self.param.ts_comm, self.COMM_SIZE)
+            task.comm = self.mem_utils.readString(cpu, addr + self.param.ts_comm, COMM_SIZE)
             paddr = self.mem_utils.v2p(cpu, caddr)
             #self.lgr.debug('comm addr is 0x%x  phys 0x%x' % (caddr, paddr))
         for field in ['ts_real_parent',
@@ -516,7 +516,7 @@ class TaskUtils():
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
-            if comm == ts_list[ts].comm or (len(comm)>self.COMM_SIZE and len(ts_list[ts].comm) == self.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
@@ -559,7 +559,7 @@ class TaskUtils():
             task_rec_addr = self.getCurTaskRec()
         else:
             task_rec_addr = rec
-        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
         seen = set()
         tasks = {}
@@ -639,7 +639,7 @@ class TaskUtils():
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_next
-            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
         return pid, comm
 
@@ -649,13 +649,13 @@ class TaskUtils():
         if next_addr is not None:
             rec = next_addr - self.param.ts_thread_group_list_head
             #self.lgr.debug('taskUtils getPidCommFromGroupNext try rec 0x%x' % rec)
-            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
         return pid, comm
 
     def currentProcessInfo(self, cpu=None):
         cur_addr = self.getCurTaskRec()
-        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
         return self.cpu, cur_addr, comm, pid
 
@@ -663,7 +663,7 @@ class TaskUtils():
         cur_addr = self.getCurTaskRec()
         parent = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
-        comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, COMM_SIZE)
         return pid, comm
                
     def getCommLeaderPid(self, cur_rec): 

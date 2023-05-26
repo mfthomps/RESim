@@ -127,7 +127,7 @@ class Win7CallParams():
                 print('%s' % str(self.call_num_map))
                 return
 
-        self.reverse_to_call = True
+        self.reverse_to_call = self.top.isReverseExecutionEnabled()
         self.rev_entry_break = None
         self.rev_entry_hap = None
         self.rev_stop_hap = None
@@ -203,16 +203,17 @@ class Win7CallParams():
         ''' Track kernel references to user space, recording which of the given parameter pointers the reference is relative to '''
         if self.do_context_switch:
             self.cpu.current_context = self.resim_context
+        pid_thread = self.task_utils.getPidAndThread()
         self.exit_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
-        self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitTrackHap, None, self.exit_break)
+        self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitTrackHap, pid_thread, self.exit_break)
 
         self.user_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Read, 0, (self.param.kernel_base-1),  0)
-        self.user_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userReadHap, None, self.user_break)
+        self.user_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userReadHap, pid_thread, self.user_break)
 
         self.user_write_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1),  0)
-        self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, None, self.user_write_break)
+        self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, pid_thread, self.user_write_break)
         self.lgr.debug('doParamTrack exit and user breaks set, get a param tracker')
-        self.param_ref_tracker = paramRefTracker.ParamRefTracker(rsp, rcx, rdx, r8, r9, self.mem_utils, self.cpu, call_name, self.lgr)
+        self.param_ref_tracker = paramRefTracker.ParamRefTracker(rsp, rcx, rdx, r8, r9, self.mem_utils, self.task_utils, self.cpu, call_name, self.lgr)
         #SIM_break_simulation('oneCallHap')
 
     def reverseToSyscall(self):
@@ -256,7 +257,7 @@ class Win7CallParams():
             self.lgr.debug('oneCallHap call stopAndGo to reverseToCall')
             self.top.stopAndGo(self.reverseToSyscall)
         else:
-            self.lgr.warning('win7CallParams oneCallHap will not see references to pointers in stack!')
+            self.lgr.error('win7CallParams oneCallHap will not see references to pointers in stack!')
             gs_base = self.cpu.ia32_gs_base
             ptr2stack = gs_base+0x6008
             stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
@@ -267,6 +268,7 @@ class Win7CallParams():
             rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
             r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
             r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
+            rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
             self.lgr.debug('oneCallHap ptr2stack 0x%x stack_val 0x%x user_stack 0x%x, rcx: 0x%x rdx: 0x%x, r8:0x%x, r9:0x%x cycles: 0x%x' % (ptr2stack, stack_val, 
                   user_stack, rcx, rdx, r8, r9, self.cpu.cycles))
             self.doParamTrack(rcx, rdx, r8, r9, rsp, self.only)
@@ -274,6 +276,10 @@ class Win7CallParams():
 
     def trackFromSysEntry(self, call_name=None):
         ''' Assuming we are at the sysentry, track kernel references to user space'''
+        if call_name is None:
+            rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+            call_name = self.call_map[rax][2:]
+
         self.lgr.debug('trackFromSysEntry')
         rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
         rcx = self.mem_utils.getRegValue(self.cpu, 'r10')
@@ -444,10 +450,13 @@ class Win7CallParams():
             self.user_write_break = None
      
  
-    def exitHap(self, dumb, third, forth, memory):
+    def exitHap(self, pid_thread_in, third, forth, memory):
         ''' hit when kernel is about to exit back to user space via sysret64 '''
         #self.lgr.debug('exitHap')
         if self.exit_hap is None:
+            return
+        pid_thread = self.task_utils.getPidAndThread()
+        if pid_thread != pid_thread_in:
             return
         dumb, comm, pid = self.task_utils.curProc()
         call_name = None
@@ -479,8 +488,11 @@ class Win7CallParams():
             SIM_delete_breakpoint(self.exit_break)
             self.exit_break = None
  
-    def userReadHap(self, dumb, third, forth, memory):
+    def userReadHap(self, pid_thread_in, third, forth, memory):
         if self.user_hap is None:
+            return
+        pid_thread = self.task_utils.getPidAndThread()
+        if pid_thread != pid_thread_in:
             return
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
@@ -514,8 +526,11 @@ class Win7CallParams():
                 self.rmUserBreaks()
 
 
-    def userWriteHap(self, dumb, third, forth, memory):
+    def userWriteHap(self, pid_thread_in, third, forth, memory):
         if self.user_write_hap is None:
+            return
+        pid_thread = self.task_utils.getPidAndThread()
+        if pid_thread != pid_thread_in:
             return
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:

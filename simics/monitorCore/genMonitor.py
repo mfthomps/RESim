@@ -302,6 +302,7 @@ class GenMonitor():
         self.binders = binder.Binder(self.lgr)
         self.connectors = connector.Connector(self.lgr)
         if self.run_from_snap is not None:
+            self.lgr.debug('genInit running from snapshot %s' % self.run_from_snap)
             ''' Restore link naming for convenient connect / disconnect '''
             net_link_file = os.path.join('./', self.run_from_snap, 'net_link.pickle')
             if os.path.isfile(net_link_file):
@@ -647,7 +648,12 @@ class GenMonitor():
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
 
-            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.context_manager[self.target], self.soMap[self.target], self.lgr)
+            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[self.target], 
+                                        self.soMap[self.target], self.traceMgr[self.target], self.param[self.target], self.lgr)
+
+            #self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, None, self.context_manager[self.target], 
+            #        self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
+            #        self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
 
             if self.isWindows():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -711,6 +717,7 @@ class GenMonitor():
         if self.run_from_snap is not None:
             self.snapInit()
             self.runScripts()
+            self.loadIgnoreList()
             return
         run_cycles = self.getBootCycleChunk()
         done = False
@@ -807,6 +814,7 @@ class GenMonitor():
                 cmd = 'c %s cycles' % run_cycles
                 dumb, ret = cli.quiet_run_command(cmd)
                 #self.lgr.debug('back from continue')
+        self.loadIgnoreList()
         self.runScripts()
 
     def handleMods(self, cell_name):
@@ -1065,7 +1073,6 @@ class GenMonitor():
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            #if not self.isWindows():
             self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, cell, pid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
@@ -1161,14 +1168,14 @@ class GenMonitor():
         cpl = memUtils.getCPL(cpu)
         eip = self.getEIP(cpu)
         so_file = self.soMap[self.target].getSOFile(eip)
+        context = SIM_object_name(cpu.current_context)
         if self.isWindows():
             cur_thread = self.task_utils[self.target].getCurThread()
-            context = SIM_object_name(cpu.current_context)
             print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x thread: 0x%x  code file: %s' % (cpu.name, context,
                    cpl, pid, comm, eip, cur_thread, so_file))
         
         else: 
-            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, cpu.current_context, 
+            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
                    cpl, pid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
             pfamily = self.pfamily[self.target].getPfamily()
             tabs = ''
@@ -1318,7 +1325,7 @@ class GenMonitor():
             self.lgr.debug('watchProc process %s found, run until some instance is scheduled' % proc)
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
-            self.toRunningProc(proc, plist, flist)
+            self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
             self.lgr.debug('watchProc no process %s found, run until execve' % proc)
             #flist = [self.toUser, self.debug]
@@ -1328,13 +1335,6 @@ class GenMonitor():
             flist = [f1]
             self.toExecve(comm=proc, flist=flist)
 
-    def cleanToProcHaps(self, dumb):
-        self.lgr.debug('cleantoProcHaps')
-        if self.cur_task_break is not None:
-            RES_delete_breakpoint(self.cur_task_break)
-        if self.cur_task_hap is not None:
-            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
-            self.cur_task_hap = None
 
     def toProc(self, proc, binary=True):
         plist = self.task_utils[self.target].getPidsForComm(proc)
@@ -1343,7 +1343,7 @@ class GenMonitor():
             print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
-            self.toRunningProc(proc, plist, flist)
+            self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
             self.lgr.debug('toProc no process %s found, run until execve' % proc)
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -1434,7 +1434,7 @@ class GenMonitor():
                 self.lgr.debug('debugProc, no so yet, run to text.')
                 rtt = stopFunction.StopFunction(self.execToText, [], nest=True)
                 flist.insert(1, rtt)
-            self.toRunningProc(proc, plist, flist)
+            self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
             self.lgr.debug('debugProc no process %s found, run until execve' % proc)
             #flist = [self.toUser, self.debug]
@@ -1509,7 +1509,7 @@ class GenMonitor():
         #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)
 
-        self.toRunningProc(None, pid_list, flist, debug_group=True, final_fun=final_fun)
+        self.run_to[self.target].toRunningProc(None, pid_list, flist, debug_group=True, final_fun=final_fun)
 
     def changedThread(self, cpu, third, forth, memory):
         cur_addr = SIM_get_mem_op_value_le(memory)
@@ -1518,26 +1518,6 @@ class GenMonitor():
             print('changedThread')
             self.show()
 
-    def runToProc(self, prec, third, forth, memory):
-        ''' callback when current_task is updated.  new value is in memory parameter '''
-        self.lgr.debug('runToProc ')
-        if self.cur_task_hap is None:
-            return
-        cpu = prec.cpu
-        cur_task_rec = SIM_get_mem_op_value_le(memory)
-        pid = self.mem_utils[self.target].readWord32(cpu, cur_task_rec + self.param[self.target].ts_pid)
-        self.lgr.debug('runToProc look for %s pid is %d' % (prec.proc, pid))
-        if pid != 0:
-            comm = self.mem_utils[self.target].readString(cpu, cur_task_rec + self.param[self.target].ts_comm, 16)
-            if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
-                self.lgr.debug('got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
-                SIM_run_alone(self.cleanToProcHaps, None)
-                SIM_break_simulation('found %s' % prec.proc)
-            else:
-                #self.proc_list[self.target][pid] = comm
-                #self.lgr.debug('runToProc pid: %d proc: %s' % (pid, comm))
-                pass
-            
     #def addProcList(self, pid, comm):
     #    #self.lgr.debug('addProcList %d %s' % (pid, comm))
     #    self.proc_list[self.target][pid] = comm
@@ -1560,73 +1540,8 @@ class GenMonitor():
 
     def toProcPid(self, pid):
         self.lgr.debug('toProcPid %d' % pid)
-        self.toRunningProc(None, [pid], None)
+        self.run_to[self.target].toRunningProc(None, [pid], None)
 
-    def inFlist(self, fun_list, the_list):
-        for stop_fun in the_list:
-            for fun in fun_list:
-                if stop_fun.fun == fun:
-                    return True
-        return False
-
-    def toRunningProc(self, proc, want_pid_list, flist, debug_group=False, final_fun=None):
-        ''' intended for use when process is already running '''
-        cpu, comm, pid  = self.task_utils[self.target].curProc()
-        ''' if already in proc, just attach debugger '''
-        if want_pid_list is not None:
-            self.lgr.debug('toRunningProc, run to pid_list %s, current pid %d <%s>' % (str(want_pid_list), pid, comm))
-        else:
-            self.lgr.debug('toRunningProc, look for <%s>, current pid %d <%s>' % (proc, pid, comm))
-        if flist is not None and self.inFlist([self.debug, self.debugGroup], flist): 
-            if pid != self.task_utils[self.target].getExitPid():
-                if proc is not None and proc == comm:
-                    self.lgr.debug('toRunningProc Already at proc %s, done' % proc)
-                    f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
-                    f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
-                    self.toUser([f2, f1])
-                    #self.debug()
-                    return
-                elif want_pid_list is not None and pid in want_pid_list:
-                    ''' TBD FIXME '''
-                    self.lgr.debug('toRunningProc already at pid %d, done' % pid)
-                    f1 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
-                    f2 = stopFunction.StopFunction(self.debug, [debug_group], nest=False)
-                    if final_fun is not None:
-                        f3 = stopFunction.StopFunction(final_fun, [], nest=False)
-                        self.toUser([f2, f1, f3])
-                    else:
-                        self.toUser([f2, f1])
-                    #self.debugGroup()
-                    return
-        ''' Set breakpoint on current_task to watch task switches '''
-        prec = Prec(cpu, proc, want_pid_list)
-        phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
-        self.cur_task_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
-                             phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
-        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.cur_task_break)
-        self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x hap %d' % (str(want_pid_list), self.cur_task_break, phys_current_task,
-            self.cur_task_hap))
-        
-        hap_clean = hapCleaner.HapCleaner(cpu)
-        #hap_clean.add("Core_Breakpoint_Memop", self.cur_task_hap)
-        #stop_action = hapCleaner.StopAction(hap_clean, [self.cur_task_break], flist)
-        stop_action = hapCleaner.StopAction(hap_clean, [], flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
-
-        status = self.is_monitor_running.isRunning()
-        if not status:
-            try:
-                self.lgr.debug('toRunningProc try continue')
-                SIM_continue(0)
-                pass
-            except SimExc_General as e:
-                print('ERROR... try continue?')
-                self.lgr.error('ERROR in toRunningProc  try continue? %s' % str(e))
-                SIM_continue(0)
-        else:
-            self.lgr.debug('toRunningProc thinks it is already running')
-       
 
     def getEIP(self, cpu=None):
         if cpu is None:
@@ -1988,7 +1903,7 @@ class GenMonitor():
             flist = [f1, f2]
             self.lgr.debug('rsynch, call toRunningProc for pid %d' % debug_pid)
             pid_list = self.context_manager[self.target].getThreadPids()
-            self.toRunningProc(None, pid_list, flist)
+            self.run_to[self.target].toRunningProc(None, pid_list, flist)
 
     def traceExecve(self, comm=None):
         ''' TBD broken '''
@@ -5109,6 +5024,7 @@ class GenMonitor():
         self.context_manager[self.target].ignoreProg(prog)
 
     def runToCycle(self, cycle):
+        self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         if cycle < cpu.cycles:
             print('Cannot use this function to run backwards.')
@@ -5119,6 +5035,7 @@ class GenMonitor():
         SIM_run_command(cmd)
 
     def runToSeconds(self, seconds):
+        self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         dumb, ret = cli.quiet_run_command('ptime -t')
         #print('dumb is %s ret is %s' % (dumb, ret))
@@ -5127,6 +5044,7 @@ class GenMonitor():
         if now > want:
             print('Cannot use this function to run backwards.')
             return
+        print('now %.2f  want %.2f' % (now, want))
         delta = want - now
         ms = delta * 1000
         
@@ -5337,6 +5255,7 @@ class GenMonitor():
         ''' Use breakpoints set on the user space to identify call parameter 
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
+            self.rmDebugWarnHap()
             self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params)
 
     def rmCallParamBreaks(self):
@@ -5364,6 +5283,44 @@ class GenMonitor():
 
     def findThreads(self):
         self.task_utils[self.target].findThreads()
+
+    def isReverseExecutionEnabled(self):
+        return self.rev_execution_enabled
+
+    def loadIgnoreList(self):
+        ''' TBD add means of naming cell '''
+        self.lgr.debug('loadIgnoreList')
+        flist = glob.glob('*.ignore_prog')
+        if len(flist) > 1:
+            self.lgr.error('Found multiple dll_skip files, only one supported')
+        elif len(flist) == 1:
+            self.lgr.debug('loadIgnoreList %s' % flist[0])
+            with open(flist[0]) as fh:
+                for line in fh:
+                    if line.startswith('#'):
+                        continue
+                    self.ignoreProg(line.strip())
+                    self.lgr.debug('will ignore %s' % line.strip())
+
+        tasks = self.task_utils[self.target].getTaskStructs()
+        for t in tasks:
+            self.context_manager[self.target].newProg(tasks[t].comm, tasks[t].pid)
+        self.context_manager[self.target].restoreDefaultContext()
+
+    def traceWindows(self):
+        tf = '/tmp/trace_windows.txt'
+        target_cpu = self.cell_config.cpuFromCell(self.target)
+        self.traceMgr[self.target].open(tf, target_cpu)
+        if self.isWindows():
+            call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateSection', 'MapViewOfSection',
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort']
+        else:
+            self.lgr.error('only for windows for now')
+            return
+        ''' Use cell of None so only our threads get tracked '''
+        call_params = []
+        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
+        self.lgr.debug('traceWindows')
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

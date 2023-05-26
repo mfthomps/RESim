@@ -302,15 +302,16 @@ class SyscallManager():
         self.lgr.debug('syscallManager rmSyscallByContext')
         retval = False
         rm_list = []
-        for instance_name in self.syscall_dict[context]:
-            rm_list.append(instance_name)
-            self.syscall_dict[context][instance_name].stopTrace()
-            self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
-            retval = True
+        if context in self.syscall_dict:
+            for instance_name in self.syscall_dict[context]:
+                rm_list.append(instance_name)
+                self.syscall_dict[context][instance_name].stopTrace()
+                self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
+                retval = True
 
-        for instance_name in rm_list:
-            del self.syscall_dict[context][instance_name]
-        del self.syscall_dict[context]
+            for instance_name in rm_list:
+                del self.syscall_dict[context][instance_name]
+            del self.syscall_dict[context]
 
         if context in self.trace_all:
             self.lgr.debug('syscallManager mrSyscallByContext remove trace_all for context %s' % context)

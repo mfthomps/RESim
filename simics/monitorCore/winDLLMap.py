@@ -114,11 +114,11 @@ class WinDLLMap():
                 self.section_list.append(unknown_dll)
                 self.lgr.debug('WinDLLMap mapSection section_handle %d not defined for pid %d, add unknown section' % (section_handle, pid))
         else:
-            self.lgr.error('WinDLLMap mapSection pid %d not in sections ' % (pid))
+            self.lgr.warning('WinDLLMap mapSection pid %d not in sections ' % (pid))
 
     def checkSOWatch(self, section):
         for fname in self.so_watch:
-            self.lgr.debug('WinDLLMap checkSOWatch does %s endwith %s' % (section.fname, fname))
+            #self.lgr.debug('WinDLLMap checkSOWatch does %s endwith %s' % (section.fname, fname))
             if section.fname.endswith(fname):
                 if self.so_watch_callback is not None:
                     self.lgr.debug('winDLL checkSOWatch do callback for %s' % fname)
