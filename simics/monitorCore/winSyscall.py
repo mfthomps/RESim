@@ -247,9 +247,12 @@ class WinSyscall():
             else:
                 self.hack_cycle = cpu.cycles
 
-        callnum = self.mem_utils.getCallNum(cpu)
-        #self.lgr.debug('syscallHap callnum %d' % callnum)
         if syscall_info.callnum is None:
+           callnum = self.mem_utils.getCallNum(cpu)
+           #self.lgr.debug('syscallHap callnum %d' % callnum)
+           if callnum == 9999:
+               SIM_break_simulation('0x4254, is that you?')
+               reutrn
            ''' tracing all'''
            callname = self.task_utils.syscallName(callnum)
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
@@ -583,7 +586,10 @@ class WinSyscall():
 
         elif callname == 'CreateSection':
             exit_info.old_fd = self.stackParam(3, frame) 
-            trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
+            if exit_info.old_fd is not None:
+                trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
+            else:
+                trace_msg = trace_msg+' Handle: is None'
 
         elif callname == 'MapViewOfSection':
             exit_info.old_fd = frame['param1']

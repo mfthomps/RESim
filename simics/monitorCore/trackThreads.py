@@ -2,6 +2,7 @@ from simics import *
 import syscall
 import elfText
 from resimHaps import *
+''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
     def __init__(self, top, cpu, cell_name, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
         self.top = top
@@ -34,6 +35,7 @@ class TrackThreads():
         self.compat32 = compat32
         self.clone_hap = None
         self.child_stacks = {}
+        self.so_track = None
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -74,6 +76,7 @@ class TrackThreads():
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
         self.stopTrackClone(immediate)
+        self.so_track.stopTrace()
 
 
     def execveHap(self, dumb, third, forth, memory):
@@ -152,7 +155,7 @@ class TrackThreads():
                 call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
-        self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False)
+        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False)
         self.lgr.debug('TrackThreads trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 

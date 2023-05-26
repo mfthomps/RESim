@@ -616,6 +616,9 @@ class GenMonitor():
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
+            if 'SKIP_PROGS' in self.comp_dict[cell_name]: 
+                sfile = comp_dict[cell_name]['SKIP_PROGS']
+                self.context_manager[cell_name].loadIgnoreList(sfile)
             self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                    self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
@@ -717,7 +720,6 @@ class GenMonitor():
         if self.run_from_snap is not None:
             self.snapInit()
             self.runScripts()
-            self.loadIgnoreList()
             return
         run_cycles = self.getBootCycleChunk()
         done = False
@@ -1073,7 +1075,7 @@ class GenMonitor():
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, cell, pid, self.context_manager[self.target], 
+            self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
 
