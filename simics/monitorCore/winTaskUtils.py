@@ -213,6 +213,7 @@ class WinTaskUtils():
         entry = self.mem_utils.readPtr(self.cpu, val)
         if entry is None:
             self.lgr.error('getComputed entry is None reading from 0x%x' % val)
+            SIM_break_simulation('remove this')
             return None
         entry = entry & 0xffffffff
         entry_shifted = entry >> 4

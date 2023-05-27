@@ -5324,6 +5324,19 @@ class GenMonitor():
         self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
         self.lgr.debug('traceWindows')
 
+    ''' Hack to catch erzat syscall from application with 9999 as syscall number for purpose of locating program text section load address'''
+    def catchEnter(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.catchEnterHap, None)
+
+    def catchEnterHap(self, dumb, one, old, new):
+        self.lgr.debug('catchEnterHap new mode: %s' % str(new))
+        if new == Sim_CPU_Mode_Supervisor:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+            if callnum == 9999:
+                SIM_break_simulation('0x4254, is that you?')
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

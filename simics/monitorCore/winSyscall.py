@@ -127,7 +127,8 @@ class WinSyscall():
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 
-        self.exit_calls = []
+        self.exit_calls = ['TerminateProcess']
+        
         ''' TBD '''
         self.stop_on_exit = False
 
@@ -354,28 +355,19 @@ class WinSyscall():
 
         if callname in self.exit_calls:
             self.context_manager.pidExit(pid)
-            if callname == 'tgkill':
-                tgid = frame['param1']
-                tid = frame['param2']
-                sig = frame['param3']
-                ida_msg = '%s pid:%d tgid: %d  tid: %d sig:%d' % (callname, pid, tgid, tid, sig)
-                if tid != pid:
-                    self.lgr.error('tgkill called from %d for other process %d, fix this TBD!' % (pid, tid))
+            self.lgr.debug('winSyscall %s exit of pid:%d stop_on_exit: %r' % (self.name, pid, self.stop_on_exit))
+            ida_msg = '%s pid:%d' % (callname, pid)
+            if callname == 'TerminateProcess':
+                who = frame['param1']
+                self.lgr.debug('winSyscall %s process who: 0x%x' % (callname, who))
+                if who == 0xffffffffffffffff:
+                    self.lgr.debug('winSyscall %s process will exit' % callname)
+                    self.handleExit(pid, ida_msg, exit_group=True)
+                    self.context_manager.stopWatchPid(pid)
+                    if self.stop_on_exit:
+                        self.lgr.debug('syscall break simulation for stop_on_exit')
+                        SIM_break_simulation(ida_msg)
                     return
-            else: 
-                ida_msg = '%s pid:%d' % (callname, pid)
-            self.lgr.debug('syscallHap %s exit of pid:%d stop_on_exit: %r' % (self.name, pid, self.stop_on_exit))
-            if callname == 'exit_group':
-                self.handleExit(pid, ida_msg, exit_group=True)
-            elif callname == 'tgkill' and sig == 6:
-                self.handleExit(pid, ida_msg, killed=True)
-            else:
-                self.handleExit(pid, ida_msg)
-            self.context_manager.stopWatchPid(pid)
-            if self.stop_on_exit:
-                self.lgr.debug('syscall break simulation for stop_on_exit')
-                SIM_break_simulation(ida_msg)
-            return
 
         ''' Set exit breaks '''
         #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x  EIP: 0x%x' % (pid, comm, callnum, break_eip))
@@ -603,6 +595,12 @@ class WinSyscall():
             size = self.stackParam(1, frame)
             base = self.paramOffPtr(2, [0], frame)
             trace_msg = trace_msg+' base 0x%x size: 0x%x' % (base, size)
+                
+        elif callname == 'TerminateProcess':
+            who = frame['param1']
+            trace_msg = trace_msg+' who: 0x%x' % (who)
+            if who == 0xffffffffffffffff:
+                trace_msg = trace_msg+' process exiting'
 
         #elif callname == 'QueryInformationProcess':
         #    entry = self.task_utils.getSyscallEntry(callnum)
@@ -1022,3 +1020,6 @@ class WinSyscall():
                 self.timeofday_count[pid] = 0
                 self.lgr.debug('checkTimeLoop pid:%d reset tod count' % pid)
 
+    def stopOnExit(self):
+        self.stop_on_exit=True
+        self.lgr.debug('syscall stopOnExit')
