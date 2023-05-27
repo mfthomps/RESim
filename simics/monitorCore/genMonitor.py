@@ -226,7 +226,8 @@ class GenMonitor():
         self.find_kernel_write = None
 
         self.fun_mgr = None
-         
+       
+        self.win_trace = None  
 
         self.one_done_module = None
         self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
@@ -4260,9 +4261,9 @@ class GenMonitor():
         self.context_manager[self.target].catchPid(pid, callback)
         SIM_continue(0)
 
-    def cleanMode(self):
+    def cleanMode(self, dumb):
         if self.mode_hap is not None:
-            print('mode_hap was lingering, delete it')
+            #print('mode_hap was lingering, delete it')
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
@@ -5328,6 +5329,8 @@ class GenMonitor():
     def catchEnter(self):
         cpu = self.cell_config.cpuFromCell(self.target)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.catchEnterHap, None)
+        self.traceWindows()
+        self.allowReverse() 
 
     def catchEnterHap(self, dumb, one, old, new):
         self.lgr.debug('catchEnterHap new mode: %s' % str(new))
@@ -5336,6 +5339,8 @@ class GenMonitor():
             callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
             if callnum == 9999:
                 SIM_break_simulation('0x4254, is that you?')
+                SIM_run_alone(self.cleanMode, None)
+                self.syscallManager[self.target].rmAllSyscalls()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

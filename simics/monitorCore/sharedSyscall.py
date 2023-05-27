@@ -581,6 +581,9 @@ class SharedSyscall():
 
     def exitHap(self, dumb, context, break_num, memory):
         cpu, comm, pid = self.task_utils.curProc() 
+        if cpu is None:
+            self.lgr.error('sharedSyscall exitHap got nothing from curProc')
+            return
         #self.lgr.debug('sharedSyscall exitHap %d (%s) context: %s  break_num: %s' % (pid, comm, str(context), str(break_num)))
         did_exit = False
         if pid in self.exit_info:

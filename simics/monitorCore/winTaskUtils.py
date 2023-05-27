@@ -241,6 +241,8 @@ class WinTaskUtils():
         #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
         #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
+        if cur_task_rec is None:
+            return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
