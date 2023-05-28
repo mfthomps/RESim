@@ -208,7 +208,7 @@ class RunTo():
                     self.lgr.debug('toRunningProc Already at proc %s, done' % proc)
                     f1 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
-                    self.toUser([f2, f1])
+                    self.top.toUser([f2, f1])
                     #self.debug()
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
@@ -218,9 +218,9 @@ class RunTo():
                     f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
                     if final_fun is not None:
                         f3 = stopFunction.StopFunction(final_fun, [], nest=False)
-                        self.toUser([f2, f1, f3])
+                        self.top.toUser([f2, f1, f3])
                     else:
-                        self.toUser([f2, f1])
+                        self.top.toUser([f2, f1])
                     #self.debugGroup()
                     return
         ''' Set breakpoint on current_task to watch task switches '''

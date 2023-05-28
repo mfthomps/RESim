@@ -1,6 +1,12 @@
 import os
 import pickle
 import soMap
+class Text():
+    ''' compat with old linux elfText code without importing... '''
+    def __init__(self, address, size):
+        self.address = address
+        self.size = size 
+
 class DLLInfo():
     def __init__(self, pid, fname, fd):
         self.fname = fname
@@ -33,6 +39,7 @@ class WinDLLMap():
         self.max_addr = None
         self.so_watch = []
         self.so_watch_callback = None
+        self.text = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -42,6 +49,7 @@ class WinDLLMap():
         so_pickle['open_files'] = self.open_files
         so_pickle['sections'] = self.sections
         so_pickle['section_list'] = self.section_list
+        so_pickle['text'] = self.text
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
         self.lgr.debug('winDLLMap pickleit to %s ' % (somap_file))
@@ -62,12 +70,22 @@ class WinDLLMap():
                     ma = section.addr + section.size
                     if self.max_addr is None or self.max_addr < ma:
                         self.max_addr = ma
+            if 'text' in so_pickle:
+                self.text = so_pickle['text']
+                    
 
     def addFile(self, fname, fd, pid):
         if pid not in self.open_files:
             self.open_files[pid] = {}
         dll_info = DLLInfo(pid, fname, fd)
         self.open_files[pid][fd] = dll_info
+
+    def addText(self, fname, pid, addr, size):
+        dll_info = DLLInfo(pid, fname, None)
+        dll_info.addr = addr
+        dll_info.size = size
+        self.section_list.append(dll_info)
+        self.text[pid] = dll_info
 
     def createSection(self, fd, section_handle, pid):
         if pid in self.open_files:
@@ -210,3 +228,16 @@ class WinDLLMap():
     def addSOWatch(self, fname, callback):
         self.so_watch.append(fname)
         self.so_watch_callback = callback
+
+    def getText(self, pid):
+        retval = None
+        if pid in self.text:
+            retval = Text(self.text[pid].addr, self.text[pid].size)
+        return retval
+             
+    def setIdaFuns(self, ida_funs):
+        if ida_funs is None:
+            self.lgr.warning('IDA funs is none, no SOMap')
+            return
+        self.ida_funs = ida_funs
+        # TBD see soMap

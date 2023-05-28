@@ -35,7 +35,7 @@ import win7CallParams
 import syscall
 from resimHaps import *
 class WinMonitor():
-    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, run_from_snap, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -47,6 +47,7 @@ class WinMonitor():
         self.traceProcs = traceProcs
         self.syscallManager = syscallManager
         self.context_manager = context_manager
+        self.soMap = soMap
         self.run_from_snap = run_from_snap
         if run_from_snap is not None:
             self.snap_start_cycle = cpu.cycles
@@ -155,6 +156,7 @@ class WinMonitor():
             self.lgr.debug('traceAll, call to setExits')
             self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
+
 
     def getSyscall(self, callname):
         ''' find the most specific syscall for the given callname '''

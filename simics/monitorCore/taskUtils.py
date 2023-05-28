@@ -157,6 +157,9 @@ class TaskUtils():
     def getPhysCurrentTask(self):
         return self.phys_current_task
 
+    def getCurThreadRec(self):
+        return self.getCurTaskRec()
+
     def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0

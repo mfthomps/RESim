@@ -544,6 +544,11 @@ class GenMonitor():
         self.lgr.debug('revToPid hap set, break on 0x%x now reverse' % phys_current_task)
         SIM_run_command('rev')
 
+    def stopAndAction(self, stop_action):
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, stop_action)
+        SIM_break_simulation('stopAndAction')
+
     def run2Kernel(self, cpu):
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
@@ -662,7 +667,7 @@ class GenMonitor():
             if self.isWindows():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
                                                self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
-                                               self.run_from_snap, self.lgr)
+                                               self.soMap[self.target], self.run_from_snap, self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
@@ -1112,9 +1117,8 @@ class GenMonitor():
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
                     real_path = self.realPath(full_path)
                     if self.isWindows():
-                        ''' TBD fix for windows'''
-                        elf_info = None
-                        pass
+                        ''' Assumes winProg has already populated soMap'''
+                        elf_info = self.soMap[self.target].getText(pid)
                     else:
                         elf_info = self.soMap[self.target].addText(real_path, prog_name, pid)
                     if elf_info is not None:
@@ -1174,8 +1178,10 @@ class GenMonitor():
         context = SIM_object_name(cpu.current_context)
         if self.isWindows():
             cur_thread = self.task_utils[self.target].getCurThread()
-            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x thread: 0x%x  code file: %s' % (cpu.name, context,
-                   cpl, pid, comm, eip, cur_thread, so_file))
+            cur_thread_rec = self.task_utils[self.target].getCurThreadRec()
+            cur_proc_rec = self.task_utils[self.target].getCurTaskRec()
+            print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x thread: 0x%x  code file: %s eproc: 0x%x ethread: 0x%x' % (cpu.name, context,
+                   cpl, pid, comm, eip, cur_thread, so_file, cur_proc_rec, cur_thread_rec))
         
         else: 
             print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
@@ -5341,6 +5347,9 @@ class GenMonitor():
                 SIM_break_simulation('0x4254, is that you?')
                 SIM_run_alone(self.cleanMode, None)
                 self.syscallManager[self.target].rmAllSyscalls()
+
+    def setFullPath(self, full_path):
+        self.full_path = full_path
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

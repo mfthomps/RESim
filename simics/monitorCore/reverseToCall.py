@@ -674,9 +674,12 @@ class reverseToCall():
         closest_fault = self.getClosestFault(all_faults)
         frame, closest_call = self.getPreviousCycleFrame(pid)
         if closest_fault is None or closest_call > closest_fault:
-            self.lgr.debug('tryRecentCycle skipping to recent call')
-            self.skipToTest(closest_call-1)
-            retval = True
+            if closest_call is not None:
+                self.lgr.debug('tryRecentCycle skipping to recent call')
+                self.skipToTest(closest_call-1)
+                retval = True
+            else:
+                self.lgr.debug('tryRecentCycle got None looking for previous cycle')
         elif closet_fault is not None: 
             self.lgr.debug('tryRecentCycle skipping to recent fault')
             self.skipToTest(closest_fault-1)

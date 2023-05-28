@@ -101,6 +101,8 @@ class SyscallManager():
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.soMap = soMap
+        if self.soMap is None:
+            self.lgr.error('SOMap is none in syscall manager')
         self.targetFS = targetFS
         self.compat32 = compat32
         self.os_type = os_type
@@ -126,7 +128,7 @@ class SyscallManager():
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
                                self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, 
-                               stop_on_call=stop_on_call, trace=trace, 
+                               stop_on_call=stop_on_call, trace=trace, soMap=self.soMap,
                                record_fd=record_fd, swapper_ok=swapper_ok)
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
@@ -171,7 +173,7 @@ class SyscallManager():
                 retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
-                               background=background, name=name, flist_in=flist, callback=callback, 
+                               background=background, name=name, flist_in=flist, callback=callback, soMap=self.soMap, 
                                stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
             else:
                 retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 

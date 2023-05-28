@@ -15,6 +15,7 @@ import syscall
 import sys
 import copy
 import ntpath
+import winProg
 from resimHaps import *
 from resimUtils import rprint
 class WinSyscall():
@@ -753,7 +754,8 @@ class WinSyscall():
                         retval = True
                         #exit_info.call_params = cp 
                         exit_info.call_params = None
-                        self.toNewProc(prog_string)
+                        win_prog = winProg.WinProg(self.top, self.cpu, self.mem_utils, self.task_utils, self.context_manager, self.soMap, self.stop_action, self.param, self.lgr)
+                        win_prog.toNewProc(prog_string)
                         #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
                     else:
                         self.lgr.debug('checkProg, got %s when looking for binary %s, skip' % (ftype, prog_string))
@@ -857,71 +859,6 @@ class WinSyscall():
             else:
                 self.lgr.debug('setExits call_param is none')
 
-    def toNewProc(self, prog_string):
-        self.lgr.debug('toNewProc %s' % prog_string)
-        phys_current_task = self.task_utils.getPhysCurrentTask()
-        self.cur_task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
-                             phys_current_task, self.mem_utils.WORD_SIZE, 0)
-        self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.toNewProcHap, prog_string, self.cur_task_break)
-        self.current_tasks = self.task_utils.getTaskList()
-        #SIM_run_alone(SIM_continue, 0)
-
-    def toNewProcHap(self, prog_string, third, forth, memory):
-        if self.cur_task_hap is None:
-            return
-        #self.lgr.debug('winMonitor toNewProcHap for proc %s' % proc)
-        cur_thread = SIM_get_mem_op_value_le(memory)
-        cur_proc = self.task_utils.getCurTaskRec(cur_thread=cur_thread)
-        pid_ptr = cur_proc + self.param.ts_pid
-        pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-        self.context_manager.newProg(prog_string, pid)
-        if cur_proc not in self.current_tasks:
-            comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
-            proc = ntpath.basename(prog_string)
-            self.lgr.debug('winMonitor does %s start with %s?' % (proc, comm))
-            if proc.startswith(comm):
-                self.lgr.debug('winMonitor toNewProcHap got new %s pid:%d' % (comm, pid))
-                SIM_run_alone(self.rmNewProcHap, self.cur_task_hap)
-                self.cur_task_hap = None
-                self.task_utils.addProgram(pid, prog_string)
-                self.context_manager.addTask(pid)
-                new_fun = stopFunction.StopFunction(self.context_manager.watchTasks, [True], nest=False)
-                if self.stop_action is not None:
-                    flist = self.stop_action.getFlist()
-                    flist.append(new_fun)
-                else:
-                    flist = [new_fun]
-                SIM_run_alone(self.top.toUser, flist)
-                SIM_run_alone(self.stopTrace, False)
-                #SIM_break_simulation('got new proc %s' % proc)
-
-    def rmNewProcHap(self, newproc_hap):
-        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", newproc_hap)
-        if self.cur_task_break is not None:
-            SIM_delete_breakpoint(self.cur_task_break)
-            self.cur_task_break = None
-
-    def stopTraceAlone(self, dumb):
-        #self.lgr.debug('stopTraceAlone')
-        if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-
-        #self.lgr.debug('stopTraceAlone2')
-        if self.background_break is not None:
-            self.lgr.debug('stopTraceAlone delete background_break %d' % self.background_break)
-            RES_delete_breakpoint(self.background_break)
-            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
-            self.background_break = None
-            self.background_hap = None
-        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
-
-        if self.cur_task_hap is not None:
-            rmNewProcHap(self.cur_task_hap)
-            self.cur_task_hap = None
-        #self.lgr.debug('stopTraceAlone done')
-
-
     def stopTrace(self, immediate=False):
         #self.lgr.debug('syscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
@@ -951,6 +888,26 @@ class WinSyscall():
         self.sharedSyscall.trackSO(True)
         self.bang_you_are_dead = True
         #self.lgr.debug('syscall stopTrace return for %s' % self.name)
+
+    def stopTraceAlone(self, dumb):
+        #self.lgr.debug('stopTraceAlone')
+        if self.stop_hap is not None:
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+
+        #self.lgr.debug('stopTraceAlone2')
+        if self.background_break is not None:
+            self.lgr.debug('stopTraceAlone delete background_break %d' % self.background_break)
+            RES_delete_breakpoint(self.background_break)
+            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
+            self.background_break = None
+            self.background_hap = None
+        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
+
+        if self.cur_task_hap is not None:
+            rmNewProcHap(self.cur_task_hap)
+            self.cur_task_hap = None
+        #self.lgr.debug('stopTraceAlone done')
 
     def resetTimeofdayCount(self, pid):
         self.timeofday_count[pid] = 0
