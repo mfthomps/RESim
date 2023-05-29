@@ -16,6 +16,7 @@ import sys
 import copy
 import ntpath
 import winProg
+import winSocket
 from resimHaps import *
 from resimUtils import rprint
 class WinSyscall():
@@ -459,20 +460,22 @@ class WinSyscall():
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) %s' % (pid_thread, comm, callname)
         if callname == 'CreateUserProcess':
-            rsp = frame['param5']
+            rsp = frame['sp']
             ptr = rsp + 0x58
             base = self.mem_utils.readPtr(self.cpu, ptr)
             if base is not None:
                 ptr2 = base + 0x18
                 ptr3 = self.mem_utils.readPtr(self.cpu, ptr2)
-
-                prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
-                trace_msg = trace_msg+' %s %s' % (prog, frame_string)
-                self.lgr.debug('winSyscall syscallparse %s' % trace_msg)
-                want_to_debug = self.checkProg(prog, pid, exit_info)
-                if want_to_debug:
-                    ''' remove param '''
-                    exit_info.call_params = None
+                if ptr3 is None:
+                    self.lgr.debug('winSyscall syscallParse %s ptr3 is None' % (trace_msg))
+                else:
+                    prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
+                    trace_msg = trace_msg+' %s %s' % (prog, frame_string)
+                    self.lgr.debug('winSyscall syscallparse %s' % trace_msg)
+                    want_to_debug = self.checkProg(prog, pid, exit_info)
+                    if want_to_debug:
+                        ''' remove param '''
+                        exit_info.call_params = None
         elif callname == 'ReadFile':
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(2, frame)
@@ -485,8 +488,20 @@ class WinSyscall():
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
             exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
             exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
+            # TBD better approach?
             exit_info.retval_addr = frame['param1']
             trace_msg = trace_msg+' fname: %s fname addr: 0x%x retval addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+            if exit_info.fname.endswith('Endpoint'):
+                extended_size = self.stackParam(7, frame)
+                if extended_size is not None:
+                    extended_size = min(extended_size, 200)
+                    extended_addr = self.stackParam(6, frame)
+                    if extended_addr is not None:
+                        extended = self.mem_utils.readBytes(self.cpu, extended_addr, extended_size)
+                        if extended is not None:
+                            extended_hx = binascii.hexlify(extended)
+                            trace_msg = trace_msg + 'AFD extended: %s' % extended_hx
+                        
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
             object_attr = frame['param3']
@@ -518,7 +533,19 @@ class WinSyscall():
   
         elif callname in ['DeviceIoControlFile']:
             exit_info.old_fd = frame['param1']
-            trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
+            operation = frame['param6']
+            if operation in winSocket.op_map:
+                op_cmd = winSocket.op_map[operation]
+            else:
+                op_cmd = ''
+            trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x %s' % (exit_info.old_fd, operation, op_cmd)
+            pdata_addr = frame['param7']
+            len_pdata = frame['param8']
+            size = min(len_pdata, 200)
+            pdata = self.mem_utils.readBytes(self.cpu, pdata_addr, size)
+            if pdata is not None:
+                pdata_hx = binascii.hexlify(pdata)
+                trace_msg = trace_msg+' pdata: %s' % pdata_hx
  
         elif callname in ['CreateEvent', 'OpenProcessToken']:
             exit_info.retval_addr = frame['param1']
@@ -624,17 +651,19 @@ class WinSyscall():
         return exit_info
 
     def stackParam(self, pnum, frame):
-        rsp = frame['param5']
+        rsp = frame['sp']
         offset = 0x20 + (pnum * self.mem_utils.WORD_SIZE)
         ptr = rsp + offset
         value = self.mem_utils.readPtr(self.cpu, ptr)
         return value
 
     def stackParamPtr(self, pnum, ptr_offset, frame):
-        rsp = frame['param5']
+        rsp = frame['sp']
         offset = 0x20 + (pnum * self.mem_utils.WORD_SIZE)
         ptr = rsp + offset
+        #self.lgr.debug('stackParamPtr rsp 0x%x ptr 0x%x' % (rsp, ptr))
         new_ptr = self.mem_utils.readPtr(self.cpu, ptr)+ptr_offset
+        #self.lgr.debug('stackParamPtr new_ptr 0x%x' % new_ptr)
         value = self.mem_utils.readWord(self.cpu, new_ptr) 
         return value
         
@@ -980,3 +1009,36 @@ class WinSyscall():
     def stopOnExit(self):
         self.stop_on_exit=True
         self.lgr.debug('syscall stopOnExit')
+
+    def handleExit(self, pid, ida_msg, killed=False, retain_so=False, exit_group=False):
+            ''' TBD fix for windws?'''
+            if self.traceProcs is not None:
+                self.traceProcs.exit(pid)
+            if killed:
+                self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
+                self.stop_action.rmFun(self.top.skipAndMail)
+            self.lgr.debug(ida_msg)
+            if self.traceMgr is not None:
+                self.traceMgr.write(ida_msg+'\n')
+            self.context_manager.setIdaMessage(ida_msg)
+            if self.soMap is not None:
+                if not retain_so and not self.context_manager.amWatching(pid):
+                    self.soMap.handleExit(pid, killed)
+            else:
+                self.lgr.debug('syscallHap exit soMap is None, pid:%d' % (pid))
+            last_one = self.context_manager.rmTask(pid, killed) 
+            debugging_pid, dumb = self.context_manager.getDebugPid()
+            self.lgr.debug('syscallHap handleExit %s pid %d last_one %r debugging %d retain_so %r exit_group %r debugging_pid %s' % (self.name, pid, last_one, self.debugging, retain_so, exit_group, str(debugging_pid)))
+            if (killed or last_one or (exit_group and pid == debugging_pid)) and self.debugging:
+                if self.top.hasProcHap():
+                    ''' exit before we got to text section '''
+                    self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % pid)
+                    SIM_run_alone(self.top.undoDebug, None)
+                self.lgr.debug('syscall handleExit exit or exit_group or tgkill pid:%d' % pid)
+                self.sharedSyscall.stopTrace()
+                ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
+                self.task_utils.setExitPid(pid)
+                #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
+                #self.stop_action.addFun(fun)
+                print('exit pid %d' % pid)
+                SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)

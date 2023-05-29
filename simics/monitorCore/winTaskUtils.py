@@ -275,6 +275,11 @@ class WinTaskUtils():
                     frame['param1'] = self.mem_utils.getRegValue(self.cpu, 'r10')
             else:
                 self.lgr.error('winTaskUtils frameFromRegs bad word size?') 
+        user_stack = frame['sp']+0x28
+        frame['param5'] = self.mem_utils.readWord(self.cpu, user_stack)
+        frame['param6'] = self.mem_utils.readWord(self.cpu, user_stack+self.mem_utils.wordSize(self.cpu))
+        frame['param7'] = self.mem_utils.readWord(self.cpu, user_stack+2*self.mem_utils.wordSize(self.cpu))
+        frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack+3*self.mem_utils.wordSize(self.cpu))
         return frame
 
     def frameFromRegsComputed(self):
@@ -291,10 +296,11 @@ class WinTaskUtils():
         #self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (user_stack, frame['param1'], r10))
         frame['sp'] = user_stack
         frame['rsp'] = user_stack
-        ''' TBD sometimes stepped on???
-            r10 is hid in rcx.  don't ask me...
-        '''
-        frame['param5'] = user_stack
+        user_stack_28 = user_stack+0x28 
+        frame['param5'] = self.mem_utils.readWord(self.cpu, user_stack_28)
+        frame['param6'] = self.mem_utils.readWord(self.cpu, user_stack_28+self.mem_utils.wordSize(self.cpu))
+        frame['param7'] = self.mem_utils.readWord(self.cpu, user_stack_28+2*self.mem_utils.wordSize(self.cpu))
+        frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack_28+3*self.mem_utils.wordSize(self.cpu))
         #frame['param1'] = self.mem_utils.readPtr(self.cpu, stack_val-40)
         if frame['param1'] is None:
             self.lgr.error('frameFromRegsComputed got none reading from 0x%x -40' % stack_val)

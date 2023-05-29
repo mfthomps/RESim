@@ -33,11 +33,14 @@ import memUtils
 import syscallNumbers
 LIST_POISON2 = object()
 def stringFromFrame(frame):
+    retval = None
     if frame is not None:
-        return 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
+        retval = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
             frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
-    else:
-        return None
+        if 'param7' in frame:
+            retval = retval + ' param7:0x%x param8:0x%x' % (frame['param7'], frame['param8'])
+    
+    return retval
 class ListHead(object):
     """Represents a struct list_head. But the pointers point to the
     task struct, rather than to another list_head"""

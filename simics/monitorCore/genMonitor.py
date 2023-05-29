@@ -623,7 +623,7 @@ class GenMonitor():
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
             if 'SKIP_PROGS' in self.comp_dict[cell_name]: 
-                sfile = comp_dict[cell_name]['SKIP_PROGS']
+                sfile = self.comp_dict[cell_name]['SKIP_PROGS']
                 self.context_manager[cell_name].loadIgnoreList(sfile)
             self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                    self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
@@ -5321,8 +5321,8 @@ class GenMonitor():
         target_cpu = self.cell_config.cpuFromCell(self.target)
         self.traceMgr[self.target].open(tf, target_cpu)
         if self.isWindows():
-            call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateSection', 'MapViewOfSection',
-                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort']
+            call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'Close', 'CreateSection', 'MapViewOfSection',
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile']
         else:
             self.lgr.error('only for windows for now')
             return

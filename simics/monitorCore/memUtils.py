@@ -311,8 +311,11 @@ class memUtils():
             return None
    
     def readWinString(self,  cpu, vaddr, maxlen):
-        bstring = self.readBytes(cpu, vaddr, maxlen)
         retval = ''
+        if vaddr is None:
+            self.lgr.debug('memUtils readWinString called with vaddr of None')
+            return retval
+        bstring = self.readBytes(cpu, vaddr, maxlen)
         null_count = 0
         for b in bstring:
             if b == 0:
@@ -326,6 +329,9 @@ class memUtils():
  
     def readBytes(self, cpu, vaddr, maxlen):
         ''' return a bytearray of maxlen read from vaddr '''
+        if vaddr is None:
+            self.lgr.debug('memUtils readBytes called with vaddr of none')
+            return None
         remain = maxlen
         start = vaddr
         retval = ()

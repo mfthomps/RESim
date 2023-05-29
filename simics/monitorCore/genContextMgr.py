@@ -1291,8 +1291,8 @@ class GenContextMgr():
         #    self.lgr.error('Found multiple dll_skip files, only one supported')
         #elif len(flist) == 1:
         if os.path.isfile(fname):
-            self.lgr.debug('loadIgnoreList %s' % flist[0])
-            with open(flist[0]) as fh:
+            self.lgr.debug('loadIgnoreList %s' % fname)
+            with open(fname) as fh:
                 for line in fh:
                     if line.startswith('#'):
                         continue
