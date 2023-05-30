@@ -634,7 +634,7 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
             if self.isWindows:
-                self.soMap[cell_name] = winDLLMap.WinDLLMap(cell_name, self.task_utils[cell_name], self.run_from_snap, self.lgr)
+                self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.run_from_snap, self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
@@ -1091,15 +1091,7 @@ class GenMonitor():
             self.watchPageFaults(pid)
 
             self.sharedSyscall[self.target].setDebugging(True)
- 
-            prog_name = self.traceProcs[self.target].getProg(pid)
-            self.lgr.debug('genMonitor debug pid %d progname is %s' % (pid, prog_name))
-            if prog_name is None or prog_name == 'unknown':
-                prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
-                self.lgr.debug('genMonitor debug pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
-                if prog_name is None:
-                    prog_name = self.task_utils[self.target].getCommFromPid(pid) 
-                    self.lgr.debug('genMonitor debug pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
+            prog_name = self.getProgName(pid)
             if self.targetFS[self.target] is not None and prog_name is not None:
                 sindex = 0
                 full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
@@ -2352,7 +2344,8 @@ class GenMonitor():
             return
 
         if self.isWindows():
-            self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
+            self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
+            self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
             self.run_to[target].watchSO()
             return
 
@@ -2685,15 +2678,21 @@ class GenMonitor():
     def tracingAll(self, cell_name, pid):
         ''' are we tracing all syscalls for the given pid? '''
         retval = False
+        #self.lgr.debug('tracingAll cell_name %s len of self.trace_all is %d' % (cell_name, len(self.trace_all))) 
         if cell_name in self.trace_all:
+            #self.lgr.debug('tracingAll %s in trace_all' % cell_name) 
             debug_pid, dumb1 = self.context_manager[self.target].getDebugPid() 
             if debug_pid is None:
-                self.lgr.debug('tracingAll pid none, return true')
+                #self.lgr.debug('tracingAll pid none, return true')
                 retval = True
             else:
+                #self.lgr.debug('tracingAll debug_pid %d' % debug_pid)
                 if self.context_manager[self.target].amWatching(pid):
-                    self.lgr.debug('tracingAll watching pid %d' % pid)
+                    #self.lgr.debug('tracingAll watching pid %d' % pid)
                     retval = True
+                else:
+                    #self.lgr.debug('tracingAll not watching debug_pid %d' % debug_pid)
+                    pass
         return retval
             
 
@@ -5020,8 +5019,15 @@ class GenMonitor():
         SIM_run_alone(SIM_run_command, cmd)
 
     def getProgName(self, pid):
-        prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
-        return prog_name 
+        prog_name = self.traceProcs[self.target].getProg(pid)
+        self.lgr.debug('genMonitor getProgName pid %d progname is %s' % (pid, prog_name))
+        if prog_name is None or prog_name == 'unknown':
+            prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
+            self.lgr.debug('genMonitor getProgName pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
+            if prog_name is None:
+                prog_name = self.task_utils[self.target].getCommFromPid(pid) 
+                self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
+        return prog_name
  
     def getSharedSyscall(self):
         return self.sharedSyscall[self.target]
@@ -5317,19 +5323,8 @@ class GenMonitor():
         self.context_manager[self.target].restoreDefaultContext()
 
     def traceWindows(self):
-        tf = '/tmp/trace_windows.txt'
-        target_cpu = self.cell_config.cpuFromCell(self.target)
-        self.traceMgr[self.target].open(tf, target_cpu)
-        if self.isWindows():
-            call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'Close', 'CreateSection', 'MapViewOfSection',
-                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile']
-        else:
-            self.lgr.error('only for windows for now')
-            return
-        ''' Use cell of None so only our threads get tracked '''
-        call_params = []
-        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
-        self.lgr.debug('traceWindows')
+        self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
+        self.lgr.debug('traceWindows set trace_all[%s] to %s' % (self.target, str(self.trace_all[self.target])))
 
     ''' Hack to catch erzat syscall from application with 9999 as syscall number for purpose of locating program text section load address'''
     def catchEnter(self):

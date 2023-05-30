@@ -17,6 +17,7 @@ import copy
 import ntpath
 import winProg
 import winSocket
+import net
 from resimHaps import *
 from resimUtils import rprint
 class WinSyscall():
@@ -138,6 +139,8 @@ class WinSyscall():
         self.cur_task_break = None
         self.cur_task_hap = None
         self.current_tasks = []
+
+        self.ioctl_op_map = winSocket.getOpMap()
 
     def breakOnProg(self):
         for call in self.call_params:
@@ -534,18 +537,32 @@ class WinSyscall():
         elif callname in ['DeviceIoControlFile']:
             exit_info.old_fd = frame['param1']
             operation = frame['param6']
-            if operation in winSocket.op_map:
-                op_cmd = winSocket.op_map[operation]
+            if operation in self.ioctl_op_map:
+                op_cmd = self.ioctl_op_map[operation]
+                trace_msg = trace_msg + ' '+op_cmd
             else:
                 op_cmd = ''
-            trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x %s' % (exit_info.old_fd, operation, op_cmd)
             pdata_addr = frame['param7']
             len_pdata = frame['param8']
             size = min(len_pdata, 200)
-            pdata = self.mem_utils.readBytes(self.cpu, pdata_addr, size)
-            if pdata is not None:
-                pdata_hx = binascii.hexlify(pdata)
-                trace_msg = trace_msg+' pdata: %s' % pdata_hx
+            if op_cmd == 'BIND':
+                sock_addr = pdata_addr+4
+                self.lgr.debug('pdata_addr 0x%x  socK_addr 0x%x' % (pdata_addr, sock_addr))
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                to_string = sock_struct.getString()
+                trace_msg = trace_msg+' '+to_string
+            elif op_cmd == 'CONNECT':
+                sock_addr = pdata_addr+4
+                self.lgr.debug('pdata_addr 0x%x  socK_addr 0x%x' % (pdata_addr, sock_addr))
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                to_string = sock_struct.getString()
+                trace_msg = trace_msg+' '+to_string
+            else:
+                trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
+                pdata = self.mem_utils.readBytes(self.cpu, pdata_addr, size)
+                if pdata is not None:
+                    pdata_hx = binascii.hexlify(pdata)
+                    trace_msg = trace_msg+' pdata: %s' % pdata_hx
  
         elif callname in ['CreateEvent', 'OpenProcessToken']:
             exit_info.retval_addr = frame['param1']
@@ -1042,3 +1059,6 @@ class WinSyscall():
                 #self.stop_action.addFun(fun)
                 print('exit pid %d' % pid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
+
+    def getCallParams(self):
+        return self.syscall_info.call_params

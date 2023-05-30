@@ -200,7 +200,7 @@ class SockStruct():
         addr = ''
         sock_type = ''
         if self.fd is not None and self.fd >= 0:
-            fd = 'FD: %d' % self.fd
+            fd = 'FD: %d (0x%x)' % (self.fd, self.fd)
         if self.addr is not None:
             addr = 'addr: 0x%x' % self.addr
         if self.sock_type is not None:

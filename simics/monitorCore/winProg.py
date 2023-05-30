@@ -1,8 +1,51 @@
 import ntpath
+import os
 import subprocess
 import shlex
 from resimHaps import *
 from simics import *
+
+def getTextSection(cpu, mem_utils, eproc, lgr):
+        retval = None
+        ''' TBD put in params! '''
+        peb_addr = eproc+0x338
+        lgr.debug('winProg getTextSection eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
+        peb = mem_utils.readPtr(cpu, peb_addr)
+        if peb is not None:
+            image_load_addr_addr = peb + 0x10
+            lgr.debug('winProg getTextSection pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
+            retval = mem_utils.readWord(cpu, image_load_addr_addr)
+        else:
+            lgr.error('winProg getTextSection pep read as None')
+        return retval
+
+def getTextSize(full_path, lgr):
+    size = None
+    if os.path.isfile(full_path):
+        cmd = 'readpe -H %s' % full_path
+        grep = 'grep "Size of .text section"'
+        proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
+                         stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+
+        proc1.stdout.close() # Allow proc1 to receive a SIGPIPE if proc2 exits.
+        out,err=proc2.communicate()
+        #print(out)
+        addr = None
+        size = 0
+        for line in out.splitlines():
+            lgr.debug('winProg readpe got %s' % line)
+            parts = line.split()
+            size_s = parts[4]
+            try:
+                size = int(size_s, 16)
+                break
+            except:
+                pass
+    else:
+        lgr.error('winProg getTextSize, no file at %s' % full_path)
+    return size
+
 class WinProg():
     def __init__(self, top, cpu, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
         self.top = top
@@ -86,39 +129,15 @@ class WinProg():
         self.lgr.debug('winProg findText')
         SIM_run_alone(self.rmFindTextHap, None)
         eproc = self.task_utils.getCurTaskRec()
-        ''' TBD put in params! '''
-        peb_addr = eproc+0x338
-        self.lgr.debug('winProg findText eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
-        peb = self.mem_utils.readPtr(self.cpu, peb_addr)
-        image_load_addr_addr = peb + 0x10
-        self.lgr.debug('winProg findText pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
-        load_addr = self.mem_utils.readWord(self.cpu, image_load_addr_addr)
+        load_addr = getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
         self.lgr.debug('winProg findText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
         self.top.debugExitHap()
         full_path = self.top.getFullPath(fname=self.prog_string)
-        self.top.setFullPath(full_path)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
-        cmd = 'readpe -H %s' % full_path
-        grep = 'grep "Size of .text section"'
-        proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
-                         stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.top.setFullPath(full_path)
+        size = getTextSize(full_path)
 
-        proc1.stdout.close() # Allow proc1 to receive a SIGPIPE if proc2 exits.
-        out,err=proc2.communicate()
-        #print(out)
-        addr = None
-        size = 0
-        for line in out.splitlines():
-            self.lgr.debug('winProg readpe got %s' % line)
-            parts = line.split()
-            size_s = parts[4]
-            try:
-                size = int(size_s, 16)
-                break
-            except:
-                pass
         self.lgr.debug('winProg findText got size 0x%x' % size)
         self.so_map.addText(self.prog_string, want_pid, load_addr, size)
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)

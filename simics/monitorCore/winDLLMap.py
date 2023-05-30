@@ -1,6 +1,7 @@
 import os
 import pickle
 import soMap
+import winProg
 class Text():
     ''' compat with old linux elfText code without importing... '''
     def __init__(self, address, size):
@@ -28,10 +29,13 @@ class DLLInfo():
 
 
 class WinDLLMap():
-    def __init__(self, cell_name, task_utils, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, run_from_snap, lgr):
+        self.cpu = cpu
         self.cell_name = cell_name
         self.task_utils = task_utils
+        self.mem_utils = mem_utils
         self.lgr = lgr
+        self.top = top
         self.open_files = {}
         self.sections = {}
         self.section_list = []
@@ -233,6 +237,18 @@ class WinDLLMap():
         retval = None
         if pid in self.text:
             retval = Text(self.text[pid].addr, self.text[pid].size)
+        else:
+            cpu, comm, cur_pid = self.task_utils.curProc() 
+            if pid == cur_pid:
+                prog_name = self.top.getProgName(pid)
+                full_path = self.top.getFullPath(fname=prog_name)
+                self.lgr.debug('winDLL getText, no text yet for %s, try reading it from winProg' % prog_name)
+                eproc = self.task_utils.getCurTaskRec()
+                load_addr = winProg.getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
+                size = winProg.getTextSize(full_path, self.lgr)
+                self.top.setFullPath(full_path)
+                self.addText(prog_name, pid, load_addr, size)
+                retval = Text(load_addr, size)
         return retval
              
     def setIdaFuns(self, ida_funs):

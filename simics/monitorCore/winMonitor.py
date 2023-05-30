@@ -156,6 +156,7 @@ class WinMonitor():
             self.lgr.debug('traceAll, call to setExits')
             self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
+        return self.trace_all
 
 
     def getSyscall(self, callname):
@@ -174,3 +175,14 @@ class WinMonitor():
     def flushTrace(self):
         if self.w7_call_params is not None: 
             self.w7_call_params.flushTrace()
+
+    def traceWindows(self):
+        tf = '/tmp/trace_windows.txt'
+        self.traceMgr.open(tf, self.cpu)
+        call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile']
+        ''' Use cell of None so only our threads get tracked '''
+        call_params = []
+        retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
+        self.lgr.debug('traceWindows')
+        return retval

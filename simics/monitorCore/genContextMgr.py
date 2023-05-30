@@ -522,10 +522,13 @@ class GenContextMgr():
             self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
-                #self.lgr.debug('contextManager alterWatches pid:%d restored debug context' % pid)
+                self.lgr.debug('contextManager alterWatches pid:%d restored debug context' % pid)
                 self.restoreDebugContext()
+            else:
+                self.lgr.debug('contextManager alterWatches pid:%d already was debug context' % pid)
+                pass
         elif self.isDebugContext():
-            #self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
+            self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
             self.restoreDefaultContext()
       
     def changedThread(self, cpu, third, forth, memory):
@@ -553,19 +556,19 @@ class GenContextMgr():
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
 
-        #if self.top.isWindows():
-        #    self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x windows thread addr: 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
-        #        prev_comm, pid, comm, new_addr, win_thread, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
-        #else:
-        #    self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r' % (prev_pid, 
-        #        prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks))
+        if self.top.isWindows():
+            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x windows thread addr: 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
+                prev_comm, pid, comm, new_addr, win_thread, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        else:
+            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
+                prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
 
         ''' Handle igoring of processes 
             Assumes we only ignore when not debugging.
             However we could be switching to a suspended thread
         '''
        
-        if len(self.ignore_progs) > 0:
+        if len(self.ignore_progs) > 0 and self.debugging_pid is None:
             #if pid in self.ignore_pids:
             if comm in self.ignore_progs:
                 #self.lgr.debug('ignoring context for pid %d' % pid)
@@ -900,9 +903,9 @@ class GenContextMgr():
         if self.watchExit():
             #self.pageFaultGen.recordPageFaults()
             if ctask in self.watch_rec_list:
-                #self.lgr.debug('watchTasks, current task already being watched')
+                self.lgr.debug('watchTasks, current task already being watched')
                 return
-            #self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
+            self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
             self.watch_rec_list[ctask] = pid
         else:
             self.lgr.warning('watchTasks, call to watchExit failed pid %d' % pid)
@@ -1089,7 +1092,8 @@ class GenContextMgr():
         ''' set breakpoint on task record that points to this (or the given) pid '''
         #self.lgr.debug('contextManager watchExit')
         if self.top.isWindows():
-            return
+            ''' TBD fix this!'''
+            return True
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
