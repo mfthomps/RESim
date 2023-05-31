@@ -522,13 +522,13 @@ class GenContextMgr():
             self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
-                self.lgr.debug('contextManager alterWatches pid:%d restored debug context' % pid)
+                #self.lgr.debug('contextManager alterWatches pid:%d restored debug context' % pid)
                 self.restoreDebugContext()
             else:
-                self.lgr.debug('contextManager alterWatches pid:%d already was debug context' % pid)
+                #self.lgr.debug('contextManager alterWatches pid:%d already was debug context' % pid)
                 pass
         elif self.isDebugContext():
-            self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
+            #self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
             self.restoreDefaultContext()
       
     def changedThread(self, cpu, third, forth, memory):
@@ -556,12 +556,12 @@ class GenContextMgr():
         prev_pid = self.mem_utils.readWord32(cpu, prev_task + self.param.ts_pid)
         prev_comm = self.mem_utils.readString(cpu, prev_task + self.param.ts_comm, 16)
 
-        if self.top.isWindows():
-            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x windows thread addr: 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
-                prev_comm, pid, comm, new_addr, win_thread, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
-        else:
-            self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
-                prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        #if self.top.isWindows():
+        #    self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x windows thread addr: 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
+        #        prev_comm, pid, comm, new_addr, win_thread, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        #else:
+        #    self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
+        #        prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
 
         ''' Handle igoring of processes 
             Assumes we only ignore when not debugging.

@@ -426,7 +426,7 @@ class WinSyscall():
                     if self.stop_on_call:
                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params = cp
-                    self.lgr.debug('syscallHap pid:%d call addExitHap' % pid)
+                    #self.lgr.debug('syscallHap pid:%d call addExitHap' % pid)
                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
                 else:
                     self.lgr.debug('syscallHap pid:%d skip exitHap for tar' % pid)

@@ -1434,14 +1434,10 @@ class reverseToCall():
 
 
     def sysenterHap(self, prec, third, forth, memory):
-        #reversing = SIM_run_command('simulation-reversing')
         #self.lgr.debug('sysenterHap')
-        reversing = False
-        if reversing:
-            return
-        else:
-            cur_cpu, comm, pid  = self.task_utils.curProc()
-            if True or (cur_cpu == self.cpu and pid == self.pid):
+        cur_cpu, comm, pid  = self.task_utils.curProc()
+        if pid is not None:
+            if True:
                 cycles = self.cpu.cycles
                 if pid not in self.sysenter_cycles:
                     self.sysenter_cycles[pid] = {}

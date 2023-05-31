@@ -242,10 +242,10 @@ class SyscallManager():
                 call_instance.stopTrace(immediate=immediate) 
                 del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about the flist? '''
-                compat32 = call_instance.compat32
+                compat32 = call_instance.syscall.compat32
                 new_call_instance = self.watchSyscall(context, other_calls, remaining_params, call_instance.name, compat32=compat32) 
                 self.syscall_dict[context][call_instance.name] = new_call_instance
-                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call-instance.name))
+                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call_instance.name))
 
     def findInstanceByParams(self, call_param_name, context):
         ''' Return the Syscallinstance that contains params having the given name.   Assumes only one. '''

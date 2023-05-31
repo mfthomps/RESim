@@ -335,7 +335,7 @@ class GenMonitor():
                     self.lgr.debug('No param pickle at %s' % param_file)
                          
         for cell_name in comp_dict:
-            self.lgr.debug('genInit for cell %s' % cell_name)
+            self.lgr.debug('genInit for cell %s' % (cell_name))
             if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
                 print('Cell %s using params from %s' % (cell_name, param_file))
@@ -380,6 +380,7 @@ class GenMonitor():
                 self.os_type[cell_name] = comp_dict[cell_name]['OS_TYPE']
                 if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN'):
                     word_size = 8
+                self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 
             cpu = self.cell_config.cpuFromCell(cell_name)
             self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
@@ -622,9 +623,6 @@ class GenMonitor():
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
         
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
-            if 'SKIP_PROGS' in self.comp_dict[cell_name]: 
-                sfile = self.comp_dict[cell_name]['SKIP_PROGS']
-                self.context_manager[cell_name].loadIgnoreList(sfile)
             self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                    self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
@@ -633,7 +631,7 @@ class GenMonitor():
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
-            if self.isWindows:
+            if self.isWindows():
                 self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.run_from_snap, self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
@@ -992,7 +990,7 @@ class GenMonitor():
             target = self.target
         print('Tasks on cell %s' % target)
 
-        if self.isWindows:
+        if self.isWindows():
             self.winMonitor[target].tasks()
         else:
             tasks = task_utils[target].getTaskStructs()
@@ -1483,7 +1481,7 @@ class GenMonitor():
 
     def debugPidList(self, pid_list, debug_function, final_fun=None, to_user=True):
         #self.stopTrace()
-        if not self.isWindows:
+        if not self.isWindows():
             self.soMap[self.target].setContext(pid_list)
         self.lgr.debug('debugPidList cell %s pid_list: %s' % (self.target, str(pid_list)))
         if to_user:
@@ -2344,6 +2342,9 @@ class GenMonitor():
             return
 
         if self.isWindows():
+            pid, cpu = self.context_manager[target].getDebugPid() 
+            if pid is None:
+                self.ignoreProgList() 
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
             self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
             self.run_to[target].watchSO()
@@ -2361,6 +2362,7 @@ class GenMonitor():
                 tf = '/tmp/syscall_trace-%s-%d.txt' % (target, pid)
                 context = self.context_manager[target].getRESimContext()
             else:
+                self.ignoreProgList() 
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
 
@@ -2541,10 +2543,11 @@ class GenMonitor():
         else:
             print('stopOnExit, no exit_group_syscall, are you debugging?')
        
-    def noReverse(self):
+    def noReverse(self, watch_enter=True):
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
-        self.noWatchSysEnter()
+        if not watch_enter:
+            self.noWatchSysEnter()
         self.rev_execution_enabled = False
         self.lgr.debug('genMonitor noReverse')
 
@@ -5262,6 +5265,7 @@ class GenMonitor():
         retval = False
         if target is None:
             target = self.target
+        #self.lgr.debug('isWindows os type of %s is %s' % (target, self.os_type[target]))
         if self.os_type[target].startswith('WIN'):
             retval = True
         return retval
@@ -5345,6 +5349,14 @@ class GenMonitor():
 
     def setFullPath(self, full_path):
         self.full_path = full_path
+
+    def ignoreProgList(self):
+        if 'SKIP_PROGS' in self.comp_dict[self.target]: 
+            sfile = self.comp_dict[self.target]['SKIP_PROGS']
+            self.context_manager[self.target].loadIgnoreList(sfile)
+
+    def recordEnter(self):
+        self.rev_to_call[self.target].sysenterHap(None, None, None, None)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

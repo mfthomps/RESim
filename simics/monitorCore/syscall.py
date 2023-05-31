@@ -2374,7 +2374,7 @@ class Syscall():
                         self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                         ''' TBD why not do for any and all?'''
                         #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                        if (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
+                        if call_param.match_param is not None and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
                             self.lgr.debug('setExits set the call_params')
                             exit_info.call_params = call_param
                             if call_param.match_param == exit_info.old_fd:
