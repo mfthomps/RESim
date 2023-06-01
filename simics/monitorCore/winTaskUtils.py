@@ -34,6 +34,7 @@ import memUtils
 import pageUtils
 import w7Params
 import taskUtils
+import winSocket
 class TaskStruct():
     def __init__(self, pid, comm):
         self.pid = pid
@@ -187,7 +188,13 @@ class WinTaskUtils():
         return self.mem_utils
 
     def syscallNumber(self, call, dumb=None):
-        retval = self.call_num_map[call]
+        if call not in self.call_num_map:
+            if call in winSocket.op_map_vals:
+                retval = self.call_num_map['DeviceIoControlFile'] 
+            else:
+                self.lgr.error('winTaskUtils, no map for call %s' % call)
+        else:
+            retval = self.call_num_map[call]
         return retval 
 
     def syscallName(self, call_num, dumb=None):
@@ -209,16 +216,16 @@ class WinTaskUtils():
         # windows has separate gui calls?  
         val = callnum * 4 + self.param.syscall_jump
         val = self.mem_utils.getUnsigned(val)
-        self.lgr.debug('getComputed syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
+        self.lgr.debug('winTaskUtils getSyscallEntry syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
         entry = self.mem_utils.readPtr(self.cpu, val)
         if entry is None:
-            self.lgr.error('getComputed entry is None reading from 0x%x' % val)
+            self.lgr.error('winTaskUtils getSyscallEntry entry is None reading from 0x%x' % val)
             SIM_break_simulation('remove this')
             return None
         entry = entry & 0xffffffff
         entry_shifted = entry >> 4
         computed = self.param.syscall_jump + entry_shifted
-        self.lgr.debug('getComputed call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
+        self.lgr.debug('winTaskUtils getSyscallEntry call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
         return computed
 
     def curProcXX(self):

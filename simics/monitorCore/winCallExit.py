@@ -120,7 +120,6 @@ class WinCallExit():
                     exit_info.call_params = None
                 else:
                     self.lgr.debug('winCallExit got match')
-                    SIM_break_simulation('remove this')
 
         elif callname == 'CreateFile':
             if exit_info.retval_addr is not None:
@@ -188,6 +187,15 @@ class WinCallExit():
                     self.lgr.debug('winCallExit %s' % (trace_msg))
             else:
                 self.lgr.debug('winCallExit %s bad retval_addr?' % (trace_msg))
+
+        elif callname in ['DeviceIoControlFile']:
+            if exit_info.socket_callname == 'RECV':
+                return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                max_read = min(return_count, 100)
+                buf_addr = exit_info.retval_addr
+                read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
+                trace_msg = trace_msg+' read count 0x%x data %s' % (return_count, read_data)
+                self.lgr.debug(trace_msg)
 
         else:
             self.lgr.debug('winCallExit %s returned: 0x%x' % (trace_msg, eax)) 

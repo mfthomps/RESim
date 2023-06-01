@@ -540,11 +540,16 @@ class WinSyscall():
             if operation in self.ioctl_op_map:
                 op_cmd = self.ioctl_op_map[operation]
                 trace_msg = trace_msg + ' '+op_cmd
+                exit_info.socket_callname = op_cmd
             else:
                 op_cmd = ''
             pdata_addr = frame['param7']
             len_pdata = frame['param8']
             size = min(len_pdata, 200)
+            pdata = self.mem_utils.readBytes(self.cpu, pdata_addr, size)
+            pdata_hx = None
+            if pdata is not None:
+                pdata_hx = binascii.hexlify(pdata)
             if op_cmd == 'BIND':
                 sock_addr = pdata_addr+4
                 self.lgr.debug('pdata_addr 0x%x  socK_addr 0x%x' % (pdata_addr, sock_addr))
@@ -553,15 +558,21 @@ class WinSyscall():
                 trace_msg = trace_msg+' '+to_string
             elif op_cmd == 'CONNECT':
                 sock_addr = pdata_addr+4
-                self.lgr.debug('pdata_addr 0x%x  socK_addr 0x%x' % (pdata_addr, sock_addr))
+                self.lgr.debug('pdata_addr 0x%x  sock_addr 0x%x' % (pdata_addr, sock_addr))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
+            elif op_cmd == 'RECV':
+                exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame)
+                exit_info.count = self.paramOffPtr(7, [0, 0], frame)
+                # actually the return count address.
+                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
+                trace_msg = trace_msg + ' buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
+                trace_msg = trace_msg + ' '+str(pdata_hx)
+                self.lgr.debug(trace_msg)
             else:
                 trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
-                pdata = self.mem_utils.readBytes(self.cpu, pdata_addr, size)
                 if pdata is not None:
-                    pdata_hx = binascii.hexlify(pdata)
                     trace_msg = trace_msg+' pdata: %s' % pdata_hx
  
         elif callname in ['CreateEvent', 'OpenProcessToken']:
@@ -689,12 +700,14 @@ class WinSyscall():
         pval = frame[param]
         for offset in offset_list:
             ptr = pval + offset
-            #self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
-            pval = self.mem_utils.readPtr(self.cpu, ptr)
-            #if pval is not None:
-            #    self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
-            #else:
-            #    self.lgr.debug('paramOffPtr got new pval is None')
+            self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
+            #pval = self.mem_utils.readPtr(self.cpu, ptr)
+            pval = self.mem_utils.readWord32(self.cpu, ptr)
+            if pval is not None:
+                self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+            else:
+                self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                break
         return pval
     
 
