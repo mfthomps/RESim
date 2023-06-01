@@ -198,7 +198,8 @@ class ParamRefTracker():
 
             if self.prev_read_addr is not None and (addr == (self.prev_read_addr-self.mem_utils.WORD_SIZE)):
                 self.read_sequence = self.read_sequence + 1
-                if self.read_sequence > 5:
+                #if self.read_sequence > 5:
+                if self.read_sequence > 5000:
                     retval = False
             else:
                 self.read_sequence = 0
@@ -283,7 +284,7 @@ class ParamRefTracker():
             self.wrote_values[addr] = new_ref
             if self.prev_wrote_addr is not None and (addr == (self.prev_wrote_addr+self.mem_utils.WORD_SIZE)):
                 self.wrote_sequence = self.wrote_sequence + 1
-                if self.wrote_sequence > 5:
+                if self.wrote_sequence > 500:
                     retval = False
             else:
                 self.wrote_sequence = 0
