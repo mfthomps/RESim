@@ -397,7 +397,7 @@ class FGetsMark():
 
 class StringMark():
     def __init__(self, fun, src, dest, count, start):
-        self.addr = src
+        self.src = src
         self.dest = dest
         self.length = count
         self.start = start
@@ -411,7 +411,7 @@ class StringMark():
 
 class ReplaceMark():
     def __init__(self, fun, src, dest, pos, length, start):
-        self.addr = src
+        self.src = src
         self.dest = dest
         self.pos = pos
         self.length = length
@@ -425,7 +425,7 @@ class ReplaceMark():
         return self.msg
 class AppendMark():
     def __init__(self, fun, src, dest, length, start):
-        self.addr = src
+        self.src = src
         self.dest = dest
         self.length = length
         self.start = start
@@ -438,7 +438,7 @@ class AppendMark():
         return self.msg
 class AssignMark():
     def __init__(self, fun, src, dest, length, start):
-        self.addr = src
+        self.src = src
         self.dest = dest
         self.length = length
         self.start = start
@@ -686,6 +686,12 @@ class WatchMarks():
                     self.lgr.debug('watchMarks removeRedundantDataMark ')
                     del self.mark_list[-1]
 
+    def isCopyMark(self, mark):
+        if mark.mark.__class__.__name__ in ['CopyMark', 'StringMark', 'ReplaceMark', 'AppendMark', 'AssignMark']:
+            return True
+        else:
+            return False
+
     def getMarkCopyOffset(self, address):
         ''' Intended for reverse data tracking. If a CopyMark is found encompassing the given address, return the 
             source address that corresponds to the given destination address. '''
@@ -695,7 +701,7 @@ class WatchMarks():
         cycle = self.cpu.cycles
         for mark in self.mark_list:
             if mark.call_cycle is not None and mark.cycle is not None and cycle >= mark.call_cycle and cycle <= mark.cycle:
-                if mark.mark.__class__.__name__ == 'CopyMark':
+                if self.isCopyMark(mark):
                     if address >= mark.mark.dest and address <= (mark.mark.dest+mark.mark.length):
                         #math = mark.mark.dest+mark.mark.length
                         #self.lgr.debug('getMarkCopyOffset found that address 0x%x is between 0x%x len %d (0x%x)' % (address, mark.mark.dest, mark.mark.length, math))
@@ -717,7 +723,7 @@ class WatchMarks():
                 self.lgr.debug('getCopyMark no call_cycle for mark %s' % mark)
                 continue
             if cycle >= mark.call_cycle and cycle <= mark.cycle:
-                if mark.mark.__class__.__name__ == 'CopyMark':
+                if self.isCopyMark(mark):
                     retval = mark
                     break
         return retval
