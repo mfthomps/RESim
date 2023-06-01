@@ -245,6 +245,8 @@ class GenContextMgr():
         self.ignore_progs = [] 
         self.ignore_pids = [] 
 
+        self.only_progs = [] 
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -571,6 +573,18 @@ class GenContextMgr():
         if len(self.ignore_progs) > 0 and self.debugging_pid is None:
             #if pid in self.ignore_pids:
             if comm in self.ignore_progs:
+                #self.lgr.debug('ignoring context for pid %d' % pid)
+                self.restoreIgnoreContext()
+            elif len(self.suspend_watch_list) > 0:
+                if self.isSuspended(new_addr, win_thread):
+                    self.restoreSuspendContext()
+                else:
+                    self.restoreDefaultContext()
+            else:
+                self.restoreDefaultContext()
+            return 
+        elif len(self.only_progs) > 0 and self.debugging_pid is None:
+            if comm not in self.only_progs:
                 #self.lgr.debug('ignoring context for pid %d' % pid)
                 self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
@@ -1198,7 +1212,7 @@ class GenContextMgr():
         return self.ida_message
 
     def getDebugPid(self):
-        self.lgr.debug('contextManager return debugging_pid of %s' % self.debugging_pid)
+        #self.lgr.debug('contextManager return debugging_pid of %s' % self.debugging_pid)
         return self.debugging_pid, self.cpu
 
     def showIdaMessage(self):
@@ -1265,6 +1279,13 @@ class GenContextMgr():
             self.lgr.debug('contextManager ignoreProg %s' % comm)
             self.setTaskHap()
 
+    def onlyProg(self, prog):
+        comm = os.path.basename(prog)[:taskUtils.COMM_SIZE]
+        if comm not in self.only_progs:
+            self.only_progs.append(comm)
+            self.lgr.debug('contextManager onlyProg %s' % comm)
+            self.setTaskHap()
+
     def getIgnoredProgs(self):
             return list(self.ignore_progs)
 
@@ -1302,10 +1323,24 @@ class GenContextMgr():
                         continue
                     self.ignoreProg(line.strip())
                     self.lgr.debug('contextManager will ignore %s' % line.strip())
-
+            '''
             tasks = self.task_utils.getTaskStructs()
             for t in tasks:
                 self.newProg(tasks[t].comm, tasks[t].pid)
             self.restoreDefaultContext()
+            '''
         else:
             self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
+
+    def loadOnlyList(self, fname):
+        self.lgr.debug('contextManager loadOnlyList')
+        if os.path.isfile(fname):
+            self.lgr.debug('loadIgnoreList %s' % fname)
+            with open(fname) as fh:
+                for line in fh:
+                    if line.startswith('#'):
+                        continue
+                    self.onlyProg(line.strip())
+                    self.lgr.debug('contextManager will watch  %s' % line.strip())
+        else:
+            self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
