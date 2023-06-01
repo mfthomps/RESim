@@ -2243,6 +2243,7 @@ class Syscall():
                 #self.stop_action.addFun(fun)
                 print('exit pid %d' % pid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
+                self.context_manager.checkExitCallback()
 
     def getBinders(self):
         return self.binders

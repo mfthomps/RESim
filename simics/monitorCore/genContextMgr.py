@@ -1259,3 +1259,7 @@ class GenContextMgr():
         for c in self.map_context:
             retval.append(c)
         return retval 
+
+    def checkExitCallback(self):
+        if self.exit_callback is not None:
+            self.exit_callback()
