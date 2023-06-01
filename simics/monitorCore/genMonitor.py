@@ -2350,6 +2350,7 @@ class GenMonitor():
             pid, cpu = self.context_manager[target].getDebugPid() 
             if pid is None:
                 self.ignoreProgList() 
+                self.onlyProgList() 
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
             self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
             self.run_to[target].watchSO()
@@ -2368,6 +2369,7 @@ class GenMonitor():
                 context = self.context_manager[target].getRESimContext()
             else:
                 self.ignoreProgList() 
+                self.onlyProgList() 
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
 
@@ -5301,9 +5303,9 @@ class GenMonitor():
         target_cpu = self.cell_config.cpuFromCell(self.target)
         ws = self.mem_utils[self.target].wordSize(target_cpu)
         print('word size: %d' % ws)
-        #reg_num = target_cpu.iface.int_register.get_number("cs_limit")
-        #cs = target_cpu.iface.int_register.read(reg_num)
-        #print('cs 0x%x' % cs)
+        reg_num = target_cpu.iface.int_register.get_number("cs_limit")
+        cs = target_cpu.iface.int_register.read(reg_num)
+        print('cs 0x%x' % cs)
 
     def findThreads(self):
         self.task_utils[self.target].findThreads()
@@ -5311,27 +5313,11 @@ class GenMonitor():
     def isReverseExecutionEnabled(self):
         return self.rev_execution_enabled
 
-    def loadIgnoreList(self):
-        ''' TBD add means of naming cell '''
-        self.lgr.debug('loadIgnoreList')
-        flist = glob.glob('*.ignore_prog')
-        if len(flist) > 1:
-            self.lgr.error('Found multiple dll_skip files, only one supported')
-        elif len(flist) == 1:
-            self.lgr.debug('loadIgnoreList %s' % flist[0])
-            with open(flist[0]) as fh:
-                for line in fh:
-                    if line.startswith('#'):
-                        continue
-                    self.ignoreProg(line.strip())
-                    self.lgr.debug('will ignore %s' % line.strip())
-
-        tasks = self.task_utils[self.target].getTaskStructs()
-        for t in tasks:
-            self.context_manager[self.target].newProg(tasks[t].comm, tasks[t].pid)
-        self.context_manager[self.target].restoreDefaultContext()
-
     def traceWindows(self):
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None:
+            self.ignoreProgList() 
+            self.onlyProgList() 
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
         self.lgr.debug('traceWindows set trace_all[%s] to %s' % (self.target, str(self.trace_all[self.target])))
 
@@ -5359,6 +5345,13 @@ class GenMonitor():
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['SKIP_PROGS']
             self.context_manager[self.target].loadIgnoreList(sfile)
+            print('Loaded list of programs to ignore from %s' % sfile)
+
+    def onlyProgList(self):
+        if 'ONLY_PROGS' in self.comp_dict[self.target]: 
+            sfile = self.comp_dict[self.target]['ONLY_PROGS']
+            self.context_manager[self.target].loadOnlyList(sfile)
+            print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
 
     def recordEnter(self):
         self.rev_to_call[self.target].sysenterHap(None, None, None, None)
