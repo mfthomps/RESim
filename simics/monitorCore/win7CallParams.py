@@ -30,6 +30,7 @@ import binascii
 import resimUtils
 import memUtils
 import taskUtils
+import winSocket
 import paramRefTracker
 from resimHaps import *
 '''
@@ -60,6 +61,7 @@ class Win7CallParams():
         self.exit_break = None
         self.exit_hap = None
         self.only = only
+        self.only_call_num = None
         self.only_proc = only_proc
         self.track_params = track_params
        
@@ -81,18 +83,6 @@ class Win7CallParams():
         self.cpu = cpu
         self.stop_on = stop_on
         resim_dir = os.getenv('RESIM_DIR')
-        self.call_map = {}
-        self.call_num_map = {}
-        w7mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
-        if os.path.isfile(w7mapfile):
-            cm = json.load(open(w7mapfile))     
-            for call in cm:
-                self.call_map[int(call)] = cm[call] 
-                ''' drop Nt prefix'''
-                self.call_num_map[cm[call][2:]] = int(call)
-        else:
-            self.lgr.error('Cannot open %s' % w7mapfile)
-            return
         ''' track parameters to different calls '''
         self.call_param_offsets = {}
 
@@ -119,12 +109,12 @@ class Win7CallParams():
       
         self.one_entry = None
         if only is not None:
-            if only in self.call_num_map:
-                call_num = self.call_num_map[only]
-                self.one_entry = self.getComputed(call_num)
+            call_num = self.task_utils.syscallNumber(only)
+            if call_num is not None:
+                self.one_entry = self.task_utils.getSyscallEntry(call_num)
+                self.only_call_num = call_num
             else:
                 self.lgr.error('%s not found in syscall map' % only)
-                print('%s' % str(self.call_num_map))
                 return
 
         self.reverse_to_call = self.top.isReverseExecutionEnabled()
@@ -157,47 +147,6 @@ class Win7CallParams():
                 self.lgr.debug('win7CallParams tracking params, exit set along with sysenter haps')
             else:
                 self.lgr.debug('win7CallParams not tracking params')
-
-    def getComputed(self, callnum):
-        ''' given a call number, compute the address of the kernel code that handles the call
-            based on observations made walking the instructions that follow syscall entry.''' 
-        # looks like  cs:0xfffff800034f1e1d p:0x0034f1e1d  movsx r11,dword ptr [r10+rax*4]
-        #             cs:0xfffff800034f1e24 p:0x0034f1e24  sar r11,4
-        #             cs:0xfffff800034f1e28 p:0x0034f1e28  add r10,r11
-        #                                          ....    call r10
-        # syscall_jump is the r10 value.  TBD, this may change based on different call tables, e.g., 
-        # windows has separate gui calls?  
-        val = callnum * 4 + self.param.syscall_jump
-        val = self.mem_utils.getUnsigned(val)
-        self.lgr.debug('getComputed syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
-        entry = self.mem_utils.readPtr(self.cpu, val)
-        if entry is None:
-            self.lgr.error('getComputed entry is None reading from 0x%x' % val)
-            return None
-        entry = entry & 0xffffffff
-        entry_shifted = entry >> 4
-        computed = self.param.syscall_jump + entry_shifted
-        self.lgr.debug('getComputed call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
-        return computed
-
-    def getCurPid(self):
-        ''' TBD replace this and references to call to taskUtils'''
-        pid = None
-        comm = None
-        cur_thread = SIM_read_phys_memory(self.cpu, self.current_task_phys, self.mem_utils.WORD_SIZE)
-        if cur_thread is not None:
-            cur_proc = self.mem_utils.readPtr(self.cpu, cur_thread+self.param.proc_ptr)
-            if cur_proc is not None:
-                pid_ptr = cur_proc + self.param.ts_pid
-                pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-                if pid is not None:
-                    #self.lgr.debug('getCurPid cur_proc, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (cur_proc, self.param.ts_pid, pid_ptr, pid))
-                    comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
-            else:
-                self.lgr.debug('getCurPid cur_proc is None reading cur_thread 0x%x' % cur_thread)
-        else:
-            self.lgr.debug('getCurPid cur_thread is None')
-        return cur_proc, pid, comm
 
     def doParamTrack(self, rcx, rdx, r8, r9, rsp, call_name): 
         ''' Track kernel references to user space, recording which of the given parameter pointers the reference is relative to '''
@@ -254,8 +203,27 @@ class Win7CallParams():
         if self.reverse_to_call:
             ''' Initiate a chain to cause simulation to reverse to the system call
                 so that we can gather all parameter references '''
-            self.lgr.debug('oneCallHap call stopAndGo to reverseToCall')
-            self.top.stopAndGo(self.reverseToSyscall)
+            call_name = self.task_utils.syscallName(self.only_call_num)
+            skip_it = False
+            if call_name != self.only and call_name == 'DeviceIoControlFile':
+ 
+                ''' looking for a socket call.  it this it? '''
+                skip_it = True
+                frame = self.task_utils.frameFromRegsComputed()
+                operation = frame['param6']
+                ioctl_op_map = winSocket.getOpMap()
+                op_cmd = None
+                if operation in ioctl_op_map:
+                    op_cmd = ioctl_op_map[operation]
+                    if op_cmd == self.only:
+                        self.lgr.debug('oneCallHap found socket call we were looking for %s' % self.only)
+                        skip_it = False
+                else:
+                    self.lgr.debug('oneCallHap failed to find operation for 0x%x' % operation)
+
+            if not skip_it: 
+                self.lgr.debug('oneCallHap call stopAndGo to reverseToCall')
+                self.top.stopAndGo(self.reverseToSyscall)
         else:
             self.lgr.error('win7CallParams oneCallHap will not see references to pointers in stack!')
             gs_base = self.cpu.ia32_gs_base
@@ -278,7 +246,7 @@ class Win7CallParams():
         ''' Assuming we are at the sysentry, track kernel references to user space'''
         if call_name is None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-            call_name = self.call_map[rax][2:]
+            call_name = self.task_utils.syscallName(rax)
 
         self.lgr.debug('trackFromSysEntry')
         rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
@@ -305,8 +273,8 @@ class Win7CallParams():
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             self.lgr.debug('syscallHap pid:%d (%s) call %d' % (pid, comm, rax))
             ''' Use the call map to get the call name, and strip off "nt" '''
-            if rax in self.call_map:
-                call_name = self.call_map[rax][2:]
+            call_name = self.task_utils.syscallName(rax)
+            if call_name is not None:
 
                 if call_name == 'RaiseException':
                     ''' This will just bounce to a user space exception handler.
@@ -314,7 +282,7 @@ class Win7CallParams():
                     self.lgr.debug('syscallHap got RaiseException, just return')
                     return
 
-                computed = self.getComputed(rax)
+                computed = self.task_utils.taskEntry(rax)
                 if computed is not None:
                     self.lgr.debug('syscallHap pid:%d (%s) call %s computed is 0x%x' % (pid, comm, call_name, computed))
                 else:
@@ -469,8 +437,8 @@ class Win7CallParams():
             if pid in self.all_reg_values:
                 self.lgr.debug(self.all_reg_values[pid])
 
-            if pid in self.current_call and self.current_call[pid] in self.call_map:
-                call_name = self.call_map[self.current_call[pid]][2:]
+            if pid in self.current_call:
+                call_name = self.task_utils.syscallName(self.current_call[pid])
                 #self.lgr.debug('exitHap callname %s' % call_name)
             if self.stop_on is not None:
                 #self.lgr.debug('exitHap stopon is %s and pid' % self.stop_on)
@@ -500,7 +468,7 @@ class Win7CallParams():
             SIM_break_simulation('fix this')
             return
         dumb, comm, pid = self.task_utils.curProc()
-        #self.lgr.debug('win7CallParams pid:%d userReadHap memory 0x%x len %d current_context %s' % (pid, memory.logical_address, memory.size, str(self.cpu.current_context)))
+        self.lgr.debug('win7CallParams pid:%d userReadHap memory 0x%x len %d current_context %s' % (pid, memory.logical_address, memory.size, str(self.cpu.current_context)))
         orig_value = self.mem_utils.readBytes(self.cpu, memory.logical_address, memory.size)
         if orig_value is not None:
             value = bytearray(orig_value)
@@ -508,6 +476,14 @@ class Win7CallParams():
             other_ptr = None
             if memory.size == 8:
                 param_ptr = struct.unpack(">Q", value)[0]
+                #self.lgr.debug('\tuserReadHap paramPtr  0x%x' % param_ptr)
+                if param_ptr is not None and param_ptr != 0:
+                    test = self.mem_utils.readWord(self.cpu, param_ptr)
+                    if test is not None:
+                        #self.lgr.debug('\tuserReadHap good paramPtr 0x%x' % param_ptr)
+                        other_ptr = param_ptr    
+            elif memory.size == 4:
+                param_ptr = struct.unpack(">L", value)[0]
                 #self.lgr.debug('\tuserReadHap paramPtr  0x%x' % param_ptr)
                 if param_ptr is not None and param_ptr != 0:
                     test = self.mem_utils.readWord(self.cpu, param_ptr)
