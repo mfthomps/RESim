@@ -397,7 +397,12 @@ class GenMonitor():
                     print('Target missing RESIM_ROOT_PREFIX path')
                     self.quit()
                     return;
-            root_prefix = comp_dict[cell_name]['RESIM_ROOT_PREFIX']
+            try:
+                root_prefix = comp_dict[cell_name]['RESIM_ROOT_PREFIX']
+            except:
+                self.lgr.error('RESIM_ROOT_PREFIX for cell %s is either not defined, or the path is wrong.' % cell_name)
+                self.quit()
+                return
             self.targetFS[cell_name] = targetFS.TargetFS(self, root_prefix)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
 
@@ -603,7 +608,7 @@ class GenMonitor():
 
     def finishInit(self, cell_name):
         
-            if cell_name not in self.param: 
+            if cell_name not in self.param or cell_name not in self.targetFS: 
                 return
             cpu = self.cell_config.cpuFromCell(cell_name)
             cell = self.cell_config.cell_context[cell_name]
