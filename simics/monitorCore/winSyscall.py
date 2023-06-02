@@ -487,23 +487,26 @@ class WinSyscall():
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
 
         elif callname == 'CreateFile':
-            str_size_addr = self.paramOffPtr(3, [0x10], frame) 
-            str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
-            exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
-            exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
-            # TBD better approach?
-            exit_info.retval_addr = frame['param1']
-            trace_msg = trace_msg+' fname: %s fname addr: 0x%x retval addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
-            if exit_info.fname.endswith('Endpoint'):
-                extended_size = self.stackParam(7, frame)
-                if extended_size is not None:
-                    extended_size = min(extended_size, 200)
-                    extended_addr = self.stackParam(6, frame)
-                    if extended_addr is not None:
-                        extended = self.mem_utils.readBytes(self.cpu, extended_addr, extended_size)
-                        if extended is not None:
-                            extended_hx = binascii.hexlify(extended)
-                            trace_msg = trace_msg + 'AFD extended: %s' % extended_hx
+            if self.mem_utils.isKernel(frame['param1']):
+                self.lgr.debug('winSyscall CreateFile internel to kernel')
+            else: 
+                str_size_addr = self.paramOffPtr(3, [0x10], frame) 
+                str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+                exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
+                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
+                # TBD better approach?
+                exit_info.retval_addr = frame['param1']
+                trace_msg = trace_msg+' fname: %s fname addr: 0x%x retval addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+                if exit_info.fname.endswith('Endpoint'):
+                    extended_size = self.stackParam(7, frame)
+                    if extended_size is not None:
+                        extended_size = min(extended_size, 200)
+                        extended_addr = self.stackParam(6, frame)
+                        if extended_addr is not None:
+                            extended = self.mem_utils.readBytes(self.cpu, extended_addr, extended_size)
+                            if extended is not None:
+                                extended_hx = binascii.hexlify(extended)
+                                trace_msg = trace_msg + 'AFD extended: %s' % extended_hx
                         
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
@@ -567,9 +570,14 @@ class WinSyscall():
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
                 # actually the return count address.
                 exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
-                trace_msg = trace_msg + ' buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
+                trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                 trace_msg = trace_msg + ' '+str(pdata_hx)
                 self.lgr.debug(trace_msg)
+            elif op_cmd == 'SEND':
+                exit_info.retval_addr = self.paramOffPtr(7, [0, 0xc], frame)
+                exit_info.count = self.paramOffPtr(7, [0, 0], frame)
+                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
+                trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
             else:
                 trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
                 if pdata is not None:
@@ -665,7 +673,7 @@ class WinSyscall():
         else:
             #self.lgr.debug(trace_msg)
             pass
-        self.lgr.debug('winSyscall syscallParse %s' % trace_msg)
+        self.lgr.debug('winSyscall syscallParse %s cycles:0x%x' % (trace_msg, self.cpu.cycles))
         #else:
         #    self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
         #    exit_info = None
@@ -700,11 +708,12 @@ class WinSyscall():
         pval = frame[param]
         for offset in offset_list:
             ptr = pval + offset
-            self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
+            #self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
             #pval = self.mem_utils.readPtr(self.cpu, ptr)
             pval = self.mem_utils.readWord32(self.cpu, ptr)
             if pval is not None:
-                self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                #self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                pass
             else:
                 self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
                 break
