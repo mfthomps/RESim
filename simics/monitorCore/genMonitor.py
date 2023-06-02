@@ -470,7 +470,9 @@ class GenMonitor():
             SIM_break_simulation('mode changed')
 
     def modeChanged(self, want_pid, one, old, new):
-        cpu, comm, this_pid = self.task_utils[self.target].curProc() 
+        dumb, comm, this_pid = self.task_utils[self.target].curProc() 
+        cpu = self.cell_config.cpuFromCell(self.target)
+        ''' note may both be None due to failure of getProc '''
         if want_pid != this_pid:
             self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
@@ -499,13 +501,15 @@ class GenMonitor():
             return 
         if stop_action.prelude is not None:
             stop_action.prelude()
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        dumb, comm, pid = self.task_utils[self.target].curProc() 
+        ''' note, curProc may fail, best effort for debugging why it failed.'''
+        cpu = self.cell_config.cpuFromCell(self.target)
         wrong_pid = False
         if stop_action.pid is not None and pid != stop_action.pid:
             ''' likely some other pid in our group '''
             wrong_pid = True
         eip = self.getEIP(cpu)
-        self.lgr.debug('genMonitor stopHap pid %d eip 0x%x cycle: 0x%x wrong_pid: %r' % (pid, eip, stop_action.hap_clean.cpu.cycles, wrong_pid))
+        self.lgr.debug('genMonitor stopHap pid %s eip 0x%x cycle: 0x%x wrong_pid: %r' % (pid, eip, stop_action.hap_clean.cpu.cycles, wrong_pid))
         for hc in stop_action.hap_clean.hlist:
             if hc.hap is not None:
                 if hc.htype == 'GenContext':
@@ -558,7 +562,7 @@ class GenMonitor():
     def run2Kernel(self, cpu):
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            dumb, comm, pid = self.task_utils[self.target].curProc() 
             self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
             hap_clean = hapCleaner.HapCleaner(cpu)
