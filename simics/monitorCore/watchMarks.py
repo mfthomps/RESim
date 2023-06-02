@@ -1269,23 +1269,23 @@ class WatchMarks():
                 entry['src'] = mark.mark.src
             elif isinstance(mark.mark, StringMark):
                 entry['mark_type'] = 'string' 
-                entry['src'] = mark.mark.addr
+                entry['src'] = mark.mark.src
                 entry['dest'] = mark.mark.dest
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, ReplaceMark):
                 entry['mark_type'] = 'replace' 
-                entry['src'] = mark.mark.addr
+                entry['src'] = mark.mark.src
                 entry['dest'] = mark.mark.dest
                 entry['pos'] = mark.mark.pos
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, AppendMark):
                 entry['mark_type'] = 'append' 
-                entry['src'] = mark.mark.addr
+                entry['src'] = mark.mark.src
                 entry['dest'] = mark.mark.dest
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, AssignMark):
                 entry['mark_type'] = 'assign' 
-                entry['src'] = mark.mark.addr
+                entry['src'] = mark.mark.src
                 entry['dest'] = mark.mark.dest
                 entry['length'] = mark.mark.length
             elif isinstance(mark.mark, MscMark):
