@@ -79,24 +79,34 @@ class WinTaskUtils():
                 value = pickle.load( open(phys_current_task_file, 'rb') ) 
                 if type(value) is int:
                     self.phys_current_task = value
+                    gs_base = self.cpu.ia32_gs_base
+                    self.phys_saved_cr3 = gs_base+self.param.saved_cr3
+                    self.lgr.debug('winTaskUtils, snapshop lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
                 else:
                     self.phys_current_task = value['current_task_phys']
                     self.phys_saved_cr3 = value['saved_cr3_phys']
-                    saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                    self.mem_utils.saveKernelCR3(self.cpu, saved_cr3)
+                    self.lgr.debug('winTaskUtils, snapshop had saved cr3, value 0x%x' % self.phys_saved_cr3)
+                saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                self.mem_utils.saveKernelCR3(self.cpu, saved_cr3)
 
                 self.lgr.debug('loaded phys_current_task from %s' % phys_current_task_file)
                 self.lgr.debug('value 0x%x' % self.phys_current_task)
             else:
                 ''' temporary hack TBD '''
+                self.lgr.debug('winTaskUtils, no phys_current_task.pickle file, temporary hack.  fix this')
                 pfile = os.path.join(self.run_from_snap, 'phys.pickle')
                 if os.path.isfile(pfile):
                     value = pickle.load(open(pfile, 'rb'))
                     if type(value) is int:
                         self.phys_current_task = value
+                        gs_base = self.cpu.ia32_gs_base
+                        self.phys_saved_cr3 = gs_base+self.param.saved_cr3
+                        self.lgr.debug('winTaskUtils, hacked snapshop lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
                     else:
                         self.phys_current_task = value['current_task_phys']
                         self.phys_saved_cr3 = value['saved_cr3_phys']
+                    saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                    self.mem_utils.saveKernelCR3(self.cpu, saved_cr3)
                 else:
                     self.lgr.error('winTaskUtils did not find %s' % pfile)
                     return
@@ -144,10 +154,12 @@ class WinTaskUtils():
         retval = self.mem_utils.readWord32(self.cpu, ptr)
         return retval
 
-    def getCurTaskRec(self, cur_thread=None):
+    def getCurTaskRec(self, cur_thread_in=None):
         retval = None
-        if cur_thread is None:
+        if cur_thread_in is None:
             cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        else:
+            cur_thread = cur_thread_in
         if cur_thread is None:
             self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.phys_current_task)
         else:
@@ -178,8 +190,11 @@ class WinTaskUtils():
             if ptr_phys is not None:
                 retval = SIM_read_phys_memory(self.cpu, ptr_phys, self.mem_utils.WORD_SIZE)
             else:
-                self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for 0x%x' % ptr)
+                self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
+                if cur_thread_in is not None:
+                    self.lgr.debug('cur_thread passed in as 0x%x' % cur_thread_in)
                 #self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                SIM_break_simulation('remove this')
                 pass
 
         return retval
