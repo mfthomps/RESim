@@ -475,7 +475,10 @@ class CharPtrMark():
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
-        self.msg = '%s read 0x%x' % (fun, addr)
+        if addr is not None:
+            self.msg = '%s read 0x%x' % (fun, addr)
+        else:
+            self.msg = '%s read None' % (fun)
     def getMsg(self):
         return self.msg
 
