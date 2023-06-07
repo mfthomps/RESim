@@ -433,7 +433,7 @@ class InjectIO():
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
-        self.top.stopTrackIO
+        self.top.stopTrackIO()
 
     def setDfile(self, dfile):
         self.dfile = dfile
