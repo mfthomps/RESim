@@ -92,6 +92,12 @@ def runPlay(args, lgr, prog_path):
     
     os.environ['ONE_DONE_PARAM3']=args.program
          
+    cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
+    for cfile in cover_list:
+        fstat = os.stat(cfile)
+        if fstat.st_size == 0:
+            os.remove(cfile)
+            print('removed zero length %s' % cfile) 
 
     read_array = []
     if len(glist) > 0:
