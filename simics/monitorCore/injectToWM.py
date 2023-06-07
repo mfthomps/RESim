@@ -48,7 +48,7 @@ class InjectToWM():
             self.mark_index = result.mark['index']
             self.lgr.debug('InjectToWM inject %d bytes and %d packets at ip: 0x%x, Watch Mark: %d from %s' % (result.size, result.mark['packet'], result.mark['ip'], 
                 self.mark_index, result.path))
-            print('InjectToWM inject %d bytes and %d packets from %s' % (result.size, result.mark['packet'], result.path))
+            print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
             self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname)
