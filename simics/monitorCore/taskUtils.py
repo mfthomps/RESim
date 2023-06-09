@@ -35,10 +35,10 @@ LIST_POISON2 = object()
 def stringFromFrame(frame):
     retval = None
     if frame is not None:
-        retval = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
-            frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
-        if 'param7' in frame:
-            retval = retval + ' param7:0x%x param8:0x%x' % (frame['param7'], frame['param8'])
+        retval = ''
+        for item in frame:
+            if item.startswith('param') and frame[item] is not None:
+                retval = retval + ' %s:0x%x' % (item, frame[item])
     
     return retval
 class ListHead(object):
@@ -156,6 +156,9 @@ class TaskUtils():
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
         else:
             self.syscall_numbers32 = None
+
+    def commSize(self):
+        return COMM_SIZE
 
     def getPhysCurrentTask(self):
         return self.phys_current_task

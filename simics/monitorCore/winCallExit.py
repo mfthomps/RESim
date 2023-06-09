@@ -97,8 +97,12 @@ class WinCallExit():
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) return from %s' % (pid_thread, comm, callname)
         if eax != 0:
-            trace_msg = trace_msg+ ' returned error 0x%x' % (eax)
-            self.lgr.debug('winCallExit %s' % (trace_msg))
+            if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
+                trace_msg = trace_msg+' BIND on handle 0x%x' % exit_info.old_fd
+                self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+            else:
+                trace_msg = trace_msg+ ' returned error 0x%x' % (eax)
+                self.lgr.debug('winCallExit %s' % (trace_msg))
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
             if exit_info.retval_addr is not None:
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -191,17 +195,20 @@ class WinCallExit():
         elif callname in ['DeviceIoControlFile']:
             if exit_info.socket_callname == 'RECV':
                 return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-                max_read = min(return_count, 100)
-                buf_addr = exit_info.retval_addr
-                read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
+                if return_count is not None:
+                    max_read = min(return_count, 100)
+                    buf_addr = exit_info.retval_addr
+                    read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
+                    trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
                 self.lgr.debug(trace_msg)
             elif exit_info.socket_callname == 'SEND':
                 return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-                max_read = min(return_count, 100)
-                buf_addr = exit_info.retval_addr
-                read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                trace_msg = trace_msg+' send count 0x%x data %s' % (return_count, read_data)
+                if return_count is not None:
+                    max_read = min(return_count, 100)
+                    buf_addr = exit_info.retval_addr
+                    read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
+                    trace_msg = trace_msg+' send count 0x%x data %s' % (return_count, read_data)
+
                 self.lgr.debug(trace_msg)
 
         else:

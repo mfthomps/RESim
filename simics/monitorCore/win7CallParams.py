@@ -46,7 +46,7 @@ the param, using gs_base and logic to account for aslr.
 '''
 watch_stack_params = 6
 class Win7CallParams():
-    def __init__(self, top, cpu, cell, cell_name, mem_utils, task_utils, current_task_phys, param, lgr, stop_on=None, only=None, only_proc=None, track_params=False):
+    def __init__(self, top, cpu, cell, cell_name, mem_utils, task_utils, context_manager, current_task_phys, param, lgr, stop_on=None, only=None, only_proc=None, track_params=False):
         self.top = top
         self.lgr = lgr
         self.param = param
@@ -78,6 +78,7 @@ class Win7CallParams():
 
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.context_manager = context_manager
         self.cell = cell
         self.cell_name = cell_name
         self.cpu = cpu
@@ -282,11 +283,11 @@ class Win7CallParams():
                     self.lgr.debug('syscallHap got RaiseException, just return')
                     return
 
-                computed = self.task_utils.taskEntry(rax)
-                if computed is not None:
-                    self.lgr.debug('syscallHap pid:%d (%s) call %s computed is 0x%x' % (pid, comm, call_name, computed))
-                else:
-                    self.lgr.error('syscallHap pid:%d could not compute syscall entry for call %d' % (pid, rax))
+                computed = self.task_utils.getSyscallEntry(rax)
+                #if computed is not None:
+                #    self.lgr.debug('syscallHap pid:%d (%s) call %s computed is 0x%x' % (pid, comm, call_name, computed))
+                #else:
+                #    self.lgr.error('syscallHap pid:%d could not compute syscall entry for call %d' % (pid, rax))
 
                 #if call_name == 'OpenFile':
                 #    SIM_break_simulation('open file') 

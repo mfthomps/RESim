@@ -87,6 +87,8 @@ class WinSyscall():
         ''' catch dual invocation of syscallHap.  TBD, find root cause and yank it out '''
         self.hack_cycle = 0
 
+        self.sockwatch = syscall.SockWatch()
+
         self.ignore_progs = context_manager.getIgnoredProgs()
 
         if trace is None and self.traceMgr is not None:
@@ -194,8 +196,13 @@ class WinSyscall():
         
         else:
             ''' will stop within the kernel at the computed entry point '''
+            did_callnum = []
             for call in self.call_list:
                 callnum = self.task_utils.syscallNumber(call)
+                if callnum in did_callnum:
+                    continue
+                else:
+                    did_callnum.append(callnum)
                 self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
                 if callnum is not None and callnum < 0:
                     self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
@@ -537,9 +544,9 @@ class WinSyscall():
                             break
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
-        elif callname in ['DeviceIoControlFile']:
+        elif callname == 'DeviceIoControlFile':
             exit_info.old_fd = frame['param1']
-            operation = frame['param6']
+            operation = frame['param6'] & 0xffffffff
             if operation in self.ioctl_op_map:
                 op_cmd = self.ioctl_op_map[operation]
                 trace_msg = trace_msg + ' '+op_cmd
@@ -554,34 +561,107 @@ class WinSyscall():
             if pdata is not None:
                 pdata_hx = binascii.hexlify(pdata)
             if op_cmd == 'BIND':
-                sock_addr = pdata_addr+4
+                sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 self.lgr.debug('pdata_addr 0x%x  socK_addr 0x%x' % (pdata_addr, sock_addr))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
+                for call_param in syscall_info.call_params:
+                    if call_param.subcall == 'BIND' and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                         if call_param.match_param is not None:
+                             go = None
+                             if sock_struct.port is not None:
+                                 ''' look to see if this address matches a given pattern '''
+                                 s = sock_struct.dottedPort()
+                                 pat = call_param.match_param
+                                 try:
+                                     go = re.search(pat, s, re.M|re.I)
+                                 except:
+                                     self.lgr.error('invalid expression: %s' % pat)
+                                     return None
+                             
+                             #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                             if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
+                                 self.lgr.debug('socketParse found match %s' % (call_param.match_param))
+                                 exit_info.call_params = call_param
+                                 if go:
+                                     ida_msg = 'BIND to %s, FD: %d' % (s, sock_struct.fd)
+                                 else:
+                                     ida_msg = 'BIND to %s, FD: %d' % (call_param.match_param, sock_struct.fd)
+                                 self.context_manager.setIdaMessage(ida_msg)
+                                 break
+    
+                         if syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
+                             exit_info.call_params = call_param
+                             self.sockwatch.bind(pid, sock_struct.fd, call_param)
             elif op_cmd == 'CONNECT':
-                sock_addr = pdata_addr+4
+                sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 self.lgr.debug('pdata_addr 0x%x  sock_addr 0x%x' % (pdata_addr, sock_addr))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
+            if op_cmd == 'ACCEPT':
+                handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+                exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
+                trace_msg = trace_msg + " bind handle: 0x%x  connect handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
+                self.lgr.debug('trace_msg')
             elif op_cmd == 'RECV':
-                exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame)
+                exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
                 # actually the return count address.
-                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
-                trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-                trace_msg = trace_msg + ' '+str(pdata_hx)
-                self.lgr.debug(trace_msg)
+                val = self.paramOffPtr(self.mem_utils.wordSize(self.cpu), [0], frame) 
+                if val is not None:
+                    exit_info.fname_addr = val + self.mem_utils.wordSize(self.cpu)
+                    trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, 
+                       exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
+                    trace_msg = trace_msg + ' '+str(pdata_hx)
+                    self.lgr.debug(trace_msg)
+                else:
+                    trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: BROKEN' %  (exit_info.old_fd, 
+                         exit_info.retval_addr, exit_info.count)
             elif op_cmd == 'SEND':
-                exit_info.retval_addr = self.paramOffPtr(7, [0, 0xc], frame)
+                #off = 3*self.mem_utils.wordSize(self.cpu)
+                #exit_info.retval_addr = self.paramOffPtr(7, [0, off], frame)
+                exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
-                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
+                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + self.mem_utils.wordSize(self.cpu)
                 trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
+            elif op_cmd == 'SEND_DATAGRAM':
+                sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+                self.lgr.debug('pdata_addr 0x%x  sock_addr 0x%x' % (pdata_addr, sock_addr))
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                to_string = sock_struct.getString()
+                trace_msg = trace_msg+' '+to_string
+            #elif op_cmd == 'TCP_FASTOPEN':
+            #    trace_msg = trace_msg+' '+to_string
+
             else:
                 trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
                 if pdata is not None:
                     trace_msg = trace_msg+' pdata: %s' % pdata_hx
+            for call_param in syscall_info.call_params:
+                self.lgr.debug('winSyscall %s subcall is %s ss.fd is %s match_param is %s' % (op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param)))
+                if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                    if call_param.nth is not None:
+                        call_param.count = call_param.count + 1
+                        self.lgr.debug('syscall parse socket %s call_param.nth not none, is %d, count incremented to  %d' % (op_cmd, call_param.nth, call_param.count))
+                        if call_param.count >= call_param.nth:
+                            self.lgr.debug('count >= param, set exit_info.call_params to catch return')
+                            exit_info.call_params = call_param
+                            if self.kbuffer is not None:
+                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.kbuffer.read(exit_info.retval_addr, ss.length)
+                    else:
+                        self.lgr.debub('call_param.nth is none, call it matched')
+                        exit_info.call_params = call_param
+                        if self.kbuffer is not None:
+                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, ss.length)
+                    break
+                elif (op_cmd not in self.call_list) and call_param.match_param is None:
+                    self.lgr.debug('winSyscall parse socket call %s, but not what we think is a runToCall.' % op_cmd)
+                    exit_info = None
+                
  
         elif callname in ['CreateEvent', 'OpenProcessToken']:
             exit_info.retval_addr = frame['param1']
@@ -590,6 +670,13 @@ class WinSyscall():
         elif callname in ['WaitForSingleObject']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
+
+        elif callname in ['WaitForMultipleObjects32']:
+            count = frame['param1'] & 0xffff
+            for i in range(count):
+                addr = frame['param2']+i*self.mem_utils.wordSize(self.cpu)
+                handle = self.mem_utils.readWord32(self.cpu, addr)
+                trace_msg = trace_msg + "handle[%d]: 0x%x" % (i, handle)
  
         elif callname in ['ClearEvent']:
             exit_info.old_fd = frame['param1']
@@ -605,7 +692,7 @@ class WinSyscall():
             exit_info.retval_addr = frame['param3']
             exit_info.count = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
             if exit_info.count is not None:
-                buf_start = frame['param3']+5*self.mem_utils.WORD_SIZE 
+                buf_start = frame['param3']+5*self.mem_utils.wordSize(self.cpu) 
                 limit_count = min(exit_info.count, 100)
                 buf = self.mem_utils.readBytes(self.cpu, buf_start, limit_count)
                 trace_msg = trace_msg+' Handle: 0x%x count: 0x%x data: %s' % (exit_info.old_fd, exit_info.count, binascii.hexlify(buf))
@@ -1082,5 +1169,112 @@ class WinSyscall():
                 print('exit pid %d' % pid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
 
+    def addCallParams(self, call_params):
+        gotone = False
+        for call in call_params:
+            if call not in self.syscall_info.call_params:
+                self.syscall_info.call_params.append(call)
+                gotone = True
+        ''' TBD inconsistent stop actions????'''
+        if gotone:
+            if self.stop_action is None:
+                f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+                flist = [f1]
+                hap_clean = hapCleaner.HapCleaner(self.cpu)
+                self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+            self.lgr.debug('syscall addCallParams added params')
+        else:
+            pass
+            #self.lgr.debug('syscall addCallParams, no new params')
+
+    def isRecordFD(self):
+        return self.record_fd
+
+    def setRecordFD(self, tof):
+        self.record_fd = tof
+
+    def getContext(self):
+        return self.cell
+
+    def rmCallParam(self, call_param):
+        if call_param in self.syscall_info.call_params: 
+            self.syscall_info.call_params.remove(call_param)
+        else: 
+            self.lgr.error('sycall rmCallParam, but param does not exist?')
+
+    def rmCallParamName(self, call_param_name):
+        return_list = []
+        rm_list = []
+        for cp in self.syscall_info.call_params:
+            if cp.name == call_param_name:
+                rm_list.append(cp)
+            else:
+                return_list.append(cp)
+        for cp in rm_list:
+            self.syscall_info.call_params.remove(cp)
+        return return_list
+
     def getCallParams(self):
         return self.syscall_info.call_params
+
+    def remainingDmod(self):
+        for call_param in self.syscall_info.call_params:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                 return True
+        return False
+
+    def hasCallParam(self, param_name):
+        retval = False
+        for call_param in self.syscall_info.call_params:
+            if call_param.name == param_name:
+                retval = True
+                break 
+        return retval
+
+    def getDmods(self):
+        retval = []
+        for call_param in self.syscall_info.call_params:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                 dmod = call_param.match_param
+                 if dmod not in retval:
+                     retval.append(dmod)
+        return retval
+
+    def rmDmods(self):
+        params_copy = list(self.syscall_info.call_params)
+        rm_list = []
+        for call_param in params_copy:
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                self.lgr.debug('syscall rmDmods, removing dmod %s' % call_param.match_param.path)
+                rm_list.append(call_param)
+
+        for call_param in rm_list:
+            self.rmCallParam(call_param)
+        if len(self.syscall_info.call_params) == 0:
+            self.lgr.debug('syscall rmDmods, no more call_params, remove syscall')
+            self.stopTrace()
+
+    def getCallList(self):
+        return self.call_list
+
+    def callListContains(self, call_list):
+        retval = True
+        if self.call_list is not None and len(self.call_list)>0:
+            for call in call_list:
+                if call not in self.call_list:
+                    retval = False
+                    break
+        else:
+           retval = False
+        return retval 
+
+    def callListIntersects(self, call_list):
+        retval = False
+        if self.call_list is not None and len(self.call_list)>0:
+            for call in call_list:
+                #self.lgr.debug('syscall compare %s to %s' % (call, str(self.call_list)))
+                if call in self.call_list:
+                    retval = True
+                    break
+        return retval 
+

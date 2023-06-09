@@ -115,6 +115,9 @@ class WinTaskUtils():
             if os.path.isfile(exec_addrs_file):
                 self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
 
+    def commSize(self):
+        return 14
+
     def getPhysCurrentTask(self):
         return self.phys_current_task
 
@@ -203,6 +206,7 @@ class WinTaskUtils():
         return self.mem_utils
 
     def syscallNumber(self, call, dumb=None):
+        retval = None
         if call not in self.call_num_map:
             if call in winSocket.op_map_vals:
                 retval = self.call_num_map['DeviceIoControlFile'] 
@@ -355,7 +359,7 @@ class WinTaskUtils():
         cur_addr = self.getCurTaskRec()
         #self.lgr.debug('currentProcessInfo cur_addr is 0x%x' % cur_addr)
         if cur_addr is not None:
-            comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, taskUtils.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
             return self.cpu, cur_addr, comm, pid
         else:
@@ -368,7 +372,7 @@ class WinTaskUtils():
             task_rec_addr = self.getCurTaskRec()
         else:
             task_rec_addr = rec
-        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, taskUtils.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.commSize())
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
         seen = set()
         tasks = {}
@@ -420,7 +424,7 @@ class WinTaskUtils():
         retval = {}
         task_list = self.getTaskList()
         for task in task_list:
-            comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, taskUtils.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
             retval[task] = TaskStruct(pid, comm)
 
@@ -490,7 +494,7 @@ class WinTaskUtils():
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
-            if comm == ts_list[ts].comm or (len(comm)>taskUtils.COMM_SIZE and len(ts_list[ts].comm) == taskUtils.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
@@ -525,7 +529,7 @@ class WinTaskUtils():
         else:
             ptr = cur_thread + self.param.proc_ptr
             cur_proc = self.mem_utils.readPtr(self.cpu, ptr)
-            comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, taskUtils.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
 
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + 0x328)
@@ -559,6 +563,25 @@ class WinTaskUtils():
             return
 
 
+    def recentExitPid(self):
+        return self.exit_pid
+
+    def getExitPid(self):
+        ''' if we are at or past the point of exit, return the most recently exitied pid. 
+            TBD, more robust, multiple PIDs? '''
+        if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
+            return self.exit_pid
+        else:
+            return None
+
+    def setExitPid(self, pid):
+        self.exit_pid = pid
+        self.exit_cycles = self.cpu.cycles
+        self.lgr.debug('taskUtils setExitPid pid:%d cycles 0x%x' % (pid, self.exit_cycles))
+
+    def clearExitPid(self):
+        self.exit_pid = 0
+        self.exit_cycles = 0
         
 
      

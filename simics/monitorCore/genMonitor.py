@@ -674,7 +674,7 @@ class GenMonitor():
             if self.isWindows():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
                                                self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
-                                               self.soMap[self.target], self.run_from_snap, self.lgr)
+                                               self.soMap[self.target], self.sharedSyscall[self.target], self.run_from_snap, self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
@@ -1476,6 +1476,7 @@ class GenMonitor():
         print('watching all threads')
  
     def debugPid(self, pid):
+        self.rmDebugWarnHap()
         self.debugPidList([pid], self.debug)
 
     def debugPidGroup(self, pid, final_fun=None, to_user=True):
@@ -1973,9 +1974,13 @@ class GenMonitor():
         cpl = memUtils.getCPL(cpu)
 
     def skipBackToUser(self, extra=0):
-        self.lgr.debug('skipBackToUser')
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.rev_to_call[self.target].jumpOverKernel(pid)
+        if self.reverseEnabled():
+            self.lgr.debug('skipBackToUser')
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            self.rev_to_call[self.target].jumpOverKernel(pid)
+        else:
+            self.lgr.debug('skipBackToUser but reverse execution not enabled.')
+            print('reverse execution not enabled.')
 
     def reverseToUser(self, force=False):
         if not force:
@@ -2142,6 +2147,7 @@ class GenMonitor():
     def runToCall(self, callname, pid=None, subcall=None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
+        self.checkOnlyIgnore()
         if pid is not None:
             pid_match = syscall.PidFilter(pid)
             pid_param = syscall.CallParams('runToCall', callname, pid_match, break_simulation=True) 
@@ -2339,7 +2345,14 @@ class GenMonitor():
                 #self.lgr.debug('copyCallParams found a syscall with intersecting calls (or syscall was traceAll), copy its params')
                 params = self.call_traces[self.target][other_call].getCallParams()
                 syscall.addCallParams(params) 
-        
+       
+    def checkOnlyIgnore(self):
+        ''' Load ignore list or only list if defined '''
+        pid, cpu = self.context_manager[self.target].getDebugPid() 
+        if pid is None:
+            self.ignoreProgList() 
+            self.onlyProgList() 
+ 
     def traceAll(self, target=None, record_fd=False, swapper_ok=False):
         if target is None:
             target = self.target
@@ -2350,11 +2363,8 @@ class GenMonitor():
             print('Unknown target %s' % target)
             return
 
+        self.checkOnlyIgnore()
         if self.isWindows():
-            pid, cpu = self.context_manager[target].getDebugPid() 
-            if pid is None:
-                self.ignoreProgList() 
-                self.onlyProgList() 
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
             self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
             self.run_to[target].watchSO()
@@ -2803,6 +2813,9 @@ class GenMonitor():
     def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
+
+        self.checkOnlyIgnore()
+
         ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
@@ -2830,29 +2843,6 @@ class GenMonitor():
         else:
             self.syscallManager[cell_name].watchSyscall(None, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                    callback=callback)
-        '''
-        if cell_name not in self.trace_all or self.trace_all[cell_name] is None:
-            debug_pid = None
-            if self.target in self.context_manager:
-                debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid()
-
-            #if call_name not in self.call_traces[cell_name] or (self.call_traces[cell_name][call_name].background and debug_pid is not None):
-            #    retval = syscall.Syscall(self, cell_name, cell, self.param[cell_name], self.mem_utils[cell_name], 
-            #                   self.task_utils[cell_name], self.context_manager[cell_name], None, self.sharedSyscall[cell_name], 
-            #                   self.lgr, self.traceMgr[cell_name],
-            #                   call_list=call, call_params=call_params_list, targetFS=self.targetFS[cell_name], linger=linger, 
-            #                   background=background, name=name, flist_in=flist, callback=callback)
-            #                   #compat32=self.is_compat32, background=background)
-            #    self.call_traces[cell_name][call_name] = retval
-            #    self.lgr.debug('runTo added sycall for %s', call_name)
-            #else:
-            #    self.call_traces[cell_name][call_name].addCallParams(call_params_list)
-            #    self.lgr.debug('runTo added parameters to existing %s rather than new syscall', call_name)
-        else:
-            #stuff the call params into existing traceall syscall module 
-            self.trace_all[cell_name].addCallParams(call_params_list)
-            self.lgr.debug('runTo added parameters to trace_all rather than new syscall')
-        '''
         if run and not self.is_monitor_running.isRunning():
             self.is_monitor_running.setRunning(True)
             SIM_continue(0)
@@ -2964,12 +2954,21 @@ class GenMonitor():
         except:
             self.lgr.error('invalid pattern: %s' % addr)
             return
-        call = self.task_utils[self.target].socketCallName('bind', self.is_compat32)
-        call_params = syscall.CallParams('runToBind', 'bind', addr, break_simulation=True, proc=proc)        
+        if self.isWindows(self.target):
+            cname = 'BIND'
+            call = ['BIND']
+        else:
+            cname = 'BIND'
+            call = self.task_utils[self.target].socketCallName('bind', self.is_compat32)
+
+        call_params = syscall.CallParams('runToBind', cname, addr, break_simulation=True, proc=proc)        
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params, name='bind')
 
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+        if self.isWindows(self.target):
+            self.winMonitor[self.target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf)
+            return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
         ''' nth occurance of syscalls that match params '''
@@ -5286,6 +5285,10 @@ class GenMonitor():
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
             self.rmDebugWarnHap()
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
+            if pid is None:
+                self.ignoreProgList() 
+                self.onlyProgList() 
             self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params)
 
     def rmCallParamBreaks(self):

@@ -49,6 +49,10 @@ op_map_vals["SET_DISCONNECT_OPTIONS_SIZE"]= 0x12077
 op_map_vals["SET_INFO"]= 0x1203B
 op_map_vals["START_LISTEN"]= 0x1200B
 op_map_vals["WAIT_FOR_LISTEN"]= 0x1200C
+# from web
+op_map_vals["TCP_FASTOPEN"]= 0x120BF
+op_map_vals["SUPER_CONNECT?"]= 0x120C7
+
 
 def getOpMap():
     retval = {}

@@ -21,6 +21,8 @@ def getTextSection(cpu, mem_utils, eproc, lgr):
 
 def getTextSize(full_path, lgr):
     size = None
+    if full_path is None:
+        return None
     if os.path.isfile(full_path):
         cmd = 'readpe -H %s' % full_path
         grep = 'grep "Size of .text section"'
@@ -76,7 +78,7 @@ class WinProg():
             return
         #self.lgr.debug('winProg toNewProcHap for proc %s' % proc)
         cur_thread = SIM_get_mem_op_value_le(memory)
-        cur_proc = self.task_utils.getCurTaskRec(cur_thread=cur_thread)
+        cur_proc = self.task_utils.getCurTaskRec(cur_thread_in=cur_thread)
         pid_ptr = cur_proc + self.param.ts_pid
         pid = self.mem_utils.readWord(self.cpu, pid_ptr)
         self.context_manager.newProg(prog_string, pid)
@@ -136,8 +138,11 @@ class WinProg():
         full_path = self.top.getFullPath(fname=self.prog_string)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
         self.top.setFullPath(full_path)
-        size = getTextSize(full_path)
-
+        size = getTextSize(full_path, self.lgr)
+        if size is None:
+            self.lgr.error('winProg findText unable t get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            self.top.quit()
+            return 
         self.lgr.debug('winProg findText got size 0x%x' % size)
         self.so_map.addText(self.prog_string, want_pid, load_addr, size)
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)

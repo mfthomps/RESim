@@ -35,7 +35,7 @@ import win7CallParams
 import syscall
 from resimHaps import *
 class WinMonitor():
-    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, sharedSyscall, run_from_snap, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -48,6 +48,7 @@ class WinMonitor():
         self.syscallManager = syscallManager
         self.context_manager = context_manager
         self.soMap = soMap
+        self.sharedSyscall = sharedSyscall
         self.run_from_snap = run_from_snap
         if run_from_snap is not None:
             self.snap_start_cycle = cpu.cycles
@@ -66,7 +67,7 @@ class WinMonitor():
     def getWin7CallParams(self, stop_on, only, only_proc, track_params):
         self.top.allowReverse()
         current_task_phys = self.task_utils.getPhysCurrentTask()
-        self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, self.task_utils, current_task_phys, self.param, self.lgr, 
+        self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, self.task_utils, self.context_manager, current_task_phys, self.param, self.lgr, 
                 stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params)
 
     def rmCallParamBreaks(self):
@@ -187,3 +188,60 @@ class WinMonitor():
         retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
         self.lgr.debug('traceWindows')
         return retval
+
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+        call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
+        ''' nth occurance of syscalls that match params '''
+        call_params.nth = count
+       
+        if 'runToIO' in self.call_traces:
+            self.lgr.debug('runToIO already in call_traces, add param')
+            self.call_traces['runToIO'].addCallParams([call_params])
+        else:
+            self.lgr.debug('runToIO on FD %s' % str(fd))
+
+            if True:
+                skip_and_mail = True
+                if flist_in is not None:
+                    ''' Given callback functions, use those instead of skip_and_mail '''
+                    skip_and_mail = False
+                self.lgr.debug('winMonitor runToIO, add new syscall')
+                kbuffer_mod = None
+                if kbuf:
+                    kbuffer_mod = self.kbuffer
+                    self.sharedSyscall.setKbuffer(kbuffer_mod)
+                calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile']
+                the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
+                                 skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
+                ''' find processes that are in the kernel on IO calls '''
+                '''
+                TBD fix for windows?
+                frames = self.getDbgFrames()
+                skip_calls = ['select', 'pselect6', '_newselect']
+                for pid in list(frames):
+                    if frames[pid] is None:
+                        self.lgr.error('frames[%d] is None' % pid)
+                        continue
+                    call = self.task_utils.syscallName(frames[pid]['syscall_num'], self.is_compat32) 
+                    self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
+                    if call not in calls or call in skip_calls:
+                       del frames[pid]
+                    else:
+                       self.lgr.debug('kept frames for pid %d' % pid)
+                if len(frames) > 0:
+                    self.lgr.debug('runToIO, call to setExits')
+                    the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager.getRESimContext()) 
+                #self.copyCallParams(the_syscall)
+                '''
+            else:
+                # TBD REMOVE, not reached
+                #self.trace_all[self.target].addCallParams([call_params])
+                #self.lgr.debug('runToIO added parameters rather than new syscall')
+                pass
+    
+    
+            if run_fun is not None:
+                SIM_run_alone(run_fun, None) 
+            if run:
+                self.lgr.debug('runToIO now run')
+                SIM_continue(0)
