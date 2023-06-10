@@ -194,20 +194,30 @@ class WinCallExit():
 
         elif callname in ['DeviceIoControlFile']:
             if exit_info.socket_callname == 'RECV':
-                return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                if exit_info.fname_addr is not None:
+                    return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                else:
+                    return_count = None
                 if return_count is not None:
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
                     trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
+                else:
+                    trace_msg = trace_msg+' FAILED to get return count'
                 self.lgr.debug(trace_msg)
             elif exit_info.socket_callname == 'SEND':
-                return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                if exit_info.fname_addr is not None:
+                    return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                else:
+                    return_count = None
                 if return_count is not None:
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
                     trace_msg = trace_msg+' send count 0x%x data %s' % (return_count, read_data)
+                else:
+                    trace_msg = trace_msg+' FAILED to get return count'
 
                 self.lgr.debug(trace_msg)
 

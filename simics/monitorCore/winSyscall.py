@@ -606,25 +606,23 @@ class WinSyscall():
                 trace_msg = trace_msg + " bind handle: 0x%x  connect handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
                 self.lgr.debug('trace_msg')
             elif op_cmd == 'RECV':
+                ''' buffer '''
                 exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
-                # actually the return count address.
-                val = self.paramOffPtr(self.mem_utils.wordSize(self.cpu), [0], frame) 
-                if val is not None:
-                    exit_info.fname_addr = val + self.mem_utils.wordSize(self.cpu)
-                    trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, 
+                # the return count address.
+                exit_info.fname_addr = frame['param5'] + self.mem_utils.wordSize(self.cpu)
+                trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, 
                        exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-                    trace_msg = trace_msg + ' '+str(pdata_hx)
-                    self.lgr.debug(trace_msg)
-                else:
-                    trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: BROKEN' %  (exit_info.old_fd, 
-                         exit_info.retval_addr, exit_info.count)
+                trace_msg = trace_msg + ' '+str(pdata_hx)
+                self.lgr.debug(trace_msg)
             elif op_cmd == 'SEND':
                 #off = 3*self.mem_utils.wordSize(self.cpu)
                 #exit_info.retval_addr = self.paramOffPtr(7, [0, off], frame)
+                ''' buffer '''
                 exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
-                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + self.mem_utils.wordSize(self.cpu)
+                ''' count return addr '''
+                exit_info.fname_addr = frame['param5'] + self.mem_utils.wordSize(self.cpu)
                 trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
             elif op_cmd == 'SEND_DATAGRAM':
                 sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
@@ -640,7 +638,7 @@ class WinSyscall():
                 if pdata is not None:
                     trace_msg = trace_msg+' pdata: %s' % pdata_hx
             for call_param in syscall_info.call_params:
-                self.lgr.debug('winSyscall %s subcall is %s ss.fd is %s match_param is %s' % (op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param)))
+                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s ss.fd is %s match_param is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param)))
                 if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
@@ -658,7 +656,7 @@ class WinSyscall():
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, ss.length)
                     break
-                elif (op_cmd not in self.call_list) and call_param.match_param is None:
+                elif (op_cmd not in self.call_list) and call_param.name == 'runToCall':
                     self.lgr.debug('winSyscall parse socket call %s, but not what we think is a runToCall.' % op_cmd)
                     exit_info = None
                 
