@@ -532,7 +532,7 @@ class GenContextMgr():
             #self.lgr.debug('contextManager alterWatches pid:%d restored default context' % pid)
             self.restoreDefaultContext()
 
-    def onlyOrIgnore(self, comm):
+    def onlyOrIgnore(self, comm, new_addr, win_thread):
 
         ''' Handle igoring of processes 
             Assumes we only ignore when not debugging.
@@ -542,10 +542,10 @@ class GenContextMgr():
         if len(self.ignore_progs) > 0 and self.debugging_pid is None:
             #if pid in self.ignore_pids:
             if comm in self.ignore_progs:
-                self.lgr.debug('ignoring context for comm %s' % comm)
+                #self.lgr.debug('ignoring context for comm %s' % comm)
                 self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
-                if self.isSuspended(new_addr, win_thread):
+                if new_addr is not None and self.isSuspended(new_addr, win_thread):
                     self.restoreSuspendContext()
                 else:
                     self.restoreDefaultContext()
@@ -553,12 +553,12 @@ class GenContextMgr():
                 self.restoreDefaultContext()
             retval = True 
         elif len(self.only_progs) > 0 and self.debugging_pid is None:
-            self.lgr.debug('onlyOrIgnore comm %s' % comm)
+            #self.lgr.debug('onlyOrIgnore comm %s' % comm)
             if comm not in self.only_progs:
-                self.lgr.debug('ignoring context for comm %s' % comm)
+                #self.lgr.debug('ignoring context for comm %s' % comm)
                 self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
-                if self.isSuspended(new_addr, win_thread):
+                if new_addr is not None and self.isSuspended(new_addr, win_thread):
                     self.restoreSuspendContext()
                 else:
                     self.restoreDefaultContext()
@@ -600,7 +600,7 @@ class GenContextMgr():
         #    self.lgr.debug('changeThread from %d (%s) to %d (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_pid, 
         #        prev_comm, pid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
 
-        if self.onlyOrIgnore(comm):
+        if self.onlyOrIgnore(comm, new_addr, win_thread):
             return 
        
         if len(self.pending_watch_pids) > 0:
@@ -900,7 +900,7 @@ class GenContextMgr():
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
             #self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
         cpu, comm, pid = self.task_utils.curProc()
-        self.onlyOrIgnore(comm)
+        self.onlyOrIgnore(comm, None, None)
 
     def restoreWatchTasks(self):
         self.watching_tasks = True

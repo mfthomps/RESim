@@ -2147,6 +2147,7 @@ class GenMonitor():
     def runToCall(self, callname, pid=None, subcall=None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
+        self.lgr.debug('runToCall')
         self.checkOnlyIgnore()
         if pid is not None:
             pid_match = syscall.PidFilter(pid)
@@ -2348,6 +2349,7 @@ class GenMonitor():
        
     def checkOnlyIgnore(self):
         ''' Load ignore list or only list if defined '''
+        self.lgr.debug('checkOnlyIgnore')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             self.ignoreProgList() 
@@ -2382,8 +2384,6 @@ class GenMonitor():
                 tf = '/tmp/syscall_trace-%s-%d.txt' % (target, pid)
                 context = self.context_manager[target].getRESimContext()
             else:
-                self.ignoreProgList() 
-                self.onlyProgList() 
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
 
@@ -2813,7 +2813,7 @@ class GenMonitor():
     def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
-
+        self.lgr.debug('runTo')
         self.checkOnlyIgnore()
 
         ''' call is a list '''
@@ -5285,10 +5285,7 @@ class GenMonitor():
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
             self.rmDebugWarnHap()
-            pid, cpu = self.context_manager[self.target].getDebugPid() 
-            if pid is None:
-                self.ignoreProgList() 
-                self.onlyProgList() 
+            self.checkOnlyIgnore()
             self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params)
 
     def rmCallParamBreaks(self):

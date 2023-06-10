@@ -36,11 +36,14 @@ class RunTo():
         
         self.cur_task_hap = None
         self.cur_task_break = None
+        self.debug_group = False
 
     def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('soMap stopHap ip: 0x%x' % eip)
+            self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
+            if self.debug_group:
+                self.context_manager.watchTasks(set_debug_pid=True)
             self.top.skipAndMail()
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
@@ -196,6 +199,7 @@ class RunTo():
 
     def toRunningProc(self, proc, want_pid_list, flist, debug_group=False, final_fun=None):
         ''' intended for use when process is already running '''
+        self.debug_group = debug_group
         cpu, comm, pid  = self.task_utils.curProc()
         ''' if already in proc, just attach debugger '''
         if want_pid_list is not None:
@@ -271,7 +275,7 @@ class RunTo():
         if pid != 0:
             comm = self.mem_utils.readString(cpu, cur_task_rec + self.param.ts_comm, 16)
             if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
-                self.lgr.debug('got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
+                self.lgr.debug('runToProc got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
                 SIM_run_alone(self.cleanToProcHaps, None)
                 SIM_break_simulation('found %s' % prec.proc)
             else:
