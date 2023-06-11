@@ -52,10 +52,14 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                                     if result is not None:
                                         if result.mark['packet'] < least_packet:
                                             least_packet = result.mark['packet']
-                                            least_size = result.size
+                                            #least_size = result.size
+                                            least_size = result.num_marks
                                             best_result = result
-                                        elif result.mark['packet'] == least_packet and result.size < least_size:
-                                            least_size = result.size
+                                        #elif result.mark['packet'] == least_packet and result.size < least_size:
+                                        #    least_size = result.size
+                                        #    best_result = result
+                                        elif result.mark['packet'] == least_packet and result.num_marks < least_size:
+                                            least_size = result.num_marks
                                             best_result = result
                                 if best_result is not None:
                                     read_mark = best_result.mark['ip']
@@ -78,7 +82,7 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                         if not no_print:
                             mark_info = ''
                             if read_mark is not None:
-                                mark_info = 'read mark: 0x%x packet: %d' % (read_mark, packet_num)
+                                mark_info = 'read mark: 0x%x packet: %d size: %d' % (read_mark, packet_num, least_size)
                             print('function: %s branch 0x%x from 0x%x not in hits %s %s' % (fun_blocks['name'], branch, bb_hit, mark_info, before_read))
                             count = count + 1
                         entry = {}
@@ -99,14 +103,13 @@ def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=F
         fname = '%s.hits' % ida_path
     else:
         fname = '%s.%s.hits' % (ida_path, target)
-        print('Using hits file %s' % fname)
+    print('Using hits file %s' % fname)
     ''' hits are now just flat lists without functions '''
     if not os.path.isfile(fname):
         print('No file at %s.  Did you forget to specific the --target?' % fname)
         return None
     with open(fname) as fh:
         hits = json.load(fh)
-
     blocks, prog_elf = resimUtils.getBasicBlocks(prog, ini)
     if blocks is None:
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
