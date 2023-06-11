@@ -103,6 +103,7 @@ class RunTo():
            return False
 
     def loadSkipList(self):
+        ''' TBD move to ini env variable '''
         flist = glob.glob('*.dll_skip')
         if len(flist) > 1:
             self.lgr.error('Found multiple dll_skip files, only one supported')
@@ -115,7 +116,8 @@ class RunTo():
                         self.skip_dll = line.strip()
                     else:
                         self.skip_dll_others.append(line.strip())
-        self.lgr.debug('runTo loadSkipList loaded %d others' % len(self.skip_dll_others))
+            self.lgr.debug('runTo loadSkipList loaded %s with %d others' % (flist[0], len(self.skip_dll_others)))
+            print('Will attempt to skip syscalls from DLLs defined in %s' % (flist[0]))
 
     def watchSO(self):
         ''' Intended to be called prior to trace all starting in order to disable tracing of
