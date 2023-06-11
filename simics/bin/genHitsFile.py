@@ -16,8 +16,9 @@ def getHits(paths):
 def main():
     parser = argparse.ArgumentParser(prog='dataDiff', description='Genereate a hits file for a target.')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
+    parser.add_argument('-a', '--all', action='store_true', help='Look at all queue files, not just unique files.')
     args = parser.parse_args()
-    expaths1 = aflPath.getAFLCoverageList(args.target)
+    expaths1 = aflPath.getAFLCoverageList(args.target, get_all=args.all)
     hits = []
     for path in expaths1:
         cover = json.load(open(path))
@@ -29,6 +30,7 @@ def main():
     ofile = '/tmp/%s.hits' % args.target
     with open(ofile, 'w') as fh:
         fh.write(json.dumps(hits))
+    print('Found %d hits' % len(hits))
     
     
 if __name__ == '__main__':
