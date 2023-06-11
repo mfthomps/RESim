@@ -20,6 +20,7 @@ def findBB(target, bb, quiet=False, get_all=False):
     cover_list = aflPath.getAFLCoverageList(target, get_all=get_all)
     if len(cover_list) == 0:
         print('No coverage found for %s' % target)
+    print('%d files found' % len(cover_list))
     for cover in cover_list:
         with open(cover) as fh:
             try:
@@ -134,7 +135,7 @@ def main():
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
-    findBB(args.target, int(args.bb, 16), args.all)
+    findBB(args.target, int(args.bb, 16), get_all=args.all)
 
 if __name__ == '__main__':
     sys.exit(main())
