@@ -1378,6 +1378,7 @@ class Syscall():
         ida_msg = None
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
+            self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
             if call_param.match_param.__class__.__name__ == 'PidFilter':
                 if pid != call_param.match_param.pid:
                     #self.lgr.debug('syscall syscallParse, pid filter did not match')
@@ -1390,6 +1391,15 @@ class Syscall():
                     #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
                     #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                     return
+            elif call_param.name == 'runToCall':
+                if callname not in self.call_list:
+                    self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
+                    return
+                else:
+                    exit_info.call_params = call_param
+                    self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
+             
+        ''' NOTE returns above '''
         if callname == 'open' or callname == 'openat':        
             #self.lgr.debug('syscallParse, is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
@@ -2170,7 +2180,7 @@ class Syscall():
                             if self.callback is None:
                                 if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
                                     if self.stop_on_call:
-                                        cp = CallParams(None, None, break_simulation=True)
+                                        cp = CallParams(None, None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
                                     #if syscall_info.call_params is not None:
@@ -2205,7 +2215,7 @@ class Syscall():
                     name = callname+'-exit' 
                     self.lgr.debug('syscallHap call to addExitHap for pid %d' % pid)
                     if self.stop_on_call:
-                        cp = CallParams(None, None, break_simulation=True)
+                        cp = CallParams(None, None, None, break_simulation=True)
                         exit_info.call_params = cp
                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
                 else:
