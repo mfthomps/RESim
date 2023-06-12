@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # given a target and two AFL sessions named by instance/index, show differences in their
-# respective hits.
+# respective hits based on coverage files.  Also will take to explicit coverage files.
 #
 import sys
 import os

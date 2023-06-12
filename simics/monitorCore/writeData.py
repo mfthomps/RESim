@@ -500,7 +500,7 @@ class WriteData():
             #SIM_run_alone(self.delCallHap, None)
         else:
             
-            frame = self.top.frameFromRegs(self.cpu)
+            frame = self.top.frameFromRegs()
             frame_s = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('handleCall writeData frame: %s' % frame_s)
 
@@ -650,7 +650,7 @@ class WriteData():
             #self.lgr.debug('writeData setCloseHap on entry 0x%x context %s current %s' % (entry, str(self.cell), str(self.cpu.current_context)))
 
     def closeHap(self, dumb, third, break_num, memory):
-        frame = self.top.frameFromRegs(self.cpu)
+        frame = self.top.frameFromRegs()
         fd = frame['param1']
         if fd == self.fd:
             if self.close_hap is not None:

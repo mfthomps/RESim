@@ -2,14 +2,15 @@ from simics import *
 import syscall
 import elfText
 from resimHaps import *
+''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
-    def __init__(self, cpu, cell_name, cell, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, compat32, lgr):
+    def __init__(self, top, cpu, cell_name, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
+        self.top = top
         self.traceProcs = traceProcs
         self.parent_pid = pid
-        self.pid_list = [pid]
+        if pid is not None:
+            self.pid_list = [pid]
         self.cpu = cpu
-        ''' tbd, cell not used.  future ability to watch multiple task SO? '''
-        self.cell = cell
         self.cell_name = cell_name
         self.param = param
         self.context_manager = context_manager
@@ -18,6 +19,7 @@ class TrackThreads():
         self.soMap = soMap
         self.targetFS = targetFS
         self.sharedSyscall = sharedSyscall
+        self.syscallManager = syscallManager
         self.lgr = lgr
         self.exit_break1 = {}
         self.exit_break2 = {}
@@ -29,11 +31,11 @@ class TrackThreads():
         self.execve_hap = None
         self.finish_hap = {}
         self.finish_break = {}
-        self.open_syscall = None
         self.first_mmap_hap = {}
         self.compat32 = compat32
         self.clone_hap = None
         self.child_stacks = {}
+        self.so_track = None
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -45,32 +47,27 @@ class TrackThreads():
             return
         #self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
 
-        execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
-        execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
-        self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
-        self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-        #self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+        if not self.top.isWindows(): 
+            execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
+            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
+            self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+            self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
+            #self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
         self.trackSO()
         #self.trackClone()
-        if self.open_syscall is None:
-            self.lgr.error('trackThreads startTrack, open_syscall is none')
 
     def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
-        if self.open_syscall is not None:
-            #self.lgr.debug('TrackThreads stopTrack stop open trace')
-            self.open_syscall.stopTrace(immediate=immediate)
-            self.open_syscall = None
-        else:
-            self.lgr.debug('TrackThreads stopTrack no open syscall for %s' % self.cell_name)
+        pass
 
     def stopTrack(self, immediate=False):
         #self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
         self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
-        self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
         self.call_hap = None
-        self.execve_hap = None
+        if self.execve_hap is not None:
+            self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
+            self.execve_hap = None
         for pid in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[pid], immediate=immediate)
         self.stopSOTrack(immediate)
@@ -79,6 +76,7 @@ class TrackThreads():
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
         self.stopTrackClone(immediate)
+        self.so_track.stopTrace()
 
 
     def execveHap(self, dumb, third, forth, memory):
@@ -148,16 +146,17 @@ class TrackThreads():
             self.addSO(prog_string, pid)
 
 
-
-
     def trackSO(self):
-        call_list = ['open', 'mmap']
-        if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
-            call_list.append('mmap2')
+        if self.top.isWindows():
+            call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection']
+        else:
+            call_list = ['open', 'mmap']
+            if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
+                call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''
-        self.open_syscall = syscall.Syscall(None, self.cell_name, None, self.param, self.mem_utils, self.task_utils, 
-                           self.context_manager, None, self.sharedSyscall, self.lgr, None, call_list=call_list,
-                           soMap=self.soMap, targetFS=self.targetFS, skip_and_mail=False, compat32=self.compat32, name='trackSO')
+        call_params = []
+        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False)
+        self.lgr.debug('TrackThreads trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 
     def cloneHap(self, dumb, third, forth, memory):
@@ -166,7 +165,7 @@ class TrackThreads():
             return
         cpu, comm, pid = self.task_utils.curProc() 
         if cpu.architecture == 'arm':
-            frame = self.task_utils.frameFromRegs(cpu)
+            frame = self.task_utils.frameFromRegs()
         else:
             frame = self.task_utils.frameFromStackSyscall()
         flags = frame['param1']

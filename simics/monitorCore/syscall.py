@@ -332,6 +332,15 @@ class IPCFilter():
     def __init__(self, call):
         self.call = call
 
+def hasParamMatchRequest(syscall_info):
+    retval = True
+    if len(syscall_info.call_params) == 0:
+        retval = False
+    elif len(syscall_info.call_params) == 1:
+        if syscall_info.call_params[0].subcall is None and syscall_info.call_params[0].match_param is None:
+            retval = False
+    return retval
+
 ''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
 record_fd_list = ['connect', 'bind', 'accept', 'open', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
 skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
@@ -1444,7 +1453,6 @@ class Syscall():
                     if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
                         self.lgr.debug('syscall open, found match_param %s' % call_param.match_param)
                         exit_info.call_params = call_param
-                             
                         
                         break
 
@@ -1935,7 +1943,7 @@ class Syscall():
         if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
             ''' caller frame will be in regs'''
             if frame is None:
-                frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 frame_string = taskUtils.stringFromFrame(frame)
             exit_eip1 = self.param.sysexit
             ''' catch interrupt returns such as wait4 '''
@@ -1949,7 +1957,7 @@ class Syscall():
             
         elif break_eip == self.param.sys_entry:
             if frame is None:
-                frame = self.task_utils.frameFromRegs(syscall_info.cpu, compat32=syscall_info.compat32)
+                frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 ''' fix up regs based on eip and esp found on stack '''
                 reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
                 esp = self.cpu.iface.int_register.read(reg_num)
@@ -1962,7 +1970,7 @@ class Syscall():
             exit_eip1 = self.param.arm_ret
             exit_eip2 = self.param.arm_ret2
             if frame is None:
-                frame = self.task_utils.frameFromRegs(self.cpu)
+                frame = self.task_utils.frameFromRegs()
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
         elif break_eip == syscall_info.calculated:
@@ -1970,14 +1978,14 @@ class Syscall():
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture == 'arm':
                 if frame is None:
-                    frame = self.task_utils.frameFromRegs(self.cpu)
+                    frame = self.task_utils.frameFromRegs()
                 exit_eip1 = self.param.arm_ret
                 exit_eip2 = self.param.arm_ret2
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=syscall_info.compat32)
+                    frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
                 exit_eip3 = self.param.sysret64
@@ -2178,9 +2186,9 @@ class Syscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, pid)
                             if self.callback is None:
-                                if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
+                                if not hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all or pid in self.pid_sockets:
                                     if self.stop_on_call:
-                                        cp = CallParams(None, None, None, break_simulation=True)
+                                        cp = CallParams('stop_on_call', None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
                                     #if syscall_info.call_params is not None:
@@ -2215,7 +2223,7 @@ class Syscall():
                     name = callname+'-exit' 
                     self.lgr.debug('syscallHap call to addExitHap for pid %d' % pid)
                     if self.stop_on_call:
-                        cp = CallParams(None, None, None, break_simulation=True)
+                        cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params = cp
                     self.sharedSyscall.addExitHap(self.cell, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
                 else:
@@ -2377,7 +2385,7 @@ class Syscall():
                         self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                         ''' TBD why not do for any and all?'''
                         #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
-                        if (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
+                        if call_param.match_param is not None and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
                             self.lgr.debug('setExits set the call_params')
                             exit_info.call_params = call_param
                             if call_param.match_param == exit_info.old_fd:

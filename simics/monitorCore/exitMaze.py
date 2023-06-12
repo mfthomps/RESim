@@ -463,7 +463,8 @@ class ExitMaze():
         if len(self.break_addrs) > 4:
             self.pruneBreaks()
         first_break = None
-        self.context_manager.addNoWatch()
+        #self.context_manager.addNoWatch()
+        self.context_manager.addSuspendWatch()
         for jmp_to_eip, cmp_eip in self.break_addrs:
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, jmp_to_eip, 1, 0)
             if first_break is None:
@@ -510,7 +511,7 @@ class ExitMaze():
             #else:
             #    self.top.traceProcesses(new_log=False)
             self.lgr.debug('exitMaze stopHap remove the nowatch')
-            self.context_manager.rmNoWatch()
+            self.context_manager.rmSuspendWatch()
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             if self.debugging:

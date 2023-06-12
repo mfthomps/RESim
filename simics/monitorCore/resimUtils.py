@@ -277,15 +277,19 @@ def findEndBB(blocks, addr):
         exit(1)
     return retval
  
-def isPrintable(thebytes):
+def isPrintable(thebytes, ignore_zero=False):
     gotone=False
     retval = True
+    zcount = 0
     for b in thebytes:
-        if b > 0x7f or (b < 0x20 and b != 0xa and b != 0xd):
+        if ignore_zero and b == 0 and zcount == 0:
+            zcount = zcount + 1 
+        elif b is None or b > 0x7f or (b < 0x20 and b != 0xa and b != 0xd):
             retval = False
             break
         elif b > 0x20:
             gotone=True
+            zcount = 0
     if not gotone:
         retval = False 
     return retval
@@ -293,10 +297,12 @@ def isPrintable(thebytes):
 def getHexDump(b):
     if len(b) == 0:
         return ""
-    s2 = "".join([chr(i) if 32 <= i <= 127 else "." for i in b])
+    s2 = "".join([chr(i) if i is not None and 32 <= i <= 127 else "." for i in b])
     if not isPrintable(b):
         s1 = ''
         for i in b:
+            if i is None:
+                break
             val = '%02x' % i
             s1 = s1+ val
         #s1 = "".join([f"{i:02x}" for i in b])

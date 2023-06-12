@@ -1,3 +1,30 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+Linux task information, e.g., task lists.
+'''
 from simics import *
 import os
 import pickle
@@ -6,18 +33,14 @@ import memUtils
 import syscallNumbers
 LIST_POISON2 = object()
 def stringFromFrame(frame):
+    retval = None
     if frame is not None:
-        return 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
+        retval = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
             frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
-    else:
-        return None
-def stringFromFrameXXX(frame):
-    if frame is not None:
-        return 'eax:0x%x ebx:0x%x ecx:0x%x edx:0x%x ebp:0x%x edi:0x%x esi:0x%x eip:0x%x esp:0x%x orig_ax:0x%x flags:0x%x' % (frame['eax'], 
-            frame['ebx'], frame['ecx'], frame['edx'], frame['ebp'], frame['edi'], frame['esi'],
-            frame['eip'], frame['esp'], frame['orig_ax'], frame['flags'])
-    else:
-        return None
+        if 'param7' in frame:
+            retval = retval + ' param7:0x%x param8:0x%x' % (frame['param7'], frame['param8'])
+    
+    return retval
 class ListHead(object):
     """Represents a struct list_head. But the pointers point to the
     task struct, rather than to another list_head"""
@@ -71,8 +94,8 @@ class TaskStruct(object):
         return self.tasks.prev
 
 
+COMM_SIZE = 16
 class TaskUtils():
-    COMM_SIZE = 16
     def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
@@ -137,6 +160,9 @@ class TaskUtils():
     def getPhysCurrentTask(self):
         return self.phys_current_task
 
+    def getCurThreadRec(self):
+        return self.getCurTaskRec()
+
     def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0
@@ -192,7 +218,7 @@ class TaskUtils():
         #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
-        phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
+        #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid 
 
@@ -205,7 +231,7 @@ class TaskUtils():
                 done = False
                 while not done and task is not None:
                     #self.lgr.debug('taskUtils findSwapper read comm task is 0x%x' % task)
-                    comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.COMM_SIZE)
+                    comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, COMM_SIZE)
                     pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
                     #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                     ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
@@ -295,7 +321,7 @@ class TaskUtils():
             task.tgid = self.mem_utils.readWord32(cpu, addr + self.param.ts_tgid)
         if self.param.ts_comm != None:
             caddr = addr + self.param.ts_comm
-            task.comm = self.mem_utils.readString(cpu, addr + self.param.ts_comm, self.COMM_SIZE)
+            task.comm = self.mem_utils.readString(cpu, addr + self.param.ts_comm, COMM_SIZE)
             paddr = self.mem_utils.v2p(cpu, caddr)
             #self.lgr.debug('comm addr is 0x%x  phys 0x%x' % (caddr, paddr))
         for field in ['ts_real_parent',
@@ -496,7 +522,7 @@ class TaskUtils():
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
-            if comm == ts_list[ts].comm or (len(comm)>self.COMM_SIZE and len(ts_list[ts].comm) == self.COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
@@ -539,7 +565,7 @@ class TaskUtils():
             task_rec_addr = self.getCurTaskRec()
         else:
             task_rec_addr = rec
-        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
         seen = set()
         tasks = {}
@@ -619,7 +645,7 @@ class TaskUtils():
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_next
-            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
         return pid, comm
 
@@ -629,13 +655,13 @@ class TaskUtils():
         if next_addr is not None:
             rec = next_addr - self.param.ts_thread_group_list_head
             #self.lgr.debug('taskUtils getPidCommFromGroupNext try rec 0x%x' % rec)
-            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, self.COMM_SIZE)
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
         return pid, comm
 
     def currentProcessInfo(self, cpu=None):
         cur_addr = self.getCurTaskRec()
-        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
         return self.cpu, cur_addr, comm, pid
 
@@ -643,7 +669,7 @@ class TaskUtils():
         cur_addr = self.getCurTaskRec()
         parent = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
-        comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, self.COMM_SIZE)
+        comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, COMM_SIZE)
         return pid, comm
                
     def getCommLeaderPid(self, cur_rec): 
@@ -716,6 +742,7 @@ class TaskUtils():
         return prog_string, arg_string_list
 
     def getProcArgsFromStack(self, pid, at_enter, cpu):
+        ''' NOTE side effect of populating exec_addrs '''
         if pid is None:
             return None, None
 
@@ -866,7 +893,7 @@ class TaskUtils():
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
         if self.cpu.architecture == 'arm':
-            frame = self.frameFromRegs(self.cpu)
+            frame = self.frameFromRegs()
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             regs_addr = esp + self.mem_utils.WORD_SIZE
@@ -907,29 +934,29 @@ class TaskUtils():
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
         return retval
 
-    def frameFromRegs(self, cpu, compat32=False):
+    def frameFromRegs(self, compat32=False):
         frame = {}
-        if cpu.architecture == 'arm':
+        if self.cpu.architecture == 'arm':
             for p in memUtils.param_map['arm']:
-                frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['arm'][p])
-            cpl = memUtils.getCPL(cpu)
+                frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
+            cpl = memUtils.getCPL(self.cpu)
             if cpl == 0:
-                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp_usr')
-                frame['pc'] = self.mem_utils.getRegValue(cpu, 'lr')
-                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr_usr')
+                frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp_usr')
+                frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+                frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr_usr')
             else:
-                frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
-                frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
-                frame['lr'] = self.mem_utils.getRegValue(cpu, 'lr')
+                frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+                frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
+                frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
         else:
-            frame['sp'] = self.mem_utils.getRegValue(cpu, 'sp')
-            frame['pc'] = self.mem_utils.getRegValue(cpu, 'pc')
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+            frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.WORD_SIZE == 8 and not compat32:
                 for p in memUtils.param_map['x86_64']:
-                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_64'][p])
+                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_64'][p])
             else:
                 for p in memUtils.param_map['x86_32']:
-                    frame[p] = self.mem_utils.getRegValue(cpu, memUtils.param_map['x86_32'][p])
+                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_32'][p])
         
         return frame
 

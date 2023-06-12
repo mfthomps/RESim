@@ -91,10 +91,12 @@ def clearBit(int_value, bit):
     return(int_value & ~mask)
 
 def bitRange(value, start, end):
-    shifted = value >> start
-    num_bits = (end - start) + 1 
-    mask = 2**num_bits - 1
-    retval = shifted & mask
+    retval = None
+    if value is not None:
+        shifted = value >> start
+        num_bits = (end - start) + 1 
+        mask = 2**num_bits - 1
+        retval = shifted & mask
     return retval
 
 def setBitRange(initial, value, start):
@@ -125,6 +127,15 @@ param_map['x86_32']['param4'] = 'esi'
 param_map['x86_32']['param5'] = 'edi'
 param_map['x86_32']['param6'] = 'ebb'
 
+win_param_map = {}
+win_param_map['x86_64'] = {}
+win_param_map['x86_64']['param1'] = 'rcx'
+win_param_map['x86_64']['param2'] = 'rdx'
+win_param_map['x86_64']['param3'] = 'r8'
+win_param_map['x86_64']['param4'] = 'r9'
+win_param_map['x86_64']['param5'] = 'rsp'
+# not used
+win_param_map['x86_64']['param6'] = 'r10'
 class memUtils():
     def __init__(self, word_size, param, lgr, arch='x86-64', cell_name='unknown'):
         self.WORD_SIZE = word_size
@@ -147,6 +158,7 @@ class memUtils():
             for ia32_reg in self.ia32_regs:
                 self.regs[ia32_reg] = ia32_reg
                 if self.WORD_SIZE == 8:
+                    #print('assigning regs[%s] value %s' % (ia32_reg, self.ia64_regs[i]))
                     self.regs[ia32_reg] = self.ia64_regs[i]
                 i+=1    
             self.regs['syscall_num'] = self.regs['eax']
@@ -167,7 +179,16 @@ class memUtils():
             self.regs['esp'] = 'sp'
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
-        
+       
+    def wordSize(self, cpu):
+        retval = self.WORD_SIZE
+        if cpu.architecture != 'arm':
+            ''' see api-help x86_exec_mode_t '''
+            mode = cpu.iface.x86_reg_access.get_exec_mode()
+            if mode == 3:
+                retval = 4
+        return retval
+
     def isReg(self, reg):
         if reg.upper() in self.regs:
             return True
@@ -178,12 +199,14 @@ class memUtils():
             return False    
 
     def v2p(self, cpu, v):
+        if v is None:
+            return None
         retval = None
         cpl = getCPL(cpu)
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
         except:
-            #self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+            self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             return None
 
         if phys_block.address != 0:
@@ -221,7 +244,7 @@ class memUtils():
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
-                            #self.lgr.error('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
                         else:
                             retval = v & ~self.param.kernel_base 
                             #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
@@ -286,9 +309,29 @@ class memUtils():
             return s
         else: 
             return None
-    
+   
+    def readWinString(self,  cpu, vaddr, maxlen):
+        retval = ''
+        if vaddr is None:
+            self.lgr.debug('memUtils readWinString called with vaddr of None')
+            return retval
+        bstring = self.readBytes(cpu, vaddr, maxlen)
+        null_count = 0
+        for b in bstring:
+            if b == 0:
+                null_count = null_count + 1
+            else:
+                retval = retval + chr(b)
+                null_count = 0
+            if null_count > 2:
+                break
+        return retval
+ 
     def readBytes(self, cpu, vaddr, maxlen):
         ''' return a bytearray of maxlen read from vaddr '''
+        if vaddr is None:
+            self.lgr.debug('memUtils readBytes called with vaddr of none')
+            return None
         remain = maxlen
         start = vaddr
         retval = ()
@@ -327,6 +370,8 @@ class memUtils():
                     except ValueError:
                         self.lgr.error('memUtils readBytes, second read %d bytes from  0x%x' % (count, ps))
                     #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+            #else:
+            #    self.lgr.error('memUtils readBytes addr 0x%x not mapped?' % vaddr)
             #self.lgr.debug('readBytes got %d' % len(retval))
             start = start+count
             remain = remain - count
@@ -409,7 +454,20 @@ class memUtils():
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
             try:
-                return self.getUnsigned(SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size))
+                return self.getUnsigned(SIM_read_phys_memory(cpu, phys, size))
+            except:
+                return None
+        else:
+            return None
+
+    def readAppPtr(self, cpu, vaddr):
+        size = self.wordSize(cpu)
+        #if vaddr < self.param.kernel_base:
+        #    size = min(size, 6)
+        phys = self.v2p(cpu, vaddr)
+        if phys is not None:
+            try:
+                return self.getUnsigned(SIM_read_phys_memory(cpu, phys, size))
             except:
                 return None
         else:
@@ -418,20 +476,28 @@ class memUtils():
     def readWord(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), self.WORD_SIZE)
+            return SIM_read_phys_memory(cpu, phys, self.WORD_SIZE)
+        else:
+            return None
+
+    def readAppWord(self, cpu, vaddr):
+        phys = self.v2p(cpu, vaddr)
+        if phys is not None:
+            return SIM_read_phys_memory(cpu, phys, self.wordSize(cpu))
         else:
             return None
 
     def readMemory(self, cpu, vaddr, size):
         phys = self.v2p(cpu, vaddr)
         if phys is not None:
-            return SIM_read_phys_memory(cpu, self.v2p(cpu, vaddr), size)
+            return SIM_read_phys_memory(cpu, phys, size)
         else:
             return None
 
     def getRegValue(self, cpu, reg):
         if reg in self.regs:
             reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+            #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
         else:
             reg_num = cpu.iface.int_register.get_number(reg)
         reg_value = cpu.iface.int_register.read(reg_num)
@@ -635,7 +701,7 @@ class memUtils():
 
     def getBytes(self, cpu, num_bytes, addr, phys_in=False):
         '''
-        Get a byte array of length num_bytes from the given address using Simics physical memory reads, which return tuples.
+        Get a tuple of bytes of length num_bytes from the given address using Simics physical memory reads, which return tuples.
         '''
         done = False
         curr_addr = addr
@@ -820,9 +886,12 @@ class memUtils():
         else:
             return False
 
-    def saveKernelCR3(self, cpu):
-        reg_num = cpu.iface.int_register.get_number("cr3")
-        self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+    def saveKernelCR3(self, cpu, cr3=None):
+        if cr3 is None:
+            reg_num = cpu.iface.int_register.get_number("cr3")
+            self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+        else:
+            self.kernel_saved_cr3 = cr3
         self.lgr.debug('memUtils saveKernelCR3 saved cr3 to 0x%x' % (self.kernel_saved_cr3))
 
     def getKernelSavedCR3(self):

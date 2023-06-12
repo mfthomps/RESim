@@ -26,6 +26,7 @@
    Manage instances of the Syscall modules in different contexts.
 '''
 import syscall
+import winSyscall
 class SyscallInstance():
     ''' Track Syscall module instances '''
     def __init__(self, name, call_names, syscall, call_param_name, lgr):
@@ -86,7 +87,7 @@ class SyscallInstance():
 
 class SyscallManager():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, soMap, compat32, targetFS):
+                   traceMgr, soMap, compat32, targetFS, os_type):
         self.top = top
         self.param = param
         self.cpu = cpu
@@ -100,8 +101,11 @@ class SyscallManager():
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.soMap = soMap
+        if self.soMap is None:
+            self.lgr.error('SOMap is none in syscall manager')
         self.targetFS = targetFS
         self.compat32 = compat32
+        self.os_type = os_type
 
         self.syscall_dict = {}
         self.trace_all = {}
@@ -117,7 +121,17 @@ class SyscallManager():
             
         cell = self.context_manager.getCellFromContext(context)
         self.lgr.debug('syscallManager watchAllSyscalls name %s context %s' % (name, context))
-        retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+        # TBD gather parameters first and stuff them into traceall
+        self.rmSyscallByContext(context)
+        if self.top.isWindows(self.cell_name):
+            retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
+                               self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, 
+                               stop_on_call=stop_on_call, trace=trace, soMap=self.soMap,
+                               record_fd=record_fd, swapper_ok=swapper_ok)
+        else:
+            retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
                                self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
@@ -155,7 +169,14 @@ class SyscallManager():
 
         call_instance = self.findCalls(call_list, context)
         if call_instance is None:
-            retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+            if self.top.isWindows(self.cell_name):
+                retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                               call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, soMap=self.soMap, 
+                               stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
+            else:
+                retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
@@ -179,7 +200,13 @@ class SyscallManager():
                     existing_call_params.append(cp)
                 call_instance.syscall.stopTrace()
                 ''' TBD what about flist and stop action?'''
-                retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                if self.top.isWindows(self.cell_name):
+                    retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
+                               background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call)
+                else:
+                    retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
@@ -215,10 +242,10 @@ class SyscallManager():
                 call_instance.stopTrace(immediate=immediate) 
                 del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about the flist? '''
-                compat32 = call_instance.compat32
+                compat32 = call_instance.syscall.compat32
                 new_call_instance = self.watchSyscall(context, other_calls, remaining_params, call_instance.name, compat32=compat32) 
                 self.syscall_dict[context][call_instance.name] = new_call_instance
-                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call-instance.name))
+                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call_instance.name))
 
     def findInstanceByParams(self, call_param_name, context):
         ''' Return the Syscallinstance that contains params having the given name.   Assumes only one. '''
@@ -273,6 +300,27 @@ class SyscallManager():
             del self.trace_all[context]
         return retval
         
+    def rmSyscallByContext(self, context):
+        self.lgr.debug('syscallManager rmSyscallByContext')
+        retval = False
+        rm_list = []
+        if context in self.syscall_dict:
+            for instance_name in self.syscall_dict[context]:
+                rm_list.append(instance_name)
+                self.syscall_dict[context][instance_name].stopTrace()
+                self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
+                retval = True
+
+            for instance_name in rm_list:
+                del self.syscall_dict[context][instance_name]
+            del self.syscall_dict[context]
+
+        if context in self.trace_all:
+            self.lgr.debug('syscallManager mrSyscallByContext remove trace_all for context %s' % context)
+            self.trace_all[context].stopTrace()
+            retval = True
+            del self.trace_all[context]
+        return retval
 
     #def stopTrace(self, param_name):
 

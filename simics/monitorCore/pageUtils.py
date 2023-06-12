@@ -92,7 +92,8 @@ def readPhysMemory(cpu, addr, length, lgr):
     try:
         retval = SIM_read_phys_memory(cpu, addr, length)                
     except:
-        lgr.debug('pageUtils error reading physical addr 0x%x' % addr)
+        #lgr.debug('pageUtils error reading physical addr 0x%x' % addr)
+        pass
     return retval
 
 ''' return start and end adjusted to be on page boundaries '''
@@ -446,14 +447,18 @@ def isIA32E(cpu):
         return False
    
 def get40(cpu, addr, lgr):
+    retval = None
+    present = None
+    page_size = None
+    value = None
     try:
         value = readPhysMemory(cpu, addr, 8, lgr)
     except:
         lgr.debug('nothing mapped at 0x%x' % addr)
-        return 0, 0, 0
-    retval = memUtils.bitRange(value, 12, 50) << 12
-    page_size = memUtils.testBit(value, 7) 
-    present = memUtils.testBit(value, 0) 
+    if value is not None:
+        retval = memUtils.bitRange(value, 12, 50) << 12
+        page_size = memUtils.testBit(value, 7) 
+        present = memUtils.testBit(value, 0) 
     return retval, present, page_size
 
 def findPageTableIA32E(cpu, addr, lgr, force_cr3=None): 
@@ -500,7 +505,7 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
         ptable_info.table_addr = table_base_addr
         table_base, present, page_size = get40(cpu, table_base_addr, lgr)                
          
-        if table_base == 0:
+        if table_base is None or table_base == 0:
             #lgr.debug('table_base could not be read from 0x%x' % table_base_addr)
             return ptable_info
         else:

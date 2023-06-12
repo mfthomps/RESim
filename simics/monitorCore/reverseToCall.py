@@ -547,6 +547,9 @@ class reverseToCall():
         ''' We were stepping backwards and entered the kernel.  '''
         self.pid = pid
         retval = False
+        if self.cpu is None:
+            self.lgr.debug('reverseToCall cannot jump, cpu not yet defined.')
+            return
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -671,9 +674,12 @@ class reverseToCall():
         closest_fault = self.getClosestFault(all_faults)
         frame, closest_call = self.getPreviousCycleFrame(pid)
         if closest_fault is None or closest_call > closest_fault:
-            self.lgr.debug('tryRecentCycle skipping to recent call')
-            self.skipToTest(closest_call-1)
-            retval = True
+            if closest_call is not None:
+                self.lgr.debug('tryRecentCycle skipping to recent call')
+                self.skipToTest(closest_call-1)
+                retval = True
+            else:
+                self.lgr.debug('tryRecentCycle got None looking for previous cycle')
         elif closet_fault is not None: 
             self.lgr.debug('tryRecentCycle skipping to recent fault')
             self.skipToTest(closest_fault-1)
@@ -1428,20 +1434,16 @@ class reverseToCall():
 
 
     def sysenterHap(self, prec, third, forth, memory):
-        #reversing = SIM_run_command('simulation-reversing')
         #self.lgr.debug('sysenterHap')
-        reversing = False
-        if reversing:
-            return
-        else:
-            cur_cpu, comm, pid  = self.task_utils.curProc()
-            if True or (cur_cpu == self.cpu and pid == self.pid):
+        cur_cpu, comm, pid  = self.task_utils.curProc()
+        if pid is not None:
+            if True:
                 cycles = self.cpu.cycles
                 if pid not in self.sysenter_cycles:
                     self.sysenter_cycles[pid] = {}
                 if cycles not in self.sysenter_cycles[pid]:
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
-                    frame = self.task_utils.frameFromRegs(self.cpu, compat32=self.compat32)
+                    frame = self.task_utils.frameFromRegs(compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
                     self.lgr.debug('sysenterHap pid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (pid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
