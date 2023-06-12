@@ -939,7 +939,7 @@ class GenContextMgr():
             #self.lgr.debug('contextManager watchTasks x set group leader to %d' % group_leader)
             self.group_leader = group_leader
         if set_debug_pid:
-            self.setDebugPid()
+            self.setDebugPid(force=True)
         if comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
       
@@ -954,8 +954,8 @@ class GenContextMgr():
     def singleThread(self, single):
         self.single_thread = single
 
-    def setDebugPid(self):
-        if self.debugging_pid is not None:
+    def setDebugPid(self, force=False):
+        if self.debugging_pid is not None and not force:
             #self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
