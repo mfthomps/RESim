@@ -304,6 +304,7 @@ class ExitInfo():
         ''' stop and reset reversing origin if set '''
         self.origin_reset = False
         self.bytes_to_write = None
+        self.trace_msg = None
 
 
 EXTERNAL = 1
@@ -1864,6 +1865,8 @@ class Syscall():
             ida_msg = '%s %s   pid:%d (%s)' % (callname, taskUtils.stringFromFrame(frame), pid, comm)
             self.lgr.debug(ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
+        if exit_info is not None:
+            exit_info.trace_msg = ida_msg
         if ida_msg is not None and not quiet:
             #self.lgr.debug(ida_msg.strip()) 
             
