@@ -2174,8 +2174,11 @@ class GenMonitor():
                 self.lgr.error('syscall runTocall subcall %s not handled for call %s' % (subcall, callname))
                 return
         else:
-            call_params = []
-        self.lgr.debug('runToCall %s' % callname)
+            self.lgr.debug('runToCall set no_param to break on this call')
+            no_param = syscall.CallParams('runToCall', callname, None, break_simulation=True) 
+            call_params = [no_param]
+
+        self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
         self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=True)
       
         #self.call_traces[self.target][callname] = syscall.Syscall(self, self.target, None, self.param[self.target], 
