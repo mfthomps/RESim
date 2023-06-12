@@ -2676,7 +2676,7 @@ class DataWatch():
             remove_watch = False
             if addr in self.no_backstop:
                 remove_watch = True
-            elif memory.size == self.length[index]:
+            elif len(self.length) > index and memory.size == self.length[index]:
                 if self.isReuse(eip):
                     #self.lgr.debug('dataWatch readHap direct move or such into watch, remove it')
                     remove_watch = True
