@@ -1,17 +1,30 @@
 import os
 import glob
 class TargetFS():
-    def __init__(self, top, root_prefix):
+    def __init__(self, top, root_prefix, root_subdirs):
         self.top = top
         self.root_prefix = root_prefix
+        self.root_subdirs = root_subdirs
         self.lgr = None
 
     def find(self, name):
+        retval = None
+        if len(self.root_subdirs) == 0:
+            retval = self.findFrom(name, self.root_prefix)
+        else:
+            for subdir in self.root_subdirs:
+                from_dir = os.path.join(self.root_prefix, subdir)
+                reval = self.findFrom(name, from_dir)
+                if retval is not None:
+                    break
+        return retval
+
+    def findFrom(self, name, from_dir):
         #if self.top.isWindows():
         #    ''' TBD avoid searching forever'''
         #    return None
-        self.lgr.debug('TargetFS find root_prefix is %s' % self.root_prefix)
-        for root, dirs, files in os.walk(self.root_prefix):
+        self.lgr.debug('TargetFS find from %s' % from_dir)
+        for root, dirs, files in os.walk(from_dir):
    
             self.lgr.debug('TargetFS find files is %s' % str(files))
             if name in files:

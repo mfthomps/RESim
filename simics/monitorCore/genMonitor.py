@@ -403,7 +403,13 @@ class GenMonitor():
                 self.lgr.error('RESIM_ROOT_PREFIX for cell %s is either not defined, or the path is wrong.' % cell_name)
                 self.quit()
                 return
-            self.targetFS[cell_name] = targetFS.TargetFS(self, root_prefix)
+            root_subdirs = []
+            if 'RESIM_ROOT_SUBDIRS' in comp_dict[cell_name]:
+                sub_dirs = comp_dict[cell_name]['RESIM_ROOT_SUBDIRS']
+                parts = sub_dirs.split(';')
+                for sd in parts:
+                    root_subdirs.append(sd.strip()) 
+            self.targetFS[cell_name] = targetFS.TargetFS(self, root_prefix, root_subdirs)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
 
             self.netInfo[cell_name] = net.NetAddresses(self.lgr)
@@ -2168,7 +2174,9 @@ class GenMonitor():
                 self.lgr.error('syscall runTocall subcall %s not handled for call %s' % (subcall, callname))
                 return
         else:
-            call_params = []
+            self.lgr.debug('runToCall set no_param to break on this call')
+            no_param = syscall.CallParams('runToCall', callname, None, break_simulation=True)
+            call_params = [no_param]
         self.lgr.debug('runToCall %s' % callname)
         self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=True)
       
@@ -5344,6 +5352,7 @@ class GenMonitor():
 
     def setFullPath(self, full_path):
         self.full_path = full_path
+        self.lgr.debug('setFullPath to %s' % full_path)
 
     def ignoreProgList(self):
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
