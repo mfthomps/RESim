@@ -226,7 +226,6 @@ class WinCallExit():
         trace_msg=trace_msg+'\n'
 
         if exit_info.call_params is not None and exit_info.call_params.break_simulation:
-            '''  Use syscall module that got us here to handle stop actions '''
             self.lgr.debug('winCallExit found matching call parameter %s' % str(exit_info.call_params.match_param))
             self.matching_exit_info = exit_info
             self.context_manager.setIdaMessage(trace_msg)
@@ -236,9 +235,13 @@ class WinCallExit():
             if not my_syscall.linger: 
                 self.stopTrace()
             if my_syscall is None:
-                self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
+                self.lgr.error('winCallExit could not get syscall for %s' % callname)
             else:
-                #SIM_run_alone(my_syscall.stopAlone, callname)
+                if eax != 0:
+                    new_msg = exit_info.trace_msg + ' ' + trace_msg
+                    self.context_manager.setIdaMessage(new_msg)
+                self.lgr.debug('winCallExit call stopAlone of syscall')
+                SIM_run_alone(my_syscall.stopAlone, callname)
                 self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
