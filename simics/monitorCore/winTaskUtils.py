@@ -151,8 +151,9 @@ class WinTaskUtils():
         cur_thread_rec = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
         return cur_thread_rec
 
-    def getCurThread(self):
-        rec = self.getCurThreadRec()
+    def getCurThread(self, rec=None):
+        if rec == None:
+            rec = self.getCurThreadRec()
         ptr = rec + self.THREAD_ID_OFFSET
         retval = self.mem_utils.readWord32(self.cpu, ptr)
         return retval
