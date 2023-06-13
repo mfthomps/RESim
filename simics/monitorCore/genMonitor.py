@@ -384,7 +384,6 @@ class GenMonitor():
 
             cpu = self.cell_config.cpuFromCell(cell_name)
             self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
-            self.traceMgr[cell_name] = traceMgr.TraceMgr(self.lgr)
             if self.os_type[cell_name].startswith('LINUX'):
                 if 'RESIM_UNISTD' not in comp_dict[cell_name]:
                     print('Target is missing RESIM_UNISTD path')
@@ -630,7 +629,7 @@ class GenMonitor():
             if tu_cur_task_rec is None:
                 self.lgr.error('could not read tu_cur_task_rec from taskUtils')
                 return
-
+            self.traceMgr[cell_name] = traceMgr.TraceMgr(self.lgr)
             #if self.param[cell_name].fs_base is None:
             #    cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
             #    #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
