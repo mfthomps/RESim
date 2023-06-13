@@ -51,14 +51,16 @@ class RunTo():
 
     def rmHaps(self, and_then):
         if len(self.hap_list) > 0:
-            self.lgr.debug('soMap rmHapsAlone')
+            self.lgr.debug('runTo rmHaps')
             for hap in self.hap_list:
                 self.context_manager.genDeleteHap(hap)
             del self.hap_list[:]
             if and_then is not None:
                 and_then()
+                self.lgr.debug('runTo rmHaps back from and_then')
 
     def stopIt(self, dumb=None):
+        self.lgr.debug('runTo stopIt')
         SIM_run_alone(self.rmHaps, None)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, self.cpu)
@@ -122,7 +124,9 @@ class RunTo():
     def watchSO(self):
         ''' Intended to be called prior to trace all starting in order to disable tracing of
             system calls made while still in a skipped dll '''
-        self.lgr.debug('runToIO watchSO')
+        self.lgr.debug('runTo watchSO')
+        self.lgr.debug('watch SO trace_mgr is %s' % str(self.trace_mgr))
+        self.trace_mgr.write('watching SO for skip dlls\n')
         if self.skip_dll is not None:
             self.so_map.addSOWatch(self.skip_dll, self.soLoadCallback)
             for dll in self.skip_dll_others:
@@ -130,7 +134,7 @@ class RunTo():
            
     def soLoadCallback(self, fname, addr, size):
         ''' called by soMap or winDLLMap when a watched code file is loaded '''
-        self.lgr.debug('runToIO soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (fname, addr, size, str(self.cpu.current_context)))
+        self.lgr.debug('runTo soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (fname, addr, size, str(self.cpu.current_context)))
         if fname.endswith(self.skip_dll):
             self.skip_dll_section = soMap.CodeSection(addr, size)
             self.breakOnSkip()
@@ -145,13 +149,14 @@ class RunTo():
            pid_and_thread = self.task_utils.getPidAndThread()
            proc_break = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.skip_dll_section.addr, self.skip_dll_section.size, 0)
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipHap, pid_and_thread, proc_break, 'breakOnSkip'))
-           self.lgr.debug('runToIO pid-thread: %s breakOnSkip set break on main skip dll addr 0x%x current_context %s' % (pid_and_thread, self.skip_dll_section.addr,
+           self.lgr.debug('runTo breakOnSkip pid-thread: %s breakOnSkip set break on main skip dll addr 0x%x current_context %s' % (pid_and_thread, self.skip_dll_section.addr,
                str(self.cpu.current_context)))
         
     def skipHap(self, pid_and_thread, third, forth, memory):
         ''' Hit the DLL whose syscalls are to be skipped '''
         if len(self.hap_list) > 0:
             if self.task_utils.matchPidThread(pid_and_thread):
+                self.lgr.debug('runTo skipHap pid %s current_context %s' % (pid_and_thread, str(self.cpu.current_context)))
                 value = memory.logical_address
                 ''' remove haps and then set the breaks on all DLLs except the skip list '''
                 SIM_run_alone(self.rmHaps, self.setSkipBreaks) 
@@ -166,19 +171,23 @@ class RunTo():
         pid_and_thread = self.task_utils.getPidAndThread()
         cpu, comm, cur_pid = self.task_utils.curProc() 
         code_section_list = self.so_map.getCodeSections(cur_pid)
-        self.lgr.debug('runTo setSkipBreaks pid-thread:%s got %d code sections' % (pid_and_thread, len(code_section_list)))
+        self.lgr.debug('runTo setSkipBreaks pid-thread:%s got %d code sections current context: %s' % (pid_and_thread, len(code_section_list), str(self.cpu.current_context)))
         self.context_manager.addSuspendWatch()
-        msg = 'pid:%s (%s) Suspending syscall trace per dll_skip file\n' % (pid_and_thread, comm)
+        msg = 'pid:%s (%s) Suspending syscall trace per dll_skip file current context %s\n' % (pid_and_thread, comm, str(self.cpu.current_context))
+        self.lgr.debug(msg)
+        self.lgr.debug('trace_mgr is %s' % str(self.trace_mgr))
         self.trace_mgr.write(msg)
+        self.trace_mgr.flush()
+        context = self.cpu.current_context
         for section in code_section_list:
            if section.addr in self.skip_list:
                continue
            if section.fname == 'unknown':
                continue
            end = section.addr+section.size
-           proc_break = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
+           proc_break = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, pid_and_thread, proc_break, 'runToKnown'))
-           #self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x' % (section.addr, section.size))
+           self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x context %s' % (section.addr, section.size, str(context)))
 
     def skipBreakoutHap(self, pid_and_thread, third, forth, memory):
         ''' We hit a DLL whose syscalls are not to be skipped.  Restore debug context.  TBD modify to handle non-debug case as well
@@ -190,6 +199,7 @@ class RunTo():
                 self.context_manager.rmSuspendWatch()
                 msg = 'pid:%s Restarting suspended syscall trace per dll_skip file\n' % (pid_and_thread)
                 self.trace_mgr.write(msg)
+                self.trace_mgr.flush()
                 self.lgr.debug(msg)
                 SIM_run_alone(self.rmHaps, self.breakOnSkip)
 
