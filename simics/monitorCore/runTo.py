@@ -130,7 +130,7 @@ class RunTo():
            
     def soLoadCallback(self, fname, addr, size):
         ''' called by soMap or winDLLMap when a watched code file is loaded '''
-        self.lgr.debug('runToIO soLoadCallback fname: %s addr: 0x%x size 0x%x' % (fname, addr, size))
+        self.lgr.debug('runToIO soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (fname, addr, size, str(self.cpu.current_context)))
         if fname.endswith(self.skip_dll):
             self.skip_dll_section = soMap.CodeSection(addr, size)
             self.breakOnSkip()
@@ -145,7 +145,8 @@ class RunTo():
            pid_and_thread = self.task_utils.getPidAndThread()
            proc_break = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.skip_dll_section.addr, self.skip_dll_section.size, 0)
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipHap, pid_and_thread, proc_break, 'breakOnSkip'))
-           self.lgr.debug('runToIO pid-thread: %s breakOnSkip set break on main skip dll addr 0x%x' % (pid_and_thread, self.skip_dll_section.addr))
+           self.lgr.debug('runToIO pid-thread: %s breakOnSkip set break on main skip dll addr 0x%x current_context %s' % (pid_and_thread, self.skip_dll_section.addr,
+               str(self.cpu.current_context)))
         
     def skipHap(self, pid_and_thread, third, forth, memory):
         ''' Hit the DLL whose syscalls are to be skipped '''
@@ -189,6 +190,7 @@ class RunTo():
                 self.context_manager.rmSuspendWatch()
                 msg = 'pid:%s Restarting suspended syscall trace per dll_skip file\n' % (pid_and_thread)
                 self.trace_mgr.write(msg)
+                self.lgr.debug(msg)
                 SIM_run_alone(self.rmHaps, self.breakOnSkip)
 
 
