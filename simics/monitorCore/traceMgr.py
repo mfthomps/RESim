@@ -5,6 +5,7 @@ class TraceMgr():
         self.trace_fh = None
         self.lgr = lgr
         self.cpu = None
+        self.lgr.debug('TraceMgr init')
 
     def write(self, msg):
         if self.trace_fh is not None:
@@ -15,6 +16,7 @@ class TraceMgr():
         if self.trace_fh is not None:
             self.trace_fh.close()
             self.trace_fh = None
+            self.lgr.debug('traceMgr close')
 
     def flush(self):
         if self.trace_fh is not None:
@@ -24,7 +26,7 @@ class TraceMgr():
         if self.trace_fh is not None:
             self.lgr.error('TraceMgr asked to open file %s while other still open' % fname)
             self.trace_fh.close()
-            
+        self.lgr.debug('traceMgr open %s' % fname)    
         self.trace_fh = open(fname, 'w') 
         self.cpu = cpu
         SIM_run_command('pselect %s' % cpu.name)
