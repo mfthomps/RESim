@@ -200,6 +200,12 @@ class WinCallExit():
                 else:
                     trace_msg = trace_msg+' old handle: 0x%x new handle: 0x%x' % (exit_info.old_fd, new_handle)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
+                    if type(exit_info.call_params.match_param) is int:
+                        if (exit_info.call_params.subcall == 'accept' or self.name=='runToIO') and \
+                           (exit_info.call_params.match_param < 0 or exit_info.call_params.match_param == exit_info.old_fd):
+                            self.lgr.debug('winCallExit %s MODIFIED handle in call params to new handle' % trace_msg)
+                            exit_info.call_params.match_param = new_handle
+                            exit_info.call_params = None
 
         elif callname in ['DeviceIoControlFile']:
             if exit_info.socket_callname == 'RECV':

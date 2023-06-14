@@ -108,6 +108,12 @@ class WinSyscall():
         self.syscall_context = None 
         self.background = background
         break_list, break_addrs = self.doBreaks(background)
+
+        break_simulation = False
+        for call in self.call_params:
+            if call is not None and call.break_simulation:
+                break_simulation = True
+                break 
  
         if flist_in is not None:
             ''' Given function list to use after syscall completes '''
@@ -116,7 +122,7 @@ class WinSyscall():
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
-        elif self.debugging and not self.breakOnProg() and not trace and skip_and_mail:
+        elif (break_simulation or self.debugging) and not self.breakOnProg() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
@@ -596,7 +602,7 @@ class WinSyscall():
                                      self.lgr.error('invalid expression: %s' % pat)
                                      return None
                              
-                             self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                                 self.lgr.debug('socketParse look for match %s %s' % (pat, s))
                              if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
                                  self.lgr.debug('socketParse found match %s' % (call_param.match_param))
                                  exit_info.call_params = call_param
@@ -616,11 +622,25 @@ class WinSyscall():
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
-            if op_cmd == 'ACCEPT':
-                handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
-                exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
+
+            if op_cmd in ['ACCEPT', '12083_ACCEPT']:
+                if op_cmd == '12083_ACCEPT':
+                    exit_info.new_fd = self.paramOffPtr(7, [4], frame)
+                    trace_msg = trace_msg+' handle: 0x%x other handle 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+                else:
+                    handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+                    exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
                 trace_msg = trace_msg + " bind handle: 0x%x  connect handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
-                self.lgr.debug('trace_msg')
+                self.lgr.debug(trace_msg)
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
+                    if type(call_param.match_param) is int:
+                        if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
+                            self.lgr.debug('did accept match')
+                            exit_info.call_params = call_param
+                            self.context_manager.setIdaMessage(trace_msg)
+                            break
+
             elif op_cmd == 'RECV':
                 ''' buffer '''
                 exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
@@ -658,10 +678,6 @@ class WinSyscall():
                 trace_msg = trace_msg+' '+to_string
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
-            elif op_cmd == '12083_ACCEPT':
-                other_handle = self.paramOffPtr(7, [4], frame)
-                trace_msg = trace_msg+' handle: 0x%x other handle 0x%x' % (exit_info.old_fd, other_handle)
-                self.lgr.debug(trace_msg)
 
             else:
                 trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
@@ -669,7 +685,7 @@ class WinSyscall():
                     trace_msg = trace_msg+' pdata: %s' % pdata_hx
             self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
-                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s ss.fd is %s match_param is %s call_param.name is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name))
+                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name))
                 if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
@@ -681,20 +697,19 @@ class WinSyscall():
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, ss.length)
                     else:
-                        self.lgr.debub('call_param.nth is none, call it matched')
+                        self.lgr.debug('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, ss.length)
                     break
-                elif (op_cmd not in self.call_list) and call_param.name == 'runToCall':
-                    self.lgr.debug('winSyscall parse socket call %s, but not what we think is a runToCall.' % op_cmd)
-                    exit_info = None
-                else:
-                    self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
-                    exit_info.call_params = call_param
-
-                
+                elif call_param.name == 'runToCall':
+                    if (op_cmd not in self.call_list):
+                        self.lgr.debug('winSyscall parse socket call %s, but not what we think is a runToCall.' % op_cmd)
+                        exit_info = None
+                    else:
+                        self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
+                        exit_info.call_params = call_param
  
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
@@ -791,6 +806,14 @@ class WinSyscall():
             exit_info.old_fd = frame['param2']
             exit_info.retval_addr = frame['param4']
             trace_msg = trace_msg+' handle: 0x%x  reval addr 0x%x' % (exit_info.old_fd, exit_info.retval_addr)
+            for call_param in syscall_info.call_params:
+                self.lgr.debug('syscall DuplicateObject subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, 
+                     str(call_param.match_param), exit_info.old_fd))
+                if type(call_param.match_param) is int:
+                    if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
+                        exit_info.call_params = call_param
+                        self.lgr.debug('syscall DuplicateObject set call param to handle in exit')
+                        break
 
         #elif callname == 'QueryInformationProcess':
         #    entry = self.task_utils.getSyscallEntry(callnum)
@@ -1007,7 +1030,8 @@ class WinSyscall():
                     self.traceMgr.flush()
                 self.top.idaMessage() 
                 ''' Run the stop action, which is a hapCleaner class '''
-                self.lgr.debug('syscall stopHap run stop_action')
+                funs = self.stop_action.listFuns()
+                self.lgr.debug('syscall stopHap run stop_action, funs: %s' % funs)
                 self.stop_action.run(cb_param=msg)
 
                 if self.call_list is not None:
