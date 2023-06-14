@@ -1344,7 +1344,6 @@ class GenContextMgr():
             retval.append(c)
         return retval 
 
-<<<<<<< HEAD
     def didListLoad(self):
         retval = False
         if len(self.only_progs) > 0 or len(self.ignore_progs) > 0:
