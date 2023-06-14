@@ -441,7 +441,14 @@ class Syscall():
         self.syscall_context = None 
         self.background = background
         break_list, break_addrs = self.doBreaks(compat32, background)
- 
+
+        ''' tbd, was only setting skip and mail in hap cleaner if self.debugging was set.  but with the "only" lists, we need a better scheme, so try this'''
+        break_simulation = False
+        for call in self.call_params:
+            if call is not None and call.break_simulation:
+                break_simulation = True
+                break 
+
         if flist_in is not None:
             ''' Given function list to use after syscall completes '''
             hap_clean = hapCleaner.HapCleaner(cpu)
@@ -449,7 +456,7 @@ class Syscall():
                 hap_clean.add("Core_Breakpoint_Memop", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
             #self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
-        elif self.debugging and not self.breakOnExecve() and not trace and skip_and_mail:
+        elif (break_simulation or self.debugging) and not self.breakOnExecve() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             for ph in self.proc_hap:
                 hap_clean.add("Core_Breakpoint_Memop", ph)
