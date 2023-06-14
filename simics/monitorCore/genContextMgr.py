@@ -1345,6 +1345,7 @@ class GenContextMgr():
         return retval 
 
     def loadIgnoreList(self, fname):
+        retval = False
         self.lgr.debug('contextManager loadIgnoreList')
         #flist = glob.glob('*.ignore_prog')
         #if len(flist) > 1:
@@ -1358,6 +1359,7 @@ class GenContextMgr():
                         continue
                     self.ignoreProg(line.strip())
                     self.lgr.debug('contextManager will ignore %s' % line.strip())
+                    retval = True
             '''
             tasks = self.task_utils.getTaskStructs()
             for t in tasks:
@@ -1366,9 +1368,11 @@ class GenContextMgr():
             '''
         else:
             self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
+        return retval
 
     def loadOnlyList(self, fname):
         self.lgr.debug('contextManager loadOnlyList')
+        retval = False
         if os.path.isfile(fname):
             self.lgr.debug('loadIgnoreList %s' % fname)
             with open(fname) as fh:
@@ -1377,5 +1381,7 @@ class GenContextMgr():
                         continue
                     self.onlyProg(line.strip())
                     self.lgr.debug('contextManager will watch  %s' % line.strip())
+                    retval = True
         else:
             self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
+        return retval

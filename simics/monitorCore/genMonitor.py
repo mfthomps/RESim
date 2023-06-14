@@ -2358,9 +2358,12 @@ class GenMonitor():
         ''' Load ignore list or only list if defined '''
         self.lgr.debug('checkOnlyIgnore')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
+        retval = False
         if pid is None:
-            self.ignoreProgList() 
-            self.onlyProgList() 
+            retval = self.ignoreProgList() 
+            if not retval:
+                retval = self.onlyProgList() 
+        return retval
  
     def traceAll(self, target=None, record_fd=False, swapper_ok=False):
         if target is None:
@@ -2372,7 +2375,9 @@ class GenMonitor():
             print('Unknown target %s' % target)
             return
 
-        self.checkOnlyIgnore()
+        if self.checkOnlyIgnore():
+            self.rmDebugWarnHap()
+
         if self.isWindows():
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
             self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
@@ -5354,16 +5359,20 @@ class GenMonitor():
         self.lgr.debug('setFullPath to %s' % full_path)
 
     def ignoreProgList(self):
+        retval = False
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['SKIP_PROGS']
-            self.context_manager[self.target].loadIgnoreList(sfile)
+            retval = self.context_manager[self.target].loadIgnoreList(sfile)
             print('Loaded list of programs to ignore from %s' % sfile)
+        return retval
 
     def onlyProgList(self):
+        retval = False
         if 'ONLY_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['ONLY_PROGS']
-            self.context_manager[self.target].loadOnlyList(sfile)
+            retval = self.context_manager[self.target].loadOnlyList(sfile)
             print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
+        return retval
 
     def recordEnter(self):
         self.rev_to_call[self.target].sysenterHap(None, None, None, None)
