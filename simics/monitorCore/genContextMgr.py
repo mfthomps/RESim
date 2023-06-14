@@ -1344,44 +1344,52 @@ class GenContextMgr():
             retval.append(c)
         return retval 
 
+    def didListLoad(self):
+        retval = False
+        if len(self.only_progs) > 0 or len(self.ignore_progs) > 0:
+            retval = True
+        return retval
+
     def loadIgnoreList(self, fname):
         retval = False
-        self.lgr.debug('contextManager loadIgnoreList')
-        #flist = glob.glob('*.ignore_prog')
-        #if len(flist) > 1:
-        #    self.lgr.error('Found multiple dll_skip files, only one supported')
-        #elif len(flist) == 1:
-        if os.path.isfile(fname):
-            self.lgr.debug('loadIgnoreList %s' % fname)
-            with open(fname) as fh:
-                for line in fh:
-                    if line.startswith('#'):
-                        continue
-                    self.ignoreProg(line.strip())
-                    self.lgr.debug('contextManager will ignore %s' % line.strip())
-                    retval = True
-            '''
-            tasks = self.task_utils.getTaskStructs()
-            for t in tasks:
-                self.newProg(tasks[t].comm, tasks[t].pid)
-            self.restoreDefaultContext()
-            '''
-        else:
-            self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
+        if not self.didListLoad():
+            self.lgr.debug('contextManager loadIgnoreList')
+            #flist = glob.glob('*.ignore_prog')
+            #if len(flist) > 1:
+            #    self.lgr.error('Found multiple dll_skip files, only one supported')
+            #elif len(flist) == 1:
+            if os.path.isfile(fname):
+                self.lgr.debug('loadIgnoreList %s' % fname)
+                with open(fname) as fh:
+                    for line in fh:
+                        if line.startswith('#'):
+                            continue
+                        self.ignoreProg(line.strip())
+                        self.lgr.debug('contextManager will ignore %s' % line.strip())
+                        retval = True
+                '''
+                tasks = self.task_utils.getTaskStructs()
+                for t in tasks:
+                    self.newProg(tasks[t].comm, tasks[t].pid)
+                self.restoreDefaultContext()
+                '''
+            else:
+                self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
         return retval
 
     def loadOnlyList(self, fname):
-        self.lgr.debug('contextManager loadOnlyList')
         retval = False
-        if os.path.isfile(fname):
-            self.lgr.debug('loadIgnoreList %s' % fname)
-            with open(fname) as fh:
-                for line in fh:
-                    if line.startswith('#'):
-                        continue
-                    self.onlyProg(line.strip())
-                    self.lgr.debug('contextManager will watch  %s' % line.strip())
-                    retval = True
-        else:
-            self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
+        if not self.didListLoad():
+            self.lgr.debug('contextManager loadOnlyList')
+            if os.path.isfile(fname):
+                self.lgr.debug('loadIgnoreList %s' % fname)
+                with open(fname) as fh:
+                    for line in fh:
+                        if line.startswith('#'):
+                            continue
+                        self.onlyProg(line.strip())
+                        self.lgr.debug('contextManager will watch  %s' % line.strip())
+                        retval = True
+            else:
+                self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
         return retval
