@@ -182,7 +182,8 @@ class WinMonitor():
         tf = '/tmp/trace_windows.txt'
         self.traceMgr.open(tf, self.cpu)
         call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
-                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32']
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32',
+                         'DuplicateObject']
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
         retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
