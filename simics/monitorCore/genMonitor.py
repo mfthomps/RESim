@@ -2826,7 +2826,8 @@ class GenMonitor():
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
         self.lgr.debug('runTo')
-        self.checkOnlyIgnore()
+        if self.checkOnlyIgnore():
+            self.rmDebugWarnHap()
 
         ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
@@ -2948,8 +2949,12 @@ class GenMonitor():
         self.runTo(['read'], call_params, name='read', ignore_running=ignore_running)
 
     def runToAccept(self, fd, flist=None, proc=None):
-        call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
+        if not self.isWindows():
+            call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
+        else:
+            call = ['ACCEPT', '12083_ACCEPT', 'DuplicateObject']
         call_params = syscall.CallParams('runToAccept', 'accept', fd, break_simulation=True, proc=proc)        
+           
         self.lgr.debug('runToAccept on FD: %d call is: %s' % (fd, str(call)))
         if flist is None:
             linger = True
@@ -5363,7 +5368,8 @@ class GenMonitor():
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['SKIP_PROGS']
             retval = self.context_manager[self.target].loadIgnoreList(sfile)
-            print('Loaded list of programs to ignore from %s' % sfile)
+            if retval:
+                print('Loaded list of programs to ignore from %s' % sfile)
         return retval
 
     def onlyProgList(self):
@@ -5371,7 +5377,8 @@ class GenMonitor():
         if 'ONLY_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['ONLY_PROGS']
             retval = self.context_manager[self.target].loadOnlyList(sfile)
-            print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
+            if retval:
+                print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
         return retval
 
     def recordEnter(self):
