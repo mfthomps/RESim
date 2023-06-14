@@ -298,6 +298,7 @@ class Win7CallParams():
         ''' hit when kernel is entered due to sysenter '''
         self.lgr.debug('win7CallParams syscallHap')
         dumb, comm, pid = self.task_utils.curProc()
+        pid_thread = self.task_utils.getPidAndThread()
         #SIM_break_simulation(pid)
         #return
         #if pid is None:
@@ -305,7 +306,7 @@ class Win7CallParams():
         #    return
         if pid is not None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-            self.lgr.debug('win7CallParams syscallHap pid:%d (%s) call %d' % (pid, comm, rax))
+            self.lgr.debug('win7CallParams syscallHap pid:%s (%s) call %d' % (pid_thread, comm, rax))
             ''' Use the call map to get the call name, and strip off "nt" '''
             call_name = self.task_utils.syscallName(rax)
             if call_name is not None:
@@ -331,7 +332,7 @@ class Win7CallParams():
                 self.current_call[pid] = rax
                 rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
                 self.entry_rsp[pid] = rsp
-                self.lgr.debug('win7CallParams syscallHap pid:%d (%s) rsp: 0x%x rax: %d call: %s' % (pid, comm, rsp, rax, call_name)) 
+                self.lgr.debug('win7CallParams syscallHap pid:%s (%s) rsp: 0x%x rax: %d call: %s' % (pid_thread, comm, rsp, rax, call_name)) 
                 if call_name == self.stop_on:
                     SIM_break_simulation('syscall stop on call')
 
@@ -413,11 +414,12 @@ class Win7CallParams():
         self.lgr.debug('after merge')
         params = self.param_ref_tracker.toString()
         dumb, comm, pid = self.task_utils.curProc()
-        if pid is not None:
+        pid_thread = self.task_utils.getPidAndThread()
+        if pid_thread is not None:
             if self.track_log is None:
                 print('pid:%d (%s) %s' % (pid, comm, params))
             else:
-                self.track_log.write('pid:%d (%s) %s\n' % (pid, comm, params))
+                self.track_log.write('pid:%s (%s) %s\n' % (pid_thread, comm, params))
         else:
             self.lgr.error('exitTrackHap got pid of None')
             SIM_break_simulation('fix this')
@@ -477,7 +479,7 @@ class Win7CallParams():
         if pid is not None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             if pid is not None:
-                self.lgr.debug('exitHap pid:%d (%s) rax: 0x%x' % (pid, comm, rax))
+                self.lgr.debug('exitHap pid:%s (%s) rax: 0x%x' % (pid_thread, comm, rax))
             if pid in self.all_reg_values:
                 self.lgr.debug(self.all_reg_values[pid])
 
@@ -515,7 +517,7 @@ class Win7CallParams():
             SIM_break_simulation('fix this')
             return
         dumb, comm, pid = self.task_utils.curProc()
-        self.lgr.debug('win7CallParams pid:%d userReadHap memory 0x%x len %d current_context %s' % (pid, memory.logical_address, memory.size, str(self.cpu.current_context)))
+        self.lgr.debug('win7CallParams pid:%s userReadHap memory 0x%x len %d current_context %s' % (pid_thread, memory.logical_address, memory.size, str(self.cpu.current_context)))
         orig_value = self.mem_utils.readBytes(self.cpu, memory.logical_address, memory.size)
         if orig_value is not None:
             value = bytearray(orig_value)
