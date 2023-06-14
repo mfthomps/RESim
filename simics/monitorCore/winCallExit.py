@@ -154,7 +154,7 @@ class WinCallExit():
             else:
                 self.lgr.debug('winCallExit %s pid:%d (%s) returned bad load address or size?' % (callname, pid, comm))
 
-        elif callname in ['CreateEvent', 'OpenProcessToken']:
+        elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
             if fd is not None:
                 trace_msg = trace_msg+' handle: 0x%x' % (fd)
@@ -191,6 +191,15 @@ class WinCallExit():
                     self.lgr.debug('winCallExit %s' % (trace_msg))
             else:
                 self.lgr.debug('winCallExit %s bad retval_addr?' % (trace_msg))
+
+        elif callname == 'DuplicateObject': 
+            if exit_info.retval_addr is not None:
+                new_handle = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
+                if new_handle is None:
+                     self.lgr.warning('bad handle read from 0x%x' % exit_info.retval_addr)
+                else:
+                    trace_msg = trace_msg+' old handle: 0x%x new handle: 0x%x' % (exit_info.old_fd, new_handle)
+                    self.lgr.debug('winCallExit %s' % (trace_msg))
 
         elif callname in ['DeviceIoControlFile']:
             if exit_info.socket_callname == 'RECV':

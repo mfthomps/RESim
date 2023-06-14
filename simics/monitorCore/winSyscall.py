@@ -629,12 +629,14 @@ class WinSyscall():
                 ''' hack until we have method of figuring out 32/64 bit app. '''
                 if exit_info.retval_addr is None or exit_info.retval_addr == 0:
                     exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame)
-                    exit_info.fname_addr = frame['param5'] + 4
+                    #exit_info.fname_addr = frame['param5'] + 4
+                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
                 trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, 
                        exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                 trace_msg = trace_msg + ' '+str(pdata_hx)
                 self.lgr.debug(trace_msg)
+                #self.lgr.debug('RECV frame %s' % frame_string)
             elif op_cmd == 'SEND':
                 #off = 3*self.mem_utils.wordSize(self.cpu)
                 #exit_info.retval_addr = self.paramOffPtr(7, [0, off], frame)
@@ -656,6 +658,10 @@ class WinSyscall():
                 trace_msg = trace_msg+' '+to_string
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
+            elif op_cmd == '12083_ACCEPT':
+                other_handle = self.paramOffPtr(7, [4], frame)
+                trace_msg = trace_msg+' handle: 0x%x other handle 0x%x' % (exit_info.old_fd, other_handle)
+                self.lgr.debug(trace_msg)
 
             else:
                 trace_msg = trace_msg+' Handle: 0x%x operation: 0x%x' % (exit_info.old_fd, operation)
@@ -690,7 +696,7 @@ class WinSyscall():
 
                 
  
-        elif callname in ['CreateEvent', 'OpenProcessToken']:
+        elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
             trace_msg = trace_msg+' handle addr: 0x%x' % (exit_info.retval_addr)
 
@@ -780,6 +786,11 @@ class WinSyscall():
             trace_msg = trace_msg+' who: 0x%x' % (who)
             if who == 0xffffffffffffffff:
                 trace_msg = trace_msg+' process exiting'
+
+        elif callname == 'DuplicateObject':
+            exit_info.old_fd = frame['param2']
+            exit_info.retval_addr = frame['param4']
+            trace_msg = trace_msg+' handle: 0x%x  reval addr 0x%x' % (exit_info.old_fd, exit_info.retval_addr)
 
         #elif callname == 'QueryInformationProcess':
         #    entry = self.task_utils.getSyscallEntry(callnum)

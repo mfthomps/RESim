@@ -52,6 +52,8 @@ op_map_vals["WAIT_FOR_LISTEN"]= 0x1200C
 # from web
 op_map_vals["TCP_FASTOPEN"]= 0x120BF
 op_map_vals["SUPER_CONNECT?"]= 0x120C7
+# from digging
+op_map_vals["12083_ACCEPT"]=0x12083
 
 
 def getOpMap():
