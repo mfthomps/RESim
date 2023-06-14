@@ -896,3 +896,13 @@ class memUtils():
 
     def getKernelSavedCR3(self):
         return self.kernel_saved_cr3
+
+    def wordSize(self, cpu):
+        retval = self.WORD_SIZE
+        if cpu.architecture != 'arm':
+            ''' see api-help x86_exec_mode_t '''
+            mode = cpu.iface.x86_reg_access.get_exec_mode()
+            if mode == 3:
+                retval = 4
+        return retval
+

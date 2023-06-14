@@ -1395,6 +1395,7 @@ class Syscall():
         ida_msg = None
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
+            self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
             if call_param.match_param.__class__.__name__ == 'PidFilter':
                 if pid != call_param.match_param.pid:
                     #self.lgr.debug('syscall syscallParse, pid filter did not match')
@@ -1407,6 +1408,15 @@ class Syscall():
                     #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
                     #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                     return
+            elif call_param.name == 'runToCall':
+                if callname not in self.call_list:
+                    self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
+                    return
+                else:
+                    exit_info.call_params = call_param
+                    self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
+             
+        ''' NOTE returns above '''
         if callname == 'open' or callname == 'openat':        
             #self.lgr.debug('syscallParse, is %s' % callname)
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
@@ -2261,6 +2271,7 @@ class Syscall():
                 #self.stop_action.addFun(fun)
                 print('exit pid %d' % pid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group pid:%d' % pid)
+                self.context_manager.checkExitCallback()
 
     def getBinders(self):
         return self.binders

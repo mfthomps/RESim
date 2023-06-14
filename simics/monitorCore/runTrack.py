@@ -110,7 +110,8 @@ def main():
         ''' single file to report on '''
         afl_list = [target]
     else:
-        afl_list = aflPath.getTargetQueue(target, ws_filter=workspace)
+        #afl_list = aflPath.getTargetQueue(target, ws_filter=workspace)
+        afl_list = aflPath.getTargetQueue(target)
 
     ''' remove any empty or corrupt track jsons '''
     track_list = aflPath.getAFLTrackList(target, ws_filter=workspace)

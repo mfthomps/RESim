@@ -197,7 +197,7 @@ class PlayAFL():
         SIM_run_alone(self.goAlone, False)
 
     def hangCallback(self, cycles):
-        self.lgr.debug('playAFL hang detected')
+        self.lgr.info('playAFL hang detected')
         SIM_break_simulation('hang')
 
     def goAlone(self, clear_hits):
@@ -243,7 +243,7 @@ class PlayAFL():
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
-            self.lgr.debug('playAFL try afl_list entry %s' % self.afl_list[self.index])
+            self.lgr.info('playAFL try afl_list entry %s' % self.afl_list[self.index])
             if self.in_data is None or not self.repeat:
                 full = os.path.join(self.afl_dir, self.afl_list[self.index])
                 if not os.path.isfile(full):
@@ -323,11 +323,11 @@ class PlayAFL():
                 SIM_continue(0)
             #SIM_run_command('c')
         else:
-            self.lgr.debug('playAFL did all sessions.')
+            self.lgr.info('playAFL did all sessions.')
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
                 hits = self.coverage.getHitCount()
-                self.lgr.debug('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
+                self.lgr.info('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
                 hits_path = self.coverage.getHitsPath()
   
                 s = json.dumps(self.all_hits)

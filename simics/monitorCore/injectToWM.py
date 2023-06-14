@@ -48,7 +48,7 @@ class InjectToWM():
             self.mark_index = result.mark['index']
             self.lgr.debug('InjectToWM inject %d bytes and %d packets at ip: 0x%x, Watch Mark: %d from %s' % (result.size, result.mark['packet'], result.mark['ip'], 
                 self.mark_index, result.path))
-            print('InjectToWM inject %d bytes and %d packets from %s' % (result.size, result.mark['packet'], result.path))
+            print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
             self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname)
@@ -87,19 +87,26 @@ class InjectToWM():
         print('Go to data mark %d.  Data file copied to /tmp/wm.io (and wm_filtered.io if there was a filter).' % self.mark_index)
 
     def findOneTrack(self, addr):
+        ''' Find a track having watchmark having the given address. 
+            Prioritize low packet numbers and small queue file size.
+        '''
         retval = None
         least_packet = 100000
         least_size = 100000
         expaths = aflPath.getAFLTrackList(self.target)
+        self.lgr.debug('findOneTrack 0x%x %d paths' % (addr, len(expaths)))
         for index in range(len(expaths)):
-            result = findTrack.findTrack(expaths[index], addr, True, quiet=True)
+            result = findTrack.findTrack(expaths[index], addr, True, quiet=True, lgr=self.lgr)
             if result is not None:
+                self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d' % (addr, result.mark['index']))
                 if result.mark['packet'] < least_packet:
                     least_packet = result.mark['packet']
-                    least_size = result.size
+                    #least_size = result.size
+                    least_size = result.num_marks
                     retval = result
-                elif result.mark['packet'] == least_packet and result.size < least_size:
-                    least_size = result.size
+                #elif result.mark['packet'] == least_packet and result.size < least_size:
+                elif result.mark['packet'] == least_packet and result.num_marks < least_size:
+                    least_size = result.num_marks
                     retval = result
         return retval
    

@@ -174,7 +174,7 @@ class InjectIO():
                 self.in_data = bytearray(fh.read())
             else:
                 self.in_data = fh.read()
-        self.lgr.debug('write data total size %d file %s' % (len(self.in_data), self.dfile))
+        self.lgr.info('injectIO go, write data total size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging, or unless modifying kernel buffer '''
         if self.target is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
@@ -433,7 +433,7 @@ class InjectIO():
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
-        self.top.stopTrackIO
+        self.top.stopTrackIO()
 
     def setDfile(self, dfile):
         self.dfile = dfile

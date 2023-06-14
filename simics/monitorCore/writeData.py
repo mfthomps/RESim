@@ -268,9 +268,9 @@ class WriteData():
                     ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
                     self.addr = self.addr+1
             else:
-                tot_len = len(self.in_data)
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
+                tot_len = len(self.in_data)
                 if self.filter is not None:
                     result = self.filter.filter(self.in_data, self.current_packet)
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
@@ -305,10 +305,11 @@ class WriteData():
                 if self.filter is not None: 
                     result = self.filter.filter(first_data, self.current_packet)
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
+                    retval = len(result)
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, first_data) 
+                    retval = len(first_data)
                 # TBD add handling of padding with udp header                
-                retval = len(first_data)
                 eip = self.top.getEIP(self.cpu)
                 #self.lgr.debug('writeData wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
                 #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
@@ -322,7 +323,7 @@ class WriteData():
                 if self.filter is not None:
                     result = self.filter.filter(data, self.current_packet)
                 self.mem_utils.writeString(self.cpu, self.addr, result)
-                retval = len(data)
+                retval = len(result)
                 self.in_data = ''
                 #retval = 100
             self.cpu.iface.int_register.write(self.len_reg_num, retval)

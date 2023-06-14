@@ -183,7 +183,7 @@ class SyscallManager():
                                stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
             ''' will have at least one call parameter, perhaps the dummy. '''
             call_param_name = call_params_list[0].name
-            self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s call_param_name:%s' % (context, name, call_param_name))
+            self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s, call_param_name: %s' % (context, name, call_param_name))
             call_instance = SyscallInstance(name, call_list, retval, call_param_name, self.lgr)
             if context not in self.syscall_dict:
                 self.syscall_dict[context] = {}
