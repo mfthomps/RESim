@@ -204,6 +204,7 @@ class LaunchRESim():
         lgr.debug('Start of log from LaunchRESim workspace %s  ONE_DONE_SCRIPT: %s' % (SIMICS_WORKSPACE, os.getenv('ONE_DONE_SCRIPT')))
         RESIM_INI = os.getenv('RESIM_INI')
         self.config = ConfigParser.ConfigParser()
+        config_command = None
         #self.config = ConfigParser.RawConfigParser()
         self.config.optionxform = str
         if not RESIM_INI.endswith('.ini'):
@@ -236,6 +237,8 @@ class LaunchRESim():
             elif name == 'DRIVER_WAIT' and (value.lower() == 'true' or value.lower() == 'yes'):
                 print('DRIVER WILL WAIT')
                 DRIVER_WAIT = True
+            elif name == 'CONFIG_COMMAND':
+                config_command = value
             #print('assigned %s to %s' % (name, value))
 
         ''' hack around simics bug generating rafts of x11 traffic '''
@@ -301,10 +304,11 @@ class LaunchRESim():
                 addSwitchLinkNames('driver', self.comp_dict['driver'], self.link_dict['driver'], switch_map)
                 if DRIVER_WAIT:
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
-                    return
-
             ''' NOTE RETURN ABOVE '''
-            self.doSections() 
+            if not DRIVER_WAIT:
+                self.doSections() 
+            if config_command is not None:
+                run_command(config_command)
         else:
             print('run from checkpoint %s' % RUN_FROM_SNAP)
             run_command('read-configuration %s' % RUN_FROM_SNAP)
@@ -366,14 +370,20 @@ class LaunchRESim():
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
             else:
+                did_net_create = False
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
-                        cmd = '%s=%s' % (name[1:], value)
+                        if 'create_network' in name:
+                            did_net_create = True
+                            cmd = 'create_network=TRUE eth_link=%s' % value
+                        else:     
+                            cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
                         if self.SIMICS_VER.startswith('4'):
                            run_command('$'+cmd)
-
+                if 'genx86' in script and not did_net_create:
+                    params = params+" "+'create_network=FALSE'
 
    
             if self.SIMICS_VER.startswith('4'):
