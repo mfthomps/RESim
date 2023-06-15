@@ -29,12 +29,13 @@ def getQueue(f):
     return track
 
 class TrackResult():
-    def __init__(self, path, size, mark):
+    def __init__(self, path, size, mark, num_marks):
         self.path = path 
         self.size = size
         self.mark = mark
+        self.num_marks = num_marks
 
-def findTrack(f, addr, one, quiet=False):
+def findTrack(f, addr, one, quiet=False, lgr=None):
     retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
@@ -56,9 +57,12 @@ def findTrack(f, addr, one, quiet=False):
             #if mark['mark_type'] == 'read' and mark['ip']==addr:
             if mark['ip']==addr:
                 size = os.path.getsize(queue_path)
-                retval = TrackResult(queue_path, size, mark)
+                retval = TrackResult(queue_path, size, mark, len(mark_list))
+                #if lgr is not None:
+                #    lgr.debug('findTrack 0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
                 if not quiet:
-                    print('0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
+                    print('0x%x found %s at mark %d in (len %d)  %s packet: %d num_marks: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, 
+                          mark['packet'], len(mark_list)))
                 if one:
                     break
     else:

@@ -102,7 +102,7 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
 
         rel_path = aflPath.getRelativePath(f, args.target)
         #print('rel_path is %s' % rel_path)
-        if not gotone:
+        if not gotone or ',orig:' in rel_path:
             #print('new hit list %d hits %s' % (numhits, rel_path))
             hit_dict[rel_path] = hits
         else:
@@ -124,6 +124,7 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
 
 def checkMulti(flist, all_hits, udp_header, hit_dict): 
     ''' find multi-udp sessions that led to new hits '''
+    print('checkMulti')
     multi_hits = {}
     for f in flist:
         json_hits = json.load(open(f))
@@ -218,8 +219,11 @@ def main():
     remove_set = []
     all_hits = []
     for f in hit_dict:
+        #print('remove subsets for %s' % f)
         for this_f in hit_dict:
             if this_f == f:
+                continue
+            if ',orig:' in this_f:
                 continue
             got_dif = False
             for hit in hit_dict[this_f]:

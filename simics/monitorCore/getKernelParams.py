@@ -953,6 +953,10 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChangedWin found sysenter')
                 self.hack_stop = True
                 SIM_break_simulation('entryModeChangedWin found sysenter')
+            elif self.param.sysenter is not None:
+                self.lgr.debug('entryModeChangedWin alread found sysenter??')
+                self.hack_stop = True
+                SIM_break_simulation('entryModeChangedWin alread found sysenter??')
             else:
                 self.lgr.debug('entryModeChangedWin what to do?')
 
@@ -1013,6 +1017,8 @@ class GetKernelParams():
                         ptr = gs_base + value
                         phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
                         self.win7_saved_cr3_phys = phys_block.address
+                        self.lgr.debug('stepCompute insruct %s param.saved_cr3 to 0x%x ptr 0x%x win7_saved_cr3 0x%x' % (instruct[1], self.param.saved_cr3,
+                            ptr, self.win7_saved_cr3_phys))
                     elif self.param.ptr2stack is None:
                         self.param.ptr2stack = value
                     else:
