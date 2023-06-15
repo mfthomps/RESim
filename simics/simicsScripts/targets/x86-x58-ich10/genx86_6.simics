@@ -1,5 +1,12 @@
 decl{
     params from "x86-x58-ich10-system6.include"
+
+ group "Networking"
+ param ip_address : string = "auto"
+ ! The board IP address.
+ params from "%simics%/targets/common/ethernet-setup.include"
+  except eth_connector
+
     result southbridge : string
     result northbridge : string
     result system : string
@@ -14,6 +21,8 @@ decl{
 #    result switch3_con : string
 #    result vswitch1_con : string
 
+ result eth_link : string or nil
+ result service_node : string or nil
 }
 
 add-directory "%script%"
@@ -52,6 +61,32 @@ $system->system_info = "Viper - "+$host_name
 #connect $system.serconsole2.serial $southbridge.serial[1]
 
 $eth0 = $host_name.mb.sb.eth_slot
+
+## Set up Ethernet for systems that need dhcp, etc.
+if $create_network {
+    $eth_connector = $system.mb.sb.eth_slot
+    run-command-file "%simics%/targets/common/ethernet-setup.include"
+}
+
+# File added in Simics-Base 6.0.75
+if (lookup-file -query "%simics%/targets/common/sn-setup.include") {
+        run-command-file "%simics%/targets/common/sn-setup.include"
+} else {
+        if $service_node != NIL {
+                local $sn = ($service_node.sn)
+                if $ip_address == "auto" {
+                        $ip_address = ($sn.get-ip-address-from-pool)
+                }
+                ($sn.add-host name = $machine_name
+                 ip = $ip_address
+                 domain = $dhcp_domain_name
+                 mac = $mac_address)
+                default-port-forward-target $ip_address
+        }
+}
+if $service_node != NIL {
+    $service_node.sn->napt_enable = 0
+}
 
 instantiate-components
 
