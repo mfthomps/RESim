@@ -178,7 +178,10 @@ decl {
 }
 ### RESim params
 $disk0_image = $disk_image
-$disk0_size = $disk_size
+#
+# Let disk size default to size of disk.  TBD remove parameter
+# after support for simics4 is dropped?
+#$disk0_size = $disk_size
 if $use_disk2{
     $disk1_image = $disk2_image
     $disk1_size = $disk2_size
