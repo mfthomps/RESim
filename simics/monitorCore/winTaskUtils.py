@@ -93,9 +93,12 @@ class WinTaskUtils():
                     value = pickle.load(open(pfile, 'rb'))
                     if type(value) is int:
                         self.phys_current_task = value
+                        self.lgr.debug('winTaskUtils loaded only phys_current_task, value 0x%x' % value)
                     else:
                         self.phys_current_task = value['current_task_phys']
                         self.phys_saved_cr3 = value['saved_cr3_phys']
+                        self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
+                           self.phys_saved_cr3))
                 else:
                     self.lgr.error('winTaskUtils did not find %s' % pfile)
                     return
