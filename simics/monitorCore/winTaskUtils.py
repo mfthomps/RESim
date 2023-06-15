@@ -102,9 +102,12 @@ class WinTaskUtils():
                         gs_base = self.cpu.ia32_gs_base
                         self.phys_saved_cr3 = gs_base+self.param.saved_cr3
                         self.lgr.debug('winTaskUtils, hacked snapshop lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
+                        self.lgr.debug('winTaskUtils loaded only phys_current_task, value 0x%x' % value)
                     else:
                         self.phys_current_task = value['current_task_phys']
                         self.phys_saved_cr3 = value['saved_cr3_phys']
+                        self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
+                           self.phys_saved_cr3))
                     saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
                     self.mem_utils.saveKernelCR3(self.cpu, saved_cr3)
                 else:

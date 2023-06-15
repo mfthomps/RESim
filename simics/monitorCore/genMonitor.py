@@ -706,7 +706,9 @@ class GenMonitor():
    
     def snapInit(self):
             ''' Running from a snapshot '''
-            self.warnSnapshot()
+            tfile = os.path.join('./', self.run_from_snap, 'debug_info.pickle')
+            if os.path.isfile(tfile):
+                self.warnSnapshot()
             for cell_name in self.cell_config.cell_context:
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
