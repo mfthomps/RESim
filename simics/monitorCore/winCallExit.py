@@ -200,7 +200,7 @@ class WinCallExit():
                 else:
                     trace_msg = trace_msg+' old handle: 0x%x new handle: 0x%x' % (exit_info.old_fd, new_handle)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
-                    if type(exit_info.call_params.match_param) is int:
+                    if exit_info.call_params is not None and type(exit_info.call_params.match_param) is int:
                         if (exit_info.call_params.subcall == 'accept' or self.name=='runToIO') and \
                            (exit_info.call_params.match_param < 0 or exit_info.call_params.match_param == exit_info.old_fd):
                             self.lgr.debug('winCallExit %s MODIFIED handle in call params to new handle' % trace_msg)
@@ -218,6 +218,25 @@ class WinCallExit():
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
                     trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
+
+
+
+                    my_syscall = exit_info.syscall_instance
+                    if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                        ''' in case we want to break on a read of this data.  '''
+                        self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
+                            exit_info.count))
+                        if self.kbuffer is not None:
+                            self.kbuffer.readReturn(eax)
+                        # TBD sainer way to look for reuse of input buffers?  For now, limit data watch range to the returned count
+                        #self.dataWatch.setRange(exit_info.retval_addr, return_count, msg=trace_msg, 
+                        #           max_len=exit_info.count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
+                        self.dataWatch.setRange(exit_info.retval_addr, return_count, msg=trace_msg, 
+                                   max_len=return_count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
+                        if my_syscall.linger: 
+                            self.dataWatch.stopWatch() 
+                            self.dataWatch.watch(break_simulation=False, i_am_alone=True)
+
                 else:
                     trace_msg = trace_msg+' FAILED to get return count'
                 self.lgr.debug(trace_msg)
@@ -235,6 +254,9 @@ class WinCallExit():
                     trace_msg = trace_msg+' FAILED to get return count'
 
                 self.lgr.debug(trace_msg)
+
+            elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
+                trace_msg = trace_msg+' bind socket: 0x%x  connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
 
         else:
             self.lgr.debug('winCallExit %s returned: 0x%x' % (trace_msg, eax)) 
