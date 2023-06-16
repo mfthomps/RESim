@@ -1,0 +1,12 @@
+#
+# Intended for use with Windows test systems (or others) that already have a service node to provide dhcp
+# to the target(s).  This script creates a new service node connected to switch2, and configures the new service
+# node to link to the driver computer at 10.0.0.140 for ssh over 4022
+#
+# The driver's service node should be independent and able to be arbitrarily cut off, e.g., to isolate the
+# simulation.
+#
+$sn=(new-service-node-comp)
+$sn_conn=($sn.add-connector ip=10.0.0.1)
+connect $sn.$sn_conn (switch2.get-free-connector)
+connect-real-network-port-in target-port = 22 host-port = 4022 ethernet-link = switch2 target-ip = 10.0.0.140
