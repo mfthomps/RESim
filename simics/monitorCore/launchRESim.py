@@ -272,6 +272,8 @@ class LaunchRESim():
                         run_command(cmd)
                     elif name == 'INTERACT_SCRIPT':
                         interact = self.comp_dict['driver'][name]
+
+                run_command('$create_network=FALSE')
         
                 driver_script = self.getSimicsScript('driver')
                 print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
