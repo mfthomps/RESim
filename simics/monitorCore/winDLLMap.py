@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 import soMap
 import winProg
 class Text():
@@ -257,3 +258,41 @@ class WinDLLMap():
             return
         self.ida_funs = ida_funs
         # TBD see soMap
+
+    def getSO(self, pid=None, quiet=False):
+        retval = {}
+        if pid is None:
+            cpu, comm, pid = self.task_utils.curProc() 
+        pid = self.getSOPid(pid)
+        if pid is None:
+            cpu, comm, pid = self.task_utils.curProc() 
+        retval['group_leader'] = pid
+        if pid in self.sections:
+            if pid in self.text and self.text[pid].addr is not None:
+                retval['prog_start'] = self.text[pid].addr
+                retval['prog_end'] = self.text[pid].addr + self.text[pid].size - 1
+                retval['prog'] = self.top.getProgName(pid)
+            else:
+                self.lgr.debug('pid %d not in text sections' % pid)
+            sort_map = {}
+            for section_handle in self.sections[pid]:
+                section = self.sections[pid][section_handle]
+                sort_map[section.addr] = section
+            retval['sections'] = []
+            for locate in sorted(sort_map):
+                section = {}
+                text_seg = sort_map[locate]
+                start = text_seg.addr
+                end = locate + text_seg.size
+                section['locate'] = locate
+                section['end'] = end
+                section['offset'] = text_seg.addr
+                section['size'] = text_seg.size
+                section['file'] = text_seg.fname
+                retval['sections'].append(section)
+        else:
+            self.lgr.debug('no so map for %d' % pid)
+        ret_json = json.dumps(retval) 
+        if not quiet:
+            print(ret_json)
+        return ret_json
