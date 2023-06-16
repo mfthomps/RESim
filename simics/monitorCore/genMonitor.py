@@ -115,6 +115,7 @@ import winTaskUtils
 import winMonitor
 import winDLLMap
 import runTo
+import winProg
 
 #import fsMgr
 import json
@@ -1039,15 +1040,37 @@ class GenMonitor():
                 if cpu.architecture == 'arm':
                     cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
                 #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                elif not self.isWindows() and self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+                elif self.isWindows:
+                    machine_size = self.soMap[self.target].getMachineSize(pid)
+                    if machine_size is None:
+                        ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
+                        dumb, machine = winProg.getSizeAndMachine(self.full_path, self.lgr)
+                        if 'I386' in machine:
+                            machine_size = 32
+                        elif 'AMD64' in machine:
+                            machine_size = 64
+                    if machine_size == 32:
+                        cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+                    elif machine_size == 64:
+                        cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+                    else:
+                        self.lgr.error('doDebugCmd failed to get windows machine type')
+                        return None 
+
+                elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
                     cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
                 else:
                     cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
                 self.lgr.debug('cmd: %s' % cmd)
                 SIM_run_command(cmd)
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
-            return pid
 
+    def setPathToProg(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        prog_name = self.getProgName(pid)
+        if self.targetFS[self.target] is not None and prog_name is not None:
+            full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
+            self.full_path = full_path
 
     def debug(self, group=False):
         '''
@@ -1063,7 +1086,9 @@ class GenMonitor():
             self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
         if not self.did_debug:
             ''' Our first debug '''
-            pid = self.doDebugCmd()
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            self.setPathToProg()
+            self.doDebugCmd()
             self.did_debug=True
             if not self.rev_execution_enabled:
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
@@ -1108,20 +1133,18 @@ class GenMonitor():
             prog_name = self.getProgName(pid)
             if self.targetFS[self.target] is not None and prog_name is not None:
                 sindex = 0
-                full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
-                self.full_path = full_path
-                if full_path is not None:
-                    self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, full_path))
-                    self.getIDAFuns(full_path)
+                if self.full_path is not None:
+                    self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, self.full_path))
+                    self.getIDAFuns(self.full_path)
                     if self.isWindows():
                         ''' TBD fix for windows'''
                         self.relocate_funs = []
                     else:
-                        self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+                        self.relocate_funs = elfText.getRelocate(self.full_path, self.lgr, self.ida_funs)
                     ''' TBD alter stackTrace to use this and buid it out'''
                     self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
-                    real_path = self.realPath(full_path)
+                    real_path = self.realPath(self.full_path)
                     if self.isWindows():
                         ''' Assumes winProg has already populated soMap'''
                         elf_info = self.soMap[self.target].getText(pid)
@@ -1139,12 +1162,12 @@ class GenMonitor():
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
                              elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
-                        self.lgr.error('debug, text segment None for %s' % full_path)
+                        self.lgr.error('debug, text segment None for %s' % self.full_path)
                     self.lgr.debug('create coverage module')
-                    ida_path = self.getIdaData(full_path)
+                    ida_path = self.getIdaData(self.full_path)
                     if ida_path is not None:
                         self.lgr.debug('debug, create Coverage ida_path %s' % ida_path)
-                        self.coverage = coverage.Coverage(self, full_path, ida_path, self.context_manager[self.target], 
+                        self.coverage = coverage.Coverage(self, self.full_path, ida_path, self.context_manager[self.target], 
                            cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
@@ -1520,6 +1543,7 @@ class GenMonitor():
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_execution_enabled = True
+        self.setPathToProg()
         self.doDebugCmd()
         cpu = self.cell_config.cpuFromCell(self.target)
         #self.setDebugBookmark('origin', cpu)

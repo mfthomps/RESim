@@ -5,6 +5,17 @@ import shlex
 from resimHaps import *
 from simics import *
 
+class WinProgInfo():
+    def __init__(self, text_addr, text_size, machine):
+        self.text_addr = text_addr
+        self.text_size = text_size
+        self.machine = machine
+
+def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
+    text_section_addr = getTextSection(cpu, mem_utils, eproc, lgr)
+    text_size, machine = getSizeAndMachine(full_path, lgr)
+    return WinProgInfo(text_section_addr, text_size, machine)
+
 def getTextSection(cpu, mem_utils, eproc, lgr):
         retval = None
         ''' TBD put in params! '''
@@ -18,6 +29,33 @@ def getTextSection(cpu, mem_utils, eproc, lgr):
         else:
             lgr.error('winProg getTextSection pep read as None')
         return retval
+
+def getSizeAndMachine(full_path, lgr):
+    size = None
+    machine = None
+    lgr.debug('winProg getSizeAndMachine for %s' % full_path)
+    if full_path is None:
+        lgr.warning('winProg getSizeAndMachine called with full_path of None')
+        return None, None
+    if os.path.isfile(full_path):
+        cmd = 'readpe -H %s' % full_path
+        with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+            output = ps.communicate()
+            for line in output[0].decode("utf-8").splitlines():
+                if 'Size of .text section' in line: 
+                    lgr.debug('winProg readpe got %s' % line)
+                    parts = line.split()
+                    size_s = parts[4]
+                    try:
+                        size = int(size_s, 16)
+                        break
+                    except:
+                        lgr.error('winProg getSizeAndMachine failed to get size from %s' % line)
+                elif 'Machine' in line:
+                    parts = line.split()
+                    machine = parts[2]
+    return size, machine    
+
 
 def getTextSize(full_path, lgr):
     size = None

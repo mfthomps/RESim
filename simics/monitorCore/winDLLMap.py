@@ -17,11 +17,16 @@ class DLLInfo():
         self.section_handle = None
         self.addr = None
         self.size = None
+        self.machine = None
+
     def addSectionHandle(self, section_handle):
         self.section_handle = section_handle
     def addLoadAddress(self, addr, size):
         self.addr = addr 
         self.size = size 
+    def addMachine(self, machine):
+        self.machine = machine
+
     def match(self, dll_info):
         retval = False
         if dll_info.pid == self.pid and dll_info.addr == self.addr and dll_info.size == self.size and dll_info.fname == self.fname:
@@ -85,10 +90,11 @@ class WinDLLMap():
         dll_info = DLLInfo(pid, fname, fd)
         self.open_files[pid][fd] = dll_info
 
-    def addText(self, fname, pid, addr, size):
+    def addText(self, fname, pid, addr, size, machine):
         dll_info = DLLInfo(pid, fname, None)
         dll_info.addr = addr
         dll_info.size = size
+        dll_info.machine = machine
         self.section_list.append(dll_info)
         self.text[pid] = dll_info
 
@@ -245,10 +251,11 @@ class WinDLLMap():
                 full_path = self.top.getFullPath(fname=prog_name)
                 self.lgr.debug('winDLL getText, no text yet for %s, try reading it from winProg' % prog_name)
                 eproc = self.task_utils.getCurTaskRec()
-                load_addr = winProg.getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
-                size = winProg.getTextSize(full_path, self.lgr)
+                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                #load_addr = winProg.getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
+                #size = winProg.getTextSize(full_path, self.lgr)
                 self.top.setFullPath(full_path)
-                self.addText(prog_name, pid, load_addr, size)
+                self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
                 retval = Text(load_addr, size)
         return retval
              
@@ -296,3 +303,19 @@ class WinDLLMap():
         if not quiet:
             print(ret_json)
         return ret_json
+
+    def getMachineSize(self, pid):
+        retval = None
+        if pid in self.text:
+            if hasattr(self.text[pid], 'machine'):
+               machine = self.text[pid].machine
+               if machine is not None:
+                   if 'I386' in machine:
+                       retval = 32
+                   elif 'AMD64' in machine:
+                       retval = 64
+            else:
+                self.lgr.warning('winDLL getMachineSize pid %d missing machine field' % pid) 
+        else: 
+            self.lgr.error('winDLL getMachineSize pid %d has no text' % pid) 
+        return retval
