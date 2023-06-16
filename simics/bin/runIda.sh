@@ -25,10 +25,12 @@ if [ $# -eq 0 ] || [ $1 = "-h" ]; then
     echo "runIda.sh [-64] <target> [color/reset] [server]"
     exit
 fi
+ida_suffix=idb
 idacmd=$IDA_DIR/ida
 if [[ "$1" == "-64" ]]; then
    echo "is 64"
    idacmd=$IDA_DIR/ida64
+   ida_suffix=i64
    shift 1
 fi
 target=$1
@@ -88,7 +90,7 @@ if [ ! -z "$remote" ]; then
     fi
 fi
 target_path=$(realpath $target)
-ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
+ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 echo "target is $target"
 echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
