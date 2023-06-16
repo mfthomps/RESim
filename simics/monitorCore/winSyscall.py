@@ -510,9 +510,12 @@ class WinSyscall():
         elif callname == 'ReadFile':
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(2, frame)
-            count_ptr = self.stackParam(1, frame)
-            count_val = self.mem_utils.readWord(self.cpu, count_ptr)
-            trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
+            if exit_info.retval_addr is not None:
+                count_ptr = self.stackParam(1, frame)
+                count_val = self.mem_utils.readWord(self.cpu, count_ptr)
+                trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x  count_ptr: 0x%x given count: %d' % (exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
+            else:
+                trace_msg = trace_msg+' Bad buffer address'
 
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
