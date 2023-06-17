@@ -555,7 +555,7 @@ class GenContextMgr():
             if comm in self.ignore_progs:
                 
                 if self.cpu.current_context != self.ignore_context:
-                    self.lgr.debug('ignoring context for pid:%s comm %s' % (pid_thread, comm))
+                    #self.lgr.debug('ignoring context for pid:%s comm %s' % (pid_thread, comm))
                     SIM_run_alone(self.restoreIgnoreContext, None)
                     #self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
@@ -573,12 +573,12 @@ class GenContextMgr():
             #self.lgr.debug('onlyOrIgnore pid:%s comm %s' % (pid_thread, comm))
             if comm not in self.only_progs:
                 if self.cpu.current_context != self.ignore_context:
-                    self.lgr.debug('ignoring context for comm pid:%s %s' % (pid_thread, comm))
+                    #self.lgr.debug('ignoring context for comm pid:%s %s' % (pid_thread, comm))
                     SIM_run_alone(self.restoreIgnoreContext, None)
                     #self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
                 if new_addr is not None and self.isSuspended(new_addr, win_thread):
-                    self.lgr.debug('restore suspend context for pid:%s comm %s' % (pid_thread, comm))
+                    #self.lgr.debug('restore suspend context for pid:%s comm %s' % (pid_thread, comm))
                     SIM_run_alone(self.restoreSuspendContext, None)
                     #self.restoreSuspendContext()
                 else:
@@ -587,7 +587,7 @@ class GenContextMgr():
             else:
                 SIM_run_alone(self.restoreDefaultContext, None)
                 #self.restoreDefaultContext()
-                self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
+                #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
             retval = True 
         return retval
     
