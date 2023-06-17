@@ -176,13 +176,13 @@ class WinProg():
         full_path = self.top.getFullPath(fname=self.prog_string)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
         self.top.setFullPath(full_path)
-        size = getTextSize(full_path, self.lgr)
+        size, machine = getSizeAndMachine(full_path, self.lgr)
         if size is None:
             self.lgr.error('winProg findText unable t get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
             self.top.quit()
             return 
         self.lgr.debug('winProg findText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_pid, load_addr, size)
+        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine)
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
         self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, None, proc_break, 'text_hap')
 

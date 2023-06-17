@@ -14,7 +14,7 @@ class TargetFS():
         else:
             for subdir in self.root_subdirs:
                 from_dir = os.path.join(self.root_prefix, subdir)
-                reval = self.findFrom(name, from_dir)
+                retval = self.findFrom(name, from_dir)
                 if retval is not None:
                     break
         return retval
@@ -23,13 +23,14 @@ class TargetFS():
         #if self.top.isWindows():
         #    ''' TBD avoid searching forever'''
         #    return None
-        self.lgr.debug('TargetFS find from %s' % from_dir)
+        self.lgr.debug('TargetFS find from %s look for [%s]' % (from_dir, name))
         for root, dirs, files in os.walk(from_dir):
    
             self.lgr.debug('TargetFS find files is %s' % str(files))
             if name in files:
-                retval = os.path.join(root, name)
-                return os.path.abspath(retval)
+                retval = os.path.join(from_dir, root, name)
+                abspath = os.path.abspath(retval)
+                return abspath
         return None
 
     def getRootPrefix(self):
