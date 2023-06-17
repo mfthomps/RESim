@@ -614,6 +614,7 @@ class WinSyscall():
                                  else:
                                      ida_msg = 'BIND to %s, FD: %d' % (call_param.match_param, sock_struct.fd)
                                  self.context_manager.setIdaMessage(ida_msg)
+                                 exit_info.call_params = call_param
                                  break
     
                          if syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
@@ -990,7 +991,7 @@ class WinSyscall():
             self.stop_action.setExitAddr(eip)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, msg)
-        #self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
     def stopHap(self, msg, one, exception, error_string):
