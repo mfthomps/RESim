@@ -279,7 +279,8 @@ class WinCallExit():
                     self.context_manager.setIdaMessage(new_msg)
                 self.lgr.debug('winCallExit call stopAlone of syscall')
                 SIM_run_alone(my_syscall.stopAlone, callname)
-                self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                self.top.idaMessage() 
+                #self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
