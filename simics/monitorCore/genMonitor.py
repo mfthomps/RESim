@@ -1120,10 +1120,7 @@ class GenMonitor():
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
-                    self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
-                    self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
-
+            self.trackThreads()
             ''' By default, no longer watch for new SO files '''
             self.track_threads[self.target].stopSOTrack()
 
@@ -1194,6 +1191,12 @@ class GenMonitor():
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
         if self.target in self.read_replace:
              self.read_replace[self.target].swapContext()
+
+    def trackThreads(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
+                    self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
+                    self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
