@@ -86,8 +86,7 @@ class WinMonitor():
             self.traceMgr.open('/tmp/execve.txt', self.cpu)
 
         self.syscallManager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
-        #self.top.setCommandCallback(self.toNewProc)
-        #self.top.setCommandCallbackParam(comm)
+        self.lgr.debug('winMonitor toCreateProc did call to watch createUserProcess')
         SIM_continue(0)
 
     def debugProc(self, proc, final_fun=None, pre_fun=None):
