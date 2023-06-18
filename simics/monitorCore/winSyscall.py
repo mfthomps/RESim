@@ -491,6 +491,7 @@ class WinSyscall():
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) %s' % (pid_thread, comm, callname)
         if callname == 'CreateUserProcess':
+            ''' TBD move offsets into param '''
             rsp = frame['sp']
             ptr = rsp + 0x58
             base = self.mem_utils.readPtr(self.cpu, ptr)
@@ -498,15 +499,23 @@ class WinSyscall():
                 ptr2 = base + 0x18
                 ptr3 = self.mem_utils.readPtr(self.cpu, ptr2)
                 if ptr3 is None:
-                    self.lgr.debug('winSyscall syscallParse %s ptr3 is None' % (trace_msg))
+                    self.lgr.debug('winSyscall syscallParse cup %s ptr3 is None' % (trace_msg))
                 else:
                     prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
                     trace_msg = trace_msg+' %s %s' % (prog, frame_string)
-                    self.lgr.debug('winSyscall syscallparse %s' % trace_msg)
+                    self.lgr.debug('winSyscall syscallparse cup %s' % trace_msg)
+                    ''' TBD section needs cleanup.  criteria for debugging seems hazy'''
                     want_to_debug = self.checkProg(prog, pid, exit_info)
                     if want_to_debug:
                         ''' remove param '''
+                        self.lgr.debug('winSyscall cup wants to debug?  remove call_params')
                         exit_info.call_params = None
+                    else:
+                        self.lgr.debug('winSyscall cup add %s as pending proc' % prog)
+                        self.soMap.addPendingProc(prog)
+            else:
+                trace_msg = trace_msg + 'base read from 0x%x was none' % ptr
+                self.lgr.debug(trace_msg)
         elif callname == 'ReadFile':
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(2, frame)
@@ -927,6 +936,7 @@ class WinSyscall():
         return frame, exit_eip1, exit_eip2, exit_eip3
 
     def checkProg(self, prog_string, pid, exit_info):
+        ''' return True if we think the syscall params indicate we want to debug this'''
         retval = True
         self.lgr.debug('checkProg syscall %s  %s' % (self.name, prog_string))
         cp = None
@@ -982,6 +992,8 @@ class WinSyscall():
                         #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
                     else:
                         self.lgr.debug('checkProg, got %s when looking for binary %s, skip' % (ftype, prog_string))
+        else:
+            retval = False
         return retval
 
     def stopAlone(self, msg):
