@@ -54,37 +54,12 @@ def getSizeAndMachine(full_path, lgr):
                 elif 'Machine' in line:
                     parts = line.split()
                     machine = parts[2]
+            if size is None:
+                lgr.error('winProg getSizeAndMachine failed to get size for path %s' % full_path)
+    else:
+        lgr.error('winProg getSizeAndMachine failed find file at path %s' % full_path)
     return size, machine    
 
-
-def getTextSize(full_path, lgr):
-    size = None
-    if full_path is None:
-        return None
-    if os.path.isfile(full_path):
-        cmd = 'readpe -H %s' % full_path
-        grep = 'grep "Size of .text section"'
-        proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
-                         stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-
-        proc1.stdout.close() # Allow proc1 to receive a SIGPIPE if proc2 exits.
-        out,err=proc2.communicate()
-        #print(out)
-        addr = None
-        size = 0
-        for line in out.splitlines():
-            lgr.debug('winProg readpe got %s' % line)
-            parts = line.split()
-            size_s = parts[4]
-            try:
-                size = int(size_s, 16)
-                break
-            except:
-                pass
-    else:
-        lgr.error('winProg getTextSize, no file at %s' % full_path)
-    return size
 
 class WinProg():
     def __init__(self, top, cpu, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
@@ -166,7 +141,7 @@ class WinProg():
         if want_pid != this_pid:
             self.lgr.debug('findText, mode changed but wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
-        self.lgr.debug('winProg findText')
+        self.lgr.debug('winProg findText pid %d' % this_pid)
         SIM_run_alone(self.rmFindTextHap, None)
         eproc = self.task_utils.getCurTaskRec()
         load_addr = getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
@@ -178,7 +153,7 @@ class WinProg():
         self.top.setFullPath(full_path)
         size, machine = getSizeAndMachine(full_path, self.lgr)
         if size is None:
-            self.lgr.error('winProg findText unable t get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            self.lgr.error('winProg findText unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
             self.top.quit()
             return 
         self.lgr.debug('winProg findText got size 0x%x' % size)

@@ -1,6 +1,7 @@
 import os
 import pickle
 import json
+import ntpath
 import soMap
 import winProg
 class Text():
@@ -45,13 +46,14 @@ class WinDLLMap():
         self.open_files = {}
         self.sections = {}
         self.section_list = []
-        self.min_addr = None
-        self.max_addr = None
+        self.min_addr = {}
+        self.max_addr = {}
         self.so_watch = []
         self.so_watch_callback = None
         self.text = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        self.pending_procs = []
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -62,9 +64,10 @@ class WinDLLMap():
         so_pickle['text'] = self.text
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
-        self.lgr.debug('winDLLMap pickleit to %s ' % (somap_file))
+        self.lgr.debug('winDLLMap pickleit to %s %d text sections' % (somap_file, len(self.text)))
 
     def loadPickle(self, name):
+        self.lgr.debug('winDLL loadPickle %s' % name)
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
         if os.path.isfile(somap_file):
             self.lgr.debug('SOMap pickle from %s' % somap_file)
@@ -75,13 +78,49 @@ class WinDLLMap():
                 self.sections = so_pickle['sections']
                 self.section_list = so_pickle['section_list']
                 for section in self.section_list:
-                    if self.min_addr is None or self.min_addr > section.addr:
-                        self.min_addr = section.addr
+                    if section.pid not in self.min_addr:
+                        self.min_addr[section.pid] = None
+                        self.max_addr[section.pid] = None
+                    if self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr:
+                        self.min_addr[section.pid] = section.addr
+                    if section.size is None:
+                        self.lgr.error('winDLL loadPickle no size for %s, addr 0x%x pid:%d' % (section.fname, section.addr, section.pid))
+                        continue
                     ma = section.addr + section.size
-                    if self.max_addr is None or self.max_addr < ma:
-                        self.max_addr = ma
+                    if self.max_addr[section.pid] is None or self.max_addr[section.pid] < ma:
+                        self.max_addr[section.pid] = ma
+
+                    if section.pid not in self.sections:
+                        self.sections[section.pid] = {}
+                    if section.section_handle is not None and section.section_handle not in self.sections[section.pid]:
+                        self.sections[section.pid][section.section_handle] = section
+              
+            else:
+                self.lgr.debug('windDLL loadPickle no open_files in pickle')
             if 'text' in so_pickle:
                 self.text = so_pickle['text']
+            else:
+                self.lgr.debug('windDLL loadPickle no text in pickle')
+
+        for pid in self.sections:
+            
+            self.lgr.debug('windDLL loadPickle check pid %d' % pid)
+            if pid not in self.text:
+                prog = self.top.getProgName(pid)
+                if prog is not None:
+                    prog_base = os.path.basename(prog)
+                    for sec_handle in self.sections[pid]:
+                        sec = self.sections[pid][sec_handle]
+                        sec_base = ntpath.basename(sec.fname)
+                        self.lgr.debug('windDLL loadPickle pid:%d compare %s and %s' % (pid, sec_base, prog_base))
+                        if sec_base.startswith(prog_base):
+                            self.lgr.debug('winDLL loadPickle pid:%d added missing text for %s' % (pid, sec.fname))
+                            self.text[pid] = sec
+                else:
+                    self.lgr.warning('winDLL loadPickle no prog for pid %d' % pid)
+        self.lgr.debug('winDLL loadPickle, have %d texts and %d sections' % (len(self.text), len(self.section_list)))
+        for pid in self.text:
+            self.lgr.debug('winDLL loadPickle have text for pid %d' % pid)
                     
 
     def addFile(self, fname, fd, pid):
@@ -97,6 +136,7 @@ class WinDLLMap():
         dll_info.machine = machine
         self.section_list.append(dll_info)
         self.text[pid] = dll_info
+        self.lgr.debug('winDLL addText for pid: %d %s' % (pid, fname))
 
     def createSection(self, fd, section_handle, pid):
         if pid in self.open_files:
@@ -127,14 +167,37 @@ class WinDLLMap():
                 self.sections[pid][section_handle].addLoadAddress(load_addr, size)
                 if self.isNew(self.sections[pid][section_handle]):
                     self.section_list.append(self.sections[pid][section_handle])
+                    if pid not in self.text and len(self.pending_procs)>0:
+                        self.lgr.debug('winDLL mapSection pid %d not in text' % pid)
+                        cpu, comm, pid = self.task_utils.curProc() 
+                        rm_pp = None
+                        for pp in self.pending_procs:
+                            proc_base = ntpath.basename(pp)
+                            self.lgr.debug('winDLL mapSection does %s start with %s' % (proc_base, comm))
+                            if proc_base.startswith(comm):
+                                eproc = self.task_utils.getCurTaskRec()
+                                full_path = self.top.getFullPath(fname=pp)
+                                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                                self.addText(pp, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
+                                if win_prog_info.text_size is None:
+                                    self.lgr.error('WinDLLMap mapSection text_size is None for %s' % comm)
+                                self.lgr.debug('WinDLLMap text mapSection added, len now %d' % len(self.text))
+                                rm_pp = pp
+                                break
+                        if rm_pp is not None:
+                            self.pending_procs.remove(rm_pp)
+
                     self.lgr.debug('WinDLLMap mapSection appended, len now %d' % len(self.section_list))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
                     self.checkSOWatch(self.sections[pid][section_handle])
-                    if self.min_addr is None or self.min_addr > load_addr:
-                        self.min_addr = load_addr
+                    if pid not in self.max_addr:
+                        self.max_addr[pid] = None
+                        self.min_addr[pid] = None
+                    if self.min_addr[pid] is None or self.min_addr[pid] > load_addr:
+                        self.min_addr[pid] = load_addr
                     ma = load_addr + size
-                    if self.max_addr is None or self.max_addr < ma:
-                        self.max_addr = ma
+                    if self.max_addr[pid] is None or self.max_addr[pid] < ma:
+                        self.max_addr[pid] = ma
                 else:
                     self.lgr.debug('Ignore existing section pid %d fname %s' % (pid, self.sections[pid][section_handle].fname))
             else:                
@@ -179,15 +242,18 @@ class WinDLLMap():
     def isCode(self, addr_in, pid):
         ''' TBD not done '''
         retval = False
-        if addr_in >= self.min_addr and addr_in <= self.max_addr:
-            retval = True
+        if pid in self.min_addr:
+            if addr_in >= self.min_addr[pid] and addr_in <= self.max_addr[pid]:
+                retval = True
+            else:
+                for section in self.section_list:
+                    if section.pid == pid:
+                        end = section.addr+section.size
+                        if addr_in >= section.addr and addr_in <= end:
+                            retval = True
+                            break 
         else:
-            for section in self.section_list:
-                if section.pid == pid:
-                    end = section.addr+section.size
-                    if addr_in >= section.addr and addr_in <= end:
-                        retval = True
-                        break 
+            self.lgr.error('winDLLMap isCode pid %d not in min/max addr dictionary' % pid)
         return retval
 
     class HackCompat():
@@ -252,11 +318,9 @@ class WinDLLMap():
                 self.lgr.debug('winDLL getText, no text yet for %s, try reading it from winProg' % prog_name)
                 eproc = self.task_utils.getCurTaskRec()
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
-                #load_addr = winProg.getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
-                #size = winProg.getTextSize(full_path, self.lgr)
                 self.top.setFullPath(full_path)
                 self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
-                retval = Text(load_addr, size)
+                retval = Text(win_prog_info.text_addr, win_prog_info.text_size)
         return retval
              
     def setIdaFuns(self, ida_funs):
@@ -318,4 +382,10 @@ class WinDLLMap():
                 self.lgr.warning('winDLL getMachineSize pid %d missing machine field' % pid) 
         else: 
             self.lgr.error('winDLL getMachineSize pid %d has no text' % pid) 
+            for pid in self.text:
+                self.lgr.debug('gms pid %d' % pid)
         return retval
+
+    def addPendingProc(self, prog_path):
+        self.pending_procs.append(prog_path)
+        self.lgr.debug('winDLL addPendingProc %s' % prog_path)
