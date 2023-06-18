@@ -148,7 +148,7 @@ class TrackThreads():
 
     def trackSO(self):
         if self.top.isWindows():
-            call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection']
+            call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateUserProcess']
         else:
             call_list = ['open', 'mmap']
             if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
