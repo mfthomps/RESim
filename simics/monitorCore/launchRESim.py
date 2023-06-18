@@ -276,7 +276,10 @@ class LaunchRESim():
                 run_command('$create_network=FALSE')
         
                 driver_script = self.getSimicsScript('driver')
-                print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                if os.path.isfile('./driver-script.sh'):
+                    print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                else:
+                    print('WARNIG, starting driver but missing driver-script.sh script! *****************************')
                 lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
