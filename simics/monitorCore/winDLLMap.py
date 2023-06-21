@@ -20,6 +20,14 @@ class DLLInfo():
         self.size = None
         self.machine = None
 
+    @classmethod
+    def copy(cls, info):
+        new = cls(info.pid, info.fname, info.fd)
+        new.addr = info.addr
+        new.size = info.size
+        new.machine = info.machine
+        return new
+
     def addSectionHandle(self, section_handle):
         self.section_handle = section_handle
     def addLoadAddress(self, addr, size):
@@ -32,6 +40,9 @@ class DLLInfo():
         retval = False
         if dll_info.pid == self.pid and dll_info.addr == self.addr and dll_info.size == self.size and dll_info.fname == self.fname:
             retval = True
+        return retval
+    def toString(self):
+        retval = '%s pid:%d addr: 0x%x size 0x%x' % (self.fname, self.pid, self.addr, self.size)
         return retval
 
 
@@ -157,6 +168,8 @@ class WinDLLMap():
         retval = True
         for dll_info in self.section_list:
             if dll_info.match(new_dll):
+                self.lgr.debug('WinDLLMap is new %s' % new_dll.toString())
+                self.lgr.debug('already in list as %s' % dll_info.toString())
                 retval = False
                 break
         return retval
@@ -165,8 +178,10 @@ class WinDLLMap():
         if pid in self.sections:
             if section_handle in self.sections[pid]:
                 self.sections[pid][section_handle].addLoadAddress(load_addr, size)
+                self.lgr.debug('WinDLL mapSection did load address to 0x%x for %s' % (load_addr, self.sections[pid][section_handle].fname))
                 if self.isNew(self.sections[pid][section_handle]):
-                    self.section_list.append(self.sections[pid][section_handle])
+                    section_copy = DLLInfo.copy(self.sections[pid][section_handle])
+                    self.section_list.append(section_copy)
                     if pid not in self.text and len(self.pending_procs)>0:
                         self.lgr.debug('winDLL mapSection pid %d not in text' % pid)
                         cpu, comm, pid = self.task_utils.curProc() 
@@ -199,7 +214,7 @@ class WinDLLMap():
                     if self.max_addr[pid] is None or self.max_addr[pid] < ma:
                         self.max_addr[pid] = ma
                 else:
-                    self.lgr.debug('Ignore existing section pid %d fname %s' % (pid, self.sections[pid][section_handle].fname))
+                    self.lgr.debug('WinDLLMap Ignore existing section pid %d fname %s' % (pid, self.sections[pid][section_handle].fname))
             else:                
                 unknown_dll = DLLInfo(pid, 'unknown', -1)
                 unknown_dll.addLoadAddress(load_addr, size)
@@ -217,11 +232,21 @@ class WinDLLMap():
                     self.so_watch_callback(fname, section.addr, section.size) 
 
     def showSO(self, pid):
-        self.lgr.debug('WinDLLMap showSO %d sections' % (len(self.section_list)))
+        if pid is None: 
+            cpu, comm, pid = self.task_utils.curProc() 
+        
+        sort_map = {}
         for section in self.section_list:
+            if section.pid == pid:
+                sort_map[section.addr] = section
+
+        self.lgr.debug('WinDLLMap showSO %d sections' % (len(sort_map)))
+        for section_addr in sorted(sort_map):
+            section = sort_map[section_addr]
             end = section.addr+section.size
             print('pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
             self.lgr.debug('winDLLMap showSO pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
+
 
 
     def isMainText(self, address):
@@ -233,10 +258,11 @@ class WinDLLMap():
         retval = None
         if addr_in is not None:
             for section in self.section_list:
-                end = section.addr+section.size
-                if addr_in >= section.addr and addr_in <= end:
-                    retval = section.fname
-                    break 
+                if section.size is not None:
+                    end = section.addr+section.size
+                    if addr_in >= section.addr and addr_in <= end:
+                        retval = section.fname
+                        break 
         return retval
 
     def isCode(self, addr_in, pid):
@@ -308,6 +334,7 @@ class WinDLLMap():
 
     def getText(self, pid):
         retval = None
+        self.lgr.debug('winDLL getText pid:%s' % pid) 
         if pid in self.text:
             retval = Text(self.text[pid].addr, self.text[pid].size)
         else:
@@ -331,6 +358,7 @@ class WinDLLMap():
         # TBD see soMap
 
     def getSO(self, pid=None, quiet=False):
+        self.lgr.debug('winDLL getSO pid %s ' % pid)
         retval = {}
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
@@ -344,11 +372,14 @@ class WinDLLMap():
                 retval['prog_end'] = self.text[pid].addr + self.text[pid].size - 1
                 retval['prog'] = self.top.getProgName(pid)
             else:
-                self.lgr.debug('pid %d not in text sections' % pid)
+                self.lgr.debug('winDLL getSO pid %d not in text sections' % pid)
             sort_map = {}
             for section_handle in self.sections[pid]:
                 section = self.sections[pid][section_handle]
-                sort_map[section.addr] = section
+                if section.addr is not None:
+                    sort_map[section.addr] = section
+                else:
+                    self.lgr.error('winDLL getSO section has none for addr %s' % section.fname)
             retval['sections'] = []
             for locate in sorted(sort_map):
                 section = {}
