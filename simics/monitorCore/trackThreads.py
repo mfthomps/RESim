@@ -62,7 +62,7 @@ class TrackThreads():
         pass
 
     def stopTrack(self, immediate=False):
-        #self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
+        self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
         self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
         self.call_hap = None
         if self.execve_hap is not None:
@@ -76,7 +76,12 @@ class TrackThreads():
             self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
         self.first_mmap_hap = {}
         self.stopTrackClone(immediate)
-        self.so_track.stopTrace()
+        ''' try deleting both contexts '''
+        resim_context = self.context_manager.getRESimContextName()
+        self.syscallManager.rmSyscall('trackSO', context=resim_context)
+        default_context = self.context_manager.getDefaultContextName()
+        self.syscallManager.rmSyscall('trackSO', context=default_context)
+        #self.so_track.stopTrace()
 
 
     def execveHap(self, dumb, third, forth, memory):
@@ -193,3 +198,8 @@ class TrackThreads():
     def stopTrackClone(self, immediate):
         if self.clone_hap is not None:
             self.context_manager.genDeleteHap(self.clone_hap, immediate) 
+
+    def checkContext(self):
+        self.lgr.debug('trackThreads checkContext')
+        self.stopTrack()
+        self.startTrack()
