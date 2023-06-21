@@ -62,7 +62,8 @@ class SyscallInstance():
         return retval
 
     def hasParamName(self, param_name):
-        return self.syscall.hasCallParam(param_name)
+        retval = self.syscall.hasCallParam(param_name)
+        return retval
 
     def stopTrace(self, immediate=False):
         self.syscall.stopTrace(immediate=immediate)
@@ -73,6 +74,7 @@ class SyscallInstance():
             self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % call_param_name)
         else:
             self.param_call_list[call_param_name] = call_names
+            self.lgr.debug('syscallManager SyscallInstance addCallParams set call_param_name to %s' % call_name)
 
     def hasOtherCalls(self, call_param_name):
         retval = []
@@ -80,7 +82,7 @@ class SyscallInstance():
             if param_name == call_param_name:
                 continue
             for call in self.param_call_list[param_name]:
-                if call not in self.param_call_list[call_param_name]:
+                if call_param_name not in self.param_call_list or call not in self.param_call_list[call_param_name]:
                     if call not in retval:
                         retval.append(call)
         return retval
@@ -217,7 +219,7 @@ class SyscallManager():
         return retval
 
     def rmSyscall(self, call_param_name, immediate=False, context=None):
-        ''' Find and rmeove the syscall having the given call parameters name (unless it has additional call params,
+        ''' Find and remove the syscall having the given call parameters name (unless it has additional call params,
             in which case just removed the named params).
             If the syscall instance has additional calls, remove the instance and recreate it having only 
             the other calls.
@@ -242,9 +244,15 @@ class SyscallManager():
                 call_instance.stopTrace(immediate=immediate) 
                 del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about the flist? '''
-                compat32 = call_instance.syscall.compat32
+                if self.top.isWindows(self.cell_name):
+                    compat32 = False
+                else:
+                    compat32 = call_instance.syscall.compat32
                 new_call_instance = self.watchSyscall(context, other_calls, remaining_params, call_instance.name, compat32=compat32) 
-                self.syscall_dict[context][call_instance.name] = new_call_instance
+
+                call_instance = SyscallInstance(call_instance.name, other_calls, new_call_instance, call_instance.name, self.lgr)
+
+                self.syscall_dict[context][call_instance.name] = call_instance
                 self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call_instance.name))
 
     def findInstanceByParams(self, call_param_name, context):
