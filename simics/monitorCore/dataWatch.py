@@ -2153,7 +2153,11 @@ class DataWatch():
         retval = None
         if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
             fun_hex, fun = self.fun_mgr.getFunName(instruct[1])
-            self.lgr.debug('isDataTransformCall fun is %s  (0x%x)' % (fun, fun_hex))
+            if fun_hex is not None:
+                self.lgr.debug('isDataTransformCall fun is %s  (0x%x)' % (fun, fun_hex))
+            else:
+                self.lgr.debug('isDataTransformCall fun is %s  failed to get fun_hex from %s' % (fun, instruct[1]))
+
             if fun is not None:
                 for tform in fun_list:
                     if tform in fun:
@@ -2165,7 +2169,10 @@ class DataWatch():
         retval = None
         if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
             fun_hex, fun = self.fun_mgr.getFunName(instruct[1])
-            self.lgr.debug('isDataRef fun is %s  (0x%x)' % (fun, fun_hex))
+            if fun_hex is not None:
+                self.lgr.debug('isDataRef fun is %s  (0x%x)' % (fun, fun_hex))
+            else:
+                self.lgr.debug('isDataRef fun is %s  failed to get fun_hex from %s' % (fun, instruct[1]))
             if fun is not None and 'isalpha' in fun:
                 retval = fun
         return retval
