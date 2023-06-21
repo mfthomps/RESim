@@ -189,7 +189,7 @@ class WinMonitor():
         self.lgr.debug('traceWindows')
         return retval
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
@@ -210,7 +210,10 @@ class WinMonitor():
                 if kbuf:
                     kbuffer_mod = self.kbuffer
                     self.sharedSyscall.setKbuffer(kbuffer_mod)
-                calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile']
+                if call_list is None:
+                    calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile']
+                else:
+                    calls = call_list
                 the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
                 ''' find processes that are in the kernel on IO calls '''

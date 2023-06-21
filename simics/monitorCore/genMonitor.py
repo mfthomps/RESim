@@ -1065,8 +1065,7 @@ class GenMonitor():
                 SIM_run_command(cmd)
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
 
-    def setPathToProg(self):
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
+    def setPathToProg(self, pid):
         prog_name = self.getProgName(pid)
         if self.targetFS[self.target] is not None and prog_name is not None:
             full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
@@ -1087,7 +1086,7 @@ class GenMonitor():
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, pid = self.task_utils[self.target].curProc() 
-            self.setPathToProg()
+            self.setPathToProg(pid)
             self.doDebugCmd()
             self.did_debug=True
             if not self.rev_execution_enabled:
@@ -1193,10 +1192,15 @@ class GenMonitor():
              self.read_replace[self.target].swapContext()
 
     def trackThreads(self):
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
+        if self.target not in self.track_threads:
+            cpu, comm, pid = self.task_utils[self.target].curProc() 
+            self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
                     self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
+        else:
+            self.track_threads[self.target].checkContext()
+            self.lgr.debug('trackThreads already tracking for %s' % self.target)
+            print('trackThreads already tracking for %s' % self.target)
 
     def show(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
@@ -1546,7 +1550,7 @@ class GenMonitor():
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_execution_enabled = True
-        self.setPathToProg()
+        self.setPathToProg(pid_list[0])
         self.doDebugCmd()
         cpu = self.cell_config.cpuFromCell(self.target)
         #self.setDebugBookmark('origin', cpu)
@@ -2874,10 +2878,19 @@ class GenMonitor():
             self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
         else:
             self.lgr.debug('genMonitor runTo cellname %s cell: %s call_name %s compat32 %r' % (cell_name, cell.name, call_name, self.is_compat32))
+        call_param_name = call_name
         if call_params is None:
             call_params_list = []
         else:
             call_params_list = [call_params]
+            call_param_name = call_params.name
+        if not linger_in:
+            if flist is None:
+                flist = []
+            f1 = stopFunction.StopFunction(self.syscallManager[self.target].rmSyscall, [call_param_name], nest=False)
+            f2 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
+            flist.append(f1)
+            flist.append(f2)
         if all_contexts:
             for context in self.context_manager[self.target].getContexts():
                 self.syscallManager[cell_name].watchSyscall(context, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
@@ -2986,7 +2999,7 @@ class GenMonitor():
         call_params = syscall.CallParams('runToAccept', 'accept', fd, break_simulation=True, proc=proc)        
            
         self.lgr.debug('runToAccept on FD: %d call is: %s' % (fd, str(call)))
-        if flist is None:
+        if flist is None and not self.isWindows():
             linger = True
         else:
             linger = False
@@ -3012,9 +3025,11 @@ class GenMonitor():
         self.lgr.debug('runToBind to %s ' % (addr))
         self.runTo(call, call_params, name='bind')
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False):
+    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, 
+                run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
         if self.isWindows(self.target):
-            self.winMonitor[self.target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf)
+            self.winMonitor[self.target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, 
+                   run_fun, proc, run, kbuf, call_list)
             return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
@@ -3878,7 +3893,12 @@ class GenMonitor():
             else:
                 SIM_continue(0)
 
-    def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, quiet=False, mark_logs=False, kbuf=False):
+    def trackRecv(self, fd, max_marks=None):
+        call_list = ['RECV']
+        self.trackIO(fd, call_list=call_list, max_marks=max_marks)
+
+    def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
+                quiet=False, mark_logs=False, kbuf=False, call_list=None):
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -3906,7 +3926,8 @@ class GenMonitor():
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
 
-        self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf)
+        self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf,
+                     call_list=call_list)
 
     def stopTrackIO(self):
         thread_pids = self.context_manager[self.target].getThreadPids()
