@@ -16,6 +16,7 @@ class TargetFS():
                 from_dir = os.path.join(self.root_prefix, subdir)
                 retval = self.findFrom(name, from_dir)
                 if retval is not None:
+                    self.lgr.debug('TargetFS find found %s' % retval)
                     break
         return retval
 
@@ -26,7 +27,7 @@ class TargetFS():
         self.lgr.debug('TargetFS find from %s look for [%s]' % (from_dir, name))
         for root, dirs, files in os.walk(from_dir):
    
-            self.lgr.debug('TargetFS find files is %s' % str(files))
+            #self.lgr.debug('TargetFS find files is %s' % str(files))
             if name in files:
                 retval = os.path.join(from_dir, root, name)
                 abspath = os.path.abspath(retval)
