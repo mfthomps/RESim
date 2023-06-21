@@ -96,10 +96,17 @@ class WinCallExit():
         #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) return from %s' % (pid_thread, comm, callname)
+
+        ''' who taught bill about error codes? '''
+        #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
+        if eax == 0x40000003:
+            self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
+            eax = 0
+
         if eax != 0:
             if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
                 trace_msg = trace_msg+' BIND on handle 0x%x' % exit_info.old_fd
-                self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                #self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
             else:
                 trace_msg = trace_msg+ ' returned error 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
