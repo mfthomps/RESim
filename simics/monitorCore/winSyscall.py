@@ -699,7 +699,9 @@ class WinSyscall():
             self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
                 self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name))
-                if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
+                             (call_param.match_param == -1 or call_param.match_param == exit_info.old_fd) and \
+                             (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
                         self.lgr.debug('syscall parse socket %s call_param.nth not none, is %d, count incremented to  %d' % (op_cmd, call_param.nth, call_param.count))
@@ -1044,7 +1046,7 @@ class WinSyscall():
                 ''' TBD when would we want to close it?'''
                 if self.traceMgr is not None:
                     self.traceMgr.flush()
-                self.top.idaMessage() 
+                #self.top.idaMessage() 
                 ''' Run the stop action, which is a hapCleaner class '''
                 funs = self.stop_action.listFuns()
                 self.lgr.debug('syscall stopHap run stop_action, funs: %s' % funs)
