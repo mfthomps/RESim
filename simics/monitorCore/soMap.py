@@ -16,7 +16,7 @@ class CodeSection():
         self.size = size
     
 class SOMap():
-    def __init__(self, top, cell_name, cell, context_manager, task_utils, targetFS, run_from_snap, lgr):
+    def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, run_from_snap, lgr):
         self.context_manager = context_manager
         self.task_utils = task_utils
         self.targetFS = targetFS
@@ -26,6 +26,7 @@ class SOMap():
         self.lgr = lgr
         self.top = top
         self.cell = cell
+        self.cpu = cpu
         self.prog_start = {}
         self.prog_end = {}
         self.text_prog = {}
@@ -178,21 +179,50 @@ class SOMap():
         else:
             self.lgr.error('soMap setContext, no context for pid %d' % pid)
       
-    def setIdaFuns(self, ida_funs):
+    def getAnalysisPath(self, fname):
+        retval = None
+        #self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
+        analysis_path = os.getenv('IDA_ANALYIS')
+        if analysis_path is None:
+            analysis_path = '/mnt/resim_archive/analysis'
+            if len(self.fun_list_cache) == 0:
+                self.lgr.warning('soMap getAnalysis path IDA_ANALYSIS not defined')
+         
+        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+        root_dir = os.path.basename(root_prefix)
+        top_dir = os.path.join(analysis_path, root_dir)
+        if len(self.fun_list_cache) == 0:
+            self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
+            self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
+
+        base = ntpath.basename(fname)+'.funs'
+        if base.upper() in map(str.upper, self.fun_list_cache):
+            with_funs = fname+'.funs'
+            retval = with_funs
+        else:
+            #self.lgr.debug('getAnalysisPath %s not in cache' % base)
+            pass
+
+        return retval
+            
+    def setIdaFuns(self, ida_funs, pid_in):
         if ida_funs is None:
             self.lgr.warning('IDA funs is none, no SOMap')
             return
         self.ida_funs = ida_funs
-        for pid in self.so_file_map:
-            sort_map = {}
-            for text_seg in self.so_file_map[pid]:
-                sort_map[text_seg.locate] = text_seg
+        pid = self.getThreadPid(pid_in, quiet=True)
+        sort_map = {}
+        for text_seg in self.so_file_map[pid]:
+            sort_map[text_seg.locate] = text_seg
 
-            for locate in sorted(sort_map, reverse=True):
-                text_seg = sort_map[locate]
-                fpath = self.so_file_map[pid][text_seg]
+        for locate in sorted(sort_map, reverse=True):
+            text_seg = sort_map[locate]
+            fpath = self.so_file_map[pid][text_seg]
+            full_path = self.getAnalysisPath(fpath)
+            if full_path is None:
                 full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
-                self.ida_funs.add(full_path, locate)
+
+            self.ida_funs.add(full_path, locate)
             
  
     def addSO(self, pid_in, fpath, addr, count):
@@ -561,3 +591,10 @@ class SOMap():
            return True
        else:
            return False
+
+    def getMachineSize(self, pid):
+       ws = self.task_utils.getMemUtils().wordSize(self.cpu)
+       if ws == 4:
+           return 32
+       else:
+           return 64
