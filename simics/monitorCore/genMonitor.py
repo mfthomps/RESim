@@ -533,15 +533,15 @@ class GenMonitor():
             self.lgr.debug('genMonitor stopHap will delete hap %s' % str(self.stop_hap))
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
-            for bp in stop_action.breakpoints:
-                RES_delete_breakpoint(bp)
-            del stop_action.breakpoints[:]
-            self.is_compat32 = self.compat32()
-            ''' check functions in list '''
-            self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_pid %r' % (self.is_compat32, stop_action.listFuns(), wrong_pid))
-            stop_action.run(wrong_pid=wrong_pid)
-            self.is_monitor_running.setRunning(False)
-            self.lgr.debug('stopAlone back from stop_action.run')
+        for bp in stop_action.breakpoints:
+            RES_delete_breakpoint(bp)
+        del stop_action.breakpoints[:]
+        self.is_compat32 = self.compat32()
+        ''' check functions in list '''
+        self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_pid %r' % (self.is_compat32, stop_action.listFuns(), wrong_pid))
+        stop_action.run(wrong_pid=wrong_pid)
+        self.is_monitor_running.setRunning(False)
+        self.lgr.debug('stopAlone back from stop_action.run')
 
         if stop_action.pid is not None and pid != stop_action.pid:
             self.lgr.debug('stopHap wrong pid %d expected %d reverse til we find pid ' % (pid, stop_action.pid))
@@ -1200,6 +1200,7 @@ class GenMonitor():
 
     def trackThreads(self):
         if self.target not in self.track_threads:
+            self.checkOnlyIgnore()
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, pid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
