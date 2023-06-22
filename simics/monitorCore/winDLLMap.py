@@ -1,9 +1,11 @@
 import os
+import glob
 import pickle
 import json
 import ntpath
 import soMap
 import winProg
+import resimUtils
 class Text():
     ''' compat with old linux elfText code without importing... '''
     def __init__(self, address, size):
@@ -65,6 +67,7 @@ class WinDLLMap():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
         self.pending_procs = []
+        self.fun_list_cache = []
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -349,13 +352,61 @@ class WinDLLMap():
                 self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
                 retval = Text(win_prog_info.text_addr, win_prog_info.text_size)
         return retval
-             
-    def setIdaFuns(self, ida_funs):
+            
+    def getAnalysisPath(self, fname):
+        retval = None
+        #self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
+        analysis_path = os.getenv('IDA_ANALYIS')
+        if analysis_path is None:
+            analysis_path = '/mnt/resim_archive/analysis'
+            if len(self.fun_list_cache) == 0:
+                self.lgr.warning('winDLL getAnalysis path IDA_ANALYSIS not defined')
+         
+        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+        root_dir = os.path.basename(root_prefix)
+        top_dir = os.path.join(analysis_path, root_dir)
+        if len(self.fun_list_cache) == 0:
+            self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
+            self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
+
+        fname = fname.replace('\\', '/')
+        if fname.startswith('/??/C:/'):
+                fname = fname[7:]
+
+        base = ntpath.basename(fname)+'.funs'
+        if base.upper() in map(str.upper, self.fun_list_cache):
+            with_funs = fname+'.funs'
+            retval = resimUtils.getfileInsensitive(with_funs, top_dir, self.lgr)
+            if retval is not None:
+                #self.lgr.debug('windDLLMap getAnalsysisPath got %s from %s' % (retval, with_funs))
+                retval = retval[:-5]
+        else:
+            #self.lgr.debug('winDLL getAnalysisPath %s not in cache' % base)
+            pass
+
+        return retval
+            
+
+    def setIdaFuns(self, ida_funs, pid):
         if ida_funs is None:
             self.lgr.warning('IDA funs is none, no SOMap')
             return
         self.ida_funs = ida_funs
-        # TBD see soMap
+
+        sort_map = {}
+        for section in self.section_list:
+            if section.pid == pid:
+                sort_map[section.addr] = section
+
+        for locate in sorted(sort_map, reverse=True):
+            section = sort_map[locate]
+            if section.fname != 'unknown':
+                #fpath = section.fname
+                #full_path = self.top.getFullPath(fpath)
+                fun_path = self.getAnalysisPath(section.fname)
+                if fun_path is not None:
+                    self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
+                    self.ida_funs.add(fun_path, locate)
 
     def getSO(self, pid=None, quiet=False):
         self.lgr.debug('winDLL getSO pid %s ' % pid)
@@ -366,34 +417,32 @@ class WinDLLMap():
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
         retval['group_leader'] = pid
-        if pid in self.sections:
-            if pid in self.text and self.text[pid].addr is not None:
+        if pid in self.text and self.text[pid].addr is not None:
                 retval['prog_start'] = self.text[pid].addr
                 retval['prog_end'] = self.text[pid].addr + self.text[pid].size - 1
                 retval['prog'] = self.top.getProgName(pid)
-            else:
-                self.lgr.debug('winDLL getSO pid %d not in text sections' % pid)
-            sort_map = {}
-            for section_handle in self.sections[pid]:
-                section = self.sections[pid][section_handle]
+        else:
+            self.lgr.debug('winDLL getSO pid %d not in text sections' % pid)
+        sort_map = {}
+        for section in self.section_list:
+            if section.pid == pid:
                 if section.addr is not None:
                     sort_map[section.addr] = section
                 else:
                     self.lgr.error('winDLL getSO section has none for addr %s' % section.fname)
-            retval['sections'] = []
-            for locate in sorted(sort_map):
-                section = {}
-                text_seg = sort_map[locate]
-                start = text_seg.addr
-                end = locate + text_seg.size
-                section['locate'] = locate
-                section['end'] = end
-                section['offset'] = text_seg.addr
-                section['size'] = text_seg.size
-                section['file'] = text_seg.fname
-                retval['sections'].append(section)
-        else:
-            self.lgr.debug('no so map for %d' % pid)
+        retval['sections'] = []
+        for locate in sorted(sort_map):
+            section = {}
+            text_seg = sort_map[locate]
+            start = text_seg.addr
+            end = locate + text_seg.size
+            section['locate'] = locate
+            section['end'] = end
+            section['offset'] = text_seg.addr
+            section['size'] = text_seg.size
+            section['file'] = text_seg.fname
+            retval['sections'].append(section)
+
         ret_json = json.dumps(retval) 
         if not quiet:
             print(ret_json)
@@ -414,7 +463,7 @@ class WinDLLMap():
         else: 
             self.lgr.error('winDLL getMachineSize pid %d has no text' % pid) 
             for pid in self.text:
-                self.lgr.debug('gms pid %d' % pid)
+                self.lgr.debug('winDLL getMachineSize pid %d' % pid)
         return retval
 
     def addPendingProc(self, prog_path):
