@@ -58,9 +58,11 @@ class MagicOrigin():
             self.magic_hap = None
 
     def setOrigin(self, dumb=None):
+        driver_service_node = 'driver_service_node'
         cmd = 'disconnect-real-network'
         SIM_run_command(cmd)
-        cmd = 'default_service_node0.status'
+        #cmd = 'default_service_node0.status'
+        cmd = '%s.status' % driver_service_node
         dumb,result = cli.quiet_run_command(cmd)
        
         ok = False 
@@ -72,11 +74,11 @@ class MagicOrigin():
                 cmd = '%s.status' % switch
                 dumb,result = cli.quiet_run_command(cmd)
                 for line in result.splitlines():
-                    if 'default_service_node0' in line:
+                    if driver_service_node in line:
                         switch_device = line.split(':')[0].strip()
-                        cmd = 'disconnect default_service_node0.%s %s.%s' % (node_connect, switch, switch_device)
+                        cmd = 'disconnect %s.%s %s.%s' % (driver_service_node, node_connect, switch, switch_device)
                         dumb,result = cli.quiet_run_command(cmd)
-                        cmd = 'default_service_node0.disable-service -all'
+                        cmd = '%s.disable-service -all' % driver_service_node
                         dumb,result = cli.quiet_run_command(cmd)
                         #cmd = 'default_service_node0.delete' 
                         #dumb,result = cli.quiet_run_command(cmd)
