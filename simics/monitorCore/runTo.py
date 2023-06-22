@@ -217,13 +217,13 @@ class RunTo():
         cpu, comm, pid  = self.task_utils.curProc()
         ''' if already in proc, just attach debugger '''
         if want_pid_list is not None:
-            self.lgr.debug('toRunningProc, run to pid_list %s, current pid %d <%s>' % (str(want_pid_list), pid, comm))
+            self.lgr.debug('runTo toRunningProc, run to pid_list %s, current pid %d <%s>' % (str(want_pid_list), pid, comm))
         else:
-            self.lgr.debug('toRunningProc, look for <%s>, current pid %d <%s>' % (proc, pid, comm))
+            self.lgr.debug('runTo toRunningProc, look for <%s>, current pid %d <%s>' % (proc, pid, comm))
         if flist is not None and self.inFlist([self.top.debug, self.top.debugGroup], flist): 
             if pid != self.task_utils.getExitPid():
                 if proc is not None and proc == comm:
-                    self.lgr.debug('toRunningProc Already at proc %s, done' % proc)
+                    self.lgr.debug('runTo toRunningProc Already at proc %s, done' % proc)
                     f1 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
                     self.top.toUser([f2, f1])
@@ -231,7 +231,7 @@ class RunTo():
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
                     ''' TBD FIXME '''
-                    self.lgr.debug('toRunningProc already at pid %d, done' % pid)
+                    self.lgr.debug('runTo toRunningProc already at pid %d, done' % pid)
                     f1 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
                     f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
                     if final_fun is not None:
@@ -247,7 +247,7 @@ class RunTo():
         self.cur_task_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils.WORD_SIZE, 0)
         self.cur_task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.cur_task_break)
-        self.lgr.debug('toRunningProc  want pids %s set break %d at 0x%x hap %d' % (str(want_pid_list), self.cur_task_break, phys_current_task,
+        self.lgr.debug('runTo toRunningProc  want pids %s set break %d at 0x%x hap %d' % (str(want_pid_list), self.cur_task_break, phys_current_task,
             self.cur_task_hap))
         
         hap_clean = hapCleaner.HapCleaner(cpu)
@@ -260,15 +260,15 @@ class RunTo():
         status = self.top.is_monitor_running.isRunning()
         if not status:
             try:
-                self.lgr.debug('toRunningProc try continue')
+                self.lgr.debug('runTo toRunningProc try continue')
                 SIM_continue(0)
                 pass
             except SimExc_General as e:
                 print('ERROR... try continue?')
-                self.lgr.error('ERROR in toRunningProc  try continue? %s' % str(e))
+                self.lgr.error('runTo ERROR in toRunningProc  try continue? %s' % str(e))
                 SIM_continue(0)
         else:
-            self.lgr.debug('toRunningProc thinks it is already running')
+            self.lgr.debug('runTo toRunningProc thinks it is already running')
        
 
     def runToProc(self, prec, third, forth, memory):
