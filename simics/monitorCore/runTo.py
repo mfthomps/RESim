@@ -38,16 +38,27 @@ class RunTo():
         self.cur_task_break = None
         self.debug_group = False
 
-    def stopHap(self, dumb, one, exception, error_string):
+    def delStopHap(self, dumb):
+        if self.stop_hap is not None:
+            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.stop_hap = None
+
+    def stopHap(self, stop_action, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
+            SIM_run_alone(self.delStopHap, None)
+            SIM_run_alone(self.top.stopHapAlone, stop_action)
+
+            '''
+
             if self.debug_group:
                 self.context_manager.watchTasks(set_debug_pid=True)
             self.top.skipAndMail()
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
             self.top.show()
+            '''
 
     def rmHaps(self, and_then):
         if len(self.hap_list) > 0:
