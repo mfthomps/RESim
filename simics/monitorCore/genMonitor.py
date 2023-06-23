@@ -1048,6 +1048,7 @@ class GenMonitor():
                 #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
                 elif self.isWindows:
                     machine_size = self.soMap[self.target].getMachineSize(pid)
+                    self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
                     if machine_size is None:
                         ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
                         dumb, machine = winProg.getSizeAndMachine(self.full_path, self.lgr)
@@ -5294,11 +5295,12 @@ class GenMonitor():
         self.lgr.debug('warnSnapShot')
         if self.snap_warn_hap is None:
             return
-        debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
-        if debug_pid is None and self.debug_info is not None and 'pid' in self.debug_info:
-            print('Warning snapshot exists but not debugging.  Running will lose state (e.g., threads waiting in the kernel.')
-            print('Continue again to go on.  Will not be warned again this session.')
-            SIM_break_simulation('stopped')
+        if not self.context_manager[self.target].didListLoad():
+            debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
+            if debug_pid is None and self.debug_info is not None and 'pid' in self.debug_info:
+                print('Warning snapshot exists but not debugging.  Running will lose state (e.g., threads waiting in the kernel.')
+                print('Continue again to go on.  Will not be warned again this session.')
+                SIM_break_simulation('stopped')
         SIM_run_alone(self.rmWarnHap, self.snap_warn_hap)
         self.snap_warn_hap = None
 
