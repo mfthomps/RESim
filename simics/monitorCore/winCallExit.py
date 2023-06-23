@@ -214,7 +214,9 @@ class WinCallExit():
                             exit_info.call_params.match_param = new_handle
                             exit_info.call_params = None
 
-        elif callname in ['DeviceIoControlFile']:
+        elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+
+            trace_msg = trace_msg + ' ' + exit_info.socket_callname
             if exit_info.socket_callname == 'RECV':
                 if exit_info.fname_addr is not None:
                     return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
