@@ -1,0 +1,148 @@
+decl {
+ ! Creates a virtual Ethernet links with a service-node. It may optionally
+ ! connect to the host network using NAPT.
+
+ group "Networking"
+
+ # The following parameter should be used by the calling script to guard
+ # inclusion of this file
+ param create_network : bool = TRUE
+ ! Creates an Ethernet link and connects the primary Ethernet adapter to it.
+
+ param dhcp_pool_ip : string or nil = NIL
+ ! Start IP address for the DHCP server in the service node.
+
+ param dhcp_pool_size : int = 100
+ ! Size of the IP address pool for the DHCP server in the service node.
+
+ param dhcp_domain_name : string = "network.sim"
+ ! Domain name to use for the DHCP server in the service node.
+
+ param service_node : string or nil = NIL
+ ! Name of the <em>service node</em> to use for services such as DHCP and DNS.
+ ! If <tt>NIL</tt>, a new service-node will be created unless
+ ! <param>create_service_node</param> is <tt>FALSE</tt>.
+
+ param create_service_node : bool = TRUE
+ ! Creates a service-node and connects it to the Ethernet link
+ ! <param>eth_link</param>.
+
+ param service_node_ip_address : string = "10.10.0.1"
+ ! IP address of the service node.
+
+ param eth_link : string or nil = NIL
+ ! Name of the Ethernet link to use for networking. If <tt>NIL</tt>, a new
+ ! Ethernet switch will be created.
+
+ param network_goal_latency : int or nil = NIL
+ ! Goal latency for communication on the Ethernet link.
+
+ param eth_link_gid : string or nil = NIL
+ ! Global ID for the Ethernet link in a distributed setup. It should only be
+ ! set if the link is distributed over multiple Simics sessions. The link ID
+ ! must be the same in all sessions.
+
+ param eth_connector : string
+ ! Ethernet connector on the virtual machine to connect to the Ethernet link.
+
+ param connect_real_network : {"no", "napt"} = "napt"
+ ! Connects the simulated Ethernet link to the host network using NAPT
+ ! (Network Address Port Translation).
+
+ param eth_vlan_enable : bool = FALSE
+ ! When creating an Ethernet switch, create a VLAN-enabled one.
+
+ param eth_connector_vlan_id : int = -1
+ ! When connecting to a VLAN-enabled switch, use this VLAN ID for the
+ ! virtual machine connection.
+
+ param service_node_vlan_id : int = -1
+ ! When connecting to a VLAN-enabled switch, use this VLAN ID for the
+ ! service_node connection. If this parameter is not set, eth_connector_vlan_id
+ ! will be used instead.
+
+ result service_node : string or nil
+ result eth_link : string
+}
+
+# Setup a pool of IP addresses based on the service-node if no range supplied
+if $dhcp_pool_ip == NIL and $dhcp_pool_size > 0 {
+    local $split_ip = (split-string -type ipv4 $service_node_ip_address)
+    $split_ip[-1] = 100
+    $dhcp_pool_ip = "%d.%d.%d.%d" % $split_ip
+}
+
+# Create a new Ethernet switch (link) if none supplied in $eth_link
+if $eth_link == NIL {
+    load-module eth-links
+    if $eth_vlan_enable {
+        $eth_link = (create-ethernet-vlan-switch)
+    } else {
+        $eth_link = (create-ethernet-switch)
+    }
+
+    if $network_goal_latency != NIL {
+        $eth_link->goal_latency = $network_goal_latency 
+    }
+
+    if $eth_link_gid != NIL {
+        $eth_link->global_id = $eth_link_gid
+    }
+    instantiate-components $eth_link
+}
+
+# Connect the virtual machine to the Ethernet link
+if $eth_vlan_enable {
+    if $eth_connector_vlan_id < 0 {
+        interrupt-script ("$eth_connector_vlan_id must be defined"
+                          + " when $eth_vlan_enable = TRUE")
+    }
+    # Create the VLAN definition if it doesn't exist
+    if not (object-exists ($eth_link.vlan_ + $eth_connector_vlan_id + _dev0)) {
+        $eth_link.add-vlan $eth_connector_vlan_id
+    }
+    connect ($eth_link.get-free-connector
+                $eth_connector_vlan_id) $eth_connector
+} else {
+    connect ($eth_link.get-free-connector) $eth_connector
+}
+
+# Create a new service-node if none supplied in $service_node
+if $service_node == NIL and $create_service_node == TRUE {
+    load-module service-node
+    $service_node = (new-service-node-comp name=dhcp_service_node)
+    local $cnt = ($service_node.add-connector $service_node_ip_address)
+    if $eth_vlan_enable {
+        if $service_node_vlan_id < 0 {
+            $service_node_vlan_id = $eth_connector_vlan_id
+        }
+        # Create the VLAN definition if it doesn't exist
+        if not (object-exists ($eth_link.vlan_ + $service_node_vlan_id
+                               + _dev0)) {
+            $eth_link.add-vlan $service_node_vlan_id
+        }
+        connect $service_node. + $cnt ($eth_link.get-free-connector
+                                       $service_node_vlan_id)
+    } else {
+        connect $service_node. + $cnt ($eth_link.get-free-connector)
+    }
+
+    # Add a pool of IP addresses for targets booting using DHCP
+    if ($dhcp_pool_size > 0) {
+        ($service_node.sn.dhcp-add-pool $dhcp_pool_size $dhcp_pool_ip
+                                        dhcp $dhcp_domain_name)
+    }
+}
+
+# Connect using NAPT to the real network (unless already connected)
+if $connect_real_network == "napt" {
+    if $service_node {
+        if $service_node.sn->napt_enable == FALSE {
+            $eth_link.connect-real-network-napt
+            $service_node.sn.enable-real-dns
+        }
+    } else {
+        echo ("Warning: A service-node is needed to connect to the real"
+              + " network. Ignoring request to connect to real network.")
+    }
+}

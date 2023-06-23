@@ -4,7 +4,7 @@ decl{
  group "Networking"
  param ip_address : string = "auto"
  ! The board IP address.
- params from "%simics%/targets/common/ethernet-setup.include"
+ params from "ethernet-setup6.include"
   except eth_connector
 
     result southbridge : string
@@ -65,7 +65,7 @@ $eth0 = $host_name.mb.sb.eth_slot
 ## Set up Ethernet for systems that need dhcp, etc.
 if $create_network {
     $eth_connector = $system.mb.sb.eth_slot
-    run-command-file "%simics%/targets/common/ethernet-setup.include"
+    run-command-file "%script%/ethernet-setup6.include"
 }
 
 # File added in Simics-Base 6.0.75
