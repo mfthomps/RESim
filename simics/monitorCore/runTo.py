@@ -296,8 +296,8 @@ class RunTo():
             cur_task_rec = self.mem_utils.readPtr(self.cpu, ptr)
 
         pid = self.mem_utils.readWord32(cpu, cur_task_rec + self.param.ts_pid)
-        self.lgr.debug('runToProc look for %s pid is %d cycle: 0x%x' % (prec.proc, pid, self.cpu.cycles))
-        if pid != 0:
+        #self.lgr.debug('runToProc look for %s pid is %d cycle: 0x%x' % (prec.proc, pid, self.cpu.cycles))
+        if pid is not None and pid != 0:
             comm = self.mem_utils.readString(cpu, cur_task_rec + self.param.ts_comm, 16)
             if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
                 self.lgr.debug('runToProc got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
