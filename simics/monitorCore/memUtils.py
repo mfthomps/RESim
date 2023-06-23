@@ -203,6 +203,7 @@ class memUtils():
             return None
         retval = None
         cpl = getCPL(cpu)
+        v = self.getUnsigned(v)
         try:
             phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
         except:
