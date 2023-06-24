@@ -199,56 +199,41 @@ class memUtils():
             return False    
 
     def v2p(self, cpu, v):
+        ''' Get the physical address of a given virtual (linear) address 
+            Method depends on architecture.  x86 kernel mode addresses must
+            use page tables via stored kernel cr3.
+
+        ''' 
         if v is None:
             return None
         retval = None
-        cpl = getCPL(cpu)
         v = self.getUnsigned(v)
-        try:
-            phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-        except:
-            self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+        ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
+        if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
+            self.lgr.debug('memUtils v2p phys addr for 0x%x not mapped per page tables' % (v))
             return None
-
-        if phys_block.address != 0:
-            #self.lgr.debug('memUtils v2p iface worked cpl %d get unsigned of of phys 0x%x' % (cpl, phys_block.address))
-            if self.WORD_SIZE == 8:
-                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
-                #if not ptable_info.page_exists:
-                #    self.lgr.debug('memUtils cpl %d v2p iface worked but page tables do not for phys 0x%x' % (cpl, phys_block.address))
-                #elif ptable_info.page_addr != phys_block.address:
-                #    self.lgr.debug('memUtils cpl %d v2p iface worked but page value 0x%x does not match 0x%x' % (cpl, ptable_info.page_addr, phys_block.address))
-                #else:
-                #    self.lgr.debug('memUtils cpl %d v2p iface AND page tables worked  0x%x' % (cpl, ptable_info.page_addr))
-            retval = self.getUnsigned(phys_block.address)
-
+        #self.lgr.debug('memUtils v2p ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+        if cpu.architecture == 'arm':
+            phys_addr = v - (self.param.kernel_base - self.param.ram_base)
+            retval = self.getUnsigned(phys_addr)
         else:
-            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
-            if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
-                self.lgr.debug('memUtils v2p phys addr for 0x%x not mapped per page tables' % (v))
-                return None
-            #self.lgr.debug('memUtils v2p ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
-            if cpu.architecture == 'arm':
-                phys_addr = v - (self.param.kernel_base - self.param.ram_base)
+            mode = cpu.iface.x86_reg_access.get_exec_mode()
+            if v < self.param.kernel_base and mode == 8:
+            #if v < self.param.kernel_base:
+                phys_addr = v & ~self.param.kernel_base 
+                #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x mode %d' % (cpl, v, mode))
                 retval = self.getUnsigned(phys_addr)
             else:
-                mode = cpu.iface.x86_reg_access.get_exec_mode()
-                if v < self.param.kernel_base and mode == 8:
-                #if v < self.param.kernel_base:
-                    phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x mode %d' % (cpl, v, mode))
-                    retval = self.getUnsigned(phys_addr)
+                if self.WORD_SIZE == 8 and ptable_info.page_exists:
+                    #self.lgr.debug('memUtils v2p mode is %d ptables page exists? phys 0x%x' % (mode, ptable_info.page_addr))
+                    retval = ptable_info.page_addr
                 else:
-                    if self.WORD_SIZE == 8 and ptable_info.page_exists:
-                        #self.lgr.debug('memUtils v2p mode is %d ptables page exists? phys 0x%x' % (mode, ptable_info.page_addr))
-                        retval = ptable_info.page_addr
+                    if self.WORD_SIZE == 8:
+                        retval = None
+                        #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
                     else:
-                        if self.WORD_SIZE == 8:
-                            retval = None
-                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
-                        else:
-                            retval = v & ~self.param.kernel_base 
-                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
+                        retval = v & ~self.param.kernel_base 
+                        #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
         return retval
                     
 
