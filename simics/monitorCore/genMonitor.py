@@ -484,6 +484,10 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         ''' note may both be None due to failure of getProc '''
         if want_pid != this_pid:
+            ''' or just want may be None if debugging some windows dead zone '''
+            if want_pid is None and this_pid is not None:
+                SIM_break_simulation('mode changed, pid was None, now is not none.')
+                
             self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
         cpl = memUtils.getCPL(cpu)
@@ -4370,7 +4374,7 @@ class GenMonitor():
 
     def pageInfo(self, addr, quiet=False):
         cpu = self.cell_config.cpuFromCell(self.target)
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=self.mem_utils.getKernelSavedCR3())
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=self.mem_utils[self.target].getKernelSavedCR3())
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
