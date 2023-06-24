@@ -165,34 +165,17 @@ class WinTaskUtils():
         retval = None
         if cur_thread_in is None:
             cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+            cur_thread = self.mem_utils.getUnsigned(cur_thread)
         else:
             cur_thread = cur_thread_in
+
         if cur_thread is None:
             self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.phys_current_task)
         else:
+            #self.lgr.debug('winTaskUtils getCurTaskRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
             ptr = cur_thread + self.param.proc_ptr
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
-            '''
-            retval = self.mem_utils.readPtr(self.cpu, ptr)
-            if retval is None:
-                self.lgr.debug('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x, try saved CR3' % (cur_thread, ptr, self.phys_current_task))
-                # Try getting phys addr of saved cr3
-                #gs_base = self.cpu.ia32_gs_base
-                #saved_cr3_addr = gs_base+self.param.saved_cr3
-                #saved_cr3 = self.mem_utils.readPtr(self.cpu, saved_cr3_addr)
-                saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                self.lgr.debug('winTaskUtils getCurTaskRec phys_saved_cr3  0x%x saved_cr3 0x%x' % (self.phys_saved_cr3, saved_cr3))
-                pt = pageUtils.findPageTable(self.cpu, ptr, self.lgr, force_cr3=saved_cr3)
-                self.lgr.debug('winTaskUtils getCurTaskRec got pt.page_addr 0x%x' % pt.page_addr)
-                retval = SIM_read_phys_memory(self.cpu, pt.page_addr, self.mem_utils.WORD_SIZE)
-                if retval is None:
-                    self.lgr.error('winTaskUtils x getCurTaskRec got current Proc of None reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (cur_thread, ptr, self.phys_current_task))
-                else:
-                    self.lgr.debug('winTaskUtils getCurTaskRec VIA saved CR3, got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
-                    pass
-
-            '''
-
+            #self.lgr.debug('winTaskUtils getCurTaskRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
 
             if ptr_phys is not None:
                 retval = SIM_read_phys_memory(self.cpu, ptr_phys, self.mem_utils.WORD_SIZE)
@@ -200,10 +183,12 @@ class WinTaskUtils():
                 self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
                 if cur_thread_in is not None:
                     self.lgr.debug('cur_thread passed in as 0x%x' % cur_thread_in)
-                #self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
+                self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
                 SIM_break_simulation('remove this')
                 pass
-
+        if retval is not None:
+            retval = self.mem_utils.getUnsigned(retval)
+            #self.lgr.debug('winTaskUtils getCurTaskRec returning 0x%x' % retval)
         return retval
 
     def getMemUtils(self):
@@ -270,11 +255,11 @@ class WinTaskUtils():
     def curProc(self):
         #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
-        #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
+        self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
         if cur_task_rec is None:
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
-        #self.lgr.debug('taskUtils curProc comm %s' % comm)
+        self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
@@ -391,25 +376,29 @@ class WinTaskUtils():
         done = False
         got = []
         task_ptr = task_ptr_in
+        #self.lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, self.param.ts_pid))
         while not done:
-            pid_ptr = task_ptr + self.param.ts_pid
+            pid_ptr = self.mem_utils.getUnsigned(task_ptr + self.param.ts_pid)
+            #self.lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
             if pid is not None:
                 got.append(task_ptr)
+                #self.lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
             else:
                 self.lgr.debug('got no pid for pid_ptr 0x%x' % pid_ptr)
                 #print('got no pid for pid_ptr 0x%x' % pid_ptr)
                 break
-            task_next = task_ptr + offset
+            task_next = self.mem_utils.getUnsigned(task_ptr + offset)
             val = self.mem_utils.readWord(self.cpu, task_next)
             if val is None:
                 print('died on task_next 0x%x' % task_next)
                 break
             else:
-                next_head = val
+                next_head = self.mem_utils.getUnsigned(val)
             
             task_ptr = next_head - self.param.ts_prev
-
+            task_ptr = self.mem_utils.getUnsigned(task_ptr)
+            #self.lgr.debug('winTaskUtils got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
             if task_ptr in got:
                 #print('already got task_ptr 0x%x' % task_ptr)
                 self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
@@ -419,7 +408,9 @@ class WinTaskUtils():
     def getTaskList(self):
         got = []
         done = False
+        self.lgr.debug('getTaskList ')
         task_ptr = self.getCurTaskRec()
+        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
         self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
