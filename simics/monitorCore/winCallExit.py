@@ -93,6 +93,9 @@ class WinCallExit():
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+        if callname is None:
+            self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
+            return
         #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) return from %s' % (pid_thread, comm, callname)
@@ -145,9 +148,12 @@ class WinCallExit():
 
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
-            section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
-            self.soMap.createSection(fd, section_handle, pid)
-            trace_msg = trace_msg+' handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
+            if fd is not None:
+                section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
+                self.soMap.createSection(fd, section_handle, pid)
+                trace_msg = trace_msg+' handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
+            else:
+                trace_msg = trace_msg+' handle was None'
             self.lgr.debug('winCallExit '+trace_msg)
 
         elif callname == 'MapViewOfSection':
