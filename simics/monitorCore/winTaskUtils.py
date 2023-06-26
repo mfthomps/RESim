@@ -255,11 +255,11 @@ class WinTaskUtils():
     def curProc(self):
         #self.lgr.debug('taskUtils curProc')
         cur_task_rec = self.getCurTaskRec()
-        self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
+        #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
         if cur_task_rec is None:
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
-        self.lgr.debug('taskUtils curProc comm %s' % comm)
+        #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
