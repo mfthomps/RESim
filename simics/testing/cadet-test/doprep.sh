@@ -1,9 +1,9 @@
 sleep 8
 ./findWindow.sh "cadet01-tst"
 sleep 1
-xdotool type "@cgc.setCommandCallback(cgc.trackKbuf)"
+xdotool type "@cgc.setDebugCallback(cgc.trackKbuf)"
 xdotool key Return
-xdotool type "@cgc.setCommandCallbackParam(4)"
+xdotool type "@cgc.setDebugCallbackParam(4)"
 xdotool key Return
 xdotool type "@cgc.debugSnap()"
 xdotool key Return
