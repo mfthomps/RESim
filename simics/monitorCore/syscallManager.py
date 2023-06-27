@@ -74,7 +74,7 @@ class SyscallInstance():
             self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % call_param_name)
         else:
             self.param_call_list[call_param_name] = call_names
-            self.lgr.debug('syscallManager SyscallInstance addCallParams set call_param_name to %s' % call_name)
+            self.lgr.debug('syscallManager SyscallInstance addCallParams set call_param_name to %s' % call_names)
 
     def hasOtherCalls(self, call_param_name):
         retval = []
@@ -157,6 +157,7 @@ class SyscallManager():
             Assumes all of the call_params have the same call parameter name for purposes of managing the
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
+        self.lgr.debug('watchSyscall')
         retval = None 
         if context is None:
             context = self.getDebugContextName()
@@ -200,25 +201,31 @@ class SyscallManager():
                 existing_call_params = call_instance.syscall.getCallParams()
                 for cp in call_params_list:
                     existing_call_params.append(cp)
+                if kbuffer is None:
+                    kbuffer = call_instance.syscall.kbuffer
+                if callback is not None and call_instance.syscall.callback is not None and callback != call_instance.syscall.callback:
+                    self.lgr.error('syscallManager watchSyscall conflicting callbacks')
+                if callback is None:
+                    callback = call_instance.syscall.callback
                 call_instance.syscall.stopTrace()
                 ''' TBD what about flist and stop action?'''
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
-                               background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call)
+                               background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
-                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call)
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 call_instance.syscall = retval
                 call_instance.addCallParams(call_params_list, call_list)
 
  
         return retval
 
-    def rmSyscall(self, call_param_name, immediate=False, context=None):
+    def rmSyscall(self, call_param_name, immediate=False, context=None, rm_all=False):
         ''' Find and remove the syscall having the given call parameters name (unless it has additional call params,
             in which case just removed the named params).
             If the syscall instance has additional calls, remove the instance and recreate it having only 
@@ -230,9 +237,10 @@ class SyscallManager():
         if call_instance is None:
             self.lgr.debug('syscallManager rmSyscall did not find syscall instance with context %s and param name %s' % (context, call_param_name))
         else:
+            self.lgr.debug('syscallManager rmSyscall call_param_name %s' % call_param_name)
             remaining_params = call_instance.syscall.rmCallParamName(call_param_name)       
             other_calls = call_instance.hasOtherCalls(call_param_name)
-            if len(other_calls) == 0:
+            if rm_all or len(other_calls) == 0:
                 if len(remaining_params) == 0:
                     call_instance.stopTrace(immediate=immediate) 
                     del self.syscall_dict[context][call_instance.name]
@@ -241,6 +249,8 @@ class SyscallManager():
                     self.lgr.debug('syscallManager rmSyscall context %s.  Removed call params %s, syscall remains, must be other params' % (context, call_param_name))
             else:
                 ''' Other syscalls.  Delete and recreate with other syscalls. '''
+                self.lgr.debug('syscallManager rmSyscall call to stopTrace will stop and delete syscall instance %s (%s) other_calls is %s' % (call_instance.name, 
+                    call_instance.syscall.name, str(other_calls)))
                 call_instance.stopTrace(immediate=immediate) 
                 del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about the flist? '''
@@ -253,7 +263,7 @@ class SyscallManager():
                 call_instance = SyscallInstance(call_instance.name, other_calls, new_call_instance, call_instance.name, self.lgr)
 
                 self.syscall_dict[context][call_instance.name] = call_instance
-                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated intance' % (context, call_instance.name))
+                self.lgr.debug('syscallManager rmSyscall context %s removed %s and recreated instance' % (context, call_instance.name))
 
     def findInstanceByParams(self, call_param_name, context):
         ''' Return the Syscallinstance that contains params having the given name.   Assumes only one. '''
