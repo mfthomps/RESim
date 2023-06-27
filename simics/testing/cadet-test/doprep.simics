@@ -1,17 +1,16 @@
 #
-#  Run the trackIO command.  Use script branch to run the prepInjectWatch
-#  after trackIO finishes.  Use xdotool or the prepInject tries to run
+#  Use script branch to run the prepInjectWatch
+#  after trackIO finishes assuming that is less than 40 seconds.  Use xdotool or the prepInject tries to run
 #  while Simics is still running.
 #
 script-branch "trackIO" {
    local $ob = Nil
 #   bp.log.wait-for RESim_log "Backstop hit."
-   wait-for-shell "sleep 20"
-   echo "doprep.simics slept 20"
+   wait-for-shell "sleep 40"
+   echo "doprep.simics slept 40"
    !./findWindow.sh "cadet01-tst"
    !sleep 1
    !xdotool type "@cgc.prepInjectWatch(1, 'cadetread')"
    !xdotool key Return
 }
-@cgc.trackIO(4, kbuf=True)
 
