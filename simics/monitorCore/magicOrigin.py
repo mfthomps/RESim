@@ -128,7 +128,8 @@ class MagicOrigin():
                     SIM_break_simulation('magic stop')
                 else:
                     self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
-                    if self.top.didDebug():
+                    if self.top.isReverseExecutionEnabled():
+                        ''' reset the origin after disconnecting the service node '''
                         self.top.stopAndGo(self.setOrigin)
                     else:
                         self.top.stopAndGo(self.disconnect)
