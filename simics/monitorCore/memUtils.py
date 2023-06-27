@@ -208,32 +208,42 @@ class memUtils():
             return None
         retval = None
         v = self.getUnsigned(v)
-        ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
-        if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
-            self.lgr.debug('memUtils v2p phys addr for 0x%x not mapped per page tables' % (v))
-            return None
-        #self.lgr.debug('memUtils v2p ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
-        if cpu.architecture == 'arm':
-            phys_addr = v - (self.param.kernel_base - self.param.ram_base)
-            retval = self.getUnsigned(phys_addr)
-        else:
-            mode = cpu.iface.x86_reg_access.get_exec_mode()
-            if v < self.param.kernel_base and mode == 8:
-            #if v < self.param.kernel_base:
-                phys_addr = v & ~self.param.kernel_base 
-                #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x mode %d' % (cpl, v, mode))
+        cpl = getCPL(cpu)
+        retval = None
+        if v < self.param.kernel_base:
+            #self.lgr.debug('memUtils v2p user address 0x%x' % v)
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+        if retval is None or retval == 0:
+            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
+            if v < self.param.kernel_base and not ptable_info.page_exists and self.WORD_SIZE==4:
+                self.lgr.debug('memUtils v2p phys addr for 0x%x not mapped per page tables' % (v))
+                return None
+            #self.lgr.debug('memUtils v2p ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+            if cpu.architecture == 'arm':
+                phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
             else:
-                if self.WORD_SIZE == 8 and ptable_info.page_exists:
-                    #self.lgr.debug('memUtils v2p mode is %d ptables page exists? phys 0x%x' % (mode, ptable_info.page_addr))
-                    retval = ptable_info.page_addr
+                mode = cpu.iface.x86_reg_access.get_exec_mode()
+                if v < self.param.kernel_base and mode == 8:
+                #if v < self.param.kernel_base:
+                    phys_addr = v & ~self.param.kernel_base 
+                    #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x mode %d' % (cpl, v, mode))
+                    retval = self.getUnsigned(phys_addr)
                 else:
-                    if self.WORD_SIZE == 8:
-                        retval = None
-                        #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                    if self.WORD_SIZE == 8 and ptable_info.page_exists:
+                        #self.lgr.debug('memUtils v2p mode is %d ptables page exists? phys 0x%x' % (mode, ptable_info.page_addr))
+                        retval = ptable_info.page_addr
                     else:
-                        retval = v & ~self.param.kernel_base 
-                        #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
+                        if self.WORD_SIZE == 8:
+                            retval = None
+                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d failed getting page info for 0x%x' % (cpl, mode, v)) 
+                        else:
+                            retval = v & ~self.param.kernel_base 
+                            #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
         return retval
                     
 
