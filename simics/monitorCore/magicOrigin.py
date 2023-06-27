@@ -45,7 +45,7 @@ class MagicOrigin():
         if self.did_magic:
             return
         self.magic_hap = RES_hap_add_callback("Core_Magic_Instruction", self.magicHap, None)
-        #self.lgr.debug('magicOrigin setMagicHap')
+        self.lgr.debug('magicOrigin setMagicHap')
 
     def deleteMagicHap(self):
         if self.magic_hap is not None:
@@ -86,20 +86,31 @@ class MagicOrigin():
         else:
             self.lgr.debug('Did not find a service node %s to disconnect.' % name)
 
-    def setOrigin(self, dumb=None):
+    def disconnect(self, run=True):
+        self.lgr.debug('MagicOrigin disconnect')
+        self.deleteMagicHap()
         driver_service_node = 'driver_service_node'
         dhcp_service_node = 'dhcp_service_node'
         cmd = 'disconnect-real-network'
         SIM_run_command(cmd)
         self.disconnectServiceNode(driver_service_node)
-        self.disconnectServiceNode(dhcp_service_node)
+        try:
+            self.disconnectServiceNode(dhcp_service_node)
+        except:
+            pass
+        if run:
+            self.lgr.debug('MagicOrigin continue')
+            SIM_continue(0)
+        
+
+    def setOrigin(self, dumb=None):
+        self.disconnect(run=False)
         #cmd = 'default_service_node0.status'
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
         self.did_magic = True
-        self.deleteMagicHap()
         self.lgr.debug('MagicOrigin to pid and then set origin')
         self.top.toPid(-1, callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
@@ -109,14 +120,18 @@ class MagicOrigin():
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
             establish a new origin '''
+        self.lgr.debug('magicHap')
         if self.magic_hap is not None:
+            self.lgr.debug('magicHap magic_hap not none, number %d' % magic_number)
             if magic_number == 99:
                 if self.break_simulation:
                     SIM_break_simulation('magic stop')
                 else:
                     self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
-                    self.top.stopAndGo(self.setOrigin)
-                    #SIM_run_alone(self.deleteMagicHapAlone, None)
+                    if self.top.didDebug():
+                        self.top.stopAndGo(self.setOrigin)
+                    else:
+                        self.top.stopAndGo(self.disconnect)
     def didMagic(self):
         return self.did_magic
 
