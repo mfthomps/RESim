@@ -420,8 +420,10 @@ class PageFaultGen():
         if self.top.hasBookmarks():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
+            print('skipping back to user space, please wait.')
             if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
                 return
+            print('Completed skip.')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if eip != prec.eip:
                 if not resimUtils.skipToTest(self.cpu, target_cycles-1, self.lgr):
@@ -454,6 +456,7 @@ class PageFaultGen():
         else:
             print('SEGV with no bookmarks.  Not yet debugging?')
             self.lgr.debug('SEGV with no bookmarks.  Not yet debugging?')
+        self.lgr.debug('pageFaultGen call to stop trackIO and then skip and mail')
         self.stopWatchPageFaults()
         self.top.stopTrackIO()
         self.top.skipAndMail()
