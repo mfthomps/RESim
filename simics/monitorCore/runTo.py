@@ -25,6 +25,7 @@ class RunTo():
         self.param = param
         self.lgr = lgr
         self.stop_hap = None
+        self.stop_action = None
         self.hap_list = []
         self.skip_list = []
         self.skip_dll = None
@@ -264,9 +265,7 @@ class RunTo():
         hap_clean = hapCleaner.HapCleaner(cpu)
         #hap_clean.add("Core_Breakpoint_Memop", self.cur_task_hap)
         #stop_action = hapCleaner.StopAction(hap_clean, [self.cur_task_break], flist)
-        stop_action = hapCleaner.StopAction(hap_clean, [], flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
 
         status = self.top.is_monitor_running.isRunning()
         if not status:
@@ -280,7 +279,12 @@ class RunTo():
                 SIM_continue(0)
         else:
             self.lgr.debug('runTo toRunningProc thinks it is already running')
-       
+      
+    def stopAlone(self, prec): 
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopHap, self.stop_action)
+        SIM_run_alone(self.cleanToProcHaps, None)
+        SIM_break_simulation('found %s' % prec.proc)
 
     def runToProc(self, prec, third, forth, memory):
         ''' callback when current_task is updated.  new value is in memory parameter '''
@@ -300,9 +304,8 @@ class RunTo():
         if pid is not None and pid != 0:
             comm = self.mem_utils.readString(cpu, cur_task_rec + self.param.ts_comm, 16)
             if (prec.pid is not None and pid in prec.pid) or (prec.pid is None and comm == prec.proc):
-                self.lgr.debug('runToProc got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
-                SIM_run_alone(self.cleanToProcHaps, None)
-                SIM_break_simulation('found %s' % prec.proc)
+                self.lgr.debug('runTo runToProc got proc %s pid is %d  prec.pid is %s' % (comm, pid, str(prec.pid)))
+                SIM_run_alone(self.stopAlone, prec)
             else:
                 #self.proc_list[self.target][pid] = comm
                 #self.lgr.debug('runToProc pid: %d proc: %s' % (pid, comm))
