@@ -2756,10 +2756,10 @@ class DataWatch():
                 st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
                 if st is None:
                     self.lgr.debug('DataWatch readHap stack trace is None, wrong pid?')
-                else:
+                elif eip not in self.not_mem_something:
                     frames = st.getFrames(20)
                     if not self.checkFree(frames, index):
-                        if eip in self.not_mem_something or not self.lookForMemStuff(addr, start, length, memory, op_type, frames, eip):
+                        if not self.lookForMemStuff(addr, start, length, memory, op_type, frames, eip):
                             #self.lgr.debug('dataWatch, not memstuff, do finishRead')
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
                         else:
@@ -2767,7 +2767,8 @@ class DataWatch():
                     else:
                         #self.lgr.debug('dataWatch was checkFree')
                         pass
-   
+                else:
+                    self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
         else:
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
 
@@ -2857,6 +2858,7 @@ class DataWatch():
             #self.lgr.debug('DataWatch lookForMemstuff not memsomething, reset the watch ')
             #self.watch()
             if eip not in self.not_mem_something:
+                self.lgr.debug('DataWatch lookForMemstuff not memsomething add 0x%x to not_mem_something' % eip)
                 self.not_mem_something.append(eip)
             pass
         return retval

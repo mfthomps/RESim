@@ -29,7 +29,7 @@ when the kernel writes to the address.
 '''
 from simics import *
 class WinDelay():
-    def __init__(self, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, lgr):
+    def __init__(self, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr):
         self.cpu = cpu
         self.count_addr = count_addr
         self.buffer_addr = buffer_addr
@@ -37,11 +37,31 @@ class WinDelay():
         self.context_manager = context_manager
         self.trace_mgr = trace_mgr
         self.call_name = call_name
+        ''' used for prep inject watch to locate kernel buffers for data injection. '''
+        self.kbuffer = kbuffer
+
         self.lgr = lgr
+        self.fd = fd
         self.count_write_hap = None
+        ''' used for data tracking, e.g., trackIO '''
+        self.data_watch = None
+        self.linger = None
+
         self.cycles = self.cpu.cycles
         ''' Set the hap'''    
         self.setCountWriteHap()
+
+    def setDataWatch(self, data_watch, linger):
+        self.data_watch = data_watch
+        self.linger = linger
+
+    def doDataWatch(self, return_count, trace_msg):
+        if self.data_watch is not None:
+            self.data_watch.setRange(self.buffer_addr, return_count, msg=trace_msg, 
+                       max_len=return_count, recv_addr=self.buffer_addr, fd=self.fd)
+            if self.linger: 
+                self.data_watch.stopWatch() 
+                self.data_watch.watch(break_simulation=False, i_am_alone=True)
 
     def setCountWriteHap(self):
         ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
@@ -52,8 +72,10 @@ class WinDelay():
         ''' Invoked when the count address is written to '''
         if self.count_write_hap is None:
             return
-        self.lgr.debug('winDelay writeCountHap')
-        return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
+        return_count = SIM_get_mem_op_value_le(memory)
+
+        #return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
+        self.lgr.debug('winDelay writeCountHap read count from 0x%x got 0x%x' % (self.count_addr, return_count))
         if return_count == 0:
             self.lgr.debug('WinDelay return count of zero.  now what?')
         else:
@@ -62,6 +84,8 @@ class WinDelay():
             trace_msg = self.call_name+' completed from cycle 0x%x count 0x%x data %s\n' % (self.cycles, return_count, read_data)
             self.trace_mgr.write(trace_msg)
             self.lgr.debug('winDelay writeCountHap %s' % trace_msg)
+            #SIM_break_simulation('WinDelay')
+            self.doDataWatch(return_count, trace_msg)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
         SIM_run_alone(self.rmHap, hap) 

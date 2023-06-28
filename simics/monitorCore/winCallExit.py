@@ -77,6 +77,12 @@ class WinCallExit():
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
 
+    def watchData(self, exit_info):
+        if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
+            return True
+        else:
+            return False
+
     def handleExit(self, exit_info, pid, comm):
         ''' 
            Invoked on (almost) return to user space after a system call.
@@ -237,9 +243,12 @@ class WinCallExit():
                 else:
                     if exit_info.fname_addr is not None and not_ready:
                         self.lgr.debug('winCallExit RECV, not ready do winDelay')
-                        winDelay.WinDelay(self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
-                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.lgr)
+                        
+                        win_delay = winDelay.WinDelay(self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                         trace_msg = trace_msg+' Device not ready.'
+                        if self.watchData(exit_info):
+                            win_delay.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
                     else:
                         self.lgr.error('winCallExit RECV failed to get return count though seems ready.')
                         trace_msg = trace_msg+' winCallExit RECV failed to get return count though seems ready.'
@@ -251,7 +260,7 @@ class WinCallExit():
                     trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
 
                     my_syscall = exit_info.syscall_instance
-                    if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                    if self.watchData(exit_info):
                         ''' in case we want to break on a read of this data.  '''
                         self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
                             exit_info.count))

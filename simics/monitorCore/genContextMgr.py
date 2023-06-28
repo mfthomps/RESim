@@ -608,6 +608,9 @@ class GenContextMgr():
             win_thread = new_addr
             ptr = new_addr + self.param.proc_ptr
             new_addr = self.mem_utils.readPtr(self.cpu, ptr)
+            if new_addr is None:
+                self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
+                return
             thread_id = self.task_utils.getCurThread(rec=win_thread)
         
         prev_task = self.task_utils.getCurTaskRec()
