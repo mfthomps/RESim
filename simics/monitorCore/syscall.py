@@ -452,14 +452,14 @@ class Syscall():
         if flist_in is not None:
             ''' Given function list to use after syscall completes '''
             hap_clean = hapCleaner.HapCleaner(cpu)
-            for ph in self.proc_hap:
-                hap_clean.add("Core_Breakpoint_Memop", ph)
+            #for ph in self.proc_hap:
+            #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
             #self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif (break_simulation or self.debugging) and not self.breakOnExecve() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
-            for ph in self.proc_hap:
-                hap_clean.add("Core_Breakpoint_Memop", ph)
+            #for ph in self.proc_hap:
+            #    hap_clean.add("GenContext", ph)
             #f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
             f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
             flist = [f1]
@@ -467,8 +467,8 @@ class Syscall():
             self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
-            for ph in self.proc_hap:
-                hap_clean.add("Core_Breakpoint_Memop", ph)
+            #for ph in self.proc_hap:
+            #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
             #self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 

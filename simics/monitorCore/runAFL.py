@@ -38,6 +38,10 @@ def ioHandler(read_array, stop, lgr):
                 print('select error, must be closed.')
                 lgr.debug('select error, must be closed.')
                 return
+            except OSError:
+                print('Bad file descriptor, must be closed.')
+                lgr.debug('Bad file descriptor, must be closed.')
+                return
             for item in r:
                 try:
                     data = os.read(item.fileno(), 800)

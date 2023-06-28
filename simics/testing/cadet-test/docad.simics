@@ -6,27 +6,15 @@
 #decl {
 #       param cgc : string = ""
 #}
+echo "starting docad"
 @cgc.debugProc('cadet01')
 c 900000000
 @cgc.writeConfig('cadet')
+echo "wrote config"
 @cgc.watchROP()
-!./findWindow.sh "Simics Target Consoles"
-!sleep 2
-!xdotool key Down
-!xdotool key Return
-!sleep 2
-$console = driver.serconsole.con
-$console.input "./client.py\n"
-#!./findWindow.sh driver.mb.sb.com
-#!sleep 2
-#!xdotool type "          ./client.py"
-#!xdotool key Return
-script-branch "sent it" {
-    local $console = NIL
-    $console = driver.serconsole.con
-    $console.bp-wait-for-console-string "sent it"
-    echo "client sent string, run some then check log"
-}
+echo "before drive driver"
 #
+# run drive driver in the background
+!./background.sh "drive-driver.py rop.directive -c"
 # Now run the simulation
 c 50000000000

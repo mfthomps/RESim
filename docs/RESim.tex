@@ -667,6 +667,11 @@ RESim configuration file used to start the session.
 
 \item {\tt saveMemory(addr, size, fname)} Write a byte array of the given size read from the given addr into a file with the given name.
 
+\item {\tt pageInfo(addr)} Use saved kernel page table addresses to get the physical address of a given linear address.  This is useful when the current
+context is not that of the typical kernel state.
+
+
+
 \end{itemize}
 
 \section{Defining a target system}
@@ -752,6 +757,8 @@ to this section.
 \item {\tt \$mac\_address\_2} Enclose in double quotes
 \item {\tt \$mac\_address\_3} Enclose in double quotes
 \item {\tt \$eth\_device} Alternet ethernet device, see \ref{networks} below.
+\item {\tt \$create\_network} Create a network service node and attach it to the named switch, intended
+to provide DHCP services to targets that requrire it. See \ref{DHCP}.
 
 \item {\tt SIMICS\_SCRIPT} Path to the Simics script file that defines the target system.  This path is relative to the {\tt target} directory
 of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targets}.  For example, 
@@ -851,12 +858,14 @@ the network topology using the Simics {\tt disconnect} command, e.g.,
 \end{verbatim}
 
 \subsubsection{Real network connections}
-Refer to the Simics \textit{Etherne Networking Technology Guide} for details on connecting the simulation to real networks.
-Also the section on driver platforms (\ref{driver} and see the limitations described in \ref{real-networks}.  By default, the Simics {\tt connect-real-network} command creates a service
+Refer to the Simics \textit{Ethernet Networking Technology Guide} for details on connecting the simulation to real networks.
+Also see the section in this guide on driver platforms (\ref{driver} and see the limitations described in \ref{real-networks}.  
+By default, the Simics {\tt connect-real-network} command creates a service
 node that provides NAPT forwarding of traffic from targets that can reach the service node.  Unless you want the target to be able to
 reach external networks (e.g., to install packages), consider using {\tt service\_node.sn->napt\_enable = 0} to disable NAPT.
 
 \subsection{DHCP}
+\label{DHCP}
 If you have an x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
 naming one of the switches to which a service node will be created.  The first IP address by default to the device will be 10.10.0.100.
 That service node will have NAPT disabled.  Note you must set the switch value to NONE for the named switch (TBD automate that.)
@@ -885,6 +894,8 @@ caused a file named {\tt driver-ready.flag} to be created within the workspace d
 create that file from the driver computer.  This requires you copy the Simics agent onto the target and get it to run
 upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.  
 An example driver is described in Appendix \ref{driver}.   
+See the {\tt mapdriver.simics} script in the simics/workspace directory for an example of how to connect the driver to a real network,
+e.g., to use {\tt drive-driver.py} script in a manner that disconnects the service node from the simulation.
 
 \section{Running the simulation}
 \label{running}
@@ -2928,6 +2939,17 @@ You wish to debug the target's data consumption and you know it will hang on a s
 you run a while without giving it data and then create a snapshot.  When the snapshot
 is restored, your target process is not scheduled, and thus the debugSnap function will appear to hang until you provide data that causes your
 target to be scheduled.  This is expected.
+
+\section{Windows}
+A preliminary implementation of Windows application tracking is under development in the win7 branch of RESim.
+Support functions include:
+\begin{itemize}
+\item Tracing syscalls with traceAll.  There is also a {\tt traceWindows} command that traces a subset of windows system calls.  This can be useful when performance is 
+impacted by the raft of syscalls some applications make.  Also consider making use of the {\tt ONLY\_PROGS} and {\tt IGNORE\_PROGS} directives.
+\item trackIO mostly works, however there is not yet processing of clib type data move functions.
+\item getWin7CallParams with {\tt track\_params=True} will generate a report on kernel references to system call parameters.  This is useful when creating code to parse out
+the system call parameters.
+\end{itemize}
 
 \end{appendices}
 \end{document}

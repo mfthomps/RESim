@@ -47,28 +47,29 @@ class TargetFS():
             
         if path.startswith('./'):
              base = os.path.basename(path)
-             fun_file = base+'.funs'
-             lgr.debug('is relative, fun_file %s' % fun_file)
-             full_fun = self.find(fun_file)
-             if full_fun is not None:              
-                 retval = os.path.join(os.path.dirname(full_fun), base)
-                 #lgr.debug('getFull found file %s' % retval)
-             else:
-                 retval = self.find(base)
+             #fun_file = base+'.funs'
+             #lgr.debug('TargetFS getFull is relative, fun_file %s' % fun_file)
+             #full_fun = self.find(fun_file)
+             #if full_fun is not None:              
+             #    retval = os.path.join(os.path.dirname(full_fun), base)
+             #    #lgr.debug('getFull found file %s' % retval)
+             #else:
+             #    retval = self.find(base)
+             retval = self.find(base)
         else:     
             if lgr is not None:
                 lgr.debug('getFull look at %s' % path) 
             if path.startswith('/??/C:/'):
                 path = path[7:]
                 if lgr is not None:
-                    lgr.debug('getFull changed to %s' % path) 
+                    lgr.debug('TargetFS getFull not relative changed to %s' % path) 
             elif path.startswith('/'):
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)
             if os.path.islink(full):
                 real = os.readlink(full)
                 if lgr is not None:
-                    lgr.debug('TargetFS link real %s' % real)
+                    lgr.debug('TargetFS not relative link real %s' % real)
                 if real.startswith('/'):
                     real = real[1:]
                     retval = os.path.join(self.root_prefix, real)
@@ -76,27 +77,30 @@ class TargetFS():
                     retval = os.path.join(os.path.dirname(full), real)
             elif not os.path.isfile(full):
                 if lgr is not None:
-                    lgr.debug('TargetFS getFull no file at %s -- use glob' % full)
+                    lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
                 flist = glob.glob(full+'*')
                 if len(flist) > 0:
                     retval = flist[0]
                 else:
                     if lgr is not None:
-                        lgr.debug('TargetFS getFull, no glob at %s' % (full+'*'))
+                        lgr.debug('TargetFS getFull, not relative no glob at %s' % (full+'*'))
                     ''' try basename '''
                     base = os.path.basename(path)
-                    fun_file = base+'.funs'
+                    #fun_file = base+'.funs'
+                    #if lgr is not None:
+                    #    lgr.debug('TargetFS getFull not relative , fun_file %s' % fun_file)
+                    #full_fun = self.find(fun_file)
+                    #if full_fun is not None:              
+                    #    retval = os.path.join(os.path.dirname(full_fun), base)
+                    #    #if lgr is not None:
+                    #    #    lgr.debug('getFull found file %s' % retval)
+                    #else:
+                    #    retval = self.find(base)
+                    #    if lgr is not None:
+                    #        lgr.debug('getFull used find found file %s' % retval)
+                    retval = self.find(base)
                     if lgr is not None:
-                        lgr.debug('is relative, fun_file %s' % fun_file)
-                    full_fun = self.find(fun_file)
-                    if full_fun is not None:              
-                        retval = os.path.join(os.path.dirname(full_fun), base)
-                        #if lgr is not None:
-                        #    lgr.debug('getFull found file %s' % retval)
-                    else:
-                        retval = self.find(base)
-                        if lgr is not None:
-                            lgr.debug('getFull used find found file %s' % retval)
+                         lgr.debug('getFull used find found file %s' % retval)
 
             else:
                 retval = full

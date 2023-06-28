@@ -6,6 +6,8 @@ import subprocess
 import imp 
 import elfText
 import json
+import re
+import fnmatch
 try:
     import cli
     from simics import *
@@ -338,4 +340,55 @@ def getIniTargetValue(input_ini_file, field):
                     if name == field:
                         retval = value 
                         break
+    return retval
+
+def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
+    ''' only works if pattern is glob-like, does not recurse '''
+    rule = re.compile(fnmatch.translate(glob_pat), re.IGNORECASE) if ignore_case \
+            else re.compile(fnmatch.translate(glob_pat))
+    return [n for n in os.listdir(path) if rule.match(n)]
+
+def findFrom(self, name, from_dir):
+    for root, dirs, files in os.walk(from_dir):
+        if name in files:
+            retval = os.path.join(from_dir, root, name)
+            abspath = os.path.abspath(retval)
+            return abspath
+    return None
+
+def findListFrom(pattern, from_dir):
+    retval = []
+    for root, dirs, files in os.walk(from_dir):
+        flist = fnmatch.filter(files, pattern)
+        for f in flist:
+            retval.append(f)
+    return retval
+
+def getfileInsensitive(path, root_prefix, lgr):
+    got_it = False
+    retval = root_prefix
+    cur_dir = root_prefix
+    if '/' in path:
+        parts = path.split('/')
+        for p in parts[:-1]:
+            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
+
+            for d in dlist:
+                if d.upper() == p.upper():
+                    retval = os.path.join(retval, d)
+                    cur_dir = os.path.join(cur_dir, d)
+                    break
+        p = parts[-1]
+        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        flist = os.listdir(cur_dir)
+        for f in flist:
+            if f.upper() == p.upper():
+                retval = os.path.join(retval, f) 
+                got_it = True
+                break
+    else:
+        pass
+    if not got_it:
+        retval = None
     return retval

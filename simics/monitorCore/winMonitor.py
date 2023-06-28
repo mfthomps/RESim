@@ -75,9 +75,10 @@ class WinMonitor():
         self.w7_call_params.rmAllBreaks()
  
 
-    def toCreateProc(self, comm=None, flist=None, binary=False):
+    def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True):
+        ''' Use syscallManager to catch a CreateUserProcess '''
         if comm is not None:    
-            params = syscall.CallParams('toCreateProc', 'CreateUserProcess', comm, break_simulation=True) 
+            params = syscall.CallParams('toCreateProc', 'CreateUserProcess', comm, break_simulation=break_simulation) 
             if binary:
                 params.param_flags.append('binary')
             call_params = [params]
@@ -89,13 +90,18 @@ class WinMonitor():
         self.lgr.debug('winMonitor toCreateProc did call to watch createUserProcess')
         SIM_continue(0)
 
+    def debugAlone(self, dumb):
+        self.lgr.debug('winMonitor debugAlone, call top debug')
+        SIM_run_alone(self.top.debug, False)
+
     def debugProc(self, proc, final_fun=None, pre_fun=None):
+        ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
         self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
         #f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
-        f1 = stopFunction.StopFunction(self.top.debug, [], nest=False)
-        #flist = [f1, f2]
-        flist = [f1]
-        self.toCreateProc(proc, flist=flist) 
+        f1 = stopFunction.StopFunction(self.debugAlone, [None], nest=False)
+        flist = []
+        #flist = [f1]
+        self.toCreateProc(proc, flist=flist, break_simulation=False) 
 
 
     def tasks(self):

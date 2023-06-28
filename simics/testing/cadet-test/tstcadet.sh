@@ -16,16 +16,19 @@ export WS=$RESIM_DIR/simics/workspace
 echo "ws is $WS"
 cp $WS/ubuntu_driver.ini $WS/ubuntu.param $WS/driver-script.sh $WS/mapdriver.simics $WS/client.py $WS/authorized_keys .
 
-#sed -i '/OS_TYPE=LINUX32/a INIT_SCRIPT=cadet.simics' ubuntu_driver.ini
+
 sed -i 's/mapdriver.simics/cadet.simics/' ubuntu_driver.ini
-echo "INTERACT_SCRIPT=teecadet.simics" >> ubuntu_driver.ini
+#echo "INTERACT_SCRIPT=teecadet.simics" >> ubuntu_driver.ini
 
 cp $TD/*.simics .
 cp $TD/*.sh .
-# use ~/bin/set-title
+cp $TD/*.directive .
+cp $TD/*.io .
+# use ~/bin/set-title to doxtool can find the window
 $HOME/bin/set-title "cadet01-tst"
 
-resim ubuntu_driver.ini || exit
+resim ubuntu_driver.ini -n || exit
+# the above should have created a rop warning in the log.  check it.
 ./checkROP.sh || exit
 ./testTrack.sh || exit
 ./testAFL.sh

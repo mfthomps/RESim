@@ -42,6 +42,7 @@ import sys
 import pickle
 import traceback
 import reWatch
+import clibFuns
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
@@ -51,10 +52,10 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup']
+win_mem_funs = []
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
-mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
 no_stop_funs = ['xml_element_free']
 ''' made up functions that could not have ghost frames?'''
 no_ghosts = ['charLookup']
@@ -2785,7 +2786,7 @@ class DataWatch():
             max_index = len(frames)-1
             for i in range(max_index, -1, -1):
                 frame = frames[i]
-                fun = self.adjustFunName(frame)
+                fun = clibFuns.adjustFunName(frame, self.ida_funs, self.lgr)
                 #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
                 if fun in free_funs:
                     self.recordFree(self.start[index], fun)
@@ -2813,7 +2814,10 @@ class DataWatch():
         if not self.undo_pending:
             #self.lgr.debug('%s' % st.getJson()) 
             # look for memcpy'ish... TBD generalize 
-            mem_stuff = self.memsomething(frames, mem_funs)
+            if self.top.isWindows():
+                mem_stuff = self.memsomething(frames, win_mem_funs)
+            else:
+                mem_stuff = self.memsomething(frames, mem_funs)
         else:
             self.lgr.debug('DataWatch lookForMemStuff, skip memsomething, already failed on it')
             self.undo_pending = False
@@ -3407,119 +3411,7 @@ class DataWatch():
                             break
                        
         return retval
-                   
-    def adjustFunName(self, frame): 
-        fun = None
-        if frame.fun_name is not None:
-            fun = frame.fun_name.strip()
-            #self.lgr.debug('dataWatch adjustFunName fun starts as %s' % fun)
-            if '@' in frame.fun_name:
-                fun = frame.fun_name.split('@')[0]
-                try:
-                    fun_hex = int(fun, 16) 
-                    if self.ida_funs is not None:
-                        fun_name = self.ida_funs.getName(fun_hex)
-                        self.lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
-                        if fun_name is not None:
-                            fun = fun_name
-                    else:
-                        self.lgr.debug('No ida_funs')
-                except ValueError:
-                    pass
-            for pre in mem_prefixes:
-                if fun.startswith(pre):
-                    fun = fun[len(pre):]
-                    #self.lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
-            if fun.startswith('std::string::'):
-                fun = fun[len('std::string::'):]
-                if '(' in fun:
-                    ''' TBD generalize/test for ghidra? '''
-                    fun, param1 = fun.split('(',1)
-                    if fun == 'string': 
-                        if param1.startswith('char const*'):
-                            fun = 'string_chr'
-                        elif param1.startswith('std::string'):
-                            fun = 'string_std'
-                        else:
-                            self.lgr.error('unknown string constructor %s' % fun)
-                    elif fun == 'replace': 
-                        if 'char' in param1:
-                            fun = 'replace_chr'
-                        else:
-                            fun = 'replace_std'
-                    elif fun == 'append': 
-                        if 'char' in param1 and 'uint' in param1:
-                            fun = 'append_chr_n'
-                        elif 'char' in param1:
-                            fun = 'append_chr'
-                        elif 'std::string' in param1:
-                            fun = 'append_std'
-                        else:
-                            self.lgr.warning('TBD build out c++ append')
-                    elif fun == 'assign': 
-                        if 'char' in param1:
-                            fun = 'assign_chr'
-                    elif fun == 'compare': 
-                        if 'char' in param1:
-                            fun = 'compare_chr'
-
-            elif fun.startswith('std::__cxx11::'):
-                fun = fun[len('std::__cxx11::'):]
-                if '(' in fun:
-                    ''' TBD generalize/test for ghidra? '''
-                    fun, params = fun.split('(',1)
-                    if '::' in fun:
-                        fun = fun.split('::')[-1]
-                    ''' TBD fix this, generalize'''
-                    #if 'basic_string' in fun and not params.startswith('void'):
-                    if 'basic_string' in fun and params.startswith('char const*,uint'):
-                        ''' TBD generalize '''
-                        self.lgr.debug('DataWatch string function is basic char fun %s params (%s' % (fun, params))
-                        fun = 'string_basic_char' 
-                    elif 'basic_string' in fun and params.startswith('std::'):
-                        self.lgr.debug('DataWatch string function is basic std %s params (%s' % (fun, params))
-                        fun = 'string_basic_std' 
                   
-                    else:
-                        self.lgr.debug('DataWatch string function did not recognize fun %s params (%s' % (fun, params))
-                else:
-                    self.lgr.error('DataWatch string function parsing, Expected "(" in %s' % fun)
-
-
-            ''' TBD clean up this hack?'''
-            if fun.endswith('destroy'):
-                #self.lgr.debug('is destroy')
-                fun = 'destroy'
-            elif fun.startswith('operator new'):
-                ''' TBD, happens in unwind code segments, just look for unwind instead?'''
-                #self.lgr.debug('is new')
-                fun = 'new'
-            elif fun.startswith('operator delete'):
-                #self.lgr.debug('is destroy')
-                fun = 'delete'
-            elif 'find_first' in fun: 
-                fun = 'find_first'
-            elif fun.endswith('end_cleanup'):
-                fun = 'end_cleanup'
-            elif 'replace_safe' in fun:
-                fun = 'replace_safe'
-
-            if '__' in fun:
-                ''' TBD generalized? '''
-                fun = fun.split('__')[1]
-            if '<' in fun:
-                fun = fun.split('<')[0]
-        return fun
-   
-    def allClib(self, frames, start):
-        retval = True
-        for i in range(start, -1, -1):
-            frame = frames[i]
-            if '/libc.so' not in frame.fname:
-                retval = False
-                break
-        return retval
-         
     def memsomething(self, frames, local_mem_funs):
         ''' Is there a call to a memcpy'ish function, or a user iterator, in the last few frames? If so, return the return address '''
         ''' Will iterate through the frames backwards, looking for the highest level function'''
@@ -3543,10 +3435,13 @@ class DataWatch():
             #self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
             if frame.instruct is not None:
                 #self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
-                fun = self.adjustFunName(frame)
-                if fun is not None:
-                    if fun not in local_mem_funs and fun.startswith('v'):
-                        fun = fun[1:]
+                if self.top.isWindows():
+                    fun = None
+                else:
+                    fun = clibFuns.adjustFunName(frame, self.ida_funs, self.lgr)
+                    if fun is not None:
+                        if fun not in local_mem_funs and fun.startswith('v'):
+                            fun = fun[1:]
                 #self.lgr.debug('dataWatch memsomething fun is %s' % fun)
                 if fun is not None and fun == prev_fun and fun != 'None':
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
@@ -3564,7 +3459,7 @@ class DataWatch():
                         if fun_precidence == 0 and i > 3:
                             ''' Is it some clib calling some other clib?  ghosts?'''
                             start = i - 1
-                            if self.allClib(frames, start):
+                            if clibFuns.allClib(frames, start):
                                 #self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                                 continue
                     if self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr):

@@ -31,6 +31,7 @@ import allWrite
 import syscall
 import resimUtils
 import epoll
+import winDelay
 from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
@@ -93,12 +94,19 @@ class WinCallExit():
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
         callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+        if callname is None:
+            self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
+            return
         #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
         trace_msg = 'pid:%s (%s) return from %s with status 0x%x' % (pid_thread, comm, callname, eax)
 
         ''' who taught bill about error codes? '''
         #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
+        not_ready = False
+        if eax == 0x103:
+            not_ready = True
+            eax = 0
         if eax == 0x40000003:
             self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
             eax = 0
@@ -145,9 +153,12 @@ class WinCallExit():
 
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
-            section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
-            self.soMap.createSection(fd, section_handle, pid)
-            trace_msg = trace_msg+' handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
+            if fd is not None:
+                section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
+                self.soMap.createSection(fd, section_handle, pid)
+                trace_msg = trace_msg+' handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
+            else:
+                trace_msg = trace_msg+' handle was None'
             self.lgr.debug('winCallExit '+trace_msg)
 
         elif callname == 'MapViewOfSection':
@@ -214,19 +225,28 @@ class WinCallExit():
                             exit_info.call_params.match_param = new_handle
                             exit_info.call_params = None
 
-        elif callname in ['DeviceIoControlFile']:
+        elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+
+            trace_msg = trace_msg + ' ' + exit_info.socket_callname
             if exit_info.socket_callname == 'RECV':
-                if exit_info.fname_addr is not None:
+                ''' fname_addr has address of return count'''
+                if exit_info.fname_addr is not None and not not_ready:
                     return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
                 else:
+                    if exit_info.fname_addr is not None and not_ready:
+                        self.lgr.debug('winCallExit RECV, not ready do winDelay')
+                        winDelay.WinDelay(self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.lgr)
+                        trace_msg = trace_msg+' Device not ready.'
+                    else:
+                        self.lgr.error('winCallExit RECV failed to get return count though seems ready.')
+                        trace_msg = trace_msg+' winCallExit RECV failed to get return count though seems ready.'
                     return_count = None
                 if return_count is not None:
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
                     trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
-
-
 
                     my_syscall = exit_info.syscall_instance
                     if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None:
@@ -244,8 +264,6 @@ class WinCallExit():
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, i_am_alone=True)
 
-                else:
-                    trace_msg = trace_msg+' FAILED to get return count'
                 self.lgr.debug(trace_msg)
             elif exit_info.socket_callname == 'SEND':
                 if exit_info.fname_addr is not None:

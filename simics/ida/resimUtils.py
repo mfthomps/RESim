@@ -1,8 +1,10 @@
 import json
 import idc
+import ida_search
 import idaapi
 import idaversion
 import idautils
+import os
 def demangle(fname):
     mangle_map = {}
     for mangled in idautils.Functions():
@@ -28,7 +30,10 @@ def dumpFuns(fname=None):
     #print 'ea is %x' % ea
     if fname is None:
         #fname = idaversion.get_root_file_name()
-        fname = idaversion.get_input_file_path()
+        fname = os.getenv('ida_analysis_path')
+        if fname is None:
+            print('No ida_analysis_path defined')
+            fname = idaversion.get_input_file_path()
     print('dumpFuns inputfile %s' % fname)
     for ea in idautils.Segments():
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
@@ -49,13 +54,16 @@ def dumpFuns(fname=None):
         json.dump(funs, fh)
         print('Wrote functions to %s.funs' % fname)
     demangle(fname)
-    unwind(fname)
+    #unwind(fname)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
         basic blocks
     '''
-    fname = idaversion.get_input_file_path()
+    fname = os.getenv('ida_analysis_path')
+    if fname is None:
+        print('No ida_analysis_path defined')
+        fname = idaversion.get_input_file_path()
     funs_fh = open(fname+'.funs') 
     fun_json = json.load(funs_fh)
     blocks = {}
@@ -98,6 +106,7 @@ def getHex(s):
     return retval
 
 def unwind(fname):
+    ''' TBD not used '''
     flag = idc.SEARCH_DOWN | idc.SEARCH_NEXT
     unwind_list = []
     count = 0
@@ -106,7 +115,9 @@ def unwind(fname):
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
         done = False
         while not done:
-            next = idc.find_text(ea, flag, 0, 0, "unwind")
+            print('ea is %s' % ea)
+            print('ea is 0x%x' % ea)
+            next = ida_search.find_text(ea, flag, 0, "unwind", 0)
             if next == prev_next:
                 break
             if next is None or next == 0:

@@ -47,19 +47,16 @@ class PrepInjectWatch():
         ''' Assume the watch mark follows an ioctl 
             that preceeds the read.  We will snapshot 
             prior to the ioctl and record the address of the kernel buffer.'''
+        self.lgr.debug('prepInjectWatch doInject snap %s mark %d' % (snap_name, watch_mark))
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
         if self.kbuffer is not None:
-            #''' go forward one to user space and record the return IP '''
-            #SIM_run_command('pselect %s' % self.cpu.name)
-            #SIM_run_command('si')
             self.ret_ip = self.top.getEIP(self.cpu)
             self.top.precall()
             self.call_ip = self.top.getEIP(self.cpu)
-            ''' TBD need to set kbuf to a kernel buffer, though only used for indirect purposes, clean up writeData'''
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
             self.pickleit(kbufs[0])  

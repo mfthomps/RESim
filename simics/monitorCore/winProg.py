@@ -76,8 +76,10 @@ class WinProg():
         self.text_hap = None
 
     def toNewProc(self, prog_string):
+        ''' Assumes this is running  alone '''
         self.prog_string = prog_string
         self.lgr.debug('toNewProc %s' % prog_string)
+        self.top.rmSyscall('toCreateProc')
         phys_current_task = self.task_utils.getPhysCurrentTask()
         self.cur_task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils.WORD_SIZE, 0)
@@ -89,7 +91,7 @@ class WinProg():
         ''' We should be in the new process '''
         if self.cur_task_hap is None:
             return
-        #self.lgr.debug('winProg toNewProcHap for proc %s' % proc)
+        self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
         cur_proc = self.task_utils.getCurTaskRec(cur_thread_in=cur_thread)
         pid_ptr = cur_proc + self.param.ts_pid
@@ -134,6 +136,27 @@ class WinProg():
     def rmFindTextHap(self, dumb):
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
 
+    def runToText(self, want_pid):
+        self.lgr.debug('winProg runToText want_pid %d' % want_pid)
+        eproc = self.task_utils.getCurTaskRec()
+        load_addr = getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
+        self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
+        print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
+        self.top.debugExitHap()
+        full_path = self.top.getFullPath(fname=self.prog_string)
+        self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
+        self.top.setFullPath(full_path)
+        size, machine = getSizeAndMachine(full_path, self.lgr)
+        if size is None:
+            self.lgr.error('winProg runToText unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            self.top.quit()
+            return 
+        self.lgr.debug('winProg runToText got size 0x%x' % size)
+        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine)
+        self.top.trackThreads()
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
+        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, None, proc_break, 'text_hap')
+
     def findText(self, want_pid, one, old, new):
         if self.mode_hap is None:
             return
@@ -143,24 +166,17 @@ class WinProg():
             return
         self.lgr.debug('winProg findText pid %d' % this_pid)
         SIM_run_alone(self.rmFindTextHap, None)
-        eproc = self.task_utils.getCurTaskRec()
-        load_addr = getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
-        self.lgr.debug('winProg findText load_addr 0x%x' % load_addr)
-        print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
-        self.top.debugExitHap()
-        full_path = self.top.getFullPath(fname=self.prog_string)
-        self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
-        self.top.setFullPath(full_path)
-        size, machine = getSizeAndMachine(full_path, self.lgr)
-        if size is None:
-            self.lgr.error('winProg findText unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
-            self.top.quit()
-            return 
-        self.lgr.debug('winProg findText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine)
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
-        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, None, proc_break, 'text_hap')
+        SIM_run_alone(self.runToText, want_pid)
+
+    def rmHapAlone(self, param_name):
+        self.top.rmSyscall(param_name, context = self.context_manager.getDefaultContextName())
+
+    def debugAlone(self, dumb=None):
+        self.lgr.debug('winMonitor debugAlone, call top debug')
+        SIM_run_alone(self.top.debug, False)
 
     def textHap(self, dumb, third, forth, memory):
+        self.lgr.debug('winProg textHap')
         self.context_manager.genDeleteHap(self.text_hap)
-        SIM_run_alone(self.top.stopAndAction, self.stop_action)
+        self.lgr.debug('winProg textHap call stopAndAction')
+        SIM_run_alone(self.top.stopAndGo, self.debugAlone)
