@@ -526,6 +526,14 @@ class WinSyscall():
             else:
                 trace_msg = trace_msg+' Bad buffer address'
 
+        elif callname == 'WriteFile':
+            exit_info.old_fd = frame['param1']
+            exit_info.retval_addr = self.stackParam(1, frame)
+            count = self.stackParam(3, frame) & 0x00000000FFFFFFFF
+            buffer_addr = self.stackParam(2, frame)
+            write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
+            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buff_addr: 0x%x  count: %d contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, write_string)
+
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
                 self.lgr.debug('winSyscall CreateFile internel to kernel')
@@ -536,7 +544,13 @@ class WinSyscall():
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
                 # TBD better approach?
                 exit_info.retval_addr = frame['param1']
-                trace_msg = trace_msg+' fname: %s fname addr: 0x%x retval addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+                
+                # Permissions
+                access_mask = frame['param2']
+                file_attributes = self.stackParam(2, frame) & 0xffffffff
+                share_access = self.stackParam(3, frame) & 0xffffffff
+                create_disposition = self.stackParam(4, frame) & 0xffffffff
+                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
                 if exit_info.fname.endswith('Endpoint'):
                     extended_size = self.stackParam(7, frame)
                     if extended_size is not None:
@@ -559,7 +573,7 @@ class WinSyscall():
                 exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
                 exit_info.retval_addr = frame['param1']
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
-                trace_msg = trace_msg+' fname: %s fname addr: 0x%x fd return addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x fd_return_addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
                 if True:
                     for call_param in syscall_info.call_params:
                         #self.lgr.debug('got param type %s' % type(call_param.match_param))
@@ -807,15 +821,21 @@ class WinSyscall():
             trace_msg = trace_msg+' handle addr 0x%x' % (exit_info.retval_addr)
 
         elif callname in ['AllocateVirtualMemory']:
-            size = self.stackParam(1, frame)
+            who = frame['param1']
+            if who == 0xffffffffffffffff:
+                trace_msg = trace_msg + ' for_process: %d (this one)' % (pid_thread)
+            else:
+                trace_msg = trace_msg+' for_process: 0x%x' % (who)  
+            size = self.paramOffPtr(2, [0], frame)
+            alloc_type = self.stackParam(1, frame)
             base = self.paramOffPtr(2, [0], frame)
-            trace_msg = trace_msg+' base 0x%x size: 0x%x' % (base, size)
+            trace_msg = trace_msg+' base 0x%x size: 0x%x type: 0x%x' % (base, size, alloc_type)
                 
         elif callname == 'TerminateProcess':
             who = frame['param1']
             trace_msg = trace_msg+' who: 0x%x' % (who)
             if who == 0xffffffffffffffff:
-                trace_msg = trace_msg+' process exiting'
+                trace_msg = trace_msg+' (this process)'
 
         elif callname == 'DuplicateObject':
             exit_info.old_fd = frame['param2']
@@ -830,7 +850,12 @@ class WinSyscall():
                         self.lgr.debug('syscall DuplicateObject set call param to handle in exit')
                         break
 
-        #elif callname == 'QueryInformationProcess':
+        elif callname == 'QueryInformationProcess':
+            who = frame['param1']
+            if who == 0xffffffffffffffff:
+                trace_msg = trace_msg + ' Process: %d (this one)' % (pid_thread)
+            else:
+                trace_msg = trace_msg+' Process: 0x%x' % (who) 
         #    entry = self.task_utils.getSyscallEntry(callnum)
         #    SIM_break_simulation('query information process computed 0x%x' % entry)
            
@@ -849,7 +874,7 @@ class WinSyscall():
             #if trace_msg is not None and self.traceMgr is not None and (len(syscall_info.call_params) == 0 or exit_info.call_params is not None):
             if trace_msg is not None and self.traceMgr is not None:
                 if len(trace_msg.strip()) > 0:
-                    self.traceMgr.write(trace_msg+' '+frame_string+'\n')
+                    self.traceMgr.write(trace_msg+'\n'+frame_string+'\n')
         return exit_info
 
     def stackParam(self, pnum, frame):
