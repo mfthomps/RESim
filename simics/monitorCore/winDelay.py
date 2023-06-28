@@ -40,14 +40,16 @@ class WinDelay():
         self.lgr = lgr
         self.count_write_hap = None
         self.cycles = self.cpu.cycles
-    
+        ''' Set the hap'''    
         self.setCountWriteHap()
 
     def setCountWriteHap(self):
+        ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.count_addr, 1, 0)
         self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
 
     def writeCountHap(self, dumb, third, forth, memory):
+        ''' Invoked when the count address is written to '''
         if self.count_write_hap is None:
             return
         self.lgr.debug('winDelay writeCountHap')
@@ -60,6 +62,7 @@ class WinDelay():
             trace_msg = self.call_name+' completed from cycle 0x%x count 0x%x data %s\n' % (self.cycles, return_count, read_data)
             self.trace_mgr.write(trace_msg)
             self.lgr.debug('winDelay writeCountHap %s' % trace_msg)
+        ''' Remove the break/hap '''
         hap = self.count_write_hap
         SIM_run_alone(self.rmHap, hap) 
         self.count_write_hap = None
