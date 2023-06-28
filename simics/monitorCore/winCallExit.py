@@ -33,6 +33,7 @@ import resimUtils
 import epoll
 import winDelay
 from resimHaps import *
+import winNTSTATUS
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
 matched parameters are handled by the stopHap in the syscall module that handled the call.
@@ -99,7 +100,8 @@ class WinCallExit():
             return
         #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
-        trace_msg = 'pid:%s (%s) return from %s with status 0x%x' % (pid_thread, comm, callname, eax)
+        status = winNTSTATUS.ntstatus_map[eax]
+        trace_msg = 'pid:%s (%s) return from %s with status %s (0x%x)' % (pid_thread, comm, callname, status, eax)
 
         ''' who taught bill about error codes? '''
         #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
@@ -124,7 +126,7 @@ class WinCallExit():
                 if fd is None:
                      SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                      return
-                trace_msg = trace_msg + ' fname_addr 0x%x fname %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
+                trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
                 if self.soMap is not None and (exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
