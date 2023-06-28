@@ -223,6 +223,9 @@ class GenMonitor():
         ''' What to call when a command completes from skipAndMail (if anything '''
         self.command_callback = None
         self.command_callback_param = None
+        ''' Command to run when debug commences '''
+        self.debug_callback = None
+        self.dubug_callback_param = None
 
         ''' TBD safe to reuse this?  helps when detecting iterative changes in address value '''
         self.find_kernel_write = None
@@ -1197,9 +1200,9 @@ class GenMonitor():
             if self.ida_funs is None:
                 self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
-            if self.command_callback is not None:
+            if self.debug_callback is not None:
                 self.lgr.debug('debug do callback to %s' % str(self.command_callback))
-                SIM_run_alone(self.command_callback, self.command_callback_param)
+                SIM_run_alone(self.debug_callback, self.debug_callback_param)
         else:
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
@@ -4806,6 +4809,13 @@ class GenMonitor():
     def setCommandCallbackParam(self, param):
         self.command_callback_param = param 
 
+    def setDebugCallback(self, callback):
+        self.lgr.debug('setDebugCallback to %s' % str(callback))
+        self.debug_callback = callback 
+
+    def setDebugCallbackParam(self, param):
+        self.debug_callback_param = param 
+
     def getCommandCallback(self):
         return self.command_callback 
 
@@ -5489,6 +5499,12 @@ class GenMonitor():
 
     def didDebug(self):
         return self.did_debug
+
+    def isRunningTo(self):
+        return self.run_to[self.target].isRunningTo()
+
+    def setOriginWhenStopped(self):
+        self.run_to[self.target].setOriginWhenStopped()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

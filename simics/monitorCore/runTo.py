@@ -44,12 +44,12 @@ class RunTo():
             RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
 
-    def stopHap(self, stop_action, one, exception, error_string):
+    def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
             SIM_run_alone(self.delStopHap, None)
-            SIM_run_alone(self.top.stopHapAlone, stop_action)
+            SIM_run_alone(self.top.stopHapAlone, self.stop_action)
 
             '''
 
@@ -75,7 +75,7 @@ class RunTo():
         self.lgr.debug('runTo stopIt')
         SIM_run_alone(self.rmHaps, None)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, self.cpu)
+            	     self.stopHap, None)
         SIM_break_simulation('soMap')
 
     def knownHap(self, pid, third, forth, memory):
@@ -282,7 +282,7 @@ class RunTo():
       
     def stopAlone(self, prec): 
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, self.stop_action)
+        	     self.stopHap, None)
         SIM_run_alone(self.cleanToProcHaps, None)
         SIM_break_simulation('found %s' % prec.proc)
 
@@ -318,3 +318,14 @@ class RunTo():
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None
+
+    def isRunningTo(self):
+        if self.cur_task_hap is not None:
+            return True
+        else:
+            return False
+
+    def setOriginWhenStopped(self):
+        f1 = stopFunction.StopFunction(self.top.setOrigin, [], nest=False)
+        self.lgr.debug('runTo setOriginWhenStopped')
+        self.stop_action.addFun(f1)

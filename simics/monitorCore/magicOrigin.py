@@ -112,7 +112,12 @@ class MagicOrigin():
         SIM_run_command(cmd)
         self.did_magic = True
         self.lgr.debug('MagicOrigin to pid and then set origin')
-        self.top.toPid(-1, callback=self.top.setOrigin)
+        if self.top.isRunningTo():
+            self.top.setOriginWhenStopped()
+            self.lgr.debug('MagicOrigin back from calling setOriginWhen stopped, now continue')
+            SIM_run_command('c')
+        else:
+            self.top.toPid(-1, callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
         #self.lgr.debug('MagicOrigin, continue')
         #SIM_run_command('c')
@@ -130,8 +135,10 @@ class MagicOrigin():
                     self.lgr.debug('MagicOrigin in magic hap 99    cell: %s  number: %d' % (str(cell), magic_number))
                     if self.top.isReverseExecutionEnabled():
                         ''' reset the origin after disconnecting the service node '''
+                        self.lgr.debug('MagicOrigin magicHap call to set origin')
                         self.top.stopAndGo(self.setOrigin)
                     else:
+                        self.lgr.debug('MagicOrigin magicHap call to only disconnect')
                         self.top.stopAndGo(self.disconnect)
     def didMagic(self):
         return self.did_magic
