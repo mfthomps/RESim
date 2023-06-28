@@ -183,7 +183,6 @@ class WinTaskUtils():
                 self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
                 if cur_thread_in is not None:
                     self.lgr.debug('cur_thread passed in as 0x%x' % cur_thread_in)
-                self.lgr.debug('winTaskUtils getCurTaskRec got current Proc of 0x%x reading cur_thread 0x%x ptr 0x%x phys_current is 0x%x' % (retval, cur_thread, ptr, self.phys_current_task))
                 SIM_break_simulation('remove this')
                 pass
         if retval is not None:
