@@ -169,8 +169,17 @@ class StackFrameManager():
     def dumpStack(self, count=80):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         ptr = esp
-        offset = self.mem_utils.wordSize()
+        offset = self.mem_utils.wordSize(self.cpu)
+        ida_funs = self.top.getIdaFuns()
+        cpu, comm, pid = self.task_utils.curProc() 
         for i in range(count):
             value = self.mem_utils.readWord(self.cpu, ptr) 
-            print('0x%x' % value)
+            name = ''
+            if self.soMap.isCode(value, pid):
+                self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
+                fun_addr = ida_funs.getFun(value)
+                if fun_addr is not None:
+                    name = ida_funs.getName(fun_addr)
+                    self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
+            print('%16x   %16x %s' % (ptr, value, name))
             ptr = ptr + offset
