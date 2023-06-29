@@ -309,6 +309,10 @@ class Win7CallParams():
             self.lgr.debug('win7CallParams syscallHap pid:%s (%s) call %d' % (pid_thread, comm, rax))
             ''' Use the call map to get the call name, and strip off "nt" '''
             call_name = self.task_utils.syscallName(rax)
+
+            if call_name == 'Continue':
+                return
+
             if call_name is not None:
 
                 if call_name == 'RaiseException':
