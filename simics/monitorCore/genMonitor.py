@@ -117,6 +117,7 @@ import winMonitor
 import winDLLMap
 import runTo
 import winProg
+import stackFrameManager
 
 #import fsMgr
 import json
@@ -189,6 +190,8 @@ class GenMonitor():
 
         self.run_to = {}
 
+        self.stackFrameManager = {}
+
         self.unistd = {}
         self.unistd32 = {}
         self.targetFS = {}
@@ -197,7 +200,9 @@ class GenMonitor():
         self.debug_breaks_set = True
         self.target = None
         self.netInfo = {}
+        ''' for compatability, remove after old snapshots updated '''
         self.stack_base = {}
+
         self.maze_exits = {}
         self.exit_maze = []
         self.rev_execution_enabled = False
@@ -318,9 +323,12 @@ class GenMonitor():
                         cmd = '%s = %s' % (self.link_dict[target][link].name, self.link_dict[target][link].obj)
                         self.lgr.debug('genInit link cmd is %s' % cmd)
                         SIM_run_command(cmd)
+
+            ''' TBD compatability, remove this '''
             stack_base_file = os.path.join('./', self.run_from_snap, 'stack_base.pickle')
             if os.path.isfile(stack_base_file):
                 self.stack_base = pickle.load( open(stack_base_file, 'rb') )
+
             debug_info_file = os.path.join('./', self.run_from_snap, 'debug_info.pickle')
             if os.path.isfile(debug_info_file):
                 self.debug_info = pickle.load( open(debug_info_file, 'rb') )
@@ -422,7 +430,7 @@ class GenMonitor():
             self.netInfo[cell_name] = net.NetAddresses(self.lgr)
             self.call_traces[cell_name] = {}
             #self.proc_list[cell_name] = {}
-            self.stack_base[cell_name] = {}
+            #self.stack_base[cell_name] = {}
             if self.run_from_snap is not None:
                 net_file = os.path.join('./', self.run_from_snap, cell_name, 'net_list.pickle')
                 if os.path.isfile(net_file):
@@ -687,6 +695,11 @@ class GenMonitor():
 
             self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[self.target], 
                                         self.soMap[self.target], self.traceMgr[self.target], self.param[self.target], self.lgr)
+            self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
+                                        self.context_manager[self.target], self.soMap[self.target], self.targetFS[cell_name], self.lgr)
+            ''' TBD compatability remove this'''
+            if self.stack_base is not None and cell_name in self.stack_base:
+                self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
 
             #self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, None, self.context_manager[self.target], 
             #        self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
@@ -1159,11 +1172,7 @@ class GenMonitor():
                 if self.full_path is not None:
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, self.full_path))
                     self.getIDAFuns(self.full_path)
-                    if self.isWindows():
-                        ''' TBD fix for windows'''
-                        self.relocate_funs = []
-                    else:
-                        self.relocate_funs = elfText.getRelocate(self.full_path, self.lgr, self.ida_funs)
+                    self.stackFrameManager[self.target].setRelocateFuns(self.full_path, self.ida_funs)
                     ''' TBD alter stackTrace to use this and buid it out'''
                     self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
@@ -1465,45 +1474,6 @@ class GenMonitor():
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
             self.toExecve(comm=proc, flist=[], binary=binary)
 
-    def setStackBase(self):
-        ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
-        cpu = self.cell_config.cpuFromCell(self.target)
-        esp = self.mem_utils[self.target].getRegValue(cpu, 'esp')
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
-        cpu, comm, pid  = self.task_utils[self.target].curProc()
-        self.stack_base[self.target][pid] = esp
-        self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
-
-    def modeChangeForStack(self, want_pid, one, old, new):
-        if self.mode_hap is None:
-            return
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.lgr.debug('modeChangeForStack pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
-        RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-        self.mode_hap = None
-        
-        if new != Sim_CPU_Mode_Supervisor:
-            self.setStackBase()
-
-    def recordStackBase(self, pid, sp):
-        self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
-        self.stack_base[self.target][pid] = sp
-
-    def recordStackClone(self, pid, parent):
-        self.lgr.debug('recordStackClone pid: %d parent: %d' % (pid, parent))
-        cpu = self.cell_config.cpuFromCell(self.target)
-        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeForStack, pid)
-        '''
-        if self.target not in self.track_threads:
-            self.lgr.error('recordStackClone without track_threads loaded')
-            return
-        sp = self.track_threads[self.target].getChildStack(parent)
-        self.stack_base[self.target][pid] = sp
-        if sp is not None:
-            self.lgr.debug('recordStackClone pid: %d 0x%x parent: %d' % (pid, sp, parent))
-        else:
-            self.lgr.debug('recordStackClone got no stack for parent %d' % parent)
-        '''
         
     def debugProc(self, proc, final_fun=None, pre_fun=None):
         if self.isWindows():
@@ -1548,7 +1518,7 @@ class GenMonitor():
                 until we enter the text segment so we get the SO map '''
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             f2 = stopFunction.StopFunction(self.execToText, [], nest=True)
-            f3 = stopFunction.StopFunction(self.setStackBase, [], nest=False)
+            f3 = stopFunction.StopFunction(self.stackFrameManager[self.target].setStackBase, [], nest=False)
             f4 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3, f4]
             self.toExecve(comm=proc, flist=flist, binary=True)
@@ -3355,73 +3325,13 @@ class GenMonitor():
         print('Traces saved in /tmp.  Move them to artifact repo and run postScripts')
 
     def stackTrace(self, verbose=False, in_pid=None):
-        cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-        if in_pid is not None:
-            pid = in_pid
-        else:
-            pid = cur_pid
-        if pid not in self.stack_base[self.target]:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[self.target][pid]
-        if pid == cur_pid:
-            reg_frame = self.task_utils[self.target].frameFromRegs()
-        else:
-            reg_frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
-       
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                 self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
-                 self.relocate_funs, reg_frame, self.lgr)
-        st.printTrace(verbose)
+        self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_pid=in_pid)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        if pid is None:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
-        else:
-            cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-            if pid != cur_pid:
-                if not self.context_manager[self.target].amWatching(cur_pid):
-                    self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
-                    return None
-                else:
-                    pid = cur_pid
-        if pid not in self.stack_base[self.target]:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[self.target][pid]
-        reg_frame = self.task_utils[self.target].frameFromRegs()
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], self.relocate_funs, 
-                reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
-        return st
+        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes)
 
     def getStackTrace(self):
-        ''' used by IDA client '''
-        pid, cpu = self.context_manager[self.target].getDebugPid() 
-        if pid is None:
-            cpu, comm, pid = self.task_utils[self.target].curProc() 
-        else:
-            cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-            if pid != cur_pid:
-                if not self.context_manager[self.target].amWatching(cur_pid):
-                    self.lgr.debug('getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
-                    return "{}"
-                else:
-                    pid = cur_pid
-        self.lgr.debug('genMonitor getStackTrace pid %d' % pid)
-        if pid not in self.stack_base[self.target]:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[self.target][pid]
-        reg_frame = self.task_utils[self.target].frameFromRegs()
-        st = stackTrace.StackTrace(self, cpu, pid, self.soMap[self.target], self.mem_utils[self.target], 
-                  self.task_utils[self.target], stack_base, self.ida_funs, self.targetFS[self.target], 
-                  self.relocate_funs, reg_frame, self.lgr)
-        j = st.getJson() 
-        self.lgr.debug(j)
-        #print j
-        return j
+        return self.stackFrameManager[self.target].getStackTrace()
 
     def resetOrigin(self, cpu=None):
         self.lgr.debug('resetOrigin')
@@ -3727,9 +3637,8 @@ class GenMonitor():
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
-        
-        stack_base_file = os.path.join('./', name, 'stack_base.pickle')
-        pickle.dump( self.stack_base, open(stack_base_file, "wb" ) )
+       
+        self.stackFrameManager[self.target].pickleit(name) 
 
         debug_info_file = os.path.join('./', name, 'debug_info.pickle')
         debug_info = {}
@@ -5222,7 +5131,8 @@ class GenMonitor():
 
     def setOrigin(self, dumb=None):
         ''' Reset the origin for the current target cpu '''
-        self.lgr.debug('setOrigin from genMonitor')
+        pid = self.getPID()
+        self.lgr.debug('setOrigin from genMonitor pid:%d' % pid)
         cpu = self.cell_config.cpuFromCell(self.target)
         self.bookmarks.setOrigin(cpu) 
 
@@ -5505,6 +5415,12 @@ class GenMonitor():
 
     def setOriginWhenStopped(self):
         self.run_to[self.target].setOriginWhenStopped()
+
+    def up(self):
+        self.stackFrameManager[self.target].up()
+
+    def dumpStack(self, count=80):
+        self.stackFrameManager[self.target].dumpStack(count)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
