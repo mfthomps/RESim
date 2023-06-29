@@ -6,15 +6,16 @@ from resimHaps import *
 from simics import *
 
 class WinProgInfo():
-    def __init__(self, text_addr, text_size, machine):
+    def __init__(self, text_addr, text_size, machine, image_base):
         self.text_addr = text_addr
         self.text_size = text_size
         self.machine = machine
+        self.image_base = image_base
 
 def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
     text_section_addr = getTextSection(cpu, mem_utils, eproc, lgr)
-    text_size, machine = getSizeAndMachine(full_path, lgr)
-    return WinProgInfo(text_section_addr, text_size, machine)
+    text_size, machine, image_base = getSizeAndMachine(full_path, lgr)
+    return WinProgInfo(text_section_addr, text_size, machine, image_base)
 
 def getTextSection(cpu, mem_utils, eproc, lgr):
         retval = None
@@ -33,22 +34,30 @@ def getTextSection(cpu, mem_utils, eproc, lgr):
 def getSizeAndMachine(full_path, lgr):
     size = None
     machine = None
+    image_base = None
     lgr.debug('winProg getSizeAndMachine for %s' % full_path)
     if full_path is None:
         lgr.warning('winProg getSizeAndMachine called with full_path of None')
-        return None, None
+        return None, None, None
     if os.path.isfile(full_path):
         cmd = 'readpe -H %s' % full_path
         with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
             output = ps.communicate()
             for line in output[0].decode("utf-8").splitlines():
+                if 'ImageBase:' in line: 
+                    parts = line.split()
+                    image_base_s = parts[1]
+                    try:
+                        image_base = int(image_base_s, 16)
+                        break
+                    except:
+                        lgr.error('winProg getSizeAndMachine failed to get image base from %s' % line)
                 if 'Size of .text section' in line: 
                     lgr.debug('winProg readpe got %s' % line)
                     parts = line.split()
                     size_s = parts[4]
                     try:
                         size = int(size_s, 16)
-                        break
                     except:
                         lgr.error('winProg getSizeAndMachine failed to get size from %s' % line)
                 elif 'Machine' in line:
@@ -58,7 +67,7 @@ def getSizeAndMachine(full_path, lgr):
                 lgr.error('winProg getSizeAndMachine failed to get size for path %s' % full_path)
     else:
         lgr.error('winProg getSizeAndMachine failed find file at path %s' % full_path)
-    return size, machine    
+    return size, machine, image_base
 
 
 class WinProg():
@@ -146,13 +155,13 @@ class WinProg():
         full_path = self.top.getFullPath(fname=self.prog_string)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
         self.top.setFullPath(full_path)
-        size, machine = getSizeAndMachine(full_path, self.lgr)
+        size, machine, image_base = getSizeAndMachine(full_path, self.lgr)
         if size is None:
             self.lgr.error('winProg runToText unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
             self.top.quit()
             return 
         self.lgr.debug('winProg runToText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine)
+        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine, image_base)
         self.top.trackThreads()
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
         self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, None, proc_break, 'text_hap')
