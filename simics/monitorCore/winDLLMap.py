@@ -8,9 +8,10 @@ import winProg
 import resimUtils
 class Text():
     ''' compat with old linux elfText code without importing... '''
-    def __init__(self, address, size):
+    def __init__(self, address, size, image_base):
         self.address = address
         self.size = size 
+        self.image_base = image_base 
 
 class DLLInfo():
     def __init__(self, pid, fname, fd):
@@ -21,6 +22,7 @@ class DLLInfo():
         self.addr = None
         self.size = None
         self.machine = None
+        self.image_base = None
 
     @classmethod
     def copy(cls, info):
@@ -28,6 +30,7 @@ class DLLInfo():
         new.addr = info.addr
         new.size = info.size
         new.machine = info.machine
+        new.image_base = info.image_base
         return new
 
     def addSectionHandle(self, section_handle):
@@ -37,6 +40,8 @@ class DLLInfo():
         self.size = size 
     def addMachine(self, machine):
         self.machine = machine
+    def addImageBase(self, image_base):
+        self.image_base = image_base
 
     def match(self, dll_info):
         retval = False
@@ -143,11 +148,12 @@ class WinDLLMap():
         dll_info = DLLInfo(pid, fname, fd)
         self.open_files[pid][fd] = dll_info
 
-    def addText(self, fname, pid, addr, size, machine):
+    def addText(self, fname, pid, addr, size, machine, image_base):
         dll_info = DLLInfo(pid, fname, None)
         dll_info.addr = addr
         dll_info.size = size
         dll_info.machine = machine
+        dll_info.image_base = image_base
         self.section_list.append(dll_info)
         self.text[pid] = dll_info
         self.lgr.debug('winDLL addText for pid: %d %s' % (pid, fname))
@@ -196,7 +202,7 @@ class WinDLLMap():
                                 eproc = self.task_utils.getCurTaskRec()
                                 full_path = self.top.getFullPath(fname=pp)
                                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
-                                self.addText(pp, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
+                                self.addText(pp, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base)
                                 if win_prog_info.text_size is None:
                                     self.lgr.error('WinDLLMap mapSection text_size is None for %s' % comm)
                                 self.lgr.debug('WinDLLMap text mapSection added, len now %d' % len(self.text))
@@ -339,7 +345,7 @@ class WinDLLMap():
         retval = None
         self.lgr.debug('winDLL getText pid:%s' % pid) 
         if pid in self.text:
-            retval = Text(self.text[pid].addr, self.text[pid].size)
+            retval = Text(self.text[pid].addr, self.text[pid].size, self.text[pid].image_base)
         else:
             cpu, comm, cur_pid = self.task_utils.curProc() 
             if pid == cur_pid:
@@ -349,8 +355,8 @@ class WinDLLMap():
                 eproc = self.task_utils.getCurTaskRec()
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                 self.top.setFullPath(full_path)
-                self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine)
-                retval = Text(win_prog_info.text_addr, win_prog_info.text_size)
+                self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base)
+                retval = Text(win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.image_base)
         return retval
             
     def getAnalysisPath(self, fname):
