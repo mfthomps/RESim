@@ -545,7 +545,7 @@ class WinSyscall():
                 info_class = self.stackParam(1, frame) & 0xFF # all values are under 80
                 exit_info.retval_addr = frame['param2']
                 buf_size = frame['param4']
-                buf_addr = frame['param2']
+                buf_addr = frame['param3']
                  
                 buf_contents = self.mem_utils.readBytes(self.cpu, buf_addr, buf_size)
                 buf_hx = None
@@ -555,9 +555,10 @@ class WinSyscall():
                 trace_msg = trace_msg + ' information_class: %s buf_addr: 0x%x buf_size: 0x%x buf_contents: %s' % (winFile.file_information_class[info_class], buf_addr, buf_size, buf_hx)
                 # TODO WHAT?! Why is buf_hx b'00' when I know I am deleting the file? 
                 # SetInformationFile Handle: 0x20 information_class: FileDispositionInformation buf_addr: 0x24f8f0 buf_size: 0x1 buf_contents: b'00' What don't we know about Windows now
-                if winFile.file_information_class[info_class] == "FileDispositionInformation" & buf_hx == b'01':
+                if (winFile.file_information_class[info_class] == "FileDispositionInformation") and (buf_hx != b'00'):
                     trace_msg = trace_msg + ' - FILE BEING FLAGGED FOR DELETION AFTER CLOSE'
                 
+                #SIM_break_simulation(trace_msg)
 
         # Handle other functions specifically 
         elif callname == 'ReadFile':
