@@ -164,7 +164,7 @@ class WinProg():
         self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine, image_base)
         self.top.trackThreads()
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
-        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, None, proc_break, 'text_hap')
+        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
 
     def findText(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -184,8 +184,10 @@ class WinProg():
         self.lgr.debug('winMonitor debugAlone, call top debug')
         SIM_run_alone(self.top.debug, False)
 
-    def textHap(self, dumb, third, forth, memory):
-        self.lgr.debug('winProg textHap')
+    def textHap(self, pid, third, forth, memory):
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.lgr.debug('winProg textHap record stack base pid:%d sp 0x%x' % (pid, sp))
+        self.top.recordStackBase(pid, sp)
         self.context_manager.genDeleteHap(self.text_hap)
         self.lgr.debug('winProg textHap call stopAndAction')
         SIM_run_alone(self.top.stopAndGo, self.debugAlone)
