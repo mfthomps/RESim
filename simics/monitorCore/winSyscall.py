@@ -620,7 +620,10 @@ class WinSyscall():
                             share.append(name)
 
                     create_disposition = self.stackParam(4, frame) & 0xffffffff
-                    trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, winFile.disposition_map[create_disposition])
+                    disposition = 'UNKNOWN'
+                    if create_disposition in winFile.disposition_map:
+                        disposition = winFile.disposition_map[create_disposition]
+                    trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, disposition)
 
                     if exit_info.fname.endswith('Endpoint'):
                         extended_size = self.stackParam(7, frame)
@@ -893,14 +896,20 @@ class WinSyscall():
             if who == 0xffffffffffffffff:
                 trace_msg = trace_msg + ' for_process: %s (this one)' % (pid_thread)
             else:
-                trace_msg = trace_msg+' for_process: 0x%x' % (who)  
-            size = self.paramOffPtr(4, [0], frame)
+                trace_msg = trace_msg+' for_process: 0x%x' % (who)
+
+            # Base addr pointer 
+            exit_info.retval_addr = frame['param2']
+            # Size pointer 
+            exit_info.fname_addr = frame['param4']
+            exit_info.count = self.paramOffPtr(4, [0], frame)     
+       
             alloc_type = self.stackParam(1, frame)
-            base = self.paramOffPtr(2, [0], frame)
-            if size is None or base is None:
-                trace_msg = trace_msg+' failed reading base/size'
-            else:
-                trace_msg = trace_msg+' base 0x%x size: 0x%x' % (base, size)
+            atype = "Uknown mapping"
+            if alloc_type in winFile.allocation_type_map:
+                atype = winFile.allocation_type_map[alloc_type]
+
+            trace_msg = trace_msg+' base_addr_ptr: 0x%x size_ptr: 0x%x size_requested: 0x%x alloc_type: 0x%x (%s)' % (exit_info.retval_addr, exit_info.fname_addr, exit_info.count, alloc_type, atype)
                 
         elif callname == 'TerminateProcess':
             who = frame['param1']
