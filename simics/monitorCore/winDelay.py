@@ -54,9 +54,11 @@ class WinDelay():
     def setDataWatch(self, data_watch, linger):
         self.data_watch = data_watch
         self.linger = linger
+        self.data_watch.registerHapForRemoval(self)
 
     def doDataWatch(self, return_count, trace_msg):
         if self.data_watch is not None:
+            self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, return_count))
             self.data_watch.setRange(self.buffer_addr, return_count, msg=trace_msg, 
                        max_len=return_count, recv_addr=self.buffer_addr, fd=self.fd)
             if self.linger: 
@@ -91,5 +93,16 @@ class WinDelay():
         SIM_run_alone(self.rmHap, hap) 
         self.count_write_hap = None
         
-    def rmHap(self, hap): 
-        self.context_manager.genDeleteHap(self.count_write_hap)
+    def rmHap(self, hap, immediate=False): 
+        self.context_manager.genDeleteHap(hap, immediate=immediate)
+        self.lgr.debug('winDelay rmHap removed hap %d' % hap)
+
+    def rmAllHaps(self, immediate=False):
+        self.lgr.debug('winDelay rmAllHaps')
+        if self.count_write_hap is not None:
+            hap = self.count_write_hap
+            if immediate:
+                self.rmHap(hap, immediate=True)
+            else:
+                SIM_run_alone(self.rmHap, hap) 
+
