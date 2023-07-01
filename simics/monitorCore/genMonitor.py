@@ -294,6 +294,11 @@ class GenMonitor():
         ''' catch-all for windows monitoring commands '''
         self.winMonitor = {}
 
+        ''' Once data tracking seems to have completed, e.g., called goToDataMark,
+            do not set debug related haps
+        '''
+        self.track_finished = False
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -696,7 +701,7 @@ class GenMonitor():
             self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[self.target], 
                                         self.soMap[self.target], self.traceMgr[self.target], self.param[self.target], self.lgr)
             self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
-                                        self.context_manager[self.target], self.soMap[self.target], self.targetFS[cell_name], self.lgr)
+                                        self.context_manager[self.target], self.soMap[self.target], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             ''' TBD compatability remove this'''
             if self.stack_base is not None and cell_name in self.stack_base:
                 self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
@@ -2526,11 +2531,11 @@ class GenMonitor():
             self.lgr.debug('startThreadTrack for %s' % cell_name)
             self.track_threads[cell_name].startTrack()
         
-    def stopThreadTrack(self):
+    def stopThreadTrack(self, immediate=False):
         self.lgr.debug('stopThreadTrack ')
         for cell_name in self.track_threads:
             self.lgr.debug('stopThreadTrack for %s' % cell_name)
-            self.track_threads[cell_name].stopTrack()
+            self.track_threads[cell_name].stopTrack(immediate=immediate)
 
     def showProcTrace(self):
         ''' TBD this looks like a hack, why are the precs none?'''
@@ -2650,10 +2655,10 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, was_watching=False):
          
-        if not self.debug_breaks_set:
+        self.context_manager[self.target].resetWatchTasks() 
+        if not self.debug_breaks_set and not self.track_finished:
             self.lgr.debug('restoreDebugBreaks')
             #self.context_manager[self.target].restoreDebug() 
-            self.context_manager[self.target].resetWatchTasks() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             if pid is not None:
                 if not was_watching:
@@ -2694,10 +2699,10 @@ class GenMonitor():
         self.lgr.debug('genMon removeDebugBreaks was set: %r' % self.debug_breaks_set)
         if self.debug_breaks_set:
             retval = True
-            pid, cpu = self.context_manager[self.target].getDebugPid() 
-            self.stopWatchPageFaults(pid)
             if not keep_watching:
                 self.context_manager[self.target].stopWatchTasks()
+            pid, cpu = self.context_manager[self.target].getDebugPid() 
+            self.stopWatchPageFaults(pid)
             self.rev_to_call[self.target].noWatchSysenter()
             if self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
@@ -3345,6 +3350,12 @@ class GenMonitor():
     def getStackTrace(self):
         return self.stackFrameManager[self.target].getStackTrace()
 
+    def recordStackBase(self, pid, sp):
+        self.stackFrameManager[self.target].recordStackBase(pid, sp)
+
+    def recordStackClone(self, pid, parent):
+        self.stackFrameManager[self.target].recordStackClone(pid, parent)
+ 
     def resetOrigin(self, cpu=None):
         self.lgr.debug('resetOrigin')
         if cpu is None:
@@ -3437,9 +3448,9 @@ class GenMonitor():
             else:
                 self.lgr.debug('writeString reverse execution was not enabled.')
 
-    def stopDataWatch(self):
+    def stopDataWatch(self, immediate=False):
         self.lgr.debug('genMonitor stopDataWatch')
-        self.dataWatch[self.target].stopWatch(break_simulation=True)
+        self.dataWatch[self.target].stopWatch(break_simulation=True, immediate=immediate)
 
     def showDataWatch(self):
         self.dataWatch[self.target].showWatch()
@@ -3632,6 +3643,7 @@ class GenMonitor():
                 self.traceProcs[cell_name].pickleit(name)
                 self.rev_to_call[cell_name].pickleit(name, cell_name)
                 self.dataWatch[cell_name].pickleit(name)
+                self.stackFrameManager[cell_name].pickleit(name)
                 if self.run_from_snap is not None:
                     old_afl_file = os.path.join('./', self.run_from_snap, cell_name, 'afl.pickle')
                     if os.path.isfile(old_afl_file):
@@ -3865,11 +3877,12 @@ class GenMonitor():
         self.stopTrackIO()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
+        self.restoreDebugBreaks()
         if callback is None:
             done_callback = self.stopTrackIO
         else:
             done_callback = callback
-        self.lgr.debug('trackIO stopped track and cleared watchs')
+        self.lgr.debug('trackIO stopped track and cleared watches current context %s' % str(cpu.current_context))
         if kbuf:
             self.kbuffer[self.target] = kbuffer.Kbuffer(self, cpu, self.context_manager[self.target], self.mem_utils[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
@@ -3886,7 +3899,7 @@ class GenMonitor():
         self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf,
                      call_list=call_list)
 
-    def stopTrackIO(self):
+    def stopTrackIO(self, immediate=False):
         thread_pids = self.context_manager[self.target].getThreadPids()
         self.lgr.debug('stopTrackIO got %d thread_pids' % len(thread_pids))
         crashing = False 
@@ -3904,8 +3917,11 @@ class GenMonitor():
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
-        self.lgr.debug('stopTrackIO, call stopDAtaWatch...')
-        self.stopDataWatch()
+        self.lgr.debug('stopTrackIO, call stopDataWatch...')
+
+        #self.removeDebugBreaks(immediate=immediate)
+
+        self.stopDataWatch(immediate=immediate)
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
         if self.coverage is not None:
@@ -3913,6 +3929,7 @@ class GenMonitor():
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
         self.dataWatch[self.target].pickleFunEntries(self.run_from_snap)
+
         self.lgr.debug('stopTrackIO return')
 
     def clearWatches(self, cycle=None):
@@ -3956,10 +3973,22 @@ class GenMonitor():
             self.lgr.debug('getWriteMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
 
+    def stopTracking(self):
+        self.stopTrackIO(immediate=True)
+        self.dataWatch[self.target].removeExternalHaps(immediate=True)
+
+        self.stopThreadTrack(immediate=True)
+        self.noWatchSysEnter()
+        self.removeDebugBreaks(immediate=True)
+        self.track_finished = True
+
     def goToDataMark(self, index):
         was_watching = self.context_manager[self.target].watchingThis()
         self.lgr.debug('goToDataMark(%d)' % index)
-        self.stopTrackIO()
+
+        ''' Assume that this is the first thing done after a track.
+            Remove all haps that might interfer with reversing. '''
+        self.stopTracking()
         cycle = self.dataWatch[self.target].goToMark(index)
         if cycle is not None:
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
