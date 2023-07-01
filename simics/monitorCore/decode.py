@@ -61,6 +61,9 @@ def isReg(reg):
     if reg.startswith('r') and (reg.endswith('b') or reg.endswith('w') or reg.endswith('d')):
         return True
 
+    if reg.startswith('xmm'):
+        return True
+
     if (len(reg) == 3 and reg.endswith('x')) or (len(reg) == 2 and reg[0] != '0'):
         try:
             dum = int(reg)
