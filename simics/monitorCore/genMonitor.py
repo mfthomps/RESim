@@ -1732,17 +1732,21 @@ class GenMonitor():
 
         #self.stopTrace()
         if self.coverage is not None:
+            
+            self.lgr.debug('skipAndMail call saveCoverage')
             self.coverage.saveCoverage()
         if self.command_callback is not None:
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
             SIM_run_alone(self.command_callback, self.command_callback_param)
         else:
             cpl = memUtils.getCPL(cpu)
+            self.lgr.debug('skipAndMail, cpl %d' % cpl)
             if cpl == 0:
                 SIM_run_alone(self.skipBackToUser, 1)
                 self.lgr.debug('skipAndMail, back from skip')
                 
-            self.restoreDebugBreaks()
+            self.lgr.debug('skipAndMail, restoreDebugBreaks')
+            SIM_run_alone(self.restoreDebugBreaks, False)
 
     def goToOrigin(self, debugging=True):
         if self.bookmarks is None:
@@ -1761,7 +1765,7 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage(msg)
             self.restoreDebugBreaks(was_watching=True)
             self.lgr.debug('goToOrigin call stopWatchTasks')
-            self.context_manager[self.target].stopWatchTasks()
+            self.context_manager[self.target].stopWatchTasksAlone(None)
             self.context_manager[self.target].watchTasks(set_debug_pid=True)
 
     def goToDebugBookmark(self, mark):
@@ -4452,7 +4456,12 @@ class GenMonitor():
                 eip = self.getEIP()
                 self.lgr.debug('precall skipped to cycle 0x%x eip: 0x%x' % (cpu.cycles, eip))
                 if cpu.cycles != previous:
-                    self.lgr.error('Cycle not as expected, wanted 0x%x got 0x%x' % (previous, cpu.cycles))
+                    self.lgr.error('precall Cycle not as expected, wanted 0x%x got 0x%x' % (previous, cpu.cycles))
+                else:
+                    cpl = memUtils.getCPL(cpu)
+                    if cpl == 0: 
+                        self.lgr.error('precall ended up in kernel, quit')
+                        self.quit()
 
     def taskSwitches(self):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5459,6 +5468,9 @@ class GenMonitor():
 
     def up(self):
         self.stackFrameManager[self.target].up()
+
+    def down(self):
+        self.stackFrameManager[self.target].down()
 
     def dumpStack(self, count=80):
         self.stackFrameManager[self.target].dumpStack(count)
