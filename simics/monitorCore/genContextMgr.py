@@ -609,7 +609,7 @@ class GenContextMgr():
             ptr = new_addr + self.param.proc_ptr
             new_addr = self.mem_utils.readPtr(self.cpu, ptr)
             if new_addr is None:
-                self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
+                #self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
                 return
             thread_id = self.task_utils.getCurThread(rec=win_thread)
         
@@ -832,7 +832,7 @@ class GenContextMgr():
         self.watch_rec_list = self.watch_rec_list_saved.copy()
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
-        self.cpu.current_context = self.resim_context
+        SIM_run_alone(self.restoreDebugContext, None)
         self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchPid(self, pid):
@@ -921,7 +921,7 @@ class GenContextMgr():
                     self.addTask(pid)
 
     def setTaskHap(self):
-        print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
+        #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
