@@ -864,14 +864,14 @@ class GenContextMgr():
         
     def stopWatchTasks(self):
         self.lgr.debug('stopWatchTasks')
-        self.stopWatchTasksAlone(None)
-        #SIM_run_alone(self.stopWatchTasksAlone, None)
+        #self.stopWatchTasksAlone(None)
+        SIM_run_alone(self.stopWatchTasksAlone, None)
 
     def stopWatchTasksAlone(self, dumb):
         if self.task_break is None:
             #self.lgr.debug('stopWatchTasks already stopped')
             return
-        self.lgr.debug('stopWatchTasks delete hap')
+        self.lgr.debug('stopWatchTasksAlone delete hap')
         RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -898,12 +898,12 @@ class GenContextMgr():
 
         cpu, dumb, dumb2  = self.task_utils.curProc()
         cpu.current_context = self.default_context
-        #self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
+        self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
         self.lgr.debug('resetWatchTasks')
-        self.stopWatchTasks()
+        self.stopWatchTasksAlone(None)
         self.watchTasks(set_debug_pid = True)
         if not self.watch_only_this:
             ctask = self.task_utils.getCurTaskRec()
@@ -989,7 +989,7 @@ class GenContextMgr():
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
-        self.cpu.current_context = self.resim_context
+        SIM_run_alone(self.restoreDebugContext, None)
         self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         self.debugging_pid_saved = self.debugging_pid
