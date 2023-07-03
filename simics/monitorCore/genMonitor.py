@@ -3918,6 +3918,7 @@ class GenMonitor():
                 crashing = True 
                
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
+        self.syscallManager[self.target].rmSyscall('runToInput', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
@@ -3977,13 +3978,14 @@ class GenMonitor():
             self.lgr.debug('getWriteMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
 
-    def stopTracking(self):
+    def stopTracking(self, keep_watching=False, keep_coverage=False):
         self.stopTrackIO(immediate=True)
         self.dataWatch[self.target].removeExternalHaps(immediate=True)
 
         self.stopThreadTrack(immediate=True)
         self.noWatchSysEnter()
-        self.removeDebugBreaks(immediate=True)
+
+        self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
         self.track_finished = True
 
     def goToDataMark(self, index):
