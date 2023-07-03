@@ -106,7 +106,10 @@ class WinCallExit():
             return
         #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
         pid_thread = self.task_utils.getPidAndThread()
-        status = winNTSTATUS.ntstatus_map[eax]
+        status = "Unknown - not mapped"
+        if eax in winNTSTATUS.ntstatus_map:
+            status = winNTSTATUS.ntstatus_map[eax]
+        
         trace_msg = 'pid:%s (%s) return from %s with status %s (0x%x)' % (pid_thread, comm, callname, status, eax)
 
         ''' who taught bill about error codes? '''
@@ -158,6 +161,14 @@ class WinCallExit():
                     self.lgr.debug('%s handle is none' % trace_msg)
             else:
                 self.lgr.debug('%s retval addr is none' % trace_msg)
+         
+        elif callname == 'AllocateVirtualMemory':
+            if exit_info.retval_addr is not None and exit_info.fname_addr is not None:
+               base_addr = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
+               size = self.mem_utils.readWord(self.cpu, exit_info.fname_addr) 
+               trace_msg = trace_msg + ' base_addr: 0x%x size: 0x%x' % (base_addr, size)
+            else:
+                self.lgr.debug('%s buffer pointer addr is none' % trace_msg)
 
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
@@ -295,7 +306,7 @@ class WinCallExit():
                 trace_msg = trace_msg+' bind socket: 0x%x  connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
 
         else:
-            self.lgr.debug('winCallExit %s returned: 0x%x' % (trace_msg, eax)) 
+            self.lgr.debug('winCallExit %s' % (trace_msg)) 
         trace_msg=trace_msg+'\n'
 
         if exit_info.call_params is not None and exit_info.call_params.break_simulation:

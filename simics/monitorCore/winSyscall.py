@@ -545,7 +545,7 @@ class WinSyscall():
                 info_class = self.stackParam(1, frame) & 0xFF # all values are under 80
                 exit_info.retval_addr = frame['param2']
                 buf_size = frame['param4']
-                buf_addr = frame['param2']
+                buf_addr = frame['param3']
                  
                 buf_contents = self.mem_utils.readBytes(self.cpu, buf_addr, buf_size)
                 buf_hx = None
@@ -555,9 +555,10 @@ class WinSyscall():
                 trace_msg = trace_msg + ' information_class: %s buf_addr: 0x%x buf_size: 0x%x buf_contents: %s' % (winFile.file_information_class[info_class], buf_addr, buf_size, buf_hx)
                 # TODO WHAT?! Why is buf_hx b'00' when I know I am deleting the file? 
                 # SetInformationFile Handle: 0x20 information_class: FileDispositionInformation buf_addr: 0x24f8f0 buf_size: 0x1 buf_contents: b'00' What don't we know about Windows now
-                if winFile.file_information_class[info_class] == "FileDispositionInformation" & buf_hx == b'01':
+                if (winFile.file_information_class[info_class] == "FileDispositionInformation") and (buf_hx != b'00'):
                     trace_msg = trace_msg + ' - FILE BEING FLAGGED FOR DELETION AFTER CLOSE'
                 
+                #SIM_break_simulation(trace_msg)
 
         # Handle other functions specifically 
         elif callname == 'ReadFile':
@@ -619,7 +620,10 @@ class WinSyscall():
                             share.append(name)
 
                     create_disposition = self.stackParam(4, frame) & 0xffffffff
-                    trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, winFile.disposition_map[create_disposition])
+                    disposition = 'UNKNOWN'
+                    if create_disposition in winFile.disposition_map:
+                        disposition = winFile.disposition_map[create_disposition]
+                    trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, disposition)
 
                     if exit_info.fname.endswith('Endpoint'):
                         extended_size = self.stackParam(7, frame)
@@ -892,14 +896,20 @@ class WinSyscall():
             if who == 0xffffffffffffffff:
                 trace_msg = trace_msg + ' for_process: %s (this one)' % (pid_thread)
             else:
-                trace_msg = trace_msg+' for_process: 0x%x' % (who)  
-            size = self.paramOffPtr(4, [0], frame)
+                trace_msg = trace_msg+' for_process: 0x%x' % (who)
+
+            # Base addr pointer 
+            exit_info.retval_addr = frame['param2']
+            # Size pointer 
+            exit_info.fname_addr = frame['param4']
+            exit_info.count = self.paramOffPtr(4, [0], frame)     
+       
             alloc_type = self.stackParam(1, frame)
-            base = self.paramOffPtr(2, [0], frame)
-            if size is None or base is None:
-                trace_msg = trace_msg+' failed reading base/size'
-            else:
-                trace_msg = trace_msg+' base 0x%x size: 0x%x' % (base, size)
+            atype = "Uknown mapping"
+            if alloc_type in winFile.allocation_type_map:
+                atype = winFile.allocation_type_map[alloc_type]
+
+            trace_msg = trace_msg+' base_addr_ptr: 0x%x size_ptr: 0x%x size_requested: 0x%x alloc_type: 0x%x (%s)' % (exit_info.retval_addr, exit_info.fname_addr, exit_info.count, alloc_type, atype)
                 
         elif callname == 'TerminateProcess':
             who = frame['param1']
