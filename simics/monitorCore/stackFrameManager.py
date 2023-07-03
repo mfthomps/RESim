@@ -28,10 +28,12 @@ TBD remind me why stackTrace is per-call and not per target?
 '''
 from simics import *
 import stackTrace
+import elfText
+from resimHaps import *
 import os
 import pickle
 class StackFrameManager():
-    def __init__(self, top, cpu, cell_name, task_utils, mem_utils, context_manager, soMap, targetFS, lgr):
+    def __init__(self, top, cpu, cell_name, task_utils, mem_utils, context_manager, soMap, targetFS, run_from_snap, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -43,6 +45,8 @@ class StackFrameManager():
         self.lgr = lgr
         self.relocate_funs = []
         self.stack_base = {}
+        if run_from_snap is not None:
+            self.loadPickle(run_from_snap)
 
     def stackTrace(self, verbose=False, in_pid=None):
         cpu, comm, cur_pid = self.task_utils.curProc() 
@@ -116,6 +120,7 @@ class StackFrameManager():
     def pickleit(self, name):
         stack_base_file = os.path.join('./', name, self.cell_name, 'stack_base.pickle')
         pickle.dump( self.stack_base, open(stack_base_file, "wb" ) )
+        self.lgr.debug('stackFrameManager pickleit saved %d stack bases' % len(self.stack_base))
 
     def loadPickle(self, name):
         stack_base_file = os.path.join('./', name, self.cell_name, 'stack_base.pickle')
@@ -128,7 +133,7 @@ class StackFrameManager():
             ''' TBD fix for windows'''
             self.relocate_funs = []
         else:
-            self.relocate_funs = elfText.getRelocate(full_path, ida_funs)
+            self.relocate_funs = elfText.getRelocate(full_path, self.lgr, ida_funs)
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
@@ -165,6 +170,12 @@ class StackFrameManager():
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
         frames = st.getFrames(2)
         print(frames[1].dumpString())
+
+    def down(self):
+        st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
+        frames = st.getFrames(2)
+        #print(frames[1].dumpString())
+        self.top.revToAddr(frames[1].ip)
 
     def dumpStack(self, count=80):
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
