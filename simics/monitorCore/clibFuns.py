@@ -34,7 +34,7 @@ def adjustFunName(frame, ida_funs, lgr):
                     fun_hex = int(fun, 16) 
                     if ida_funs is not None:
                         fun_name = ida_funs.getName(fun_hex)
-                        lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                        #lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
                         if fun_name is not None:
                             fun = fun_name
                     else:
@@ -89,16 +89,16 @@ def adjustFunName(frame, ida_funs, lgr):
                     #if 'basic_string' in fun and not params.startswith('void'):
                     if 'basic_string' in fun and params.startswith('char const*,uint'):
                         ''' TBD generalize '''
-                        lgr.debug('DataWatch string function is basic char fun %s params (%s' % (fun, params))
+                        #lgr.debug('clibFuns string function is basic char fun %s params (%s' % (fun, params))
                         fun = 'string_basic_char' 
                     elif 'basic_string' in fun and params.startswith('std::'):
-                        lgr.debug('DataWatch string function is basic std %s params (%s' % (fun, params))
+                        #lgr.debug('clibFuns string function is basic std %s params (%s' % (fun, params))
                         fun = 'string_basic_std' 
                   
                     else:
-                        lgr.debug('DataWatch string function did not recognize fun %s params (%s' % (fun, params))
+                        lgr.debug('clibFuns string function did not recognize fun %s params (%s' % (fun, params))
                 else:
-                    lgr.error('DataWatch string function parsing, Expected "(" in %s' % fun)
+                    lgr.error('clibFuns string function parsing, Expected "(" in %s' % fun)
 
 
             ''' TBD clean up this hack?'''
@@ -124,6 +124,8 @@ def adjustFunName(frame, ida_funs, lgr):
                 fun = fun.split('__')[1]
             if '<' in fun:
                 fun = fun.split('<')[0]
+        else:
+            lgr.debug('clibFuns fun name was none')
         return fun
    
 def allClib(frames, start):
