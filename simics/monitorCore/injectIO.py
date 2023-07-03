@@ -27,10 +27,10 @@ class InjectIO():
         self.context_manager = context_manager
         self.top = top
         self.lgr = lgr
-        self.lgr.debug('break_on given as %s fname as %s' % (str(break_on), fname))
+        self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
         self.break_on = break_on
         if break_on is not None and fname is not None:
-            self.lgr.debug('break_on given as 0x%x' % break_on)
+            self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
             so_entry = self.top.getSOAddr(fname, pid=self.pid)
             if so_entry is None:
                 self.lgr.error('injectIO no SO entry for %s' % prog)
@@ -311,7 +311,7 @@ class InjectIO():
             self.lgr.debug('injectIO debug to %s' % self.target)
             self.top.resetOrigin()
             ''' watch for death of this process as well '''
-            self.context_manager.stopWatchTasks()
+            self.context_manager.stopWatchTasksAlone(None)
             self.context_manager.watchGroupExits()
             self.top.watchPageFaults()
             #self.context_manager.setExitCallback(self.recordExit)
