@@ -825,11 +825,14 @@ class WatchMarks():
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
-            src_str = src_str.replace('\n\r','<newline>')
-            src_str = src_str.replace('\n','<newline>')
-            src_str = src_str.replace('\t','<tab>')
-            #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
-            #self.lgr.debug('srcdst_string hex is %s' % hexstring)
+                src_str = src_str.replace('\n\r','<newline>')
+                src_str = src_str.replace('\n','<newline>')
+                src_str = src_str.replace('\t','<tab>')
+                #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
+                #self.lgr.debug('srcdst_string hex is %s' % hexstring)
+            else:
+                src_str = ''
+                self.lgr.debug('watchMarks compare src_string is None reading from 0x%x' % src)
         else:
             dst_str = ''
             src_str = ''
