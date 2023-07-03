@@ -2918,7 +2918,7 @@ class DataWatch():
         else:
             #self.lgr.debug('DataWatch lookForMemstuff not memsomething, reset the watch ')
             #self.watch()
-            if fun not in self.not_mem_something:
+            if fun is not None and fun not in self.not_mem_something:
                 self.lgr.debug('DataWatch lookForMemstuff not memsomething add fun 0x%x to not_mem_something' % fun)
                 self.not_mem_something.append(fun)
             pass
