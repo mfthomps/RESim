@@ -246,6 +246,10 @@ class GenContextMgr():
 
         self.only_progs = [] 
 
+        self.watch_for_prog = None
+        self.watch_for_prog_callback = None
+        self.current_tasks = []
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -583,9 +587,13 @@ class GenContextMgr():
                     #self.restoreSuspendContext()
                 else:
                     SIM_run_alone(self.restoreDefaultContext, None)
+                    if self.watch_for_prog is not None:
+                        self.checkFirstSchedule(new_addr, pid, comm)
                     #self.restoreDefaultContext()
             else:
                 SIM_run_alone(self.restoreDefaultContext, None)
+                if self.watch_for_prog is not None:
+                    self.checkFirstSchedule(new_addr, pid, comm)
                 #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
             retval = True 
@@ -1423,3 +1431,14 @@ class GenContextMgr():
         else:
             self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
 
+    def callWhenFirstScheduled(self, comm, callback):
+        self.watch_for_prog = comm
+        self.watch_for_prog_callback = callback
+        self.current_tasks = self.task_utils.getTaskList()
+
+    def checkFirstSchedule(self, task_rec, pid, comm):
+        if task_rec not in self.current_tasks and comm == self.watch_for_prog:
+            self.lgr.debug('contextManager checkFirstSchedule got first for pid:%d' % pid)
+            self.watch_for_prog = None
+            self.watch_for_prog_callback(pid)
+            self.watch_for_prog_callback = None

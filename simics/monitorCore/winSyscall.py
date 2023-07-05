@@ -513,6 +513,7 @@ class WinSyscall():
                     prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
                     trace_msg = trace_msg+' prog: %s frame: %s' % (prog, frame_string)
                     self.lgr.debug('winSyscall syscallparse cup %s' % trace_msg)
+                    want_to_debug = False
                     if self.name == 'CreateUserProcess': 
                         ''' TBD section needs cleanup.  criteria for debugging seems hazy'''
                         ''' checkProg will initiate debug sequence '''
@@ -521,9 +522,14 @@ class WinSyscall():
                             ''' remove param, no more syscall processing here '''
                             self.lgr.debug('winSyscall cup wants to debug?  remove call_params')
                             exit_info.call_params = None
-                        else:
-                            self.lgr.debug('winSyscall cup add %s as pending proc' % prog)
-                            self.soMap.addPendingProc(prog)
+                    if not want_to_debug:
+                        self.lgr.debug('winSyscall cup add %s as pending proc' % prog)
+                        self.soMap.addPendingProc(prog)
+                        base = ntpath.basename(prog)
+                        if base.startswith(comm):
+                            ''' creating another process for same program '''
+                            self.lgr.debug('winSyscall syscallParase cup of same program')
+                            self.context_manager.callWhenFirstScheduled(comm, self.recordStack)
             else:
                 trace_msg = trace_msg + ' base read from 0x%x was none' % ptr
                 self.lgr.debug(trace_msg)
@@ -1471,3 +1477,6 @@ class WinSyscall():
                     break
         return retval 
 
+    def recordStack(self, pid):
+        self.lgr.debug('winSyscall recordStack pid:%d' % pid)
+        self.top.recordStackClone(pid, -1)
