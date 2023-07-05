@@ -530,10 +530,20 @@ class WinSyscall():
                 SIM_break_simulation(trace_msg)
 
         # Handle JUST first parameter for a bunch of functions that have Handle as their first, then break out into more params for some
-        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent']:
+        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
 
+            if callname == 'QueryValueKey':
+                exit_info.retval_addr = frame['param4']
+                exit_info.fname = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
+                trace_msg = trace_msg + ' ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.retval_addr, exit_info.fname)
+
+            if callname == 'RequestWaitReplyPort':
+                exit_info.retval_addr = frame['param3']
+                exit_info.fname_addr = frame['param2']
+                trace_msg = trace_msg + ' LPCRequestAddr: 0x%x LPCReplyAddr: 0x%x' % (exit_info.fname_addr, exit_info.retval_addr)
+           
             if callname == 'QueryInformationFile':
                 info_class = self.stackParam(1, frame) & 0xFF # all values are under 80
                 exit_info.retval_addr = frame['param3']
@@ -606,6 +616,9 @@ class WinSyscall():
     
                     attributes = []
                     file_attributes = self.stackParam(2, frame) & 0xffffffff
+                    if file_attributes == 0x0:
+                       attributes.append('NONE')
+
                     for attrib, name in winFile.file_attribute_map.items():
                         if file_attributes & attrib:
                             attributes.append(name)
@@ -636,7 +649,7 @@ class WinSyscall():
                                 extended = self.mem_utils.readBytes(self.cpu, extended_addr, extended_size)
                                 if extended is not None:
                                     extended_hx = binascii.hexlify(extended)
-                                    trace_msg = trace_msg + 'AFD extended: %s' % extended_hx
+                                    trace_msg = trace_msg + ' AFD extended: %s' % extended_hx
 
         elif callname == 'QueryAttributesFile':
             object_attr = frame['param1']
@@ -851,9 +864,19 @@ class WinSyscall():
                         self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
                         exit_info.call_params = call_param
  
-        elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
+        elif callname in ['CreateEvent', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
-            trace_msg = trace_msg+' handle addr: 0x%x' % (exit_info.retval_addr)
+            trace_msg = tace_msg + ' Handle_addr: 0x%x' % (exit_info.retval_addr)
+
+        elif callname == 'OpenProcessToken':
+            process_handle = frame['param1']
+            if process_handle == 0xffffffffffffffff:
+                trace_msg = trace_msg + ' for_process: %s (this one)' % (pid_thread)
+            else:
+                trace_msg = trace_msg+' for_process: 0x%x' % (process_handle)
+            
+            exit_info.retval_addr = frame['param3']
+            trace_msg = trace_msg+' ReturnHandleAddr: 0x%x' % (exit_info.retval_addr)
 
         elif callname in ['WaitForMultipleObjects32']:
             count = frame['param1'] & 0xffff
@@ -930,10 +953,11 @@ class WinSyscall():
                 
         elif callname == 'QueryVirtualMemory':
             who = frame['param1']
-            trace_msg = trace_msg + ' whose: 0x%x' % (who)
             if who == 0xffffffffffffffff:
-                trace_msg = trace_msg+' (this process)'
-       
+                trace_msg = trace_msg + ' for_process: %s (this one)' % (pid_thread)            
+            else:
+                trace_msg = trace_msg + ' for_process: 0x%x' % (who)
+ 
             base_addr = frame['param2']
             if base_addr is not None:
                 trace_msg = trace_msg + ' base_address: 0x%x' % (base_addr)
