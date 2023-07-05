@@ -55,6 +55,7 @@ def dumpFuns(fname=None):
         print('Wrote functions to %s.funs' % fname)
     demangle(fname)
     #unwind(fname)
+    dumpImports(fname)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
@@ -134,3 +135,41 @@ def unwind(fname):
     with open(fname+'.unwind', 'w') as fh:
         fh.write(s)
     print('Wrote unwind addresses to %s.unwind' % fname)
+
+class ImportNames():
+    def __init__(self):
+        self.imports = {} 
+
+    def imp_cb(self, ea, name, ord):
+        if not name:
+            #print "%08x: ord#%d" % (ea, ord)
+            pass
+        else:
+            self.imports[ea] = name 
+            #print "%08x: %s (ord#%d)" % (ea, name, ord)
+        return True
+    def printit(self):
+        for ea in self.imports:
+            print('0x%x %s' % (ea, self.imports[ea]))
+
+    def dumpit(self, fname):
+        with open(fname+'.imports', "w") as fh:
+            json.dump(self.imports, fh)
+            print('Wrote functions to %s.imports' % fname)
+
+def dumpImports(fname):
+    imports = {}
+    nimps = idaapi.get_import_module_qty()
+
+    print "Found %d import(s)..." % nimps
+    import_names = ImportNames()
+    for i in xrange(0, nimps):
+        name = idaapi.get_import_module_name(i)
+        if not name:
+            print "Failed to get import module name for #%d" % i
+            continue
+
+        print "Walking-> %s" % name
+        idaapi.enum_import_names(i, import_names.imp_cb)
+    #import_names.printit()
+    import_names.dumpit(fname)
