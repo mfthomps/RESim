@@ -1080,6 +1080,7 @@ class GenMonitor():
                 elif self.isWindows:
                     machine_size = self.soMap[self.target].getMachineSize(pid)
                     self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
+                    winProg.getRelocate(self.full_path, self.lgr)
                     if machine_size is None:
                         ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
                         dumb, machine = winProg.getSizeAndMachine(self.full_path, self.lgr)
@@ -2704,7 +2705,10 @@ class GenMonitor():
         if self.debug_breaks_set:
             retval = True
             if not keep_watching:
-                self.context_manager[self.target].stopWatchTasks()
+                if immediate:
+                    self.context_manager[self.target].stopWatchTasksAlone(None)
+                else:
+                    self.context_manager[self.target].stopWatchTasks()
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.stopWatchPageFaults(pid)
             self.rev_to_call[self.target].noWatchSysenter()
