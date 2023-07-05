@@ -553,8 +553,6 @@ class WinSyscall():
                     buf_hx = binascii.hexlify(buf_contents)
 
                 trace_msg = trace_msg + ' information_class: %s buf_addr: 0x%x buf_size: 0x%x buf_contents: %s' % (winFile.file_information_class[info_class], buf_addr, buf_size, buf_hx)
-                # TODO WHAT?! Why is buf_hx b'00' when I know I am deleting the file? 
-                # SetInformationFile Handle: 0x20 information_class: FileDispositionInformation buf_addr: 0x24f8f0 buf_size: 0x1 buf_contents: b'00' What don't we know about Windows now
                 if (winFile.file_information_class[info_class] == "FileDispositionInformation") and (buf_hx != b'00'):
                     trace_msg = trace_msg + ' - FILE BEING FLAGGED FOR DELETION AFTER CLOSE'
                 
@@ -583,7 +581,9 @@ class WinSyscall():
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
                 self.lgr.debug('winSyscall CreateFile internel to kernel')
-            else: 
+            else:
+                #SIM_break_simulation('create')
+
                 str_size_addr = self.paramOffPtr(3, [0x10], frame) 
                 str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
                 exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
@@ -623,6 +623,8 @@ class WinSyscall():
                     disposition = 'UNKNOWN'
                     if create_disposition in winFile.disposition_map:
                         disposition = winFile.disposition_map[create_disposition]
+                    
+
                     trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, disposition)
 
                     if exit_info.fname.endswith('Endpoint'):
@@ -686,6 +688,7 @@ class WinSyscall():
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
         elif callname == 'DeviceIoControlFile':
+            #SIM_break_simulation('DeviceIoControlFile')
             exit_info.old_fd = frame['param1']
             operation = frame['param6'] & 0xffffffff
             if operation in self.ioctl_op_map:
@@ -791,12 +794,12 @@ class WinSyscall():
                     exit_info.fname_addr = frame['param5'] + 4
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame)
                 trace_msg = trace_msg + ' handle: 0x%x buffer: 0x%x count: 0x%x ret_count_addr: 0x%x' %  (exit_info.old_fd, exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-            elif op_cmd == 'SEND_DATAGRAM':
-                sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
-                self.lgr.debug('pdata_addr 0x%x  sock_addr 0x%x' % (pdata_addr, sock_addr))
-                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
-                to_string = sock_struct.getString()
-                trace_msg = trace_msg+' '+to_string
+            #elif op_cmd == 'SEND_DATAGRAM':
+            #    sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+            #    self.lgr.debug('pdata_addr 0x%x  sock_addr 0x%x' % (pdata_addr, sock_addr))
+            #    sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+            #    to_string = sock_struct.getString()
+            #    trace_msg = trace_msg+' '+to_string
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
