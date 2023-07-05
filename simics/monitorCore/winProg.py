@@ -69,6 +69,50 @@ def getSizeAndMachine(full_path, lgr):
         lgr.error('winProg getSizeAndMachine failed find file at path %s' % full_path)
     return size, machine, image_base
 
+def getRelocate(full_path, lgr):
+    ''' This is not used.  See IDA resimUtils for dumpImports. '''
+    lgr.debug('winProg getRelocate for %s' % full_path)
+    if full_path is None:
+        lgr.warning('winProg getRelocate called with full_path of None')
+        return None
+    retval = {}
+    if os.path.isfile(full_path):
+        cmd = 'readpe -d -i %s' % full_path
+        lgr.debug('cmd %s' % cmd)
+        with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+            output = ps.communicate()
+            library = None
+            get_library = False
+            for line in output[0].decode("utf-8").splitlines():
+                if 'IMAGE_DIRECTORY_ENTRY_IMPORT:' in line: 
+                    parts = line.split()
+                    import_base_s = parts[1]
+                    try:
+                        import_base = int(import_base_s, 16)
+                        lgr.debug('got import base 0x%x' % import_base)
+                    except:
+                        lgr.error('winProg getRelocate failed to get import base from %s' % line)
+                else:
+                    parts = line.split()
+                    if parts[0].strip() == 'Library':
+                        get_library = True
+                        lgr.debug('get library')
+                    elif parts[0].strip() == 'Hint:':
+                        entry = int(parts[1].strip())
+                    elif parts[0].strip() == 'Name:':
+                        if get_library:
+                            library = parts[1].strip()
+                            retval[library] = {}
+                            get_library = False
+                        else:
+                            fun = parts[1].strip()
+                            retval[library][fun] = entry
+    for lib in retval:
+        lgr.debug('Library: %s' % lib)
+        for fun in retval[lib]:
+            lgr.debug('\t%s  0x%x' % (fun, retval[lib][fun]))
+
+                    
 
 class WinProg():
     def __init__(self, top, cpu, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
@@ -85,7 +129,7 @@ class WinProg():
         self.text_hap = None
 
     def toNewProc(self, prog_string):
-        ''' Assumes this is running  alone '''
+        ''' Assumes this is running  alone  and nothing is being debugged '''
         self.prog_string = prog_string
         self.lgr.debug('toNewProc %s' % prog_string)
         self.top.rmSyscall('toCreateProc')
