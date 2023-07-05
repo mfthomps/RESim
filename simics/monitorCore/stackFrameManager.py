@@ -142,6 +142,7 @@ class StackFrameManager():
         cpu, comm, pid  = self.task_utils.curProc()
         self.stack_base[pid] = esp
         self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
+        SIM_continue(0)
 
     def modeChangeForStack(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -152,7 +153,10 @@ class StackFrameManager():
         self.mode_hap = None
         
         if new != Sim_CPU_Mode_Supervisor:
-            self.setStackBase()
+            esp = self.mem_utils.getRegValue(self.cpu, 'esp')
+            eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+            self.lgr.debug('stackFrameManager modeChangedForStack user mode eip: 0x%x esp: 0x%x' % (eip, esp))
+            self.top.stopAndGo(self.setStackBase)
 
     def recordStackBase(self, pid, sp):
         self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
@@ -184,7 +188,7 @@ class StackFrameManager():
         ida_funs = self.top.getIdaFuns()
         cpu, comm, pid = self.task_utils.curProc() 
         for i in range(count):
-            value = self.mem_utils.readWord(self.cpu, ptr) 
+            value = self.mem_utils.readAppWord(self.cpu, ptr) 
             name = ''
             if self.soMap.isCode(value, pid):
                 self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
