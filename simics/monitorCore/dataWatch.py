@@ -784,6 +784,9 @@ class DataWatch():
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
         #frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
         frame, cycles = self.rev_to_call.getPreviousCycleFrame(pid)
+        if frame is None:
+            self.lgr.error('dataWatch kernelReturnHap failed to get previous frame, bail')
+            return
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('kernelReturnHap, pid:%d (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (pid, comm, eip, eax, 
         #    kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
