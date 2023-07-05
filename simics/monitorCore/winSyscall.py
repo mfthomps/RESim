@@ -530,7 +530,7 @@ class WinSyscall():
                 SIM_break_simulation(trace_msg)
 
         # Handle JUST first parameter for a bunch of functions that have Handle as their first, then break out into more params for some
-        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent']:
+        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
 
@@ -638,12 +638,26 @@ class WinSyscall():
                                     extended_hx = binascii.hexlify(extended)
                                     trace_msg = trace_msg + 'AFD extended: %s' % extended_hx
 
-        elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
+        elif callname == 'QueryAttributesFile':
+            object_attr = frame['param1']
+            str_size_addr = self.paramOffPtr(1, [0x10], frame)
+            str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+            if str_size is not None:
+                self.lgr.debug('winSyscall QueryAttributesFile str_size_addr 0x%x size %d' % (str_size_addr, str_size))
+                
+                exit_info.fname_addr = self.paramOffPtr(1, [0x10, 8], frame)
+                exit_info.retval_addr = frame['param2']
+                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
+                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x info_return_addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+
+
+        elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             object_attr = frame['param3']
             str_size_addr = self.paramOffPtr(3, [0x10], frame) 
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+
             if str_size is not None:
-                self.lgr.debug('winSyscall Openfile str_size_addr 0x%x size %d' % (str_size_addr, str_size))
+                self.lgr.debug('winSyscall %s str_size_addr 0x%x size %d' % (callname, str_size_addr, str_size))
 
                 exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
                 exit_info.retval_addr = frame['param1']
@@ -914,6 +928,20 @@ class WinSyscall():
 
             trace_msg = trace_msg+' base_addr_ptr: 0x%x size_ptr: 0x%x size_requested: 0x%x alloc_type: 0x%x (%s)' % (exit_info.retval_addr, exit_info.fname_addr, exit_info.count, alloc_type, atype)
                 
+        elif callname == 'QueryVirtualMemory':
+            who = frame['param1']
+            trace_msg = trace_msg + ' whose: 0x%x' % (who)
+            if who == 0xffffffffffffffff:
+                trace_msg = trace_msg+' (this process)'
+       
+            base_addr = frame['param2']
+            if base_addr is not None:
+                trace_msg = trace_msg + ' base_address: 0x%x' % (base_addr)
+
+            exit_info.retval_addr = frame['param4']
+            buf_size = self.stackParam(1, frame)
+            trace_msg = trace_msg + ' return_buf: 0x%x return_buf_size: %d' % (exit_info.retval_addr, buf_size) 
+
         elif callname == 'TerminateProcess':
             who = frame['param1']
             trace_msg = trace_msg+' who: 0x%x' % (who)
@@ -987,7 +1015,7 @@ class WinSyscall():
             ptr = pval + offset
             #self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
             #pval = self.mem_utils.readPtr(self.cpu, ptr)
-            pval = self.mem_utils.readWord32(self.cpu, ptr)
+            pval = self.mem_utils.readWord(self.cpu, ptr)
             if pval is not None:
                 #self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
                 pass
