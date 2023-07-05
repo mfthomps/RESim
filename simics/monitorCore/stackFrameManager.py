@@ -45,6 +45,7 @@ class StackFrameManager():
         self.lgr = lgr
         self.relocate_funs = []
         self.stack_base = {}
+        self.did_mode_change = False
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -142,7 +143,10 @@ class StackFrameManager():
         cpu, comm, pid  = self.task_utils.curProc()
         self.stack_base[pid] = esp
         self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
-        SIM_continue(0)
+        if self.did_mode_change: 
+            ''' We only stopped in order to let the the register values load '''
+            self.did_mode_change = False
+            SIM_continue(0)
 
     def modeChangeForStack(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -156,6 +160,8 @@ class StackFrameManager():
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             self.lgr.debug('stackFrameManager modeChangedForStack user mode eip: 0x%x esp: 0x%x' % (eip, esp))
+            ''' hack to control whether we continue after setting the stack base'''
+            self.did_mode_change = True
             self.top.stopAndGo(self.setStackBase)
 
     def recordStackBase(self, pid, sp):
