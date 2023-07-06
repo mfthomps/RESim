@@ -6,35 +6,37 @@ from resimHaps import *
 from simics import *
 
 class WinProgInfo():
-    def __init__(self, text_addr, text_size, machine, image_base):
-        self.text_addr = text_addr
+    def __init__(self, load_addr, text_offset, text_size, machine, image_base):
+        self.load_addr = load_addr
+        self.text_offset = text_offset
         self.text_size = text_size
         self.machine = machine
         self.image_base = image_base
 
 def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
-    text_section_addr = getTextSection(cpu, mem_utils, eproc, lgr)
-    text_size, machine, image_base = getSizeAndMachine(full_path, lgr)
-    return WinProgInfo(text_section_addr, text_size, machine, image_base)
+    load_address = getLoadAddress(cpu, mem_utils, eproc, lgr)
+    text_size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
+    return WinProgInfo(load_addr, text_offset, text_size, machine, image_base)
 
-def getTextSection(cpu, mem_utils, eproc, lgr):
+def getLoadAddress(cpu, mem_utils, eproc, lgr):
         retval = None
         ''' TBD put in params! '''
         peb_addr = eproc+0x338
-        lgr.debug('winProg getTextSection eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
+        lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
         peb = mem_utils.readPtr(cpu, peb_addr)
         if peb is not None:
             image_load_addr_addr = peb + 0x10
-            lgr.debug('winProg getTextSection pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
+            lgr.debug('winProg getLoadAddress pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
             retval = mem_utils.readWord(cpu, image_load_addr_addr)
         else:
-            lgr.error('winProg getTextSection pep read as None')
+            lgr.error('winProg getLoadAddress pep read as None')
         return retval
 
 def getSizeAndMachine(full_path, lgr):
     size = None
     machine = None
     image_base = None
+    addr_of_text = None
     lgr.debug('winProg getSizeAndMachine for %s' % full_path)
     if full_path is None:
         lgr.warning('winProg getSizeAndMachine called with full_path of None')
@@ -52,6 +54,14 @@ def getSizeAndMachine(full_path, lgr):
                         break
                     except:
                         lgr.error('winProg getSizeAndMachine failed to get image base from %s' % line)
+                if 'Address of .text section' in line: 
+                    #lgr.debug('winProg readpe got %s' % line)
+                    parts = line.split()
+                    addr_s = parts[4]
+                    try:
+                        addr_of_text = int(addr_s, 16)
+                    except:
+                        lgr.error('winProg getSizeAndMachine failed to get size from %s' % line)
                 if 'Size of .text section' in line: 
                     lgr.debug('winProg readpe got %s' % line)
                     parts = line.split()
@@ -67,7 +77,7 @@ def getSizeAndMachine(full_path, lgr):
                 lgr.error('winProg getSizeAndMachine failed to get size for path %s' % full_path)
     else:
         lgr.error('winProg getSizeAndMachine failed find file at path %s' % full_path)
-    return size, machine, image_base
+    return size, machine, image_base, addr_of_text
 
 def getRelocate(full_path, lgr):
     ''' This is not used.  See IDA resimUtils for dumpImports. '''
@@ -192,22 +202,23 @@ class WinProg():
     def runToText(self, want_pid):
         self.lgr.debug('winProg runToText want_pid %d' % want_pid)
         eproc = self.task_utils.getCurTaskRec()
-        load_addr = getTextSection(self.cpu, self.mem_utils, eproc, self.lgr)
+        load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
         self.top.debugExitHap()
         full_path = self.top.getFullPath(fname=self.prog_string)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
         self.top.setFullPath(full_path)
-        size, machine, image_base = getSizeAndMachine(full_path, self.lgr)
+        size, machine, image_base, text_offset = getSizeAndMachine(full_path, self.lgr)
         if size is None:
             self.lgr.error('winProg runToText unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
             self.top.quit()
             return 
+        text_addr = load_addr + text_offset
         self.lgr.debug('winProg runToText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine, image_base)
+        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine, image_base, text_offset)
         self.top.trackThreads()
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, load_addr, size, 0)
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
         self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
 
     def findText(self, want_pid, one, old, new):

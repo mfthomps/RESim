@@ -19,7 +19,11 @@ class DLLInfo():
         self.fd = fd
         self.pid = pid
         self.section_handle = None
+        ''' load address '''
         self.addr = None
+        ''' offset of text relative to load address '''
+        self.text_offset = 0
+        ''' size of text '''
         self.size = None
         self.machine = None
         self.image_base = None
@@ -101,11 +105,11 @@ class WinDLLMap():
                         self.min_addr[section.pid] = None
                         self.max_addr[section.pid] = None
                     if self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr:
-                        self.min_addr[section.pid] = section.addr
+                        self.min_addr[section.pid] = section.addr + section.text_offset
                     if section.size is None:
                         self.lgr.error('winDLL loadPickle no size for %s, addr 0x%x pid:%d' % (section.fname, section.addr, section.pid))
                         continue
-                    ma = section.addr + section.size
+                    ma = section.addr + section.text_offset + section.size
                     if self.max_addr[section.pid] is None or self.max_addr[section.pid] < ma:
                         self.max_addr[section.pid] = ma
 
@@ -148,9 +152,10 @@ class WinDLLMap():
         dll_info = DLLInfo(pid, fname, fd)
         self.open_files[pid][fd] = dll_info
 
-    def addText(self, fname, pid, addr, size, machine, image_base):
+    def addText(self, fname, pid, addr, size, machine, image_base, text_offset):
         dll_info = DLLInfo(pid, fname, None)
         dll_info.addr = addr
+        dll_info.text_offset = text_offset
         dll_info.size = size
         dll_info.machine = machine
         dll_info.image_base = image_base
@@ -202,7 +207,8 @@ class WinDLLMap():
                                 eproc = self.task_utils.getCurTaskRec()
                                 full_path = self.top.getFullPath(fname=pp)
                                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
-                                self.addText(pp, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base)
+                                self.addText(pp, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
+                                            win_prog_info.image_base, win_prog_info.text_offset)
                                 if win_prog_info.text_size is None:
                                     self.lgr.error('WinDLLMap mapSection text_size is None for %s' % comm)
                                 self.lgr.debug('WinDLLMap text mapSection added, len now %d' % len(self.text))
@@ -342,6 +348,7 @@ class WinDLLMap():
         self.so_watch_callback = callback
 
     def getText(self, pid):
+        ''' poor name.  actually used to get the load address to compute an offset from the header's image base'''
         retval = None
         self.lgr.debug('winDLL getText pid:%s' % pid) 
         if pid in self.text:
@@ -355,8 +362,8 @@ class WinDLLMap():
                 eproc = self.task_utils.getCurTaskRec()
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                 self.top.setFullPath(full_path)
-                self.addText(prog_name, pid, win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base)
-                retval = Text(win_prog_info.text_addr, win_prog_info.text_size, win_prog_info.image_base)
+                self.addText(prog_name, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog.text_offset)
+                retval = Text(win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.image_base)
         return retval
             
     def getAnalysisPath(self, fname):
