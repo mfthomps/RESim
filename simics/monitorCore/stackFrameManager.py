@@ -45,7 +45,6 @@ class StackFrameManager():
         self.lgr = lgr
         self.relocate_funs = []
         self.stack_base = {}
-        self.did_mode_change = False
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -143,10 +142,6 @@ class StackFrameManager():
         cpu, comm, pid  = self.task_utils.curProc()
         self.stack_base[pid] = esp
         self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
-        if self.did_mode_change: 
-            ''' We only stopped in order to let the the register values load '''
-            self.did_mode_change = False
-            SIM_continue(0)
 
     def modeChangeForStack(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -156,13 +151,13 @@ class StackFrameManager():
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
         self.mode_hap = None
         
-        if new != Sim_CPU_Mode_Supervisor:
+        #if new != Sim_CPU_Mode_Supervisor:
+        ''' catch entry into kernel so that we can read SP without breaking simulation '''
+        if new == Sim_CPU_Mode_Supervisor:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            self.lgr.debug('stackFrameManager modeChangedForStack user mode eip: 0x%x esp: 0x%x' % (eip, esp))
-            ''' hack to control whether we continue after setting the stack base'''
-            self.did_mode_change = True
-            self.top.stopAndGo(self.setStackBase)
+            self.lgr.debug('stackFrameManager modeChangedForStack, calling into  kernel mode eip: 0x%x esp: 0x%x' % (eip, esp))
+            self.setStackBase()
 
     def recordStackBase(self, pid, sp):
         self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
