@@ -3750,7 +3750,7 @@ class DataWatch():
             wm = self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, 
                      self.getCmp(), self.move_stuff.trans_size, ad_hoc=True, dest=self.last_ad_hoc)
             ''' recorded in mem_something as part of obscure memcpy check '''
-            dest_addr = self.mem_something.dest_addr
+            dest_addr = self.mem_something.dest
             self.setRange(dest_addr, self.move_stuff.trans_size, watch_mark=wm)
             #self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (self.move_stuff.addr, ad_hoc, dest_addr))
             self.setBreakRange()
