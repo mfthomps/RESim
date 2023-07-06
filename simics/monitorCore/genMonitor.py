@@ -1080,7 +1080,6 @@ class GenMonitor():
                 elif self.isWindows:
                     machine_size = self.soMap[self.target].getMachineSize(pid)
                     self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
-                    winProg.getRelocate(self.full_path, self.lgr)
                     if machine_size is None:
                         ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
                         dumb, machine = winProg.getSizeAndMachine(self.full_path, self.lgr)
@@ -1191,7 +1190,6 @@ class GenMonitor():
                             self.getIDAFuns(self.full_path, offset)
                         else:
                             self.getIDAFuns(self.full_path, 0)
-                        self.stackFrameManager[self.target].setRelocateFuns(self.full_path, self.ida_funs)
                         ''' TBD alter stackTrace to use this and buid it out'''
                         self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                         self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
@@ -1413,6 +1411,9 @@ class GenMonitor():
             else:
                 self.lgr.debug('getIDAFuns No IDA function file at %s try using old paths ' % fun_path)
                 self.getIDAFunsOld(full_path)
+
+            ''' TBD can relocate simply go into ida funs and not into stackFrameManager?'''
+            self.stackFrameManager[self.target].setRelocateFuns(funs_file, self.ida_funs)
         else:
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
 
