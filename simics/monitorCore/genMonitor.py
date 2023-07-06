@@ -4547,7 +4547,7 @@ class GenMonitor():
     def fuzz(self, path, n=1, fname=None):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
-        self.debugPidGroup(pid)
+        self.debugPidGroup(pid, to_user=False)
         full_path = None
         if fname is not None:
             full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
@@ -4559,6 +4559,8 @@ class GenMonitor():
 
     def checkUserSpace(self, cpu):
         retval = True
+        ''' TBD remove all this?'''
+        return retval
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
             self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
@@ -4566,7 +4568,7 @@ class GenMonitor():
             SIM_run_command('si')
             cpl = memUtils.getCPL(cpu)
             if cpl == 0:
-                self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                self.lgr.error('checkUserSpace Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
                 retval = False
         return retval
 
@@ -4588,7 +4590,7 @@ class GenMonitor():
                 return
             # keep gdb 9123 port free
             self.gdb_port = 9124
-            self.debugPidGroup(pid)
+            self.debugPidGroup(pid, to_user=False)
         full_path = None
         if fname is not None and target is None:
             full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
@@ -4672,9 +4674,9 @@ class GenMonitor():
         ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
-        if not self.checkUserSpace(cpu):
-            return
-        self.debugPidGroup(pid)
+        #if not self.checkUserSpace(cpu):
+        #    return
+        self.debugPidGroup(pid, to_user=False)
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
@@ -4729,7 +4731,7 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         if self.aflPlay is None:
-            self.debugPidGroup(pid)
+            self.debugPidGroup(pid, to_user=False)
             self.aflPlay = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], self.coverage,
                   self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
                   self.lgr, packet_count=n, stop_on_read=sor)
@@ -5273,7 +5275,7 @@ class GenMonitor():
         RES_hap_delete_callback_id("Core_Continuation", hap)
 
     def warnSnapshotHap(self, stop_action, one):
-        self.lgr.debug('warnSnapShot')
+        #self.lgr.debug('warnSnapShot')
         if self.snap_warn_hap is None:
             return
         if not self.context_manager[self.target].didListLoad():
