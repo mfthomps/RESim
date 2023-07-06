@@ -255,7 +255,7 @@ class WinCallExit():
                     if exit_info.fname_addr is not None and not_ready:
                         self.lgr.debug('winCallExit RECV, not ready do winDelay')
                         
-                        win_delay = winDelay.WinDelay(self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                        win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
                               self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                         trace_msg = trace_msg+' Device not ready.'
                         if self.watchData(exit_info):
@@ -273,7 +273,7 @@ class WinCallExit():
                     my_syscall = exit_info.syscall_instance
                     if self.watchData(exit_info):
                         ''' in case we want to break on a read of this data.  '''
-                        self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
+                        self.lgr.debug('winCallExit RECV call succeeded, setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
                             exit_info.count))
                         if self.kbuffer is not None:
                             self.kbuffer.readReturn(eax)
