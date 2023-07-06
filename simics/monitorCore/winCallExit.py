@@ -26,6 +26,7 @@ from simics import *
 import pageUtils
 import memUtils
 import net
+import binascii 
 import ipc
 import allWrite
 import syscall
@@ -129,7 +130,7 @@ class WinCallExit():
             else:
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
-        elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey']:
+        elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             if exit_info.retval_addr is not None:
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is None:
@@ -139,9 +140,14 @@ class WinCallExit():
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
                 if self.soMap is not None and (exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
+                    self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
                     self.soMap.addFile(exit_info.fname, fd, pid)
+
+                    if callname == 'OpenSection':
+                        self.soMap.createSection(fd, fd, pid)
             else:
                 self.lgr.debug('%s retval addr is none' % trace_msg)
+            
             if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
                 self.lgr.debug('winCallExit open check string %s against %s' % (exit_info.fname, exit_info.call_params.match_param))
                 #if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
@@ -157,6 +163,10 @@ class WinCallExit():
                 if fd is not None:
                     trace_msg = trace_msg + ' fname_addr 0x%x fname: %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
+
+                    if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
+                        self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
+                        self.soMap.addFile(exit_info.fname, fd, pid)
                 else:
                     self.lgr.debug('%s handle is none' % trace_msg)
             else:
@@ -245,8 +255,20 @@ class WinCallExit():
                             exit_info.call_params = None
 
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
-
+            output_data = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, exit_info.count)
+            odata_hx = None
+            if output_data is not None:
+                odata_hx = binascii.hexlify(output_data)
+            
+            trace_msg = trace_msg + ' output_data: %s' % (odata_hx)            
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
+            
+            if exit_info.socket_callname in ['BIND', 'GET_SOCK_NAME']:
+                sock_addr = exit_info.retval_addr
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                to_string = sock_struct.getString()
+                trace_msg = trace_msg+' '+to_string
+
             if exit_info.socket_callname == 'RECV':
                 ''' fname_addr has address of return count'''
                 if exit_info.fname_addr is not None and not not_ready:
