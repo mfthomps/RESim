@@ -133,6 +133,11 @@ class AFL():
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone, record_hits=False)
+
+            if not self.linear:
+                self.context_manager.restoreDefaultContext()
+                self.lgr.debug('afl, set default context. %s' % str(self.cpu.current_context))
+
             cli.quiet_run_command('disable-reverse-execution')
             cli.quiet_run_command('enable-unsupported-feature internals')
             cli.quiet_run_command('save-snapshot name = origin')
@@ -228,12 +233,10 @@ class AFL():
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
                 with open('./icrashed', 'wb') as fh:
                     fh.write(self.orig_in_data)
-                self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
             elif status == AFL_HANG:
                 self.lgr.debug('afl finishUp status reflects hang %d iteration %d, data written to ./ihung' %(status, self.iteration)) 
                 with open('./ihung', 'wb') as fh:
                     fh.write(self.orig_in_data)
-                self.lgr.debug('afl finishUp cpu context is %s' % self.cpu.current_context)
                 #self.top.quit()
                 #return
 
@@ -314,7 +317,7 @@ class AFL():
         if self.stop_hap is None:
             return
         if self.cpu.cycles == self.starting_cycle:
-            #self.lgr.debug('afl stopHap but got nowhere.  continue.')
+            self.lgr.debug('afl stopHap but got nowhere.  continue.')
             SIM_run_alone(SIM_continue, 0)
             return
         self.finishUp()
@@ -327,6 +330,7 @@ class AFL():
         self.bad_trick = False
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
+            self.lgr.debug('afl goN first, context is %s' % str(self.cpu.current_context))
             self.in_data = self.getMsg()
             if self.in_data is None:
                 self.lgr.error('Got None from afl')
@@ -335,6 +339,8 @@ class AFL():
         self.orig_in_data = self.in_data
         
         cli.quiet_run_command('restore-snapshot name=origin')
+        if not self.linear and self.context_manager.isDebugContext():
+            SIM_run_alone(self.context_manager.restoreDefaultContext, None)
         #self.top.restoreRESimContext()
 
         #self.lgr.debug('got %d of data from afl iteration %d' % (len(self.in_data), self.iteration))
@@ -383,7 +389,6 @@ class AFL():
 
         self.write_data.write()
         self.page_faults.watchPageFaults()
-        #self.lgr.debug('afl goN back from watchPageFaults context %s cycle: 0x%x' % (self.cpu.current_context, self.cpu.cycles))
         #cli.quiet_run_command('c') 
         SIM_continue(0)
         
