@@ -76,6 +76,8 @@ class MagicOrigin():
                         dumb,result = cli.quiet_run_command(cmd)
                         cmd = '%s.disable-service -all' % name
                         dumb,result = cli.quiet_run_command(cmd)
+                        #cmd = '%s.delete' % name
+                        #dumb,result = cli.quiet_run_command(cmd)
                         #cmd = 'default_service_node0.delete' 
                         #dumb,result = cli.quiet_run_command(cmd)
                         ok = True
@@ -92,6 +94,10 @@ class MagicOrigin():
         driver_service_node = 'driver_service_node'
         dhcp_service_node = 'dhcp_service_node'
         cmd = 'disconnect-real-network'
+        SIM_run_command(cmd)
+        cmd = 'switch0.disconnect-real-network'
+        SIM_run_command(cmd)
+        cmd = 'switch1.disconnect-real-network'
         SIM_run_command(cmd)
         self.disconnectServiceNode(driver_service_node)
         try:

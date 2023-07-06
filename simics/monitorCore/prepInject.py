@@ -44,7 +44,8 @@ class PrepInject():
         self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 
     def instrumentSelect(self, dumb):
-        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
+        #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
+        self.top.stopTracking(keep_coverage=True)
         ''' go forward one to user space and record the return IP '''
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')
@@ -103,7 +104,8 @@ class PrepInject():
         return length
 
     def instrumentAlone(self, dumb): 
-        self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
+        #self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
+        self.top.stopTracking(keep_watching=True, keep_coverage=True)
         ''' go forward one to user space and record the return IP '''
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')

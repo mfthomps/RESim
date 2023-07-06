@@ -9,11 +9,11 @@ def rmPrefix(fun):
 
 class IDAFuns():
 
-    def __init__(self, path, lgr):
+    def __init__(self, path, lgr, offset=0):
         self.funs = {}
         self.lgr = lgr
         self.did_paths = []
-        self.lgr.debug('IDAFuns for path %s' % path)
+        self.lgr.debug('IDAFuns for path %s offset 0x%x' % (path, offset))
         self.mangle = {}
         self.unwind = {}
         if path.endswith('funs'):
@@ -38,8 +38,9 @@ class IDAFuns():
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
+                self.lgr.debug('idaFuns read funs from %s' % path)
                 for sfun in jfuns:
-                    fun = int(sfun)
+                    fun = int(sfun) 
                     fun_rec = jfuns[sfun]
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
@@ -50,8 +51,11 @@ class IDAFuns():
                         #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
                         fun_rec['name'] = self.mangle[fun_name]
                         #lgr.debug('function name for 0x%x (%s) changed to %s' % (fun, fun_name, fun_rec['name']))
+                    fun_rec['start'] = fun_rec['start'] + offset
+                    fun_rec['end'] = fun_rec['end'] + offset
                     self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
+        self.lgr.debug('idaFuns loaded %d funs' % len(self.funs))
 
     def getFunPath(self, path):
         if path is None:
@@ -91,9 +95,9 @@ class IDAFuns():
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
-                    fun = int(f)+offset
+                    fun = int(f)
                     self.funs[fun] = {}
-                    self.funs[fun]['start'] = fun
+                    self.funs[fun]['start'] = fun + offset
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
                     self.funs[fun]['name'] = fun_name

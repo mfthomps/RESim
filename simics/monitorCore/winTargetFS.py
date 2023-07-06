@@ -59,8 +59,8 @@ class TargetFS():
         self.lgr = lgr
         if self.top.isWindows():
             path = path.replace('\\', '/')
-            #if lgr is not None:
-            #     lgr.debug('getFull windows, new path is %s' % path)
+            if lgr is not None:
+                 lgr.debug('getFull windows, new path is %s' % path)
             
         if path.startswith('./'):
              base = os.path.basename(path)
@@ -83,18 +83,10 @@ class TargetFS():
             elif path.startswith('/'):
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)
+            self.lgr.debug('winTargetFS root_prefix %s path %s full %s' % (self.root_prefix, path, full))
             full_insensitive = getfileInsensitive(path, self.root_prefix, lgr)
             self.lgr.debug('full_insenstive is %s' % full_insensitive)
-            if full_insensitive is not None and os.path.islink(full_insensitive):
-                real = os.readlink(full)
-                if lgr is not None:
-                    lgr.debug('TargetFS not relative link real %s' % real)
-                if real.startswith('/'):
-                    real = real[1:]
-                    retval = os.path.join(self.root_prefix, real)
-                else:
-                    retval = os.path.join(os.path.dirname(full), real)
-            elif full_insensitive is None or not os.path.isfile(full_insensitive):
+            if full_insensitive is None or not os.path.isfile(full_insensitive):
                 if lgr is not None:
                     lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
                 pattern = path

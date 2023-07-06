@@ -246,6 +246,10 @@ class GenContextMgr():
 
         self.only_progs = [] 
 
+        self.watch_for_prog = None
+        self.watch_for_prog_callback = None
+        self.current_tasks = []
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -583,9 +587,13 @@ class GenContextMgr():
                     #self.restoreSuspendContext()
                 else:
                     SIM_run_alone(self.restoreDefaultContext, None)
+                    if self.watch_for_prog is not None:
+                        self.checkFirstSchedule(new_addr, pid, comm)
                     #self.restoreDefaultContext()
             else:
                 SIM_run_alone(self.restoreDefaultContext, None)
+                if self.watch_for_prog is not None:
+                    self.checkFirstSchedule(new_addr, pid, comm)
                 #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
             retval = True 
@@ -609,7 +617,7 @@ class GenContextMgr():
             ptr = new_addr + self.param.proc_ptr
             new_addr = self.mem_utils.readPtr(self.cpu, ptr)
             if new_addr is None:
-                self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
+                #self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
                 return
             thread_id = self.task_utils.getCurThread(rec=win_thread)
         
@@ -832,7 +840,7 @@ class GenContextMgr():
         self.watch_rec_list = self.watch_rec_list_saved.copy()
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
-        self.cpu.current_context = self.resim_context
+        SIM_run_alone(self.restoreDebugContext, None)
         self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
 
     def stopWatchPid(self, pid):
@@ -864,14 +872,14 @@ class GenContextMgr():
         
     def stopWatchTasks(self):
         self.lgr.debug('stopWatchTasks')
-        self.stopWatchTasksAlone(None)
-        #SIM_run_alone(self.stopWatchTasksAlone, None)
+        #self.stopWatchTasksAlone(None)
+        SIM_run_alone(self.stopWatchTasksAlone, None)
 
     def stopWatchTasksAlone(self, dumb):
         if self.task_break is None:
             #self.lgr.debug('stopWatchTasks already stopped')
             return
-        self.lgr.debug('stopWatchTasks delete hap')
+        self.lgr.debug('stopWatchTasksAlone delete hap')
         RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -898,12 +906,12 @@ class GenContextMgr():
 
         cpu, dumb, dumb2  = self.task_utils.curProc()
         cpu.current_context = self.default_context
-        #self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
+        self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
         self.lgr.debug('resetWatchTasks')
-        self.stopWatchTasks()
+        self.stopWatchTasksAlone(None)
         self.watchTasks(set_debug_pid = True)
         if not self.watch_only_this:
             ctask = self.task_utils.getCurTaskRec()
@@ -921,7 +929,7 @@ class GenContextMgr():
                     self.addTask(pid)
 
     def setTaskHap(self):
-        print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
+        #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
@@ -989,7 +997,7 @@ class GenContextMgr():
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
-        self.cpu.current_context = self.resim_context
+        SIM_run_alone(self.restoreDebugContext, None)
         self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         self.debugging_pid_saved = self.debugging_pid
@@ -1423,3 +1431,14 @@ class GenContextMgr():
         else:
             self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
 
+    def callWhenFirstScheduled(self, comm, callback):
+        self.watch_for_prog = comm
+        self.watch_for_prog_callback = callback
+        self.current_tasks = self.task_utils.getTaskList()
+
+    def checkFirstSchedule(self, task_rec, pid, comm):
+        if task_rec not in self.current_tasks and comm == self.watch_for_prog:
+            self.lgr.debug('contextManager checkFirstSchedule got first for pid:%d' % pid)
+            self.watch_for_prog = None
+            self.watch_for_prog_callback(pid)
+            self.watch_for_prog_callback = None

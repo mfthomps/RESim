@@ -492,7 +492,7 @@ class Syscall():
             self.stop_action.setExitAddr(eip)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, msg)
-        #self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
     def doBreaks(self, compat32, background):
@@ -679,14 +679,20 @@ class Syscall():
         self.finish_break[pid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, fname_addr, 1, 0)
         self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[pid])
 
+    def rmBreakAndHap(self, break_hap):
+        break_num, hap = break_hap
+        RES_delete_breakpoint(break_num)
+        RES_hap_delete_callback_id("Core_Breakpoint_Memop", hap)
+
     def fnameTable (self, exit_info, third, forth, memory):
         ''' only used with 64-bit IA32E paging '''
         cpu, comm, pid = self.task_utils.curProc() 
         if pid not in self.finish_hap_table:
             return
         self.lgr.debug('fnameTable delete finish_break')
-        RES_delete_breakpoint(self.finish_break[pid])
-        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap_table[pid])
+        break_num = self.finish_break[pid]
+        hap = self.finish_hap_table[pid]
+        SIM_run_alone(self.rmBreakAndHap, (break_num, hap))
         del self.finish_hap_table[pid]
         length = memory.size
         op_type = SIM_get_mem_op_type(memory)
@@ -719,8 +725,10 @@ class Syscall():
         if pid not in self.finish_hap_page:
             return
         self.lgr.debug('fnamePage delete finish_break')
-        RES_delete_breakpoint(self.finish_break[pid])
-        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap_page[pid])
+        break_num = self.finish_break[pid]
+        hap = self.finish_hap_page[pid]
+        SIM_run_alone(self.rmBreakAndHap, (break_num, hap))
+
         del self.finish_hap_page[pid]
 
         length = memory.size
@@ -762,9 +770,12 @@ class Syscall():
         exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
         if exit_info.fname is not None:
             #self.lgr.debug('finishParseOpen pid %d got fid %s' % (pid, exit_info.fname))
-            RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
+
+            break_num = self.finish_break[pid]
+            hap = self.finish_hap[pid]
+            SIM_run_alone(self.rmBreakAndHap, (break_num, hap))
+
             self.lgr.debug('finishParseOpen delete finish_break')
-            RES_delete_breakpoint(self.finish_break[pid])
             del self.finish_hap[pid]
             del self.finish_break[pid]
         else:
@@ -813,9 +824,12 @@ class Syscall():
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('finishParseExecve progstring None, arm fu?')
             return
-        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
+
+        break_num = self.finish_break[pid]
+        hap = self.finish_hap[pid]
+        SIM_run_alone(self.rmBreakAndHap, (break_num, hap))
+
         self.lgr.debug('finishParseExec delete finish_break')
-        RES_delete_breakpoint(self.finish_break[pid])
         del self.finish_hap[pid]
         del self.finish_break[pid]
         if prog_string in self.ignore_progs:
@@ -1893,13 +1907,16 @@ class Syscall():
                     self.traceMgr.write(ida_msg+'\n')
         return exit_info
 
+    def rmStopHap(self, hap):
+       RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     def stopHap(self, msg, one, exception, error_string):
         '''  Invoked when a syscall (or more typically its exit back to user space) triggers
              a break in the simulation
         '''
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHap, hap)
             self.stop_hap = None
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.stop_action is not None:
@@ -2288,7 +2305,8 @@ class Syscall():
     def stopMazeHap(self, syscall, one, exception, error_string):
         if self.stop_maze_hap is not None:
             SIM_run_alone(self.top.exitMaze, syscall)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_maze_hap)
+            hap = self.stop_maze_hap
+            SIM_run_alone(self.rmStopHap, hap)
             self.stop_maze_hap = None
 
     def stopForMazeAlone(self, syscall):
@@ -2310,7 +2328,9 @@ class Syscall():
             else:
                 rprint("Pid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (pid, syscall))
                 SIM_break_simulation('timer loop?')
-   
+  
+    def rmModeHap(self, hap): 
+        RES_hap_delete_callback_id("Core_Mode_Change", hap)
  
     def modeChanged(self, fun_arg, one, old, new):
         the_fun, arg = fun_arg
@@ -2318,7 +2338,8 @@ class Syscall():
             return
         self.lgr.debug('syscall modeChanged old %d new %d' % (old, new))
         if old == Sim_CPU_Mode_Supervisor:
-            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            hap = self.mode_hap
+            SIM_run_alone(self.rmModeHap, hap)
             self.mode_hap = None
             SIM_run_alone(the_fun, arg)
             
