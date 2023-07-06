@@ -110,7 +110,7 @@ class StackTrace():
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
         if return_to == 0 or not self.soMap.isCode(return_to, self.pid):
-            #self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
+            self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
             return None
         if self.cpu.architecture == 'arm':
             #self.lgr.debug('followCall return_to 0x%x' % return_to)
@@ -141,7 +141,7 @@ class StackTrace():
                         if self.soMap.isCode(dst, self.pid):
                             retval = eip
                         else:
-                            #self.lgr.debug('stackTrace dst not code 0x%x' % dst)
+                            self.lgr.debug('stackTrace dst not code 0x%x' % dst)
                             eip = eip-1
                     else:        
                         retval = eip
@@ -150,8 +150,8 @@ class StackTrace():
                 else:
                     eip = eip-1
                 count = count+1
-        #if retval is not None:
-        #    self.lgr.debug('followCall return 0x%x' % retval)
+        if retval is not None:
+            self.lgr.debug('followCall return 0x%x' % retval)
         return retval
 
     def getJson(self):
@@ -378,7 +378,7 @@ class StackTrace():
         eip = self.reg_frame['pc']
         esp = self.reg_frame['sp']
         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
-        #self.lgr.debug('stackTrace dox86 eip:0x%x esp:0x%x bp:0x%x' % (eip, esp, bp))
+        self.lgr.debug('stackTrace dox86 eip:0x%x esp:0x%x bp:0x%x' % (eip, esp, bp))
         cur_fun = None
         quick_return = None
         cur_fun_name = None
@@ -391,17 +391,18 @@ class StackTrace():
         #    self.lgr.debug('stackTrace doX86 cur_fun is 0x%x' % cur_fun)
         #    pass
         if bp == 0:
-            #self.lgr.debug('bp is zero')
             stack_val = self.mem_utils.readAppPtr(self.cpu, esp)
             call_inst = self.followCall(stack_val)
+            self.lgr.debug('doX86 bp is zero')
             if call_inst is not None:
-                #self.lgr.debug('doX86 initial sp value 0x%x is a return to address 0x%x' % (stack_val, call_inst))
+                self.lgr.debug('doX86 initial sp value 0x%x is a return to address 0x%x' % (stack_val, call_inst))
                 instruct = SIM_disassemble_address(self.cpu, call_inst, 1, 0)[1]
-                this_fun_name = self.funFromAddr(cur_fun)
+                #this_fun_name = self.funFromAddr(cur_fun)
+                this_fun_name = 'unknown'
                 call_addr, fun_name = self.getFunName(instruct)
                 if fun_name is None or fun_name == 'None':
                     fun_name = this_fun_name
-                #self.lgr.debug('doX86 initial sp call to fun_name %s' % fun_name)
+                self.lgr.debug('doX86 initial sp call to fun_name %s' % fun_name)
                 fname = self.soMap.getSOFile(call_addr)
                 instruct = self.resolveCall(instruct)
                 frame = self.FrameEntry(call_inst, fname, instruct, esp, fun_addr=call_addr, 
