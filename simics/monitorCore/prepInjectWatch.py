@@ -44,9 +44,7 @@ class PrepInjectWatch():
 
 
     def doInject(self, snap_name, watch_mark):
-        ''' Assume the watch mark follows an ioctl 
-            that preceeds the read.  We will snapshot 
-            prior to the ioctl and record the address of the kernel buffer.'''
+        ''' Find kernel buffer used for read/recv calls '''
         self.lgr.debug('prepInjectWatch doInject snap %s mark %d' % (snap_name, watch_mark))
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
@@ -54,9 +52,18 @@ class PrepInjectWatch():
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
         if self.kbuffer is not None:
+            ''' Watch mark should leave us after the return '''
             self.ret_ip = self.top.getEIP(self.cpu)
+           
+            ''' Jump to prior to call to record the call address ''' 
             self.top.precall()
             self.call_ip = self.top.getEIP(self.cpu)
+
+            ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
+            kcycle = self.kbuffer.getKernelCycleOfWrite() 
+            if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
+                self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
+                return
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
             self.pickleit(kbufs[0])  

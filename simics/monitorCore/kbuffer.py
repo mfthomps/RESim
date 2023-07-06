@@ -26,6 +26,9 @@ from simics import *
 import decodeArm;
 '''
 Track kernel buffers used with read/recv calls
+
+Kernel buffer size is determined by looking for a fixed character (Z) following a backtrack
+of the first write to the application read buffer.
 '''
 class Kbuffer():
     def __init__(self, top, cpu, context_manager, mem_utils, lgr):
@@ -42,6 +45,7 @@ class Kbuffer():
         self.buf_remain = None
         self.user_addr = None
         self.orig_buffer = None
+        self.kernel_cycle_of_write = None
 
     def read(self, addr, count):
         ''' syscall got a read call. '''
@@ -121,6 +125,8 @@ class Kbuffer():
                             skipped_list.append(instruct[1])
                             continue
                     self.lgr.debug('findArmBuf buf found at 0x%x' % value)
+                    if self.kernel_cycle_of_write is None:
+                        self.kernel_cycle_of_write = self.cpu.cycles - 1
                     self.updateBuffers(value)
                     gotone = True
                     break
@@ -209,7 +215,9 @@ class Kbuffer():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             esi = self.mem_utils.getRegValue(self.cpu, 'esi') 
             src = esi 
-            self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s' % (eip, esi, instruct[1]))
+            self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s cycle: 0x%x' % (eip, esi, instruct[1], self.cpu.cycles))
+            if self.kernel_cycle_of_write is None:
+                self.kernel_cycle_of_write = self.cpu.cycles - 1
             self.updateBuffers(src)
         else:
            
@@ -252,3 +260,6 @@ class Kbuffer():
 
     def getOrigBuf(self):
         return self.orig_buffer
+
+    def getKernelCycleOfWrite(self):
+        return self.kernel_cycle_of_write 
