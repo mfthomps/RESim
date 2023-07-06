@@ -32,6 +32,7 @@ import elfText
 from resimHaps import *
 import os
 import pickle
+import json
 class StackFrameManager():
     def __init__(self, top, cpu, cell_name, task_utils, mem_utils, context_manager, soMap, targetFS, run_from_snap, lgr):
         self.top = top
@@ -45,73 +46,89 @@ class StackFrameManager():
         self.lgr = lgr
         self.relocate_funs = []
         self.stack_base = {}
+        self.stack_cache = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
     def stackTrace(self, verbose=False, in_pid=None):
-        cpu, comm, cur_pid = self.task_utils.curProc() 
-        if in_pid is not None:
-            pid = in_pid
+        cycle = self.cpu.cycles
+        if cycle in self.stack_cache:
+            st = self.stack_cache[cycle]
         else:
-            pid = cur_pid
-        if pid not in self.stack_base:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[pid]
-        if pid == cur_pid:
-            reg_frame = self.task_utils.frameFromRegs()
-        else:
-            reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(pid)
-       
-        st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                 self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
-                 self.relocate_funs, reg_frame, self.lgr)
+            cpu, comm, cur_pid = self.task_utils.curProc() 
+            if in_pid is not None:
+                pid = in_pid
+            else:
+                pid = cur_pid
+            if pid not in self.stack_base:
+                stack_base = None
+            else:
+                stack_base = self.stack_base[pid]
+            if pid == cur_pid:
+                reg_frame = self.task_utils.frameFromRegs()
+            else:
+                reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(pid)
+           
+            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+                     self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
+                     self.relocate_funs, reg_frame, self.lgr)
+            self.stack_cache[cycle] = st
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
-        pid, cpu = self.context_manager.getDebugPid() 
-        if pid is None:
-            cpu, comm, pid = self.task_utils.curProc() 
+        cycle = self.cpu.cycles
+        if cycle in self.stack_cache:
+            st = self.stack_cache[cycle]
         else:
-            cpu, comm, cur_pid = self.task_utils.curProc() 
-            if pid != cur_pid:
-                if not self.context_manager.amWatching(cur_pid):
-                    self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
-                    return None
-                else:
-                    pid = cur_pid
-        if pid not in self.stack_base:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[pid]
-        reg_frame = self.task_utils.frameFromRegs()
-        st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, self.relocate_funs, 
-                reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
+            pid, cpu = self.context_manager.getDebugPid() 
+            if pid is None:
+                cpu, comm, pid = self.task_utils.curProc() 
+            else:
+                cpu, comm, cur_pid = self.task_utils.curProc() 
+                if pid != cur_pid:
+                    if not self.context_manager.amWatching(cur_pid):
+                        self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
+                        return None
+                    else:
+                        pid = cur_pid
+            if pid not in self.stack_base:
+                stack_base = None
+            else:
+                stack_base = self.stack_base[pid]
+            reg_frame = self.task_utils.frameFromRegs()
+            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+                    self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, self.relocate_funs, 
+                    reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
+            self.stack_cache[cycle] = st
         return st
 
     def getStackTrace(self):
         ''' used by IDA client '''
-        pid, cpu = self.context_manager.getDebugPid() 
-        if pid is None:
-            cpu, comm, pid = self.task_utils.curProc() 
+        cycle = self.cpu.cycles
+        if cycle in self.stack_cache:
+            st = self.stack_cache[cycle]
         else:
-            cpu, comm, cur_pid = self.task_utils.curProc() 
-            if pid != cur_pid:
-                if not self.context_manager.amWatching(cur_pid):
-                    self.lgr.debug('stackFrameManager getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
-                    return "{}"
-                else:
-                    pid = cur_pid
-        self.lgr.debug('stackFrameManager getStackTrace pid %d' % pid)
-        if pid not in self.stack_base:
-            stack_base = None
-        else:
-            stack_base = self.stack_base[pid]
-        reg_frame = self.task_utils.frameFromRegs()
-        st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                  self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
-                  self.relocate_funs, reg_frame, self.lgr)
+            pid, cpu = self.context_manager.getDebugPid() 
+            if pid is None:
+                cpu, comm, pid = self.task_utils.curProc() 
+            else:
+                cpu, comm, cur_pid = self.task_utils.curProc() 
+                if pid != cur_pid:
+                    if not self.context_manager.amWatching(cur_pid):
+                        self.lgr.debug('stackFrameManager getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
+                        return "{}"
+                    else:
+                        pid = cur_pid
+            self.lgr.debug('stackFrameManager getStackTrace pid %d' % pid)
+            if pid not in self.stack_base:
+                stack_base = None
+            else:
+                stack_base = self.stack_base[pid]
+            reg_frame = self.task_utils.frameFromRegs()
+            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+                      self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
+                      self.relocate_funs, reg_frame, self.lgr)
+            self.stack_cache[cycle] = st
         j = st.getJson() 
         self.lgr.debug(j)
         #print j
@@ -129,10 +146,12 @@ class StackFrameManager():
             self.stack_base = pickle.load( open(stack_base_file, 'rb') ) 
 
     def setRelocateFuns(self, full_path, ida_funs):
-        if self.top.isWindows():
-            ''' TBD fix for windows'''
-            self.relocate_funs = []
+        relocate_path = full_path+'.imports'
+        if os.path.isfile(relocate_path):
+            with open(relocate_path) as fh:
+                self.relocate_funs = json.load(fh)
         else:
+            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse' % relocate_path)
             self.relocate_funs = elfText.getRelocate(full_path, self.lgr, ida_funs)
 
     def setStackBase(self):
