@@ -200,17 +200,19 @@ class InjectIO():
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
-            if cpl == 0:
-                self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
+            #if cpl == 0:
+            if cpl == 0 and not self.mem_utils.isKernel(self.addr):
+                self.lgr.warning('injectIO The snapshot from prepInject left us in the kernel, try forward 1')
                 SIM_run_command('pselect %s' % self.cpu.name)
                 SIM_run_command('si')
                 cpl = memUtils.getCPL(self.cpu)
                 if cpl == 0:
-                    self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                    self.lgr.error('injectIO Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
                     return 
 
             self.top.stopDebug()
-            self.top.debugPidGroup(self.pid) 
+            self.lgr.debug('injectIO call debugPidGroup')
+            self.top.debugPidGroup(self.pid, to_user=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             self.top.watchPageFaults()
