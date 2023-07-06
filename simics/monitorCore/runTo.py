@@ -236,22 +236,19 @@ class RunTo():
             if pid != self.task_utils.getExitPid():
                 if proc is not None and proc == comm:
                     self.lgr.debug('runTo toRunningProc Already at proc %s, done' % proc)
-                    f1 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
-                    f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
-                    self.top.toUser([f2, f1])
-                    #self.debug()
+                    hap_clean = hapCleaner.HapCleaner(cpu)
+                    stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                    stop_action.run()
                     return
                 elif want_pid_list is not None and pid in want_pid_list:
                     ''' TBD FIXME '''
                     self.lgr.debug('runTo toRunningProc already at pid %d, done' % pid)
-                    f1 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
-                    f2 = stopFunction.StopFunction(self.top.debug, [debug_group], nest=False)
+                    hap_clean = hapCleaner.HapCleaner(cpu)
                     if final_fun is not None:
                         f3 = stopFunction.StopFunction(final_fun, [], nest=False)
-                        self.top.toUser([f2, f1, f3])
-                    else:
-                        self.top.toUser([f2, f1])
-                    #self.debugGroup()
+                        flist.append(f3)
+                    stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                    stop_action.run()
                     return
         ''' Set breakpoint on current_task to watch task switches '''
         prec = Prec(cpu, proc, want_pid_list)
