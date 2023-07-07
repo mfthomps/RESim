@@ -139,7 +139,7 @@ class WinCallExit():
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
-                if self.soMap is not None and (exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
+                if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
                     self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
                     self.soMap.addFile(exit_info.fname, fd, pid)
 
@@ -255,45 +255,46 @@ class WinCallExit():
                             exit_info.call_params = None
 
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
-            output_data = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, exit_info.count)
-            odata_hx = None
-            if output_data is not None:
-                odata_hx = binascii.hexlify(output_data)
-            
-            trace_msg = trace_msg + ' output_data: %s' % (odata_hx)            
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
-            
+
             if exit_info.socket_callname in ['BIND', 'GET_SOCK_NAME']:
                 sock_addr = exit_info.retval_addr
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
 
-            if exit_info.socket_callname == 'RECV':
+            elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
                 if exit_info.fname_addr is not None and not not_ready:
                     return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+
                 else:
                     if exit_info.fname_addr is not None and not_ready:
-                        self.lgr.debug('winCallExit RECV, not ready do winDelay')
+                        self.lgr.debug('winCallExit %s: not ready --> do winDelay' % exit_info.socket_callname)
                         
                         win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
                               self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
-                        trace_msg = trace_msg+' Device not ready.'
-                        if self.watchData(exit_info):
+                        trace_msg = trace_msg+' - Device not ready'
+
+                        if self.watchData(exit_info) and exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM']:
+                            self.lgr.debug('doing win_delay.setDataWatch')
                             win_delay.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
                     else:
-                        self.lgr.error('winCallExit RECV failed to get return count though seems ready.')
-                        trace_msg = trace_msg+' winCallExit RECV failed to get return count though seems ready.'
+                        self.lgr.error('winCallExit %s failed to get return count even though seems ready' % exit_info.socket_callname)
+                        trace_msg = trace_msg+' winCallExit %s failed to get return count even though seems ready' % exit_info.socket_callname
+
                     return_count = None
+
                 if return_count is not None:
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                    trace_msg = trace_msg+' recv count 0x%x data %s' % (return_count, read_data)
+                    trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, read_data)
 
                     my_syscall = exit_info.syscall_instance
-                    if self.watchData(exit_info):
+                    self.lgr.debug('winCallExit %s' % (trace_msg))
+
+                    if self.watchData(exit_info) and exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM']:
                         ''' in case we want to break on a read of this data.  '''
                         self.lgr.debug('winCallExit RECV call succeeded, setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
                             exit_info.count))
@@ -308,24 +309,18 @@ class WinCallExit():
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, i_am_alone=True)
 
-                self.lgr.debug(trace_msg)
-            elif exit_info.socket_callname == 'SEND':
-                if exit_info.fname_addr is not None:
-                    return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
                 else:
-                    return_count = None
-                if return_count is not None:
-                    max_read = min(return_count, 100)
-                    buf_addr = exit_info.retval_addr
-                    read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                    trace_msg = trace_msg+' send count 0x%x data %s' % (return_count, read_data)
-                else:
-                    trace_msg = trace_msg+' FAILED to get return count'
-
-                self.lgr.debug(trace_msg)
-
+                    trace_msg = trace_msg + ' FAILED to get returned count'
+              
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
-                trace_msg = trace_msg+' bind socket: 0x%x  connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+                trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+
+            else:
+                output_data = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, exit_info.count)
+                odata_hx = None
+                if output_data is not None and exit_info.count > 0:
+                    odata_hx = binascii.hexlify(output_data)
+                    trace_msg = trace_msg + ' output_data: %s' % (odata_hx)
 
         else:
             self.lgr.debug('winCallExit %s' % (trace_msg)) 
