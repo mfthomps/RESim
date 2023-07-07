@@ -706,7 +706,7 @@ class WinSyscall():
                     share = []
                     share_access = self.stackParam(1, frame) & 0xffffffff
                     if share_access == 0x0:
-                        share.append(NONE)
+                        share.append('NONE')
 
                     for ac, name in winFile.share_access_map.items():
                         if share_access & ac:
