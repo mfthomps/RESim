@@ -1,7 +1,7 @@
 from simics import *
 class TraceMalloc():
-    def __init__(self, ida_funs, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr):
-        self.ida_funs = ida_funs
+    def __init__(self, fun_mgr, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr):
+        self.fun_mgr = fun_mgr
         self.cell = cell
         self.cpu = cpu
         self.context_manager = context_manager
@@ -33,12 +33,12 @@ class TraceMalloc():
             self.malloc_hap_ret = None
 
     def setBreaks(self):
-        if self.ida_funs is not None:
-            malloc_fun_addr, end = self.ida_funs.getAddr('malloc')
+        if self.fun_mgr is not None:
+            malloc_fun_addr, end = self.fun_mgr.getAddr('malloc')
             if malloc_fun_addr is not None:
                 malloc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, malloc_fun_addr, 1, 0)
                 self.malloc_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocHap, None, malloc_break, 'malloc')
-                free_fun_addr, end = self.ida_funs.getAddr('free')
+                free_fun_addr, end = self.fun_mgr.getAddr('free')
                 free_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, free_fun_addr, 1, 0)
                 self.free_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.freeHap, None, free_break, 'free')
 

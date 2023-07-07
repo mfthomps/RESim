@@ -23,7 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
-def adjustFunName(frame, ida_funs, lgr): 
+def adjustFunName(frame, fun_mgr, lgr): 
         fun = None
         if frame.fun_name is not None:
             fun = frame.fun_name.strip()
@@ -32,8 +32,8 @@ def adjustFunName(frame, ida_funs, lgr):
                 fun = frame.fun_name.split('@')[0]
                 try:
                     fun_hex = int(fun, 16) 
-                    if ida_funs is not None:
-                        fun_name = ida_funs.getName(fun_hex)
+                    if fun_mgr is not None:
+                        fun_name = fun_mgr.getName(fun_hex)
                         #lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
                         if fun_name is not None:
                             fun = fun_name

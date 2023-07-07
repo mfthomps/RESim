@@ -124,10 +124,8 @@ class DataWatch():
             self.decode = decode
         self.readLib = readLibTrack.ReadLibTrack(cpu, self.mem_utils, 
                   self.context_manager, self, self.top, self.lgr)
-        self.user_iterators = None
         ''' ignore modify of ad-hoc buffer for same cycle '''
         self.move_cycle = 0
-        self.ida_funs = None
         self.fun_mgr = None
         ''' optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
         self.mem_fun_entries = {}
@@ -785,7 +783,7 @@ class DataWatch():
         #frame, cycles = self.rev_to_call.getRecentCycleFrame(pid)
         frame, cycles = self.rev_to_call.getPreviousCycleFrame(pid)
         if frame is None:
-            self.lgr.error('dataWatch kernelReturnHap failed to get previous frame, bail')
+            self.lgr.debug('dataWatch kernelReturnHap failed to get previous frame, bail')
             return
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('kernelReturnHap, pid:%d (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (pid, comm, eip, eax, 
@@ -2687,12 +2685,12 @@ class DataWatch():
         eip = self.top.getEIP(self.cpu)
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
     
-        if op_type != Sim_Trans_Load:
-            self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
-                 self.cpu.cycles, eip))
-        else:
-            self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
-                 self.cpu.cycles, eip))
+        #if op_type != Sim_Trans_Load:
+        #    self.lgr.debug('dataWatch readHap pid:%d write addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
+        #         self.cpu.cycles, eip))
+        #else:
+        #    self.lgr.debug('dataWatch readHap pid:%d read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
+        #         self.cpu.cycles, eip))
    
    
         #if self.watchMarks.markCount() == 186:
@@ -2798,7 +2796,7 @@ class DataWatch():
             return 
 
         start, length = self.getStartLength(index, addr) 
-        self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x, len %d' % (index, addr, start, length))
+        #self.lgr.debug('readHap index %d addr 0x%x got start of 0x%x, len %d' % (index, addr, start, length))
         cpl = memUtils.getCPL(self.cpu)
         ''' If execution outside of text segment, check for mem-something library call '''
         if cpl != 0:
@@ -2808,7 +2806,7 @@ class DataWatch():
 
 
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            fun = self.ida_funs.getFun(eip)
+            fun = self.fun_mgr.getFun(eip)
             ''' TBD seems impossible for a push to trigger a load.  huh?'''
             if instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
                 self.lgr.debug('********* is a push, provide an explaination please!')
@@ -2850,7 +2848,7 @@ class DataWatch():
             max_index = len(frames)-1
             for i in range(max_index, -1, -1):
                 frame = frames[i]
-                fun = clibFuns.adjustFunName(frame, self.ida_funs, self.lgr)
+                fun = clibFuns.adjustFunName(frame, self.fun_mgr, self.lgr)
                 #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
                 if fun in free_funs:
                     self.recordFree(self.start[index], fun)
@@ -3216,9 +3214,9 @@ class DataWatch():
         self.lgr.debug('dataWatch resetOrigin now call watchmarks')
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
 
-    def setIdaFuns(self, ida_funs):
+    def setFunMgr(self, fun_mgr):
         self.lgr.debug('DataWatch setIdaFuns')
-        self.ida_funs = ida_funs
+        self.fun_mgr = fun_mgr
 
     def setFunMgr(self, fun_mgr):
         self.lgr.debug('DataWatch setFunMgr')
@@ -3238,23 +3236,20 @@ class DataWatch():
     def tagIterator(self, index):
         ''' Call from IDA Client to collapse a range of data references into the given watch mark index ''' 
         self.lgr.debug('DataWatch tagIterator index %d' % index)
-        if self.ida_funs is not None:
+        if self.fun_mgr is not None:
             watch_mark = self.watchMarks.getMarkFromIndex(index)
             if watch_mark is not None:
-                fun = self.ida_funs.getFun(watch_mark.ip)
+                fun = self.fun_mgr.getFun(watch_mark.ip)
                 if fun is None:
                     self.lgr.error('DataWatch tagIterator failed to get function for 0x%x' % ip)
                 else:
                     self.lgr.debug('DataWatch add iterator for function 0x%x from watch_mark IP of 0x%x' % (fun, watch_mark.ip))
-                    self.user_iterators.add(fun)
+                    self.fun_mgr.addIterator(fun)
             else:
                 self.lgr.error('failed to get watch mark for index %d' % index)
         else:
             self.lgr.error('dataWatch tagIterator called but no IDA functions defined yet.  Debugging?')
 
-    def setUserIterators(self, user_iterators):
-        self.user_iterators = user_iterators
-        self.lgr.debug('dataWatch setUserIterators %s' % str(user_iterators))
 
     def wouldBreakSimulation(self):
         if self.break_simulation:
@@ -3325,8 +3320,8 @@ class DataWatch():
         self.disabled = False
         report_backstop = not quiet
         self.back_stop.reportBackstop(report_backstop)
-        ida_funs = self.top.getIdaFuns()
-        self.readLib.trackReadLib(ida_funs)
+        fun_mgr = self.top.getFunMgr()
+        self.readLib.trackReadLib(fun_mgr)
 
     def firstBufferAddress(self):
         return self.watchMarks.firstBufferAddress()
@@ -3464,9 +3459,9 @@ class DataWatch():
         max_index = index - 1
         for i in range(max_index, -1, -1):
             frame = frames[i]
-            if self.ida_funs is not None:
-                fun_addr = self.ida_funs.getFun(frame.ip)
-                fun_of_ip = self.ida_funs.getName(fun_addr)
+            if self.fun_mgr is not None:
+                fun_addr = self.fun_mgr.getFun(frame.ip)
+                fun_of_ip = self.fun_mgr.getName(fun_addr)
                 so_file = self.top.getSOFile(fun_addr)
                 if fun_addr is not None:
                     if fun_of_ip == 'main':
@@ -3492,22 +3487,22 @@ class DataWatch():
         prev_fun = None
         for i in range(max_index, -1, -1):
             frame = frames[i]
-            if frame.fun_addr is None and self.ida_funs is not None:
+            if frame.fun_addr is None and self.fun_mgr is not None:
                 #self.lgr.debug('dataWatch memsomething frame %d fun_addr is None' % i)
-                frame.fun_addr = self.ida_funs.getFun(frame.ip)
-            if frame.fun_addr is None:
-                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
-                pass
-            else:
-                #self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
-                pass
-            self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
+                frame.fun_addr = self.fun_mgr.getFun(frame.ip)
+            #if frame.fun_addr is None:
+            #    self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr NONE instruct is %s' % (i, frame.ip, frame.instruct))
+            #    pass
+            #else:
+            #    self.lgr.debug('dataWatch memsomething frame %d ip: 0x%x fun_addr 0x%x instruct is %s' % (i, frame.ip, frame.fun_addr, frame.instruct))
+            #    pass
+            #self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
             if frame.instruct is not None:
                 #self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
                 #if self.top.isWindows():
                 #    fun = None
                 #else:
-                fun = clibFuns.adjustFunName(frame, self.ida_funs, self.lgr)
+                fun = clibFuns.adjustFunName(frame, self.fun_mgr, self.lgr)
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
@@ -3518,10 +3513,7 @@ class DataWatch():
                 else:
                     #self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
                     prev_fun = fun
-                if self.user_iterators is None:
-                    #self.lgr.debug('NO user iterators')
-                    pass
-                if fun in local_mem_funs or (self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr)):
+                if fun in local_mem_funs or self.fun_mgr.isIterator(frame.fun_addr):
                     if fun in local_mem_funs:
                         fun_precidence = self.funPrecidence(fun)
                         #self.lgr.debug('fun in local_mem_funs %s, set fun_precidence to %d' % (fun, fun_precidence))
@@ -3531,10 +3523,10 @@ class DataWatch():
                             if clibFuns.allClib(frames, start):
                                 #self.lgr.debug('dataWatch memsomething i is %d and precidence %d, bailing' % (i, fun_precidence))
                                 continue
-                    if self.user_iterators is not None and self.user_iterators.isIterator(frame.fun_addr):
+                    if self.fun_mgr.isIterator(frame.fun_addr):
                         #self.lgr.debug('fun is iterator 0x%x' % frame.fun_addr) 
                         fun_precidence = 999
-                    self.lgr.debug('dataWatch memsomething frame index %d, is %s, frame: %s' % (i, fun, frame.dumpString()))
+                    #self.lgr.debug('dataWatch memsomething frame index %d, is %s, frame: %s' % (i, fun, frame.dumpString()))
                     if fun_precidence < max_precidence:
                         #self.lgr.debug('dataWatch memsomething precidence %d less than current max %d, skip it' % (fun_precidence, max_precidence))
                         continue

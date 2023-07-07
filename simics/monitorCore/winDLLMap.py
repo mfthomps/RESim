@@ -400,11 +400,11 @@ class WinDLLMap():
         return retval
             
 
-    def setIdaFuns(self, ida_funs, pid):
-        if ida_funs is None:
+    def setFunMgr(self, fun_mgr, pid):
+        if fun_mgr is None:
             self.lgr.warning('IDA funs is none, no SOMap')
             return
-        self.ida_funs = ida_funs
+        self.fun_mgr = fun_mgr
 
         sort_map = {}
         for section in self.section_list:
@@ -419,7 +419,7 @@ class WinDLLMap():
                 fun_path = self.getAnalysisPath(section.fname)
                 if fun_path is not None:
                     self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
-                    self.ida_funs.add(fun_path, locate)
+                    self.fun_mgr.add(fun_path, locate)
 
     def getSO(self, pid=None, quiet=False):
         self.lgr.debug('winDLL getSO pid %s ' % pid)

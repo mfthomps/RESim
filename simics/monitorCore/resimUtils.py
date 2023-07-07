@@ -348,7 +348,7 @@ def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
             else re.compile(fnmatch.translate(glob_pat))
     return [n for n in os.listdir(path) if rule.match(n)]
 
-def findFrom(self, name, from_dir):
+def findFrom(name, from_dir):
     for root, dirs, files in os.walk(from_dir):
         if name in files:
             retval = os.path.join(from_dir, root, name)
@@ -392,3 +392,12 @@ def getfileInsensitive(path, root_prefix, lgr):
     if not got_it:
         retval = None
     return retval
+
+def realPath(full_path):
+        retval = full_path
+        if os.path.islink(full_path):
+            parent = os.path.dirname(full_path)
+            actual = os.readlink(full_path)
+            retval = os.path.join(parent, actual)
+        return retval
+

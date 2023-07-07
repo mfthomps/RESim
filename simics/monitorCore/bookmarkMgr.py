@@ -54,15 +54,15 @@ class bookmarkMgr():
         self.context_mgr = context_mgr
         self.lgr = lgr
         self.track_num = 0
-        self.ida_funs = None
+        self.fun_mgr = None
         self.mark_json = {}
 
     def setTrackNum(self):
         self.track_num += 1
         return self.track_num
 
-    def setIdaFuns(self, ida_funs):
-        self.ida_funs = ida_funs
+    def setFunMgr(self, fun_mgr):
+        self.fun_mgr = fun_mgr
 
     def clearMarks(self):
         self.lgr.debug('bookmarkMgr, clearMarks')
@@ -115,8 +115,8 @@ class bookmarkMgr():
             if mark.startswith('protected_memory:') and self.hasBookmarkDelta(delta):
                 self.lgr.debug('setDebugBookmark protected memory, return')
                 return
-            if self.ida_funs is not None:
-                fun = self.ida_funs.getFunName(eip)
+            if self.fun_mgr is not None:
+                fun = self.fun_mgr.getFunName(eip)
                 if fun is not None:
                     mark = mark +" %s " % fun
             mark = mark+" cycle:%x" % delta

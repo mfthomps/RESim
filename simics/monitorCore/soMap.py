@@ -35,7 +35,7 @@ class SOMap():
         self.prog_text_offset = {}
         self.hap_list = []
         self.stop_hap = None
-        self.ida_funs = None
+        self.fun_mgr = None
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
         self.cheesy_pid = 0
@@ -205,11 +205,11 @@ class SOMap():
 
         return retval
             
-    def setIdaFuns(self, ida_funs, pid_in):
-        if ida_funs is None:
+    def setFunMgr(self, fun_mgr, pid_in):
+        if fun_mgr is None:
             self.lgr.warning('IDA funs is none, no SOMap')
             return
-        self.ida_funs = ida_funs
+        self.fun_mgr = fun_mgr
         pid = self.getThreadPid(pid_in, quiet=True)
         sort_map = {}
         for text_seg in self.so_file_map[pid]:
@@ -222,7 +222,7 @@ class SOMap():
             if full_path is None:
                 full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
 
-            self.ida_funs.add(full_path, locate)
+            self.fun_mgr.add(full_path, locate)
             
  
     def addSO(self, pid_in, fpath, addr, count):
@@ -257,8 +257,8 @@ class SOMap():
                    full_path, text_seg.size, count, addr, text_seg.address, text_seg.offset, len(self.so_addr_map[pid])))
 
             start = text_seg.locate
-            if self.ida_funs is not None:
-                self.ida_funs.add(full_path, start)
+            if self.fun_mgr is not None:
+                self.fun_mgr.add(full_path, start)
 
     def listSO(self):
         for pid in self.so_file_map:

@@ -55,18 +55,18 @@ class TrackFunctionWrite():
         self.writeMarks = writeMarks.WriteMarks(mem_utils, cpu, lgr)
 
     
-    def trackFunction(self, pid, fun, ida_funs, read_watch_marks, show_compare):
+    def trackFunction(self, pid, fun, fun_mgr, read_watch_marks, show_compare):
         self.pid = pid
         self.fun = fun
         self.read_watch_marks = read_watch_marks
         self.show_compare = show_compare
-        start, end = ida_funs.getAddr(fun)
+        start, end = fun_mgr.getAddr(fun)
         if start is None:
             self.lgr.error('TrackFunctionWrite, no function found: %s' % fun)         
             return
         self.lgr.debug('trackFunction %s start 0x%x' % (fun, start))
         eip = self.mem_utils.getRegValue(self.cpu, 'pc') 
-        cur_fun = ida_funs.getFun(eip)
+        cur_fun = fun_mgr.getFun(eip)
         if cur_fun == start:
             ''' TBD need to be be prior to call to record return address '''
             self.lgr.error('TrackFunctionWrite starting in the function %s -- rev to prior' % fun)

@@ -44,13 +44,16 @@ class StackFrameManager():
         self.targetFS = targetFS
         self.soMap = soMap
         self.lgr = lgr
-        self.relocate_funs = []
         self.stack_base = {}
         self.stack_cache = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
     def stackTrace(self, verbose=False, in_pid=None):
+        fun_mgr = self.top.getFunMgr()
+        if fun_mgr is None:
+            self.lgr.error('No function manager defined.  Debugging?')
+            return
         cycle = self.cpu.cycles
         if cycle in self.stack_cache:
             st = self.stack_cache[cycle]
@@ -70,12 +73,16 @@ class StackFrameManager():
                 reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(pid)
            
             st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                     self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
-                     self.relocate_funs, reg_frame, self.lgr)
+                     self.task_utils, stack_base, fun_mgr, self.targetFS, 
+                     reg_frame, self.lgr)
             self.stack_cache[cycle] = st
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
+        fun_mgr = self.top.getFunMgr()
+        if fun_mgr is None:
+            self.lgr.error('No function manager defined.  Debugging?')
+            return
         cycle = self.cpu.cycles
         if cycle in self.stack_cache:
             st = self.stack_cache[cycle]
@@ -97,13 +104,17 @@ class StackFrameManager():
                 stack_base = self.stack_base[pid]
             reg_frame = self.task_utils.frameFromRegs()
             st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                    self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, self.relocate_funs, 
+                    self.task_utils, stack_base, fun_mgr, self.targetFS, 
                     reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
             self.stack_cache[cycle] = st
         return st
 
     def getStackTrace(self):
         ''' used by IDA client '''
+        fun_mgr = self.top.getFunMgr()
+        if fun_mgr is None:
+            self.lgr.error('No function manager defined.  Debugging?')
+            return
         cycle = self.cpu.cycles
         if cycle in self.stack_cache:
             st = self.stack_cache[cycle]
@@ -126,8 +137,8 @@ class StackFrameManager():
                 stack_base = self.stack_base[pid]
             reg_frame = self.task_utils.frameFromRegs()
             st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
-                      self.task_utils, stack_base, self.top.getIdaFuns(), self.targetFS, 
-                      self.relocate_funs, reg_frame, self.lgr)
+                      self.task_utils, stack_base, fun_mgr, self.targetFS, 
+                      reg_frame, self.lgr)
             self.stack_cache[cycle] = st
         j = st.getJson() 
         self.lgr.debug(j)
@@ -144,15 +155,6 @@ class StackFrameManager():
         if os.path.isfile(stack_base_file):
             self.lgr.debug('stackFrameManager stack_base pickle from %s' % stack_base_file)
             self.stack_base = pickle.load( open(stack_base_file, 'rb') ) 
-
-    def setRelocateFuns(self, full_path, ida_funs):
-        relocate_path = full_path+'.imports'
-        if os.path.isfile(relocate_path):
-            with open(relocate_path) as fh:
-                self.relocate_funs = json.load(fh)
-        else:
-            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse' % relocate_path)
-            self.relocate_funs = elfText.getRelocate(full_path, self.lgr, ida_funs)
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
@@ -205,16 +207,16 @@ class StackFrameManager():
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         ptr = esp
         offset = self.mem_utils.wordSize(self.cpu)
-        ida_funs = self.top.getIdaFuns()
+        fun_mgr = self.top.getFunMgr()
         cpu, comm, pid = self.task_utils.curProc() 
         for i in range(count):
             value = self.mem_utils.readAppWord(self.cpu, ptr) 
             name = ''
             if self.soMap.isCode(value, pid):
                 self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
-                fun_addr = ida_funs.getFun(value)
+                fun_addr = fun_mgr.getFun(value)
                 if fun_addr is not None:
-                    name = ida_funs.getName(fun_addr)
+                    name = fun_mgr.getName(fun_addr)
                     self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
             print('%16x   %16x %s' % (ptr, value, name))
             ptr = ptr + offset

@@ -127,7 +127,6 @@ class reverseToCall():
             ''' used for undoing ghost frames '''
             self.save_cycle = None
             self.save_reg_mod = None
-            self.ida_funs = None
             self.satisfy_value = None
             self.run_from_snap = run_from_snap
             ''' keep tracking when entering the kernel '''
@@ -376,18 +375,6 @@ class reverseToCall():
             if instruct == 'sysexit' or instruct == 'iretd' or instruct.startswith('sysret'):
                 return True
         return False
-
-    def sameFun(self, eip):
-        ''' return true if ida_fun set and given ip in same function as previous ip ''' 
-        ''' TBD not used '''
-        retval = False
-        if self.ida_funs is not None:
-            f = self.ida_funs.getFun(eip)
-            if f is not None:
-                fp = self.ida_funs.getFun(self.previous_eip)
-                if fp == f:
-                    retval = True
-        return retval
 
     def isRet(self, instruct, eip):
         if self.cpu.architecture == 'arm':
@@ -1477,9 +1464,6 @@ class reverseToCall():
                         #self.lgr.debug('sysenterHap setting first recent cycle')
                 else:
                     self.lgr.debug('sysenterHap, cycles already there for pid %d' % pid) 
-
-    def setIdaFuns(self, ida_funs):
-        self.ida_funs = ida_funs
 
     def getEnterCycles(self, pid):
         retval = []

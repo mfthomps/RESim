@@ -68,20 +68,20 @@ class ReadLibTrack():
         else:
             self.lgr.debug('readLibTrack, no functions defined in %s' % self.fname)
 
-    def trackReadLib(self, ida_funs):
+    def trackReadLib(self, fun_mgr):
         if self.fun is None:
             self.lgr.debug('readLibTrack no fun, do nothing')
             return
-        elif ida_funs is None:
+        elif fun_mgr is None:
             self.lgr.error('readLibTrack funs defined, but no ida functions')
             return
-        start, end = ida_funs.getAddr(self.fun)
+        start, end = fun_mgr.getAddr(self.fun)
         if start is None:
             self.lgr.error('readLibTrack, no function found: %s' % self.fun)         
             return
         self.lgr.debug('readLibTrack %s start 0x%x' % (self.fun, start))
         eip = self.mem_utils.getRegValue(self.cpu, 'pc') 
-        cur_fun = ida_funs.getFun(eip)
+        cur_fun = fun_mgr.getFun(eip)
         if cur_fun == start:
             ''' TBD need to be be prior to call to record return address '''
             self.lgr.error('readLibTrack starting in the function %s -- rev to prior' % self.fun)

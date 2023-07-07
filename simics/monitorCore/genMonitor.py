@@ -1176,7 +1176,7 @@ class GenMonitor():
                 sindex = 0
                 if self.full_path is not None:
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, self.full_path))
-                    real_path = self.realPath(self.full_path)
+                    real_path = resimUtils.realPath(self.full_path)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
                     if self.isWindows():
                         ''' Assumes winProg has already populated soMap'''
@@ -1184,20 +1184,18 @@ class GenMonitor():
                     else:
                         elf_info = self.soMap[self.target].addText(real_path, prog_name, pid)
                     if elf_info is not None:
+                        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                         #self.getIDAFuns(self.full_path, elf_info.address)
+                        self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.lgr)
                         if self.isWindows():
                             offset = elf_info.address - elf_info.image_base
-                            self.getIDAFuns(self.full_path, offset)
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         else:
-                            self.getIDAFuns(self.full_path, 0)
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, 0)
                         ''' TBD alter stackTrace to use this and buid it out'''
-                        self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.ida_funs, self.relocate_funs, self.lgr)
                         self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
-                        self.soMap[self.target].setIdaFuns(self.ida_funs, pid)
-                        self.rev_to_call[self.target].setIdaFuns(self.ida_funs)
-                        self.dataWatch[self.target].setIdaFuns(self.ida_funs)
-                        self.dataWatch[self.target].setUserIterators(self.user_iterators)
-                        self.bookmarks.setIdaFuns(self.ida_funs)
+                        self.soMap[self.target].setFunMgr(self.fun_mgr, pid)
+                        self.bookmarks.setFunMgr(self.fun_mgr)
                         self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
@@ -1215,7 +1213,7 @@ class GenMonitor():
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s' % prog_name)
-            if self.ida_funs is None:
+            if not self.fun_mgr.hasIDAFuns():
                 self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
             if self.debug_callback is not None:
@@ -1347,77 +1345,6 @@ class GenMonitor():
         if not status:
             SIM_continue(0)
    
-    def realPath(self, full_path):
-        retval = full_path
-        if os.path.islink(full_path):
-            parent = os.path.dirname(full_path)
-            actual = os.readlink(full_path)
-            retval = os.path.join(parent, actual)
-        return retval
-
-    def getIDAFunsOld(self, full_path):
-        full_path = self.realPath(full_path)
-        fun_path = full_path+'.funs'
-        iterator_path = full_path+'.iterators'
-        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
-        root_dir = os.path.basename(root_prefix)
-        self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
-        if not os.path.isfile(fun_path):
-            ''' TBD REMOVE THIS...        No functions file, check for symbolic links '''
-            if os.path.islink(full_path):
-                parent = os.path.dirname(full_path)
-                actual = os.readlink(full_path)
-                actual = os.path.join(parent, actual)
-                self.lgr.debug('getIDAFuns is link, actual %s' % actual)
-                fun_path = actual+'.funs'
-
-        if os.path.isfile(fun_path):
-            if self.isWindows():
-                self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr)
-            else: 
-                self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr)
-            self.lgr.debug('getIDAFuns using IDA function analysis from %s' % fun_path)
-        else:
-            self.lgr.warning('No IDA function file at %s' % fun_path)
-
-
- 
-    def getIDAFuns(self, full_path, offset):
-        if not self.isWindows():
-            ''' much of the link mess is due to linux target file systems with links.  Also using links while
-                figuring out the windows directory structures. '''
-            full_path = self.realPath(full_path)
-        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
-        self.lgr.debug('getIDAFuns full_path %s  root_prefix %s' % (full_path, root_prefix))
-        if full_path.startswith(root_prefix):
-            rel_path = full_path[(len(root_prefix)+1):]
-            analysis_path = os.getenv('IDA_ANALYSIS')
-            if analysis_path is None:
-                analysis_path = '/mnt/resim_archive/analysis' 
-                self.lgr.debug('IDA_ANALYSIS is not defined using %s' % analysis_path)
-            root_dir = os.path.basename(root_prefix)
-            self.lgr.debug('getIDAFuns root_dir  %s  rel_path %s offset 0x%x' % (root_dir, rel_path, offset))
-          
-            funs_file = os.path.join(analysis_path, root_dir, rel_path) 
-            self.lgr.debug('getIDAFuns funs_file %s' % funs_file) 
-
-            fun_path = funs_file+'.funs'
-            iterator_path = funs_file+'.iterators'
-            self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
-            
-            if os.path.isfile(fun_path):
-                self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr, offset=offset)
-                self.lgr.debug('getIDAFuns using IDA function analysis from %s' % fun_path)
-            else:
-                self.lgr.debug('getIDAFuns No IDA function file at %s try using old paths ' % fun_path)
-                self.getIDAFunsOld(full_path)
-
-            ''' TBD can relocate simply go into ida funs and not into stackFrameManager?'''
-            self.stackFrameManager[self.target].setRelocateFuns(funs_file, self.ida_funs)
-        else:
-            self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
-
- 
     def execToText(self, flist=None):
         ''' assuming we are in an exec system call, run until execution enters the
             the .text section per the elf header in the file that was execed.'''
@@ -4303,7 +4230,7 @@ class GenMonitor():
     def modFunction(self, fun, offset, word):
         ''' write a given word at the offset of a start of a function.  Intended to force a return
             of a specific value.  Assumes you provide proper machine code. '''
-        addr, end = self.ida_funs.getAddr(fun)
+        addr, end = self.fun_mgr.getAddr(fun)
         cpu = self.cell_config.cpuFromCell(self.target)
         if addr is not None:
             new_addr = addr+offset
@@ -4321,7 +4248,7 @@ class GenMonitor():
         pid, cpu = self.context_manager[self.target].getDebugPid() 
 
         read_watch_marks = self.dataWatch[self.target].getWatchMarks()
-        self.trackFunction[self.target].trackFunction(pid, fun, self.ida_funs, read_watch_marks, show_compare)
+        self.trackFunction[self.target].trackFunction(pid, fun, self.fun_mgr, read_watch_marks, show_compare)
 
     def saveMemory(self, addr, size, fname):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -4523,7 +4450,7 @@ class GenMonitor():
         self.lgr.debug('genMonitor traceMalloc')
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
-        self.trace_malloc = traceMalloc.TraceMalloc(self.ida_funs, self.context_manager[self.target], 
+        self.trace_malloc = traceMalloc.TraceMalloc(self.fun_mgr, self.context_manager[self.target], 
                self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr)
 
     def showMalloc(self):
@@ -5099,8 +5026,8 @@ class GenMonitor():
         print('Simics quitting.')
         self.flushTrace()
 
-    def getIdaFuns(self):
-        return self.ida_funs
+    def getFunMgr(self):
+        return self.fun_mgr
 
     def stopStepN(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
@@ -5252,19 +5179,20 @@ class GenMonitor():
             return True
 
     def showFuns(self, search=None):
-        if self.ida_funs is not None:
-            self.ida_funs.showFuns(search = search)
+        if self.fun_mgr is not None:
+            self.fun_mgr.showFuns(search = search)
         else:
             print('No IDA functions loaded.')
 
     def showMangle(self, search=None):
-        if self.ida_funs is not None:
-            self.ida_funs.showMangle(search = search)
+        if self.fun_mgr is not None:
+            self.fun_mgr.showMangle(search = search)
         else:
             print('No IDA functions loaded.')
 
     def getFun(self, addr):
-        fname = self.ida_funs.getFunName(addr)
+        #fname = self.fun_mgr.getFunName(addr)
+        fname = self.fun_mgr.funFromAddr(addr)
         print('fun for 0x%x is %s' % (addr, fname))
 
     def rmDebugWarnHap(self):
