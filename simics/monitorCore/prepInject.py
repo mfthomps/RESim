@@ -70,7 +70,7 @@ class PrepInject():
         self.prepInject()
 
     def finishNoCall(self, read_original=True):
-        syscall = self.top.getSyscall(self.cell_name, 'runToInput')
+        syscall = self.top.getSyscall(self.cell_name, 'runToIO')
         if syscall is not None:
             if read_original:
                 length = self.getLength()
