@@ -338,6 +338,7 @@ class GenMonitor():
             debug_info_file = os.path.join('./', self.run_from_snap, 'debug_info.pickle')
             if os.path.isfile(debug_info_file):
                 self.debug_info = pickle.load( open(debug_info_file, 'rb') )
+                self.lgr.debug('genInit loaded debug_info %s' % str(self.debug_info))
             connector_file = os.path.join('./', self.run_from_snap, 'connector.json')
             if os.path.isfile(connector_file):
                 self.connectors.loadJson(connector_file)
@@ -1083,8 +1084,11 @@ class GenMonitor():
                     self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
                     if machine_size is None:
                         ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
-                        dumb, machine = winProg.getSizeAndMachine(self.full_path, self.lgr)
-                        if 'I386' in machine:
+                        dumb, machine, dumb2, dumb3 = winProg.getSizeAndMachine(self.full_path, self.lgr)
+                        if machine is None:
+                            self.lgr.error('doDebugCmd failed to get machine value from %s' % self.full_path)
+                            machine_size = 64
+                        elif 'I386' in machine:
                             machine_size = 32
                         elif 'AMD64' in machine:
                             machine_size = 64
@@ -1672,8 +1676,10 @@ class GenMonitor():
             cpl = memUtils.getCPL(cpu)
             self.lgr.debug('skipAndMail, cpl %d' % cpl)
             if cpl == 0:
-                SIM_run_alone(self.skipBackToUser, 1)
-                self.lgr.debug('skipAndMail, back from skip')
+                #SIM_run_alone(self.skipBackToUser, 1)
+                #self.lgr.debug('skipAndMail, back from call to skip (but it ran alone)')
+                # TBD skipping back to prior to call makes no sense
+                self.lgr.debug('skipAndMail left in kernel')
                 
             self.lgr.debug('skipAndMail, restoreDebugBreaks')
             SIM_run_alone(self.restoreDebugBreaks, False)
@@ -2589,9 +2595,10 @@ class GenMonitor():
  
     def restoreDebugBreaks(self, was_watching=False):
          
+        self.lgr.debug('restoreDebugBreaks')
         self.context_manager[self.target].resetWatchTasks() 
         if not self.debug_breaks_set and not self.track_finished:
-            self.lgr.debug('restoreDebugBreaks')
+            self.lgr.debug('restoreDebugBreaks breaks not set and not track finished')
             #self.context_manager[self.target].restoreDebug() 
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             if pid is not None:
@@ -3091,7 +3098,7 @@ class GenMonitor():
         input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
         call_param_list = []
         for call in input_calls:
-            call_param = syscall.CallParams('runToInput', call, fd, break_simulation=break_simulation)        
+            call_param = syscall.CallParams('runToIO', call, fd, break_simulation=break_simulation)        
             call_param.nth = count
             call_param_list.append(call_param)
 
@@ -3109,11 +3116,11 @@ class GenMonitor():
             ''' Given callback functions, use those instead of skip_and_mail '''
             skip_and_mail = False
 
-        the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToInput', linger=linger, flist=flist_in, 
+        the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
-        self.call_traces[self.target]['runToInput'] = the_syscall
+        self.call_traces[self.target]['runToIO'] = the_syscall
 
         ''' find processes that are in the kernel on IO calls '''
         frames = self.getDbgFrames()
@@ -3564,6 +3571,7 @@ class GenMonitor():
             return
         cmd = 'write-configuration %s' % name 
         SIM_run_command(cmd)
+        self.lgr.debug('writeConfig %s' % cmd)
         for cell_name in self.cell_config.cell_context:
             if cell_name in self.netInfo:
                 ''' netInfo stands in for all cell_name-based dictionaries ''' 
@@ -3812,7 +3820,7 @@ class GenMonitor():
             print('Reverse execution must be enabled.')
             return
         self.track_started = True
-        self.stopTrackIO()
+        self.stopTrackIOAlone()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
         self.restoreDebugBreaks()
@@ -3837,7 +3845,11 @@ class GenMonitor():
         self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf,
                      call_list=call_list)
 
+   
     def stopTrackIO(self, immediate=False):
+        SIM_run_alone(self.stopTrackIOAlone, immediate)
+
+    def stopTrackIOAlone(self, immediate=False):
         thread_pids = self.context_manager[self.target].getThreadPids()
         self.lgr.debug('stopTrackIO got %d thread_pids' % len(thread_pids))
         crashing = False 
@@ -3852,7 +3864,6 @@ class GenMonitor():
                 crashing = True 
                
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
-        self.syscallManager[self.target].rmSyscall('runToInput', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
