@@ -598,7 +598,7 @@ Use of the resulting snapshot with AFL or injectIO will cause the data to be inj
 into a kernel buffer. If the watch mark was an ioctl call, the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
-It is important that received data all appears within the kernel buffer before the application makes its recv call.  Otherwise, injectIO and AFL sessions
+It is important that received data all appears within the kernel buffer before the application is returned to from its recv call.  Otherwise, injectIO and AFL sessions
 will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command.
 
 \item{\tt prepInjectAddr(addr, configfile)} -- For use when preparing to inject data directly into arbitrary application memory, e.g., when fuzzing argv parameters
@@ -2645,6 +2645,9 @@ This option, kbuf=True, requires drive-driver.sh to send as large a data stream 
 must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
 kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
 application memory location that will receive the first byte from the next kernel buffer.
+
+The snapshot will be created just before the kernel copies the first data from a kernel buffer into the appliation buffer.  Setting the snapshot at the kernel entry will fail if the read/recv
+is blocking, i.e., the data may not be present in the buffer yet.
 
 And fuzzing design in general... In addition to basic problems that can be solved by filters, sometimes fuzzed data does not conform to system state values.
 For example, previously received data may contain a crc and/or length of the data to be fuzzed.  Jumpers around crc calculations and memory modification should
