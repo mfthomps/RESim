@@ -149,8 +149,8 @@ class StackTrace():
                 else:
                     eip = eip-1
                 count = count+1
-        if retval is not None:
-            self.lgr.debug('followCall return 0x%x' % retval)
+        #if retval is not None:
+        #    self.lgr.debug('followCall return 0x%x' % retval)
         return retval
 
     def getJson(self):
@@ -559,7 +559,7 @@ class StackTrace():
                             else:
                                 #self.lgr.debug('findReturnFromCall call_addr is none from %s' % (first_instruct[1]))
                                 pass
-                        instruct = self.fun_mgr.resolveCall(instruct, call_addr)
+                        instruct = self.fun_mgr.resolveCall(instruct_of_call, call_addr)
                         if call_addr == cur_fun:
                             fname = self.soMap.getSOFile(call_ip)
                             frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=fun_name, ret_to_addr=ptr)
@@ -662,10 +662,11 @@ class StackTrace():
 
         ''' record info about current IP '''
        
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
+        instruct_tuple = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
+        instruct = instruct_tuple[1]
         fname = self.soMap.getSOFile(eip)
         prev_fname = fname
-        instruct = self.fun_mgr.resolveCall(instruct, eip)
+        instruct = self.fun_mgr.resolveCall(instruct_tuple, eip)
 
         #self.lgr.debug('StackTrace doTrace xx begin pid:%d cur eip 0x%x instruct %s  fname %s' % (self.pid, eip, instruct, fname))
         if fname is None:
@@ -845,7 +846,7 @@ class StackTrace():
                                     pass
 
                                 
-                        self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct_str, ptr, call_ip))
+                        #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct_str, ptr, call_ip))
                         fname = self.soMap.getSOFile(val)
                         if fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
