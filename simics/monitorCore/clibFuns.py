@@ -125,7 +125,8 @@ def adjustFunName(frame, fun_mgr, lgr):
             if '<' in fun:
                 fun = fun.split('<')[0]
         else:
-            lgr.debug('clibFuns fun name was none')
+            #lgr.debug('clibFuns fun name was none')
+            pass
         return fun
    
 def allClib(frames, start):
