@@ -297,6 +297,7 @@ class GenMonitor():
         ''' Once data tracking seems to have completed, e.g., called goToDataMark,
             do not set debug related haps
         '''
+        self.track_started = False
         self.track_finished = False
 
         ''' ****NO init data below here**** '''
@@ -3810,6 +3811,7 @@ class GenMonitor():
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
             return
+        self.track_started = True
         self.stopTrackIO()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
@@ -4139,6 +4141,7 @@ class GenMonitor():
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.
             use no_reset True to stop the tracking if RESim would need to reset the origin.'''
+        self.track_started = True
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             if 'coverage/id' in dfile:
@@ -4244,6 +4247,7 @@ class GenMonitor():
     def trackFunctionWrite(self, fun, show_compare=False):
         ''' When the given function is entered, begin tracking memory addresses that are written to.
             Stop on exit of the function. '''
+        self.track_started = True
         self.lgr.debug('genMonitor trackFunctionWrite %s' % fun)
         pid, cpu = self.context_manager[self.target].getDebugPid() 
 
@@ -4463,6 +4467,7 @@ class GenMonitor():
 
     def trackFile(self, substring):
         ''' track access to XML file access '''
+        self.track_started = True
         self.stopTrackIO()
         self.clearWatches()
         self.lgr.debug('trackFile stopped track and cleared watchs')
@@ -5411,6 +5416,9 @@ class GenMonitor():
 
     def dumpStack(self, count=80):
         self.stackFrameManager[self.target].dumpStack(count)
+
+    def tracking(self):
+        return self.track_started
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

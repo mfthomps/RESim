@@ -57,9 +57,10 @@ class WinDelay():
         self.setCountWriteHap()
 
     def setDataWatch(self, data_watch, linger):
-        self.data_watch = data_watch
-        self.linger = linger
-        self.data_watch.registerHapForRemoval(self)
+        if self.top.tracking():
+            self.data_watch = data_watch
+            self.linger = linger
+            self.data_watch.registerHapForRemoval(self)
 
     def doDataWatch(self):
         if self.data_watch is not None:
@@ -96,7 +97,8 @@ class WinDelay():
             # we are in the kernel at some arbitrary place.  run to user space
             self.return_count = return_count
             self.trace_msg = trace_msg
-            SIM_run_alone(self.toUserAlone, None)
+            if self.data_watch is not None:
+                SIM_run_alone(self.toUserAlone, None)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
         SIM_run_alone(self.rmHap, hap) 
