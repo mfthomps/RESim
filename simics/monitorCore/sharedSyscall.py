@@ -1086,9 +1086,9 @@ class SharedSyscall():
                     self.modifySelect(exit_info.select_info, eax)
                 elif exit_info.call_params is not None:
                     if type(exit_info.call_params.match_param) is int:
-                        if exit_info.syscall_instance.name == 'runToInput':
+                        if exit_info.syscall_instance.name == 'runToIO':
                             if not exit_info.select_info.setHasFD(exit_info.call_params.match_param, exit_info.select_info.readfds):
-                                self.lgr.debug('sharedSyscall select for runToInput fd %d not in read fds, no match' % exit_info.call_params.match_param)
+                                self.lgr.debug('sharedSyscall select for runToIO fd %d not in read fds, no match' % exit_info.call_params.match_param)
                                 exit_info.call_params = None
                         elif not exit_info.select_info.hasFD(exit_info.call_params.match_param):
                             self.lgr.debug('sharedSyscall select fd %d not in any fds, no match' % exit_info.call_params.match_param)

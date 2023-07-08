@@ -1409,7 +1409,7 @@ class Syscall():
         ida_msg = None
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
-            self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
+            #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
             if call_param.match_param.__class__.__name__ == 'PidFilter':
                 if pid != call_param.match_param.pid:
                     #self.lgr.debug('syscall syscallParse, pid filter did not match')
@@ -2032,7 +2032,7 @@ class Syscall():
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
         cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
+        #self.lgr.debug('syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')

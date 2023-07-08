@@ -71,10 +71,10 @@ class FunMgr():
     def funFromAddr(self, addr):
         fun = None
         if addr in self.relocate_funs:
-            self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
             fun = self.relocate_funs[addr]
         elif self.ida_funs is not None:
-            self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
             fun = self.ida_funs.getFunName(addr)
         return fun
 
@@ -164,8 +164,9 @@ class FunMgr():
                     ''' TBD why are these not adjusted per offset? '''
                     self.relocate_funs[addr] = funs[addr_s]
         else:
-            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse' % relocate_path)
             self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
+          
 
     def getFunNameFromInstruction(self, instruct, eip):
         ''' get the called function address and its name, if known '''
@@ -191,9 +192,9 @@ class FunMgr():
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
+            #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
-                self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
+                #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr = self.ipRelative(instruct, eip)
           
             elif len(parts) == 2:
@@ -204,17 +205,17 @@ class FunMgr():
                     pass
             if call_addr is not None:
                 fun = str(self.funFromAddr(call_addr))
-                self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
+                #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
-        if call_addr is not None:
-            self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
+        #if call_addr is not None:
+        #    self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
         return call_addr, fun
 
     def resolveCall(self, instruct, eip):      
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
-        self.lgr.debug('funMgr resolveCall %s' % instruct[1])
+        #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
@@ -250,19 +251,20 @@ class FunMgr():
             if parts[-1].strip().endswith(']'):
                 s = parts[-1]
                 content = s.split('[', 1)[1].split(']')[0]
-                self.lgr.debug('funMgr ipRelative content <%s> eip: 0x%x' % (content, eip))
+                #self.lgr.debug('funMgr ipRelative content <%s> eip: 0x%x' % (content, eip))
                 if content.startswith('rip+'):
                     offset_s = content[4:]
                     offset = None
                     try:
                         offset = int(offset_s, 16)
                     except:
-                        self.lgr.error('funMgr ipRelative did not get offset from %s' % instruct)
+                        #self.lgr.error('funMgr ipRelative did not get offset from %s' % instruct)
                         return None
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]
                 else:
                     self.lgr.debug('funMgr ipRelative <%s> does not start with rip+' % content)
-            self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
+            #if retval is not None:
+            #    self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
             return retval
 

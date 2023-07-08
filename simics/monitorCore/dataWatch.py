@@ -3686,7 +3686,12 @@ class DataWatch():
 
     def pickleFunEntries(self, name):
         if self.added_mem_fun_entry:
-            entries_file = os.path.join('./', name, self.cell_name, 'funEntry.pickle')
+            entries_dir = os.path.join('./', name, self.cell_name)
+            try:
+                os.mkdir(entries_dir)
+            except:
+                pass
+            entries_file = os.path.join(entries_dir, 'funEntry.pickle')
             entries = {}
             entries['fun_entries'] = self.mem_fun_entries
             self.lgr.debug('dataWatch pickleFunEntries saved %d fun entries' % len(self.mem_fun_entries))
