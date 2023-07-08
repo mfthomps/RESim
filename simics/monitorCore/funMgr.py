@@ -164,8 +164,9 @@ class FunMgr():
                     ''' TBD why are these not adjusted per offset? '''
                     self.relocate_funs[addr] = funs[addr_s]
         else:
-            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse' % relocate_path)
             self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
+          
 
     def getFunNameFromInstruction(self, instruct, eip):
         ''' get the called function address and its name, if known '''
@@ -263,6 +264,7 @@ class FunMgr():
                     retval = eip + offset + instruct[0]
                 else:
                     self.lgr.debug('funMgr ipRelative <%s> does not start with rip+' % content)
-            #self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
+            #if retval is not None:
+            #    self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
             return retval
 
