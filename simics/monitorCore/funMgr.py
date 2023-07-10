@@ -37,6 +37,7 @@ class FunMgr():
         self.mem_utils = mem_utils
         self.top = top
         self.lgr = lgr
+        self.so_checked = []
         if cpu.architecture == 'arm':
             self.callmn = 'bl'
             self.jmpmn = 'bx'
@@ -268,3 +269,13 @@ class FunMgr():
             #    self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
             return retval
 
+
+    def soChecked(self, addr):
+        if addr in self.so_checked:
+            return True
+        else:
+            return False
+
+    def soCheckAdd(self, addr):
+        if addr not in self.so_checked: 
+            self.so_checked.append(addr)

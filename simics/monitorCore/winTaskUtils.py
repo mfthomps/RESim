@@ -223,7 +223,7 @@ class WinTaskUtils():
         # windows has separate gui calls?  
         val = callnum * 4 + self.param.syscall_jump
         val = self.mem_utils.getUnsigned(val)
-        self.lgr.debug('winTaskUtils getSyscallEntry syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
+        #self.lgr.debug('winTaskUtils getSyscallEntry syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
         entry = self.mem_utils.readPtr(self.cpu, val)
         if entry is None:
             self.lgr.error('winTaskUtils getSyscallEntry entry is None reading from 0x%x' % val)
@@ -232,7 +232,7 @@ class WinTaskUtils():
         entry = entry & 0xffffffff
         entry_shifted = entry >> 4
         computed = self.param.syscall_jump + entry_shifted
-        self.lgr.debug('winTaskUtils getSyscallEntry call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
+        #self.lgr.debug('winTaskUtils getSyscallEntry call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
         return computed
 
     def curProcXX(self):
@@ -400,18 +400,18 @@ class WinTaskUtils():
             #self.lgr.debug('winTaskUtils got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
             if task_ptr in got:
                 #print('already got task_ptr 0x%x' % task_ptr)
-                self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
+                #self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
                 break
         return got
 
     def getTaskList(self):
         got = []
         done = False
-        self.lgr.debug('getTaskList ')
+        #self.lgr.debug('getTaskList ')
         task_ptr = self.getCurTaskRec()
-        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
+        #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
-        self.lgr.debug('getTaskList returning %d tasks' % len(got))
+        #self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
     
     def getTaskStructs(self):

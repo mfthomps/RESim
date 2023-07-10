@@ -3810,6 +3810,10 @@ class GenMonitor():
     def trackKbuf(self, fd):
         self.trackIO(fd, kbuf=True)
 
+    def resetTrackIOBackstop(self):
+        self.dataWatch[self.target].rmBackStop()
+        print('Track IO has stopped at a backstop.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
+
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None):
         self.lgr.debug('trackIO') 
@@ -3825,7 +3829,7 @@ class GenMonitor():
         self.clearWatches(cycle=cpu.cycles)
         self.restoreDebugBreaks()
         if callback is None:
-            done_callback = self.stopTrackIO
+            done_callback = self.resetTrackIOBackstop
         else:
             done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watches current context %s' % str(cpu.current_context))
@@ -3924,6 +3928,7 @@ class GenMonitor():
             self.lgr.debug('error %s' % str(e))
 
     def stopTracking(self, keep_watching=False, keep_coverage=False):
+        self.lgr.debug('stopTracking')
         self.stopTrackIO(immediate=True)
         self.dataWatch[self.target].removeExternalHaps(immediate=True)
 
@@ -4478,6 +4483,7 @@ class GenMonitor():
 
     def trackFile(self, substring):
         ''' track access to XML file access '''
+        self.lgr.debug('trackFile') 
         self.track_started = True
         self.stopTrackIO()
         self.clearWatches()
@@ -5205,6 +5211,12 @@ class GenMonitor():
             self.fun_mgr.showMangle(search = search)
         else:
             print('No IDA functions loaded.')
+
+    def isFun(self, addr):
+        if self.fun_mgr.isFun(addr):
+            print('Yes, 0x%x is a function' % addr)
+        else:
+            print('No, 0x%x is not a function' % addr)
 
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
