@@ -320,7 +320,7 @@ class StackTrace():
         eip = self.reg_frame['pc']
         esp = self.reg_frame['sp']
         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
-        self.lgr.debug('stackTrace dox86 eip:0x%x esp:0x%x bp:0x%x' % (eip, esp, bp))
+        #self.lgr.debug('stackTrace dox86 eip:0x%x esp:0x%x bp:0x%x' % (eip, esp, bp))
         cur_fun = None
         quick_return = None
         cur_fun_name = None
@@ -335,16 +335,16 @@ class StackTrace():
         if bp == 0:
             stack_val = self.mem_utils.readAppPtr(self.cpu, esp)
             call_inst = self.followCall(stack_val)
-            self.lgr.debug('doX86 bp is zero')
+            #self.lgr.debug('doX86 bp is zero')
             if call_inst is not None:
-                self.lgr.debug('doX86 initial sp value 0x%x is a return to address 0x%x' % (stack_val, call_inst))
+                #self.lgr.debug('doX86 initial sp value 0x%x is a return to address 0x%x' % (stack_val, call_inst))
                 instruct = SIM_disassemble_address(self.cpu, call_inst, 1, 0)
                 #this_fun_name = self.funFromAddr(cur_fun)
                 this_fun_name = 'unknown'
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
                 if fun_name is None or fun_name == 'None':
                     fun_name = this_fun_name
-                self.lgr.debug('doX86 initial sp call to fun_name %s' % fun_name)
+                #self.lgr.debug('doX86 initial sp call to fun_name %s' % fun_name)
                 fname = self.soMap.getSOFile(call_addr)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, eip)
                 frame = self.FrameEntry(call_inst, fname, instruct_1, esp, fun_addr=call_addr, 
@@ -523,7 +523,7 @@ class StackTrace():
                             pass
                     instruct_of_call = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                     instruct = instruct_of_call[1]
-                    self.lgr.debug('findRetrunFromCall call_ip 0x%x  %s' % (call_ip, instruct))
+                    #self.lgr.debug('findRetrunFromCall call_ip 0x%x  %s' % (call_ip, instruct))
                     call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct_of_call, call_ip)
                     if call_addr == cur_fun:
                         fname = self.soMap.getSOFile(call_ip)
@@ -651,7 +651,6 @@ class StackTrace():
         ptr = esp
         been_in_main = False
         prev_ip = None
-        so_checked = []
         if self.soMap.isMainText(eip):
             self.lgr.debug('stackTrace starting in main text set prev_ip to 0x%x' %eip)
             been_in_main = True
@@ -738,15 +737,15 @@ class StackTrace():
                     call_to = self.getCallTo(call_ip)
                     if call_to is not None:
                         #self.lgr.debug('stackTrace call_to 0x%x ' % call_to)
-                        if call_to not in so_checked:
+                        if not self.fun_mgr.soChecked(call_to):
                             ''' should we add ida function analysys? '''
                             if not self.fun_mgr.isFun(call_to):
                                 fname, start, end = self.soMap.getSOInfo(call_to)
-                                #self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
+                                self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
                                     full_path = self.targetFS.getFull(fname, self.lgr)
                                     self.fun_mgr.add(full_path, start)
-                            so_checked.append(call_to) 
+                            self.fun_mgr.soCheckAdd(call_to) 
                         if self.fun_mgr.isFun(call_to):
                             if not self.fun_mgr.inFun(prev_ip, call_to):
                                 first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)

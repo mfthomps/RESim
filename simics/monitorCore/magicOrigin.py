@@ -59,7 +59,11 @@ class MagicOrigin():
 
     def disconnectServiceNode(self, name):
         cmd = '%s.status' % name
-        dumb,result = cli.quiet_run_command(cmd)
+        try:
+            dumb,result = cli.quiet_run_command(cmd)
+        except:
+            self.lgr.debug('magicOrigin disconnectService node failed')
+            return
        
         ok = False 
         for line in result.splitlines():

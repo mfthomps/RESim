@@ -265,23 +265,28 @@ class WinDLLMap():
 
 
     def isMainText(self, address):
-        ''' TBD fix this ''' 
-        return False
+        retval = False
+        cpu, comm, pid = self.task_utils.curProc() 
+        if pid in self.text:
+            end = self.text[pid].addr + self.text[pid].size
+            if address >= self.text[pid].addr and address <= end:
+                retval = True
+        return retval
 
     def getSOFile(self, addr_in):
-        ''' TBD should'nt this require a pid???'''
         retval = None
+        cpu, comm, pid = self.task_utils.curProc() 
         if addr_in is not None:
             for section in self.section_list:
-                if section.size is not None:
-                    end = section.addr+section.size
-                    if addr_in >= section.addr and addr_in <= end:
-                        retval = section.fname
-                        break 
+                if section.pid == pid:
+                    if section.size is not None:
+                        end = section.addr+section.size
+                        if addr_in >= section.addr and addr_in <= end:
+                            retval = section.fname
+                            break 
         return retval
 
     def isCode(self, addr_in, pid):
-        ''' TBD not done '''
         retval = False
         if pid in self.min_addr:
             if addr_in >= self.min_addr[pid] and addr_in <= self.max_addr[pid]:
