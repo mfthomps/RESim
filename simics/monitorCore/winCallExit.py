@@ -292,7 +292,7 @@ class WinCallExit():
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                    trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, read_data)
+                    trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, repr(read_data))
 
                     my_syscall = exit_info.syscall_instance
                     self.lgr.debug('winCallExit %s' % (trace_msg))

@@ -605,7 +605,7 @@ class WinSyscall():
             count = self.stackParam(3, frame) & 0x00000000FFFFFFFF
             buffer_addr = self.stackParam(2, frame)
             write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
-            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, write_string)
+            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, repr(write_string))
 
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
