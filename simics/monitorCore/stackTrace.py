@@ -188,12 +188,10 @@ class StackTrace():
                 sp_string = ' sp: 0x%x' % frame.sp
             fun_of_ip = None
             if self.fun_mgr is not None:
-                fun_addr = self.fun_mgr.getFun(frame.ip)
-                fun_of_ip = self.fun_mgr.getName(fun_addr)
+                fun_of_ip = self.fun_mgr.getFunName(frame.ip)
+              
                 if fun_of_ip is not None:
                     fun_of_ip = cppClean(fun_of_ip)
-                if fun_addr is not None:
-                    self.lgr.debug('printTrace fun_addr 0x%x  fun_of_ip %s' % (fun_addr, fun_of_ip))
             if frame.instruct.startswith(self.callmn):
                 parts = frame.instruct.split()
                 try:
@@ -206,7 +204,7 @@ class StackTrace():
                 if frame.fun_name is not None:
                     fun_name = frame.fun_name
                 elif self.fun_mgr is not None:
-                    fun_name = self.fun_mgr.getName(faddr)
+                    fun_name = self.fun_mgr.getFunName(faddr)
                 if fun_name is not None:
                     fun_name = cppClean(fun_name)
                     print('%s 0x%08x %s %s %s %s' % (sp_string, frame.ip, fname, self.callmn, fun_name, fun_of_ip))
@@ -239,7 +237,7 @@ class StackTrace():
             if self.fun_mgr is not None:
                 cur_fun = self.fun_mgr.getFun(eip)
                 if cur_fun is not None:
-                    fun_name = self.fun_mgr.getName(cur_fun)
+                    fun_name = self.fun_mgr.getFunName(cur_fun)
                     #self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.fun_mgr.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
@@ -683,8 +681,11 @@ class StackTrace():
         if self.fun_mgr is not None:
             cur_fun = self.fun_mgr.getFun(eip)
             if prev_ip == eip and cur_fun is not None:
-                cur_fun_name = self.fun_mgr.getName(cur_fun)
-                if cur_fun_name.startswith('.'):
+                cur_fun_name = self.fun_mgr.getFunName(cur_fun)
+                if cur_fun_name is None:
+                    #self.lgr.debug('stackTrace fun_mgr.getFunName returned none for cur_fun 0x%x' % cur_fun) 
+                    pass
+                elif cur_fun_name.startswith('.'):
                     cur_fun_name = cur_fun_name[1:]
                 elif cur_fun_name.startswith('_'):
                     cur_fun_name = cur_fun_name[1:]
@@ -931,8 +932,7 @@ class StackTrace():
             prev_ip = self.frames[-1].ip
         if frame.ip != prev_ip:
             if self.fun_mgr is not None:
-                fun_addr = self.fun_mgr.getFun(frame.ip)
-                fun_of_ip = self.fun_mgr.getName(fun_addr)
+                fun_of_ip = self.fun_mgr.getFunName(frame.ip)
                 frame.fun_of_ip = fun_of_ip
                 #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
             self.frames.append(frame)
