@@ -159,11 +159,9 @@ class FunMgr():
                 funs = json.load(fh)
                 for addr_s in funs:
                     addr = int(addr_s)
-                    #adjust = addr+offset
+                    adjust = addr+offset
                     #self.lgr.debug('funMgr setRelocateFuns addr 0x%x offset 0x%x adjusted [0x%x] to %s' % (addr, offset, adjust, funs[addr_s]))
-                    #self.relocate_funs[adjust] = funs[addr_s]
-                    ''' TBD why are these not adjusted per offset? '''
-                    self.relocate_funs[addr] = funs[addr_s]
+                    self.relocate_funs[adjust] = funs[addr_s]
         else:
             self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
             self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
@@ -259,7 +257,7 @@ class FunMgr():
                     try:
                         offset = int(offset_s, 16)
                     except:
-                        #self.lgr.error('funMgr ipRelative did not get offset from %s' % instruct)
+                        self.lgr.error('funMgr ipRelative did not get offset from %s' % instruct)
                         return None
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]

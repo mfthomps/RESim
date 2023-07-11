@@ -22,7 +22,7 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_']
+mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_']
 def adjustFunName(frame, fun_mgr, lgr): 
         fun = None
         if frame.fun_name is not None:
@@ -44,7 +44,7 @@ def adjustFunName(frame, fun_mgr, lgr):
             for pre in mem_prefixes:
                 if fun.startswith(pre):
                     fun = fun[len(pre):]
-                    #lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
+                    lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
             if fun.startswith('std::string::'):
                 fun = fun[len('std::string::'):]
                 if '(' in fun:

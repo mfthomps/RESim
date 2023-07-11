@@ -12,6 +12,7 @@ class IDAFuns():
     def __init__(self, path, lgr, offset=0):
         self.funs = {}
         self.lgr = lgr
+        self.offset = offset
         self.did_paths = []
         self.lgr.debug('IDAFuns for path %s offset 0x%x' % (path, offset))
         self.mangle = {}
@@ -116,10 +117,19 @@ class IDAFuns():
 
  
     def isFun(self, fun):
-        if fun in self.funs:
-            return True
+        ''' The given fun is the rebased value, so an offset is applied '''
+        retval = False
+        if fun is not None:
+            adjusted = fun - self.offset
+            if adjusted in self.funs:
+                retval = True
+            #else:
+            #    result = self.getFun(fun)
+            #    if result is not None:
+            #        self.lgr.debug('idaFuns isFun 0x%x not fun but found 0x%x' % (fun, result))
         else:
-            return False
+            self.lgr.debug('idaFuns isFun called with fun of None')
+        return retval
 
     def getAddr(self, name):
         for fun in self.funs:
@@ -128,18 +138,21 @@ class IDAFuns():
         return None, None
  
     def getName(self, fun):
+        ''' NOTE this does not apply offsets.  Given fun must be address of the function prior to rebasing. '''
         retval = None
-        if fun in self.funs:
-            retval = self.funs[fun]['name']
-            
+        if fun is not None:
+            if fun in self.funs:
+                retval = self.funs[fun]['name']
         return retval
 
     def inFun(self, ip, fun):
-        #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
-        if fun in self.funs:
-            #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
-            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                return True
+        if fun is not None:
+            #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
+            adjusted = fun - self.offset
+            if adjusted in self.funs:
+                #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
+                if ip >= self.funs[adjusted]['start'] and ip <= self.funs[adjusted]['end']:
+                    return True
         return False 
 
     def getFun(self, ip):
@@ -151,8 +164,9 @@ class IDAFuns():
 
     def getFunName(self, ip):
         retval = None
-        if ip in self.funs:
-            retval = self.getName(ip)
+        adjusted = ip - self.offset
+        if adjusted in self.funs:
+            retval = self.getName(adjusted)
         else:
             fun = self.getFun(ip)
             if fun is not None:
