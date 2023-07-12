@@ -2056,7 +2056,7 @@ class DataWatch():
                 #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
                 self.back_stop.clearCycle()
                 #SIM_break_simulation('handle memstuff')
-                SIM_run_alone(self.runToReturnAlone, None)
+                self.runToReturnAlone(None)
             else:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
