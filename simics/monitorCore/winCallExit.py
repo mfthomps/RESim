@@ -122,6 +122,11 @@ class WinCallExit():
         if eax == 0x40000003:
             self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
             eax = 0
+        
+        # variable to determine if we are going to be doing 32 or 64 bit syscall
+        word_size = 8 # default to 8 for 64 bit unless 
+        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+            word_size = 4
 
         if eax != 0:
             if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
@@ -219,7 +224,7 @@ class WinCallExit():
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
             if fd is not None:
-                section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame) 
+                section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
                 self.soMap.createSection(fd, section_handle, pid)
                 trace_msg = trace_msg+' Handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
             else:
@@ -228,7 +233,7 @@ class WinCallExit():
 
         elif callname == 'MapViewOfSection':
             section_handle = exit_info.old_fd
-            load_address = exit_info.syscall_instance.paramOffPtr(3, [0], exit_info.frame)
+            load_address = exit_info.syscall_instance.paramOffPtr(3, [0], exit_info.frame, word_size)
             size = exit_info.syscall_instance.stackParamPtr(3, 0, exit_info.frame) 
             if load_address is not None and size is not None:
                 trace_msg = trace_msg+' section_handle: 0x%x load_address: 0x%x size: 0x%x' % (section_handle, load_address, size)
