@@ -3818,3 +3818,6 @@ class DataWatch():
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.memcpyCheck)
         self.lgr.debug('stopForMemcpyCheck, is big move, look for memcpy')
         SIM_break_simulation('handle memstuff')
+
+    def setUserIterators(self, iterators):
+        self.fun_mgr.setUserIterators(iterators)
