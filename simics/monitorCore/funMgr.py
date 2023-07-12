@@ -48,6 +48,9 @@ class FunMgr():
     def getFun(self, addr):
         return self.ida_funs.getFun(addr)
 
+    def getFunAddr(self, addr):
+        return self.ida_funs.getFunAddr(addr)
+
     def getName(self, addr):
         return self.ida_funs.getName(addr)
 

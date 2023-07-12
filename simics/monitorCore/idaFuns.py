@@ -10,6 +10,7 @@ def rmPrefix(fun):
 class IDAFuns():
 
     def __init__(self, path, lgr, offset=0):
+        ''' self.funs primary dict key is the address of the function per initial IDA/ghidra analysis '''
         self.funs = {}
         self.lgr = lgr
         self.offset = offset
@@ -156,10 +157,19 @@ class IDAFuns():
         return False 
 
     def getFun(self, ip):
+        ''' Returns the function address per initial analysis (no offset adjustment) for a dynamic ip.'''
         for fun in self.funs:
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
                 return fun
+        return None
+
+    def getFunAddr(self, ip):
+        ''' Returns the function address adjusted per load address '''
+        for fun in self.funs:
+            #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
+            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                return (fun + self.offset)
         return None
 
     def getFunName(self, ip):
