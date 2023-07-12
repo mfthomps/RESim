@@ -330,7 +330,7 @@ class GenContextMgr():
         if isinstance(hap_handle, str):
             self.lgr.error('contextManager genDeleteHap hap_handle is string? %s' % hap_handle)
             return 
-        #self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
+        self.lgr.debug('genDeleteHap hap_handle %d immediate: %r' % (hap_handle, immediate))
         hap_copy = list(self.haps)
         for hap in hap_copy:
             if hap.handle == hap_handle:
@@ -393,7 +393,7 @@ class GenContextMgr():
                     hap.set()
 
     def clearAllBreak(self, dumb):
-        #self.lgr.debug('contextManager clearAllBreak')
+        self.lgr.debug('contextManager clearAllBreak')
         ''' Called to clear breaks within the resim context '''
         for bp in self.breakpoints:
             #if bp.cell == self.resim_context:
@@ -859,7 +859,7 @@ class GenContextMgr():
         if pid == cur_pid and self.debugging_pid is not None:
             ''' we are stopping due to a clone doing an exec or something similar.  in any event, remove haps and change context if needed '''
             ''' TBD, do this in some other function? '''
-            SIM_run_alone(self.clearAllHap, False)
+            #SIM_run_alone(self.clearAllHap, False)
             self.watching_tasks = False
             if pid in self.watch_rec_list_saved:
                 self.watch_rec_list_saved.remove(pid)
@@ -910,13 +910,16 @@ class GenContextMgr():
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
-        self.lgr.debug('resetWatchTasks')
+        pid = self.debugging_pid
+        if pid is None: 
+            pid = self.debugging_pid_saved
+        self.lgr.debug('resetWatchTasks pid:%d' % pid)
         self.stopWatchTasksAlone(None)
-        self.watchTasks(set_debug_pid = True)
+        self.lgr.debug('resetWatchTasks back from stopWatch')
+        self.watchTasks(set_debug_pid = True, pid=pid)
+        self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
-            ctask = self.task_utils.getCurTaskRec()
-            pid = self.mem_utils.readWord32(self.cpu, ctask + self.param.ts_pid)
-            #self.lgr.debug('resetWatchTasks pid %d' % pid)
+            self.lgr.debug('resetWatchTasks pid %d' % pid)
             if pid == 1:
                 self.lgr.debug('resetWatchTasks got leader pid of 1, skip')
                 return
@@ -945,12 +948,13 @@ class GenContextMgr():
             #self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
             self.cpu.current_context = self.resim_context
 
-    def watchTasks(self, set_debug_pid = False):
+    def watchTasks(self, set_debug_pid = False, pid=None):
         if self.task_break is not None:
             self.lgr.debug('watchTasks called, but already watching')
             #return
-        ctask = self.task_utils.getCurTaskRec()
-        cell, comm, pid  = self.task_utils.curProc()
+        if pid is None:
+            ctask = self.task_utils.getCurTaskRec()
+            cell, comm, pid  = self.task_utils.curProc()
         if pid == 1:
             self.lgr.debug('contextManager watchTasks, pid is 1, ignore')
             return
@@ -960,10 +964,11 @@ class GenContextMgr():
         if len(self.watch_rec_list) == 0:
             #self.lgr.debug('watchTasks, call restoreDebug')
             self.restoreDebug()
-        if self.watchExit():
+        if self.watchExit(pid=pid):
             #self.pageFaultGen.recordPageFaults()
+            ctask = self.task_utils.getRecAddrForPid(pid)
             if ctask in self.watch_rec_list:
-                self.lgr.debug('watchTasks, current task already being watched')
+                self.lgr.debug('watchTasks, pid:%d already being watched' % pid)
                 return
             self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
             self.watch_rec_list[ctask] = pid
