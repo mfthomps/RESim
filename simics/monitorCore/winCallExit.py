@@ -176,20 +176,29 @@ class WinCallExit():
         
         elif callname == 'ReadFile':
             ''' fname_addr has address of return count'''
-            #SIM_break_simulation('ReadFile returning')
-            if exit_info.fname_addr is not None:
+            return_count = None
+            if exit_info.fname_addr is None:
+                self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
+
+            else:
+                # see what the return count claims to be right now
                 return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-                if return_count != 0x0: 
+                # if the call reported not ready (0x103), see if it became ready in the meantime
+                if not_ready and return_count != exit_info.new_fd:
+                    self.lgr.debug('winCallExit ReadFile: Finished despite STATUS_PENDING return status. %d != %d' % (return_count, exit_info.new_fd))
+                    trace_msg = trace_msg + ' (but still finished)'
+
                     not_ready = False
-           
-            if exit_info.fname_addr is not None and not_ready:
-                self.lgr.debug('winCallExit ReadFile: not ready --> do winDelay')
 
-                win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
+                if not_ready:
+                    return_count = None
+                    self.lgr.debug('winCallExit ReadFile: not ready --> do winDelay')
+
+                    win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
                     
-                trace_msg = trace_msg+' - Device not ready'
+                    trace_msg = trace_msg+' - Device not ready'
 
-            if return_count is not None and return_count != 0x0:
+            if return_count is not None:
                 max_read = min(return_count, 100)
                 buf_addr = exit_info.retval_addr
                 read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
@@ -197,10 +206,6 @@ class WinCallExit():
 
                 my_syscall = exit_info.syscall_instance
                 self.lgr.debug('winCallExit %s' % (trace_msg))
-
-            else:
-                trace_msg = trace_msg + ' FAILED to get returned count'
-
  
         elif callname == 'AllocateVirtualMemory':
             if exit_info.retval_addr is not None and exit_info.fname_addr is not None:
@@ -296,13 +301,22 @@ class WinCallExit():
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
-                if exit_info.fname_addr is not None and not not_ready:
+                return_count = None
+                if exit_info.fname_addr is None:
+                    self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
+                
+                else: 
+                    # see what the return count claims to be right now
                     return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                    # if the call reported not ready (0x103), see if it became ready in the meantime
+                    if not_ready and return_count != exit_info.new_fd:
+                        self.lgr.debug('winCallExit %s: Finished despite STATUS_PENDING return status. %d != %d' % (exit_info.socket_callname, return_count, exit_info.new_fd))
+                        trace_msg = trace_msg + ' (but still finished)'
+                        not_ready = False
 
-                else:
-                    if exit_info.fname_addr is not None and not_ready:
+                    if not_ready:
+                        return_count = None #denote it isnt ready to be read
                         self.lgr.debug('winCallExit %s: not ready --> do winDelay' % exit_info.socket_callname)
-                        
                         win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
                               self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                         trace_msg = trace_msg+' - Device not ready'
@@ -310,11 +324,6 @@ class WinCallExit():
                         if self.watchData(exit_info) and exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM']:
                             self.lgr.debug('doing win_delay.setDataWatch')
                             win_delay.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-                    else:
-                        self.lgr.error('winCallExit %s failed to get return count even though seems ready' % exit_info.socket_callname)
-                        trace_msg = trace_msg+' winCallExit %s failed to get return count even though seems ready' % exit_info.socket_callname
-
-                    return_count = None
 
                 if return_count is not None:
                     #SIM_break_simulation('read returning')
