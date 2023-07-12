@@ -28,7 +28,8 @@ address that is to contain the byte count and generates a trace message
 when the kernel writes to the address.
 '''
 from simics import *
-import stopFunction
+from resimHaps import *
+import memUtils
 class WinDelay():
     def __init__(self, top, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr):
         self.top = top
@@ -48,6 +49,7 @@ class WinDelay():
         ''' used for data tracking, e.g., trackIO '''
         self.data_watch = None
         self.linger = None
+        self.mode_hap = None
 
         self.cycles = self.cpu.cycles
         self.return_count = None
@@ -62,7 +64,7 @@ class WinDelay():
             self.linger = linger
             self.data_watch.registerHapForRemoval(self)
 
-    def doDataWatch(self):
+    def doDataWatch(self, dumb=None):
         if self.data_watch is not None:
             self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, self.return_count))
             self.data_watch.setRange(self.buffer_addr, self.return_count, msg=self.trace_msg, 
@@ -70,7 +72,10 @@ class WinDelay():
             if self.linger: 
                 self.data_watch.stopWatch() 
                 self.data_watch.watch(break_simulation=False, i_am_alone=True)
-            SIM_continue(0)
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
+            #if not self.top.isRunning():
+            #    SIM_continue(0)
 
     def setCountWriteHap(self):
         ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
@@ -105,8 +110,23 @@ class WinDelay():
         self.count_write_hap = None
 
     def toUserAlone(self, dumb):
-        f1 = stopFunction.StopFunction(self.doDataWatch, [], nest=False)
-        self.top.toUser(flist=[f1])
+        pid = self.top.getPID()
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, pid)
+        self.lgr.debug('windDelay toUserAlone, set mode hap for pid %d' % pid)
+
+    def modeChanged(self, want_pid, one, old, new):
+        if self.mode_hap is None:
+            return
+        this_pid = self.top.getPID()
+        if want_pid != this_pid:
+            self.lgr.debug('windDelay mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
+            return
+        cpl = memUtils.getCPL(self.cpu)
+        if new == Sim_CPU_Mode_Supervisor:
+            self.lgr.warning('windDelay mode changed wrong mode, new is supervisor?')
+        else:
+            self.lgr.debug('windDelay mode changed in user, call doDataWatch')
+            SIM_run_alone(self.doDataWatch, None)
         
     def rmHap(self, hap, immediate=False): 
         self.context_manager.genDeleteHap(hap, immediate=immediate)
