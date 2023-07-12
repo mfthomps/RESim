@@ -913,11 +913,14 @@ class GenContextMgr():
         pid = self.debugging_pid
         if pid is None: 
             pid = self.debugging_pid_saved
-        self.lgr.debug('resetWatchTasks pid:%d' % pid)
+        if pid is None:
+            cpu, pid, dumb2  = self.task_utils.curProc()
+            self.lgr.debug('resetWatchTasks pid was not, got current as pid:%d' % pid)
+        #self.lgr.debug('resetWatchTasks pid:%d' % pid)
         self.stopWatchTasksAlone(None)
-        self.lgr.debug('resetWatchTasks back from stopWatch')
+        #self.lgr.debug('resetWatchTasks back from stopWatch')
         self.watchTasks(set_debug_pid = True, pid=pid)
-        self.lgr.debug('resetWatchTasks back from watchTasks')
+        #self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
             self.lgr.debug('resetWatchTasks pid %d' % pid)
             if pid == 1:
