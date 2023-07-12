@@ -2,6 +2,7 @@ from simics import *
 import os
 import pickle
 import elfText
+import resimUtils
 import json
 
 from resimHaps import *
@@ -40,6 +41,7 @@ class SOMap():
             self.loadPickle(run_from_snap)
         self.cheesy_pid = 0
         self.cheesy_mapped = 0
+        self.fun_list_cache = []
 
     def loadPickle(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -195,7 +197,7 @@ class SOMap():
             self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
             self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
 
-        base = ntpath.basename(fname)+'.funs'
+        base = os.path.basename(fname)+'.funs'
         if base.upper() in map(str.upper, self.fun_list_cache):
             with_funs = fname+'.funs'
             retval = with_funs
