@@ -586,7 +586,7 @@ class StackTrace():
                             self.addFrame(frame)
                             retval = self.mem_utils.readAppPtr(self.cpu, ptr)
                             #self.lgr.debug('findReturnFromCall Found x86 GOT, though no current fuction found. call %s  is got %s   add frame  call_ip 0x%x  call_addr: 0x%x ret_to_addr: 0x%x ret: 0x%x' % (instruct, 
-                                 got_fun_name, call_ip, call_addr, ptr, retval))
+                            #     got_fun_name, call_ip, call_addr, ptr, retval))
                         elif got_fun_name is not None:
                             fname = self.soMap.getSOFile(call_ip)
                             frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=got_fun_name, ret_to_addr=ptr)
