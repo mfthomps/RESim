@@ -467,6 +467,12 @@ class WinSyscall():
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         trace_msg = None
         frame_string = taskUtils.stringFromFrame(frame)
+
+        # variable to determine if we are going to be doing 32 or 64 bit syscall
+        word_size = 8 # default to 8 for 64 bit unless 
+        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+            word_size = 4
+
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
             if call_param.match_param.__class__.__name__ == 'PidFilter':
@@ -535,6 +541,7 @@ class WinSyscall():
                 trace_msg = trace_msg + ' base read from 0x%x was none' % ptr
                 self.lgr.debug(trace_msg)
                 SIM_break_simulation(trace_msg)
+       
 
         # Handle JUST first parameter for a bunch of functions that have Handle as their first, then break out into more params for some
         elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey']:
@@ -542,9 +549,14 @@ class WinSyscall():
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
 
             if callname == 'QueryValueKey':
+                info_class = frame['param3']
+                iclass = 'Unknown'
+                if info_class in winNTSTATUS.keyval_info_class_map:
+                    iclass = winNTSTATUS.keyval_info_class_map[info_class]
+
                 exit_info.retval_addr = frame['param4']
                 exit_info.fname = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
-                trace_msg = trace_msg + ' ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.retval_addr, exit_info.fname)
+                trace_msg = trace_msg + ' information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.fname)
 
             if callname == 'RequestWaitReplyPort':
                 exit_info.retval_addr = frame['param3']
@@ -573,8 +585,6 @@ class WinSyscall():
                 if (winFile.file_information_class[info_class] == "FileDispositionInformation") and (buf_hx != b'00'):
                     trace_msg = trace_msg + ' - FILE BEING FLAGGED FOR DELETION AFTER CLOSE'
                 
-                #SIM_break_simulation(trace_msg)
-
         # Handle other functions specifically
         elif callname == 'QuerySystemInformation':
             exit_info.retval_addr = frame['param2']
@@ -584,18 +594,23 @@ class WinSyscall():
             if info_class in winNTSTATUS.system_info_class_map:
                 iclass = winNTSTATUS.system_info_class_map[info_class]
 
-            trace_msg = trace_msg + ' info_class: %d (%s) return_buf: 0x%x return_buf_size: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
+            trace_msg = trace_msg + ' information_class: %d (%s) return_buf: 0x%x buf_size: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
  
         elif callname == 'ReadFile':
             exit_info.old_fd = frame['param1']
+            # data buffer address
             exit_info.retval_addr = self.stackParam(2, frame)
-            if exit_info.retval_addr is not None:
-                count_ptr = self.stackParam(1, frame)
-                #count_val = self.mem_utils.readWord(self.cpu, count_ptr)
-                count_val = self.stackParam(3, frame) & 0xFFFFFFFF
-                trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x  IoStatusBlock_ptr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, count_ptr, count_val) 
+            # the return count address --> this is where kernel will store count ACTUALLY sent/received
+            if word_size == 4:
+                exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + word_size
             else:
-                trace_msg = trace_msg+' Bad buffer address'
+                exit_info.fname_addr = frame['param5'] + word_size
+
+            exit_info.count = self.stackParam(3, frame) & 0xFFFFFFFF 
+             
+            trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
+            #SIM_break_simulation('starting Read')
+
 
         elif callname == 'WriteFile':
             exit_info.old_fd = frame['param1']
@@ -603,7 +618,7 @@ class WinSyscall():
             count = self.stackParam(3, frame) & 0x00000000FFFFFFFF
             buffer_addr = self.stackParam(2, frame)
             write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
-            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buff_addr: 0x%x  count: %d contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, write_string)
+            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, repr(write_string))
 
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
@@ -673,26 +688,26 @@ class WinSyscall():
             str_size_addr = self.paramOffPtr(1, [0x10], frame)
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
             if str_size is not None:
-                self.lgr.debug('winSyscall QueryAttributesFile str_size_addr 0x%x size %d' % (str_size_addr, str_size))
+                self.lgr.debug('winSyscall QueryAttributesFile str_size_addr: 0x%x size: %d' % (str_size_addr, str_size))
                 
                 exit_info.fname_addr = self.paramOffPtr(1, [0x10, 8], frame)
                 exit_info.retval_addr = frame['param2']
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
-                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x info_return_addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
 
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             object_attr = frame['param3']
             str_size_addr = self.paramOffPtr(3, [0x10], frame) 
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
-
+              
             if str_size is not None:
-                self.lgr.debug('winSyscall %s str_size_addr 0x%x size %d' % (callname, str_size_addr, str_size))
+                self.lgr.debug('winSyscall %s str_size_addr: 0x%x size: %d' % (callname, str_size_addr, str_size))
 
                 exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame)
                 exit_info.retval_addr = frame['param1']
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
-                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x fd_return_addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+                trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x (handle addr)' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
                 
                 # Permissions
                 accesses = []
@@ -752,7 +767,7 @@ class WinSyscall():
             
             exit_info.retval_addr = self.stackParam(5, frame)
             exit_info.count = self.stackParam(6, frame) & 0xFFFFFFFF
-           
+
             trace_msg = trace_msg+' Handle: 0x%x Operation: 0x%x Event_Handle: 0x%x' % (exit_info.old_fd, operation, event_handle)
             if pdata is not None and len_pdata > 0:
                 trace_msg = trace_msg+' pdata: %s' % pdata_hx
@@ -807,7 +822,7 @@ class WinSyscall():
             if op_cmd in ['ACCEPT', '12083_ACCEPT']:
                 if op_cmd == '12083_ACCEPT':
                     exit_info.new_fd = self.paramOffPtr(7, [4], frame)
-                    trace_msg = trace_msg+'New_Handle 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+                    trace_msg = trace_msg+'New_Handle: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
                 else:
                     handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                     exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
@@ -824,15 +839,13 @@ class WinSyscall():
 
             elif op_cmd in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 # data buffer address
-                exit_info.retval_addr = self.paramOffPtr(7, [0, self.mem_utils.wordSize(self.cpu)], frame)
+                exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame)
                 # the return count address --> this is where kernel will store count ACTUALLY sent/received
-                exit_info.fname_addr = frame['param5'] + self.mem_utils.wordSize(self.cpu)
-                
-                ''' hack until we have method of figuring out 32/64 bit app. '''
-                if exit_info.retval_addr is None or exit_info.retval_addr == 0:
-                    exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame)
-                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + 4
-                    #exit_info.fname_addr = frame['param5'] + 4 # which is right, this or above one? 
+                if word_size == 4:
+                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + word_size
+                else:
+                    exit_info.fname_addr = frame['param5'] + word_size 
+                #SIM_break_simulation('in send/recv') 
  
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame) & 0xFFFFFFFF
 
@@ -883,7 +896,7 @@ class WinSyscall():
                 trace_msg = trace_msg+' for_process: 0x%x' % (process_handle)
             
             exit_info.retval_addr = frame['param3']
-            trace_msg = trace_msg+' ReturnHandleAddr: 0x%x' % (exit_info.retval_addr)
+            trace_msg = trace_msg+' Handle_addr: 0x%x' % (exit_info.retval_addr)
 
         elif callname in ['WaitForMultipleObjects32']:
             count = frame['param1'] & 0xffff
@@ -891,7 +904,7 @@ class WinSyscall():
                 #addr = frame['param2']+i*self.mem_utils.wordSize(self.cpu)
                 addr = frame['param2']+i*4
                 handle = self.mem_utils.readWord32(self.cpu, addr)
-                trace_msg = trace_msg + " handle[%d]: 0x%x" % (i, handle)
+                trace_msg = trace_msg + " Handle[%d]: 0x%x" % (i, handle)
  
         elif callname in ['AlpcSendWaitReceivePort']:
             exit_info.old_fd = frame['param1']
@@ -912,7 +925,7 @@ class WinSyscall():
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
             exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
             exit_info.retval_addr = frame['param1']
-            trace_msg = trace_msg+' fname: %s fname addr: 0x%x fd return addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+            trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x (handle addr)' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
 
         elif callname == 'AlpcConnectPort':
             exit_info.fname_addr = self.paramOffPtr(2, [8], frame)
@@ -920,7 +933,8 @@ class WinSyscall():
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
             exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
             exit_info.retval_addr = frame['param1']
-            trace_msg = trace_msg+' fname: %s fname addr: 0x%x fd return addr 0x%x' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+            trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x (handle addr)' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
+        
         elif callname == 'Continue':
             pass
         
@@ -932,11 +946,11 @@ class WinSyscall():
             if exit_info.old_fd is not None:
                 trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
             else:
-                trace_msg = trace_msg+' Handle: is None'
+                trace_msg = trace_msg+' Handle: None'
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             exit_info.retval_addr = frame['param1']
-            trace_msg = trace_msg+' handle addr 0x%x' % (exit_info.retval_addr)
+            trace_msg = trace_msg+' retval_addr: 0x%x (handle addr)' % (exit_info.retval_addr)
 
         elif callname in ['AllocateVirtualMemory', 'FreeVirtualMemory', 'QueryVirtualMemory', 'UnmapViewOfSection']:
             who = frame['param1']
@@ -981,7 +995,7 @@ class WinSyscall():
             elif callname == 'QueryVirtualMemory':
                 base_addr = frame['param2']
                 if base_addr is not None:
-                    trace_msg = trace_msg + ' base_address: 0x%x' % (base_addr)
+                    trace_msg = trace_msg + ' base_addr: 0x%x' % (base_addr)
 
                 exit_info.retval_addr = frame['param4']
                 buf_size = self.stackParam(1, frame)
@@ -990,9 +1004,8 @@ class WinSyscall():
             elif callname == 'UnmapViewOfSection':
                 base_addr = frame['param2']
                 if base_addr is not None:
-                    trace_msg = trace_msg + ' base_address: 0x%x' % (base_addr)
+                    trace_msg = trace_msg + ' base_addr: 0x%x' % (base_addr)
  
-
         elif callname == 'TerminateProcess':
             who = frame['param1']
             trace_msg = trace_msg+' who: 0x%x' % (who)
@@ -1002,7 +1015,7 @@ class WinSyscall():
         elif callname == 'DuplicateObject':
             exit_info.old_fd = frame['param2']
             exit_info.retval_addr = frame['param4']
-            trace_msg = trace_msg+' handle: 0x%x  reval addr 0x%x' % (exit_info.old_fd, exit_info.retval_addr)
+            trace_msg = trace_msg+' Handle: 0x%x  reval_addr: 0x%x' % (exit_info.old_fd, exit_info.retval_addr)
             for call_param in syscall_info.call_params:
                 self.lgr.debug('syscall DuplicateObject subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, 
                      str(call_param.match_param), exit_info.old_fd))
@@ -1026,7 +1039,7 @@ class WinSyscall():
             
             exit_info.retval_addr = frame['param3']
             exit_info.count = frame['param4']
-            trace_msg = trace_msg + ' info_class: %d (%s) return_buf: 0x%x return_buf_size: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
+            trace_msg = trace_msg + ' information_class: %d (%s) return_buf: 0x%x return_buf_size: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
         #    entry = self.task_utils.getSyscallEntry(callnum)
         #    SIM_break_simulation('query information process computed 0x%x' % entry)
            
@@ -1073,11 +1086,17 @@ class WinSyscall():
         pval = frame[param]
         for offset in offset_list:
             ptr = pval + offset
-            #self.lgr.debug('paramOffPtr offset 0x%x from pval 0x%x ptr 0x%x' % (offset, pval, ptr))
-            #pval = self.mem_utils.readPtr(self.cpu, ptr)
-            pval = self.mem_utils.readWord(self.cpu, ptr)
+            self.lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
+            
+            # Determine if 32 or 64 bit and then read the param appropriately 
+            cpu, comm, pid = self.task_utils.curProc()
+            word_size = self.soMap.getMachineSize(pid)
+            if word_size == 64:
+                pval = self.mem_utils.readWord(self.cpu, ptr)
+            elif word_size == 32: 
+                pval = self.mem_utils.readWord32(self.cpu, ptr)
             if pval is not None:
-                #self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
                 pass
             else:
                 self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)

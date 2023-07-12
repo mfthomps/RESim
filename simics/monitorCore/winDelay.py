@@ -90,7 +90,7 @@ class WinDelay():
         else:
             max_read = min(return_count, 100)
             read_data = self.mem_utils.readString(self.cpu, self.buffer_addr, max_read)
-            trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, read_data)
+            trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, repr(read_data))
             self.trace_mgr.write(trace_msg)
             self.lgr.debug('winDelay writeCountHap %s' % trace_msg)
             #SIM_break_simulation('WinDelay')

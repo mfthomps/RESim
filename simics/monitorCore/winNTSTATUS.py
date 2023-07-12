@@ -2989,4 +2989,11 @@ process_info_class_map[0x60] = "ProcessEnableLogging"
 process_info_class_map[0x61] = "ProcessLeapSecondInformation"
 process_info_class_map[0x62] = "ProcessFiberShadowStackAllocation"
 process_info_class_map[0x63] = "ProcessFreeFiberShadowStackAllocation"
-process_info_class_map[0x64] = "MaxProcessInfoClass" 
+
+keyval_info_class_map = {}
+
+keyval_info_class_map[0] = "KeyValueBasicInformation"
+keyval_info_class_map[1] = "KeyValueFullInformation"
+keyval_info_class_map[2] = "KeyValuePartialInformation"
+keyval_info_class_map[3] = "KeyValueFullInformationAlign64"
+keyval_info_class_map[4] = "KeyValuePartialInnformationAlign64"
