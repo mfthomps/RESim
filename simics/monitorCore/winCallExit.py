@@ -173,7 +173,35 @@ class WinCallExit():
                     self.lgr.debug('%s handle is none' % trace_msg)
             else:
                 self.lgr.debug('%s retval addr is none' % trace_msg)
-         
+        
+        elif callname == 'ReadFile':
+            ''' fname_addr has address of return count'''
+            #SIM_break_simulation('ReadFile returning')
+            if exit_info.fname_addr is not None:
+                return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+                if return_count != 0x0: 
+                    not_ready = False
+           
+            if exit_info.fname_addr is not None and not_ready:
+                self.lgr.debug('winCallExit ReadFile: not ready --> do winDelay')
+
+                win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
+                    
+                trace_msg = trace_msg+' - Device not ready'
+
+            if return_count is not None and return_count != 0x0:
+                max_read = min(return_count, 100)
+                buf_addr = exit_info.retval_addr
+                read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
+                trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, repr(read_data))
+
+                my_syscall = exit_info.syscall_instance
+                self.lgr.debug('winCallExit %s' % (trace_msg))
+
+            else:
+                trace_msg = trace_msg + ' FAILED to get returned count'
+
+ 
         elif callname == 'AllocateVirtualMemory':
             if exit_info.retval_addr is not None and exit_info.fname_addr is not None:
                 base_addr = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -289,6 +317,7 @@ class WinCallExit():
                     return_count = None
 
                 if return_count is not None:
+                    #SIM_break_simulation('read returning')
                     max_read = min(return_count, 100)
                     buf_addr = exit_info.retval_addr
                     read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
@@ -311,10 +340,7 @@ class WinCallExit():
                         if my_syscall.linger: 
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, i_am_alone=True)
-
-                else:
-                    trace_msg = trace_msg + ' FAILED to get returned count'
-              
+ 
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
 
