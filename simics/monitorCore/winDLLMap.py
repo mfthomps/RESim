@@ -479,9 +479,11 @@ class WinDLLMap():
             else:
                 self.lgr.warning('winDLL getMachineSize pid %d missing machine field' % pid) 
         else: 
-            self.lgr.error('winDLL getMachineSize pid %d has no text' % pid) 
-        
-        self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))
+            self.lgr.debug('winDLL getMachineSize pid %d has no text' % pid) 
+            pass
+       
+        if retval is not None: 
+            self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))
         return retval
 
     def addPendingProc(self, prog_path):
