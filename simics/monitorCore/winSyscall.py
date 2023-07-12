@@ -605,7 +605,11 @@ class WinSyscall():
                 exit_info.fname_addr = self.paramOffPtr(5, [0], frame) + word_size
             else:
                 exit_info.fname_addr = frame['param5'] + word_size
-
+            
+            # Record current return count value so we can know if it changes before the function returns
+            # Do it in new_fd since it isnt used for this syscall
+            exit_info.new_fd = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
+            self.lgr.debug('Current value in returned count is 0x%x' % exit_info.new_fd)
             exit_info.count = self.stackParam(3, frame) & 0xFFFFFFFF 
              
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
@@ -846,11 +850,14 @@ class WinSyscall():
                 else:
                     exit_info.fname_addr = frame['param5'] + word_size 
                 #SIM_break_simulation('in send/recv') 
- 
+                # Now, in case the returned count gets filled between here and the return and it still returns 0x103
+                # record the current value to compare in new_fd since we aren't using it
+                exit_info.new_fd = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame) & 0xFFFFFFFF
 
                 trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-
+                self.lgr.debug(trace_msg)
+                self.lgr.debug('Current value in return count is 0x%x' % exit_info.new_fd)
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
