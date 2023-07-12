@@ -137,7 +137,7 @@ class SyscallManager():
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
                                self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
-                               stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, 
+                               stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, soMap=self.soMap,
                                netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)
         self.trace_all[context] = retval
         return retval
@@ -182,7 +182,7 @@ class SyscallManager():
                 retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
-                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
+                               background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, soMap=self.soMap, 
                                stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
             ''' will have at least one call parameter, perhaps the dummy. '''
             call_param_name = call_params_list[0].name
@@ -212,12 +212,12 @@ class SyscallManager():
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
-                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
+                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
-                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, 
+                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 call_instance.syscall = retval
                 call_instance.addCallParams(call_params_list, call_list)
