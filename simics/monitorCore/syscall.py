@@ -479,6 +479,8 @@ class Syscall():
         self.exit_calls.append('tgkill')
         self.stop_on_exit = False
 
+        self.platform = self.top.getTargetPlatform()
+
     def breakOnExecve(self):
         for call in self.call_params:
             if call is not None and call.subcall == 'execve' and call.break_simulation:
@@ -1036,22 +1038,21 @@ class Syscall():
                         else:
                             got_bad = True
                 if got_bad and not got_good:
-                    self.lgr.debug('syscall socketParse socketcall %s not in list, skip it' % socket_callname)
+                    self.lgr.debug('syscall socketParse pid:%d socketcall %s not in list, skip it' % (pid, socket_callname))
                     return None
 
             if self.record_fd and socket_callname not in record_fd_list:
                 self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
                 return None
-            self.lgr.debug('socketParse socket_callnum is %d name: %s record_fd: %r' % (socket_callnum, socket_callname, self.record_fd))
+            self.lgr.debug('socketParse pid:%d socket_callnum is %d name: %s record_fd: %r' % (pid, socket_callnum, socket_callname, self.record_fd))
             #if syscall_info.compat32:
             #    SIM_break_simulation('socketcall')
             exit_info.socket_callname = socket_callname
             if socket_callname != 'socket' and socket_callname != 'setsockopt':
-                self.lgr.debug('syscall socketParse get SockStruct from param2: 0x%x' % frame['param2'])
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
                 if pid in self.pid_fd_sockets and ss.fd is not None and ss.fd in self.pid_fd_sockets[pid]:
                     ss.addParams(self.pid_fd_sockets[pid][ss.fd])
-                self.lgr.debug('ss is %s' % ss.getString())
+                self.lgr.debug('syscall socketParse got SockStruct from param2: 0x%x %s' % (frame['param2'], ss.getString()))
         else:
             socket_callname = callname
             self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
@@ -1243,7 +1244,7 @@ class Syscall():
             else:
                 ida_msg = '%s - %s pid:%d FD: %d len: %d %s' % (callname, socket_callname, pid, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
-                self.lgr.debug('syscall parse socket rec... subcall is %s ss.fd is %s match_param is %s' % (call_param.subcall, str(ss.fd), str(call_param.match_param)))
+                self.lgr.debug('syscall parse pid:%d socket rec... subcall is %s ss.fd is %s match_param is %s' % (pid, call_param.subcall, str(ss.fd), str(call_param.match_param)))
                 if (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
@@ -1785,8 +1786,7 @@ class Syscall():
         elif callname == 'mmap' or callname == 'mmap2':        
             #self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
-            '''
-            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0:
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0 and self.platform == 'arm5':
                 #self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
@@ -1807,14 +1807,14 @@ class Syscall():
                     ida_msg = '%s pid:%d FD: NONE' % (callname, pid)
                 else:
                     ida_msg = '%s pid:%d FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, pid, fd, arg_addr, length, prot, flags, offset)
-            '''
-            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+            elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
                 ''' tbd wth? the above seems wrong, why key on addr of zero? '''
                 fd = frame['param5']
                 prot = frame['param3']
                 ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
-                #self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
+                self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
+                self.lgr.debug(ida_msg)
             else:
                 fd = frame['param5']
                 prot = frame['param3']
@@ -1826,7 +1826,7 @@ class Syscall():
                 #    self.lgr.debug('syscall mmap watch_first_mmap is none')
                 self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
             is_ex = prot & 4
-            #self.lgr.debug('is exec? %d' % is_ex)
+            self.lgr.debug('syscall mmap fd %d  watch_first_mmap %s  is exec? %d' % (fd, self.watch_first_mmap, is_ex))
             if self.watch_first_mmap == fd and is_ex:
                 self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % fd)
                 exit_info.fname = self.mmap_fname
