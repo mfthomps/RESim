@@ -476,7 +476,6 @@ class WinDLLMap():
                        retval = 32
                    elif 'AMD64' in machine:
                        retval = 64
-               self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))
 
             else:
                 self.lgr.warning('winDLL getMachineSize pid %d missing machine field' % pid) 
