@@ -55,7 +55,13 @@ class FunMgr():
         return self.ida_funs.demangle(fun)
 
     def isFun(self, fun):
-        return self.ida_funs.isFun(fun)
+        retval = False
+        if self.ida_funs.isFun(fun):
+            retval = True
+        elif fun in self.relocate_funs:
+            retval = True
+        return retval
+ 
 
     def add(self, path, start):
         self.ida_funs.add(path, start)
@@ -133,21 +139,21 @@ class FunMgr():
             root_dir = os.path.basename(root_prefix)
             self.lgr.debug('getIDAFuns root_dir  %s  rel_path %s offset 0x%x' % (root_dir, rel_path, offset))
           
-            funs_file = os.path.join(analysis_path, root_dir, rel_path) 
-            self.lgr.debug('getIDAFuns funs_file %s' % funs_file) 
+            analysis_path = os.path.join(analysis_path, root_dir, rel_path) 
+            self.lgr.debug('getIDAFuns analysis_path %s' % analysis_path) 
 
-            fun_path = funs_file+'.funs'
-            iterator_path = funs_file+'.iterators'
+            fun_path = analysis_path+'.funs'
+            iterator_path = analysis_path+'.iterators'
             self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
             
             if os.path.isfile(fun_path):
                 self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr, offset=offset)
-                self.setRelocateFuns(funs_file, offset=offset)
+                self.setRelocateFuns(analysis_path, offset=offset)
                 self.lgr.debug('getIDAFuns using IDA function analysis from %s' % fun_path)
             else:
                 self.lgr.debug('getIDAFuns No IDA function file at %s try using old paths ' % fun_path)
                 self.getIDAFunsOld(full_path, root_prefix)
-                self.setRelocateFuns(funs_file)
+                self.setRelocateFuns(full_path)
 
         else:
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
@@ -164,7 +170,7 @@ class FunMgr():
                     self.relocate_funs[adjust] = funs[addr_s]
         else:
             self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
-            self.lgr.warning('stackFrameManager setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
+            self.lgr.warning('funMgr setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
           
 
     def getFunNameFromInstruction(self, instruct, eip):
