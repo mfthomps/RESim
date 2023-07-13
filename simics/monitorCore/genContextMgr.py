@@ -1,5 +1,6 @@
 from simics import *
 from resimHaps import *
+import winProg
 import os
 '''
 Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
@@ -246,9 +247,12 @@ class GenContextMgr():
 
         self.only_progs = [] 
 
-        self.watch_for_prog = None
+        self.watch_for_prog = []
         self.watch_for_prog_callback = None
         self.current_tasks = []
+
+        self.comm_prog_map = {}
+        self.soMap = None
 
     def getRealBreak(self, break_handle):
         for hap in self.haps:
@@ -587,12 +591,12 @@ class GenContextMgr():
                     #self.restoreSuspendContext()
                 else:
                     SIM_run_alone(self.restoreDefaultContext, None)
-                    if self.watch_for_prog is not None:
+                    if len(self.watch_for_prog) > 0: 
                         self.checkFirstSchedule(new_addr, pid, comm)
                     #self.restoreDefaultContext()
             else:
                 SIM_run_alone(self.restoreDefaultContext, None)
-                if self.watch_for_prog is not None:
+                if len(self.watch_for_prog) > 0:
                     self.checkFirstSchedule(new_addr, pid, comm)
                 #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
@@ -913,11 +917,14 @@ class GenContextMgr():
         pid = self.debugging_pid
         if pid is None: 
             pid = self.debugging_pid_saved
-        self.lgr.debug('resetWatchTasks pid:%d' % pid)
+        if pid is None:
+            cpu, pid, dumb2  = self.task_utils.curProc()
+            self.lgr.debug('resetWatchTasks pid was not, got current as pid:%d' % pid)
+        #self.lgr.debug('resetWatchTasks pid:%d' % pid)
         self.stopWatchTasksAlone(None)
-        self.lgr.debug('resetWatchTasks back from stopWatch')
+        #self.lgr.debug('resetWatchTasks back from stopWatch')
         self.watchTasks(set_debug_pid = True, pid=pid)
-        self.lgr.debug('resetWatchTasks back from watchTasks')
+        #self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
             self.lgr.debug('resetWatchTasks pid %d' % pid)
             if pid == 1:
@@ -1332,10 +1339,17 @@ class GenContextMgr():
 
     def onlyProg(self, prog):
         comm = os.path.basename(prog)[:self.task_utils.commSize()]
+        self.comm_prog_map[comm]=prog
         if comm not in self.only_progs:
             self.only_progs.append(comm)
             self.lgr.debug('contextManager onlyProg %s' % comm)
             self.setTaskHap()
+            if prog.startswith('/'):
+                existing_pids = self.task_utils.getPidsForComm(comm)
+                if len(existing_pids) == 0:
+                    ''' watch for first schedule of this in case we are just tracing and not using debugProc '''
+                    self.lgr.debug('contextManager onlyProg will watch for first schedule of %s' % comm)
+                    self.callWhenFirstScheduled(comm, self.recordProcessText)
 
     def getIgnoredProgs(self):
             return list(self.ignore_progs)
@@ -1437,13 +1451,33 @@ class GenContextMgr():
             self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
 
     def callWhenFirstScheduled(self, comm, callback):
-        self.watch_for_prog = comm
+        self.watch_for_prog.append(comm)
         self.watch_for_prog_callback = callback
         self.current_tasks = self.task_utils.getTaskList()
 
     def checkFirstSchedule(self, task_rec, pid, comm):
-        if task_rec not in self.current_tasks and comm == self.watch_for_prog:
+        if task_rec not in self.current_tasks and comm in self.watch_for_prog:
             self.lgr.debug('contextManager checkFirstSchedule got first for pid:%d' % pid)
-            self.watch_for_prog = None
+            self.watch_for_prog.remove(comm)
             self.watch_for_prog_callback(pid)
             self.watch_for_prog_callback = None
+
+    def recordProcessText(self, pid):
+        comm = self.task_utils.getCommFromPid(pid) 
+        self.lgr.debug('contextManager recordProcessText for %s' % comm)
+        if comm in self.comm_prog_map:
+            prog = self.comm_prog_map[comm]
+            eproc = self.task_utils.getCurTaskRec()
+            full_path = self.top.getFullPath(prog)
+            self.lgr.debug('contextManager recordProcessText full path %s' % full_path)
+  
+            win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+            self.soMap.addText(prog, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
+                        win_prog_info.image_base, win_prog_info.text_offset)
+        else:
+            self.lgr.debug('contextManager recordProcess text %s not in comm_prog_map' % comm)
+
+
+    def setSOMap(self, soMap):
+        ''' ugly dependency loop needed to set text on first schedule ''' 
+        self.soMap = soMap

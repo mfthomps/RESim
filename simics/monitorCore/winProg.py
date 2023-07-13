@@ -16,7 +16,7 @@ class WinProgInfo():
 def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
     load_address = getLoadAddress(cpu, mem_utils, eproc, lgr)
     text_size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
-    return WinProgInfo(load_addr, text_offset, text_size, machine, image_base)
+    return WinProgInfo(load_address, text_offset, text_size, machine, image_base)
 
 def getLoadAddress(cpu, mem_utils, eproc, lgr):
         retval = None

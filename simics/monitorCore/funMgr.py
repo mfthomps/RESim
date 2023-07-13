@@ -92,10 +92,15 @@ class FunMgr():
         return self.ida_funs.getFunName(addr)
 
     def isIterator(self, addr):
-        return self.user_iterators.isIterator(addr)
+        if self.user_iterators is not None:
+            return self.user_iterators.isIterator(addr)
+
+    def setUserIterators(self, iterators):
+        self.user_iterators = iterators
 
     def addIterator(self, fun):
-        self.user_iterators.add(fun)
+        if self.user_iterators is not None:
+            self.user_iterators.add(fun)
 
     def hasIDAFuns(self):
         if self.ida_funs is not None:

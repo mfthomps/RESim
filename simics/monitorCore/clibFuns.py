@@ -100,6 +100,10 @@ def adjustFunName(frame, fun_mgr, lgr):
                 else:
                     lgr.error('clibFuns string function parsing, Expected "(" in %s' % fun)
 
+            elif fun.startswith('crt_stdio_output::'):
+                fun = fun[len('crt_stdio_output::'):]
+                if '<' in fun:
+                    fun = fun.split('<', 1)[0]
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy'):

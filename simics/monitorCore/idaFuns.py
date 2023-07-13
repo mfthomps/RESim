@@ -174,13 +174,14 @@ class IDAFuns():
 
     def getFunName(self, ip):
         retval = None
-        adjusted = ip - self.offset
-        if adjusted in self.funs:
-            retval = self.getName(adjusted)
-        else:
-            fun = self.getFun(ip)
-            if fun is not None:
-                retval = self.getName(fun)
+        if ip is not None:
+            adjusted = ip - self.offset
+            if adjusted in self.funs:
+                retval = self.getName(adjusted)
+            else:
+                fun = self.getFun(ip)
+                if fun is not None:
+                    retval = self.getName(fun)
         return retval
 
     def showFuns(self, search=None):
