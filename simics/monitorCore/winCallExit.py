@@ -204,7 +204,8 @@ class WinCallExit():
                     trace_msg = trace_msg+' - Device not ready'
 
             if return_count is not None:
-                max_read = min(return_count, 100)
+                #SIM_break_simulation('in return from ReadFile')
+                max_read = min(return_count, 1000)
                 buf_addr = exit_info.retval_addr
                 read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
                 trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, repr(read_data))
