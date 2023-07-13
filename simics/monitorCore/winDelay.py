@@ -55,6 +55,12 @@ class WinDelay():
         self.return_count = None
         self.trace_msg = None
 
+        ''' Control when to generate watch marks and trace messages'''
+        self.did_exit = False
+
+        ''' wth?'''
+        self.hack_count = 0
+
         ''' Set the hap'''    
         self.setCountWriteHap()
 
@@ -81,28 +87,38 @@ class WinDelay():
         ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.count_addr, 1, 0)
         self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
+        self.lgr.debug('winDelay setCountWriteHap to 0x%x' % self.count_addr)
 
     def writeCountHap(self, dumb, third, forth, memory):
         ''' Invoked when the count address is written to '''
         if self.count_write_hap is None:
             return
+        if not self.did_exit and self.hack_count < 1:
+            self.lgr.debug('winDelay writeCountHap skipping first kernel write to count address.  TBD if always needed.')
+            self.hack_count = self.hack_count + 1
+            return
         return_count = SIM_get_mem_op_value_le(memory)
 
         #return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
-        self.lgr.debug('winDelay writeCountHap read count from 0x%x got 0x%x' % (self.count_addr, return_count))
+        self.lgr.debug('winDelay writeCountHap read count from 0x%x got 0x%x did exit? %r' % (self.count_addr, return_count, self.did_exit))
         if return_count == 0:
-            self.lgr.debug('WinDelay return count of zero.  now what?')
+            self.lgr.debug('winDelay return count of zero.  now what?')
         else:
             max_read = min(return_count, 100)
             read_data = self.mem_utils.readString(self.cpu, self.buffer_addr, max_read)
-            trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, repr(read_data))
-            self.trace_mgr.write(trace_msg)
-            self.lgr.debug('winDelay writeCountHap %s' % trace_msg)
+            if self.did_exit:
+                trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, repr(read_data))
+                self.trace_mgr.write(trace_msg)
+                self.lgr.debug('winDelay writeCountHap already did exit so log the trace message %s' % trace_msg)
+            else:
+                trace_msg = self.call_name+' return  count: 0x%x data: %s\n' % (return_count, repr(read_data))
+                self.lgr.debug('winDelay writeCountHap have not yet done exit so log SAVE the trace message %s' % trace_msg)
             #SIM_break_simulation('WinDelay')
             # we are in the kernel at some arbitrary place.  run to user space
             self.return_count = return_count
             self.trace_msg = trace_msg
-            if self.data_watch is not None:
+            self.lgr.debug('winDelay writeCountHap trace_msg: %s' % trace_msg)
+            if self.data_watch is not None and self.did_exit:
                 SIM_run_alone(self.toUserAlone, None)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
@@ -140,4 +156,23 @@ class WinDelay():
                 self.rmHap(hap, immediate=True)
             else:
                 SIM_run_alone(self.rmHap, hap) 
+
+    def exitingKernel(self, trace_msg, not_ready):
+        retval = False
+        if self.trace_msg is not None:
+            '''Data and count already written, log it '''
+            retval = True
+            if not_ready:
+                self.trace_msg = self.trace_msg+ ' Though kernel reported not ready.\n'
+            self.trace_mgr.write(self.trace_msg)
+            self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % self.trace_msg)
+            if self.data_watch is not None:
+                self.lgr.debug('winDelay exitingKernel do data watch')
+                SIM_run_alone(self.toUserAlone, None)
+        else:
+            self.lgr.debug('winDelay exitingKernel did not yet see data')
+            self.did_exit = True
+        return retval
+
+
 

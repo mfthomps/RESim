@@ -20,18 +20,20 @@ import winSocket
 import winFile
 import winNTSTATUS
 import net
+import winDelay
 from resimHaps import *
 from resimUtils import rprint
 class WinSyscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
+                   traceMgr, dataWatch, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
                    background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.dataWatch = dataWatch
         self.context_manager = context_manager
         ''' mostly a test if we are debugging (if pid is not none). not very clean '''
         pid, cpu = context_manager.getDebugPid()
@@ -111,10 +113,10 @@ class WinSyscall():
         self.background = background
         break_list, break_addrs = self.doBreaks(background)
 
-        break_simulation = False
+        self.break_simulation = False
         for call in self.call_params:
             if call is not None and call.break_simulation:
-                break_simulation = True
+                self.break_simulation = True
                 break 
  
         if flist_in is not None:
@@ -125,7 +127,7 @@ class WinSyscall():
             #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
-        elif (break_simulation or self.debugging) and not self.breakOnProg() and not trace and skip_and_mail:
+        elif (self.break_simulation or self.debugging) and not self.breakOnProg() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
@@ -614,7 +616,12 @@ class WinSyscall():
              
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
             #SIM_break_simulation('starting Read')
-
+            self.lgr.debug('winSyscall ReadFile set asynch_handler')
+            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, 
+                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
+            if self.watchData(exit_info):
+                self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
+                exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
 
         elif callname == 'WriteFile':
             exit_info.old_fd = frame['param1']
@@ -850,14 +857,18 @@ class WinSyscall():
                 else:
                     exit_info.fname_addr = frame['param5'] + word_size 
                 #SIM_break_simulation('in send/recv') 
-                # Now, in case the returned count gets filled between here and the return and it still returns 0x103
-                # record the current value to compare in new_fd since we aren't using it
-                exit_info.new_fd = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
                 exit_info.count = self.paramOffPtr(7, [0, 0], frame, word_size) & 0xFFFFFFFF
 
                 trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                 self.lgr.debug(trace_msg)
-                self.lgr.debug('Current value in return count is 0x%x' % exit_info.new_fd)
+
+                if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
+                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                          self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
+
+                    self.lgr.debug('doing win_delay.setDataWatch')
+                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
@@ -1591,3 +1602,11 @@ class WinSyscall():
     def recordStack(self, pid):
         self.lgr.debug('winSyscall recordStack pid:%d' % pid)
         self.top.recordStackClone(pid, -1)
+
+    def watchData(self, exit_info):
+        if (self.break_simulation or self.linger) and self.dataWatch is not None:
+            self.lgr.debug('winSyscall watchData True')
+            return True
+        else:
+            self.lgr.debug('winSyscall watchData False break_sim %r  lingre %r' % (self.break_simulation, self.linger))
+            return False

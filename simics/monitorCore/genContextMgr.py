@@ -962,6 +962,8 @@ class GenContextMgr():
         if pid is None:
             ctask = self.task_utils.getCurTaskRec()
             cell, comm, pid  = self.task_utils.curProc()
+        else:
+            comm = self.task_utils.getCommFromPid(pid)
         if pid == 1:
             self.lgr.debug('contextManager watchTasks, pid is 1, ignore')
             return

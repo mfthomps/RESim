@@ -89,7 +89,7 @@ class SyscallInstance():
 
 class SyscallManager():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, soMap, compat32, targetFS, os_type):
+                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type):
         self.top = top
         self.param = param
         self.cpu = cpu
@@ -102,6 +102,7 @@ class SyscallManager():
         self.sharedSyscall = sharedSyscall
         self.lgr = lgr
         self.traceMgr = traceMgr
+        self.dataWatch = dataWatch
         self.soMap = soMap
         if self.soMap is None:
             self.lgr.error('SOMap is none in syscall manager')
@@ -128,7 +129,7 @@ class SyscallManager():
         if self.top.isWindows(self.cell_name):
             retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
-                               self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
+                               self.lgr, self.traceMgr, self.dataWatch, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, 
                                stop_on_call=stop_on_call, trace=trace, soMap=self.soMap,
                                record_fd=record_fd, swapper_ok=swapper_ok)
@@ -175,7 +176,7 @@ class SyscallManager():
             if self.top.isWindows(self.cell_name):
                 retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
-                               call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                               self.dataWatch, call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, soMap=self.soMap, 
                                stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
             else:
@@ -211,7 +212,7 @@ class SyscallManager():
                 ''' TBD what about flist and stop action?'''
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
                                call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 else:

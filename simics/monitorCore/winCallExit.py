@@ -32,7 +32,6 @@ import allWrite
 import syscall
 import resimUtils
 import epoll
-import winDelay
 from resimHaps import *
 import winNTSTATUS
 '''
@@ -186,31 +185,13 @@ class WinCallExit():
                 self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
 
             else:
-                # see what the return count claims to be right now
-                return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-                # if the call reported not ready (0x103), see if it became ready in the meantime
-                if not_ready and return_count != exit_info.new_fd:
-                    self.lgr.debug('winCallExit ReadFile: Finished despite STATUS_PENDING return status. %d != %d' % (return_count, exit_info.new_fd))
-                    trace_msg = trace_msg + ' (but still finished)'
-
-                    not_ready = False
-
-                if not_ready:
+                was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                if not was_ready:
                     return_count = None
-                    self.lgr.debug('winCallExit ReadFile: not ready --> do winDelay')
-
-                    win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
-                    
+                    self.lgr.debug('winCallExit ReadFile: not ready ')
                     trace_msg = trace_msg+' - Device not ready'
 
-            if return_count is not None:
-                max_read = min(return_count, 100)
-                buf_addr = exit_info.retval_addr
-                read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, repr(read_data))
-
-                my_syscall = exit_info.syscall_instance
-                self.lgr.debug('winCallExit %s' % (trace_msg))
+            self.lgr.debug('winCallExit %s' % (trace_msg))
  
         elif callname == 'AllocateVirtualMemory':
             if exit_info.retval_addr is not None and exit_info.fname_addr is not None:
@@ -311,49 +292,15 @@ class WinCallExit():
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
                 
                 else: 
-                    # see what the return count claims to be right now
-                    return_count = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-                    # if the call reported not ready (0x103), see if it became ready in the meantime
-                    if not_ready and return_count != exit_info.new_fd:
-                        self.lgr.debug('winCallExit %s: Finished despite STATUS_PENDING return status. %d != %d' % (exit_info.socket_callname, return_count, exit_info.new_fd))
-                        trace_msg = trace_msg + ' (but still finished)'
-                        not_ready = False
-
+                    if exit_info.asynch_handler is not None:
+                        was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                        self.lgr.debug('winCallExit asynch_hanler was ready? %r' % was_ready)
+                        if was_ready:
+                            not_ready = False
                     if not_ready:
                         return_count = None #denote it isnt ready to be read
-                        self.lgr.debug('winCallExit %s: not ready --> do winDelay' % exit_info.socket_callname)
-                        win_delay = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
-                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                         trace_msg = trace_msg+' - Device not ready'
-
-                        if self.watchData(exit_info) and exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM']:
-                            self.lgr.debug('doing win_delay.setDataWatch')
-                            win_delay.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-
-                if return_count is not None:
-                    #SIM_break_simulation('read returning')
-                    max_read = min(return_count, 100)
-                    buf_addr = exit_info.retval_addr
-                    read_data = self.mem_utils.readString(self.cpu, buf_addr, max_read)
-                    trace_msg = trace_msg+' count: 0x%x data: %s' % (return_count, repr(read_data))
-
-                    my_syscall = exit_info.syscall_instance
-                    self.lgr.debug('winCallExit %s' % (trace_msg))
-
-                    if self.watchData(exit_info) and exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM']:
-                        ''' in case we want to break on a read of this data.  '''
-                        self.lgr.debug('winCallExit RECV call succeeded, setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, return_count,
-                            exit_info.count))
-                        if self.kbuffer is not None:
-                            self.kbuffer.readReturn(eax)
-                        # TBD sainer way to look for reuse of input buffers?  For now, limit data watch range to the returned count
-                        #self.dataWatch.setRange(exit_info.retval_addr, return_count, msg=trace_msg, 
-                        #           max_len=exit_info.count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
-                        self.dataWatch.setRange(exit_info.retval_addr, return_count, msg=trace_msg, 
-                                   max_len=return_count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
-                        if my_syscall.linger: 
-                            self.dataWatch.stopWatch() 
-                            self.dataWatch.watch(break_simulation=False, i_am_alone=True)
+                        self.lgr.debug('winCallExit %s' % trace_msg)
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)

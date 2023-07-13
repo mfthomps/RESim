@@ -305,6 +305,7 @@ class ExitInfo():
         self.origin_reset = False
         self.bytes_to_write = None
         self.trace_msg = None
+        self.asynch_handler = None
 
 
 EXTERNAL = 1
