@@ -82,6 +82,9 @@ class SharedSyscall():
         else:
             self.win_call_exit = None
 
+        ''' optimization if "only" or "ignore" lists are used '''
+        self.preserve_exit = False
+
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
         self.track_so = track_so
@@ -142,8 +145,13 @@ class SharedSyscall():
                     my_exit_pids[eip].remove(pid)
                     #self.lgr.debug('rmExitHap removed pid %d for eip 0x%x cycle: 0x%x' % (pid, eip, self.cpu.cycles))
                     if len(my_exit_pids[eip]) == 0:
-                        #self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero' % eip)
-                        self.context_manager.genDeleteHap(self.exit_hap[eip])
+                        if  self.preserve_exit:
+                            ''' add a dummy entry to preserve exit haps '''
+                            self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero, but we are preserving os add a dummy entry' % eip)
+                            my_exit_pids[eip].append(-1)
+                        else:
+                            self.lgr.debug('rmExitHap len of exit_pids[0x%x] is zero, delete exit hap' % eip)
+                            self.context_manager.genDeleteHap(self.exit_hap[eip])
             self.exit_info[pid] = {}     
 
         else:
@@ -191,7 +199,7 @@ class SharedSyscall():
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap')
-                #self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
+                self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
             my_exit_pids[exit_eip1].append(pid)
             #self.lgr.debug('sharedSyscall addExitHap appended pid %d for exitHap for 0x%x' % (pid, exit_eip1))
         else:
@@ -208,7 +216,7 @@ class SharedSyscall():
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap2')
-                #self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
+                self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
             else:
                 #self.lgr.debug('sharedSyscall has exit pid for EIP2, len is %d' % len(my_exit_pids[exit_eip2]))
                 #for pid in my_exit_pids[exit_eip2]:
@@ -584,7 +592,7 @@ class SharedSyscall():
         if cpu is None:
             self.lgr.error('sharedSyscall exitHap got nothing from curProc')
             return
-        #self.lgr.debug('sharedSyscall exitHap %d (%s) context: %s  break_num: %s' % (pid, comm, str(context), str(break_num)))
+        #self.lgr.debug('sharedSyscall exitHap pid:%d (%s) context: %s  break_num: %s cycle: 0x%x' % (pid, comm, str(context), str(break_num), self.cpu.cycles))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:
@@ -1235,3 +1243,6 @@ class SharedSyscall():
 
     def setReadFixup(self, read_fixup_callback):
         self.read_fixup_callback = read_fixup_callback
+
+    def preserveExit(self):
+        self.preserve_exit = True

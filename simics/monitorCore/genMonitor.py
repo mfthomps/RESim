@@ -2378,6 +2378,9 @@ class GenMonitor():
             retval = self.ignoreProgList() 
             if not retval:
                 retval = self.onlyProgList() 
+        if retval:
+            ''' do not delete/recreate exit haps '''
+            self.sharedSyscall[self.target].preserveExit()
         return retval
  
     def traceAll(self, target=None, record_fd=False, swapper_ok=False):
@@ -5212,6 +5215,9 @@ class GenMonitor():
             self.fun_mgr.showFuns(search = search)
         else:
             print('No IDA functions loaded.')
+
+    def showRelocate(self):
+        self.fun_mgr.showRelocate()
 
     def showMangle(self, search=None):
         if self.fun_mgr is not None:
