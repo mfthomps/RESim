@@ -300,7 +300,7 @@ class InjectIO():
                     #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
-                    self.top.stopTrackIO()
+                    self.top.stopTrackIO(immediate=True)
                     self.dataWatch.clearWatches()
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()

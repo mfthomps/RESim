@@ -697,7 +697,7 @@ class GenMonitor():
 
             self.syscallManager[cell_name] = syscallManager.SyscallManager(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name],
                                      self.context_manager[cell_name], self.traceProcs[cell_name], self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name], self.soMap[cell_name], 
-                                     self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name])
+                                     self.dataWatch[cell_name], self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name])
 
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
@@ -3827,7 +3827,7 @@ class GenMonitor():
             print('Reverse execution must be enabled.')
             return
         self.track_started = True
-        self.stopTrackIOAlone()
+        self.stopTrackIOAlone(immediate=True)
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
         self.restoreDebugBreaks()
@@ -3854,7 +3854,11 @@ class GenMonitor():
 
    
     def stopTrackIO(self, immediate=False):
-        SIM_run_alone(self.stopTrackIOAlone, immediate)
+        self.lgr.debug('stopTrackIO immediate %r' % immediate)
+        if immediate:
+            self.stopTrackIOAlone(immediate)
+        else:
+            SIM_run_alone(self.stopTrackIOAlone, immediate)
 
     def stopTrackIOAlone(self, immediate=False):
         thread_pids = self.context_manager[self.target].getThreadPids()
@@ -4488,7 +4492,7 @@ class GenMonitor():
         ''' track access to XML file access '''
         self.lgr.debug('trackFile') 
         self.track_started = True
-        self.stopTrackIO()
+        self.stopTrackIO(immediate=True)
         self.clearWatches()
         self.lgr.debug('trackFile stopped track and cleared watchs')
         self.dataWatch[self.target].trackFile(self.stopTrackIO, self.is_compat32)
