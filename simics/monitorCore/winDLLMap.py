@@ -483,8 +483,8 @@ class WinDLLMap():
             self.lgr.debug('winDLL getMachineSize pid %d has no text' % pid) 
             pass
        
-        if retval is not None: 
-            self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))
+        #if retval is not None: 
+        #    self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))
         
         return retval
 

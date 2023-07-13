@@ -834,7 +834,7 @@ class WinSyscall():
             if op_cmd in ['ACCEPT', '12083_ACCEPT']:
                 if op_cmd == '12083_ACCEPT':
                     exit_info.new_fd = self.paramOffPtr(7, [4], frame, word_size)
-                    trace_msg = trace_msg+'New_Handle: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+                    trace_msg = trace_msg+'New_Handle: 0x%x' % (exit_info.new_fd)
                 else:
                     handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                     exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
@@ -1105,7 +1105,7 @@ class WinSyscall():
         pval = frame[param]
         for offset in offset_list:
             ptr = pval + offset
-            self.lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
+            #self.lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
             
             # Determine if 32 or 64 bit and then read the param appropriately 
             #cpu, comm, pid = self.task_utils.curProc()
@@ -1115,10 +1115,10 @@ class WinSyscall():
             elif word_size == 4: 
                 pval = self.mem_utils.readWord32(self.cpu, ptr)
             if pval is not None:
-                self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                #self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
                 pass
             else:
-                self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                #self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
                 break
         return pval
     
