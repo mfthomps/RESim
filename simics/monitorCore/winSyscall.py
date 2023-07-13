@@ -603,11 +603,12 @@ class WinSyscall():
             # data buffer address
             exit_info.retval_addr = self.stackParam(2, frame)
             # the return count address --> this is where kernel will store count ACTUALLY sent/received
-            if word_size == 4:
-                exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
-            else:
-                exit_info.fname_addr = frame['param5'] + word_size
-            
+            #if word_size == 4:
+            #    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+            #else:
+            #    exit_info.fname_addr = frame['param5'] + word_size
+            # So far we have only seen a pointer to a 64-bit IO_CTRL_BLOCK structure so just do 64 bit way for now
+            exit_info.fname_addr = frame['param5'] + 8
             # Record current return count value so we can know if it changes before the function returns
             # Do it in new_fd since it isnt used for this syscall
             exit_info.new_fd = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)

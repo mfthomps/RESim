@@ -199,7 +199,7 @@ class WinTaskUtils():
             if call in winSocket.op_map_vals:
                 retval = self.call_num_map['DeviceIoControlFile'] 
             else:
-                self.lgr.error('winTaskUtils, no map for call %s' % call)
+                self.lgr.warning('winTaskUtils, no map for call %s' % call)
         else:
             retval = self.call_num_map[call]
         return retval 
@@ -207,7 +207,7 @@ class WinTaskUtils():
     def syscallName(self, call_num, dumb=None):
         retval = None
         if call_num not in self.call_map:
-            self.lgr.error('winTaskUtils, no map for call number %d' % call_num)
+            self.lgr.warning('winTaskUtils, no map for call number %d' % call_num)
         else:
             retval = self.call_map[call_num][2:]
         return retval 
