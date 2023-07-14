@@ -3006,8 +3006,12 @@ class GenMonitor():
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, 
                 run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
         if self.isWindows(self.target):
+            if kbuf:
+                kbuffer = self.kbuffer[self.target]
+            else:
+                kbuffer = None
             self.winMonitor[self.target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, 
-                   run_fun, proc, run, kbuf, call_list)
+                   run_fun, proc, run, kbuffer, call_list)
             return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
@@ -3809,9 +3813,9 @@ class GenMonitor():
             else:
                 SIM_continue(0)
 
-    def trackRecv(self, fd, max_marks=None):
+    def trackRecv(self, fd, max_marks=None, kbuf=False):
         call_list = ['RECV']
-        self.trackIO(fd, call_list=call_list, max_marks=max_marks)
+        self.trackIO(fd, call_list=call_list, max_marks=max_marks, kbuf=kbuf)
 
     def trackKbuf(self, fd):
         self.trackIO(fd, kbuf=True)
@@ -5455,6 +5459,9 @@ class GenMonitor():
 
     def tracking(self):
         return self.track_started
+
+    def runToSO(self, file):
+        self.run_to[self.target].runToSO(file)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
