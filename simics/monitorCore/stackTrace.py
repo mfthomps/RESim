@@ -192,7 +192,8 @@ class StackTrace():
               
                 if fun_of_ip is not None:
                     fun_of_ip = cppClean(fun_of_ip)
-            if frame.instruct.startswith(self.callmn):
+            ''' TBD remove this, call instructions should already be fixed up '''
+            if False and frame.instruct.startswith(self.callmn):
                 parts = frame.instruct.split()
                 try:
                     faddr = int(parts[1], 16)
@@ -349,9 +350,9 @@ class StackTrace():
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
                 if fun_name is None or fun_name == 'None':
                     fun_name = this_fun_name
-                self.lgr.debug('doX86 initial sp call to fun_name %s' % fun_name)
                 fname = self.soMap.getSOFile(call_addr)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, eip)
+                self.lgr.debug('doX86 initial sp call to fun_name %s resolve call got %s' % (fun_name, instruct_1))
                 frame = self.FrameEntry(call_inst, fname, instruct_1, esp, fun_addr=call_addr, 
                         fun_name=fun_name, ret_addr=stack_val, ret_to_addr = esp)
                 self.addFrame(frame)
@@ -455,7 +456,7 @@ class StackTrace():
                     fname = self.soMap.getSOFile(call_addr)
                     if fname is None:
                         fname = 'unknown'
-                    #self.lgr.debug('stackTrace x86 add frame add call_inst 0x%x  inst: %s' % (call_inst, instruct_1)) 
+                    self.lgr.debug('stackTrace x86 add frame add call_inst 0x%x  inst: %s' % (call_inst, instruct_1)) 
                     frame = self.FrameEntry(call_inst, fname, instruct_1, (bp - self.mem_utils.wordSize(self.cpu)), fun_addr=call_addr, 
                         fun_name=fun_name, ret_addr=ret_to, ret_to_addr = ret_to_addr)
                     self.addFrame(frame)
@@ -711,8 +712,9 @@ class StackTrace():
                 done = True
             else:
                 self.lgr.debug('stackTrace doTrace after doX86 bp 0x%x num frames %s' % (bp, len(self.frames)))
-                ''' TBD remove this '''
-                #done = True
+                if len(self.frames) > 5:
+                    ''' TBD revisit this wag '''
+                    done = True
 
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''

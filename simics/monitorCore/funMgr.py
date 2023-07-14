@@ -26,8 +26,8 @@ import idaFuns
 import userIterators
 import elfText
 import resimUtils
+import winProg
 import os
-import json
 import json
 class FunMgr():
     def __init__(self, top, cpu, mem_utils, lgr):
@@ -58,6 +58,7 @@ class FunMgr():
         return self.ida_funs.demangle(fun)
 
     def isFun(self, fun):
+        ''' given fun value may reflect random load base address '''
         retval = False
         if self.ida_funs.isFun(fun):
             retval = True
@@ -65,9 +66,19 @@ class FunMgr():
             retval = True
         return retval
  
-
-    def add(self, path, start):
-        self.ida_funs.add(path, start)
+    ''' TBD extend linux soMap to pass load addr '''
+    def add(self, path, start, offset=0):
+        use_offset = start
+        if offset != 0:
+            use_offset = offset
+        self.ida_funs.add(path, use_offset)
+        if offset is not None:
+            self.lgr.debug('funMgr add call setRelocate funs path %s offset 0x%x   start 0x%x ' % (path, offset, start))
+        else:
+            self.lgr.debug('funMgr add call setRelocate funs path %s  start 0x%x offset was None' % (path, start))
+            
+           
+        self.setRelocateFuns(path, offset=offset)
 
     def isCall(self, instruct):
         if instruct.startswith(self.callmn):
@@ -167,6 +178,7 @@ class FunMgr():
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
 
     def setRelocateFuns(self, full_path, offset=0):
+        self.lgr.debug('funMgr setRelocateFuns offset is 0x%x' % offset) 
         relocate_path = full_path+'.imports'
         if os.path.isfile(relocate_path):
             with open(relocate_path) as fh:
@@ -176,9 +188,14 @@ class FunMgr():
                     adjust = addr+offset
                     #self.lgr.debug('funMgr setRelocateFuns addr 0x%x offset 0x%x adjusted [0x%x] to %s' % (addr, offset, adjust, funs[addr_s]))
                     self.relocate_funs[adjust] = funs[addr_s]
+                self.lgr.debug('funMgr setRelocateFuns loaded %d relocates for path %s num relocates now %d' % (len(funs), relocate_path, len(self.relocate_funs))) 
         else:
-            self.relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
-            self.lgr.warning('funMgr setRelocateFuns no file at %s, revert to elf parse got %d relocate funs' % (relocate_path, len(self.relocate_funs)))
+            ''' TBD need to adjust per offset'''
+            new_relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+            if new_relocate_funs is not None:
+                for fun in new_relocate_funs:
+                    self.relocate_funs[fun] = new_relocate_funs[fun]
+                self.lgr.warning('funMgr setRelocateFuns no file at %s, revert to elf parse got %d new relocate funs' % (relocate_path, len(new_relocate_funs)))
           
 
     def getFunNameFromInstruction(self, instruct, eip):
@@ -228,7 +245,7 @@ class FunMgr():
     def resolveCall(self, instruct, eip):      
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
-        #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
+        self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
@@ -246,11 +263,15 @@ class FunMgr():
                     if fun_name.startswith('.') or fun_name.startswith('_'):
                         fun_name = fun_name[1:]
                     retval = '%s %s' % (self.callmn, fun_name)
-                    #self.lgr.debug('resolveCall got %s' % retval)
+                    self.lgr.debug('resolveCall got %s' % retval)
         return retval
    
     def isRelocate(self, addr):
         return addr in self.relocate_funs
+
+    def showRelocate(self):
+        for fun in self.relocate_funs:
+            print('0x%x %s' % (fun, self.relocate_funs[fun]))
 
     def showFuns(self, search = False):
         self.ida_funs.showFuns(search=search)
