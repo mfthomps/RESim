@@ -106,7 +106,7 @@ if [[ $target = $here/* ]]; then
 fi
 
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
-mkdir -p $ida_analysis_path
+mkdir -p "$ida_analysis_path"
 
 echo "target is $target"
 echo "dbpath $ida_db_path"
@@ -119,6 +119,6 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
-    mkdir -p $RESIM_IDA_DATA/$root_dir/$target_base
-    $idacmd -o$ida_db_path -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $target
+    mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
+    $idacmd -o$ida_db_path -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
 fi
