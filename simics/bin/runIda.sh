@@ -37,8 +37,11 @@ fi
 target=$1
 echo "target is $1"
 target_base="$(basename -- "$target")"
+echo "the target base is $target_base"
 here="$(pwd)"
+echo "we are currently: $here"
 root_dir="$(basename --  "$here")"
+echo "the root_dir is $root_dir"
 old_dir=$RESIM_IDA_DATA/$target_base
 new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
@@ -91,7 +94,7 @@ if [ ! -z "$remote" ]; then
     fi
 fi
 
-target_path=$(realpath $target)
+target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 
 if [ -z "$IDA_ANALYSIS" ]; then
