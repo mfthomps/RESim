@@ -56,6 +56,7 @@ class WinMonitor():
             self.snap_start_cycle = None
         self.cell = self.top.getCell(cell_name)
 
+        self.kbuffer = {}
 
         ''' dict of dict of syscall.SysCall keyed cell and context'''
         ''' TBD remove these '''
@@ -195,7 +196,7 @@ class WinMonitor():
         self.lgr.debug('traceWindows')
         return retval
 
-    def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
+    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list):
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
@@ -213,8 +214,8 @@ class WinMonitor():
                     skip_and_mail = False
                 self.lgr.debug('winMonitor runToIO, add new syscall')
                 kbuffer_mod = None
-                if kbuf:
-                    kbuffer_mod = self.kbuffer
+                if kbuf is not None:
+                    kbuffer_mod = kbuf
                     self.sharedSyscall.setKbuffer(kbuffer_mod)
                 if call_list is None:
                     calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile']
