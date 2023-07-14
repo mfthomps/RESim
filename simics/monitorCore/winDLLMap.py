@@ -424,7 +424,20 @@ class WinDLLMap():
                 fun_path = self.getAnalysisPath(section.fname)
                 if fun_path is not None:
                     self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
-                    self.fun_mgr.add(fun_path, locate)
+                    if section.image_base is None:
+                        full_path = self.top.getFullPath(fname=section.fname)
+                        size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
+                    else:
+                        image_base = section.image_base
+                        text_offset = section.text_offset
+                    if text_offset is not None:
+                        delta = (locate - image_base) 
+                        offset = delta + text_offset
+                        self.lgr.debug('winDLL setIdaFuns xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x ' % (offset, locate, text_offset, image_base, delta))
+                    else:
+                        self.lgr.debug('winDLL setIdaFuns offset 0x%x locate: 0x%x text_offset is None ' % (offset, locate))
+                        offset = 0
+                    self.fun_mgr.add(fun_path, locate, offset=offset)
 
     def getSO(self, pid=None, quiet=False):
         self.lgr.debug('winDLL getSO pid %s ' % pid)
