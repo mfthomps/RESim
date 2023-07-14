@@ -918,7 +918,7 @@ class GenContextMgr():
         if pid is None: 
             pid = self.debugging_pid_saved
         if pid is None:
-            cpu, pid, dumb2  = self.task_utils.curProc()
+            cpu, dumb2, pid  = self.task_utils.curProc()
             self.lgr.debug('resetWatchTasks pid was not, got current as pid:%d' % pid)
         #self.lgr.debug('resetWatchTasks pid:%d' % pid)
         self.stopWatchTasksAlone(None)
