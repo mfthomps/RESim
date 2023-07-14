@@ -421,6 +421,8 @@ or other loader goo.
 \item {\tt runToOther} Continue execution until a text range known to the SOMap (see {\tt showSOMap()}) -- but not the current text range -- is entered.
 Useful if you are in some library called by some other library, and you want to return to the latter.
 
+\item {\tt runToSO} Continue execution until a given SO or DLL file is reached.
+
 \item {\tt doBreak} Sets a breakpoint on a given address.  This command can be useful when wishing to break while running other commands.  For example,
 using {\tt doBreak} prior to running {\tt injectIO} may be more reliable than simply setting a Simics break and it will clean up other breaks and haps that 
 might interfere with your subsequent analysis.
@@ -653,8 +655,10 @@ Provide an fname if the bb is in a lib.  The bb value is per the program address
 
 \subsection{Msc}
 \begin{itemize}
-\item{\tt runToCycle} -- Run to an absolute cpu cycle on the current cpu.  Useful for moving simulation forward to prepare to debug some process
+\item{\tt runToCycle(cycle)} -- Run to an absolute cpu cycle on the current cpu.  Useful for moving simulation forward to prepare to debug some process
 that is not created until after much processing.  Cycles reported in syscall logs can help get you close to the point in time.
+
+\item{\tt runToSeconds(seconds)} -- Run to a simulation time in seconds .  
 
 \item{\tt satisfyCondition} -- (experimental) Assess the comparison instruction at a given address and attempt to satisfy it by altering input data.  
 Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The 
@@ -2494,6 +2498,8 @@ Some system may take a long time to create the process you are interested in.  T
 a runTo or debugProc (e.g., some script is in a loop failing on create of a process, which may happen millions of times.)  Consider using
 runToCycle to run forward to a desired cpu cycle with the least amount of overhead.
 
+Use {\tt system-perfmeter sample\_time = N} where N is in seconds to view current performance.  Use {\tt -deactive} to turn it off.
+
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
 the file, and run with realtime enabled.  After the install, use save-persistent-state, and then rename the resulting craff as
@@ -2949,7 +2955,8 @@ Support functions include:
 \begin{itemize}
 \item Tracing syscalls with traceAll.  There is also a {\tt traceWindows} command that traces a subset of windows system calls.  This can be useful when performance is 
 impacted by the raft of syscalls some applications make.  Also consider making use of the {\tt ONLY\_PROGS} and {\tt IGNORE\_PROGS} directives.
-\item trackIO mostly works, however there is not yet processing of clib type data move functions.
+\item trackIO mostly works, with initial processing of clib type data move functions.  Also try trackRecv to focus on recv calls for performance.  
+
 \item getWin7CallParams with {\tt track\_params=True} will generate a report on kernel references to system call parameters.  This is useful when creating code to parse out
 the system call parameters.
 \end{itemize}

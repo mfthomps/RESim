@@ -49,7 +49,7 @@ class RunTo():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
             SIM_run_alone(self.delStopHap, None)
-            SIM_run_alone(self.top.stopHapAlone, self.stop_action)
+            self.stop_action.run()
 
             '''
 
@@ -73,7 +73,7 @@ class RunTo():
 
     def stopIt(self, dumb=None):
         self.lgr.debug('runTo stopIt')
-        SIM_run_alone(self.rmHaps, None)
+        self.rmHaps(None)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, None)
         SIM_break_simulation('soMap')
@@ -89,7 +89,7 @@ class RunTo():
                 else:
                     self.lgr.debug('soMap knownHap pid:%d memory 0x%x NO mapping file %s' % (pid, value, fname))
 
-                self.stopIt(None)                
+                SIM_run_alone(self.stopIt, None)
             #else:
             #    self.lgr.debug('soMap knownHap wrong pid, wanted %d got %d' % (pid, cur_pid))
         
@@ -260,8 +260,6 @@ class RunTo():
             self.cur_task_hap))
         
         hap_clean = hapCleaner.HapCleaner(cpu)
-        #hap_clean.add("Core_Breakpoint_Memop", self.cur_task_hap)
-        #stop_action = hapCleaner.StopAction(hap_clean, [self.cur_task_break], flist)
         self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
 
         status = self.top.is_monitor_running.isRunning()
@@ -326,3 +324,26 @@ class RunTo():
         f1 = stopFunction.StopFunction(self.top.setOrigin, [], nest=False)
         self.lgr.debug('runTo setOriginWhenStopped')
         self.stop_action.addFun(f1)
+
+    def runToSO(self, fname):        
+       cpu, comm, cur_pid = self.task_utils.curProc() 
+       code_section_list = self.so_map.getCodeSections(cur_pid)
+       self.lgr.debug('runTo runToSO pid:%d got %d code sections' % (cur_pid, len(code_section_list)))
+       for section in code_section_list:
+           if section.addr in self.skip_list:
+               continue
+           if section.fname.endswith(fname):
+               hap_clean = hapCleaner.HapCleaner(cpu)
+               f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+               self.stop_action = hapCleaner.StopAction(hap_clean, [], [f1])
+               end = section.addr+section.size
+               proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
+               self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
+               self.lgr.debug('runTo runToSO set break on 0x%x size 0x%x' % (section.addr, section.size))
+               SIM_continue(0)
+               break
+                
+       if len(self.hap_list) > 0:  
+           return True
+       else:
+           return False
