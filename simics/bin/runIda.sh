@@ -22,7 +22,7 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     exit
 fi
 cp -u $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
-if [ $# -eq 0 ] || [ $1 = "-h" ]; then
+if [[ $# -eq 0 ]] || [[ "$1" = "-h" ]]; then
     echo "runIda.sh [-64] <target> [color/reset] [server]"
     exit
 fi
@@ -36,9 +36,9 @@ if [[ "$1" == "-64" ]]; then
 fi
 target=$1
 echo "target is $1"
-target_base="$(basename -- $target)"
+target_base="$(basename -- "$target")"
 here="$(pwd)"
-root_dir="$(basename --  $here)"
+root_dir="$(basename --  "$here")"
 old_dir=$RESIM_IDA_DATA/$target_base
 new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
