@@ -244,7 +244,7 @@ class WinDLLMap():
             if section.fname.endswith(fname):
                 if self.so_watch_callback is not None:
                     self.lgr.debug('winDLL checkSOWatch do callback for %s' % fname)
-                    self.so_watch_callback(fname, section.addr, section.size) 
+                    self.so_watch_callback(section)
 
     def showSO(self, pid):
         if pid is None: 

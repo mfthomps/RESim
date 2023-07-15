@@ -144,14 +144,14 @@ class RunTo():
             for dll in self.skip_dll_others:
                 self.so_map.addSOWatch(dll, self.soLoadCallback)
            
-    def soLoadCallback(self, fname, addr, size):
+    def soLoadCallback(self, section):
         ''' called by soMap or winDLLMap when a watched code file is loaded '''
-        self.lgr.debug('runTo soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (fname, addr, size, str(self.cpu.current_context)))
+        self.lgr.debug('runTo soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (fname, section.addr, section.size, str(self.cpu.current_context)))
         if fname.endswith(self.skip_dll):
-            self.skip_dll_section = soMap.CodeSection(addr, size)
+            self.skip_dll_section = soMap.CodeSection(section.addr, section.size)
             self.breakOnSkip()
         else:
-            other_section = soMap.CodeSection(addr, size)
+            other_section = soMap.CodeSection(section.addr, section.size)
             self.skip_dll_other_section.append(other_section)
 
 
@@ -325,25 +325,43 @@ class RunTo():
         self.lgr.debug('runTo setOriginWhenStopped')
         self.stop_action.addFun(f1)
 
+    def setRunToSOBreak(self, addr, size):
+       cpu, comm, cur_pid = self.task_utils.curProc() 
+       hap_clean = hapCleaner.HapCleaner(self.cpu)
+       f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+       self.stop_action = hapCleaner.StopAction(hap_clean, [], [f1])
+       end = addr+size
+       proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, size, 0)
+       self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
+
     def runToSO(self, fname):        
+       ''' run until the give SO/DLL file.  if not loaded, use soMap/winDLL to call us back when it is loaded'''
+       ''' TBD need to update soMap.py'''
        cpu, comm, cur_pid = self.task_utils.curProc() 
        code_section_list = self.so_map.getCodeSections(cur_pid)
        self.lgr.debug('runTo runToSO pid:%d got %d code sections' % (cur_pid, len(code_section_list)))
+       got_one = False
        for section in code_section_list:
            if section.addr in self.skip_list:
                continue
            if section.fname.endswith(fname):
-               hap_clean = hapCleaner.HapCleaner(cpu)
-               f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
-               self.stop_action = hapCleaner.StopAction(hap_clean, [], [f1])
-               end = section.addr+section.size
-               proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
-               self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_pid, proc_break, 'runToKnown'))
+               self.setRunToSOBreak(section.addr, section.size)
                self.lgr.debug('runTo runToSO set break on 0x%x size 0x%x' % (section.addr, section.size))
+               got_one = True
                SIM_continue(0)
                break
+       if not got_one:
+           self.so_map.addSOWatch(fname, self.soLoaded)    
+           SIM_continue(0)
                 
        if len(self.hap_list) > 0:  
            return True
        else:
            return False
+
+    def soLoadedAlone(self, section):
+        self.lgr.debug('runto soLoadedAlone file %s, call setRuntoSOBreak' % section.fname)
+        self.setRunToSOBreak(section.addr, section.size)
+     
+    def soLoaded(self, section):
+        SIM_run_alone(self.soLoadedAlone, section)
