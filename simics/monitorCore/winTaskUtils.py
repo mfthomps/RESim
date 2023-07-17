@@ -212,7 +212,7 @@ class WinTaskUtils():
             retval = self.call_map[call_num][2:]
         return retval 
 
-    def getSyscallEntry(self, callnum):
+    def getSyscallEntry(self, callnum, compat32=False):
         ''' given a call number, compute the address of the kernel code that handles the call
             based on observations made walking the instructions that follow syscall entry.''' 
         # looks like  cs:0xfffff800034f1e1d p:0x0034f1e1d  movsx r11,dword ptr [r10+rax*4]

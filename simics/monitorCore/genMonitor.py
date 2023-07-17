@@ -5166,13 +5166,17 @@ class GenMonitor():
             print('No jumper file defined.')
 
     def getSyscallEntry(self, callname):
+        retval = None
         callnum = self.task_utils[self.target].syscallNumber(callname, self.is_compat32)
         #self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
         if callnum is not None and callnum < 0:
             self.lgr.error('getSyscallEntry bad call number %d for call <%s>' % (callnum, callname))
-            return None
-        entry = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
-        return entry
+        elif callnum is not None:
+            retval = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
+        else:
+            self.lgr.error('getSyscallEntry got no call number for %s' % callname)
+            
+        return retval
 
     def setOrigin(self, dumb=None):
         ''' Reset the origin for the current target cpu '''

@@ -552,7 +552,7 @@ class WriteData():
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
         if self.total_read >= self.read_limit:
-            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain:
@@ -570,7 +570,11 @@ class WriteData():
                  self.kernel_buf_consumed = True
                  if self.no_call_hap:
                      self.setCallHap()
-                 self.setSelectStopHap()
+                 if self.top.isWindows():
+                     ''' TBD '''
+                     pass
+                 else:
+                     self.setSelectStopHap()
                  SIM_run_alone(self.delRetHap, None)
                  #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
