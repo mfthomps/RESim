@@ -131,6 +131,7 @@ class WinDLLMap():
             if pid not in self.text:
                 prog = self.top.getProgName(pid)
                 if prog is not None:
+                    self.lgr.debug('winDLL TBD is this a windows path? if so fix this' % prog)
                     prog_base = os.path.basename(prog)
                     for sec_handle in self.sections[pid]:
                         sec = self.sections[pid][sec_handle]
@@ -305,22 +306,33 @@ class WinDLLMap():
     class HackCompat():
         def __init__(self, address, locate, offset, size):
             self.address = address
+            self.text_start = address
             self.locate = locate
             self.offset = offset
             self.size = size
+            self.text_size = size
 
     def getSOAddr(self, in_fname, pid=None):
+        self.lgr.debug('winDLLMap getSOAddr %s' % in_fname)
         retval = None
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
         pid = self.getSOPid(pid)
         if pid is None:
+            self.lgr.debug('winDLLMap getSOAddr no pid for %s' % str(pid))
             return None
  
         for section in self.section_list:
             if section.pid == pid:
-                if os.path.basename(in_fname) == os.path.basename(section.fname):
-                    retval = self.HackCompat(section.addr, section.addr, 0, section.size)
+                #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(in_fname).lower(), ntpath.basename(section.fname).lower()))
+                if os.path.basename(in_fname).lower() == ntpath.basename(section.fname).lower():
+                    if section.image_base is None:
+                        self.lgr.error('winDLLMap no section base defined for %s' % section.fname)
+                        offset = 0
+                    else:
+                        delta = (section.addr - section.image_base) 
+                        offset = delta + section.text_offset
+                    retval = self.HackCompat(section.addr, section.addr, offset, section.size)
                     break 
         return retval
 
@@ -426,7 +438,9 @@ class WinDLLMap():
                     self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
                     if section.image_base is None:
                         full_path = self.top.getFullPath(fname=section.fname)
+                        self.lgr.debug('winDLL setIdaFuns got %s from getFullPath' % full_path)
                         size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
+                        section.image_base = image_base
                     else:
                         image_base = section.image_base
                         text_offset = section.text_offset

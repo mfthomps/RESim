@@ -238,7 +238,7 @@ class InjectIO():
         else:
             use_data_watch = self.dataWatch
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
-                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                 self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
                  write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)

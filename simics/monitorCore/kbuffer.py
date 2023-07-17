@@ -23,7 +23,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 from simics import *
-import decodeArm;
+import decodeArm
+import decode
+import resimUtils
 '''
 Track kernel buffers used with read/recv calls
 
@@ -31,9 +33,10 @@ Kernel buffer size is determined by looking for a fixed character (Z) following 
 of the first write to the application read buffer.
 '''
 class Kbuffer():
-    def __init__(self, top, cpu, context_manager, mem_utils, lgr):
+    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr):
         self.context_manager = context_manager
         self.mem_utils = mem_utils
+        self.data_watch = data_watch
         self.top = top
         self.cpu = cpu
         self.lgr = lgr
@@ -44,8 +47,10 @@ class Kbuffer():
         self.read_count = None
         self.buf_remain = None
         self.user_addr = None
+        self.user_count = None
         self.orig_buffer = None
         self.kernel_cycle_of_write = None
+        self.hack_count = 0
 
     def read(self, addr, count):
         ''' syscall got a read call. '''
@@ -55,8 +60,10 @@ class Kbuffer():
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
             self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
             self.read_count = count
+            self.lgr.debug('Kbuffer read set write_hap count 0x%x' % count)
 
             self.user_addr = addr
+            self.user_count = count
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, addr, count)
         if self.buf_remain is not None:
             self.lgr.debug('Kbuffer read buf_remain is %d count %d' % (self.buf_remain, count))
@@ -67,6 +74,7 @@ class Kbuffer():
                 self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
                 self.read_count = count
                 self.lgr.debug('Kbuffer read, set new hap at new_addr 0x%x read_count %d' % (new_addr, count))
+                self.data_watch.registerHapForRemoval(self)
 
     def gotBufferCallback(self, buf_addrs):
         ''' Not yet used, would need to stop simulation'''
@@ -141,7 +149,7 @@ class Kbuffer():
     def updateBuffers(self, src):
         if self.kbuf_len is not None and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len):
             ''' The read is from the same kernel buffer used on the previous read.'''
-            self.lgr.debug('Kbuffer read from previous kernel buffer 0x%x' % self.kbufs[-1])
+            self.lgr.debug('Kbuffer updateBuffers read from previous kernel buffer 0x%x' % self.kbufs[-1])
             kbuf_remaining = (self.kbufs[-1] + self.kbuf_len) - src + 1
             if self.read_count > kbuf_remaining:
                 ''' change break to write of first byte from next buffer '''
@@ -152,7 +160,7 @@ class Kbuffer():
                 self.watching_addr = new_break
 
         else:  
-            self.lgr.debug('Kbuffer adding kbuf of 0x%x, kbuf_len is %s' % (src, str(self.kbuf_len)))
+            self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, kbuf_len is %s' % (src, str(self.kbuf_len)))
             self.kbufs.append(src)
             print('adding kbuf 0x%x' % src)
             if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
@@ -183,7 +191,7 @@ class Kbuffer():
                         SIM_break_simulation('error in kbuffer')    
                     return
                 buf_size = (last_good - src) + 1 
-                self.lgr.debug('Kbuffer writeHap, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
+                self.lgr.debug('Kbuffer updateBuffers, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
                 if self.kbuf_len is None:
                     self.kbuf_len = buf_size
         
@@ -206,30 +214,46 @@ class Kbuffer():
         ''' callback when user space buffer address is written'''
         if self.write_hap is None:
             return
-        self.lgr.debug('Kbuffer writeHap addr 0x%x' % memory.logical_address)
+
+        value = SIM_get_mem_op_value_le(memory)
+        self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x' % (memory.logical_address, value))
         if self.cpu.architecture != 'arm':
             eip = self.top.getEIP()
-            if not self.mem_utils.isKernel(eip):
+            if self.top.isWindows() and self.hack_count < 1:
+                self.hack_count = self.hack_count + 1
+                self.lgr.debug('Kbuffer writeHap skip first write.  Windows fu. eip: 0x%x' % eip)
+            elif not self.mem_utils.isKernel(eip):
                 self.lgr.debug('Kbuffer eip 0x%x not in kernel, skip' % eip)
-                return
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            esi = self.mem_utils.getRegValue(self.cpu, 'esi') 
-            src = esi 
-            self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s cycle: 0x%x' % (eip, esi, instruct[1], self.cpu.cycles))
-            if self.kernel_cycle_of_write is None:
-                self.kernel_cycle_of_write = self.cpu.cycles - 1
-            self.updateBuffers(src)
+            else:
+                hap = self.write_hap
+                SIM_run_alone(self.removeHap, hap)
+                self.write_hap = None
+    
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+
+                if not self.top.isWindows():
+                    esi = self.mem_utils.getRegValue(self.cpu, 'esi') 
+                    src = esi 
+                    self.lgr.debug('Kbuffer writeHap, eip 0x%x, esi 0x%x, instruct: %s cycle: 0x%x' % (eip, esi, instruct[1], self.cpu.cycles))
+                    if self.kernel_cycle_of_write is None:
+                        self.kernel_cycle_of_write = self.cpu.cycles - 1
+                    self.updateBuffers(src)
+                else:
+                    self.top.stopAndGo(self.findWinBuf)
         else:
+            hap = self.write_hap
+            SIM_run_alone(self.removeHap, hap)
+            self.write_hap = None
+    
            
             #self.removeHap(None)
             #self.top.stopTrackIO()
             src = self.findArmBuf()
             #SIM_break_simulation('arm writeHap')
 
-    def removeHap(self, dumb):
-        if self.write_hap is not None:
-            self.context_manager.genDeleteHap(self.write_hap)
-            self.write_hap = None
+    def removeHap(self, hap, immediate=False):
+        if hap is not None:
+            self.context_manager.genDeleteHap(hap, immediate=immediate)
 
     def replaceHap(self, addr):
         if self.write_hap is not None:
@@ -258,8 +282,61 @@ class Kbuffer():
     def getUserAddr(self):
         return self.user_addr
 
+    def getUserCount(self):
+        return self.user_count
+
     def getOrigBuf(self):
         return self.orig_buffer
 
     def getKernelCycleOfWrite(self):
         return self.kernel_cycle_of_write 
+
+    def findWinBuf(self):
+        SIM_run_alone(self.findWinBufAlone, None)
+
+    def findWinBufAlone(self, dumb):
+        ''' Find a windows kernel buffer.  Set context so we can keep the tracking breakpoints '''
+        self.context_manager.setReverseContext() 
+        self.lgr.debug('Kbuffer findWinBuf set reverse context: %r' % self.context_manager.isReverseContext())
+        eip = self.top.getEIP()
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        self.lgr.debug('Kbuffer findWinBuf instruct %s' % instruct[1])
+
+        prev = self.cpu.cycles - 1 
+        resimUtils.skipToTest(self.cpu, prev, self.lgr)
+        eip = self.top.getEIP()
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        op2, op1 = decode.getOperands(instruct[1])
+        self.lgr.debug('Kbuffer findWinBuf skipped back one, intruct: %s op1 is %s op2: %s' % (instruct[1], op1, op2))
+        our_reg = op2
+        if self.kernel_cycle_of_write is None:
+            self.kernel_cycle_of_write = self.cpu.cycles - 1
+        limit = 20
+        gotit = False
+        for i in range(limit):
+            prev = self.cpu.cycles - 1 
+            resimUtils.skipToTest(self.cpu, prev, self.lgr)
+            eip = self.top.getEIP()
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('Kbuffer findWinBuf prev instruct %s' % instruct[1])
+            op2, op1 = decode.getOperands(instruct[1])
+            if instruct[1].startswith('mov') and op1 == our_reg:
+                src = decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                self.lgr.debug('Kbuffer findWinBuf got it, src: 0x%x' % src)
+                self.updateBuffers(src)
+                self.context_manager.clearReverseContext() 
+                gotit = True
+                SIM_continue(0) 
+                break
+        if not gotit:
+            self.lgr.error('kbuffer findWinBufAlone failed to find buffer')
+          
+    def rmAllHaps(self, immediate=False):
+        self.lgr.debug('kbuffer rmAllHaps')
+        if self.count_write_hap is not None:
+            hap = self.count_write_hap
+            if immediate:
+                self.removeHap(hap, immediate=True)
+            else:
+                SIM_run_alone(self.removeHap, hap) 
+            self.write_hap = None

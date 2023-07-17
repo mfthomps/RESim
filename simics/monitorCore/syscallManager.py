@@ -395,3 +395,33 @@ class SyscallManager():
             for instance in self.syscall_dict[context]:
                 out_string = self.syscall_dict[context][instance].toString()
                 print('\t\t%s' % out_string)
+
+    def getReadAddr(self):
+        ''' Used by writeData to track data read from kernel. ''' 
+        retval = None
+        length = None 
+        callnum = self.mem_utils.getCallNum(self.cpu)
+        callname = self.task_utils.syscallName(callnum, self.compat32) 
+        if callname is None:
+            self.lgr.debug('getReadAddr bad call number %d' % callnum)
+            return None, None
+        frame = self.task_utils.frameFromRegs()
+        if self.top.isWindows():
+            pid = self.top.getPID()
+            word_size = 8 # default to 8 for 64 bit unless 
+            if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+                word_size = 4
+            retval = winSyscall.paramOffPtrUtil(7, [0, word_size], frame, word_size, self.cpu, self.mem_utils, self.lgr)
+            value = winSyscall.paramOffPtrUtil(7, [0, 0], frame, word_size, self.cpu, self.mem_utils, self.lgr) 
+            if value is not None:
+                length = value & 0xFFFFFFFF
+        else:
+            if callname in ['read', 'recv', 'recfrom']:
+                retval = frame['param2']
+                length = frame['param3']
+            elif callname == 'socketcall':
+                retval = self.mem_utils.readWord32(self.cpu, frame['param2']+16)
+                length = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
+       
+        return retval, length
+

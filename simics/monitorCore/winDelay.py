@@ -31,7 +31,7 @@ from simics import *
 from resimHaps import *
 import memUtils
 class WinDelay():
-    def __init__(self, top, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr):
+    def __init__(self, top, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr, count=None):
         self.top = top
         self.cpu = cpu
         self.count_addr = count_addr
@@ -54,6 +54,7 @@ class WinDelay():
         self.cycles = self.cpu.cycles
         self.return_count = None
         self.trace_msg = None
+        self.count = count
 
         ''' Control when to generate watch marks and trace messages'''
         self.did_exit = False
@@ -61,8 +62,12 @@ class WinDelay():
         ''' wth?'''
         self.hack_count = 0
 
-        ''' Set the hap'''    
-        self.setCountWriteHap()
+        ''' Count provided by writeData, e.g., for injectIO.  WinDelay created just for purpose of returning to user space and setting data watch'''
+        if count is None:
+            ''' Set the hap'''    
+            self.setCountWriteHap()
+        else:
+            self.return_count = count
 
     def setDataWatch(self, data_watch, linger):
         if self.top.tracking():
@@ -73,6 +78,8 @@ class WinDelay():
     def doDataWatch(self, dumb=None):
         if self.data_watch is not None:
             self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, self.return_count))
+            if self.kbuffer is not None:
+                self.kbuffer.readReturn(self.return_count)
             self.data_watch.setRange(self.buffer_addr, self.return_count, msg=self.trace_msg, 
                        max_len=self.return_count, recv_addr=self.buffer_addr, fd=self.fd)
             if self.linger: 
@@ -91,7 +98,7 @@ class WinDelay():
 
     def writeCountHap(self, dumb, third, forth, memory):
         ''' Invoked when the count address is written to '''
-        if self.count_write_hap is None:
+        if self.count_write_hap is None or self.context_manager.isReverseContext():
             return
         if not self.did_exit and self.hack_count < 1:
             self.lgr.debug('winDelay writeCountHap skipping first kernel write to count address.  TBD if always needed.')
@@ -156,6 +163,7 @@ class WinDelay():
                 self.rmHap(hap, immediate=True)
             else:
                 SIM_run_alone(self.rmHap, hap) 
+            self.count_write_hap = None
 
     def exitingKernel(self, trace_msg, not_ready):
         retval = False

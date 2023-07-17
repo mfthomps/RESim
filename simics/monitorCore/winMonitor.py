@@ -224,25 +224,23 @@ class WinMonitor():
                 the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
                 ''' find processes that are in the kernel on IO calls '''
-                '''
-                TBD fix for windows?
-                frames = self.getDbgFrames()
-                skip_calls = ['select', 'pselect6', '_newselect']
+                frames = self.top.getDbgFrames()
+                skip_calls = []
                 for pid in list(frames):
                     if frames[pid] is None:
                         self.lgr.error('frames[%d] is None' % pid)
                         continue
-                    call = self.task_utils.syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-                    self.lgr.debug('runToIO found %s in kernel for pid:%d' % (call, pid))
-                    if call not in calls or call in skip_calls:
+                    call = self.task_utils.syscallName(frames[pid]['syscall_num'], False) 
+                    self.lgr.debug('winMonitor runToIO found %s in kernel for pid:%d' % (call, pid))
+                    if call != 'DeviceIoControlFile' and (call not in calls or call in skip_calls):
                        del frames[pid]
+                       self.lgr.debug('winMonitor runToIO removed %s in kernel for pid:%d' % (call, pid))
                     else:
-                       self.lgr.debug('kept frames for pid %d' % pid)
+                       self.lgr.debug('winMonitor runToIO kept frames for pid %d' % pid)
                 if len(frames) > 0:
-                    self.lgr.debug('runToIO, call to setExits')
+                    self.lgr.debug('wnMonitor runToIO, call to setExits')
                     the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager.getRESimContext()) 
                 #self.copyCallParams(the_syscall)
-                '''
             else:
                 # TBD REMOVE, not reached
                 #self.trace_all[self.target].addCallParams([call_params])

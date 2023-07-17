@@ -371,7 +371,7 @@ def getfileInsensitive(path, root_prefix, lgr):
     if '/' in path:
         parts = path.split('/')
         for p in parts[:-1]:
-            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            #lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
             dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
 
             for d in dlist:
@@ -380,7 +380,7 @@ def getfileInsensitive(path, root_prefix, lgr):
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():

@@ -346,7 +346,7 @@ class memUtils():
                         ''' get the rest ''' 
                         ps = self.v2p(cpu, start+remain_in_page)
                         if ps is None:
-                            self.lgr.debug('readBytes, could not get phys addr of start+remain 0x%x wanted maxlen of %d' % ((start+remain_in_page), maxlen))
+                            self.lgr.debug('memUtils readBytes, could not get phys addr of start+remain 0x%x wanted maxlen of %d' % ((start+remain_in_page), maxlen))
                             retval = retval+first_read
                         else:
                             #self.lgr.debug('readBytes first read %s new ps 0x%x' % (first_read, ps))
@@ -378,7 +378,7 @@ class memUtils():
     def readWord32(self, cpu, vaddr):
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
-            self.lgr.debug('readWord32 phys of 0x%x is none' % vaddr)
+            #self.lgr.debug('readWord32 phys of 0x%x is none' % vaddr)
             return None
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)

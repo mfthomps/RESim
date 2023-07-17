@@ -23,6 +23,25 @@ import net
 import winDelay
 from resimHaps import *
 from resimUtils import rprint
+def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
+        param = 'param%d' % pnum
+        pval = frame[param]
+        for offset in offset_list:
+            ptr = pval + offset
+            #lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
+            
+            if word_size == 8:
+                pval = mem_utils.readWord(cpu, ptr)
+            elif word_size == 4: 
+                pval = mem_utils.readWord32(cpu, ptr)
+            if pval is not None:
+                #lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                pass
+            else:
+                #lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                break
+        return pval
+
 class WinSyscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
@@ -248,6 +267,8 @@ class WinSyscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
+        if self.context_manager.isReverseContext():
+            return
         cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('winSyscall syscallHap pid:%d (%s) %s context %s break_num %s cpu is %s t is %s' % (pid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
@@ -887,13 +908,13 @@ class WinSyscall():
                             exit_info.call_params = call_param
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, ss.length)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     else:
                         self.lgr.debug('call_param.nth is none, call it matched')
                         exit_info.call_params = call_param
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, ss.length)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     break
                 elif call_param.name == 'runToCall':
                     if (op_cmd not in self.call_list):
@@ -1101,27 +1122,7 @@ class WinSyscall():
         return value
         
     def paramOffPtr(self, pnum, offset_list, frame, word_size):
-        param = 'param%d' % pnum
-        pval = frame[param]
-        for offset in offset_list:
-            ptr = pval + offset
-            #self.lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
-            
-            # Determine if 32 or 64 bit and then read the param appropriately 
-            #cpu, comm, pid = self.task_utils.curProc()
-            #word_size = self.soMap.getMachineSize(pid)
-            if word_size == 8:
-                pval = self.mem_utils.readWord(self.cpu, ptr)
-            elif word_size == 4: 
-                pval = self.mem_utils.readWord32(self.cpu, ptr)
-            if pval is not None:
-                #self.lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
-                pass
-            else:
-                #self.lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
-                break
-        return pval
-    
+        return paramOffPtrUtil(pnum, offset_list, frame, word_size, self.cpu, self.mem_utils, self.lgr)
 
     def getExitAddrs(self, break_eip, syscall_info, frame = None):
         exit_eip1 = None
@@ -1317,13 +1318,8 @@ class WinSyscall():
             self.lgr.debug('setExits set count to parm3 now 0x%x' % exit_info.count)
 
             the_callname = callname
-            ''' tbd for socket calls and selectish calls...'''
-            if callname == 'socketcall' or callname.upper() in net.callname:
-                the_callname = self.handleReadOrSocket(callname, frames[pid], exit_info, syscall_info)
-            elif callname in ['select','_newselect', 'pselect6']:        
-                self.handleSelect(callname, pid, frames[pid], exit_info, syscall_info)
-
-            if exit_info.call_params is not None:
+            ''' TBD need to evaluate syscall params against call params to know if we care about this call'''
+            if True or exit_info.call_params is not None:
                 exit_info.origin_reset = origin_reset
                 if exit_info.retval_addr is not None:
                     self.lgr.debug('setExits almost done for pid %d call %d retval_addr is 0x%x' % (pid, callnum, exit_info.retval_addr))

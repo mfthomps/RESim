@@ -73,7 +73,6 @@ class WinCallExit():
         self.callback = None
         self.callback_param = None
    
-        self.kbuffer = None
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
 
@@ -288,6 +287,7 @@ class WinCallExit():
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
                 return_count = None
+                not_ready = False
                 if exit_info.fname_addr is None:
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
                 
@@ -351,3 +351,4 @@ class WinCallExit():
             self.exit_pids[context] = {}
         for eip in self.exit_hap:
             self.exit_info[eip] = {}
+

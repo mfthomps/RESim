@@ -283,7 +283,7 @@ class PlayAFL():
                 if self.target == 'oneplay' and not self.repeat:
                     force_default_context = False
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
-                         self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                         self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                          filter=self.filter_module, stop_on_read=self.stop_on_read)
                          #filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
@@ -319,9 +319,10 @@ class PlayAFL():
                 #if self.repeat_counter > 20:
                 #    return
                 SIM_continue(0)
+                pass
             else:
                 SIM_continue(0)
-            #SIM_run_command('c')
+                pass
         else:
             self.lgr.info('playAFL did all sessions.')
             ''' did all sessions '''

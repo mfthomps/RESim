@@ -7,8 +7,8 @@ import decode
 import decodeArm
 import resimUtils
 '''
-Create a snapshot from a given watch mark index value, intended to
-be an ioctl.  The snapshot will preceed the ioctl call, and
+Create a snapshot from a given watch mark index value, 
+which may be a read or an ioctl.  The snapshot will preceed the call, and
 will include the address of the kernel buffer, and the kernel pointers
 used ot calculate the ioctl return value.
 '''
@@ -189,6 +189,7 @@ class PrepInjectWatch():
             k_buf_len = self.kbuffer.getBufLength()
             pickDict['k_buf_len'] = k_buf_len
             pickDict['user_addr'] = self.kbuffer.getUserAddr()
+            pickDict['user_count'] = self.kbuffer.getUserCount()
             orig_buf = self.kbuffer.getOrigBuf()
             pickDict['orig_buffer'] = orig_buf
             if orig_buf is not None:

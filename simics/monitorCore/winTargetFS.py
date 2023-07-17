@@ -2,6 +2,7 @@ import os
 import glob
 import re
 import fnmatch
+import resimUtils
 '''
 work around case insensitive file system.
 Assumes root_prefix and root_subdirs have proper case.
@@ -12,35 +13,6 @@ def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
             else re.compile(fnmatch.translate(glob_pat))
     return [n for n in os.listdir(path) if rule.match(n)]
 
-def getfileInsensitive(path, root_prefix, lgr):
-    got_it = False
-    retval = root_prefix
-    cur_dir = root_prefix
-    if '/' in path:
-        parts = path.split('/')
-        for p in parts[:-1]:
-            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
-            dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
-
-            for d in dlist:
-                if d.upper() == p.upper():
-                    retval = os.path.join(retval, d)
-                    cur_dir = os.path.join(cur_dir, d)
-                    break
-        p = parts[-1]
-        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
-        flist = os.listdir(cur_dir)
-        for f in flist:
-            if f.upper() == p.upper():
-                retval = os.path.join(retval, f) 
-                got_it = True
-                break
-    else:
-        pass
-    if not got_it:
-        retval = None
-    return retval
-    
 
 class TargetFS():
     def __init__(self, top, root_prefix, root_subdirs):
@@ -84,7 +56,7 @@ class TargetFS():
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)
             self.lgr.debug('winTargetFS root_prefix %s path %s full %s' % (self.root_prefix, path, full))
-            full_insensitive = getfileInsensitive(path, self.root_prefix, lgr)
+            full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, lgr)
             self.lgr.debug('full_insenstive is %s' % full_insensitive)
             if full_insensitive is None or not os.path.isfile(full_insensitive):
                 if lgr is not None:
@@ -105,7 +77,7 @@ class TargetFS():
                 for f in flist:
                     self.lgr.debug('targetFS getFull got %s' % f)
             else:
-                retval = full
+                retval = full_insensitive
         if retval is not None:
             retval = os.path.abspath(retval)
         return retval

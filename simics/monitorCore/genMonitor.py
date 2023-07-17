@@ -905,17 +905,22 @@ class GenMonitor():
         plist = {}
         pid_list = self.context_manager[self.target].getThreadPids()
         tasks = self.task_utils[self.target].getTaskStructs()
-        self.lgr.debug('getDbgFrames')
+        self.lgr.debug('getDbgFrames pid_list %s' % str(pid_list))
         plist = {}
         for t in tasks:
             if tasks[t].pid in pid_list:
                 plist[tasks[t].pid] = t 
+    
+        self.lgr.debug('getDbgFrames plist %s' % str(plist))
         for pid in sorted(plist):
             t = plist[pid]
-            if tasks[t].state > 0:
+            self.lgr.debug('getDbgFrames task for pid %d state %d' % (pid, tasks[t].state))
+            ''' TBD do we care about windows task state?'''
+            if True or tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(pid)
                 if frame is not None:
                     retval[pid] = frame
+        self.lgr.debug('getDbgFrames return %d frames' % len(retval))
         return retval 
 
     def getRecentEnterCycle(self):
@@ -1211,9 +1216,14 @@ class GenMonitor():
                         self.lgr.error('debug, text segment None for %s' % self.full_path)
                     self.lgr.debug('create coverage module')
                     ida_path = self.getIdaData(self.full_path)
-                    if ida_path is not None:
-                        self.lgr.debug('debug, create Coverage ida_path %s' % ida_path)
-                        self.coverage = coverage.Coverage(self, self.full_path, ida_path, self.context_manager[self.target], 
+                    if ida_path is not None and self.target in self.soMap:
+                        analysis_path = self.soMap[self.target].getAnalysisPath(self.full_path)
+                        if analysis_path is None:
+                            analysis_path = self.full_path
+                            self.lgr.debug('coverage, no analysis path, revert to full_path')
+                        self.lgr.debug('debug, create Coverage ida_path %s, analysis path: %s' % (ida_path, analysis_path))
+                        
+                        self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
                            cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
@@ -1430,6 +1440,7 @@ class GenMonitor():
         
     def debugProc(self, proc, final_fun=None, pre_fun=None):
         if self.isWindows():
+            self.rmDebugWarnHap()
             self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun)
             return
 
@@ -3844,7 +3855,8 @@ class GenMonitor():
             done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watches current context %s' % str(cpu.current_context))
         if kbuf:
-            self.kbuffer[self.target] = kbuffer.Kbuffer(self, cpu, self.context_manager[self.target], self.mem_utils[self.target], self.lgr)
+            self.kbuffer[self.target] = kbuffer.Kbuffer(self, cpu, self.context_manager[self.target], self.mem_utils[self.target], 
+                self.dataWatch[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
 
         self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet)
@@ -4195,6 +4207,7 @@ class GenMonitor():
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
         self.rmDebugWarnHap()
+        self.checkOnlyIgnore()
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
@@ -4327,11 +4340,13 @@ class GenMonitor():
         ''' Intended for use with trackIO '''
         if self.coverage is not None:
             if fname is not None:
-                full_path = self.targetFS[self.target].getFull(fname)
+                analysis_path = self.soMap[self.target].getAnalysisPath(fname)
+                if analysis_path is None:
+                    analysis_path = self.getFullPath(fname)
             else:
-                full_path = None
+                analysis_path = None
             pid, cpu = self.context_manager[self.target].getDebugPid() 
-            self.coverage.enableCoverage(pid, fname=full_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles)
+            self.coverage.enableCoverage(pid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles)
             self.coverage.doCoverage(physical=physical)
         else:
             self.lgr.error('enableCoverage, no coverage defined')
@@ -4340,11 +4355,11 @@ class GenMonitor():
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
-            full_path = self.targetFS[self.target].getFull(fname, self.lgr)
+            analysis_path = self.soMap[self.target].getAnalysisPath(fname)
         else:
-            full_path = None
-        self.lgr.debug('mapCoverage file (None means use prog name): %s' % full_path)
-        self.enableCoverage(fname=full_path)
+            analysis_path = None
+        self.lgr.debug('mapCoverage file (None means use prog name): %s' % analysis_path)
+        self.enableCoverage(fname=analysis_path)
 
     def showCoverage(self):
         self.coverage.showCoverage()
@@ -4509,6 +4524,7 @@ class GenMonitor():
         self.runToOpen(substring)    
 
     def fuzz(self, path, n=1, fname=None):
+        ''' TBD not used.  See runAFL '''
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         self.debugPidGroup(pid, to_user=False)
@@ -4938,13 +4954,20 @@ class GenMonitor():
         SIM_continue(0)
 
     def stopAndGo(self, callback):
-        ''' Will stop simulation and invoke the given callback once stopped.'''
+        ''' Will stop simulation and invoke the given callback once stopped.
+            It also calls our stopHap, which 
+        '''
+
         SIM_run_alone(self.stopAndGoAlone, callback)
 
-    def stopAndGoAlone(self, callback):
+    def stopAndGoAlone(self, callback, param=None):
         self.lgr.debug('stopAndGoAlone')
         cpu = self.cell_config.cpuFromCell(self.target)
-        f1 = stopFunction.StopFunction(callback, [], nest=False)
+        if param is None:
+            call_params = []
+        else:
+            call_params = [param]
+        f1 = stopFunction.StopFunction(callback, call_params, nest=False)
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
@@ -5169,22 +5192,7 @@ class GenMonitor():
         return platform
 
     def getReadAddr(self):
-        retval = None
-        length = None
-        cpu = self.cell_config.cpuFromCell(self.target)
-        callnum = self.mem_utils[self.target].getCallNum(cpu)
-        callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
-        if callname is None:
-            self.lgr.debug('getReadAddr bad call number %d' % callnum)
-            return
-        reg_frame = self.task_utils[self.target].frameFromRegs()
-        if callname in ['read', 'recv', 'recfrom']:
-            retval = reg_frame['param2']
-            length = reg_frame['param3']
-        elif callname == 'socketcall':
-            retval = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+16)
-            length = self.mem_utils[self.target].readWord32(self.cpu, frame['param2']+20)
-        return retval, length
+        return self.syscallManager[self.target].getReadAddr()
 
     def showSyscalls(self):
         for cell_name in self.syscallManager:

@@ -20,7 +20,7 @@ Tracks a single code file at a time, e.g., main or a single so file.  TBD expand
 Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
-    def __init__(self, top, full_path, hits_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
+    def __init__(self, top, analysis_path, hits_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
         self.lgr = lgr
         self.cell = cell
         self.cpu = cpu
@@ -33,7 +33,7 @@ class Coverage():
         self.block_total = 0
         self.funs_hit = []
         self.blocks_hit = OrderedDict()
-        self.full_path = full_path
+        self.analysis_path = analysis_path
         self.hits_path = hits_path
         self.did_cover = False
         self.enabled = False
@@ -160,36 +160,39 @@ class Coverage():
         self.lgr.debug('coverage: cover physical: %r linear: %r' % (physical, self.linear))
         self.offset = 0
         self.physical = physical
-        block_file = self.full_path+'.blocks'
+        block_file = self.analysis_path+'.blocks'
         if not os.path.isfile(block_file):
-            if os.path.islink(self.full_path):
-                real = os.readlink(self.full_path)
-                parent = os.path.dirname(self.full_path)
+            if os.path.islink(self.analysis_path):
+                real = os.readlink(self.analysis_path)
+                parent = os.path.dirname(self.analysis_path)
                 block_file = os.path.join(parent, (real+'.blocks'))
                 if not os.path.isfile(block_file):
-                    self.lgr.error('coverage: No blocks file at %s' % block_file)
+                    self.lgr.error('coverage: analysis path is link No blocks file at %s' % block_file)
                     return
             else:
                 self.lgr.error('coverage: No blocks file at %s' % block_file)
                 return
         self.loadBlocks(block_file)         
-        so_entry = self.so_map.getSOAddr(self.full_path, pid=self.pid)
+        so_entry = self.so_map.getSOAddr(self.analysis_path, pid=self.pid)
         if so_entry is None:
            
             so_entry = self.so_map.getSOAddr(self.top.getProgName(self.pid), pid=self.pid)
             if so_entry is None:
-                self.lgr.error('coverage no SO entry for %s' % self.full_path)
+                self.lgr.error('coverage no SO entry for %s' % self.analysis_path)
                 return
         self.so_entry = so_entry
         if so_entry.address is not None:
             if so_entry.locate is not None:
-                self.offset = so_entry.locate+so_entry.offset
+                if self.top.isWindows():
+                    self.offset = so_entry.offset
+                else:
+                    self.offset = so_entry.locate+so_entry.offset
             #else:
             #    self.offset = so_entry.address
         else:
-            self.lgr.debug('coverage: cover no address in so_entry for %s' % self.full_path)
+            self.lgr.debug('coverage: cover no address in so_entry for %s' % self.analysis_path)
             return
-        #self.lgr.debug('cover offset 0x%x' % self.offset)
+        self.lgr.debug('cover offset 0x%x' % self.offset)
         if self.blocks is None:
             self.lgr.error('Coverge: No basic blocks defined')
             return
@@ -200,6 +203,9 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
+                # TBD REMOVE THIS
+                #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
+                #return
                 #if bb_rel in self.dead_map:
                 #    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
                 #    continue
@@ -868,11 +874,11 @@ class Coverage():
         self.only_thread = only_thread
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
-            self.full_path = fname
+            self.analysis_path = fname
             self.hits_path = self.top.getIdaData(fname)
             #self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
         
-        ida_path = self.top.getIdaData(self.full_path)
+        ida_path = self.top.getIdaData(self.analysis_path)
         # dynamically alter control flow, e.g., to avoid CRC checks
         self.loadJumpers(ida_path)
 
@@ -959,7 +965,7 @@ class Coverage():
         return self.hits_path
 
     def getFullPath(self):
-        return self.full_path
+        return self.analysis_path
 
     def appendName(self, name):
         self.hits_path = '%s-%s' % (self.hits_path, name)

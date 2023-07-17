@@ -199,8 +199,8 @@ class SOMap():
 
         base = os.path.basename(fname)+'.funs'
         if base.upper() in map(str.upper, self.fun_list_cache):
-            with_funs = fname+'.funs'
-            retval = with_funs
+            #with_funs = fname+'.funs'
+            retval = fname
         else:
             #self.lgr.debug('getAnalysisPath %s not in cache' % base)
             pass
@@ -223,8 +223,9 @@ class SOMap():
             full_path = self.getAnalysisPath(fpath)
             if full_path is None:
                 full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
-
-            self.fun_mgr.add(full_path, locate)
+            if full_path is not None:
+                full_path = full_path+'.funs'
+                self.fun_mgr.add(full_path, locate)
             
  
     def addSO(self, pid_in, fpath, addr, count):

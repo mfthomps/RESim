@@ -355,11 +355,12 @@ class AFL():
             self.lgr.debug('afl packet count now %d' % self.afl_packet_count)
        
 
-        if self.addr is None:
-           self.addr, max_len = self.dataWatch.firstBufferAddress()
-           if self.addr is None:
-               self.lgr.error('AFL, no firstBufferAddress found')
-               return
+        ''' TBD remove this?  addr always from pickle?'''
+        #if self.addr is None:
+        #   self.addr, max_len = self.dataWatch.firstBufferAddress()
+        #   if self.addr is None:
+        #       self.lgr.error('AFL, no firstBufferAddress found')
+        #       return
 
         if self.create_dead_zone:
             self.lgr.debug('afl goN dead zone iteration %d' % self.iteration)
@@ -381,7 +382,7 @@ class AFL():
 
         if self.write_data is None:
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
-                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                 self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
                  stop_on_read=self.stop_on_read)
         else:

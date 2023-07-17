@@ -3,11 +3,12 @@ import sys
 import os
 import pickle
 import taskUtils
+import winDelay
 from resimUtils import rprint
 from resimHaps import *
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
-                 mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
+                 mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
                   dataWatch=None, shared_syscall=None, no_reset=False):
         ''' expected_packet_count == -1 for TCP '''
@@ -63,6 +64,7 @@ class WriteData():
             self.udp_header = udp_header
         self.pad_to_size = pad_to_size
         self.mem_utils = mem_utils
+        self.context_manager = context_manager
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
         self.write_callback = write_callback
@@ -89,6 +91,7 @@ class WriteData():
         self.orig_buffer = None
         # for restoring user space to what it was, less what we read from the kernel
         self.user_space_addr = None
+        self.user_space_count = None
 
         self.loadPickle(snapshot_name)
 
@@ -151,6 +154,7 @@ class WriteData():
         self.closed_fd = False
 
     def writeKdata(self, data):
+        ''' write data to kernel buffers '''
         if self.k_bufs is None:
             ''' TBD remove this, all kernel buffers should now use k_bufs'''
             self.lgr.error('writeKdata, missing k_bufs')
@@ -159,8 +163,12 @@ class WriteData():
             remain = len(data)
             offset = 0
             index = 0
-            self.user_space_addr, length = self.top.getReadAddr()
-            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+            ''' So we can restore use space content to what it was, less what we read from kernel 
+                We are in a read system call, but not at the kernel entry.'''
+            if self.user_space_count is None: 
+                self.user_space_addr, self.user_space_count = self.top.getReadAddr()
+            #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
             #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             #self.lgr.debug('writeData writeKdata, call setCallHap')
             if not self.no_call_hap:
@@ -177,6 +185,14 @@ class WriteData():
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
+
+            if self.top.isWindows() and self.dataWatch is not None:
+                self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
+                asynch_handler = winDelay.WinDelay(self.top, self.cpu, None, self.user_space_addr,
+                        self.mem_utils, self.context_manager, None, None, None, self.fd, self.lgr, count=self.user_space_count)
+                asynch_handler.setDataWatch(self.dataWatch, True)
+                asynch_handler.toUserAlone(None)
+
           
     
     def write(self, record=False):
@@ -721,4 +737,10 @@ class WriteData():
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 self.lgr.debug('injectIO load orig_buffer from pickle')
-                
+
+            if 'user_count' in so_pickle:
+                self.user_space_count = so_pickle['user_count']
+                self.user_space_addr = so_pickle['user_addr']
+                self.lgr.debug('injectIO load user_addr 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+               
+             
