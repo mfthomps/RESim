@@ -1433,7 +1433,7 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    self.lgr.debug('sysenterHap pid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (pid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                    #self.lgr.debug('sysenterHap pid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (pid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
                     #self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
@@ -1448,7 +1448,7 @@ class reverseToCall():
                         ''' must be 32-bit get params from struct '''
                         socket_callnum = frame['param1']
                         socket_callname = net.callname[socket_callnum].lower()
-                        self.lgr.debug('sysenterHap socket_callnum is %d name %s' % (socket_callnum, socket_callname))
+                        #self.lgr.debug('sysenterHap socket_callnum is %d name %s' % (socket_callnum, socket_callname))
                         if socket_callname != 'socket' and socket_callname != 'setsockopt':
                             ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
                             frame['ss'] = ss
