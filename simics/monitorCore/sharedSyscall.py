@@ -588,11 +588,13 @@ class SharedSyscall():
         return trace_msg
 
     def exitHap(self, dumb, context, break_num, memory):
+        if self.context_manager.isReverseContext():
+            return
         cpu, comm, pid = self.task_utils.curProc() 
         if cpu is None:
             self.lgr.error('sharedSyscall exitHap got nothing from curProc')
             return
-        #self.lgr.debug('sharedSyscall exitHap pid:%d (%s) context: %s  break_num: %s cycle: 0x%x' % (pid, comm, str(context), str(break_num), self.cpu.cycles))
+        #self.lgr.debug('sharedSyscall exitHap pid:%d (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (pid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
         did_exit = False
         if pid in self.exit_info:
             for name in self.exit_info[pid]:

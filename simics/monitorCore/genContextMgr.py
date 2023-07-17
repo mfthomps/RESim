@@ -254,6 +254,11 @@ class GenContextMgr():
         self.comm_prog_map = {}
         self.soMap = None
 
+        ''' keep track of this ourselves because when simics reverses it does not know if it
+            is afoot or horseback. '''
+        self.current_context = self.default_context
+        self.reverse_context = False
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -610,7 +615,7 @@ class GenContextMgr():
             Also manages breakpoints/haps for maze exits.  TBD alter so that if 
             maze is not an issue, no breakpoints are deleted or restored and we
             only rely on context. '''
-        if self.task_hap is None:
+        if self.task_hap is None or self.reverse_context:
             return
         # get the value that will be written into the current thread address
         new_addr = SIM_get_mem_op_value_le(memory)
@@ -822,21 +827,25 @@ class GenContextMgr():
             return False
 
     def restoreIgnoreContext(self, dumb=None):
-        #self.lgr.debug('contextManager restoreDefaultContext')
+        #self.lgr.debug('contextManager restoreIgnoreContext')
         self.cpu.current_context = self.ignore_context
-        #self.lgr.debug('contextManager restoreDefaultContext')
+        self.current_context = self.ignore_context
+        #self.lgr.debug('contextManager restoreIgnoreContext')
 
     def restoreSuspendContext(self, dumb=None):
         #self.lgr.debug('contextManager restoreSuspendContext')
         self.cpu.current_context = self.suspend_context
+        self.current_context = self.suspend_context
         #self.lgr.debug('contextManager restoreSuspendContext')
 
     def restoreDefaultContext(self, dumb=None):
         self.cpu.current_context = self.default_context
+        self.current_context = self.default_context
         #self.lgr.debug('contextManager restoreDefaultContext')
 
     def restoreDebugContext(self, dumb=None):
         self.cpu.current_context = self.resim_context
+        self.current_context = self.resim_context
         #self.lgr.debug('contextManager restoreDebugContext')
 
     def restoreDebug(self):
@@ -844,8 +853,8 @@ class GenContextMgr():
         self.watch_rec_list = self.watch_rec_list_saved.copy()
         for ctask in self.watch_rec_list:
             self.pid_cache.append(self.watch_rec_list[ctask])
-        SIM_run_alone(self.restoreDebugContext, None)
         self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_pid to %s' % str(self.debugging_pid))
+        SIM_run_alone(self.restoreDebugContext, None)
 
     def stopWatchPid(self, pid):
         SIM_run_alone(self.stopWatchPidAlone, pid)
@@ -909,7 +918,7 @@ class GenContextMgr():
         self.debugging_pid = None
 
         cpu, dumb, dumb2  = self.task_utils.curProc()
-        cpu.current_context = self.default_context
+        self.restoreDefaultContext()
         self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted' % (cpu.name, str(self.default_context)))
 
     def resetWatchTasks(self, dumb=None):
@@ -952,8 +961,8 @@ class GenContextMgr():
     def restoreWatchTasks(self):
         self.watching_tasks = True
         if self.debugging_pid is not None:
-            #self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
-            self.cpu.current_context = self.resim_context
+            self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
+            self.restoreDebugContext()
 
     def watchTasks(self, set_debug_pid = False, pid=None):
         if self.task_break is not None:
@@ -1011,8 +1020,8 @@ class GenContextMgr():
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
+        self.lgr.debug('contextManager setDebugPid %d, (%s) restore cpu to resim_context' % (cur_pid, comm))
         SIM_run_alone(self.restoreDebugContext, None)
-        self.lgr.debug('contextManager setDebugPid %d, (%s) restored cpu to resim_context' % (cur_pid, comm))
         self.debugging_pid = cur_pid
         self.debugging_pid_saved = self.debugging_pid
         if comm not in self.debugging_comm:
@@ -1288,6 +1297,16 @@ class GenContextMgr():
             return True
         else:
             return False
+
+    def setReverseContext(self):
+        ''' Tells all haps to ignore because we are reversing or skipping '''
+        self.reverse_context = True
+
+    def clearReverseContext(self):
+        self.reverse_context = False
+
+    def isReverseContext(self):
+        return self.reverse_context
 
     def getRESimContext(self):
         return self.resim_context

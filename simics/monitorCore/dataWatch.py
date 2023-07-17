@@ -688,10 +688,9 @@ class DataWatch():
                 eip = eip + instruct[0]
         return retval
            
-    def deleteReturnHap(self, dumb): 
-        if self.return_hap is not None:
-            self.context_manager.genDeleteHap(self.return_hap)
-            self.return_hap = None
+    def deleteReturnHap(self, hap): 
+        if hap is not None:
+            self.context_manager.genDeleteHap(hap)
                
     def stopWatch(self, break_simulation=None, immediate=False, leave_fun_entries=False): 
         ''' stop data watches, e.g., in prep for reverse execution or to run free from a memsomething call to its return'''
@@ -711,8 +710,10 @@ class DataWatch():
         if break_simulation is not None: 
             self.break_simulation = break_simulation
             self.lgr.debug('DataWatch stopWatch break_simulation %r' % break_simulation)
-        self.deleteReturnHap(None)
-
+        hap = self.return_hap
+        SIM_run_alone(self.deleteReturnHap, hap)
+        self.return_hap = None
+        self.lgr.debug('DataWatch stopWatch return_hap is now None')
         if not leave_fun_entries:
             for fun in self.mem_fun_entries:
                 for eip in self.mem_fun_entries[fun]:
@@ -813,7 +814,9 @@ class DataWatch():
  
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
-        SIM_run_alone(self.deleteReturnHap, None)
+        hap = self.return_hap
+        SIM_run_alone(self.deleteReturnHap, hap)
+        self.return_hap = None
         self.lgr.debug('dataWatch kernelReturn reset watch')
         ''' TBD was true'''
         self.watch(i_am_alone=False)
@@ -894,7 +897,9 @@ class DataWatch():
         ''' should be at return from a memsomething.  see  getMemParams for gathering of parameters'''
         if self.return_hap is None:
             return
-        SIM_run_alone(self.deleteReturnHap, None)
+        hap = self.return_hap
+        SIM_run_alone(self.deleteReturnHap, hap)
+        self.return_hap = None
         eip = self.top.getEIP(self.cpu)
         if self.cpu.cycles < self.cycles_was:
             if self.mem_something.addr is None:
@@ -905,7 +910,8 @@ class DataWatch():
                 SIM_run_alone(self.startUndoAlone, None)
                 return
         #self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
-        self.context_manager.genDeleteHap(self.return_hap)
+        hap = self.return_hap
+        SIM_run_alone(self.deleteReturnHap, hap)
         self.return_hap = None
         self.pending_call = False
         SIM_run_alone(self.top.restoreDebugBreaks, True)
@@ -2709,7 +2715,7 @@ class DataWatch():
         When memsomethings are found, we set a break on their entry so that future hits on that memsomething can be caught
         without triggering the readHap.  TBD trade off between setting breaks beforehand?  Save for rerun of runTrack operations?
         '''
-        if self.return_hap is not None:
+        if self.return_hap is not None or self.context_manager.isReverseContext():
             return
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
@@ -2728,6 +2734,9 @@ class DataWatch():
         #    SIM_break_simulation("FIX THIS")
         #    return
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
+            ''' hap echos? '''
+            if len(self.read_hap) == 0:
+                return
             self.lgr.debug('dataWatch max marks exceeded')
             self.stopWatch()
             self.clearWatches()
@@ -2837,15 +2846,21 @@ class DataWatch():
 
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             fun = self.fun_mgr.getFun(eip)
+            if fun is None:
+                ''' This value is only used to check if we've looked to see if the current funtion is a memsomethign.'''
+                fun = eip
+
             ''' TBD seems impossible for a push to trigger a load.  huh?'''
             if instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
                 self.lgr.debug('********* is a push, provide an explaination please!')
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp') - self.mem_utils.wordSize(self.cpu)
                 self.trackPush(sp, instruct, addr, start, length, eip)
             elif fun in self.not_mem_something:
+                self.lgr.debug('DataWatch readHap fun 0x%x in not_mem_something' % fun)
                 self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
             else:
                 ''' Get the stack frame so we can look for memsomething or frees '''
+                self.lgr.debug('DataWatch call getStackTrace from readHap fun 0x%x not in not_mem_something' % fun)
                 st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
                 if st is None:
                     self.lgr.debug('DataWatch readHap stack trace is None, wrong pid?')
@@ -2855,6 +2870,9 @@ class DataWatch():
                         if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, fun):
                             self.lgr.debug('dataWatch, not memstuff, do finishRead')
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
+                            if fun is not None and fun not in self.not_mem_something:
+                                self.lgr.debug('DataWatch readHap not memsomething add fun 0x%x to not_mem_something' % fun)
+                                self.not_mem_something.append(fun)
                         else:
                             self.lgr.debug('dataWatch not checkFree maybe memstuff?')
                     else:
@@ -3729,7 +3747,7 @@ class DataWatch():
             pickle.dump(entries, open( entries_file, "wb") ) 
 
     def registerHapForRemoval(self, module):
-        self.lgr.debug('winDelay registerHapForRemoval')
+        self.lgr.debug('dataWatch registerHapForRemoval')
         self.remove_external_haps.append(module)
 
     def removeExternalHaps(self, immediate=False):
