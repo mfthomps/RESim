@@ -42,7 +42,8 @@ def getSizeAndMachine(full_path, lgr):
         lgr.warning('winProg getSizeAndMachine called with full_path of None')
         return None, None, None, None
     if os.path.isfile(full_path):
-        cmd = 'readpe -H %s' % full_path
+        lgr.debug('is it a real path that exists')
+        cmd = 'readpe -H "%s"' % full_path
         with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
             output = ps.communicate()
             for line in output[0].decode("utf-8").splitlines():

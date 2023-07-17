@@ -22,7 +22,7 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     exit
 fi
 cp -u $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
-if [ $# -eq 0 ] || [ $1 = "-h" ]; then
+if [[ $# -eq 0 ]] || [[ "$1" = "-h" ]]; then
     echo "runIda.sh [-64] <target> [color/reset] [server]"
     exit
 fi
@@ -36,9 +36,12 @@ if [[ "$1" == "-64" ]]; then
 fi
 target=$1
 echo "target is $1"
-target_base="$(basename -- $target)"
+target_base="$(basename -- "$target")"
+echo "the target base is $target_base"
 here="$(pwd)"
-root_dir="$(basename --  $here)"
+echo "we are currently: $here"
+root_dir="$(basename --  "$here")"
+echo "the root_dir is $root_dir"
 old_dir=$RESIM_IDA_DATA/$target_base
 new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
@@ -91,7 +94,7 @@ if [ ! -z "$remote" ]; then
     fi
 fi
 
-target_path=$(realpath $target)
+target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 
 if [ -z "$IDA_ANALYSIS" ]; then
@@ -103,7 +106,7 @@ if [[ $target = $here/* ]]; then
 fi
 
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
-mkdir -p $ida_analysis_path
+mkdir -p "$ida_analysis_path"
 
 echo "target is $target"
 echo "dbpath $ida_db_path"
@@ -116,6 +119,6 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
-    mkdir -p $RESIM_IDA_DATA/$root_dir/$target_base
-    $idacmd -o$ida_db_path -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $target
+    mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
+    $idacmd -o$ida_db_path -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
 fi
