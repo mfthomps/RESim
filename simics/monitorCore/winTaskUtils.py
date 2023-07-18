@@ -118,6 +118,10 @@ class WinTaskUtils():
             exec_addrs_file = os.path.join('./', run_from_snap, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
                 self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
+                for pid in self.program_map:
+                    self.lgr.debug('winTaskUtils from pickle got pid:%d  %s' % (pid, self.program_map[pid]))
+            else:
+                self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
 
     def commSize(self):
         return 14
@@ -449,6 +453,12 @@ class WinTaskUtils():
             retval = self.program_map[pid]
         ''' TBD find arg list? '''
         return retval, []
+
+    def getProgNameFromComm(self, comm):
+        for pid in self.program_map:
+            if self.program_map[pid].endswith(comm):
+                return self.program_map[pid]
+        return None
 
     def clearExitPid(self):
         self.exit_pid = 0
