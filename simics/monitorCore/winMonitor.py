@@ -174,7 +174,7 @@ class WinMonitor():
         retval = None
         if  callname == 'exit_group':
             #self.lgr.debug('is exit group')
-            retval = self.exit_group_syscall
+            retval = self.terminate_syscall
         elif callname in self.call_traces:
             #self.lgr.debug('is given callname %s' % callname)
             retval = self.call_traces[callname]
