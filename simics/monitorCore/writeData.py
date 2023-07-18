@@ -552,7 +552,7 @@ class WriteData():
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
         if self.total_read >= self.read_limit:
-            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain:
