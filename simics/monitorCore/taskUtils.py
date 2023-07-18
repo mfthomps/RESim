@@ -866,6 +866,12 @@ class TaskUtils():
             self.lgr.debug('taskUtils getProgName pid %d not in exec_addrs' % pid)
             return None, None
 
+    def getProgNameFromComm(self, comm):
+        for pid in self.program_map:
+            if self.program_map[pid].endswith(comm):
+                return self.program_map[pid]
+        return None
+
     def swapExecPid(self, old, new):
         if old in self.exec_addrs and new in self.exec_addrs:
             self.exec_addrs[new] = self.exec_addrs[old]
