@@ -1964,7 +1964,7 @@ class GenMonitor():
 
         if pid is None:
             pid, cpu = self.context_manager[self.target].getDebugPid() 
-        #self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
+        self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
         self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         #self.lgr.debug('genMonitor watchPageFaults back')
 
@@ -5082,7 +5082,7 @@ class GenMonitor():
 
     def jumper(self, from_addr, to_addr):
         ''' Set a control flow jumper '''
-        if self.target not in self.jummper_dict:
+        if self.target not in self.jumper_dict:
             cpu = self.cell_config.cpuFromCell(self.target)
             self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
         self.jumper_dict[self.target].setJumper(from_addr, to_addr)
@@ -5125,8 +5125,11 @@ class GenMonitor():
             prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
             self.lgr.debug('genMonitor getProgName pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
             if prog_name is None:
-                prog_name = self.task_utils[self.target].getCommFromPid(pid) 
-                self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
+                comm = self.task_utils[self.target].getCommFromPid(pid) 
+                prog_name = self.task_utils[self.target].getProgNameFromComm(comm) 
+                if prog_name is None:
+                    prog_name = comm
+                    self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
         return prog_name
  
     def getSharedSyscall(self):
@@ -5487,6 +5490,12 @@ class GenMonitor():
 
     def runToSO(self, file):
         self.run_to[self.target].runToSO(file)
+
+    def skipToCycle(self, cycle):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.context_manager[self.target].setReverseContext()
+        resimUtils.skipToTest(cpu, cycle, self.lgr)
+        self.context_manager[self.target].clearReverseContext()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
