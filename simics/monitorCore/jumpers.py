@@ -43,7 +43,7 @@ class Jumpers():
         #self.lgr.debug('doJump')
         ''' callback when jumper breakpoint is hit'''
         #curr_addr = memory.logical_address 
-        #self.lgr.debug('doJump addr is 0x%x' % addr)
+        self.lgr.debug('doJump addr is 0x%x' % addr)
         if addr not in self.hap:
             self.lgr.debug('jumper doJump addr 0x%x not in haps' % addr)
             return
@@ -59,14 +59,16 @@ class Jumpers():
             self.top.writeRegValue('eip', self.fromto[addr], alone=True)
         else:
             if self.cpu.architecture != 'arm':
-                reg_num = self.cpu.iface.int_register.get_number('eip')
+                #reg_num = self.cpu.iface.int_register.get_number('eip')
+                reg_num = self.cpu.iface.int_register.get_number('pc')
             else:
                 reg_num = self.cpu.iface.int_register.get_number('pc')
             self.cpu.iface.int_register.write(reg_num, self.fromto[addr])
-        #if addr in self.comm_name:
-        #    self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (addr, self.fromto[addr], self.comm_name[addr]))
-        #else:
-        #    self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (addr, self.fromto[addr]))
+            self.lgr.debug('jumper doJump wrote 0x%x to pc' % (self.fromto[addr]))
+        if addr in self.comm_name:
+            self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (addr, self.fromto[addr], self.comm_name[addr]))
+        else:
+            self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (addr, self.fromto[addr]))
         if addr in self.break_simulation:
             SIM_break_simulation('Jumper request')
 
