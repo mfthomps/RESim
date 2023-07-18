@@ -5116,6 +5116,9 @@ class GenMonitor():
         SIM_run_alone(SIM_run_command, cmd)
 
     def getProgName(self, pid):
+        if pid is None:
+            self.lgr.debug('genMonitor getProgName pid is none')
+            return None
         prog_name = self.traceProcs[self.target].getProg(pid)
         self.lgr.debug('genMonitor getProgName pid %d progname is %s' % (pid, prog_name))
         if prog_name is None or prog_name == 'unknown':

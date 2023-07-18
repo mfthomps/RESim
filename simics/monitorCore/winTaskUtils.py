@@ -36,9 +36,10 @@ import w7Params
 import taskUtils
 import winSocket
 class TaskStruct():
-    def __init__(self, pid, comm):
+    def __init__(self, pid, comm, next):
         self.pid = pid
         self.comm = comm
+        self.next = next
         ''' TBD fix for windows so we know who is waiting in the kernel when setting exit haps'''
         self.state = 0
 
@@ -356,16 +357,23 @@ class WinTaskUtils():
 
     def getTaskListPtr(self, rec=None):
         ''' return address of the task list "next" entry that points to the current task '''
+        retval = None
         if rec is None:
             task_rec_addr = self.getCurTaskRec()
         else:
             task_rec_addr = rec
         comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.commSize())
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
-        seen = set()
-        tasks = {}
-        ''' TBD'''
-        return None
+        task_structs = self.getTaskStructs()
+        look_for = task_rec_addr + self.param.ts_next - self.mem_utils.WORD_SIZE
+        for t in task_structs:
+            #self.lgr.debug('winTaskUtils getTaskListPtr compre 0x%x to 0x%x' % (task_structs[t].next, look_for))
+            if task_structs[t].next == look_for:
+                retval = t + self.param.ts_next
+                self.lgr.debug('winTaskUtils getTaskListPtr got rec pointing to 0x%x, it is 0x%x returning 0x%x' % (task_rec_addr, t, retval))
+                break
+        return retval 
+ 
 
     def getGroupLeaderPid(self, pid):
         ''' TBD '''
@@ -420,7 +428,8 @@ class WinTaskUtils():
         for task in task_list:
             comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
-            retval[task] = TaskStruct(pid, comm)
+            next = self.mem_utils.readWord(self.cpu, task + self.param.ts_next)
+            retval[task] = TaskStruct(pid, comm, next)
 
         return retval
 
@@ -547,12 +556,14 @@ class WinTaskUtils():
                 got.append(next_thread)
                 ''' TBD compute this delta by looping each next_thread we find and computing the smallest delta from the cur_thread values'''
                 rec_start = next_thread - 0x428
+                thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
+                thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
                 this_proc = self.mem_utils.readPtr(self.cpu, rec_start+self.param.proc_ptr)
                 if this_proc != 0: 
-                    self.lgr.debug('next thread %d is 0x%x  rec_start 0x%x  proc_ptr 0x%x' % (i, next_thread, rec_start, this_proc))
+                    self.lgr.debug('next thread %d id 0x%x is 0x%x  rec_start 0x%x  proc_ptr 0x%x' % (i, thread_id, next_thread, rec_start, this_proc))
                 thread_recs.append(rec_start)
 
-            offset=w7Params.hackpid(self.cpu, self.mem_utils, thread_recs, self.lgr, max_zeros=0)
+            #offset=w7Params.hackpid(self.cpu, self.mem_utils, thread_recs, self.lgr, max_zeros=0)
                 
             return
 
@@ -577,5 +588,12 @@ class WinTaskUtils():
         self.exit_pid = 0
         self.exit_cycles = 0
         
+    def getPidCommFromNext(self, next_addr):
+        pid = None
+        comm = None
+        if next_addr is not None:
+            rec = next_addr - self.param.ts_next
+            comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, taskUtils.COMM_SIZE)
+            pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
+        return pid, comm
 
-     

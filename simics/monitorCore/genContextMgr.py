@@ -1155,6 +1155,7 @@ class GenContextMgr():
             self.pidExit(pid)
 
     def setExitCallback(self, callback):
+        ''' callback to be invoked when/if program exits.  intended for use recording exits that occur during playAFL'''
         self.exit_callback = callback
 
     def watchGroupExits(self, pid=None):
@@ -1174,9 +1175,9 @@ class GenContextMgr():
         retval = True
         ''' set breakpoint on task record that points to this (or the given) pid '''
         #self.lgr.debug('contextManager watchExit')
-        if self.top.isWindows():
-            ''' TBD fix this!'''
-            return True
+        #if self.top.isWindows():
+        #    ''' TBD fix this!'''
+        #    return True
         dumb, comm, cur_pid  = self.task_utils.curProc()
         if pid is None and cur_pid == 1:
             self.lgr.debug('watchExit for pid 1, ignore')
@@ -1193,36 +1194,23 @@ class GenContextMgr():
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
-            #self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
+            self.lgr.debug('contextManager watchExit failed to get list_addr pid %d cur_pid %d rec 0x%x' % (pid, cur_pid, rec))
             return False
         
         if pid not in self.task_rec_bp or self.task_rec_bp[pid] is None:
             cell = self.default_context
             watch_pid, watch_comm = self.task_utils.getPidCommFromNext(list_addr)
-            if watch_pid == 0:
-                self.lgr.debug('genContext watchExit, try group next')
-                watch_pid, watch_comm = self.task_utils.getPidCommFromGroupNext(list_addr)
-                if self.debugging_pid is not None and self.amWatching(watch_pid):
-                    cell = self.resim_context
+            if not self.top.isWindows():
+                if watch_pid == 0:
+                    self.lgr.debug('genContext watchExit, try group next')
+                    watch_pid, watch_comm = self.task_utils.getPidCommFromGroupNext(list_addr)
+                    if self.debugging_pid is not None and self.amWatching(watch_pid):
+                        cell = self.resim_context
             if watch_pid == 0:
                 self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
                 return False
-            '''
-            if watch_pid in self.pid_cache:
-                #cell = self.resim_context
-                cell = self.default_context
-            else:
-                cell = self.default_context
-                #cell = self.resim_context
-            '''
-            #self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on 0x%x context: %s' % (watch_pid, watch_comm, pid, list_addr, cell))
+            self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on 0x%x context: %s' % (watch_pid, watch_comm, pid, list_addr, cell))
             self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
-            #bp = self.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
-            #self.lgr.debug('contextManager watchExit cur pid:%d set list break %d at 0x%x for pid %d context %s' % (cur_pid, self.task_rec_bp[pid], 
-            #     list_addr, pid, str(cell)))
-            #self.task_rec_hap[pid] = self.genHapIndex("Core_Breakpoint_Memop", self.taskRecHap, pid, bp)
-            #self.lgr.debug('contextManager watchExit pid %d bp: %d' % (pid, self.task_rec_bp[pid]))
-            #self.task_rec_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
             SIM_run_alone(self.watchTaskHapAlone, pid)
             self.task_rec_watch[pid] = list_addr
         else:
