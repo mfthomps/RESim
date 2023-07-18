@@ -565,7 +565,8 @@ branches that have not been taken.
 
 \item{\tt goToBasicBlock} -- Skip the simulation state to the first hit of the block named by an address (requires use of {\tt mapCoverage}..
 
-\item{\tt addJumper(from, to)} -- Define a jumper to cause execution to skip from a from block to a to block.
+\item{\tt addJumper(from, to)} -- Define a jumper to cause execution to skip from a from block to a to block.  These are intended for use with code coverage and fuzzing (see \ref{jumpers}).
+Use {\tt jumper(from, to)} for general execution jumpers.
 \end{itemize}
 
 \subsection{Fuzzing}
@@ -624,7 +625,9 @@ The {\tt playAFL} command also generates a hits file for each AFL queue file and
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  Use {\tt playAFLTCP} for tcp sessions.
 If {\tt target} is a full path, then only that files will be played.  \textbf{Note} AFL filters are not applied to replays, and thus you may see divergence from what AFL observed.
 The {\tt runPlay} stand-alone command launches parallel instances of RESim running the playAFL, for use in replaying sessions created by parallel fuzzing.  Note however this 
-does not generate a new total hits file, it only creates coverage files.
+does not generate a new total hits file, it only creates coverage files.  
+
+If processes exit during replay, those will be reported after {\tt playAFL} completes replaying the sessions.
 
 \item{\tt crashReport(target)} Generate crash reports for each crash discovred by AFL.  The given {\tt target} is as defined in the {\tt playAFL} command, except you can optionally provide the
 full path to a file, in which case only that file will be reported on.  NOTE: when handling multi-packet data sets, use the {\tt crashReport.py} utility (see section \ref{utilities} to launch RESim multiple times,
@@ -735,7 +738,7 @@ and is overridden by the {\tt READ\_LOOP\_MAX}.  A value of \textit{quit} will c
 the RESim session to exit (useful for crashReport).  Otherwise, the data watch is stopped and execution continues, e.g., to arrive at a page boundary fault.
 \item {\tt READ\_LOOP\_MAX} -- Limit on dataWatch reads from a single buffer.
 \item {\tt EXECUTION\_JUMPERS} -- Name of a file with jumpers (see the {\tt jumper} command in \ref{sec:modification}), expressed as 
-from/to addresses in hex.  \textbf{Note:} encountering
+from/to addresses in hex.  Each line has both addresses, separated by a space.  Use \# for comments.  \textbf{Note:} encountering
 a jumper will reset the reverse execution origin, and thus may not be suitable when using injectIO or crash analysis.
 \item {\tt RESIM\_LOG\_LEVEL} -- Set to INFO to supress debug messages in the resim log.
 
@@ -2715,7 +2718,10 @@ All snapshots decend directly from snapshot0.
 
 \subsection{Fuzzing crash detection}
 While fuzzing, we want to detect and report crashes and/or process exits.
-User control over these?  Currently only report crashes.
+We watch crashes by watching for modifications of the next pointer in the link lists previous entry.
+The crashes are seen by AFL.
+Exits are watched during playback and are displayed to the user.  For Linux, the {\tt exit\_group} and the
+{\tt tgkill} calls are watched.  For Windows, the {\tt TerminateProcess} is watched.  (TBD add TerminateThread?)
 
 
 \section{Driver platforms}
