@@ -124,7 +124,7 @@ class PageFaultGen():
     def pageFaultHap(self, compat32, third, forth, memory):
         if self.fault_hap is None:
             return
-        #self.lgr.debug('pageFaultHap')
+        #self.lgr.debug('pageFaultHap cycle 0x%x' % self.cpu.cycles)
         #cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultHap pid:%d third: %s  forth: %s' % (pid, str(third), str(forth)))
         #cpu = SIM_current_processor()
@@ -136,7 +136,7 @@ class PageFaultGen():
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
         if not self.context_manager.watchingThis():
-            #self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
+            self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
             return
         if self.exception_eip is None:
             eip = self.mem_utils.getRegValue(cpu, 'pc')
@@ -159,8 +159,9 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
             cr2 = self.cpu.iface.int_register.read(reg_num)
-            #self.lgr.debug('cr2 read is 0x%x' % cr2)
+            #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
         else:
+            #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
             cr2 = eip
         if pid not in self.faulted_pages:
             self.faulted_pages[pid] = []
@@ -200,8 +201,15 @@ class PageFaultGen():
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if pid in self.pending_faults:
-                #self.lgr.debug('removing pending fault')
-                del self.pending_faults[pid]
+                #self.lgr.debug('pageFaultHap user space, was a pending fault for addr 0x%x' % self.pending_faults[pid].cr2)
+                prec = self.pending_faults[pid]
+                phys_block = cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
+                if phys_block.address is not None and phys_block.address != 0:
+                    #self.lgr.debug('pageFaultHap in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
+                    del self.pending_faults[pid]
+                else:
+                    self.lgr.debug('pageFaultHap in user space but 0x%x still not mapped' % prec.cr2)
+                    SIM_run_alone(self.hapAlone, self.pending_faults[pid])
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
 
@@ -241,9 +249,9 @@ class PageFaultGen():
         if self.fault_hap1 is not None or self.fault_hap is not None:
             self.lgr.debug('pageFaultGen watchPageFaults, already watching.  Do nothing.')
             return
-        if self.top.isWindows():
-            ''' TBD fix for windows '''
-            return 
+        #if self.top.isWindows():
+        #    ''' TBD fix for windows '''
+        #    return 
         self.debugging_pid = pid
         if self.cpu.architecture == 'arm':
             '''
