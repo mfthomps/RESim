@@ -58,6 +58,8 @@ class WinMonitor():
 
         self.kbuffer = {}
 
+        self.terminate_syscall = None
+
         ''' dict of dict of syscall.SysCall keyed cell and context'''
         ''' TBD remove these '''
         self.call_traces = {}
@@ -241,11 +243,6 @@ class WinMonitor():
                     self.lgr.debug('wnMonitor runToIO, call to setExits')
                     the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager.getRESimContext()) 
                 #self.copyCallParams(the_syscall)
-            else:
-                # TBD REMOVE, not reached
-                #self.trace_all[self.target].addCallParams([call_params])
-                #self.lgr.debug('runToIO added parameters rather than new syscall')
-                pass
     
     
             if run_fun is not None:
@@ -253,3 +250,11 @@ class WinMonitor():
             if run:
                 self.lgr.debug('runToIO now run')
                 SIM_continue(0)
+
+
+    def debugExitHap(self, flist=None): 
+        if self.terminate_syscall is None:
+            context=self.context_manager.getRESimContextName()
+            exit_calls = ['TerminateProcess', 'TerminateThread']
+            self.terminate_syscall = self.syscallManager.watchSyscall(context, exit_calls, [], 'debugExit')
+            self.lgr.debug('winMonitor debugExitHap')

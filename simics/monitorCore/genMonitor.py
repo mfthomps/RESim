@@ -2559,8 +2559,7 @@ class GenMonitor():
     def debugExitHap(self, flist=None): 
         ''' intended to stop simultion if the threads we are debugging all exit '''
         if self.isWindows():
-            ''' TBD fix for windows '''
-            pass
+            self.winMonitor[self.target].debugExitHap(flist)
         else:
             if self.target not in self.exit_group_syscall:
                 somap = None
@@ -4359,6 +4358,17 @@ class GenMonitor():
         else:
             analysis_path = None
         self.lgr.debug('mapCoverage file (None means use prog name): %s' % analysis_path)
+        if self.coverage is None and fname is not None:
+            cell = self.cell_config.cell_context[self.target]
+            cpu = self.cell_config.cpuFromCell(self.target)
+            if analysis_path is not None:
+                ida_path = self.getIdaData(analysis_path)
+                self.lgr.debug('mapCoverage, no coveage defined, create one. ida_path is %s' % ida_path)
+                self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
+                   cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+            else:
+                self.lgr.error('mapCoverage, could not get analysis path from fname %s' % fname)
+              
         self.enableCoverage(fname=analysis_path)
 
     def showCoverage(self):
@@ -5344,7 +5354,7 @@ class GenMonitor():
             print('current task phys addr is 0x%x' % phys)
 
     def getIdaData(self, path):
-        #self.lgr.debug('getIdaData path %s' % path)
+        self.lgr.debug('getIdaData path %s' % path)
         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
         ida_path = resimUtils.getIdaData(path, root_prefix)
         return ida_path
