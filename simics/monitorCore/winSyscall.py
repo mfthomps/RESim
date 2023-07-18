@@ -752,15 +752,18 @@ class WinSyscall():
 
                 if callname == 'OpenFile':
                     share = []
-                    share_access = self.stackParam(1, frame) & 0xffffffff
-                    if share_access == 0x0:
-                        share.append('NONE')
+                    value = self.stackParam(1, frame) 
+                    if value is not None:
+                        share_access = value & 0xffffffff
+                        if share_access == 0x0:
+                            share.append('NONE')
+                        for ac, name in winFile.share_access_map.items():
+                            if share_access & ac:
+                                share.append(name)
+                        trace_msg = trace_msg+' share_access: 0x%x (%s)' % (share_access, ', '.join(share)) 
+                    else:
+                        trace_msg = trace_msg + 'failed reading stack param 1 '
 
-                    for ac, name in winFile.share_access_map.items():
-                        if share_access & ac:
-                            share.append(name)
-
-                    trace_msg = trace_msg+' share_access: 0x%x (%s)' % (share_access, ', '.join(share)) 
                 
                 if True:
                     for call_param in syscall_info.call_params:
