@@ -181,14 +181,20 @@ class WinTaskUtils():
             ptr = cur_thread + self.param.proc_ptr
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
             #self.lgr.debug('winTaskUtils getCurTaskRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
-
+            if ptr_phys is None:
+               if ptr > self.param.kernel_base: 
+                    try:
+                        phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+                        ptr_phys = phys_block.address
+                    except:
+                        self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             if ptr_phys is not None:
                 retval = SIM_read_phys_memory(self.cpu, ptr_phys, self.mem_utils.WORD_SIZE)
             else:
                 self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
                 if cur_thread_in is not None:
                     self.lgr.debug('cur_thread passed in as 0x%x' % cur_thread_in)
-                SIM_break_simulation('remove this')
+                #SIM_break_simulation('remove this')
                 pass
         if retval is not None:
             retval = self.mem_utils.getUnsigned(retval)
