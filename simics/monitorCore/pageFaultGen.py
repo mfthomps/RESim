@@ -122,6 +122,7 @@ class PageFaultGen():
         SIM_break_simulation('SEGV, task rec for %d (%s) modified mem reference was 0x%x' % (prec.pid, prec.comm, prec.cr2))
  
     def pageFaultHap(self, compat32, third, forth, memory):
+        ''' Invoked when the kernel's page fault entry point is hit'''
         if self.fault_hap is None:
             return
         #cpu, comm, pid = self.task_utils.curProc() 
@@ -135,7 +136,7 @@ class PageFaultGen():
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
         eip = self.mem_utils.getRegValue(cpu, 'pc')
-        #self.lgr.debug('pageFaultHap pid:%d eip: 0x%x cycle 0x%x' % (pid, eip, self.cpu.cycles))
+        self.lgr.debug('pageFaultHap pid:%d eip: 0x%x cycle 0x%x' % (pid, eip, self.cpu.cycles))
         if not self.context_manager.watchingThis():
             self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
             return
@@ -155,14 +156,14 @@ class PageFaultGen():
                 data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
                 fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                #self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
+                self.lgr.debug('data fault pid:%d reg value 0x%x  violation type: %d' % (pid, fault, access_type))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
             cr2 = self.cpu.iface.int_register.read(reg_num)
-            #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
+            self.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
         else:
-            #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
+            self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
             cr2 = eip
 
         if pid not in self.faulted_pages:
@@ -183,7 +184,7 @@ class PageFaultGen():
         prec = Prec(self.cpu, comm, pid, cr2, cur_pc)
         if pid not in self.pending_faults:
             self.pending_faults[pid] = prec
-            #self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x cycle 0x%x' % (pid, prec.cr2, prec.cycles))
+            self.lgr.debug('pageFaultHap add pending fault for %d addr 0x%x cycle 0x%x' % (pid, prec.cr2, prec.cycles))
             if self.mode_hap is None:
                 #self.lgr.debug('pageFaultGen adding mode hap')
                 self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
@@ -191,9 +192,10 @@ class PageFaultGen():
         SIM_run_alone(self.pageFaultHapAlone, hack_rec)
 
     def rmModeHapAlone(self, dumb):
-                #self.lgr.debug('last fault, remove hap')
-                RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-                self.mode_hap = None
+        #self.lgr.debug('last fault, remove hap')
+        if self.mode_hap is not None:
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
 
     def modeChanged(self, want_pid, one, old, new):
         if self.mode_hap is None:
@@ -213,14 +215,15 @@ class PageFaultGen():
                 if phys_block.address is not None and phys_block.address != 0:
                     #self.lgr.debug('pageFaultHap in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
                     del self.pending_faults[pid]
-                else:
+                elif self.cpu.architecture != 'arm':
+                    ''' TBD handle reflection of segv to user space for arm? '''
                     sp = self.mem_utils.getRegValue(cpu, 'sp')
                     if sp > prec.cr2 and sp < (prec.cr2 + 80):
                         ''' growing stack '''
                         del self.pending_faults[pid]
                     else:
                         self.lgr.debug('pageFaultHap in user space but 0x%x still not mapped' % prec.cr2)
-                        #SIM_run_alone(self.hapAlone, self.pending_faults[pid])
+                        SIM_run_alone(self.hapAlone, self.pending_faults[pid])
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
             if len(self.pending_faults) == 0:
@@ -266,6 +269,7 @@ class PageFaultGen():
         #    ''' TBD fix for windows '''
         #    return 
         self.debugging_pid = pid
+        ''' TBD explain why arm only uses faultCallback yet x86 also uses pageFaultHap '''
         if self.cpu.architecture == 'arm':
             '''
             self.lgr.debug('watchPageFaults set break at 0x%x' % self.param.page_fault)
@@ -301,6 +305,7 @@ class PageFaultGen():
 
 
     def faultCallback(self, cpu, one, exception_number):
+        ''' invoked when a processor exception occurs.  Also see pageFaultHap'''
         if not self.context_manager.watchingThis():
             #self.lgr.debug('faultCallback, contextManager says not watching')
             return
@@ -331,7 +336,7 @@ class PageFaultGen():
                     prec = Prec(self.cpu, comm, pid, dfar, eip, name=name, fsr=fsr)
                 if pid not in self.pending_faults:
                     self.pending_faults[pid] = prec
-                    #self.lgr.debug('faultCallback add pending fault for %d addr 0x%x  fsr: %s eip: 0x%x cycle 0x%x' % (pid, prec.cr2, str(prec.fsr), eip, prec.cycles))
+                    #self.lgr.debug('faultCallback add pending fault for pid:%d addr 0x%x  fsr: %s eip: 0x%x cycle 0x%x' % (pid, prec.cr2, str(prec.fsr), eip, prec.cycles))
                     if self.mode_hap is None:
                         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
 
