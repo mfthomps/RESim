@@ -3872,7 +3872,7 @@ class GenMonitor():
             print('Reverse execution must be enabled.')
             return
         self.track_started = True
-        self.stopTrackIOAlone(immediate=True)
+        self.stopTrackIOAlone(immediate=True, check_crash=False)
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
         self.restoreDebugBreaks()
@@ -3906,19 +3906,20 @@ class GenMonitor():
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
-    def stopTrackIOAlone(self, immediate=False):
+    def stopTrackIOAlone(self, immediate=False, check_crash=True):
         thread_pids = self.context_manager[self.target].getThreadPids()
         self.lgr.debug('stopTrackIO got %d thread_pids' % len(thread_pids))
         crashing = False 
-        for pid in thread_pids:
-            if self.page_faults[self.target].hasPendingPageFault(pid):
-                comm = self.task_utils[self.target].getCommFromPid(pid)
-                cycle = self.page_faults[self.target].getPendingFaultCycle(pid)
-                print('Pid %d (%s) has pending page fault, may be crashing. Cycle %s' % (pid, comm, cycle))
-                self.lgr.debug('stopTrackIO Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
-                leader = self.task_utils[self.target].getGroupLeaderPid(pid)
-                self.page_faults[self.target].handleExit(pid, leader)
-                crashing = True 
+        if check_crash:
+            for pid in thread_pids:
+                if self.page_faults[self.target].hasPendingPageFault(pid):
+                    comm = self.task_utils[self.target].getCommFromPid(pid)
+                    cycle = self.page_faults[self.target].getPendingFaultCycle(pid)
+                    print('Pid %d (%s) has pending page fault, may be crashing. Cycle %s' % (pid, comm, cycle))
+                    self.lgr.debug('stopTrackIO Pid %d (%s) has pending page fault, may be crashing.' % (pid, comm))
+                    leader = self.task_utils[self.target].getGroupLeaderPid(pid)
+                    self.page_faults[self.target].handleExit(pid, leader)
+                    crashing = True 
                
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
         #if 'runToIO' in self.call_traces[self.target]:
