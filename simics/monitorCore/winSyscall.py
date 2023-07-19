@@ -715,6 +715,7 @@ class WinSyscall():
                                 if extended is not None:
                                     extended_hx = binascii.hexlify(extended)
                                     trace_msg = trace_msg + ' - socket() call \n AFD extended: %s' % extended_hx
+                    exit_info = self.genericCallParams(syscall_info, exit_info, callname)
 
         elif callname == 'QueryAttributesFile':
             object_attr = frame['param1']
@@ -766,20 +767,7 @@ class WinSyscall():
 
                 
                 if True:
-                    for call_param in syscall_info.call_params:
-                        #self.lgr.debug('got param type %s' % type(call_param.match_param))
-                        if call_param.match_param.__class__.__name__ == 'Dmod':
-                             mod = call_param.match_param
-                             #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
-                             #if mod.fname_addr is None:
-                             if mod.getMatch() == exit_info.fname:
-                                 self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
-                                 exit_info.call_params = call_param
-                        if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
-                            self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
-                            exit_info.call_params = call_param
-                            
-                            break
+                    exit_info = self.genericCallParams(syscall_info, exit_info, callname)
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
         elif callname == 'DeviceIoControlFile':
@@ -1610,3 +1598,23 @@ class WinSyscall():
         else:
             self.lgr.debug('winSyscall watchData False break_sim %r  lingre %r' % (self.break_simulation, self.linger))
             return False
+
+    def genericCallParams(self, syscall_info, exit_info, callname):
+        retval = None
+        for call_param in syscall_info.call_params:
+            #self.lgr.debug('got param type %s' % type(call_param.match_param))
+            if call_param.match_param.__class__.__name__ == 'Dmod':
+                 mod = call_param.match_param
+                 #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
+                 #if mod.fname_addr is None:
+                 if mod.getMatch() == exit_info.fname:
+                     self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
+                     exit_info.call_params = call_param
+                     retval = exit_info
+                     break
+            if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
+                self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
+                exit_info.call_params = call_param
+                retval = exit_info
+                break
+        return retval

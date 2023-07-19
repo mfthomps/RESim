@@ -128,16 +128,19 @@ class WinCallExit():
 
         if eax != 0:
             if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
+                ''' TBD why does this need special case?  remove it?''' 
                 trace_msg = trace_msg+' BIND on Handle 0x%x' % exit_info.old_fd
                 #self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
             else:
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
+            exit_info.call_params = None
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             if exit_info.retval_addr is not None:
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is None:
+                     self.lgr.error('bad fd read from 0x%x' % exit_info.retval_addr)
                      SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                      return
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
@@ -150,17 +153,11 @@ class WinCallExit():
                     if callname == 'OpenSection':
                         self.lgr.debug('this is an OpenSection WITHOUT an Open/CreateFile --> make section')
                         self.soMap.createSection(fd, fd, pid)
+                self.openCallParams(exit_info)
             else:
+                exit_info.call_params = None
                 self.lgr.debug('%s retval addr is none' % trace_msg)
             
-            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
-                self.lgr.debug('winCallExit open check string %s against %s' % (exit_info.fname, exit_info.call_params.match_param))
-                #if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
-                if exit_info.call_params.match_param not in exit_info.fname:
-                    ''' no match, set call_param to none '''
-                    exit_info.call_params = None
-                else:
-                    self.lgr.debug('winCallExit got match')
 
         elif callname == 'CreateFile':
             if exit_info.retval_addr is not None:
@@ -172,11 +169,15 @@ class WinCallExit():
                     if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
                         self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
                         self.soMap.addFile(exit_info.fname, fd, pid)
+                    self.openCallParams(exit_info)
+
                 else:
                     self.lgr.debug('%s handle is none' % trace_msg)
+                    exit_info.call_params = None
             else:
                 self.lgr.debug('%s retval addr is none' % trace_msg)
-        
+                exit_info.call_params = None
+
         elif callname == 'ReadFile':
             ''' fname_addr has address of return count'''
             return_count = None
@@ -352,3 +353,10 @@ class WinCallExit():
         for eip in self.exit_hap:
             self.exit_info[eip] = {}
 
+    def openCallParams(self, exit_info):
+            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
+                self.lgr.debug('winCallExit openCallParams open check string %s against %s' % (exit_info.fname, exit_info.call_params.match_param))
+                #if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
+                if exit_info.call_params.match_param not in exit_info.fname:
+                    ''' no match, set call_param to none '''
+                    exit_info.call_params = None
