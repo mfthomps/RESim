@@ -19,6 +19,7 @@ class TargetFS():
         self.top = top
         self.root_prefix = root_prefix
         self.root_subdirs = root_subdirs
+        self.cache = {}
         self.lgr = None
 
 
@@ -29,12 +30,12 @@ class TargetFS():
     def getFull(self, path, lgr=None):
         retval = None
         self.lgr = lgr
-        if self.top.isWindows():
-            path = path.replace('\\', '/')
-            if lgr is not None:
-                 lgr.debug('getFull windows, new path is %s' % path)
-            
-        if path.startswith('./'):
+        path = path.replace('\\', '/')
+        if lgr is not None:
+             lgr.debug('getFull windows, new path is %s' % path)
+        if path in self.cache:
+            return self.cache[path]   
+        elif path.startswith('./'):
              base = os.path.basename(path)
              #fun_file = base+'.funs'
              #lgr.debug('TargetFS getFull is relative, fun_file %s' % fun_file)
@@ -80,4 +81,9 @@ class TargetFS():
                 retval = full_insensitive
         if retval is not None:
             retval = os.path.abspath(retval)
+            ret_base = os.path.basename(retval)
+            if ret_base not in self.cache:
+                self.cache[ret_base] = retval
+            elif self.cache[ret_base] != retval:
+                self.lgr.error('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
         return retval
