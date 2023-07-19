@@ -321,7 +321,9 @@ class WinDLLMap():
         if pid is None:
             self.lgr.debug('winDLLMap getSOAddr no pid for %s' % str(pid))
             return None
- 
+        if in_fname == 'unknown':
+            self.lgr.debug('winDLLMap getSOAddr in_fname is "unknown" for pid for %s' % str(pid))
+            return
         for section in self.section_list:
             if section.pid == pid:
                 #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(in_fname).lower(), ntpath.basename(section.fname).lower()))
@@ -511,9 +513,9 @@ class WinDLLMap():
                        retval = 64
 
             else:
-                self.lgr.warning('winDLL getMachineSize pid %d missing machine field' % pid) 
+                self.lgr.warning('winDLL getMachineSize pid:%d missing machine field' % pid) 
         else: 
-            self.lgr.debug('winDLL getMachineSize pid %d has no text' % pid) 
+            self.lgr.debug('winDLL getMachineSize pid:%d has no text' % pid) 
             pass
        
         #if retval is not None: 
