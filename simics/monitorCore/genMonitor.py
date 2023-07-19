@@ -350,6 +350,19 @@ class GenMonitor():
                 if os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
+
+                    ''' TBD remove this once param files are cycled out '''
+                    new_param_file = comp_dict[cell_name]['RESIM_PARAM']
+                    print('Cell %s using params from %s' % (cell_name, new_param_file))
+                    self.lgr.debug('Cell %s using params from %s' % (cell_name, new_param_file))
+                    if not os.path.isfile(new_param_file):
+                        self.lgr.error('Could not find param file at %s -- ??' % param_file)
+                        continue
+                    pjson = pickle.load( open(new_param_file, 'rb') ) 
+                    self.param[cell_name].page_fault = pjson.page_fault
+                    self.lgr.debug('*** page fault value over-written by value from %s' % new_param_file)
+
+
                     self.lgr.debug(self.param[cell_name].getParamString())
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
@@ -2954,6 +2967,21 @@ class GenMonitor():
         call_params = syscall.CallParams('runToOpen', open_call_name, substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
         self.runTo([open_call_name], call_params, name='open')
+
+    def runToCreate(self, substring):
+        if self.target in self.track_threads:
+            self.track_threads[self.target].stopSOTrack()
+        else:
+            ''' do not hook mmap calls to track SO maps '''
+            self.sharedSyscall[self.target].trackSO(False)
+        print('warning, SO tracking has stopped')
+        if self.isWindows():
+            open_call_name = 'CreateFile'
+        else:
+            open_call_name = 'create'
+        call_params = syscall.CallParams('runToCreate', open_call_name, substring, break_simulation=True)
+        self.lgr.debug('runToCreate to %s' % substring)
+        self.runTo([open_call_name], call_params, name='create')
 
     def runToSend(self, substring):
         call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
