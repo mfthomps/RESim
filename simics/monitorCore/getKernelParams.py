@@ -1438,9 +1438,15 @@ class GetKernelParams():
             return
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         self.lgr.debug('pageFaultHap eip 0x%x' % eip)
+        if eip > self.param.kernel_base: 
+            self.lgr.debug('pageFaultHap from kernel, skip')
+            return
         SIM_break_simulation('pageFaultHap')
+        '''
         if eip < self.param.kernel_base: 
+            self.lgr.debug('pageFaultHap page_fault eip in user space?' % eip)
             SIM_break_simulation('pageFaultHap')
+            pass
         else:
             self.param.page_fault = eip
             self.lgr.debug('pageFaultHap page_fault right off at 0x%x' % self.param.page_fault)
@@ -1449,6 +1455,7 @@ class GetKernelParams():
                 self.saveParam()
             else:
                 SIM_run_alone(self.setDataAbortHap, None)
+        '''
         
     def dataAbortHap(self, kind, one, exception_number):
         if self.page_hap2 is None:
