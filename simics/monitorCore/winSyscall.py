@@ -1600,10 +1600,11 @@ class WinSyscall():
             return False
 
     def genericCallParams(self, syscall_info, exit_info, callname):
-        retval = None
+        retval = exit_info
         for call_param in syscall_info.call_params:
-            #self.lgr.debug('got param type %s' % type(call_param.match_param))
+            self.lgr.debug('got param type %s' % type(call_param.match_param))
             if call_param.match_param.__class__.__name__ == 'Dmod':
+                 retval = None
                  mod = call_param.match_param
                  #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
                  #if mod.fname_addr is None:
@@ -1612,9 +1613,13 @@ class WinSyscall():
                      exit_info.call_params = call_param
                      retval = exit_info
                      break
-            if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
-                self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
-                exit_info.call_params = call_param
-                retval = exit_info
-                break
+            if type(call_param.match_param) is str: 
+                if (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
+                    self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
+                    exit_info.call_params = call_param
+                    retval = exit_info
+                    break
+                else:
+                    retval = None
+                
         return retval
