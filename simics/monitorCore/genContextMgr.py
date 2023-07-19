@@ -1219,7 +1219,7 @@ class GenContextMgr():
         return retval
 
     def watchTaskHapAlone(self, pid):
-        if pid in self.task_rec_bp and pid:
+        if pid in self.task_rec_bp and pid and self.task_rec_bp[pid] is not None:
             self.task_rec_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, pid, self.task_rec_bp[pid])
 
     def auditExitBreaks(self):
@@ -1245,7 +1245,10 @@ class GenContextMgr():
         #self.lgr.debug('contextManager setExitBreaks')
         for pid in self.task_rec_bp:
             rec = self.task_utils.getRecAddrForPid(pid)
-            self.watchExit(rec, pid)
+            if rec is None:
+                self.lgr.debug('contextManager setExitBreaks got record addr of none for pid %d' % pid)
+            else:
+                self.watchExit(rec, pid)
 
     def clearExitBreaks(self):
         SIM_run_alone(self.clearExitBreaksAlone, None)
