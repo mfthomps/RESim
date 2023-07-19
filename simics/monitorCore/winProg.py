@@ -152,10 +152,10 @@ class WinProg():
         #SIM_run_alone(SIM_continue, 0)
 
     def toNewProcHap(self, prog_string, third, forth, memory):
-        ''' We should be in the new process '''
+        ''' We might be in the new process '''
         if self.cur_task_hap is None:
             return
-        self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
+        #self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
         cur_proc = self.task_utils.getCurTaskRec(cur_thread_in=cur_thread)
         pid_ptr = cur_proc + self.param.ts_pid
