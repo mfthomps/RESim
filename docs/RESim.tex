@@ -31,7 +31,7 @@ RESim is a dynamic software analysis tool that provides detailed insight into pr
 platform's high fidelity models of processors, peripheral devices (e.g., network interface cards), and disks.  The networked simulated computers load and run targeted software copied from disk images extracted from the physical systems being modeled.  Insight into software behavior is obtained by instrumenting the simulated hardware
 rather than instrumenting the software.
 
-RESim aids reverse engineering of networks of Linux-based systems by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is recorded through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of the kernel hosting the processes.
+RESim aids reverse engineering of networks of Linux-based systems\footnote{And preliminary support for analyzing Windows applications.} by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is recorded through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of the kernel hosting the processes.
 The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicity modify memory or register content, and can also dynamically augment memory 
 based on system events, e.g., change a password file entry as it is read by the {\tt su} program (see the dmod function described in\ref{dmod}).
 
@@ -2961,7 +2961,14 @@ Support functions include:
 \begin{itemize}
 \item Tracing syscalls with traceAll.  There is also a {\tt traceWindows} command that traces a subset of windows system calls.  This can be useful when performance is 
 impacted by the raft of syscalls some applications make.  Also consider making use of the {\tt ONLY\_PROGS} and {\tt IGNORE\_PROGS} directives.
+
 \item trackIO mostly works, with initial processing of clib type data move functions.  Also try trackRecv to focus on recv calls for performance.  
+
+\item prepInjectWatch will create a snapshot and record windows kernel buffers.  The snapshot will be just before the kernel starts to copy data to user space.
+
+\item Ability to detect SEGV, including catching return to user space without mapping faulted addresses (excepting stack growth).
+
+\item Fuzzing windows applications is working, at least preliminarily.
 
 \item getWin7CallParams with {\tt track\_params=True} will generate a report on kernel references to system call parameters.  This is useful when creating code to parse out
 the system call parameters.
