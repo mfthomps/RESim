@@ -124,7 +124,6 @@ class PageFaultGen():
     def pageFaultHap(self, compat32, third, forth, memory):
         if self.fault_hap is None:
             return
-        #self.lgr.debug('pageFaultHap cycle 0x%x' % self.cpu.cycles)
         #cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultHap pid:%d third: %s  forth: %s' % (pid, str(third), str(forth)))
         #cpu = SIM_current_processor()
@@ -135,6 +134,8 @@ class PageFaultGen():
         #if self.debugging_pid is not None:
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
+        eip = self.mem_utils.getRegValue(cpu, 'pc')
+        #self.lgr.debug('pageFaultHap pid:%d eip: 0x%x cycle 0x%x' % (pid, eip, self.cpu.cycles))
         if not self.context_manager.watchingThis():
             self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
             return
@@ -163,6 +164,7 @@ class PageFaultGen():
         else:
             #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
             cr2 = eip
+
         if pid not in self.faulted_pages:
             self.faulted_pages[pid] = []
         if cr2 in self.faulted_pages[pid]:
@@ -197,6 +199,10 @@ class PageFaultGen():
         if self.mode_hap is None:
             return
         cpu, comm, pid = self.task_utils.curProc() 
+        if pid != want_pid:
+            #self.lgr.debug('pageFaultGen modeChanged wrong pid  pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
+            return
+
         #self.lgr.debug('pageFaultGen modeChanged pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
@@ -208,8 +214,15 @@ class PageFaultGen():
                     #self.lgr.debug('pageFaultHap in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
                     del self.pending_faults[pid]
                 else:
-                    self.lgr.debug('pageFaultHap in user space but 0x%x still not mapped' % prec.cr2)
-                    SIM_run_alone(self.hapAlone, self.pending_faults[pid])
+                    sp = self.mem_utils.getRegValue(cpu, 'sp')
+                    if sp > prec.cr2 and sp < (prec.cr2 + 80):
+                        ''' growing stack '''
+                        del self.pending_faults[pid]
+                    else:
+                        self.lgr.debug('pageFaultHap in user space but 0x%x still not mapped' % prec.cr2)
+                        #SIM_run_alone(self.hapAlone, self.pending_faults[pid])
+                        SIM_run_alone(self.rmModeHapAlone, None) 
+                        #SIM_break_simulation('remove this')
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
 
@@ -268,8 +281,8 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, 0, max_intr) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         else:
-            #self.lgr.debug('watchPageFaults not arm set break at 0x%x pid %s' % (self.param.page_fault, pid))
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
+            self.lgr.debug('watchPageFaults not arm set break at 0x%x pid %s' % (self.param.page_fault, pid))
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             ''' TBD catch illegal instruction '''
             max_intr = 255
