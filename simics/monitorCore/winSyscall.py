@@ -630,10 +630,6 @@ class WinSyscall():
             #    exit_info.fname_addr = frame['param5'] + word_size
             # So far we have only seen a pointer to a 64-bit IO_CTRL_BLOCK structure so just do 64 bit way for now
             exit_info.fname_addr = frame['param5'] + 8
-            # Record current return count value so we can know if it changes before the function returns
-            # Do it in new_fd since it isnt used for this syscall
-            exit_info.new_fd = self.mem_utils.readWord32(self.cpu, exit_info.fname_addr)
-            self.lgr.debug('Current value in returned count is 0x%x' % exit_info.new_fd)
             exit_info.count = self.stackParam(3, frame) & 0xFFFFFFFF 
              
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
@@ -644,6 +640,33 @@ class WinSyscall():
             if self.watchData(exit_info):
                 self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
                 exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+
+            for call_param in syscall_info.call_params:
+                ''' look for matching FD '''
+                if type(call_param.match_param) is int:
+                    if call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+
+                        if call_param.nth is not None:
+                            call_param.count = call_param.count + 1
+                            self.lgr.debug('winSyscall read call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
+                            if call_param.count >= call_param.nth:
+                                self.lgr.debug('count >= param, set it')
+                                exit_info.call_params = call_param
+                                if self.kbuffer is not None:
+                                    self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                        else:
+                            self.lgr.debug('winSyscall read, call_param.nth is none, call it matched')
+                            exit_info.call_params = call_param
+                            if self.kbuffer is not None:
+                                self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                        break
+
+
+
+
+
 
         elif callname == 'WriteFile':
             exit_info.old_fd = frame['param1']
@@ -870,17 +893,23 @@ class WinSyscall():
                 else:
                     exit_info.fname_addr = frame['param5'] + word_size 
                 #SIM_break_simulation('in send/recv') 
-                exit_info.count = self.paramOffPtr(7, [0, 0], frame, word_size) & 0xFFFFFFFF
+                value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+                if value is not None:
+                    exit_info.count = self.paramOffPtr(7, [0, 0], frame, word_size) & 0xFFFFFFFF
 
-                trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-                self.lgr.debug(trace_msg)
+                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
+                    self.lgr.debug(trace_msg)
 
-                if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
-                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
-                          self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
+                    if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
+                        exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
 
-                    self.lgr.debug('doing win_delay.setDataWatch')
-                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                        self.lgr.debug('doing win_delay.setDataWatch')
+                        exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                else:
+                    trace_msg = trace_msg + ' failed to read count'
+                    exit_info.count=0
+                    self.lgr.debug(trace_msg)
 
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string

@@ -70,7 +70,9 @@ class WinDelay():
             self.return_count = count
 
     def setDataWatch(self, data_watch, linger):
+        self.lgr.debug('winDelay setDataWatch')
         if self.top.tracking():
+            self.lgr.debug('winDelay setDataWatch setting data_watch')
             self.data_watch = data_watch
             self.linger = linger
             self.data_watch.registerHapForRemoval(self)
