@@ -87,8 +87,9 @@ class WinTaskUtils():
                     self.phys_current_task = value['current_task_phys']
                     self.phys_saved_cr3 = value['saved_cr3_phys']
                     self.lgr.debug('winTaskUtils, snapshop had saved cr3, value 0x%x' % self.phys_saved_cr3)
-                saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                self.mem_utils.saveKernelCR3(self.cpu, saved_cr3)
+                #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                ''' memUtils will now read the value and also save the phys_saved_cr3 for when cr3 changes.'''
+                self.mem_utils.saveKernelCR3(self.cpu, self.phys_saved_cr3)
 
                 self.lgr.debug('loaded phys_current_task from %s' % phys_current_task_file)
                 self.lgr.debug('value 0x%x' % self.phys_current_task)
@@ -180,6 +181,9 @@ class WinTaskUtils():
             #self.lgr.debug('winTaskUtils getCurTaskRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
             ptr = cur_thread + self.param.proc_ptr
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
+            if ptr_phys is None:
+                self.lgr.debug('winTaskUtils getCurTaskRec got ptr_phys None reading ptr 0x%x (cur_thread + 0x%x' % (ptr, self.param.proc_ptr))
+           
             #self.lgr.debug('winTaskUtils getCurTaskRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
                if ptr > self.param.kernel_base: 
