@@ -283,7 +283,7 @@ class WinDLLMap():
                     if section.size is not None:
                         end = section.addr+section.size
                         if addr_in >= section.addr and addr_in <= end:
-                            retval = section.fname
+                            retval = ntpath.basename(section.fname)
                             break 
         return retval
 
