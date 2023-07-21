@@ -49,13 +49,13 @@ class StackFrameManager():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
-    def stackTrace(self, verbose=False, in_pid=None):
+    def stackTrace(self, verbose=False, in_pid=None, use_cache=True):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
             return
         cycle = self.cpu.cycles
-        if cycle in self.stack_cache:
+        if cycle in self.stack_cache and use_cache:
             st = self.stack_cache[cycle]
         else:
             cpu, comm, cur_pid = self.task_utils.curProc() 

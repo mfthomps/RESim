@@ -3333,8 +3333,8 @@ class GenMonitor():
         self.showNets()
         print('Traces saved in /tmp.  Move them to artifact repo and run postScripts')
 
-    def stackTrace(self, verbose=False, in_pid=None):
-        self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_pid=in_pid)
+    def stackTrace(self, verbose=False, in_pid=None, use_cache=True):
+        self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_pid=in_pid, use_cache=use_cache)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
         return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes)
