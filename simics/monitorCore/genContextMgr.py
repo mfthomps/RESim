@@ -1468,7 +1468,7 @@ class GenContextMgr():
         self.current_tasks = self.task_utils.getTaskList()
 
     def checkFirstSchedule(self, task_rec, pid, comm):
-        if task_rec not in self.current_tasks and comm in self.watch_for_prog:
+        if task_rec not in self.current_tasks and comm in self.watch_for_prog and self.watch_for_prog_callback is not None:
             self.lgr.debug('contextManager checkFirstSchedule got first for pid:%d' % pid)
             self.watch_for_prog.remove(comm)
             self.watch_for_prog_callback(pid)
