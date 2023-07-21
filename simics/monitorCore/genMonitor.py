@@ -1290,8 +1290,17 @@ class GenMonitor():
         context = SIM_object_name(cpu.current_context)
         if self.isWindows():
             cur_thread = self.task_utils[self.target].getCurThread()
+            if cur_thread is None:
+                self.lgr.error('show cur_thread is None')
+                return
             cur_thread_rec = self.task_utils[self.target].getCurThreadRec()
+            if cur_thread_rec is None:
+                self.lgr.error('show cur_thread_rec is None')
+                return
             cur_proc_rec = self.task_utils[self.target].getCurTaskRec()
+            if cur_proc_rec is None:
+                self.lgr.error('show cur_proc_rec is None')
+                return
             print('cpu.name is %s context: %s PL: %d pid: %d(%s) EIP: 0x%x thread: 0x%x  code file: %s eproc: 0x%x ethread: 0x%x' % (cpu.name, context,
                    cpl, pid, comm, eip, cur_thread, so_file, cur_proc_rec, cur_thread_rec))
         
@@ -3796,7 +3805,10 @@ class GenMonitor():
     def v2p(self, addr):
         cpu = self.cell_config.cpuFromCell(self.target)
         value = self.mem_utils[self.target].v2p(cpu, addr)
-        print('0x%x' % value)
+        if value is not None:
+            print('0x%x' % value)
+        else:
+            print('got None doing v2p from 0x%x' % addr)
 
     def allWrite(self):
         self.sharedSyscall[self.target].startAllWrite() 
