@@ -68,17 +68,21 @@ class FunMgr():
  
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0):
-        use_offset = start
-        if offset != 0:
-            use_offset = offset
-        self.ida_funs.add(path, use_offset)
-        if offset is not None:
-            self.lgr.debug('funMgr add call setRelocate funs path %s offset 0x%x   start 0x%x ' % (path, offset, start))
-        else:
-            self.lgr.debug('funMgr add call setRelocate funs path %s  start 0x%x offset was None' % (path, start))
+        if self.ida_funs is not None:
+            use_offset = start
+            if offset != 0:
+                use_offset = offset
+            self.ida_funs.add(path, use_offset)
+            if offset is not None:
+                self.lgr.debug('funMgr add call setRelocate funs path %s offset 0x%x   start 0x%x ' % (path, offset, start))
+            else:
+                self.lgr.debug('funMgr add call setRelocate funs path %s  start 0x%x offset was None' % (path, start))
             
            
-        self.setRelocateFuns(path, offset=offset)
+            self.setRelocateFuns(path, offset=offset)
+        else:
+            self.lgr.debug('funMgr add called with no IDA funs defined')
+            
 
     def isCall(self, instruct):
         if instruct.startswith(self.callmn):
