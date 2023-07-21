@@ -31,10 +31,11 @@ def adjustFunName(frame, fun_mgr, lgr):
             if '@' in frame.fun_name:
                 fun = frame.fun_name.split('@')[0]
                 try:
+                    ''' an ida function name reflecting original address (not rebased) '''
                     fun_hex = int(fun, 16) 
                     if fun_mgr is not None:
                         fun_name = fun_mgr.getName(fun_hex)
-                        #lgr.debug('looked for fun for 0x%x got %s' % (fun_hex, fun_name))
+                        lgr.debug('clib adjustFunName looked for fun for 0x%x got %s from fun_name %s' % (fun_hex, fun_name, frame.fun_name))
                         if fun_name is not None:
                             fun = fun_name
                     else:

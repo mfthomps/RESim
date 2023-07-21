@@ -459,7 +459,8 @@ class WinDLLMap():
                     else:
                         self.lgr.debug('winDLL setIdaFuns offset 0x%x locate: 0x%x text_offset is None ' % (offset, locate))
                         offset = 0
-                    self.fun_mgr.add(fun_path, locate, offset=offset)
+                        text_offset = 0
+                    self.fun_mgr.add(fun_path, locate, offset=offset, text_offset=text_offset)
 
     def getSO(self, pid=None, quiet=False):
         self.lgr.debug('winDLL getSO pid %s ' % pid)

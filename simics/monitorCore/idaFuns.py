@@ -42,7 +42,6 @@ class IDAFuns():
                 jfuns = json.load(fh)
                 self.lgr.debug('idaFuns read funs from %s' % path)
                 for sfun in jfuns:
-                    fun = int(sfun) 
                     fun_rec = jfuns[sfun]
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
@@ -53,8 +52,11 @@ class IDAFuns():
                         #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
                         fun_rec['name'] = self.mangle[fun_name]
                         #lgr.debug('function name for 0x%x (%s) changed to %s' % (fun, fun_name, fun_rec['name']))
-                    fun_rec['start'] = fun_rec['start'] + offset
+                    adjusted = fun_rec['start'] + offset
+                    fun = adjusted
+                    fun_rec['start'] = adjusted
                     fun_rec['end'] = fun_rec['end'] + offset
+                    ''' index by load address to avoid collisions '''
                     self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
         self.lgr.debug('idaFuns loaded %d funs' % len(self.funs))
@@ -97,12 +99,17 @@ class IDAFuns():
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
-                    fun = int(f)
+                    fun_int = int(f)
+                    fun = fun_int + offset
+                    if fun in self.funs:
+                        self.lgr.error('idaFuns collision on function 0x%x fun_int 0x%x offset 0x%x file: %s' % (fun, fun_int, offset, funfile))
                     self.funs[fun] = {}
-                    self.funs[fun]['start'] = fun + offset
+                    self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
                     self.funs[fun]['name'] = fun_name
+                    if fun_name == 'memcpy':
+                        self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
                     if fun_name in add_mangle:
                         #self.lgr.debug('****************** %s in add mangle as %s' % (fun_name, add_mangle[fun_name]))
@@ -118,28 +125,24 @@ class IDAFuns():
 
  
     def isFun(self, fun):
-        ''' The given fun is the rebased value, so an offset is applied '''
+        ''' The given fun is the rebased value '''
         retval = False
         if fun is not None:
-            adjusted = fun - self.offset
-            if adjusted in self.funs:
+            if fun in self.funs:
                 retval = True
-            #else:
-            #    result = self.getFun(fun)
-            #    if result is not None:
-            #        self.lgr.debug('idaFuns isFun 0x%x not fun but found 0x%x' % (fun, result))
         else:
             self.lgr.debug('idaFuns isFun called with fun of None')
         return retval
 
     def getAddr(self, name):
+        ''' return the start and end of a function (loaded) given its name '''
         for fun in self.funs:
             if self.funs[fun]['name'] == name:
                 return self.funs[fun]['start'], self.funs[fun]['end']
         return None, None
  
     def getName(self, fun):
-        ''' NOTE this does not apply offsets.  Given fun must be address of the function prior to rebasing. '''
+        ''' Given a function address (loaded), return the name '''
         retval = None
         if fun is not None:
             if fun in self.funs:
@@ -147,17 +150,19 @@ class IDAFuns():
         return retval
 
     def inFun(self, ip, fun):
+        ''' Is the given IP within the given function? '''
         if fun is not None:
             #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
-            adjusted = fun - self.offset
-            if adjusted in self.funs:
+            if fun in self.funs:
                 #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
-                if ip >= self.funs[adjusted]['start'] and ip <= self.funs[adjusted]['end']:
+                if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
                     return True
+            else:
+                self.lgr.debug('idaFuns inFun given fun 0x%x is not a function' % fun)
         return False 
 
     def getFun(self, ip):
-        ''' Returns the function address per initial analysis (no offset adjustment) for a dynamic ip.'''
+        ''' Returns the loaded function address of the fuction containing a given ip '''
         for fun in self.funs:
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
@@ -165,7 +170,7 @@ class IDAFuns():
         return None
 
     def getFunAddr(self, ip):
-        ''' Returns the function address adjusted per load address '''
+        ''' TBD remove and just use getFun '''
         for fun in self.funs:
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
@@ -173,15 +178,15 @@ class IDAFuns():
         return None
 
     def getFunName(self, ip):
+        ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
         if ip is not None:
-            adjusted = ip - self.offset
-            if adjusted in self.funs:
-                retval = self.getName(adjusted)
+            if ip in self.funs:
+                retval = self.funs[ip]['name']
             else:
                 fun = self.getFun(ip)
                 if fun is not None:
-                    retval = self.getName(fun)
+                    retval = self.funs[fun]['name']
         return retval
 
     def showFuns(self, search=None):
