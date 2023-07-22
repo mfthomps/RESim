@@ -624,7 +624,8 @@ class GenContextMgr():
         if self.top.isWindows(target=self.cell_name):
             win_thread = new_addr
             ptr = new_addr + self.param.proc_ptr
-            new_addr = self.mem_utils.readPtr(self.cpu, ptr)
+            phys_block = cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+            new_addr = self.mem_utils.readPhysPtr(self.cpu, phys_block.address)
             if new_addr is None:
                 #self.lgr.debug('contextManager changedThread new_addr is None reading from ptr 0x%x' % ptr)
                 return
