@@ -562,3 +562,7 @@ class WinDLLMap():
            del self.prog_start[pid]
            del self.prog_end[pid]
            del self.text_prog[pid]
+
+    def swapPid(self, old, new):
+       ''' TBD ??? '''
+       return False
