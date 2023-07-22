@@ -1445,7 +1445,6 @@ class GenMonitor():
             flist = [f1]
             self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
-            self.lgr.debug('toProc no process %s found, run until execve' % proc)
             cpu = self.cell_config.cpuFromCell(self.target)
             '''
             prec = Prec(cpu, proc, None)
@@ -1457,7 +1456,12 @@ class GenMonitor():
             '''
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
-            self.toExecve(comm=proc, flist=[], binary=binary)
+            if self.isWindows():
+                self.lgr.debug('toProc no process %s found, run until CreateUserProcess' % proc)
+                self.winMonitor[self.target].toCreateProc(comm=proc)
+            else:
+                self.lgr.debug('toProc no process %s found, run until execve' % proc)
+                self.toExecve(comm=proc, flist=[], binary=binary)
 
         
     def debugProc(self, proc, final_fun=None, pre_fun=None):
@@ -1593,10 +1597,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         self.run2User(cpu, flist)
 
-    def runToUserSpace(self):
+    def runToUserSpace(self, dumb=None):
         self.lgr.debug('runToUserSpace')
         self.is_monitor_running.setRunning(True)
-        flist = [self.skipAndMail]
         f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
         self.toUser([f1])
 
@@ -1716,8 +1719,10 @@ class GenMonitor():
                 # TBD skipping back to prior to call makes no sense
                 self.lgr.debug('skipAndMail left in kernel')
                 
-            self.lgr.debug('skipAndMail, restoreDebugBreaks')
-            SIM_run_alone(self.restoreDebugBreaks, False)
+            db_pid, cpu = self.context_manager[self.target].getDebugPid() 
+            if db_pid is not None:
+                self.lgr.debug('skipAndMail, restoreDebugBreaks')
+                SIM_run_alone(self.restoreDebugBreaks, False)
 
     def goToOrigin(self, debugging=True):
         if self.bookmarks is None:
