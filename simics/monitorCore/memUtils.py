@@ -147,7 +147,6 @@ class memUtils():
         self.cell_name = cell_name
         self.lgr = lgr
         self.hacked_v2p_offset = None
-        ''' TBD these need to be a dict keyed by cpu'''
         self.kernel_saved_cr3 = None
         self.phys_cr3 = None
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
@@ -207,7 +206,6 @@ class memUtils():
 
         ''' 
         if v is None:
-            self.lgr.debug('memUtils v2p given v is None')
             return None
         retval = None
         v = self.getUnsigned(v)
@@ -247,21 +245,20 @@ class memUtils():
                         else:
                             retval = v & ~self.param.kernel_base 
                             #self.lgr.debug('memUtils v2p  cpl %d 32-bit Mode?  mode %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, mode, self.param.kernel_base, v, retval))
-                if retval is None:
-                    self.lgr.debug('memUtils v2p got none, try cpu.iface for v 0x%x' % v)
-                    phys_block = None
-                    try:
-                        phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-                    except:
-                        self.lgr.debug('memUtils v2p cpu.iface crapped out')
-                        return None
-                    if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
-                        retval = phys_block.address
-                        cr3 = SIM_read_phys_memory(cpu, self.phys_cr3, self.WORD_SIZE)
-                        self.lgr.debug('memUtils v2p did saved cr3 change? was 0x%x now 0x%x' % (self.kernel_saved_cr3, cr3))
-                        self.kernel_saved_cr3 = cr3
-                    
-
+        if retval is None and v > self.param.kernel_base:
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
+            if retval is None:
+                self.lgr.debug('memUtils v2p logical_to_physical got none for 0x%x' % v)
+            else: 
+               cpl = getCPL(cpu)
+               saved_cr3 = SIM_read_phys_memory(cpu, self.phys_cr3, self.WORD_SIZE)
+               self.lgr.debug('memUtils v2p was none for v 0x%x, used iface and got 0x%x cpl %d, reload kernel_saved_cr3 was 0x%x now 0x%x' % (v, retval, cpl,
+                    self.kernel_saved_cr3, saved_cr3))
+               self.kernel_saved_cr3 = saved_cr3
         return retval
                     
 
@@ -904,12 +901,11 @@ class memUtils():
         if phys_cr3 is None:
             reg_num = cpu.iface.int_register.get_number("cr3")
             self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
-            self.lgr.debug('memUtils saveKernelCR3 given cr3 is None, got from reg, saved cr3 to 0x%x' % (self.kernel_saved_cr3))
         else:
             self.phys_cr3 = phys_cr3
-            cr3 = SIM_read_phys_memory(cpu, phys_cr3, self.WORD_SIZE)
-            self.kernel_saved_cr3 = cr3
-            self.lgr.debug('memUtils saveKernelCR3 saved cr3 to 0x%x' % (self.kernel_saved_cr3))
+            saved_cr3 = SIM_read_phys_memory(cpu, phys_cr3, self.WORD_SIZE)
+            self.kernel_saved_cr3 = saved_cr3
+        self.lgr.debug('memUtils saveKernelCR3 saved cr3 to 0x%x' % (self.kernel_saved_cr3))
 
     def getKernelSavedCR3(self):
         return self.kernel_saved_cr3
