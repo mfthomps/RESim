@@ -1484,12 +1484,13 @@ class reverseToCall():
         ''' NOTE these frames do not reflect socket call decoding '''
         retval = None
         ret_cycles = None
-        cur_cycles = self.cpu.cycles
-        self.lgr.debug('getRecentCycleFrame pid %d' % pid)
-        if pid in self.recent_cycle:
-            ret_cycles, retval = self.recent_cycle[pid]
-        else:
-            self.lgr.debug('getRecentCycleFrame pid %d not there')
+        if self.cpu is not None:
+            cur_cycles = self.cpu.cycles
+            self.lgr.debug('getRecentCycleFrame pid %d' % pid)
+            if pid in self.recent_cycle:
+                ret_cycles, retval = self.recent_cycle[pid]
+            else:
+                self.lgr.debug('getRecentCycleFrame pid %d not there')
         return retval, ret_cycles
 
     def getPreviousCycleFrame(self, pid):
