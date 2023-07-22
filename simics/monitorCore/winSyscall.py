@@ -1243,13 +1243,20 @@ class WinSyscall():
                             wrong_type = True
                     '''
                     if not wrong_type:
-                        self.lgr.debug('checkProg CreateUserProc of %s call toNewProc' % prog_string)
-                        retval = True
-                        #exit_info.call_params = cp 
-                        exit_info.call_params = None
-                        win_prog = winProg.WinProg(self.top, self.cpu, self.mem_utils, self.task_utils, self.context_manager, self.soMap, self.stop_action, self.param, self.lgr)
-                        SIM_run_alone(win_prog.toNewProc, prog_string)
-                        #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
+                        ''' Obscure criteria for not looking to debug.  Debug will set break_simulation to false.'''
+                        if cp.break_simulation:
+                            retval = False
+                            self.top.rmSyscall('toCreateProc')
+                            SIM_run_alone(self.top.runToUserSpace, None)
+                            
+                        else:
+                            self.lgr.debug('checkProg CreateUserProc of %s call toNewProc' % prog_string)
+                            retval = True
+                            #exit_info.call_params = cp 
+                            exit_info.call_params = None
+                            win_prog = winProg.WinProg(self.top, self.cpu, self.mem_utils, self.task_utils, self.context_manager, self.soMap, self.stop_action, self.param, self.lgr)
+                            SIM_run_alone(win_prog.toNewProc, prog_string)
+                            #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
                     else:
                         self.lgr.debug('checkProg, got %s when looking for binary %s, skip' % (ftype, prog_string))
         else:
