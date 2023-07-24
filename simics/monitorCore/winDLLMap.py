@@ -70,8 +70,7 @@ class WinDLLMap():
         self.section_list = []
         self.min_addr = {}
         self.max_addr = {}
-        self.so_watch = []
-        self.so_watch_callback = None
+        self.so_watch_callback = {}
         self.text = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
@@ -240,14 +239,12 @@ class WinDLLMap():
             self.lgr.warning('WinDLLMap mapSection pid %d not in sections ' % (pid))
 
     def checkSOWatch(self, section):
-        for fname in self.so_watch:
-            #self.lgr.debug('WinDLLMap checkSOWatch does %s endwith %s' % (section.fname, fname))
-            if section.fname.endswith(fname):
-                if self.so_watch_callback is not None:
-                    self.lgr.debug('winDLL checkSOWatch do callback for %s' % fname)
-                    self.so_watch_callback(section)
+        basename = ntpath.basename(section.fname)
+        if basename in self.so_watch_callback:
+            self.lgr.debug('winDLL checkSOWatch do callback for %s' % basename)
+            self.so_watch_callback[basename](section)
 
-    def showSO(self, pid):
+    def showSO(self, pid, filter=None):
         if pid is None: 
             cpu, comm, pid = self.task_utils.curProc() 
         
@@ -259,10 +256,10 @@ class WinDLLMap():
         self.lgr.debug('WinDLLMap showSO %d sections' % (len(sort_map)))
         for section_addr in sorted(sort_map):
             section = sort_map[section_addr]
-            end = section.addr+section.size
-            print('pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
-            self.lgr.debug('winDLLMap showSO pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
-
+            if filter is None or filter in section.fname:
+                end = section.addr+section.size
+                print('pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
+                self.lgr.debug('winDLLMap showSO pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
 
 
     def isMainText(self, address):
@@ -337,7 +334,7 @@ class WinDLLMap():
                     if section.image_base is not None:
                         delta = (section.addr - section.image_base) 
                         offset = delta + section.text_offset
-                        retval = self.HackCompat(section.addr, section.addr, offset, section.size)
+                        retval = self.HackCompat(section.addr, section.image_base, offset, section.size)
                     else:
                         self.lgr.error('winDLLMap no image base defined for %s' % section.fname)
                     break 
@@ -368,8 +365,7 @@ class WinDLLMap():
         return retval
 
     def addSOWatch(self, fname, callback):
-        self.so_watch.append(fname)
-        self.so_watch_callback = callback
+        self.so_watch_callback[fname] = callback
 
     def getText(self, pid):
         ''' poor name.  actually used to get the load address to compute an offset from the header's image base'''

@@ -271,7 +271,7 @@ class SOMap():
                 print('pid:%d  no text found' % pid)
     
           
-    def showSO(self, pid=None):
+    def showSO(self, pid=None, filter=None):
         if pid is None:
             cpu, comm, pid = self.task_utils.curProc() 
         pid = self.getSOPid(pid)
@@ -291,9 +291,10 @@ class SOMap():
                 
             for locate in sorted(sort_map):
                 text_seg = sort_map[locate]
-                start = text_seg.locate+text_seg.offset
-                end = locate + text_seg.size
-                print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
+                if filter is None or filter in self.so_file_map[pid][text_seg]:
+                    start = text_seg.locate+text_seg.offset
+                    end = locate + text_seg.size
+                    print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, end, text_seg.offset, text_seg.size, self.so_file_map[pid][text_seg])) 
         else:
             print('no so map for %d' % pid)
             
