@@ -578,8 +578,15 @@ class WinSyscall():
                     iclass = winNTSTATUS.keyval_info_class_map[info_class]
 
                 exit_info.retval_addr = frame['param4']
-                exit_info.fname = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
-                trace_msg = trace_msg + ' information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.fname)
+                exit_info.count = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
+                trace_msg = trace_msg + ' information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('winSyscall QueryValueKey call_param.subcall %s type %s' % (call_param.subcall, type(call_param.match_param)))
+                    if type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and \
+                             (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
+                        exit_info.call_params = call_param
+                        self.lgr.debug('winSyscall QueryValueKey found match')
+                        break
 
             if callname == 'RequestWaitReplyPort':
                 exit_info.retval_addr = frame['param3']
@@ -1638,7 +1645,7 @@ class WinSyscall():
     def genericCallParams(self, syscall_info, exit_info, callname):
         retval = exit_info
         for call_param in syscall_info.call_params:
-            self.lgr.debug('got param type %s' % type(call_param.match_param))
+            self.lgr.debug('winSyscall genericCallparams got param name: %s type %s' % (call_param.name, type(call_param.match_param)))
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  retval = None
                  mod = call_param.match_param
@@ -1651,7 +1658,7 @@ class WinSyscall():
                      break
             if type(call_param.match_param) is str: 
                 if (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
-                    self.lgr.debug('syscall %s, found match_param %s' % (callname, call_param.match_param))
+                    self.lgr.debug('syscall %s, found match_param %s param.subcall %s' % (callname, call_param.match_param, call_param.subcall))
                     exit_info.call_params = call_param
                     retval = exit_info
                     break
