@@ -2851,7 +2851,7 @@ class DataWatch():
                 fun = eip
 
             ''' TBD seems impossible for a push to trigger a load.  huh?'''
-            if instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
+            if not self.top.isWindows() and instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
                 self.lgr.debug('********* is a push, provide an explaination please!')
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp') - self.mem_utils.wordSize(self.cpu)
                 self.trackPush(sp, instruct, addr, start, length, eip)
