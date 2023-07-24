@@ -1056,14 +1056,14 @@ class GenMonitor():
             retval.append(pid_state)
         print(json.dumps(retval))
 
-    def tasks(self, target=None):
+    def tasks(self, target=None, filter=None):
         self.lgr.debug('tasks')
         if target is None:
             target = self.target
         print('Tasks on cell %s' % target)
 
         if self.isWindows():
-            self.winMonitor[target].tasks()
+            self.winMonitor[target].tasks(filter=filter)
         else:
             tasks = self.task_utils[target].getTaskStructs()
             plist = {}
@@ -1071,13 +1071,14 @@ class GenMonitor():
                 plist[tasks[t].pid] = t 
             for pid in sorted(plist):
                 t = plist[pid]
-                uid, e_uid = self.task_utils[target].getCred(t)
-                if uid is not None:
-                    id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
-                else:
-                    id_str = ''
-                print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
-                    tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+                if filter is None or filter in tasks[t].comm:
+                    uid, e_uid = self.task_utils[target].getCred(t)
+                    if uid is not None:
+                        id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
+                    else:
+                        id_str = ''
+                    print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
+                        tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -1261,7 +1262,7 @@ class GenMonitor():
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
         if self.target in self.read_replace:
              self.read_replace[self.target].swapContext()
@@ -3238,7 +3239,10 @@ class GenMonitor():
             pass
         return retval
 
-    def getSO(self, eip):
+    def origProgAddr(self, eip):
+        return self.getSO(eip, show_orig=True)
+
+    def getSO(self, eip, show_orig=False):
         fname = self.getSOFile(eip)
         #self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
         retval = None
@@ -3254,7 +3258,11 @@ class GenMonitor():
                 else:
                     start = elf_info.address
                     end = elf_info.address + elf_info.size
-                retval = ('%s:0x%x-0x%x' % (fname, start, end))
+                orig_str = ''
+                if show_orig:
+                    orig_eip = eip - elf_info.offset
+                    orig_str = ' orig address: 0x%x' % orig_eip
+                retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
             else:
                 #print('None')
                 pass
@@ -3264,9 +3272,9 @@ class GenMonitor():
         return retval
 
      
-    def showSOMap(self, pid=None):
+    def showSOMap(self, pid=None, filter=None):
         self.lgr.debug('showSOMap')
-        self.soMap[self.target].showSO(pid)
+        self.soMap[self.target].showSO(pid, filter=filter)
 
     def listSOMap(self):
         self.soMap[self.target].listSO()
@@ -5130,7 +5138,7 @@ class GenMonitor():
         ''' Set a control flow jumper '''
         if self.target not in self.jumper_dict:
             cpu = self.cell_config.cpuFromCell(self.target)
-            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
+            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
         self.jumper_dict[self.target].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
 
@@ -5221,7 +5229,7 @@ class GenMonitor():
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
                 cpu = self.cell_config.cpuFromCell(self.target)
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], cpu, self.lgr)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
             self.jumper_dict[self.target].loadJumpers(jumper_file, physical=False)
             print('Loaded jumpers from %s' % jumper_file)
         else:

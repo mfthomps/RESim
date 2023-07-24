@@ -107,7 +107,7 @@ class WinMonitor():
         self.toCreateProc(proc, flist=flist, break_simulation=False) 
 
 
-    def tasks(self):
+    def tasks(self, filter=None):
         plist = {}
         self.lgr.debug('tasks ts_next is 0x%x (%d)' % (self.param.ts_next, self.param.ts_next))
         got = self.task_utils.getTaskList()
@@ -119,11 +119,12 @@ class WinMonitor():
             if pid is not None and pid < 0xfffff:
                 #self.lgr.debug('getCurPid task_ptr, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (task_ptr, self.param.ts_pid, pid_ptr, pid))
                 comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
-                if pid in plist and pid != 0:
-                    #print('pid %d already in plist' % pid)
-                    self.lgr.debug('pid %d already in plist as comm %s' % (pid, plist[pid]))
-                plist[pid] = comm
-                #print('pid:%d  %s' % (pid , comm))
+                if filter is None or filter in comm:
+                    if pid in plist and pid != 0:
+                        #print('pid %d already in plist' % pid)
+                        self.lgr.debug('pid %d already in plist as comm %s' % (pid, plist[pid]))
+                    plist[pid] = comm
+                    #print('pid:%d  %s' % (pid , comm))
             else:
                 print('got no pid for pid_ptr 0x%x' % pid_ptr)
                 #break
