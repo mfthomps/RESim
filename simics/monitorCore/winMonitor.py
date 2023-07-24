@@ -78,7 +78,7 @@ class WinMonitor():
         self.w7_call_params.rmAllBreaks()
  
 
-    def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True):
+    def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True, run=True):
         ''' Use syscallManager to catch a CreateUserProcess '''
         if comm is not None:    
             params = syscall.CallParams('toCreateProc', 'CreateUserProcess', comm, break_simulation=break_simulation) 
@@ -91,7 +91,8 @@ class WinMonitor():
 
         self.syscallManager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
         self.lgr.debug('winMonitor toCreateProc did call to watch createUserProcess')
-        SIM_continue(0)
+        if run:
+            SIM_continue(0)
 
     def debugAlone(self, dumb):
         self.lgr.debug('winMonitor debugAlone, call top debug')
@@ -221,7 +222,7 @@ class WinMonitor():
                     kbuffer_mod = kbuf
                     self.sharedSyscall.setKbuffer(kbuffer_mod)
                 if call_list is None:
-                    calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile']
+                    calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'ReadFile', 'WriteFile', 'QueryValueKey']
                 else:
                     calls = call_list
                 the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
