@@ -1437,7 +1437,7 @@ class GenMonitor():
             self.toExecve(comm=proc, flist=flist)
 
 
-    def toProc(self, proc, binary=True):
+    def toProc(self, proc, binary=True, run=True):
         plist = self.task_utils[self.target].getPidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitPid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
@@ -1459,7 +1459,7 @@ class GenMonitor():
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
             if self.isWindows():
                 self.lgr.debug('toProc no process %s found, run until CreateUserProcess' % proc)
-                self.winMonitor[self.target].toCreateProc(comm=proc)
+                self.winMonitor[self.target].toCreateProc(comm=proc, run=run)
             else:
                 self.lgr.debug('toProc no process %s found, run until execve' % proc)
                 self.toExecve(comm=proc, flist=[], binary=binary)
@@ -2976,12 +2976,22 @@ class GenMonitor():
             self.sharedSyscall[self.target].trackSO(False)
         print('warning, SO tracking has stopped')
         if self.isWindows():
-            open_call_name = 'OpenFile'
+            open_call_list = ['OpenFile']
         else:
-            open_call_name = 'open'
-        call_params = syscall.CallParams('runToOpen', open_call_name, substring, break_simulation=True)
+            open_call_name = ['open']
+        call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
-        self.runTo([open_call_name], call_params, name='open')
+        self.runTo(open_call_list, call_params, name='open')
+
+    def runToOpenKey(self, substring):
+        if self.isWindows():
+            open_call_list = ['OpenKey', 'OpenKeyEx']
+        else:
+            self.lgr.error('runToOpenKey not available on Linux')
+            return
+        call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
+        self.lgr.debug('runToOpenKey to %s' % substring)
+        self.runTo(open_call_list, call_params, name='open')
 
     def runToCreate(self, substring):
         if self.target in self.track_threads:
@@ -3411,7 +3421,7 @@ class GenMonitor():
             target = self.cell_config.cellFromCPU(target_cpu)
         cpu, comm, pid = self.task_utils[target].curProc() 
         self.mem_utils[target].setRegValue(cpu, reg, value)
-        #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
+        self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if self.reverseEnabled():
             if alone:
                 SIM_run_alone(self.clearBookmarks, reuse_msg) 
