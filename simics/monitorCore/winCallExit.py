@@ -248,6 +248,14 @@ class WinCallExit():
             timer_syscall = self.top.getSyscall(self.cell_name, 'QueryValueKey')
             if timer_syscall is not None:
                 timer_syscall.checkTimeLoop('gettimeofday', pid)
+            if self.dataWatch is not None:
+                self.lgr.debug('winCallExit QueryValueKey doDataWatch call setRange for 0x%x count 0x%x' % (exit_info.retval_addr, exit_info.count))
+                self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, msg=trace_msg, 
+                       max_len=exit_info.count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
+                my_syscall = exit_info.syscall_instance
+                if my_syscall.linger: 
+                    self.dataWatch.stopWatch() 
+                    self.dataWatch.watch(break_simulation=False, i_am_alone=True)
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             if exit_info.retval_addr is not None:
