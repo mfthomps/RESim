@@ -54,6 +54,8 @@ def regIsPartList(reg1, reg2_list):
     return False
 
 def isReg(reg):
+    if reg is None:
+        return False
     if reg in ia32_regs:
         return True
     if reg in ia64_regs:
