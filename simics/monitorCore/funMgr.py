@@ -96,10 +96,10 @@ class FunMgr():
     def funFromAddr(self, addr):
         fun = None
         if addr in self.relocate_funs:
-            self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
             fun = self.relocate_funs[addr]
         elif self.ida_funs is not None:
-            self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
             fun = self.ida_funs.getFunName(addr)
         return fun
 
@@ -220,17 +220,17 @@ class FunMgr():
                 fun = str(self.funFromAddr(call_addr))
                 self.lgr.debug('funMgr fun from addr 0x%x was None used readAddPtr to get call_addr 0x%x' % (addr, call_addr))
             else:
-                self.lgr.debug('funMgr got fun %s from addr 0x%x' % (fun, addr))
+                #self.lgr.debug('funMgr got fun %s from addr 0x%x' % (fun, addr))
                 call_addr = addr
-            self.lgr.debug('getFunName addr 0x%x, call_addr 0x%x got %s' % (addr, call_addr, fun))
+            #self.lgr.debug('getFunName addr 0x%x, call_addr 0x%x got %s' % (addr, call_addr, fun))
  
         else:
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
+            #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
-                self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
+                #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr = self.ipRelative(instruct, eip)
           
             elif len(parts) == 2:
@@ -241,17 +241,17 @@ class FunMgr():
                     pass
             if call_addr is not None:
                 fun = str(self.funFromAddr(call_addr))
-                self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
+                #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
-        if call_addr is not None:
-            self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
+        #if call_addr is not None:
+        #    self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
         return call_addr, fun
 
     def resolveCall(self, instruct, eip):      
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
-        self.lgr.debug('funMgr resolveCall %s' % instruct[1])
+        #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
@@ -269,7 +269,7 @@ class FunMgr():
                     if fun_name.startswith('.') or fun_name.startswith('_'):
                         fun_name = fun_name[1:]
                     retval = '%s %s' % (self.callmn, fun_name)
-                    self.lgr.debug('resolveCall got %s' % retval)
+                    #self.lgr.debug('resolveCall got %s' % retval)
         return retval
    
     def isRelocate(self, addr):
