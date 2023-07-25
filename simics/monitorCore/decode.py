@@ -114,7 +114,7 @@ def getInBrackets(cpu, s, lgr):
         content = s.split('[', 1)[1].split(']')[0]
         if prefix is None:
             prebracket = s.split('[')[0]
-            #print 'cell_name: %s prebracket is %s' % (cell_name, prebracket)
+            #lgr.debug('cell_name: %s prebracket is %s' % (cell_name, prebracket))
             pieces = prebracket.split(' ')
             if len(pieces) > 0:
                 prefix = pieces[len(pieces)-1]
@@ -234,17 +234,21 @@ def getAddressFromOperand(cpu, operand, lgr):
             #lgr.debug('bracketed value was %x' % address)
             offset = 0
             if prefix is not None:
-               try:
-                  offset = int(prefix)
-                  address = address + offset
-               except:
-                  try:
-                      offset = getSigned(int(prefix, 16))
-                      #lgr.debug("adjusting by offset %d" % offset)
+               if prefix == 'fs:':
+                   address = cpu.ia32_fs_base + address
+                   #lgr.debug('prefix was fs, address now %x' % address)
+               else:
+                   try:
+                      offset = int(prefix)
                       address = address + offset
-                  except:
-                      #lgr.debug('did not parse offset %s' % prefix)
-                      pass
+                   except:
+                      try:
+                          offset = getSigned(int(prefix, 16))
+                          #lgr.debug("adjusting by offset %d" % offset)
+                          address = address + offset
+                      except:
+                          #lgr.debug('did not parse offset %s' % prefix)
+                          pass
 
         else:
             #lgr.debug('could not get reg number from %s' % bracketed)
