@@ -2103,7 +2103,7 @@ class DataWatch():
             existing_index = self.findRangeIndex(dest_addr)
             if existing_index is None:
                 ''' TBD may miss some add hocs? not likely '''
-                self.lgr.debug('dataWatch adHocCopy will add address 0x%x' % dest_addr)
+                self.lgr.debug('dataWatch adHocCopy will add dest address 0x%x, src 0x%x' % (dest_addr, addr))
                 self.last_ad_hoc=dest_addr
                 retval = True
             else:
@@ -2125,7 +2125,7 @@ class DataWatch():
             self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
             self.finish_check_move_hap = None
             return
-        self.lgr.debug('dataWatch finishCheckMoveHap')
+        self.lgr.debug('dataWatch finishCheckMoveHap dest_op %s' % self.move_stuff.dest_op)
         dest_addr = self.decode.getAddressFromOperand(self.cpu, self.move_stuff.dest_op, self.lgr)
         ad_hoc = False
         if self.move_stuff.function is None:
@@ -2154,6 +2154,7 @@ class DataWatch():
             self.lgr.debug('dataWatch finishCheckMove Hap move_stuff function is None')
 
         if ad_hoc:
+            self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc')
             if self.move_stuff.trans_size >= 16:
                 f = self.frames[1]
                 self.mem_something = MemSomething(f.fun_name, f.fun_addr, self.move_stuff.start, f.ret_addr, self.move_stuff.start, dest_addr, None, 
