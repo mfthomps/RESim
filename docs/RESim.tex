@@ -255,7 +255,8 @@ There are also a set of utility commands that run from a bash prompt (rather tha
 \subsection{General display}
 \begin{itemize}
 \item {\tt show} -- Show current process information for the currently monitored target.
-\item {\tt tasks} -- List currently executing process names and their PIDs for the currently monitored target.
+\item {\tt tasks(filter=None)} -- List currently executing process names and their PIDs for the currently monitored target. Use a simple string filter to view information on
+a specific program.
 \item {\tt showThreads} -- List threads of process currently selected for analysis, e.g., via {\tt debugProc}.
 \item {\tt showTargets} - List the target cells that may be monitored.
 \item {\tt setTarget} -- Set the currently monitored target.
@@ -304,6 +305,7 @@ time line of watch marks.
 \item {\tt flushTrace} - Flush trace output to the trace log files.
 
 \item {\tt toProc} – Continue execution until the named program is either loaded via execve or scheduled.  Intended for use prior to tracing processes, e.g., to get to some known point before incurring overhead associated with tracing.   This function will track processes PIDs and names along with network configuration information, and will save that data if a writeConfig function is used.
+Use an optional {\tt run=False} to prevent RESim from continuing the simulation, e.g., so that you can run commands such as ptime.
 
 \item {\tt autoMaze} -- Avoid being prompted when tracing detects a crude timing loop or other events that are repeated many times in a loop.
 See section \ref{maze}.
@@ -387,7 +389,8 @@ If nth is greater than 1, will run until the nth recv call.
 
 \item {\tt revToText()} – Reverse execute the current process until the text segment is reached.  Also useful when you get lucky and execution is down a nop sled.  This function can be slow, e.g., if there is a kernel system call between you and the text segment.
  
-\item {\tt showSOMap(pid)} – Display the map of shared object library files to their load addresses for the given pid (along with the main text segment).
+\item {\tt showSOMap(pid, filter=none)} – Display the map of shared object library files to their load addresses for the given pid (along with the main text segment).
+Use a simple string filter to look for a particular library.
 
 \item {\tt getSOFile(pid, addr)} – Display the file name and load address of the shared object at the given address.
 
@@ -433,7 +436,7 @@ might interfere with your subsequent analysis.
 Also see \ref{tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -457,6 +460,8 @@ critical that the data be of a form that will be read by the application because
 However, if you find the first kernel buffer is as large as any data you might send, then a single application read will suffice.
 If AFL filters are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
 Take care to avoid extranious characters, e.g., newlines at the end of the test data.
+
+Use an optional {\tt run=False} to prevent RESim from continuing the simulation, e.g., so that you can run commands such as ptime.
 
 \item {\tt trackProgArgs} Track references to arguments provided to the program as argv values.
 
@@ -1176,16 +1181,43 @@ TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host
 at the tunnel (or do copy as part of creating tunnel?.  
 
 
+\subsection{Dynamic to execution control flow}
+RESim includes {\tt jumpers} to cause execution to skip from a given source address to a destination address.
+%Physical address breakpoints are set on the
+%source address.  As a result, jumpers can only be set while the target process is scheduled.
 
-\subsection{Dynamic modifications to memory and topology}
+The execution jumpers are different from jumpers intended for use with code coverage and fuzzing,
+which are described in \ref{jumpers}.
+Execution jumpers are defined in a filed named by the {\tt EXECUTION\_JUMPERS} environment variable.
+The file may have multiple entries, and the format of each entry can be one of two forms.  
+Each includes an optional comm paramter that names the process,
+which is intended to differentiate processes that share a library containing the jump 
+addresses. Each format also includes an optional 'break' keyword that causes the
+simulation to stop at the destination address. The break keyword must come last.
+The two formats are:
+
+\begin{enumerate}
+\item Provide load addresses (implies you know the load address of source and destination)
+\begin{verbatim}
+    addr addr [comm] [break]
+\end{verbatim}
+\item Provide original addresses (i.e., per the binary file).  Provide "prog" as either the
+program name or the SO/DLL basename and the addr as the original address.
+\begin{verbatim}
+    prog:addr addr [comm] [break]
+\end{verbatim}
+\end{enumerate}
+
+\subsection{Dynamic modifications to memory, topology and control flow}
 \label{dmod}
-RESim includes functions that dynamically modify modeled elements and connections,
-triggered by system events.  For example, a script that loads selected kernel modules could be augmented in memory to
+RESim includes functions that cause system events to trigger dynamic modification of modeled elements and connections.
+
+For example, a script that loads selected kernel modules could be augmented in memory to
 load alternate modules, e.g., those for which you have modeled devices.  Modifying such a script on the volume
 image itself is not always convenient, e.g., \textit{tripwire} functions might manage checksums of
 configuration files.  It is therefore sometimes preferable to dynamically augment the software's perception of what is read.
 
-There are two mechanisms for dynamic modifications: one that modifies system memory content the first time an address is
+There are two mechanisms for dynamic memory modifications: one that modifies system memory content the first time an address is
 read (known as a \textit{ReadReplace}; and a \textit{Dmod} that modifies results of file read, write or open operations.
 
 Additionally, there is an experimental {\tt modFunction} to write a given word at an offset from the start of a named function.  
@@ -2973,6 +3005,9 @@ impacted by the raft of syscalls some applications make.  Also consider making u
 \item getWin7CallParams with {\tt track\_params=True} will generate a report on kernel references to system call parameters.  This is useful when creating code to parse out
 the system call parameters.
 \end{itemize}
+
+Windows applications can be very system call intensive.  Use of crypto DLLs seems to generate many system calls.  A new function was introduced to suspend 
+system call tracing while executing from selected DLLs.
 
 \end{appendices}
 \end{document}
