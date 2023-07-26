@@ -498,6 +498,17 @@ class WinDLLMap():
             print(ret_json)
         return ret_json
 
+    def wordSize(self, pid):
+        retval = None
+        ms = self.getMachineSize(pid)
+        if ms == 32:
+            retval = 4
+        elif ms  == 64:
+            retval = 8
+        elif ms is None:
+            retval = self.mem_utils.wordSize(self.cpu)
+        return retval
+
     def getMachineSize(self, pid):
         retval = None
         if pid in self.text:
@@ -511,9 +522,11 @@ class WinDLLMap():
 
             else:
                 self.lgr.warning('winDLL getMachineSize pid:%d missing machine field' % pid) 
-        else: 
+        elif pid is not None:
             self.lgr.debug('winDLL getMachineSize pid:%d has no text' % pid) 
             pass
+        else:
+            self.lgr.error('winDLL getMachineSize with pid of None')
        
         #if retval is not None: 
         #    self.lgr.debug('winDLL getMachineSize of %d for pid %d' % (retval, pid))

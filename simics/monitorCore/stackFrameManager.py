@@ -204,13 +204,16 @@ class StackFrameManager():
         self.top.revToAddr(frames[1].ip)
 
     def dumpStack(self, count=80):
-        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        ptr = esp
-        offset = self.mem_utils.wordSize(self.cpu)
-        fun_mgr = self.top.getFunMgr()
         cpu, comm, pid = self.task_utils.curProc() 
+        offset = self.soMap.wordSize(pid)
+        esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        ptr = esp
+        fun_mgr = self.top.getFunMgr()
         for i in range(count):
-            value = self.mem_utils.readAppWord(self.cpu, ptr) 
+            if offset == 4:
+                value = self.mem_utils.readWord32(self.cpu, ptr) 
+            else:
+                value = self.mem_utils.readWord(self.cpu, ptr) 
             name = ''
             if self.soMap.isCode(value, pid):
                 self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)

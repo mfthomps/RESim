@@ -596,6 +596,9 @@ class SOMap():
        else:
            return False
 
+    def wordSize(self, pid):
+       return self.task_utils.getMemUtils().wordSize(self.cpu)
+
     def getMachineSize(self, pid):
        ws = self.task_utils.getMemUtils().wordSize(self.cpu)
        if ws == 4:
