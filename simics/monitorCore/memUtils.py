@@ -420,11 +420,13 @@ class memUtils():
         retval = hi << 8 | lo
         return retval
 
-    def printRegJson(self, cpu):
+    def printRegJson(self, cpu, word_size=None):
+        if word_size is None:
+            word_size = self.WORD_SIZE
         if cpu.architecture == 'arm':
             #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
             regs = self.regs.keys()
-        elif self.WORD_SIZE == 8:
+        elif word_size == 8:
             ''' check for 32-bit compatibility mode '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             if mode == 4:
