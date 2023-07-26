@@ -410,3 +410,45 @@ def realPath(full_path):
             retval = os.path.join(parent, actual)
         return retval
 
+def disconnectServiceNode(name):
+        cmd = '%s.status' % name
+        try:
+            dumb,result = cli.quiet_run_command(cmd)
+        except:
+            print('resimUtils disconnectService node failed')
+            return
+       
+        ok = False 
+        for line in result.splitlines():
+            if 'connector_link0' in line:
+                parts = line.split(':')
+                node_connect = parts[0].strip()
+                switch = parts[1].strip()
+                cmd = '%s.status' % switch
+                dumb,result = cli.quiet_run_command(cmd)
+                for line in result.splitlines():
+                    if name in line:
+                        switch_device = line.split(':')[0].strip()
+                        cmd = 'disconnect %s.%s %s.%s' % (name, node_connect, switch, switch_device)
+                        dumb,result = cli.quiet_run_command(cmd)
+                        cmd = '%s.disable-service -all' % name
+                        dumb,result = cli.quiet_run_command(cmd)
+                        ok = True
+                        break
+                break
+
+def cutRealWorld():
+    driver_service_node = 'driver_service_node'
+    dhcp_service_node = 'dhcp_service_node'
+    cmd = 'disconnect-real-network'
+    SIM_run_command(cmd)
+    cmd = 'switch0.disconnect-real-network'
+    SIM_run_command(cmd)
+    cmd = 'switch1.disconnect-real-network'
+    SIM_run_command(cmd)
+    disconnectServiceNode(driver_service_node)
+    try:
+        disconnectServiceNode(dhcp_service_node)
+    except:
+        pass
+
