@@ -577,9 +577,12 @@ class WinSyscall():
                 if info_class in winNTSTATUS.keyval_info_class_map:
                     iclass = winNTSTATUS.keyval_info_class_map[info_class]
 
+                exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
+                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 30)
                 exit_info.retval_addr = frame['param4']
                 exit_info.count = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
-                trace_msg = trace_msg + ' information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
+                trace_msg = trace_msg + ' name addr: 0x%x ValueName: %s information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.fname_addr, 
+                        exit_info.fname, info_class, iclass, exit_info.retval_addr, exit_info.count)
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('winSyscall QueryValueKey call_param.subcall %s type %s' % (call_param.subcall, type(call_param.match_param)))
                     if type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and \
