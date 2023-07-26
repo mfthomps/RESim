@@ -2322,42 +2322,8 @@ class GenMonitor():
         self.syscallManager[cell_name].rmAllSyscalls()
  
  
-    def stopTrace(self, cell_name=None, syscall=None):
-        ''' TBD remove not used'''
-        if cell_name is None:
-            cell_name = self.target
- 
-        self.syscallManager[cell_name].stopTrace(syscall=syscall)
-        #if syscall is not None:
-        #    self.lgr.debug('genMonitor stopTrace from genMonitor cell %s given syscall %s' % (cell_name, syscall.name))
-        #else:
-        #    self.lgr.debug('genMonitor stopTrace from genMonitor cell %s no given syscall' % (cell_name))
-
-        '''
-        dup_traces = self.call_traces[cell_name].copy()
-        for call in dup_traces:
-            syscall_trace = dup_traces[call]
-            if syscall is None or syscall_trace == syscall: 
-                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
-                syscall_trace.stopTrace(immediate=True)
-                #self.lgr.debug('genMonitor back from stopTrace')
-                self.rmCallTrace(cell_name, call)
-
-        #if syscall is None or syscall_trace == syscall: 
-        #    self.call_traces[cell_name].clear()   
-        if cell_name in self.trace_all and (syscall is None or self.trace_all[cell_name]==syscall):
-            self.lgr.debug('call stopTrace for trace_all')
-            self.trace_all[cell_name].stopTrace(immediate=False)
-            del self.trace_all[cell_name]
-
-            for exit in self.exit_maze:
-                exit.rmAllBreaks()
-        if cell_name not in self.trace_all and len(self.call_traces[cell_name]) == 0:
-            self.traceMgr[cell_name].close()
-
-        #if self.instruct_trace is not None:
-        #    self.stopInstructTrace()
-        '''
+    def stopTrace(self):
+        self.syscallManager[self.target].rmAllSyscalls()
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
@@ -3213,7 +3179,7 @@ class GenMonitor():
         SIM_continue(0)
 
     def getCurrentSO(self):
-        cpu, comm, pid = self[self.target].task_utils[self.target].curProc() 
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
         eip = self.getEIP(cpu)
         retval = self.getSO(eip)
         return retval
@@ -3760,7 +3726,15 @@ class GenMonitor():
     def printRegJson(self):
         self.lgr.debug('printRegJson')
         pid, cpu = self.context_manager[self.target].getDebugPid() 
-        self.mem_utils[self.target].printRegJson(cpu)
+        word_size = self.mem_utils[self.target].wordSize(cpu)
+        prog_machine_size = self.soMap[self.target].getMachineSize(pid)
+        if prog_machine_size is not None:
+            if prog_machine_size == 64:
+                word_size = 8
+            else:
+                word_size = 4
+           
+        self.mem_utils[self.target].printRegJson(cpu, word_size=word_size)
 
     def flushTrace(self):
         if self.target in self.traceMgr:
@@ -5560,6 +5534,9 @@ class GenMonitor():
         self.context_manager[self.target].setReverseContext()
         resimUtils.skipToTest(cpu, cycle, self.lgr)
         self.context_manager[self.target].clearReverseContext()
+
+    def cutRealWorld(self):
+        resimUtils.cutRealWorld()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
