@@ -1911,6 +1911,9 @@ class GenMonitor():
         simics_status = SIM_simics_is_running()
         resim_status = self.is_monitor_running.isRunning()
         debug_pid, cpu = self.context_manager[self.target].getDebugPid() 
+        ''' TBD fix this race condition? '''
+        if debug_pid is None:
+            debug_pid = self.context_manager[self.target].getSavedDebugPid()
         eip = self.getEIP(cpu)
         retval = None
         if not resim_status and debug_pid is None:
@@ -2955,7 +2958,7 @@ class GenMonitor():
         else:
             self.lgr.error('runToOpenKey not available on Linux')
             return
-        call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
+        call_params = syscall.CallParams('runToOpenKey', open_call_list[0], substring, break_simulation=True)
         self.lgr.debug('runToOpenKey to %s' % substring)
         self.runTo(open_call_list, call_params, name='open')
 
