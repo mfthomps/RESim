@@ -567,43 +567,48 @@ class WinSyscall():
        
 
         # Handle JUST first parameter for a bunch of functions that have Handle as their first, then break out into more params for some
-        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey']:
+        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey', 'EnumerateValueKey']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
 
-            if callname == 'QueryValueKey':
+            if callname in ['QueryValueKey', 'EnumerateValueKey']:
                 info_class = frame['param3']
                 iclass = 'Unknown'
                 if info_class in winNTSTATUS.keyval_info_class_map:
                     iclass = winNTSTATUS.keyval_info_class_map[info_class]
 
-                exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
-                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 100)
                 exit_info.retval_addr = frame['param4']
                 exit_info.count = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
-                trace_msg = trace_msg + ' name addr: 0x%x ValueName: %s information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.fname_addr, 
+                if callname == 'QueryValueKey':
+                    exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
+                    exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 100)
+                    trace_msg = trace_msg + ' name addr: 0x%x ValueName: %s information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.fname_addr, 
                         exit_info.fname, info_class, iclass, exit_info.retval_addr, exit_info.count)
+                else:
+                    exit_info.fname = frame['param2']
+                    trace_msg = trace_msg + ' subkey Index: %d information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % ( exit_info.fname, 
+                        info_class, iclass, exit_info.retval_addr, exit_info.count)
                 for call_param in syscall_info.call_params:
-                    self.lgr.debug('winSyscall QueryValueKey call_param.subcall %s type %s' % (call_param.subcall, type(call_param.match_param)))
+                    self.lgr.debug('winSyscall %s call_param.subcall %s type %s' % (callname, call_param.subcall, type(call_param.match_param)))
                     if type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and \
                              (call_param.proc is None or call_param.proc == self.comm_cache[pid]):
                         exit_info.call_params = call_param
-                        self.lgr.debug('winSyscall QueryValueKey found match')
+                        self.lgr.debug('winSyscall %s found match', callname)
                         break
 
-            if callname == 'RequestWaitReplyPort':
+            elif callname == 'RequestWaitReplyPort':
                 exit_info.retval_addr = frame['param3']
                 exit_info.fname_addr = frame['param2']
                 trace_msg = trace_msg + ' LPCRequestAddr: 0x%x LPCReplyAddr: 0x%x' % (exit_info.fname_addr, exit_info.retval_addr)
            
-            if callname == 'QueryInformationFile':
+            elif callname == 'QueryInformationFile':
                 info_class = self.stackParam(1, frame) & 0xFF # all values are under 80
                 exit_info.retval_addr = frame['param3']
                 buf_size = frame['param4']
                 io_status_block = frame['param2']
                 trace_msg = trace_msg + ' information_class: %s return_buf: 0x%x buf_size: 0x%x IoStatusBlock_addr: 0x%x' % (winFile.file_information_class[info_class], exit_info.retval_addr, buf_size, io_status_block)
 
-            if callname == 'SetInformationFile':
+            elif callname == 'SetInformationFile':
                 info_class = self.stackParam(1, frame) & 0xFF # all values are under 80
                 exit_info.retval_addr = frame['param2']
                 buf_size = frame['param4']
@@ -1648,7 +1653,7 @@ class WinSyscall():
     def genericCallParams(self, syscall_info, exit_info, callname):
         retval = exit_info
         for call_param in syscall_info.call_params:
-            self.lgr.debug('winSyscall genericCallparams got param name: %s type %s' % (call_param.name, type(call_param.match_param)))
+            self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  retval = None
                  mod = call_param.match_param
@@ -1660,7 +1665,8 @@ class WinSyscall():
                      retval = exit_info
                      break
             if type(call_param.match_param) is str: 
-                if (call_param.subcall is None or call_param.subcall.startswith(callname) and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
+                if ((call_param.subcall is None or call_param.subcall.startswith(callname) or callname.startswith(call_param.subcall)) \
+                         and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
                     self.lgr.debug('syscall %s, found match_param %s param.subcall %s' % (callname, call_param.match_param, call_param.subcall))
                     exit_info.call_params = call_param
                     retval = exit_info
