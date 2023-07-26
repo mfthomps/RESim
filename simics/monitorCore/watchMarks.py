@@ -603,15 +603,27 @@ class WatchMarks():
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
+            self.lgr.debug('watchMarks dataRead ad_hoc address 0x%x ' % (addr))
             if len(self.mark_list) > 0:
                 pm = self.mark_list[-1]
+                create_new = True   
                 if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                    end_addr = addr + trans_size - 1
-                    #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
-                    pm.mark.addrRange(end_addr)
-                else:
-                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
-                    #sp, base = self.getStackBase(dest)
+                    skip_this = False
+                    if dest is not None:
+                        self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
+                        cur_len = pm.mark.end_addr - pm.mark.addr
+                        ok_dest = pm.mark.dest + cur_len + 1
+                        self.lgr.debug('watchMarks dataRead cur_len 0x%x  ok_dest would be 0x%x' % (cur_len, ok_dest))
+                        if dest != ok_dest:
+                            skip_this = True
+                    if not skip_this:
+                        end_addr = addr + trans_size - 1
+                        self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                        pm.mark.addrRange(end_addr)
+                        create_new = False
+                if create_new:
+                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
+                    sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
                     dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
@@ -637,6 +649,8 @@ class WatchMarks():
                     wm = self.addWatchMark(dm, cycles=cycles)
                     #self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
+        #if wm is None:
+        #    self.lgr.error('returning none for wm addr 0x%x' % addr)
         return wm
 
     def getMarkFromIndex(self, index):
