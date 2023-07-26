@@ -578,7 +578,7 @@ class WinSyscall():
                     iclass = winNTSTATUS.keyval_info_class_map[info_class]
 
                 exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
-                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 30)
+                exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 100)
                 exit_info.retval_addr = frame['param4']
                 exit_info.count = self.stackParam(1, frame) & 0xffffffff  #length of return buffer
                 trace_msg = trace_msg + ' name addr: 0x%x ValueName: %s information_class: %d (%s) ReturnBuffer: 0x%x BufferLength: %d' % (exit_info.fname_addr, 
