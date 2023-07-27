@@ -930,7 +930,7 @@ class GenContextMgr():
             pid = self.debugging_pid_saved
         if pid is None:
             cpu, dumb2, pid  = self.task_utils.curProc()
-            self.lgr.debug('resetWatchTasks pid was not, got current as pid:%d' % pid)
+            #self.lgr.debug('resetWatchTasks pid was not, got current as pid:%d' % pid)
         #self.lgr.debug('resetWatchTasks pid:%d' % pid)
         self.stopWatchTasksAlone(None)
         #self.lgr.debug('resetWatchTasks back from stopWatch')
@@ -967,8 +967,9 @@ class GenContextMgr():
             self.restoreDebugContext()
 
     def watchTasks(self, set_debug_pid = False, pid=None):
+        self.lgr.debug('contextManager watchTasks set_debug_pid: %r' % set_debug_pid)
         if self.task_break is not None:
-            self.lgr.debug('watchTasks called, but already watching')
+            self.lgr.debug('contextManager watchTasks called, but already watching')
             #return
         if pid is None:
             ctask = self.task_utils.getCurTaskRec()
@@ -984,13 +985,18 @@ class GenContextMgr():
         if len(self.watch_rec_list) == 0:
             #self.lgr.debug('watchTasks, call restoreDebug')
             self.restoreDebug()
+        if set_debug_pid:
+            #self.lgr.warning('watchTasks, call to setDebugPid')
+            self.setDebugPid(force=True)
+        if comm not in self.debugging_comm:
+            self.debugging_comm.append(comm)
         if self.watchExit(pid=pid):
             #self.pageFaultGen.recordPageFaults()
             ctask = self.task_utils.getRecAddrForPid(pid)
             if ctask in self.watch_rec_list:
                 self.lgr.debug('watchTasks, pid:%d already being watched' % pid)
                 return
-            self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
+            #self.lgr.debug('watchTasks cell %s watch record 0x%x pid: %d set_debug_pid: %r' % (self.cell_name, ctask, pid, set_debug_pid))
             self.watch_rec_list[ctask] = pid
         else:
             self.lgr.warning('watchTasks, call to watchExit failed pid %d' % pid)
@@ -1000,10 +1006,6 @@ class GenContextMgr():
         if group_leader != self.group_leader:
             #self.lgr.debug('contextManager watchTasks x set group leader to %d' % group_leader)
             self.group_leader = group_leader
-        if set_debug_pid:
-            self.setDebugPid(force=True)
-        if comm not in self.debugging_comm:
-            self.debugging_comm.append(comm)
       
     def changeDebugPid(self, pid):
         if pid not in self.pid_cache:
@@ -1018,7 +1020,7 @@ class GenContextMgr():
 
     def setDebugPid(self, force=False):
         if self.debugging_pid is not None and not force:
-            #self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
+            self.lgr.debug('contextManager setDebugPid already set to %d' % self.debugging_pid)
             return
         cell, comm, cur_pid  = self.task_utils.curProc()
         #self.default_context = self.cpu.current_context
