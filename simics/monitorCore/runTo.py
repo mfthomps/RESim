@@ -3,6 +3,8 @@ from resimHaps import *
 import soMap
 import stopFunction
 import hapCleaner
+import resimUtils
+import memUtils
 import glob
 ''' TBD extend for multiple concurrent threads and multiple skip SO files '''
 class Prec():
@@ -365,3 +367,26 @@ class RunTo():
      
     def soLoaded(self, section):
         SIM_run_alone(self.soLoadedAlone, section)
+
+    def runTo32(self):
+        self.lgr.debug('runTo runto32')
+        done = False
+        if self.cpu.architecture != 'x86-64':
+            self.lgr.error('runTo runTo32 only supported on x86-64')
+            return
+        while not done:
+            ws = self.mem_utils.wordSize(self.cpu)
+            if ws == 4:
+                self.lgr.debug('runTo runTo32 ws is 4, done')
+                break
+            cpl = memUtils.getCPL(self.cpu)
+            if cpl == 0:
+                self.lgr.debug('runTo runTo32 in kernel, run to user')
+                f1 = stopFunction.StopFunction(self.runTo32, [], nest=False)
+                self.top.toUser([f1])
+                done = True
+            else:
+                next_cycle = self.cpu.cycles+1  
+                #self.lgr.debug('runTo runTo32 skip to 0x%x' % next_cycle)
+                resimUtils.skipToTest(self.cpu, next_cycle, self.lgr)
+                

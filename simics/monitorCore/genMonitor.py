@@ -5542,6 +5542,9 @@ class GenMonitor():
     def cutRealWorld(self):
         resimUtils.cutRealWorld()
 
+    def runTo32(self):
+        self.run_to[self.target].runTo32()
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
