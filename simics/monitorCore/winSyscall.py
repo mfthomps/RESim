@@ -234,7 +234,8 @@ class WinSyscall():
                     continue
                 else:
                     did_callnum.append(callnum)
-                self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
+                if callnum is not None:
+                    self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
                 if callnum is not None and callnum < 0:
                     self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
@@ -447,6 +448,9 @@ class WinSyscall():
                                             cp = syscall.CallParams('stop_on_call', None, None, break_simulation=True)
                                             exit_info.call_params = cp
                                     #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
+                                    if self.dataWatch is not None:
+                                        self.lgr.debug('winSyscall calling dataWatch to stop watch to ignore kernel fiddle with data')
+                                        self.dataWatch.stopWatch()
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
                                     self.lgr.debug('did not add exitHap')
@@ -1117,6 +1121,12 @@ class WinSyscall():
             trace_msg = trace_msg + ' information_class: %d (%s) return_buf: 0x%x return_buf_size: %d' % (info_class, iclass, exit_info.retval_addr, exit_info.count)
         #    entry = self.task_utils.getSyscallEntry(callnum)
         #    SIM_break_simulation('query information process computed 0x%x' % entry)
+        elif callname in ['FindAtom', 'AddAtom']:
+            str_addr = frame['param1']
+            length = frame['param2']
+            atom_str = self.mem_utils.readWinString(self.cpu, str_addr, length)
+            exit_info.retval_addr = frame['param3']
+            trace_msg = trace_msg + ' atom string: %s, lenght: %d' % (atom_str, length)
            
         else:
             #self.lgr.debug(trace_msg)
@@ -1135,6 +1145,9 @@ class WinSyscall():
                 if len(trace_msg.strip()) > 0:
                     self.traceMgr.write(trace_msg+'\n'+frame_string+'\n')
         return exit_info
+        #
+        # end of syscallParse
+        #
 
     def stackParam(self, pnum, frame):
         rsp = frame['sp']

@@ -94,6 +94,11 @@ class WinCallExit():
         if pid == 0:
             #self.lgr.debug('winCallExit cell %s pid is zero' % (self.cell_name))
             return False
+
+        if self.dataWatch is not None:
+            self.lgr.debug('winCallExit handleExit restore data watch')
+            self.dataWatch.watch()
+
         eip = self.top.getEIP(self.cpu)
 
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -283,6 +288,10 @@ class WinCallExit():
                             self.lgr.debug('winCallExit %s MODIFIED handle in call params to new handle' % trace_msg)
                             exit_info.call_params.match_param = new_handle
                             exit_info.call_params = None
+
+        elif callname in ['FindAtom', 'AddAtom']: 
+            atom_hex = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
+            trace_msg = trace_msg+' atom hex: 0x%x' % atom_hex
 
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
