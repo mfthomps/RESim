@@ -158,10 +158,11 @@ class SyscallManager():
             Assumes all of the call_params have the same call parameter name for purposes of managing the
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
-        self.lgr.debug('watchSyscall')
+        self.lgr.debug('watchSyscall given context %s' % context)
         retval = None 
         if context is None:
             context = self.getDebugContextName()
+            self.lgr.debug('watchSyscall given context was none, now set to %s' % context)
 
         cell = self.context_manager.getCellFromContext(context)
 
