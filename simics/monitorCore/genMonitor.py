@@ -1912,8 +1912,8 @@ class GenMonitor():
         resim_status = self.is_monitor_running.isRunning()
         debug_pid, cpu = self.context_manager[self.target].getDebugPid() 
         ''' TBD fix this race condition? '''
-        if debug_pid is None:
-            debug_pid = self.context_manager[self.target].getSavedDebugPid()
+        #if debug_pid is None:
+        #    debug_pid = self.context_manager[self.target].getSavedDebugPid()
         eip = self.getEIP(cpu)
         retval = None
         if not resim_status and debug_pid is None:
@@ -2217,7 +2217,7 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, pid=None, subcall=None):
+    def runToCall(self, callname, pid=None, subcall=None, run=True):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2247,8 +2247,8 @@ class GenMonitor():
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
         self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=True)
-      
-        SIM_continue(0)
+        if run: 
+            SIM_continue(0)
 
     def runToSyscall(self, callnum = None):
         cell = self.cell_config.cell_context[self.target]
@@ -4931,6 +4931,7 @@ class GenMonitor():
 
     def debugIfNot(self):
         ''' warning, assumes current pid is the one to be debugged. '''
+        self.rmDebugWarnHap()
         if self.bookmarks is None:
             cpu, comm, this_pid = self.task_utils[self.target].curProc() 
             print('Will debug pid: %d (%s)' % (this_pid, comm))
