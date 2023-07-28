@@ -93,6 +93,9 @@ class WriteData():
         self.user_space_addr = None
         self.user_space_count = None
 
+        # for windows
+        self.addr_of_count = None
+
         self.loadPickle(snapshot_name)
 
         if self.call_ip is not None:
@@ -259,6 +262,17 @@ class WriteData():
             self.call_break = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
+    def setCountValue(self, count):
+        if self.top.isWindows():
+            word_size = self.top.getWordSize()
+            if word_size == 4:
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+            else: 
+                self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
+            self.lgr.debug('writeData wrote count %d to addr 0x%x' % (count, self.addr_of_count))
+        else:
+            self.cpu.iface.int_register.write(self.len_reg_num, count)
+
     def userBufWrite(self, record=False):
         retval = None
         if self.current_packet > 1 and self.no_reset:
@@ -277,7 +291,7 @@ class WriteData():
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 #self.lgr.debug('%s' % next_data)
-                self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
+                self.setCountValue(len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
@@ -302,7 +316,7 @@ class WriteData():
                     self.mem_utils.writeString(self.cpu, next_addr, b) 
                     #self.lgr.debug('writeData TCP last packet, padded %d bytes' % pad_count)
                     tot_len = tot_len + pad_count
-                self.cpu.iface.int_register.write(self.len_reg_num, tot_len)
+                self.setCountValue(tot_len)
                 self.in_data = ''
                 retval = tot_len
         elif self.udp_header is not None:
@@ -342,7 +356,7 @@ class WriteData():
                 retval = len(result)
                 self.in_data = ''
                 #retval = 100
-            self.cpu.iface.int_register.write(self.len_reg_num, retval)
+            self.setCountValue(tot_len)
             ''' reflect current packet in artifacts, starting with one'''
             self.top.setPacketNumber((self.current_packet+1))
                 
@@ -747,4 +761,8 @@ class WriteData():
                 self.user_space_addr = so_pickle['user_addr']
                 self.lgr.debug('injectIO load user_addr 0x%x count %d' % (self.user_space_addr, self.user_space_count))
                
-             
+            if 'addr_of_count' in so_pickle: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('injectIO load add_of_count 0x%x' % (self.addr_of_count))
+        else:
+            self.lgr.debug('injectIO load, no pickle file at %s' % afl_file)

@@ -840,6 +840,7 @@ class memUtils():
                 SIM_write_phys_memory(cpu, phys, b, 1)
             else:
                 self.lgr.error('Failed to get phys addr for 0x%x' % cur_addr)
+                break
             cur_addr = cur_addr + 1
 
     def getGSCurrent_task_offset(self, cpu):

@@ -149,6 +149,7 @@ class InjectIO():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        self.lgr.debug('injectIO go')
         if self.addr is None:
             return
         if self.callback is None:
@@ -193,6 +194,7 @@ class InjectIO():
             ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                 references data past the end of what is received. '''
             #self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+            self.lgr.debug('injectIO call to restore %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
@@ -409,16 +411,17 @@ class InjectIO():
             #print('start %s' % str(so_pickle['text_start']))
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
+                self.lgr.debug('injectIO addr from pickle is 0x%x' % self.addr)
             else:
                 self.lgr.debug('injectIO no addr in pickle?')
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 if self.orig_buffer is not None:
-                    self.lgr.debug('injectiO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
+                    self.lgr.debug('injectIO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
             if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
-                self.lgr.debug('injectiO load max_len read %d' % self.max_len)
+                self.lgr.debug('injectIO load max_len read %d' % self.max_len)
             if 'addr_addr' in so_pickle:
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']

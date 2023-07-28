@@ -4656,8 +4656,6 @@ class GenMonitor():
                 cpu, comm, pid = self.task_utils[self.target].curProc() 
                 self.debugPidGroup(pid)
             print('fd is %d' % fd)
-            #fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
-            #   self.dataWatch[self.target], snap_name, self.context_manager[self.target], self.lgr, fd=fd, count=count)
             prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr) 
         else:
             print('Reverse execution must be enabled to run prepInject')
@@ -5544,6 +5542,11 @@ class GenMonitor():
 
     def runTo32(self):
         self.run_to[self.target].runTo32()
+
+    def getWordSize(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        retval = self.soMap[self.target].wordSize(pid)
+        return retval
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

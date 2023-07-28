@@ -29,6 +29,8 @@ class PrepInject():
         self.new_origin = None
         self.exit_info = None
         self.ret_cycle = None
+        # for windows 
+        self.addr_of_count = None
 
 
         ''' NOTHING below here '''
@@ -41,7 +43,10 @@ class PrepInject():
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
-        self.top.runToInput(self.fd, flist_in=flist, count=self.count)
+        if self.top.isWindows():
+            self.top.runToIO(self.fd, flist_in=flist, count=self.count)
+        else:
+            self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 
     def instrumentSelect(self, dumb):
         #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
@@ -101,6 +106,9 @@ class PrepInject():
         else:
             length = self.exit_info.count
             self.lgr.debug('prepInject getLength length from count is %d' % length)
+            if self.top.isWindows():
+                self.addr_of_count = self.exit_info.fname_addr
+                self.lgr.debug('prepInject getLength length address of count 0x%x' % self.addr_of_count)
         return length
 
     def instrumentAlone(self, dumb): 
@@ -114,7 +122,7 @@ class PrepInject():
         pid = self.top.getPID()
         self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, pid, self.cpu.cycles))
 
-
+        ''' Find the exit info from the system call that did the read.'''
         self.exit_info = self.top.getMatchingExitInfo()
 
         pid = self.top.getPID()
@@ -150,7 +158,10 @@ class PrepInject():
 
     def instrumentIO(self, callname):
         self.lgr.debug("prepInject in instrument IO, callname is %s" % callname);
-        if callname.startswith('re') or callname == 'socketcall':
+        if self.top.isWindows():
+            self.lgr.debug("prepInject in instrument IO")
+            SIM_run_alone(self.instrumentAlone, None)
+        elif callname.startswith('re') or callname == 'socketcall':
             SIM_run_alone(self.instrumentAlone, None)
         elif 'select' in callname:
             SIM_run_alone(self.instrumentSelect, None)
@@ -179,6 +190,8 @@ class PrepInject():
             pickDict['addr_size'] = count
 
         pickDict['orig_buffer'] = orig_buffer
+        if self.top.isWindows():
+            pickDict['addr_of_count'] = self.addr_of_count
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
         if self.call_ip is not None:

@@ -377,3 +377,7 @@ class WinCallExit():
                 if exit_info.call_params.match_param not in exit_info.fname:
                     ''' no match, set call_param to none '''
                     exit_info.call_params = None
+
+    def getMatchingExitInfo(self):
+        return self.matching_exit_info 
+

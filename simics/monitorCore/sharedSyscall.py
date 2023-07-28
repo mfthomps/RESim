@@ -1169,7 +1169,10 @@ class SharedSyscall():
         self.all_write = True
        
     def getMatchingExitInfo(self):
-        return self.matching_exit_info 
+        if self.top.isWindows():
+            return self.win_call_exit.getMatchingExitInfo() 
+        else:
+            return self.matching_exit_info 
 
     def stopAlone(self, Dumb):
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHapReset, None)
