@@ -382,7 +382,7 @@ class WinDLLMap():
                 eproc = self.task_utils.getCurTaskRec()
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                 self.top.setFullPath(full_path)
-                self.addText(prog_name, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog.text_offset)
+                self.addText(prog_name, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset)
                 retval = Text(win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.image_base)
         return retval
             
