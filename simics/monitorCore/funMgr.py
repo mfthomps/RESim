@@ -237,7 +237,7 @@ class FunMgr():
                 try:
                     call_addr = int(parts[1],16)
                 except ValueError:
-                    self.lgr.debug('getFunName, %s not a hex' % parts[1])
+                    #self.lgr.debug('getFunName, %s not a hex' % parts[1])
                     pass
             if call_addr is not None:
                 fun = str(self.funFromAddr(call_addr))
@@ -302,8 +302,8 @@ class FunMgr():
                         return None
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]
-                else:
-                    self.lgr.debug('funMgr ipRelative <%s> does not start with rip+' % content)
+                #else:
+                #    self.lgr.debug('funMgr ipRelative <%s> does not start with rip+' % content)
             #if retval is not None:
             #    self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
             return retval
