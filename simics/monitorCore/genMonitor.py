@@ -2464,7 +2464,7 @@ class GenMonitor():
             cmd = 'disable-reverse-execution'
             SIM_run_command(cmd)
             self.rev_execution_enabled = False
-        self.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+        self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         self.sharedSyscall[self.target].setDebugging(False)
         self.syscallManager[self.target].rmAllSyscalls()
         #self.stopTrace()
@@ -4612,6 +4612,7 @@ class GenMonitor():
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
         self.lgr.debug('genMonitor afl')
+        self.rmDebugWarnHap()
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         cell_name = self.getTopComponentName(cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
