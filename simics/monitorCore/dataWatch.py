@@ -305,7 +305,8 @@ class DataWatch():
     def stopStackThisHaps(self, immediate=False):
         for eip in self.stack_this_hap:
             #self.lgr.debug('dataWatch stopStackThisHaps delete hap for eip 0x%x' % eip)
-            self.context_manager.genDeleteHap(self.stack_this_hap[eip], immediate=immediate)
+            hap = self.stack_this_hap[eip]
+            self.context_manager.genDeleteHap(hap, immediate=immediate)
         self.stack_this_hap = {}
 
     def manageStackThis(self, index_list, ret_to):
@@ -555,7 +556,8 @@ class DataWatch():
   
                    if self.start[range_index] < sp:
                         #self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
-                        self.context_manager.genDeleteHap(self.read_hap[range_index], immediate=False)
+                        hap = self.read_hap[range_index]
+                        self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[range_index] = None
                         self.start[range_index] = None
                    else:
@@ -718,7 +720,8 @@ class DataWatch():
             for fun in self.mem_fun_entries:
                 for eip in self.mem_fun_entries[fun]:
                     if self.mem_fun_entries[fun][eip].hap is not None:
-                        self.context_manager.genDeleteHap(self.mem_fun_entries[fun][eip].hap, immediate=immediate)
+                        hap = self.mem_fun_entries[fun][eip].hap
+                        self.context_manager.genDeleteHap(hap, immediate=immediate)
                         self.mem_fun_entries[fun][eip].hap = None
             if self.destroy_hap is not None:
                 self.context_manager.genDeleteHap(self.destroy_hap, immediate=immediate)
@@ -948,7 +951,8 @@ class DataWatch():
                         if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
                             self.lgr.debug('dataWatch returnHap, overwrite buffer exact match, remove the buffer')
                             if buf_index in self.read_hap:
-                                self.context_manager.genDeleteHap(self.read_hap[buf_index], immediate=False)
+                                hap = self.read_hap[buf_index]
+                                self.context_manager.genDeleteHap(hap, immediate=False)
                                 self.read_hap[buf_index] = None
                             self.start[buf_index] = None
                         else:
@@ -1019,7 +1023,8 @@ class DataWatch():
                 if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
                     self.lgr.debug('dataWatch returnHap memset is exact match, remove buffer')
                     if buf_index in self.read_hap:
-                        self.context_manager.genDeleteHap(self.read_hap[buf_index], immediate=False)
+                        hap = self.read_hap[buf_index] 
+                        self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[buf_index] = None
                     self.start[buf_index] = None
                 else:
@@ -2189,7 +2194,7 @@ class DataWatch():
                          cycles=self.prev_cycle)
             else:
                 self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.getCmp(), self.move_stuff.trans_size, ip=self.move_stuff.ip)
-        #self.lgr.debug('dataWatch finishCheckMove now delete hap')
+        self.lgr.debug('dataWatch finishCheckMove now delete hap')
         if self.finish_check_move_hap is None:
             self.lgr.error('it is none')
         self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
@@ -2356,6 +2361,7 @@ class DataWatch():
             return adhoc                
 
     def loopAdHoc(self, addr, trans_size, start, length, instruct, our_reg, eip, orig_ip):
+            #self.lgr.debug('dataWatch loopAdHoc')
             ''' Loop through the next several instructions to see if our reg is stored to memory,
                 or pushed onto the stack for a call'''
             ''' TBD this will miss copies and such that occur in branches.  It assumes no branching between the start and the next'''
@@ -2375,12 +2381,12 @@ class DataWatch():
             for i in range(max_num):
                 next_ip = next_ip + next_instruct[0]
                 next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
-                ''' Normally bail on branch, but catch xmm mem copies that have a lot of processing.'''
-                if decode.isBranch(self.cpu, next_instruct[1]) and not our_reg.startswith('xmm'):
+                ''' Normally bail on branch, but catch xmm mem copies that have a lot of processing. TBD this is broken since we can't follow branches properly'''
+                if (decode.isBranch(self.cpu, next_instruct[1]) and not our_reg.startswith('xmm')) or next_instruct[1].startswith('ret'):
                     #self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
+                self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
                 dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
                 #if dest_addr is not None:
@@ -2394,7 +2400,7 @@ class DataWatch():
                         adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
                         break
                     else:                   
-                        #self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
+                        self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
                         adhoc = True
                         break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
                         dest_op = op1
@@ -2402,7 +2408,8 @@ class DataWatch():
                             dest_op = op2
                         ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
                         self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip)
-                        #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x' % (addr, start, next_ip))
+                        self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
+                              start, next_ip, self.cpu.current_context))
                         self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
                                  self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
                         break
@@ -2527,6 +2534,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
                 our_reg = op1
                 adhoc = self.loopAdHoc(addr, trans_size, start, length, instruct, our_reg, eip, orig_ip)
+                self.lgr.debug('dataWatch checkMove loopAdHoc returned %r' % adhoc)
                 was_checked = True
         elif instruct[1].startswith('ldm'):
             op2, op1 = self.decode.getOperands(instruct[1])
@@ -2549,6 +2557,7 @@ class DataWatch():
                 self.save_cycle = self.cpu.cycles - 1
                 re_watch = reWatch.REWatch.isCharLookup(addr, eip, instruct, self.decode, self.cpu, pid, self.mem_utils, 
                       self.context_manager, self.watchMarks, self.top, self.lgr)
+            ''' TBD move this RE logic to own function'''
             if re_watch is not None:
                 self.re_watch_list.append(re_watch)
 
@@ -2607,7 +2616,7 @@ class DataWatch():
                         self.lgr.error('dataWatch checkMove failed to get mem_something from re_watch')
                         self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
             else: 
-                #self.lgr.debug('dataWatch checkMove not a reWatch')
+                self.lgr.debug('dataWatch checkMove not a reWatch')
                 self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
 
     def isReuse(self, eip):
@@ -2795,7 +2804,8 @@ class DataWatch():
                 if index < len(self.read_hap):
                     if self.read_hap[index] is not None:
                         #self.lgr.debug('dataWatch readHap  delete hap %d' % self.read_hap[index])
-                        self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                        hap = self.read_hap[index]
+                        self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[index] = None
                 return
         else:
@@ -2804,8 +2814,9 @@ class DataWatch():
 
         ''' NOTE RETURNS above '''
         if self.finish_check_move_hap is not None:
-            #self.lgr.debug('DataWatch readHap delete finish_check_move_hap')
-            self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=False)
+            self.lgr.debug('DataWatch readHap delete finish_check_move_hap')
+            hap = self.finish_check_move_hap
+            self.context_manager.genDeleteHap(hap, immediate=False)
             self.finish_check_move_hap = None
         dum_cpu, cur_addr, comm, pid = self.task_utils.currentProcessInfo(self.cpu)
 
@@ -2884,7 +2895,8 @@ class DataWatch():
 
     def rmFree(self, fun, index):
         self.lgr.debug('dataWatch rmFree delete hap for %s' % fun)
-        self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+        hap = self.read_hap[index]
+        self.context_manager.genDeleteHap(hap, immediate=False)
         self.read_hap[index] = None
         self.start[index] = None
 
@@ -3068,7 +3080,8 @@ class DataWatch():
                     self.lgr.debug('dataWatch rmSubRange index[%d] set to None' % index)
                     if index < len(self.read_hap) and self.read_hap[index] is not None:
                         self.lgr.debug('dataWatch rmSubRange read_hap[%d] %d' % (index, self.read_hap[index]))
-                        self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                        hap = self.read_hap[index]
+                        self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[index] = None
                     if start < addr:
                         newlen = addr - start + 1
@@ -3097,7 +3110,8 @@ class DataWatch():
             self.start[index] = None
             if index < len(self.read_hap) and self.read_hap[index] is not None:
                 #self.lgr.debug('dataWatch rmRange addr 0x%x index %d len of read_hap %d call genDeleteHap' % (addr, index, len(self.read_hap)))
-                self.context_manager.genDeleteHap(self.read_hap[index], immediate=False)
+                hap = self.read_hap[index]
+                self.context_manager.genDeleteHap(hap, immediate=False)
                 self.read_hap[index] = None
             else:
                 if index >= len(self.read_hap):
