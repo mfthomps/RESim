@@ -269,7 +269,7 @@ class WriteData():
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
             else: 
                 self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
-            self.lgr.debug('writeData wrote count %d to addr 0x%x' % (count, self.addr_of_count))
+            self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
 
@@ -754,15 +754,15 @@ class WriteData():
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-                self.lgr.debug('injectIO load orig_buffer from pickle')
+                self.lgr.debug('writeData load orig_buffer from pickle')
 
             if 'user_count' in so_pickle:
                 self.user_space_count = so_pickle['user_count']
                 self.user_space_addr = so_pickle['user_addr']
-                self.lgr.debug('injectIO load user_addr 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+                self.lgr.debug('writeData load user_addr 0x%x count %d' % (self.user_space_addr, self.user_space_count))
                
             if 'addr_of_count' in so_pickle: 
                 self.addr_of_count = so_pickle['addr_of_count']
-                self.lgr.debug('injectIO load add_of_count 0x%x' % (self.addr_of_count))
+                self.lgr.debug('writeData load add_of_count 0x%x' % (self.addr_of_count))
         else:
             self.lgr.debug('injectIO load, no pickle file at %s' % afl_file)
