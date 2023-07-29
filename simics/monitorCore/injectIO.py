@@ -69,6 +69,9 @@ class InjectIO():
         self.fd = None
 
         self.snap_name = snap_name
+        self.addr_of_count = None
+        # Loading pickle below. init those variable above
+
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()
@@ -276,6 +279,10 @@ class InjectIO():
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     if not self.mem_utils.isKernel(self.addr):
                         self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                        if self.addr_of_count is not None:
+                            self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
+                            self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
+     
                         ''' special case'''
                         if self.max_len == 1:
                             self.addr += 1
@@ -360,6 +367,7 @@ class InjectIO():
                 self.resetOrigin(None)
                 self.dataWatch.clearWatchMarks(record_old=True)
             if count != 0:
+                self.lgr.debug('resetReverseAlone call setRange')
                 self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                 ''' special case'''
                 if self.max_len == 1:
@@ -427,6 +435,9 @@ class InjectIO():
                 self.addr_size = so_pickle['addr_size']
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
+            if 'addr_of_count' in so_pickle: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
         else:
             self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
 
