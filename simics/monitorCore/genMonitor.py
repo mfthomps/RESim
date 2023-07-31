@@ -3001,7 +3001,7 @@ class GenMonitor():
         self.lgr.debug('runToRead to %s' % str(substring))
         self.runTo(['read'], call_params, name='read', ignore_running=ignore_running)
 
-    def runToAccept(self, fd, flist=None, proc=None):
+    def runToAccept(self, fd, flist=None, proc=None, run=True):
         if not self.isWindows():
             call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         else:
@@ -3013,9 +3013,9 @@ class GenMonitor():
             linger = True
         else:
             linger = False
-        self.runTo(call, call_params, linger_in=linger, flist=flist, name='accept')
+        self.runTo(call, call_params, linger_in=linger, flist=flist, name='accept', run=run)
         
-    def runToBind(self, addr, proc=None):
+    def runToBind(self, addr, proc=None, run=True):
         #addr = '192.168.31.52:20480'
         if type(addr) is int:
             addr = '.*:%d' % addr
@@ -3033,7 +3033,7 @@ class GenMonitor():
 
         call_params = syscall.CallParams('runToBind', cname, addr, break_simulation=True, proc=proc)        
         self.lgr.debug('runToBind to %s ' % (addr))
-        self.runTo(call, call_params, name='bind')
+        self.runTo(call, call_params, name='bind', run=run)
 
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, 
                 run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
