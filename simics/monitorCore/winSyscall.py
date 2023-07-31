@@ -925,6 +925,15 @@ class WinSyscall():
 
                         self.lgr.debug('doing win_delay.setDataWatch')
                         exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                    elif op_cmd in ['SEND_DATAGRAM']:
+                        if word_size == 8:
+                            sock_addr = self.paramOffPtr(7, [0], frame, word_size) + 0x68
+                        else:
+                            sock_addr = self.paramOffPtr(7, [0x34], frame, word_size) 
+                        self.lgr.debug('sock_addr: 0x%x' % (sock_addr))
+                        sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                        to_string = sock_struct.getString()
+                        trace_msg = trace_msg+' '+to_string
                 else:
                     trace_msg = trace_msg + ' failed to read count'
                     exit_info.count=0
