@@ -506,7 +506,7 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
         #lgr.debug('dir_entry %d' % dir_entry)
         table_base_addr = dir_base + (dir_entry * 8)
         #lgr.debug('table_base_addr 0x%x' % table_base_addr)
-        ptable_info.table_addr = table_base_addr
+        ptable_info.ptable_addr = table_base_addr
         table_base, present, page_size = get40(cpu, table_base_addr, lgr)                
          
         if table_base is None or table_base == 0:
