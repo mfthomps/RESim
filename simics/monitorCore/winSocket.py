@@ -54,6 +54,7 @@ op_map_vals["TCP_FASTOPEN"]= 0x120BF
 op_map_vals["SUPER_CONNECT?"]= 0x120C7
 # from digging
 op_map_vals["12083_ACCEPT"]=0x12083
+op_map_vals["RANDOM_VALUE"]=0x390008
 
 
 def getOpMap():
