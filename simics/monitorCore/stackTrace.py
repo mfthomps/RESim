@@ -237,11 +237,11 @@ class StackTrace():
             call_instr = lr-4
             #self.lgr.debug("isCallToMe call_instr 0x%x  eip 0x%x" % (call_instr, eip))
             if self.fun_mgr is not None:
-                cur_fun = self.fun_mgr.getFunAddr(eip)
+                cur_fun = self.fun_mgr.getFun(eip)
                 if cur_fun is not None:
                     fun_name = self.fun_mgr.getFunName(cur_fun)
                     self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
-                ret_to = self.fun_mgr.getFunAddr(lr)
+                ret_to = self.fun_mgr.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
                     #self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
                     pass
@@ -332,7 +332,7 @@ class StackTrace():
         quick_return = None
         cur_fun_name = None
         if self.fun_mgr is not None:
-            cur_fun = self.fun_mgr.getFunAddr(eip)
+            cur_fun = self.fun_mgr.getFun(eip)
         if cur_fun is None:
             self.lgr.debug('stackTrace doX86, curFun for eip 0x%x is NONE' % eip)
             pass
@@ -454,7 +454,7 @@ class StackTrace():
                     self.addFrame(frame)
                     pass
                 if self.fun_mgr is not None: 
-                    cur_fun = self.fun_mgr.getFunAddr(ret_to)
+                    cur_fun = self.fun_mgr.getFun(ret_to)
                 bp = pushed_bp
                 ''' only add if not done by findReturnFromCall'''
                 if call_addr is not None and not added_frame:
@@ -507,7 +507,7 @@ class StackTrace():
                     break
             val = self.readAppPtr(ptr)
             if val is None:
-                #self.lgr.debug('stackTrace findReturnFromCall, failed to read from 0x%x' % ptr)
+                self.lgr.debug('stackTrace findReturnFromCall, failed to read from 0x%x' % ptr)
                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 done = True
                 continue
@@ -525,7 +525,7 @@ class StackTrace():
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                     if cur_fun is None and self.fun_mgr is not None:
-                        cur_fun = self.fun_mgr.getFunAddr(call_ip)
+                        cur_fun = self.fun_mgr.getFun(call_ip)
                         #if cur_fun is not None:
                         #    self.lgr.debug('findReturn had no cur_fun, set to 0x%x' % cur_fun)
                         #    pass
@@ -705,7 +705,7 @@ class StackTrace():
         cur_fun = None
         cur_fun_name = None
         if self.fun_mgr is not None:
-            cur_fun = self.fun_mgr.getFunAddr(eip)
+            cur_fun = self.fun_mgr.getFun(eip)
             if prev_ip == None and cur_fun is not None:
                 cur_fun_name = self.fun_mgr.getFunName(cur_fun)
                 if cur_fun_name is None:
