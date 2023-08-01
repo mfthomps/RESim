@@ -48,9 +48,6 @@ class FunMgr():
     def getFun(self, addr):
         return self.ida_funs.getFun(addr)
 
-    def getFunAddr(self, addr):
-        return self.ida_funs.getFunAddr(addr)
-
     def getName(self, addr):
         return self.ida_funs.getName(addr)
 
@@ -96,10 +93,10 @@ class FunMgr():
     def funFromAddr(self, addr):
         fun = None
         if addr in self.relocate_funs:
-            #self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+            self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
             fun = self.relocate_funs[addr]
         elif self.ida_funs is not None:
-            #self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+            self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
             fun = self.ida_funs.getFunName(addr)
         return fun
 

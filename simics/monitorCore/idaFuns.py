@@ -169,14 +169,6 @@ class IDAFuns():
                 return fun
         return None
 
-    def getFunAddr(self, ip):
-        ''' TBD remove and just use getFun '''
-        for fun in self.funs:
-            #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
-            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                return (fun + self.offset)
-        return None
-
     def getFunName(self, ip):
         ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
