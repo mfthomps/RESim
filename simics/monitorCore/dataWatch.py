@@ -1021,9 +1021,10 @@ class DataWatch():
             if buf_index is not None:
                 #self.lgr.debug('dataWatch returnHap memset on one of our buffers')
                 if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
-                    self.lgr.debug('dataWatch returnHap memset is exact match, remove buffer')
+                    self.lgr.debug('dataWatch returnHap memset is exact match, remove buffer index %d addr 0x%x' % (buf_index, self.mem_something.dest))
                     if buf_index in self.read_hap:
                         hap = self.read_hap[buf_index] 
+                        self.lgr.debug('dataWatch returnHap memset delete the hap %d' % hap)
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[buf_index] = None
                     self.start[buf_index] = None
@@ -1409,7 +1410,8 @@ class DataWatch():
             self.lgr.debug('memSomethingEntry, fun %s eip 0x%x not in mem_fun_entries haps' % (fun, eip))
             return
         ret_to = self.getReturnAddr()
-        if ret_to is not None and not self.top.isMainText(ret_to):
+        ''' TBD expand to catch all free-type functions?  Also, cases where we would still want to see this?'''
+        if not fun == 'memset' and ret_to is not None and not self.top.isMainText(ret_to):
             self.lgr.debug('memSomethingEntry, fun %s called from 0x%x, not main text' % (fun, ret_to))
             return
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
@@ -3003,8 +3005,11 @@ class DataWatch():
                 continue
             ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_pid is not set while
                 fussing with memsomething parameters? '''
-           
-            break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
+    
+                  
+            phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
+            break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Read | Sim_Access_Write, phys_block.address, self.length[index], 0)
+            #break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + self.length[index] 
             eip = self.top.getEIP(self.cpu)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
