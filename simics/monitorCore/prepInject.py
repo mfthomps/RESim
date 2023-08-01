@@ -41,6 +41,7 @@ class PrepInject():
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('prepInject snap %s' % self.snap_name)
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
+        self.top.stopWatchPageFaults()
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
         if self.top.isWindows():
