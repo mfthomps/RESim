@@ -1447,7 +1447,8 @@ class GenContextMgr():
         if self.exit_callback is not None:
             self.exit_callback()
 
-    def loadIgnoreList(self, fname):
+    def loadIgnoreListXXXX(self, fname):
+        ## TBD remove
         self.lgr.debug('contextManager loadIgnoreList')
         #flist = glob.glob('*.ignore_prog')
         #if len(flist) > 1:
