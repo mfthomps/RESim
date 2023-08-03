@@ -8,9 +8,17 @@ work around case insensitive file system.
 Assumes root_prefix and root_subdirs have proper case.
 All else is unknown.
 '''
-def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
+def findPattern(path: str, glob_pat: str, ignore_case: bool = False, lgr=None):
+    #lgr.debug('findPatter glob_pat is %s' % glob_pat) 
     rule = re.compile(fnmatch.translate(glob_pat), re.IGNORECASE) if ignore_case \
             else re.compile(fnmatch.translate(glob_pat))
+    #for n in os.listdir(path):
+    #    lgr.debug('n is %s' % n)
+    #    if rule.match(n):
+    #        lgr.debug('matched')
+    #    else:
+    #        lgr.debug('failed matched')
+          
     return [n for n in os.listdir(path) if rule.match(n)]
 
 
@@ -64,14 +72,21 @@ class TargetFS():
                     lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
                 pattern = path
                 if self.root_subdirs is None or len(self.root_subdirs) == 0:
-                    flist = findPattern(self.root_prefix, pattern, ignore_case=True)
+                    #self.lgr.debug('pattern %s' % pattern)
+                    flist = findPattern(self.root_prefix, pattern, ignore_case=True, lgr=self.lgr)
+                    if len(flist) == 0:
+                        pattern = '%s*' % path
+                        flist = findPattern(self.root_prefix, pattern, ignore_case=True, lgr=self.lgr)
                     if len(flist) > 0:
                         retval = os.path.join(self.root_prefix, flist[0])
                 else:
                     for subdir in self.root_subdirs:
                         subpath = os.path.join(self.root_prefix, subdir)
-                        self.lgr.debug('TargetFS getFull subpath %s  pattern %s' % (subpath, pattern))
-                        flist = findPattern(subpath, pattern)
+                        #self.lgr.debug('TargetFS getFull subpath %s  pattern %s' % (subpath, pattern))
+                        flist = findPattern(subpath, pattern, lgr=self.lgr)
+                        if len(flist) == 0:
+                            pattern = '%s*' % path
+                            flist = findPattern(subpath, pattern, ignore_case=True, lgr=self.lgr)
                         if len(flist) > 0:
                             retval = os.path.join(subpath, flist[0])
                             break 
