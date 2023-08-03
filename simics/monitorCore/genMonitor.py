@@ -1154,6 +1154,7 @@ class GenMonitor():
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, pid = self.task_utils[self.target].curProc() 
+            ''' This will set full_path'''
             self.setPathToProg(pid)
             self.lgr.debug('genMonitor debug call doDebugCmd')
             self.doDebugCmd()
@@ -1244,7 +1245,9 @@ class GenMonitor():
                 else:
                     self.lgr.error('Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s' % prog_name)
-            if not self.fun_mgr.hasIDAFuns():
+            if self.fun_mgr is None:
+                self.lgr.debug('Warning no fun_mgr is defined.  Do not know what we are debugging?')
+            elif not self.fun_mgr.hasIDAFuns():
                 self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
             if self.debug_callback is not None:
