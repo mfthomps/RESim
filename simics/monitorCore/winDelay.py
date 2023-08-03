@@ -30,12 +30,14 @@ when the kernel writes to the address.
 from simics import *
 from resimHaps import *
 import memUtils
+import net
 class WinDelay():
-    def __init__(self, top, cpu, count_addr, buffer_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr, count=None):
+    def __init__(self, top, cpu, count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr, count=None):
         self.top = top
         self.cpu = cpu
         self.count_addr = count_addr
         self.buffer_addr = buffer_addr
+        self.sock_addr = sock_addr
         self.mem_utils = mem_utils
         self.context_manager = context_manager
         self.trace_mgr = trace_mgr
@@ -122,6 +124,14 @@ class WinDelay():
             else:
                 trace_msg = self.call_name+' return  count: 0x%x data: %s\n' % (return_count, repr(read_data))
                 self.lgr.debug('winDelay writeCountHap have not yet done exit so log SAVE the trace message %s' % trace_msg)
+            if self.call_name == 'RECV_DATAGRAM':
+                self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
+                sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
+                to_string = sock_struct.getString()
+                trace_msg = trace_msg + ' '+to_string 
+                self.lgr.debug('windDelay RECV_DATAGRAM socket addr %s' % to_string)
+                #SIM_break_simulation(trace_msg)
+
             #SIM_break_simulation('WinDelay')
             # we are in the kernel at some arbitrary place.  run to user space
             self.return_count = return_count

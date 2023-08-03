@@ -39,7 +39,7 @@ def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
                 #lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
                 pass
             else:
-                lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                #lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
                 break
         return pval
 
@@ -505,7 +505,7 @@ class WinSyscall():
             word_size = 8
         else:
             word_size = 4
-        self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
+        #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
 
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
@@ -661,7 +661,7 @@ class WinSyscall():
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
             #SIM_break_simulation('starting Read')
             self.lgr.debug('winSyscall ReadFile set asynch_handler')
-            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, 
+            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, None,
                         self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, self.lgr)
             if self.watchData(exit_info):
                 self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
@@ -933,12 +933,7 @@ class WinSyscall():
                     trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                     self.lgr.debug(trace_msg)
 
-                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
-                              self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
-                    if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
-                        self.lgr.debug('doing win_delay.setDataWatch')
-                        exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-                    elif op_cmd in ['SEND_DATAGRAM']:
+                    if op_cmd == 'SEND_DATAGRAM':
                         if word_size == 8:
                             sock_addr = self.paramOffPtr(7, [0], frame, word_size) + 0x68
                         else:
@@ -947,6 +942,19 @@ class WinSyscall():
                         sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                         to_string = sock_struct.getString()
                         trace_msg = trace_msg+' '+to_string
+                    elif op_cmd == 'RECV_DATAGRAM':
+                        if word_size == 8:
+                            exit_info.sock_struct = self.paramOffPtr(7, [0], frame, word_size) + 0x10
+                        else:
+                            exit_info.sock_struct = self.paramOffPtr(7, [0x10], frame, word_size) 
+                            self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_struct)
+                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_struct,
+                              self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
+                    self.lgr.debug('doing win_delay.setDataWatch')
+                    if self.watchData(exit_info):
+                        exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+
+
                 else:
                     trace_msg = trace_msg + ' failed to read count'
                     exit_info.count=0
