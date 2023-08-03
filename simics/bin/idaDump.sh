@@ -71,6 +71,6 @@ if [[ -f $ida_db_path ]];then
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
-    echo $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/dumpFuns.py "$target_path $@" "$target"
-    $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/dumpFuns.py "$target_path $@" "$target"
+    #$idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target_path $@" "$target"
+    $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
 fi
