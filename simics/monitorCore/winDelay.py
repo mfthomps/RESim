@@ -174,8 +174,11 @@ class WinDelay():
             retval = True
             if not_ready:
                 self.trace_msg = self.trace_msg+ ' Though kernel reported not ready.\n'
-            self.trace_mgr.write(self.trace_msg)
-            self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % self.trace_msg)
+            # hack to avoid repeating call name
+            self.trace_msg = self.trace_msg.split(' ', 1)[1]
+            combined_msg = trace_msg + ' '+self.trace_msg
+            self.trace_mgr.write(combined_msg)
+            self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % combined_msg)
             if self.data_watch is not None:
                 self.lgr.debug('winDelay exitingKernel do data watch')
                 SIM_run_alone(self.toUserAlone, None)
