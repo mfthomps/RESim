@@ -26,6 +26,7 @@ from resimUtils import rprint
 def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
         param = 'param%d' % pnum
         pval = frame[param]
+        #lgr.debug('paramOffPtr word size %d' % word_size)
         for offset in offset_list:
             ptr = pval + offset
             #lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
@@ -38,7 +39,7 @@ def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
                 #lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
                 pass
             else:
-                #lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
                 break
         return pval
 
@@ -496,9 +497,15 @@ class WinSyscall():
         frame_string = taskUtils.stringFromFrame(frame)
 
         # variable to determine if we are going to be doing 32 or 64 bit syscall
-        word_size = 8 # default to 8 for 64 bit unless 
-        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+        #word_size = 8 # default to 8 for 64 bit unless 
+        #if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+        #    word_size = 4
+        user_sp = frame['sp']
+        if user_sp > 0xffffffff:
+            word_size = 8
+        else:
             word_size = 4
+        self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
 
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
@@ -879,11 +886,18 @@ class WinSyscall():
                              self.sockwatch.bind(pid, sock_struct.fd, call_param)
 
             elif op_cmd == 'CONNECT':
-                sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+
+                if word_size == 8:
+                    # TBD not right yet. fix this
+                    sock_addr = self.paramOffPtr(7, [16], frame, word_size) 
+                else:
+                    sock_addr = self.paramOffPtr(7, [8], frame, word_size) 
+                #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x' % (pdata_addr, sock_addr))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
+                #self.lgr.debug(trace_msg)
 
             if op_cmd in ['ACCEPT', '12083_ACCEPT']:
                 if op_cmd == '12083_ACCEPT':
@@ -919,10 +933,9 @@ class WinSyscall():
                     trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                     self.lgr.debug(trace_msg)
 
-                    if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
-                        exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
+                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, self.mem_utils, 
                               self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
-
+                    if self.watchData(exit_info) and op_cmd in ['RECV', 'RECV_DATAGRAM']:
                         self.lgr.debug('doing win_delay.setDataWatch')
                         exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
                     elif op_cmd in ['SEND_DATAGRAM']:
