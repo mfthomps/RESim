@@ -109,6 +109,10 @@ export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path"
 
 echo "target is $target"
+tt=$(readpe -H "$target" | grep ImageBase | awk '{print $2}')
+export original_image_base=$tt
+echo "original_image_base is $tt"
+
 echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
 if [[ -f $ida_db_path ]];then
