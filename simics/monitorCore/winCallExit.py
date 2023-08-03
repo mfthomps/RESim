@@ -127,8 +127,14 @@ class WinCallExit():
             eax = 0
         
         # variable to determine if we are going to be doing 32 or 64 bit syscall
-        word_size = 8 # default to 8 for 64 bit unless 
-        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+        #word_size = 8 # default to 8 for 64 bit unless 
+        #if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+        #    word_size = 4
+
+        user_sp = exit_info.frame['sp']
+        if user_sp > 0xffffffff:
+            word_size = 8
+        else:
             word_size = 4
 
         if eax != 0:
@@ -312,13 +318,15 @@ class WinCallExit():
                 else: 
                     if exit_info.asynch_handler is not None:
                         was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
-                        self.lgr.debug('winCallExit asynch_hanler was ready? %r' % was_ready)
+                        self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
                         if was_ready:
                             not_ready = False
                     if not_ready:
                         return_count = None #denote it isnt ready to be read
                         trace_msg = trace_msg+' - Device not ready'
                         self.lgr.debug('winCallExit %s' % trace_msg)
+                    else:
+                        trace_msg = ''
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
