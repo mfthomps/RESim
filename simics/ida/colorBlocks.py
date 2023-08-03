@@ -9,6 +9,7 @@ import idc
 import gdbProt
 import subprocess
 import idaversion
+import resimUtils
 '''
 Color basic blocks to reflect whether blocks were hit during the most recent data session, or any data session.
 '''
@@ -54,22 +55,33 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     p.bg_color =  new_hit_color
     num_new = 0
     graph_dict = {}
-    offset = 0
+    image_base = 0
     info = idaapi.get_inf_structure()
     if info.is_dll():
-        offset = ida_nalt.get_imagebase()
+        image_base = ida_nalt.get_imagebase()
+    print('image_base is 0x%x' % image_base)
+    fname = idaversion.get_input_file_path()
 
+    orig_image_base = os.getenv('original_image_base')
+    if orig_image_base is not None:
+        offset = image_base - int(orig_image_base,16)
+    else:
+        offset = image_base
+
+    print('offset is 0x%x' % offset)
     for bb in latest_hits_json:
         bb = bb + offset
         f = idaapi.get_func(bb)
         if f is None:
             print('Error getting function for bb 0x%x' % bb)
             return
+            #continue
         f_start = f.start_ea
         if f_start not in graph_dict:
             graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         block = getBB(graph_dict[f_start], bb)
         if block is not None:
+            #print('bb 0x%x' % bb)
             bb_id = block.id
             if bb not in all_hits_json:
                 ''' first time bb has been hit in any data session '''
@@ -124,6 +136,9 @@ def colorBlocks():
     else:
         here = os.getcwd()
         print('here is %s' % here)
+        print('resim_ida_data is %s' % resim_ida_data)
+        ida_analysis_path = os.getenv('ida_analysis_path')
+        print('ida_analysis_path is %s' % ida_analysis_path)
         if here.startswith(resim_ida_data):
             less_ida_data = here[len(resim_ida_data):]
             print('less_ida_data is %s' % less_ida_data)
@@ -131,7 +146,8 @@ def colorBlocks():
             print('root is %s' % root)
             fname = idaversion.get_input_file_path()
             base = os.path.basename(fname)
-            base = base.rsplit('.',1)[0]
+            print('orig base %s' % base)
+            #base = base.rsplit('.',1)[0]
             fname = os.path.join(resim_ida_data, root, base, base)
             latest_hits_file = fname+'.hits' 
                 
