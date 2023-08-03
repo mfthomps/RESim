@@ -197,15 +197,23 @@ class Win7CallParams():
         #SIM_break_simulation('oneCallHap')
 
     def reverseToSyscall(self):
-        ''' Call setReverse breaks after removing all breaks and haps '''
-        self.lgr.debug('win7CallParams reverseToCall')
-        SIM_run_alone(self.rmAllBreaks, self.setReverseBreaks) 
+        debugging_pid, dumb = self.context_manager.getDebugPid()
+        if debugging_pid is None:
+            ''' Call setReverse breaks after removing all breaks and haps '''
+            self.lgr.debug('win7CallParams reverseToCall')
+            SIM_run_alone(self.rmAllBreaks, self.setReverseBreaks) 
+        else:
+            ''' debugging, skip back to entry '''
+            frame, cycle = self.top.getPreviousEnterCycle()
+            resimUtils.skipToTest(self.cpu, cycle, self.lgr)
+            self.lgr.debug('win7Callparams reverseToSyscall was debug, so skipped to cycle 0x%x' % cycle)
+            SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
 
     def setReverseBreaks(self):
         ''' Set a breakpoint on the sysenter, set a stop hap and reverse'''
         if self.do_context_switch:
             self.cpu.current_context = self.resim_context
-        self.lgr.debug('win7CallParams setReverseBreaks on 0x%x' % self.param.sysenter)
+        self.lgr.debug('win7CallParams setReverseBreaks on 0x%x current context %s' % (self.param.sysenter, self.cpu.current_context))
         self.rev_entry_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
         self.rev_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stoppedAtSyscall, None)
         dumb, comm, pid = self.task_utils.curProc()
