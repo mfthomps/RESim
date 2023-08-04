@@ -30,6 +30,7 @@ when the kernel writes to the address.
 from simics import *
 from resimHaps import *
 import memUtils
+import resimUtils
 import net
 class WinDelay():
     def __init__(self, top, cpu, count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr, count=None):
@@ -86,6 +87,9 @@ class WinDelay():
                 self.kbuffer.readReturn(self.return_count)
             self.data_watch.setRange(self.buffer_addr, self.return_count, msg=self.trace_msg, 
                        max_len=self.return_count, recv_addr=self.buffer_addr, fd=self.fd)
+            self.data_watch.setRange(self.count_addr, 4, msg='read count')
+            if self.sock_addr is not None:
+                self.data_watch.setRange(self.sock_addr, 8, msg='source address')
             if self.linger: 
                 self.data_watch.stopWatch() 
                 self.data_watch.watch(break_simulation=False, i_am_alone=True)
@@ -116,7 +120,17 @@ class WinDelay():
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
             max_read = min(return_count, 100)
-            read_data = self.mem_utils.readString(self.cpu, self.buffer_addr, max_read)
+            #read_data = self.mem_utils.readString(self.cpu, self.buffer_addr, max_read)
+
+            byte_array = self.mem_utils.getBytes(self.cpu, return_count, self.buffer_addr)
+            if byte_array is not None:
+                read_data = resimUtils.getHexDump(byte_array[:max_read])
+                # TBD add traceFiles to windows
+                #if self.traceFiles is not None:
+                #    self.traceFiles.read(pid, exit_info.old_fd, byte_array)
+            else:
+                read_data = '<< NOT MAPPED >>'
+
             if self.did_exit:
                 trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, repr(read_data))
                 self.trace_mgr.write(trace_msg)
@@ -127,9 +141,9 @@ class WinDelay():
             if self.call_name == 'RECV_DATAGRAM':
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
                 sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
-                to_string = sock_struct.getString()
-                trace_msg = trace_msg + ' '+to_string 
-                self.lgr.debug('windDelay RECV_DATAGRAM socket addr %s' % to_string)
+                sock_string = sock_struct.getString()
+                trace_msg = trace_msg + ' '+sock_string 
+                self.lgr.debug('windDelay RECV_DATAGRAM socket addr %s' % sock_string)
                 #SIM_break_simulation(trace_msg)
 
             #SIM_break_simulation('WinDelay')
