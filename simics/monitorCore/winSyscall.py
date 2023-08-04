@@ -497,14 +497,14 @@ class WinSyscall():
         frame_string = taskUtils.stringFromFrame(frame)
 
         # variable to determine if we are going to be doing 32 or 64 bit syscall
-        #word_size = 8 # default to 8 for 64 bit unless 
-        #if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
-        #    word_size = 4
-        user_sp = frame['sp']
-        if user_sp > 0xffffffff:
-            word_size = 8
-        else:
+        word_size = 8 # default to 8 for 64 bit unless 
+        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
             word_size = 4
+        #user_sp = frame['sp']
+        #if user_sp > 0xffffffff:
+        #    word_size = 8
+        #else:
+        #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
 
         #self.lgr.debug('syscallParse syscall name: %s pid:%d callname <%s> params: %s' % (self.name, pid, callname, str(syscall_info.call_params)))
@@ -944,10 +944,10 @@ class WinSyscall():
                         trace_msg = trace_msg+' '+to_string
                     elif op_cmd == 'RECV_DATAGRAM':
                         if word_size == 8:
-                            exit_info.sock_struct = self.paramOffPtr(7, [0], frame, word_size) + 0x10
+                            exit_info.sock_struct = self.paramOffPtr(7, [0x18], frame, word_size) 
                         else:
                             exit_info.sock_struct = self.paramOffPtr(7, [0x10], frame, word_size) 
-                            self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_struct)
+                        self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_struct)
                     exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_struct,
                               self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                     self.lgr.debug('doing win_delay.setDataWatch')
