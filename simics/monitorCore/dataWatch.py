@@ -231,6 +231,9 @@ class DataWatch():
         ''' recent record during check move for use in creating a watch mark if a potential obscure memcpy does not pan out '''
         self.move_stuff = None
 
+        ''' Do not start tracking until this string is read '''
+        self.commence_with = None
+
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
@@ -368,6 +371,22 @@ class DataWatch():
         if length == 0:
             self.lgr.error('dataWatch setRange called with length of zero')
             return
+        if self.commence_with is not None:
+            match = True
+            addr = start
+            for c in self.commence_with:
+                v = self.mem_utils.readByte(self.cpu, addr)
+                if c != chr(v):
+                    match = False
+                    self.lgr.debug('dataWatch setRange failed commence. %x does not match %x' % (ord(c), v))
+                    break
+                else:
+                    addr = addr + 1
+            if match:
+                self.commence_with = None
+                self.lgr.debug('dataWatch setRange commence matched.')
+            else:
+                return
 
         if fd is not None:
             self.total_read = self.total_read + length
@@ -2388,7 +2407,7 @@ class DataWatch():
                     #self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
                     break
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
+                #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
                 new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
                 dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
                 #if dest_addr is not None:
@@ -2638,7 +2657,7 @@ class DataWatch():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
-        self.lgr.debug('dataWatch finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
+        #self.lgr.debug('dataWatch finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
         if op_type == Sim_Trans_Load:
             if cpl == 0:
                 #if not self.break_simulation:
@@ -2882,7 +2901,7 @@ class DataWatch():
                     self.frames = st.getFrames(20)
                     if not self.checkFree(self.frames, index):
                         if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, fun):
-                            self.lgr.debug('dataWatch, not memstuff, do finishRead')
+                            #self.lgr.debug('dataWatch, not memstuff, do finishRead')
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
                             if fun is not None and fun not in self.not_mem_something:
                                 self.lgr.debug('DataWatch readHap not memsomething add fun 0x%x to not_mem_something' % fun)
@@ -3864,3 +3883,6 @@ class DataWatch():
 
     def setUserIterators(self, iterators):
         self.fun_mgr.setUserIterators(iterators)
+
+    def commenceWith(self, commence_with):
+        self.commence_with = commence_with

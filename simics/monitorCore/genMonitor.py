@@ -3049,6 +3049,7 @@ class GenMonitor():
                    run_fun, proc, run, kbuffer, call_list)
             return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
+        #call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
@@ -3866,8 +3867,10 @@ class GenMonitor():
             else:
                 SIM_continue(0)
 
-    def trackRecv(self, fd, max_marks=None, kbuf=False):
+    def trackRecv(self, fd, max_marks=None, kbuf=False, commence=None):
         call_list = ['RECV', 'RECV_DATAGRAM']
+        if commence is not None:
+            self.dataWatch[self.target].commenceWith(commence)
         self.trackIO(fd, call_list=call_list, max_marks=max_marks, kbuf=kbuf)
 
     def trackKbuf(self, fd):
@@ -3878,7 +3881,7 @@ class GenMonitor():
         print('Track IO has stopped at a backstop.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
-                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True):
+                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=False):
         self.lgr.debug('trackIO') 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
@@ -3886,6 +3889,8 @@ class GenMonitor():
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
             return
+        if commence is not None:
+            self.dataWatch[self.target].commenceWith(commence)
         self.track_started = True
         self.stopTrackIOAlone(immediate=True, check_crash=False)
         cpu = self.cell_config.cpuFromCell(self.target)
