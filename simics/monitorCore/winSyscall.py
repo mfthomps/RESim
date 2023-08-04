@@ -922,13 +922,14 @@ class WinSyscall():
                 exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
                 # the return count address --> this is where kernel will store count ACTUALLY sent/received
                 if word_size == 4:
-                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                    #  Seems to be same for 32 and 64 bit? 
+                    exit_info.fname_addr = frame['param5'] + 8
                 else:
                     exit_info.fname_addr = frame['param5'] + word_size 
                 #SIM_break_simulation('in send/recv') 
                 value = self.paramOffPtr(7, [0, 0], frame, word_size) 
                 if value is not None:
-                    exit_info.count = self.paramOffPtr(7, [0, 0], frame, word_size) & 0xFFFFFFFF
+                    exit_info.count = value & 0xFFFFFFFF
 
                     trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
                     self.lgr.debug(trace_msg)
