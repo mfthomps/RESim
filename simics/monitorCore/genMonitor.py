@@ -3867,7 +3867,7 @@ class GenMonitor():
                 SIM_continue(0)
 
     def trackRecv(self, fd, max_marks=None, kbuf=False):
-        call_list = ['RECV']
+        call_list = ['RECV', 'RECV_DATAGRAM']
         self.trackIO(fd, call_list=call_list, max_marks=max_marks, kbuf=kbuf)
 
     def trackKbuf(self, fd):
