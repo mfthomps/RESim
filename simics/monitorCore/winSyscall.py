@@ -945,11 +945,11 @@ class WinSyscall():
                         trace_msg = trace_msg+' '+to_string
                     elif op_cmd == 'RECV_DATAGRAM':
                         if word_size == 8:
-                            exit_info.sock_struct = self.paramOffPtr(7, [0x18], frame, word_size) 
+                            exit_info.sock_addr = self.paramOffPtr(7, [0x18], frame, word_size) 
                         else:
-                            exit_info.sock_struct = self.paramOffPtr(7, [0x10], frame, word_size) 
-                        self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_struct)
-                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_struct,
+                            exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
+                        self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_addr)
+                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_addr,
                               self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, exit_info.old_fd, self.lgr)
                     self.lgr.debug('doing win_delay.setDataWatch')
                     if self.watchData(exit_info):

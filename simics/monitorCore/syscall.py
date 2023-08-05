@@ -306,6 +306,7 @@ class ExitInfo():
         self.bytes_to_write = None
         self.trace_msg = None
         self.asynch_handler = None
+        self.sock_addr = None
 
 
 EXTERNAL = 1
