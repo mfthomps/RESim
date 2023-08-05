@@ -61,6 +61,7 @@ class InjectIO():
         self.current_packet = 0
         self.addr = None
         self.addr_addr = None
+        self.addr_size = 4
 
         self.max_len = None
         self.orig_buffer = None
@@ -431,8 +432,11 @@ class InjectIO():
                 self.max_len = so_pickle['size']
                 self.lgr.debug('injectIO load max_len read %d' % self.max_len)
             if 'addr_addr' in so_pickle:
+                # TBD windows should not be using this?
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']
+                if self.addr_size is None:
+                    self.addr_size = 4
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
             if 'addr_of_count' in so_pickle: 
