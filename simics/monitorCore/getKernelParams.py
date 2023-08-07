@@ -40,7 +40,6 @@ import decode
 import os
 
 import w7Params
-import win7CallParams
 import winKParams
 import win7Syscalls
 
@@ -142,7 +141,6 @@ class GetKernelParams():
 
         self.win7_tasks = []
         self.win7_count = 0
-        self.w7_call_params = None
         self.win7_saved_cr3_phys = None
 
     def searchCurrentTaskAddr(self, cur_task):
@@ -1541,11 +1539,6 @@ class GetKernelParams():
                     else:
                         self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
                         return
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, cell_name, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on, only=only)
-
-    def showW7CallParams(self):
-        ''' Show results of getWin7CallParams '''
-        self.w7_call_params.showParams()
 
     def test(self):
         rbx = self.mem_utils.getRegValue(self.cpu, 'rdi')
