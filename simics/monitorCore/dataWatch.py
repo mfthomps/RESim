@@ -46,7 +46,7 @@ import clibFuns
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
-            'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 
+            'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l',
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
@@ -987,7 +987,7 @@ class DataWatch():
                     #self.lgr.debug('returnHap set range for copy')
                     self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
                     self.setBreakRange()
-        elif self.mem_something.fun == 'memcmp':
+        elif self.mem_something.fun in 'memcmp':
             str1 = self.mem_something.dest
             str2 = self.mem_something.src
             buf_start = self.findRange(str1)
@@ -999,7 +999,7 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, str1, str2, self.mem_something.count, buf_start)
             #self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
             #       self.mem_something.dest, self.mem_something.count))
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp','mbscmp_l']: 
             buf_start = self.findRange(self.mem_something.dest)
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
             #self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
@@ -1673,7 +1673,7 @@ class DataWatch():
                     if self.mem_something.count > n:
                         self.mem_something.count = n
                 self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp)
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 'mbscmp_l']: 
             self.mem_something.dest, self.mem_something.src, count_maybe = self.getCallParams(sp)
             if self.cpu.architecture == 'arm':
                 if self.mem_something.fun == 'strncmp':
