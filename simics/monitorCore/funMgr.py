@@ -93,10 +93,10 @@ class FunMgr():
     def funFromAddr(self, addr):
         fun = None
         if addr in self.relocate_funs:
-            self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
             fun = self.relocate_funs[addr]
         elif self.ida_funs is not None:
-            self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+            #self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
             fun = self.ida_funs.getFunName(addr)
         return fun
 
@@ -228,7 +228,7 @@ class FunMgr():
             #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
                 #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
-                call_addr = self.ipRelative(instruct, eip)
+                call_addr = self.indirectCall(instruct, eip)
           
             elif len(parts) == 2:
                 try:
@@ -253,7 +253,7 @@ class FunMgr():
             faddr = None
             parts = instruct[1].split()
             if parts[-1].strip().endswith(']'):
-                faddr = self.ipRelative(instruct, eip)
+                faddr = self.indirectCall(instruct, eip)
             else:
                 try:
                     faddr = int(parts[1], 16)
@@ -282,27 +282,35 @@ class FunMgr():
     def showMangle(self, search = False):
         self.ida_funs.showMangle(search=search)
 
-    def ipRelative(self, instruct, eip):
+    def indirectCall(self, instruct, eip):
             retval = None
             parts = instruct[1].split()
             if parts[-1].strip().endswith(']'):
                 s = parts[-1]
                 content = s.split('[', 1)[1].split(']')[0]
-                #self.lgr.debug('funMgr ipRelative content <%s> eip: 0x%x' % (content, eip))
+                #self.lgr.debug('funMgr indirectCall content <%s> eip: 0x%x' % (content, eip))
                 if content.startswith('rip+'):
                     offset_s = content[4:]
                     offset = None
                     try:
                         offset = int(offset_s, 16)
                     except:
-                        self.lgr.error('funMgr ipRelative did not get offset from %s' % instruct)
+                        self.lgr.error('funMgr indirectCall did not get offset from %s' % instruct)
                         return None
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]
+                else:
+                    addr = None
+                    try:
+                        addr = int(content, 16)
+                    except:
+                        pass
+                    if addr is not None:
+                        retval = self.mem_utils.readAppPtr(self.cpu, addr)
                 #else:
-                #    self.lgr.debug('funMgr ipRelative <%s> does not start with rip+' % content)
+                #    self.lgr.debug('funMgr indirectCall <%s> does not start with rip+' % content)
             #if retval is not None:
-            #    self.lgr.debug('funMgr ipRelative returning 0x%x' % retval)
+            #    self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
             return retval
 
 
