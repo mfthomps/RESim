@@ -331,6 +331,8 @@ class WinDLLMap():
                         self.lgr.debug('winDLL getSOAddr got %s from getFullPath' % full_path)
                         size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
                         section.image_base = image_base
+                        section.text_offset = text_offset
+                        section.size = size
                     if section.image_base is not None:
                         delta = (section.addr - section.image_base) 
                         offset = delta + section.text_offset
@@ -445,6 +447,9 @@ class WinDLLMap():
                         self.lgr.debug('winDLL setIdaFuns got %s from getFullPath' % full_path)
                         size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
                         section.image_base = image_base
+                        section.text_offset = text_offset
+                        section.size = size
+                  
                     else:
                         image_base = section.image_base
                         text_offset = section.text_offset
