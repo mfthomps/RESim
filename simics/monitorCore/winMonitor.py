@@ -201,8 +201,8 @@ class WinMonitor():
         self.lgr.debug('traceWindows')
         return retval
 
-    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list):
-        call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
+    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None):
+        call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc, sub_match=sub_match)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
        

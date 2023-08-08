@@ -689,9 +689,7 @@ class WinSyscall():
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                         break
 
-
-
-
+            exit_info.asynch_handler.setExitInfo(exit_info)
 
 
         elif callname == 'WriteFile':
@@ -993,6 +991,9 @@ class WinSyscall():
                     else:
                         self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
                         exit_info.call_params = call_param
+
+            if exit_info.asynch_handler is not None:
+                exit_info.asynch_handler.setExitInfo(exit_info)
  
         elif callname in ['CreateEvent', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']

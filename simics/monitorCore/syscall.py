@@ -313,10 +313,11 @@ EXTERNAL = 1
 AF_INET = 2
 DEST_PORT = 3
 class CallParams():
-    def __init__(self, name, subcall, match_param, break_simulation=False, proc=None):
+    def __init__(self, name, subcall, match_param, break_simulation=False, proc=None, sub_match=None):
         self.name = name
         self.subcall = subcall
         self.match_param = match_param
+        self.sub_match = sub_match
         self.param_flags = []
         self.break_simulation = break_simulation
         self.proc = proc

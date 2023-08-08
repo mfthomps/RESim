@@ -3039,14 +3039,14 @@ class GenMonitor():
         self.runTo(call, call_params, name='bind', run=run)
 
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, 
-                run_fun=None, proc=None, run=True, kbuf=False, call_list=None):
+                run_fun=None, proc=None, run=True, kbuf=False, call_list=None, sub_match=None):
         if self.isWindows(self.target):
             if kbuf:
                 kbuffer = self.kbuffer[self.target]
             else:
                 kbuffer = None
             self.winMonitor[self.target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, 
-                   run_fun, proc, run, kbuffer, call_list)
+                   run_fun, proc, run, kbuffer, call_list, sub_match=sub_match)
             return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         #call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
@@ -4350,6 +4350,7 @@ class GenMonitor():
         byte_array = self.mem_utils[self.target].readBytes(cpu, addr, size)
         with open(fname, 'wb') as fh:
             fh.write(byte_array)
+        self.lgr.debug('saveMemory wrote %d bytes from 0x%x to file %s' % (size, addr, fname))
 
     def pageInfo(self, addr, quiet=False):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -4649,7 +4650,7 @@ class GenMonitor():
     def aflFD(self, fd, snap_name, count=1):
         self.prepInject(fd, snap_name, count=count)
 
-    def prepInject(self, fd, snap_name, count=1):
+    def prepInject(self, fd, snap_name, count=1, commence=None):
         ''' 
             Prepare a system checkpoint for fuzzing or injection by running until IO on some FD.
             fd -- will runToIOish on that FD and will record the buffer address for use by injectIO or fuzzing.
@@ -4665,7 +4666,7 @@ class GenMonitor():
                 cpu, comm, pid = self.task_utils[self.target].curProc() 
                 self.debugPidGroup(pid)
             print('fd is %d' % fd)
-            prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr) 
+            prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr, commence=commence) 
         else:
             print('Reverse execution must be enabled to run prepInject')
 

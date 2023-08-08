@@ -13,7 +13,7 @@ State information includes instruction address of the syscall and the return add
 along with the address of the read buffer.
 '''
 class PrepInject():
-    def __init__(self, top, cpu, cell_name, fd, snap_name, count, mem_utils, lgr):
+    def __init__(self, top, cpu, cell_name, fd, snap_name, count, mem_utils, lgr, commence=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.fd = fd
@@ -32,6 +32,8 @@ class PrepInject():
         # for windows 
         self.addr_of_count = None
 
+        self.commence = commence
+
 
         ''' NOTHING below here '''
         self.prepInject()
@@ -45,7 +47,7 @@ class PrepInject():
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
         if self.top.isWindows():
-            self.top.runToIO(self.fd, flist_in=flist, count=self.count)
+            self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence)
         else:
             self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 

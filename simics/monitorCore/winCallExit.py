@@ -191,14 +191,14 @@ class WinCallExit():
 
         elif callname == 'ReadFile':
             ''' fname_addr has address of return count'''
-            return_count = None
             if exit_info.fname_addr is None:
                 self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
 
             else:
+                # TBD hack to let prepInject get the exit info
+                self.matching_exit_info = exit_info
                 was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
                 if not was_ready:
-                    return_count = None
                     self.lgr.debug('winCallExit ReadFile: not ready ')
                     trace_msg = trace_msg+' - Device not ready'
 
@@ -310,19 +310,20 @@ class WinCallExit():
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
-                return_count = None
                 not_ready = False
                 if exit_info.fname_addr is None:
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
                 
                 else: 
                     if exit_info.asynch_handler is not None:
+                        self.matching_exit_info = exit_info
                         was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                        ''' Call params satisfied in winDelay'''
+                        exit_info.call_params = None
                         self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
                         if was_ready:
                             not_ready = False
                     if not_ready:
-                        return_count = None #denote it isnt ready to be read
                         trace_msg = trace_msg+' - Device not ready'
                         self.lgr.debug('winCallExit %s' % trace_msg)
                     else:

@@ -72,6 +72,11 @@ class WinDelay():
         else:
             self.return_count = count
 
+        ''' assess call params.  Note exit_info.call_params is the data structure generated as part of the syscall.  Changes made here
+            affect that structure.
+        '''
+        self.exit_info = None
+
     def setDataWatch(self, data_watch, linger):
         self.lgr.debug('winDelay setDataWatch')
         if self.top.tracking():
@@ -97,6 +102,21 @@ class WinDelay():
             self.mode_hap = None
             #if not self.top.isRunning():
             #    SIM_continue(0)
+        else:
+            ''' assume we got here due to call parameters '''
+            my_syscall = self.exit_info.syscall_instance
+            #if not my_syscall.linger: 
+            #    self.stopTrace()
+            if my_syscall is None:
+                self.lgr.error('winCallExit could not get syscall for %s' % self.call_name)
+            else:
+                #if eax != 0:
+                #    new_msg = exit_info.trace_msg + ' ' + trace_msg
+                #    self.context_manager.setIdaMessage(new_msg)
+                self.context_manager.setIdaMessage(self.trace_msg)
+                self.lgr.debug('winCallExit call stopAlone of syscall')
+                SIM_run_alone(my_syscall.stopAlone, self.call_name)
+                self.top.idaMessage() 
 
     def setCountWriteHap(self):
         ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
@@ -142,16 +162,31 @@ class WinDelay():
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
                 sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
                 sock_string = sock_struct.getString()
-                trace_msg = trace_msg + ' '+sock_string 
-                self.lgr.debug('windDelay RECV_DATAGRAM socket addr %s' % sock_string)
+                trace_msg = trace_msg + ' '+sock_string+'\n'
+                self.lgr.debug('winDelay RECV_DATAGRAM socket addr %s' % sock_string)
                 #SIM_break_simulation(trace_msg)
+                if self.exit_info is not None and self.exit_info.call_params is not None and self.exit_info.call_params.sub_match is not None:
+                    self.lgr.debug('winDelay sees a submatch, test it')
+                    byte_index = 0
+                    match = True
+                    for c in self.exit_info.call_params.sub_match:
+                        v = byte_array[byte_index]
+                        if c != chr(v):
+                            match = False
+                            self.lgr.debug('winDelay failed sub_match. %x does not match %x' % (ord(c), v))
+                            break
+                    if match:
+                        self.lgr.debug('winDelay got sub_match.')  
+                        self.exit_info.call_params.sub_match = None
+                    else:
+                        self.exit_info.call_params = None
 
             #SIM_break_simulation('WinDelay')
             # we are in the kernel at some arbitrary place.  run to user space
             self.return_count = return_count
             self.trace_msg = trace_msg
             self.lgr.debug('winDelay writeCountHap trace_msg: %s' % trace_msg)
-            if self.data_watch is not None and self.did_exit:
+            if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
                 SIM_run_alone(self.toUserAlone, None)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
@@ -203,13 +238,14 @@ class WinDelay():
             combined_msg = trace_msg + ' '+self.trace_msg
             self.trace_mgr.write(combined_msg)
             self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % combined_msg)
-            if self.data_watch is not None:
-                self.lgr.debug('winDelay exitingKernel do data watch')
+            if self.data_watch is not None or (self.exit_info is not None and self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation):
+                self.lgr.debug('winDelay exitingKernel do data watch or break simulation due to call params')
                 SIM_run_alone(self.toUserAlone, None)
         else:
             self.lgr.debug('winDelay exitingKernel did not yet see data')
             self.did_exit = True
         return retval
 
-
+    def setExitInfo(self, exit_info):
+        self.exit_info = exit_info
 
