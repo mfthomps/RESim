@@ -64,6 +64,7 @@ class InjectIO():
         self.addr_size = 4
 
         self.max_len = None
+        self.orig_max_len = None
         self.orig_buffer = None
         self.limit_one = limit_one
         self.clear_retrack = False
@@ -262,6 +263,10 @@ class InjectIO():
                 self.lgr.debug('injectIO enabled coverage')
                 self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
+            env_max_len = os.getenv('AFL_MAX_LEN')
+            if env_max_len is not None:
+                self.lgr.debug('injectIO overrode max_len value from pickle with value from environment')
+                self.max_len = int(env_max_len)
             if self.max_len is not None and self.max_len < bytes_wrote:
                 self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
             if not self.stay:
@@ -279,7 +284,8 @@ class InjectIO():
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     if not self.mem_utils.isKernel(self.addr):
-                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                        #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.orig_max_len)
                         if self.addr_of_count is not None:
                             self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
                             self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
@@ -430,6 +436,7 @@ class InjectIO():
                     self.lgr.debug('injectIO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
             if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
+                self.orig_max_len = so_pickle['size']
                 self.lgr.debug('injectIO load max_len read %d' % self.max_len)
             if 'addr_addr' in so_pickle:
                 # TBD windows should not be using this?
