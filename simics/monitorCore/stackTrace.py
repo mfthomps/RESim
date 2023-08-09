@@ -35,6 +35,15 @@ def cppClean(fun):
             fun = fun[len('__cxx11::'):]
     return fun
 
+def isClib(lib_file):
+    retval = False
+    if lib_file is not None:
+        lf = lib_file.lower()
+        if 'libc' in lf or 'kernelbase' in lf or 'ws2_32' in lf:
+            retval = True
+    return retval
+ 
+
 class StackTrace():
     class FrameEntry():
         def __init__(self, ip, fname, instruct, sp, ret_addr=None, fun_addr=None, fun_name=None, lr_return=False, ret_to_addr=None):
@@ -371,7 +380,7 @@ class StackTrace():
             #if not self.soMap.isMainText(eip):
             if True:
                 ''' TBD need to be smarter to avoid bogus frames.  Cannot rely on not being main because such things are called in static-linked programs. '''
-                self.lgr.debug('doX86 is call findReturnFromCall')
+                #self.lgr.debug('doX86 is call findReturnFromCall')
                 delta = bp - esp
                 num_bytes = min(0x22, delta)
                 quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=num_bytes, eip=eip)
@@ -387,14 +396,17 @@ class StackTrace():
             pushed_bp = self.readAppPtr(bp)
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
-            self.frames[0].ret_addr = ret_to
+            if not self.soMap.isCode(ret_to, self.pid):
+                self.frames[0].ret_addr = None
+            else:
+                self.frames[0].ret_addr = ret_to
             self.frames[0].ret_to_addr = ret_to_addr
             self.frames[0].fun_addr = cur_fun
             self.frames[0].fun_name = cur_fun_name
-            #if cur_fun is not None and ret_to is not None:
-            #    self.lgr.debug('doX86, set frame 0 ret_to_addr 0x%x  ret_addr 0x%x  fun_addr 0x%x' % (ret_to_addr, ret_to, cur_fun))
-            #else:
-            #    self.lgr.debug('doX86, set frame 0 ret_to or cur_fun is None')
+            if cur_fun is not None and ret_to is not None:
+                self.lgr.debug('doX86, set frame 0 ret_to_addr 0x%x  ret_addr 0x%x  fun_addr 0x%x' % (ret_to_addr, ret_to, cur_fun))
+            else:
+                self.lgr.debug('doX86, set frame 0 ret_to or cur_fun is None')
         
         #self.lgr.debug('doX86 enter loop. bp is 0x%x' % bp)
         ''' attempt to weed out bogus stack frames '''
@@ -404,12 +416,15 @@ class StackTrace():
                 break
             pushed_bp = self.readAppPtr(bp)
             if pushed_bp == bp:
-                self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
+                #self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
                 break
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
             if ret_to is None:
-                self.lgr.debug('stackTrace doX86 ret_to None, bail')
+                #self.lgr.debug('stackTrace doX86 ret_to None, bail')
+                break
+            if not self.soMap.isCode(ret_to, self.pid):
+                #self.lgr.debug('stackTrace doX86 ret_to 0x%x is not code, bail' % ret_to)
                 break
             ws = self.mem_utils.wordSize(self.cpu)
             #self.lgr.debug('stackTrace doX86 pushed_bp was 0x%x ret_to is 0x%x, ret_to_addr was 0x%x bp was 0x%x ws %d' % (pushed_bp, ret_to, ret_to_addr, bp, ws))
@@ -466,7 +481,7 @@ class StackTrace():
                 self.lgr.debug('stackTrace x86, no call_instr from ret_to 0x%x' % ret_to)
                 break
         return bp
-    
+   
     def findReturnFromCall(self, ptr, cur_fun, max_bytes=None, eip=None):        
         ''' See if an x86 return instruction is within a few bytes of the SP.  Handles clib cases where ebp is not pushed. 
             Likely more complicated then it needs to be.  Many special cases.'''
@@ -485,7 +500,7 @@ class StackTrace():
         if eip is not None:
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
             lib_file = self.top.getSO(eip)
-            if lib_file is not None and 'libc' in lib_file.lower():
+            if isClib(lib_file):
                 cur_is_clib = True
             #self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
         retval = None
@@ -725,10 +740,10 @@ class StackTrace():
             bp = self.doX86()
             if bp == 0 and len(self.frames)>1:
                 ''' walked full stack '''
-                self.lgr.debug('doTrace starting doX86 got it, we are done')
+                #self.lgr.debug('doTrace starting doX86 got it, we are done')
                 done = True
             else:
-                self.lgr.debug('stackTrace doTrace after doX86 bp 0x%x num frames %s' % (bp, len(self.frames)))
+                #self.lgr.debug('stackTrace doTrace after doX86 bp 0x%x num frames %s' % (bp, len(self.frames)))
                 if len(self.frames) > 5:
                     ''' TBD revisit this wag '''
                     done = True
