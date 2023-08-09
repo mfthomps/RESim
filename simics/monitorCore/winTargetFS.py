@@ -39,8 +39,8 @@ class TargetFS():
         retval = None
         self.lgr = lgr
         path = path.replace('\\', '/')
-        if lgr is not None:
-             lgr.debug('getFull windows, new path is %s' % path)
+        #if lgr is not None:
+        #     lgr.debug('getFull windows, new path is %s' % path)
         if path in self.cache:
             return self.cache[path]   
         elif path.startswith('./'):
@@ -55,21 +55,21 @@ class TargetFS():
              #    retval = self.find(base)
              retval = self.find(base)
         else:     
-            if lgr is not None:
-                lgr.debug('getFull look at %s' % path) 
+            #if lgr is not None:
+            #    lgr.debug('getFull look at %s' % path) 
             if path.startswith('/??/C:/'):
                 path = path[7:]
-                if lgr is not None:
-                    lgr.debug('TargetFS getFull not relative changed to %s' % path) 
+                #if lgr is not None:
+                #    lgr.debug('TargetFS getFull not relative changed to %s' % path) 
             elif path.startswith('/'):
                 path = path[1:]
             full = os.path.join(self.root_prefix, path)
-            self.lgr.debug('winTargetFS root_prefix %s path %s full %s' % (self.root_prefix, path, full))
+            #self.lgr.debug('winTargetFS root_prefix %s path %s full %s' % (self.root_prefix, path, full))
             full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, lgr)
-            self.lgr.debug('full_insenstive is %s' % full_insensitive)
+            #self.lgr.debug('full_insenstive is %s' % full_insensitive)
             if full_insensitive is None or not os.path.isfile(full_insensitive):
-                if lgr is not None:
-                    lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
+                #if lgr is not None:
+                #    lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
                 pattern = path
                 if self.root_subdirs is None or len(self.root_subdirs) == 0:
                     #self.lgr.debug('pattern %s' % pattern)
@@ -90,8 +90,8 @@ class TargetFS():
                         if len(flist) > 0:
                             retval = os.path.join(subpath, flist[0])
                             break 
-                for f in flist:
-                    self.lgr.debug('targetFS getFull got %s' % f)
+                #for f in flist:
+                #    self.lgr.debug('targetFS getFull got %s' % f)
             else:
                 retval = full_insensitive
         if retval is not None:
