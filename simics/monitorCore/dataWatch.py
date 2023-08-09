@@ -36,6 +36,7 @@ import watchMarks
 import backStop
 import resimUtils
 import readLibTrack
+import stackTrace
 import net
 import os
 import sys
@@ -298,6 +299,13 @@ class DataWatch():
                     retval = True
         return retval
 
+    def setStackBufHaps(self):
+        for ret_to in self.stack_buffers:
+            if ret_to not in self.stack_buf_hap:
+                self.lgr.debug('dataWatch setStackBufHaps add hap for eip 0x%x' % ret_to)
+                proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
+                self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+
     def setStackThisHaps(self):
         for ret_to in self.stack_this:
             if ret_to not in self.stack_this_hap:
@@ -321,7 +329,7 @@ class DataWatch():
                 return
             if ret_to not in self.stack_this:
                 self.stack_this[ret_to] = []
-                #self.lgr.debug('DataWatch manageStackBuf stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
+                #self.lgr.debug('DataWatch manageStackThis stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
                 if ret_to not in self.stack_this_hap:
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
                     self.stack_this_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackThisHap, None, proc_break, 'stack_this_hap')
@@ -339,11 +347,11 @@ class DataWatch():
     def manageStackBuf(self, index_list, ret_to):
         if ret_to is not None:
             eip = self.top.getEIP(self.cpu)
-            #self.lgr.debug('manageStackBuf ret_to 0x%x, eip 0x%x' % (ret_to, eip))
+            self.lgr.debug('manageStackBuf ret_to 0x%x, eip 0x%x' % (ret_to, eip))
             if eip == ret_to:
                 #self.lgr.error('manageStackBuf, eh????')
                 return
-            #self.lgr.debug('DataWatch manageStackBuf stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
+            self.lgr.debug('DataWatch manageStackBuf stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
             if ret_to not in self.stack_buffers:
                 self.stack_buffers[ret_to] = []
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
@@ -354,10 +362,10 @@ class DataWatch():
                 pass
             for index in index_list:
                 self.stack_buffers[ret_to].append(index)
-            #self.lgr.debug('added index %d to stack_buffers[0x%x]' % (index, ret_to))
+                self.lgr.debug('added index %d to stack_buffers[0x%x]' % (index, ret_to))
         else:
             pass
-            #self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
+            self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, 
                  watch_mark=None, fd=None, is_lib=False, no_extend=False):
@@ -464,11 +472,12 @@ class DataWatch():
             self.mark.append(watch_mark)
             if (self.isCopyMark(watch_mark) and watch_mark.mark.sp) or (msg == 'fun result' and self.watchMarks.isStackBuf(start)):
                 ''' TBD awkward method for deciding to watch function results going to memory'''
-                #self.lgr.debug('dataWatch setRange is stack buffer start 0x%x' % start)
                 #ret_to = self.getReturnAddr(watch_mark.mark)
                 index = len(self.start)-1
                 ret_to = self.getReturnAddr()
-                self.manageStackBuf([index], ret_to)
+                if ret_to is not None:
+                    self.lgr.debug('dataWatch setRange is stack buffer start 0x%x, ret_to 0x%x index %d' % (start, ret_to, index))
+                    self.manageStackBuf([index], ret_to)
 
             #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
         if msg is not None:
@@ -552,7 +561,7 @@ class DataWatch():
             next stack frame 
         '''
         eip = memory.logical_address
-        #self.lgr.debug('stackBufHap eip 0x%x' % eip)
+        self.lgr.debug('stackBufHap eip 0x%x' % eip)
         if eip in self.stack_buf_hap:
             self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
             self.lgr.debug('stackBufHap deleted stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
@@ -562,7 +571,7 @@ class DataWatch():
             op2, op1 = self.decode.getOperands(instruct[1])
             new_sp = self.adjustSP(sp, instruct, op1, op2)
             if new_sp is not None:
-                #self.lgr.debug('dataWatch stackBufHap adjusted sp to 0x%x' % new_sp)
+                self.lgr.debug('dataWatch stackBufHap adjusted sp to 0x%x' % new_sp)
                 sp = new_sp
 
             ret_to = self.getReturnAddr()
@@ -570,11 +579,11 @@ class DataWatch():
             for range_index in self.stack_buffers[eip]:
                if range_index < len(self.read_hap):
                    if self.start[range_index] is None:
-                        #self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
+                        self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
                         continue
   
                    if self.start[range_index] < sp:
-                        #self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
+                        self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
                         hap = self.read_hap[range_index]
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[range_index] = None
@@ -583,15 +592,15 @@ class DataWatch():
                         if ret_to is not None:
                             ''' avoid trying to return from text to some library '''
                             if self.top.isMainText(eip) and not self.top.isMainText(ret_to):
-                                #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, but would be return to lib from main, skip it).' % (self.start[range_index], sp))
+                                self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, but would be return to lib from main, skip it).' % (self.start[range_index], sp))
                                 pass
                             else:
-                                #self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
+                                self.lgr.debug('dataWatch stackBufHap, start 0x%x not less than sp 0x%x, set break on next frame.' % (self.start[range_index], sp))
                                 replace_index.append(range_index)
                else:
                    self.lgr.debug('dataWatch stackBufHap range_index %d out of range of read_hap whose len is %d?' % (range_index, len(self.read_hap)))
                    self.lgr.debug('read_hap has %s' % str(self.read_hap))
-            self.lgr.debug('stackBufHap remove stack buf hap entry for 0x%x' % eip)
+            self.lgr.debug('stackBufHap remove stack buf hap entry for 0x%x len of buffers for that will now be %d' % (eip, len(replace_index)))
             del self.stack_buf_hap[eip] 
             del self.stack_buffers[eip] 
             if len(replace_index) > 0:
@@ -604,15 +613,19 @@ class DataWatch():
 
     def getReturnAddr(self):
         retval = None
-        self.lgr.debug('dataWatch getReturnAddr')
-        st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
+        #self.lgr.debug('dataWatch getReturnAddr')
+        st = self.top.getStackTraceQuiet(max_frames=4, max_bytes=1000)
         if st is None:
-            self.lgr.debug('getStackBase stack trace is None, wrong pid?')
+            self.lgr.debug('dataWatch getReturnAddr stack trace is None, wrong pid?')
             return None
-        frames = st.getFrames(2)
+        frames = st.getFrames(4)
+        #self.lgr.debug('dataWatch getReturnAddr %d frames' % len(frames))
         for frame in frames:
+            if stackTrace.isClib(frame.fname):
+                #self.lgr.debug('dataWatch getReturnFromCall stack frame is clib, skip')
+                continue
             if frame.ret_addr is not None:
-                self.lgr.debug('dataWatch getReturnAddr got 0x%x' % frame.ret_addr)
+                #self.lgr.debug('dataWatch getReturnAddr got 0x%x' % frame.ret_addr)
                 retval = frame.ret_addr
                 break
         if retval is None:
@@ -676,6 +689,7 @@ class DataWatch():
         for re_watch in self.re_watch_list:
             re_watch.setMapBreakRange()
 
+        self.setStackBufHaps()
         self.setStackThisHaps()
 
         return retval
@@ -754,7 +768,9 @@ class DataWatch():
 
         for eip in self.stack_buf_hap:
             self.lgr.debug('DataWatch stopWatch remove stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
-            self.context_manager.genDeleteHap(self.stack_buf_hap[eip], immediate=immediate)
+            hap = self.stack_buf_hap[eip]
+            self.context_manager.genDeleteHap(hap, immediate=immediate)
+        self.stack_buf_hap = {}
 
         self.stopStackThisHaps(immediate=immediate)
         #if self.finish_check_move_hap is not None:
@@ -2207,8 +2223,8 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch finishCheckMove rewrote 0x%x using %s' % (dest_addr, self.move_stuff.function))
         else:
-            self.lgr.debug('dataWatch finishCheckMove, not ad_hoc addr 0x%x  start 0x%x ad_hoc %r ip: 0x%x' % (self.move_stuff.addr, self.move_stuff.start, ad_hoc, 
-                 self.move_stuff.ip))
+            #self.lgr.debug('dataWatch finishCheckMove, not ad_hoc addr 0x%x  start 0x%x ad_hoc %r ip: 0x%x' % (self.move_stuff.addr, self.move_stuff.start, ad_hoc, 
+            #     self.move_stuff.ip))
             if self.cpu.cycles != self.prev_cycle:
                 self.lgr.debug('dataWatch checkMove found nothing, use prev cycle 0x%x for recording' % self.prev_cycle)
                 self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.getCmp(), self.move_stuff.trans_size, ip=self.move_stuff.ip,
@@ -3229,17 +3245,17 @@ class DataWatch():
     def clearWatches(self, cycle=None):
         self.lgr.debug('dataWatch clearWatches')
         if cycle is None:
-            self.lgr.debug('DataWatch clear Watches, no cycle given')
+            self.lgr.debug('DataWatch clearWatches, no cycle given')
             self.prev_cycle = None
         else:
-            self.lgr.debug('DataWatch clear Watches cycle 0x%x' % cycle)
+            self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
         self.stopWatch()
         self.break_simulation = True
         self.stack_buffers = {}
         self.total_read = 0
         self.last_ad_hoc = 0
         for eip in self.stack_buf_hap:
-            self.lgr.debug('DataWatch remove stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
+            self.lgr.debug('DataWatch clearWatches remove stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
             self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
         self.stack_buf_hap = {}
         if cycle is None:
