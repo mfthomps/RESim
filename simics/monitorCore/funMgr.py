@@ -228,7 +228,7 @@ class FunMgr():
             #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
                 #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
-                call_addr = self.indirectCall(instruct, eip)
+                call_addr, fun = self.indirectCall(instruct, eip)
           
             elif len(parts) == 2:
                 try:
@@ -236,8 +236,8 @@ class FunMgr():
                 except ValueError:
                     #self.lgr.debug('getFunName, %s not a hex' % parts[1])
                     pass
-            if call_addr is not None:
-                fun = str(self.funFromAddr(call_addr))
+                if call_addr is not None:
+                    fun = str(self.funFromAddr(call_addr))
                 #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
@@ -248,25 +248,26 @@ class FunMgr():
     def resolveCall(self, instruct, eip):      
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
+        fun_name = None
         #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
             if parts[-1].strip().endswith(']'):
-                faddr = self.indirectCall(instruct, eip)
+                faddr, fun_name = self.indirectCall(instruct, eip)
             else:
                 try:
                     faddr = int(parts[1], 16)
                     #print('faddr 0x%x' % faddr)
                 except ValueError:
                     pass
-            if faddr is not None:
-                fun_name = self.funFromAddr(faddr)
-                if fun_name is not None:
-                    if fun_name.startswith('.') or fun_name.startswith('_'):
-                        fun_name = fun_name[1:]
-                    retval = '%s %s' % (self.callmn, fun_name)
-                    #self.lgr.debug('resolveCall got %s' % retval)
+                if faddr is not None:
+                    fun_name = self.funFromAddr(faddr)
+            if fun_name is not None:
+                if fun_name.startswith('.') or fun_name.startswith('_'):
+                    fun_name = fun_name[1:]
+                retval = '%s %s' % (self.callmn, fun_name)
+                #self.lgr.debug('resolveCall got %s' % retval)
         return retval
    
     def isRelocate(self, addr):
@@ -284,6 +285,7 @@ class FunMgr():
 
     def indirectCall(self, instruct, eip):
             retval = None
+            fun_name = None
             parts = instruct[1].split()
             if parts[-1].strip().endswith(']'):
                 s = parts[-1]
@@ -299,6 +301,7 @@ class FunMgr():
                         return None
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]
+                    fun_name = self.funFromAddr(retval)
                 else:
                     addr = None
                     try:
@@ -306,12 +309,17 @@ class FunMgr():
                     except:
                         pass
                     if addr is not None:
-                        retval = self.mem_utils.readAppPtr(self.cpu, addr)
+                        fun_name = self.funFromAddr(addr)
+                        if fun_name is None:
+                            retval = self.mem_utils.readAppPtr(self.cpu, addr)
+                            fun_name = self.funFromAddr(retval)
+                        else: 
+                            retval = addr
                 #else:
                 #    self.lgr.debug('funMgr indirectCall <%s> does not start with rip+' % content)
             #if retval is not None:
             #    self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
-            return retval
+            return retval, fun_name
 
 
     def soChecked(self, addr):
