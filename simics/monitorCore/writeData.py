@@ -99,7 +99,7 @@ class WriteData():
         self.loadPickle(snapshot_name)
 
         if self.call_ip is not None:
-            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len (before adjust) %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
                  self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
         else:
             self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
@@ -110,9 +110,9 @@ class WriteData():
         self.dataWatch = dataWatch
         env_max_len = os.getenv('AFL_MAX_LEN')
         if env_max_len is not None:
-            if self.max_len is None or self.max_len > int(env_max_len):
-                self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
-                self.max_len = int(env_max_len)
+            #if self.max_len is None or self.max_len > int(env_max_len):
+            self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
+            self.max_len = int(env_max_len)
 
         stop_on_close_env = os.getenv('AFL_STOP_ON_CLOSE')
         self.stop_on_close = False
@@ -224,6 +224,7 @@ class WriteData():
             ''' not done, no control over size. prep must use maximum buffer'''
             if len(self.in_data) > self.max_len:
                 self.in_data = self.in_data[:self.max_len]
+                self.lgr.debug('writeData  write truncated in data to %d bytes' % self.max_len)
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
                 if len(result) > self.max_len:
