@@ -39,11 +39,14 @@ class DLLInfo():
 
     def addSectionHandle(self, section_handle):
         self.section_handle = section_handle
+
     def addLoadAddress(self, addr, size):
         self.addr = addr 
         self.size = size 
+
     def addMachine(self, machine):
         self.machine = machine
+
     def addImageBase(self, image_base):
         self.image_base = image_base
 
@@ -58,11 +61,12 @@ class DLLInfo():
 
 
 class WinDLLMap():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, run_from_snap, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
         self.task_utils = task_utils
         self.mem_utils = mem_utils
+        self.context_manager = context_manager
         self.lgr = lgr
         self.top = top
         self.open_files = {}
@@ -196,6 +200,9 @@ class WinDLLMap():
                 if self.isNew(self.sections[pid][section_handle]):
                     section_copy = DLLInfo.copy(self.sections[pid][section_handle])
                     self.section_list.append(section_copy)
+                    debugging_pid, dumb = self.context_manager.getDebugPid()
+                    if debugging_pid is not None:
+                        self.addSectionFunction(section_copy, section_copy.addr)
                     if pid not in self.text and len(self.pending_procs)>0:
                         self.lgr.debug('winDLL mapSection pid %d not in text' % pid)
                         cpu, comm, pid = self.task_utils.curProc() 
@@ -439,29 +446,32 @@ class WinDLLMap():
             if section.fname != 'unknown':
                 #fpath = section.fname
                 #full_path = self.top.getFullPath(fpath)
-                fun_path = self.getAnalysisPath(section.fname)
-                if fun_path is not None:
-                    self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
-                    if section.image_base is None:
-                        full_path = self.top.getFullPath(fname=section.fname)
-                        self.lgr.debug('winDLL setIdaFuns got %s from getFullPath' % full_path)
-                        size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
-                        section.image_base = image_base
-                        section.text_offset = text_offset
-                        section.size = size
-                  
-                    else:
-                        image_base = section.image_base
-                        text_offset = section.text_offset
-                    if text_offset is not None:
-                        delta = (locate - image_base) 
-                        offset = delta + text_offset
-                        self.lgr.debug('winDLL setIdaFuns xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x ' % (offset, locate, text_offset, image_base, delta))
-                    else:
-                        self.lgr.debug('winDLL setIdaFuns offset 0x%x locate: 0x%x text_offset is None ' % (offset, locate))
-                        offset = 0
-                        text_offset = 0
-                    self.fun_mgr.add(fun_path, locate, offset=offset, text_offset=text_offset)
+                self.addSectionFunction(section, locate)
+
+    def addSectionFunction(self, section, locate):
+        fun_path = self.getAnalysisPath(section.fname)
+        if fun_path is not None:
+            self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
+            if section.image_base is None:
+                full_path = self.top.getFullPath(fname=section.fname)
+                self.lgr.debug('winDLL setIdaFuns got %s from getFullPath' % full_path)
+                size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
+                section.image_base = image_base
+                section.text_offset = text_offset
+                section.size = size
+          
+            else:
+                image_base = section.image_base
+                text_offset = section.text_offset
+            if text_offset is not None:
+                delta = (locate - image_base) 
+                offset = delta + text_offset
+                self.lgr.debug('winDLL addSectionFunction xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x ' % (offset, locate, text_offset, image_base, delta))
+            else:
+                self.lgr.debug('winDLL addSectionFunction offset 0x%x locate: 0x%x text_offset is None ' % (offset, locate))
+                offset = 0
+                text_offset = 0
+            self.fun_mgr.add(fun_path, locate, offset=offset, text_offset=text_offset)
 
     def getSO(self, pid=None, quiet=False):
         self.lgr.debug('winDLL getSO pid %s ' % pid)
