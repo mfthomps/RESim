@@ -690,7 +690,8 @@ class GenMonitor():
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
             if self.isWindows():
-                self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.run_from_snap, self.lgr)
+                self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
+                          self.context_manager[cell_name], self.run_from_snap, self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             ''' ugly circular dependency'''
@@ -1733,9 +1734,9 @@ class GenMonitor():
             self.lgr.debug('genMonitor goToOrigin, no bookmarks do nothing')
             return
         if debugging:
-            self.removeDebugBreaks()
+            self.removeDebugBreaks(immediate=True)
             self.lgr.debug('goToOrigin am debugging, call stopTrackIO')
-            self.stopTrackIO()
+            self.stopTrackIO(immediate=True)
         cpu, comm, pid  = self.task_utils[self.target].curProc()
         #self.lgr.debug('goToOrigin pid was is %d' % pid)
         msg = self.bookmarks.goToOrigin()
@@ -2220,7 +2221,7 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, pid=None, subcall=None, run=True):
+    def runToCall(self, callname, pid=None, subcall=None, run=True, stop_on_call=True):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2249,7 +2250,7 @@ class GenMonitor():
             call_params = [no_param]
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
-        self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=True)
+        self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call)
         if run: 
             SIM_continue(0)
 
@@ -5557,6 +5558,9 @@ class GenMonitor():
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         retval = self.soMap[self.target].wordSize(pid)
         return retval
+
+    def runToWriteNotZero(self, addr):
+        self.run_to[self.target].runToWriteNotZero(addr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
