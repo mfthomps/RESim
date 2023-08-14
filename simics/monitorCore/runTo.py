@@ -40,6 +40,7 @@ class RunTo():
         self.cur_task_hap = None
         self.cur_task_break = None
         self.debug_group = False
+        self.write_hap = None
 
     def delStopHap(self, dumb):
         if self.stop_hap is not None:
@@ -171,7 +172,6 @@ class RunTo():
         if len(self.hap_list) > 0:
             if self.task_utils.matchPidThread(pid_and_thread):
                 self.lgr.debug('runTo skipHap pid %s current_context %s' % (pid_and_thread, str(self.cpu.current_context)))
-                value = memory.logical_address
                 ''' remove haps and then set the breaks on all DLLs except the skip list '''
                 SIM_run_alone(self.rmHaps, self.setSkipBreaks) 
 
@@ -390,3 +390,22 @@ class RunTo():
                 #self.lgr.debug('runTo runTo32 skip to 0x%x' % next_cycle)
                 resimUtils.skipToTest(self.cpu, next_cycle, self.lgr)
                 
+
+    def runToWriteNotZero(self, addr):
+       cpu, comm, cur_pid = self.task_utils.curProc() 
+       proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+       self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, cur_pid, proc_break, 'runToWrite')
+       self.lgr.debug('runTo runToWriteNotZero set break on 0x%x' % addr)
+
+    def writeHap(self, pid, third, forth, memory):
+        if self.write_hap is not None:
+            cpu, comm, cur_pid = self.task_utils.curProc() 
+            if pid == cur_pid: 
+                value = SIM_get_mem_op_value_le(memory)
+                self.lgr.debug('runTo writeHap saw write, value 0x%x' % value)
+                if value != 0:
+                    SIM_break_simulation('writeHap')
+                    hap = self.write_hap
+                    SIM_run_alone(self.context_manager.genDeleteHap, hap)
+                    self.lgr.debug('runTo writeHap did break simulation')
+                    self.write_hap = None
