@@ -179,7 +179,7 @@ class FunMgr():
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
 
     def setRelocateFuns(self, full_path, offset=0):
-        self.lgr.debug('funMgr setRelocateFuns offset is 0x%x' % offset) 
+        self.lgr.debug('funMgr setRelocateFuns %s offset is 0x%x' % (full_path, offset))
         relocate_path = full_path+'.imports'
         if os.path.isfile(relocate_path):
             with open(relocate_path) as fh:
