@@ -3882,7 +3882,7 @@ class GenMonitor():
         print('Track IO has stopped at a backstop.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
-                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=False):
+                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None):
         self.lgr.debug('trackIO') 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
