@@ -407,7 +407,7 @@ If nth is greater than 1, will run until the nth recv call.
 
 \item {\tt runToOpen(file)} -- Stops at the open of a given filename.
 
-\item {\tt runToWrite(substring)} -- Stops when a process writes the given substring.
+\item {\tt runToWrite(substring)} -- Stops when a process writes the given substring via a system call.
 
 \item {\tt clone(nth)} – Continue execution until the nth clone system call in the current process occurs, and then halt execution within the child.
 
@@ -457,6 +457,9 @@ Useful if you are in some library called by some other library, and you want to 
 \item {\tt doBreak} Sets a breakpoint on a given address.  This command can be useful when wishing to break while running other commands.  For example,
 using {\tt doBreak} prior to running {\tt injectIO} may be more reliable than simply setting a Simics break and it will clean up other breaks and haps that 
 might interfere with your subsequent analysis.
+
+\item {\tt runToWriteNotZero(addr)} – Run forward until a non-zero value is written to the given memory address.
+
 
 \end{itemize}
 
