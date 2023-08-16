@@ -68,7 +68,7 @@ class RunTo():
         if len(self.hap_list) > 0:
             self.lgr.debug('runTo rmHaps')
             for hap in self.hap_list:
-                self.context_manager.genDeleteHap(hap)
+                self.context_manager.genDeleteHap(hap, immediate=True)
             del self.hap_list[:]
             if and_then is not None:
                 and_then()
