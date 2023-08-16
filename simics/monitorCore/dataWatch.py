@@ -668,6 +668,8 @@ class DataWatch():
             self.destroy_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.destroyEntry, None, proc_break, 'destroy_entry') 
 
     def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False, no_backstop=False):
+        if self.disabled:
+            return
         ''' set the data watches, e.g., after a reverse execution is complete.'''
         #self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
         #   len(self.start), len(self.read_hap)))
@@ -729,6 +731,8 @@ class DataWatch():
                
     def stopWatch(self, break_simulation=None, immediate=False, leave_fun_entries=False): 
         ''' stop data watches, e.g., in prep for reverse execution or to run free from a memsomething call to its return'''
+        if self.disabled:
+            return
         self.lgr.debug('dataWatch stopWatch immediate: %r len of start is %d len of read_hap: %d' % (immediate, len(self.start), len(self.read_hap)))
         for index in range(len(self.start)):
             if self.start[index] is None:
