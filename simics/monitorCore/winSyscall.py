@@ -175,6 +175,15 @@ class WinSyscall():
 
         self.ioctl_op_map = winSocket.getOpMap()
 
+        self.word_size_cache = {}
+        self.default_app_word_size = 8
+        env_word_size = os.getenv('DEFAULT_APP_WORD_SIZE')
+        if env_word_size is not None:
+            self.default_app_word_size = int(env_word_size)
+            self.lgr.debug('winSyscall using default application word size from env: %d' % self.default_app_word_size)
+        else:
+            self.lgr.debug('winSyscall using default application word size of 8')
+
     def breakOnProg(self):
         for call in self.call_params:
             if call is not None and call.subcall == 'CreateUserProcess' and call.break_simulation:
@@ -334,7 +343,7 @@ class WinSyscall():
         if callnum == 0 and self.mem_utils.WORD_SIZE==4:
             self.lgr.debug('syscallHap callnum is zero')
             return
-        value = memory.logical_address
+        #value = memory.logical_address
         #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s name: %s cycle: 0x%x' % (self.cell_name, str(context), 
         #     pid, comm, break_eip, value, callnum, str(syscall_info.callnum), self.name, self.cpu.cycles))
            
@@ -425,7 +434,7 @@ class WinSyscall():
         ''' Set exit breaks '''
         #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x  EIP: 0x%x' % (pid, comm, callnum, break_eip))
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
-        frame_string = taskUtils.stringFromFrame(frame)
+        #frame_string = taskUtils.stringFromFrame(frame)
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
 
 
@@ -449,7 +458,8 @@ class WinSyscall():
                                             cp = syscall.CallParams('stop_on_call', None, None, break_simulation=True)
                                             exit_info.call_params = cp
                                     #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
-                                    if self.dataWatch is not None:
+
+                                    if self.dataWatch is not None and not self.dataWatch.disabled:
                                         self.lgr.debug('winSyscall calling dataWatch to stop watch to ignore kernel fiddle with data')
                                         self.dataWatch.stopWatch()
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, pid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
@@ -497,9 +507,14 @@ class WinSyscall():
         frame_string = taskUtils.stringFromFrame(frame)
 
         # variable to determine if we are going to be doing 32 or 64 bit syscall
-        word_size = 8 # default to 8 for 64 bit unless 
-        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
-            word_size = 4
+        if pid in self.word_size_cache:
+            word_size = self.word_size_cache[pid]
+        else: 
+            word_size = self.default_app_word_size
+            if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+                word_size = 4
+            self.word_size_cache[pid] = word_size
+        exit_info.word_size = word_size
         #user_sp = frame['sp']
         #if user_sp > 0xffffffff:
         #    word_size = 8
@@ -581,7 +596,9 @@ class WinSyscall():
         elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey', 'EnumerateValueKey']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
-
+            # TBD remove this
+            #if callname == 'MapViewOfSection':
+            #    return None
             if callname in ['QueryValueKey', 'EnumerateValueKey']:
                 info_class = frame['param3']
                 iclass = 'Unknown'
@@ -695,10 +712,12 @@ class WinSyscall():
         elif callname == 'WriteFile':
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(1, frame)
-            count = self.stackParam(3, frame) & 0x00000000FFFFFFFF
-            buffer_addr = self.stackParam(2, frame)
-            write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
-            trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, repr(write_string))
+            val = self.stackParam(3, frame) 
+            if val is not None:
+                count = val & 0x00000000FFFFFFFF
+                buffer_addr = self.stackParam(2, frame)
+                write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
+                trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, repr(write_string))
 
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
@@ -962,7 +981,7 @@ class WinSyscall():
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
-            self.lgr.debug('winSyscall socket check call params')
+            #self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
                 self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name))
                 if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
@@ -1122,6 +1141,8 @@ class WinSyscall():
             trace_msg = trace_msg+' who: 0x%x' % (who)
             if who == 0xffffffffffffffff:
                 trace_msg = trace_msg+' (this process)'
+            if pid in self.word_size_cache:
+                del self.word_size_cache[pid]
 
         elif callname == 'DuplicateObject':
             exit_info.old_fd = frame['param2']
@@ -1698,7 +1719,7 @@ class WinSyscall():
     def genericCallParams(self, syscall_info, exit_info, callname):
         retval = exit_info
         for call_param in syscall_info.call_params:
-            self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
+            #self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  retval = None
                  mod = call_param.match_param

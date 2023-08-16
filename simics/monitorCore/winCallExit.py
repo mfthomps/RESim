@@ -95,7 +95,7 @@ class WinCallExit():
             #self.lgr.debug('winCallExit cell %s pid is zero' % (self.cell_name))
             return False
 
-        if self.dataWatch is not None:
+        if self.dataWatch is not None and not self.dataWatch.disabled:
             self.lgr.debug('winCallExit handleExit restore data watch')
             self.dataWatch.watch()
 
@@ -127,15 +127,7 @@ class WinCallExit():
             eax = 0
         
         # variable to determine if we are going to be doing 32 or 64 bit syscall
-        word_size = 8 # default to 8 for 64 bit unless 
-        if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
-            word_size = 4
-
-        #user_sp = exit_info.frame['sp']
-        #if user_sp > 0xffffffff:
-        #    word_size = 8
-        #else:
-        #    word_size = 4
+        word_size = exit_info.word_size
 
         if eax != 0:
             if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
@@ -333,7 +325,8 @@ class WinCallExit():
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
 
             else:
-                output_data = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, exit_info.count)
+                max_count = min(exit_info.count, 100)
+                output_data = self.mem_utils.readBytes(self.cpu, exit_info.retval_addr, max_count)
                 odata_hx = None
                 if output_data is not None and exit_info.count > 0:
                     odata_hx = binascii.hexlify(output_data)
