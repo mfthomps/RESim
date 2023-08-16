@@ -466,7 +466,7 @@ class GenContextMgr():
         #SIM_run_alone(self.clearAllHap, True)
 
     def rmSuspendWatch(self):
-        ''' suspend watching of specific pid or thread 
+        ''' Remove suspend watching of specific pid or thread 
             If debugging, restore debug context. Otherwise restore default context.
         '''
         if self.top.isWindows():
