@@ -98,8 +98,6 @@ class WinDelay():
             if self.linger: 
                 self.data_watch.stopWatch() 
                 self.data_watch.watch(break_simulation=False, i_am_alone=True)
-            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-            self.mode_hap = None
             #if not self.top.isRunning():
             #    SIM_continue(0)
         else:
@@ -113,10 +111,12 @@ class WinDelay():
                 #if eax != 0:
                 #    new_msg = exit_info.trace_msg + ' ' + trace_msg
                 #    self.context_manager.setIdaMessage(new_msg)
-                self.context_manager.setIdaMessage(self.trace_msg)
+                self.context_manager.setIdaMessage('%s %s' % (self.call_name, self.trace_msg))
                 self.lgr.debug('winCallExit call stopAlone of syscall')
                 SIM_run_alone(my_syscall.stopAlone, self.call_name)
                 self.top.idaMessage() 
+        RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+        self.mode_hap = None
 
     def setCountWriteHap(self):
         ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
@@ -152,11 +152,12 @@ class WinDelay():
                 read_data = '<< NOT MAPPED >>'
 
             if self.did_exit:
-                trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x data: %s\n' % (self.cycles, return_count, repr(read_data))
+                trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x requested: 0x%x data: %s\n' % (self.cycles, return_count, 
+                   self.exit_info.count, repr(read_data))
                 self.trace_mgr.write(trace_msg)
                 self.lgr.debug('winDelay writeCountHap already did exit so log the trace message %s' % trace_msg)
             else:
-                trace_msg = self.call_name+' return  count: 0x%x data: %s\n' % (return_count, repr(read_data))
+                trace_msg = self.call_name+' return count: 0x%x request: 0x%x data: %s\n' % (return_count, self.exit_info.count, repr(read_data))
                 self.lgr.debug('winDelay writeCountHap have not yet done exit so log SAVE the trace message %s' % trace_msg)
             if self.call_name == 'RECV_DATAGRAM':
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
