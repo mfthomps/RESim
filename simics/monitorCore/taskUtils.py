@@ -1027,3 +1027,8 @@ class TaskUtils():
         return uid, eu_id
 
 
+    def getPidAndThread(self):
+        dum, dum1, pid = self.curProc()
+        retval = '%d' % (pid)
+        return retval
+
