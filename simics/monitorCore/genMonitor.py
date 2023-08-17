@@ -1057,14 +1057,20 @@ class GenMonitor():
             retval.append(pid_state)
         print(json.dumps(retval))
 
-    def tasks(self, target=None, filter=None):
+    def tasks(self, target=None, filter=None, file=None):
         self.lgr.debug('tasks')
         if target is None:
             target = self.target
+        if file is not None:
+            fh = open(file, 'w')
+        else:
+            fh = None
         print('Tasks on cell %s' % target)
+        if fh is not None:
+            fh.write('Tasks on cell %s\n' % target)
 
         if self.isWindows():
-            self.winMonitor[target].tasks(filter=filter)
+            self.winMonitor[target].tasks(filter=filter, file=file)
         else:
             tasks = self.task_utils[target].getTaskStructs()
             plist = {}
@@ -1080,6 +1086,9 @@ class GenMonitor():
                         id_str = ''
                     print('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
                         tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+                    if fh is not None:
+                        fh.write('pid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s\n' % (tasks[t].pid, t, 
+                            tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
@@ -2038,6 +2047,10 @@ class GenMonitor():
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         return this_pid
 
+    def getPIDThread(self):
+        pid_thread = self.task_utils[self.target].getPidAndThread() 
+        return pid_thread
+
     def getCurrentProc(self, target_cpu=None):
         if target_cpu is None:
             target = self.target
@@ -2390,6 +2403,7 @@ class GenMonitor():
             retval = self.ignoreProgList() 
             if not retval:
                 retval = self.onlyProgList() 
+            self.ignoreThreadList()
         if retval:
             ''' do not delete/recreate exit haps '''
             self.sharedSyscall[self.target].preserveExit()
@@ -5465,8 +5479,7 @@ class GenMonitor():
     def traceWindows(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
-            self.ignoreProgList() 
-            self.onlyProgList() 
+            self.checkOnlyIgnore()
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
         self.lgr.debug('traceWindows set trace_all[%s] to %s' % (self.target, str(self.trace_all[self.target])))
 
@@ -5498,6 +5511,15 @@ class GenMonitor():
             retval = self.context_manager[self.target].loadIgnoreList(sfile)
             if retval:
                 print('Loaded list of programs to ignore from %s' % sfile)
+        return retval
+
+    def ignoreThreadList(self):
+        retval = False
+        if 'SKIP_THREADS' in self.comp_dict[self.target]: 
+            sfile = self.comp_dict[self.target]['SKIP_THREADS']
+            retval = self.context_manager[self.target].loadIgnoreThreadList(sfile)
+            if retval:
+                print('Loaded list of threads to ignore from %s' % sfile)
         return retval
 
     def onlyProgList(self):
