@@ -109,11 +109,15 @@ class WinMonitor():
         self.toCreateProc(proc, flist=flist, break_simulation=False) 
 
 
-    def tasks(self, filter=None):
+    def tasks(self, filter=None, file=None):
         plist = {}
         self.lgr.debug('tasks ts_next is 0x%x (%d)' % (self.param.ts_next, self.param.ts_next))
         got = self.task_utils.getTaskList()
         self.lgr.debug('tasks ts_next is 0x%x (%d) got %d tasks' % (self.param.ts_next, self.param.ts_next, len(got)))
+        if file is not None:
+            fh = open(file, 'w')
+        else:
+            fh = None
         for task_ptr in got:
             pid_ptr = task_ptr + self.param.ts_pid
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
@@ -132,6 +136,8 @@ class WinMonitor():
                 #break
         for pid in sorted(plist):
             print('pid: %d  %s' % (pid, plist[pid]))
+            if fh is not None:
+                fh.write('pid: %d  %s\n' % (pid, plist[pid]))
 
     def traceAll(self, record_fd=False, swapper_ok=False):
 
@@ -202,6 +208,7 @@ class WinMonitor():
         return retval
 
     def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None):
+
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc, sub_match=sub_match)        
         ''' nth occurance of syscalls that match params '''
         call_params.nth = count
