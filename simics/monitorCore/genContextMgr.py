@@ -247,6 +247,8 @@ class GenContextMgr():
 
         self.only_progs = [] 
 
+        self.ignore_threads = []
+
         self.watch_for_prog = []
         self.watch_for_prog_callback = None
         self.current_tasks = []
@@ -563,7 +565,11 @@ class GenContextMgr():
             pid_thread = '%s' % pid
         else:
             pid_thread = '%s-%s' % (pid, thread_id)
-        if len(self.ignore_progs) > 0 and self.debugging_pid is None:
+        if pid_thread in self.ignore_threads:
+            if self.cpu.current_context != self.ignore_context:
+                SIM_run_alone(self.restoreIgnoreContext, None)
+            retval = True
+        elif len(self.ignore_progs) > 0 and self.debugging_pid is None:
             #if pid in self.ignore_pids:
             if comm in self.ignore_progs:
                 
@@ -1441,6 +1447,23 @@ class GenContextMgr():
                         retval = True
             else:
                 self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
+        return retval
+
+    def loadIgnoreThreadList(self, fname):
+        retval = False
+        if len(self.ignore_threads) == 0:
+            self.lgr.debug('contextManager loadIgnoreThreadList')
+            if os.path.isfile(fname):
+                self.lgr.debug('loadIgnoreThreadList %s' % fname)
+                with open(fname) as fh:
+                    for line in fh:
+                        if line.startswith('#'):
+                            continue
+                        self.ignore_threads.append(line.strip())
+                        self.lgr.debug('contextManager will ignore thread %s' % line.strip())
+                        retval = True
+            else:
+                self.lgr.error('contextManager loadIgnoreThreadList no file at %s' % fname)
         return retval
 
     def checkExitCallback(self):
