@@ -319,7 +319,9 @@ class WinCallExit():
                         trace_msg = trace_msg+' - Device not ready'
                         self.lgr.debug('winCallExit %s' % trace_msg)
                     else:
-                        trace_msg = ''
+                        # why was this being set to nothing?
+                        #trace_msg = ''
+                        pass
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
