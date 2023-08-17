@@ -888,6 +888,8 @@ class DataWatch():
                 exit_addr = self.param.sysexit
             elif self.param.iretd is not None:
                 exit_addr = self.param.iretd
+            elif self.param.sysret64 is not None:
+                exit_addr = self.param.sysret64
             else:
                 self.lgr.error('dataWatch kernelReturn could not find kernel exit address')
                 return
