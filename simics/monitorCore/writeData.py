@@ -270,7 +270,7 @@ class WriteData():
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
             else: 
                 self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
-            self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
+            #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
 
