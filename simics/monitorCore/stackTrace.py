@@ -606,7 +606,7 @@ class StackTrace():
                         #self.lgr.debug('memcpy/rep x86 mov hack call %s ret_t_addr: 0x%x ret: 0x%x' % (instruct, ptr, retval))
                     else:
                         ''' look for GOTish jump to dword '''
-                        retval = self.isGOT(ptr, call_addr, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname)
+                        retval = self.isGOT(ptr, call_addr, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname, cur_is_clib)
                 #else:
                 #    self.lgr.debug('call_ip is None')
             ptr = ptr + self.mem_utils.wordSize(self.cpu)
@@ -614,7 +614,7 @@ class StackTrace():
         #    self.lgr.debug('findReturnFromCall hit stack limit of 0x%x' % limit)
         return retval                
 
-    def isGOT(self, ptr, call_addr, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname):
+    def isGOT(self, ptr, call_addr, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname, cur_is_clib):
         retval = None
         first_instruct = SIM_disassemble_address(self.cpu, call_addr, 1, 0)
         #self.lgr.debug('stackTrace isGOT first_instruct is %s' % first_instruct[1])
