@@ -53,6 +53,7 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
         self.backstop.setHangCallback(hang_callback, hang_cycles)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
@@ -413,7 +414,8 @@ class InjectIO():
             self.lgr.debug('injectIO stopHap, count None, just stop?')
         
     def writeCallback(self, count):
-        self.lgr.debug('injectIO writeCallback')
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('injectIO writeCallback eip: 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, count)
         SIM_break_simulation('writeCallback')
