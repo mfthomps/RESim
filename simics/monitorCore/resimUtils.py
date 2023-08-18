@@ -8,6 +8,8 @@ import elfText
 import json
 import re
 import fnmatch
+import winProg
+import ntpath
 try:
     import cli
     from simics import *
@@ -219,14 +221,28 @@ def getPacketFilter(packet_filter, lgr):
                 raise Exception('failed to find filter at %s' % packet_filter)
     return retval
 
-def getBasicBlocks(prog, ini):
+def getBasicBlocks(prog, ini, lgr=None):
     blocks = None
     prog_file = getProgPath(prog, ini)
+    print('prog_file at %s' % prog_file)
+    if lgr is not None:
+        lgr.debug('prog_file %s' % prog_file)
     prog_elf = None
+    os_type = getIniTargetValue(ini, 'OS_TYPE')
     if prog_file is not None:
-        prog_elf = elfText.getTextOfText(prog_file)
+        if os_type.startswith('WIN'):
+            if lgr is not None:
+                lgr.debug('is windows')
+            prog_elf = winProg.getText(prog_file, lgr)
+        else:
+            prog_elf = elfText.getTextOfText(prog_file)
         print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
-        block_file = prog_file+'.blocks'
+        if lgr is not None:
+            lgr.debug('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+        analysis_path = getAnalysisPath(ini, prog_file, lgr=lgr)
+        if lgr is not None:
+            lgr.debug('analysis_path: %s' % analysis_path)
+        block_file = analysis_path+'.blocks'
         print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
             if os.path.islink(prog_file):
@@ -452,3 +468,36 @@ def cutRealWorld():
     except:
         pass
 
+def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None):
+        retval = None
+        #lgr.debug('winDLL getAnalyisPath find %s' % fname)
+        analysis_path = os.getenv('IDA_ANALYIS')
+        if analysis_path is None:
+            analysis_path = '/mnt/resim_archive/analysis'
+            if len(fun_list_cache) == 0:
+                lgr.warning('winDLL getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
+         
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        root_dir = os.path.basename(root_prefix)
+        top_dir = os.path.join(analysis_path, root_dir)
+        if len(fun_list_cache) == 0:
+            fun_list_cache = findListFrom('*.funs', top_dir)
+            #lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(fun_list_cache)))
+
+        fname = fname.replace('\\', '/')
+        if fname.startswith('/??/C:/'):
+                fname = fname[7:]
+
+        base = ntpath.basename(fname)+'.funs'
+        if base.upper() in map(str.upper, fun_list_cache):
+            with_funs = fname+'.funs'
+            lgr.debug('windDLLMap getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+            retval = getfileInsensitive(with_funs, top_dir, lgr)
+            if retval is not None:
+                #lgr.debug('windDLLMap getAnalsysisPath got %s from %s' % (retval, with_funs))
+                retval = retval[:-5]
+        else:
+            #lgr.debug('winDLL getAnalysisPath %s not in cache' % base)
+            pass
+
+        return retval
