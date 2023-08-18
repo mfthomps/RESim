@@ -2,8 +2,12 @@ import ntpath
 import os
 import subprocess
 import shlex
-from resimHaps import *
-from simics import *
+try:
+    from resimHaps import *
+    from simics import *
+except:
+    # if loaded from script like findBNT.py
+    pass
 
 class WinProgInfo():
     def __init__(self, load_addr, text_offset, text_size, machine, image_base):
@@ -12,6 +16,22 @@ class WinProgInfo():
         self.text_size = text_size
         self.machine = machine
         self.image_base = image_base
+
+# match linux structure for use by utils like findBNT
+class Text():
+    def __init__(self, address, offset, size):
+        self.address = address
+        self.offset = offset
+        self.size = size
+        self.locate = None
+        self.text_start = None
+        self.text_size = None
+        self.text_offset = None
+
+    def setText(self, address, size, offset):
+        self.text_start = address
+        self.text_size = size
+        self.text_offset = offset
 
 def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
     load_address = getLoadAddress(cpu, mem_utils, eproc, lgr)
@@ -79,6 +99,10 @@ def getSizeAndMachine(full_path, lgr):
     else:
         lgr.error('winProg getSizeAndMachine failed find file at path %s' % full_path)
     return size, machine, image_base, addr_of_text
+
+def getText(full_path, lgr):
+    size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
+    return Text(image_base, text_offset, size)
 
 def getRelocate(full_path, lgr):
     ''' This is not used.  See IDA resimUtils for dumpImports. '''
