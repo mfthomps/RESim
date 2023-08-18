@@ -424,15 +424,15 @@ class StackTrace():
                 break
             pushed_bp = self.readAppPtr(bp)
             if pushed_bp == bp:
-                self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
+                #self.lgr.debug('stackTrace doX86, pushed bp same as bp, bail')
                 break
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
             if ret_to is None:
-                self.lgr.debug('stackTrace doX86 ret_to None, bail')
+                #self.lgr.debug('stackTrace doX86 ret_to None, bail')
                 break
             if not self.soMap.isCode(ret_to, self.pid):
-                self.lgr.debug('stackTrace doX86 ret_to 0x%x is not code, bail' % ret_to)
+                #self.lgr.debug('stackTrace doX86 ret_to 0x%x is not code, bail' % ret_to)
                 break
 
             ret_to_fname = self.soMap.getSOFile(ret_to)
@@ -567,13 +567,13 @@ class StackTrace():
                         #    pass
                     instruct_of_call = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                     instruct = instruct_of_call[1]
-                    self.lgr.debug('findRetrunFromCall call_ip 0x%x  %s' % (call_ip, instruct))
+                    #self.lgr.debug('findRetrunFromCall call_ip 0x%x  %s' % (call_ip, instruct))
                     call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct_of_call, call_ip)
-                    if call_addr is not None:
-                        if cur_fun is not None:
-                            self.lgr.debug('findReturnFromCall call_addr 0x%x cur_fun 0x%x fun_name %s cur_fun_name %s' % (call_addr, cur_fun, fun_name, cur_fun_name))
-                        else:
-                            self.lgr.debug('findReturnFromCall call_addr 0x%x cur_fun none fun_name %s cur_fun_name %s' % (call_addr, fun_name, cur_fun_name))
+                    #if call_addr is not None:
+                    #    if cur_fun is not None:
+                    #        self.lgr.debug('findReturnFromCall call_addr 0x%x cur_fun 0x%x fun_name %s cur_fun_name %s' % (call_addr, cur_fun, fun_name, cur_fun_name))
+                    #    else:
+                    #        self.lgr.debug('findReturnFromCall call_addr 0x%x cur_fun none fun_name %s cur_fun_name %s' % (call_addr, fun_name, cur_fun_name))
                     if call_addr == cur_fun or self.sameFun(fun_name, cur_fun_name):
                         if fun_name is not None:
                             instruct = '%s %s' % (self.callmn, fun_name)
