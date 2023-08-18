@@ -4403,12 +4403,7 @@ class GenMonitor():
         ''' Enable code coverage '''
         ''' Intended for use with trackIO '''
         if self.coverage is not None:
-            if fname is not None:
-                analysis_path = self.soMap[self.target].getAnalysisPath(fname)
-                if analysis_path is None:
-                    analysis_path = self.getFullPath(fname)
-            else:
-                analysis_path = None
+            analysis_path = self.getAnalysisPath(fname)
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.coverage.enableCoverage(pid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles)
             self.coverage.doCoverage(physical=physical)
@@ -5583,6 +5578,15 @@ class GenMonitor():
 
     def runToWriteNotZero(self, addr):
         self.run_to[self.target].runToWriteNotZero(addr)
+
+    def getAnalysisPath(self, fname):
+        if fname is not None:
+            analysis_path = self.soMap[self.target].getAnalysisPath(fname)
+            if analysis_path is None:
+                analysis_path = self.getFullPath(fname)
+        else:
+            analysis_path = None
+        return analysis_path
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
