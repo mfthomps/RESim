@@ -262,7 +262,8 @@ class InjectIO():
             self.dataWatch.clearWatches()
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
-                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
+                analysis_path = self.top.getAnalysisPath(self.fname) 
+                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             env_max_len = os.getenv('AFL_MAX_LEN')
             if env_max_len is not None:

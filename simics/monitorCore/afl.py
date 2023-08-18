@@ -123,6 +123,7 @@ class AFL():
         self.starting_cycle = cpu.cycles 
         self.total_cycles = 0
         self.tmp_time = time.time()
+        self.fname = fname
         self.pid_list = []
         if target is None:
             self.pid_list = self.context_manager.getWatchPids()
@@ -131,8 +132,9 @@ class AFL():
             #if self.orig_buffer is not None:
             #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
+            analysis_path = self.top.getAnalysisPath(self.fname)
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-                afl=True, fname=fname, linear=linear, create_dead_zone=self.create_dead_zone, record_hits=False)
+                afl=True, fname=analysis_path, linear=linear, create_dead_zone=self.create_dead_zone, record_hits=False)
 
             if not self.linear:
                 self.context_manager.restoreDefaultContext()
@@ -167,8 +169,9 @@ class AFL():
         self.lgr.debug('afl aflInitCallback %d pids in list' % len(self.pid_list))
 
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
+        analysis_path = self.top.getAnalysisPath(self.fname)
         self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-            afl=True)
+            afl=True, fname=analysis_path)
         self.coverage.doCoverage()
         cmd = 'skip-to bookmark = bookmark0'
         cli.quiet_run_command(cmd)

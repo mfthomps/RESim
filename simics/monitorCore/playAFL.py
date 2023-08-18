@@ -140,11 +140,10 @@ class PlayAFL():
         self.physical=False
         if self.coverage is not None:
             full_path = None
-            if fname is not None:
-                full_path = self.top.getFullPath(fname)
+            analysis_path = self.top.getAnalysisPath(fname)
             self.lgr.debug('playAFL call enableCoverage')
             self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=full_path)
+               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=analysis_path)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
             if linear:
