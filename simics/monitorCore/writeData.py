@@ -374,6 +374,7 @@ class WriteData():
 
     def setCallHap(self):
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
+        # TBD fix for windows?  asynch hell?
         if self.call_hap is None:
             #if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             if self.k_start_ptr is None and self.call_ip is not None:
@@ -452,8 +453,13 @@ class WriteData():
         if pid != self.pid:
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
+        pid_thread = self.top.getPIDThread()
+        #if self.top.isWindows():
+        #    eip = self.top.getEIP(self.cpu)
+        #    self.lgr.debug('writeData callHap,  pid_thread:%s eip: 0x%x cycles: 0x%x' % (pid_thread, eip, self.cpu.cycles))
+        #    return
         self.read_count = self.read_count + 1
-        #self.lgr.debug('writeData callHap, read_count is %d' % self.read_count)
+        #self.lgr.debug('writeData callHap, read_count is %d pid_thread:%s' % (self.read_count, pid_thread))
         self.handleCall()
 
     def handleCall(self):
@@ -461,7 +467,8 @@ class WriteData():
         if pid != self.pid:
             #self.lgr.debug('writeData handleCall wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
-        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
+        eip = self.top.getEIP(self.cpu)
+        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (pid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             #if self.closed_fd:
             #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
