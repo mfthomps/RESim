@@ -127,7 +127,8 @@ class PrepInject():
             self.return_ip = current_ip
         self.ret_cycle = self.cpu.cycles
         pid = self.top.getPID()
-        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, pid, self.cpu.cycles))
+        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, 
+              current_ip, pid, self.cpu.cycles))
 
         ''' Find the exit info from the system call that did the read.'''
         self.exit_info = self.top.getMatchingExitInfo()
@@ -161,6 +162,8 @@ class PrepInject():
             self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
             ''' skip back to return so the snapshot is ready to inject input '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+            current_ip = self.top.getEIP(self.cpu)
+            self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
 
     def instrumentIO(self, callname):
