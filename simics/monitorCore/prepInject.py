@@ -117,10 +117,14 @@ class PrepInject():
     def instrumentAlone(self, dumb): 
         #self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
         self.top.stopTracking(keep_watching=True, keep_coverage=True)
-        ''' go forward one to user space and record the return IP '''
-        SIM_run_command('pselect %s' % self.cpu.name)
-        SIM_run_command('si')
-        self.return_ip = self.top.getEIP(self.cpu)
+        current_ip = self.top.getEIP(self.cpu)
+        if self.mem_utils.isKernel(current_ip): 
+            ''' go forward one to user space and record the return IP '''
+            SIM_run_command('pselect %s' % self.cpu.name)
+            SIM_run_command('si')
+            self.return_ip = self.top.getEIP(self.cpu)
+        else:
+            self.return_ip = current_ip
         self.ret_cycle = self.cpu.cycles
         pid = self.top.getPID()
         self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, pid, self.cpu.cycles))
