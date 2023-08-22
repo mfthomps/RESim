@@ -228,7 +228,8 @@ class Coverage():
         if self.afl or self.force_default_context:
             self.lgr.debug('coverage generated ?? context %d breaks' % (len(self.bp_list)))
         else:
-            self.lgr.debug('coverage generated %d RESim context breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
+            ''' physical breaks, context does not matter'''
+            self.lgr.debug('coverage generated %d breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
         self.block_total = len(self.bp_list)
         if len(tmp_list) > 0:
             self.doHapRange(tmp_list)
