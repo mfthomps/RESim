@@ -33,6 +33,7 @@ import memUtils
 import stopFunction
 import win7CallParams
 import syscall
+import traceBuffer
 from resimHaps import *
 class WinMonitor():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, sharedSyscall, run_from_snap, lgr):
@@ -153,6 +154,7 @@ class WinMonitor():
                 tf = '/tmp/syscall_trace-%s.txt' % self.cell_name
                 cpu, comm, pid = self.task_utils.curProc() 
 
+            traceBuffer.TraceBuffer(self.top, cpu, self.mem_utils, self.context_manager, self.lgr)
             self.traceMgr.open(tf, cpu)
             if not self.context_manager.watchingTasks():
                 self.traceProcs.watchAllExits()

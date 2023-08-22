@@ -118,6 +118,7 @@ import winDLLMap
 import runTo
 import winProg
 import stackFrameManager
+import traceBuffer
 
 #import fsMgr
 import json
@@ -2418,7 +2419,6 @@ class GenMonitor():
         if target not in self.cell_config.cell_context:
             print('Unknown target %s' % target)
             return
-
         if self.checkOnlyIgnore():
             self.rmDebugWarnHap()
 
@@ -2443,6 +2443,7 @@ class GenMonitor():
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
 
+            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
             self.traceMgr[target].open(tf, cpu)
             if not self.context_manager[self.target].watchingTasks():
                 self.traceProcs[target].watchAllExits()
@@ -4260,6 +4261,8 @@ class GenMonitor():
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu is None:
             cpu = this_cpu
+        if trace_all:
+            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
         self.dataWatch[self.target].resetWatch()
@@ -4726,6 +4729,7 @@ class GenMonitor():
         #if not self.checkUserSpace(cpu):
         #    return
         self.debugPidGroup(pid, to_user=False)
+        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
@@ -5473,6 +5477,7 @@ class GenMonitor():
 
     def traceWindows(self):
         pid, cpu = self.context_manager[self.target].getDebugPid() 
+        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         if pid is None:
             self.checkOnlyIgnore()
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
@@ -5588,6 +5593,9 @@ class GenMonitor():
             analysis_path = None
         return analysis_path
 
+    def traceBuffer(self):
+        cpu, comm, pid = self.task_utils[self.target].curProc() 
+        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
