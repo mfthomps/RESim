@@ -39,6 +39,11 @@ def ioHandler(read_array, stop, lgr):
                     lgr.debug('read error, must be closed.')
                     return
                 fh.write(data+b'\n')
+                if 'Error' in str(data):
+                    print(data)
+                    print("use ctrl-C, fatal error.")
+                    exit(1)
+                    return
                    
 
 def handleClose(resim_procs, read_array, remote, lgr):
