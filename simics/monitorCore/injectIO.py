@@ -232,6 +232,10 @@ class InjectIO():
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
+        elif self.trace_all:
+            self.top.debugPidGroup(self.pid, to_user=False) 
+            if self.only_thread:
+                self.context_manager.watchOnlyThis()
 
         self.bookmarks = self.top.getBookmarksInstance()
         force_default_context = False
