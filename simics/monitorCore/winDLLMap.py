@@ -402,7 +402,7 @@ class WinDLLMap():
         if analysis_path is None:
             analysis_path = '/mnt/resim_archive/analysis'
             if len(self.fun_list_cache) == 0:
-                self.lgr.warning('winDLL getAnalysis path IDA_ANALYSIS not defined')
+                self.lgr.warning('winDLL getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
          
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
