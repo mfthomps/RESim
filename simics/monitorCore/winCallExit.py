@@ -303,6 +303,7 @@ class WinCallExit():
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
                 not_ready = False
+                trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                 if exit_info.fname_addr is None:
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
                 
