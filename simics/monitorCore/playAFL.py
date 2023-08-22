@@ -84,6 +84,7 @@ class PlayAFL():
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
         self.lgr.debug('playAFL afl list has %d items.  current context %s' % (len(self.afl_list), self.cpu.current_context))
+        self.initial_context = cpu.current_context
         self.index = -1
         self.stop_hap = None
         self.call_hap = None
@@ -133,7 +134,7 @@ class PlayAFL():
             self.top.setDisableReverse()
             cli.quiet_run_command('enable-unsupported-feature internals')
             cli.quiet_run_command('save-snapshot name = origin')
-            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False)
+            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         else:
             self.top.resetOrigin()
 
@@ -207,7 +208,8 @@ class PlayAFL():
             self.repeat_counter += 1
             if self.repeat_counter % 10 == 0:
                 rprint(str(self.repeat_counter))
-        self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d' % (len(self.afl_list), self.index))
+        self.cpu.current_context = self.initial_context 
+        self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d context %s' % (len(self.afl_list), self.index, str(self.cpu.current_context)))
         done = False
         if self.target != 'oneplay':
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
@@ -453,8 +455,9 @@ class PlayAFL():
 
 
     def delStopHap(self, dumb):
-        SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
-        self.stop_hap = None
+        if self.stop_hap is not None:
+            SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
+            self.stop_hap = None
 
     def loadPickle(self, name):
         retval = False
