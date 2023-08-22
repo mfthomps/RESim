@@ -301,8 +301,8 @@ class DataWatch():
 
     def setStackBufHaps(self):
         for ret_to in self.stack_buffers:
-            if ret_to not in self.stack_buf_hap:
-                self.lgr.debug('dataWatch setStackBufHaps add hap for eip 0x%x' % ret_to)
+            if ret_to not in self.stack_buf_hap and ret_to != -1:
+                #self.lgr.debug('dataWatch setStackBufHaps add hap for eip 0x%x' % ret_to)
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
                 self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
 
@@ -470,14 +470,24 @@ class DataWatch():
             self.hack_reuse.append(0)
             self.cycle.append(self.cpu.cycles)
             self.mark.append(watch_mark)
-            if (self.isCopyMark(watch_mark) and watch_mark.mark.sp) or (msg == 'fun result' and self.watchMarks.isStackBuf(start)):
+            
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            self.lgr.debug('dataWatch setRange msg %s stack 0x%x  start 0x%x' % (msg, sp, start))
+            if (self.isCopyMark(watch_mark) and watch_mark.mark.sp) or \
+                     ((msg == 'fun result' or (msg is not None and msg.startswith('injectIO'))) and self.watchMarks.isStackBuf(start)):
                 ''' TBD awkward method for deciding to watch function results going to memory'''
                 #ret_to = self.getReturnAddr(watch_mark.mark)
                 index = len(self.start)-1
+                self.lgr.debug('dataWatch setRange is it a stack buffer? start 0x%x check ret addr' % (start))
                 ret_to = self.getReturnAddr()
                 if ret_to is not None:
                     #self.lgr.debug('dataWatch setRange is stack buffer start 0x%x, ret_to 0x%x index %d' % (start, ret_to, index))
                     self.manageStackBuf([index], ret_to)
+                else:
+                    if -1 not in self.stack_buffers:
+                        self.stack_buffers[-1] = []
+                    #self.lgr.debug('dataWatch setRange is stack buffer no return address, add index %d to failed stack buffers' % index)
+                    self.stack_buffers[-1].append(index)
 
             #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
         if msg is not None:
@@ -576,6 +586,10 @@ class DataWatch():
 
             ret_to = self.getReturnAddr()
             replace_index = []
+            if -1 in self.stack_buffers:
+                for failed_index in self.stack_buffers[-1]:
+                    replace_index.append(failed_index)
+                del self.stack_buffers[-1] 
             for range_index in self.stack_buffers[eip]:
                if range_index < len(self.read_hap):
                    if self.start[range_index] is None:
@@ -628,8 +642,8 @@ class DataWatch():
                 #self.lgr.debug('dataWatch getReturnAddr got 0x%x' % frame.ret_addr)
                 retval = frame.ret_addr
                 break
-        if retval is None:
-            self.lgr.debug('dataWatch getReturnAddr got zilch')
+        #if retval is None:
+        #    self.lgr.debug('dataWatch getReturnAddr got zilch')
         return retval
 
     def getReturnAddrXX(self, mark):
@@ -1414,7 +1428,7 @@ class DataWatch():
         
         ''' See if this return should result in deletion of temp stack buffers '''
         self.stackBufHap(None, None, None, memory)
-        self.lgr.debug('dataWatch returnHap done')
+        #self.lgr.debug('dataWatch returnHap done')
          
 
     class MemCallRec():
@@ -2525,7 +2539,7 @@ class DataWatch():
             self.stack_buffers[ret_to] = []
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
             self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
-            self.lgr.debug('dataWatch trackPush stack_buf_hap[0x%x] %d x added to stack_buffers' % (ret_to, self.stack_buf_hap[ret_to]))
+            #self.lgr.debug('dataWatch trackPush stack_buf_hap[0x%x] %d x added to stack_buffers' % (ret_to, self.stack_buf_hap[ret_to]))
         else:
             #self.lgr.debug('dataWatch trackPush eip 0x%x already in stack_buffers, no hap set' % ret_to)
             pass
