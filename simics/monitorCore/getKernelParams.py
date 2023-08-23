@@ -260,7 +260,11 @@ class GetKernelParams():
             elif 'sys' not in instruct[1] and 'int' not in instruct[1]:
                 self.lgr.debug('taskModeChanged64 not a syscall, page fault, continue')
             else:
-                self.lgr.debug('taskModeChanged64 must be a call, look for GS')
+                rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+                self.lgr.debug('taskModeChanged64 must be a call rax is 0x%x, look for GS' % rax)
+                if rax > 100:
+                    self.lgr.debug('superstition about multiple jump tables, skip this one')
+                    return
                 #self.lookForFS(None)
                 self.lookForGS(None)
                 SIM_run_alone(self.delTaskModeAlone, None)
@@ -327,7 +331,7 @@ class GetKernelParams():
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             self.gs_start_cycle = self.cpu.cycles
             self.lgr.debug('gsEnableReverse should be at kernel entry. eip is 0x%x, , now continue %d cycles' % (eip, self.gs_cycles))
-            ''' tbd point of going forward? to let us reverse?'''
+            ''' The point of going forward is to let us reverse'''
             SIM_continue(self.gs_cycles)
             self.gsFindAlone()
 
@@ -391,6 +395,9 @@ class GetKernelParams():
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 addr = self.mem_utils.getUnsigned(int(addr, 16))
+                if addr < 0x1000:
+                    self.lgr.debug('gs offset looks dicey, skip this 0x%x' % addr)
+                    continue
                 self.gs_base = self.cpu.ia32_gs_base
                 self.param.current_task_gs  = True
                 self.param.gs_base = self.gs_base
@@ -401,6 +408,10 @@ class GetKernelParams():
                 phys = self.mem_utils.v2p(self.cpu, va)
                 #phys = (self.gs_base + self.param.current_task)-self.param.kernel_base
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
+                cur_task = SIM_read_phys_memory(self.cpu, phys, self.mem_utils.WORD_SIZE)
+                if cur_task < 0x10000:
+                    self.lgr.debug('cur task looks dicey, skip this 0x%x' % cur_task)
+                    continue
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
                 if self.os_type == 'WIN7':
@@ -411,6 +422,8 @@ class GetKernelParams():
  
                     self.findWin7Params()
                 else:
+                    #SIM_break_simulation('remove this')
+                    #return
                     self.findSwapper()
                 break
                 
@@ -1034,9 +1047,11 @@ class GetKernelParams():
             ''' find where we do the syscall jump table computation '''
             prefix = 'call dword ptr [eax*4'
             prefix1 = 'mov eax,dword ptr [eax*4'
+            prefix2 = 'mov eax,dword ptr [eax*4'
             if self.mem_utils.WORD_SIZE == 8:
                 prefix = 'call qword ptr [rax*8'
                 prefix1 = 'mov rax,qword ptr [rbx*8-'
+                prefix2 = 'mov rax,qword ptr [rax*8-'
             while True:
                 SIM_run_command('si -q')
                 eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -1045,7 +1060,7 @@ class GetKernelParams():
                     return
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('instruct: %s' % (instruct[1]))
-                if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1):
+                if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1) or instruct[1].startswith(prefix2):
                     if compat32:
                         self.param.compat_32_compute = eip
                         print(instruct[1])
@@ -1082,7 +1097,7 @@ class GetKernelParams():
             if rax > 500:
                 self.lgr.debug('skip this call...')
                 return
-        self.lgr.debug('computeDoStop must be at sys_entry rax is %d' % rax)
+            self.lgr.debug('computeDoStop must be at sys_entry rax is %d' % rax)
         SIM_break_simulation('computeDoStop')
 
     def testComputeHap(self, dumb, third, forth, memory):
