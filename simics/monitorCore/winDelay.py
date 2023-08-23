@@ -33,7 +33,8 @@ import memUtils
 import resimUtils
 import net
 class WinDelay():
-    def __init__(self, top, cpu, count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, call_name, kbuffer, fd, lgr, count=None):
+    def __init__(self, top, cpu, count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, 
+                  call_name, kbuffer, fd, count, lgr, watch_count_addr=True):
         self.top = top
         self.cpu = cpu
         self.count_addr = count_addr
@@ -66,7 +67,7 @@ class WinDelay():
         self.hack_count = 0
 
         ''' Count provided by writeData, e.g., for injectIO.  WinDelay created just for purpose of returning to user space and setting data watch'''
-        if count is None:
+        if watch_count_addr:
             ''' Set the hap'''    
             self.setCountWriteHap()
         else:
@@ -123,6 +124,11 @@ class WinDelay():
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.count_addr, 1, 0)
         self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
         self.lgr.debug('winDelay setCountWriteHap to 0x%x' % self.count_addr)
+        #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.buffer_addr, self.count, 0)
+        #self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeBufferHap, None, proc_break, 'winDelayBufferHap')
+
+    #def writeBufferHap(self, dumb, third, forth, memory):
+    #    SIM_break_simulation('wrote to buffer 0x%x' % self.buffer_addr)
 
     def writeCountHap(self, dumb, third, forth, memory):
         ''' Invoked when the count address is written to '''
