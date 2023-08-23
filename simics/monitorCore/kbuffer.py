@@ -33,7 +33,7 @@ Kernel buffer size is determined by looking for a fixed character (Z) following 
 of the first write to the application read buffer.
 '''
 class Kbuffer():
-    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr):
+    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr, commence=None):
         self.context_manager = context_manager
         self.mem_utils = mem_utils
         self.data_watch = data_watch
@@ -214,8 +214,16 @@ class Kbuffer():
         ''' callback when user space buffer address is written'''
         if self.write_hap is None:
             return
-
         value = SIM_get_mem_op_value_le(memory)
+        if self.data_watch is not None and self.data_watch.commence_with is not None:
+            first = value & 0xff
+            commence_1 = ord(self.data_watch.commence_with[0])
+            self.lgr.debug('Kbuffer writeHap commence_1 0x%x value 0x%x first: 0x%x' % (commence_1, value, first))
+            if commence_1 != first:
+                return
+            else:
+                # do not wait for 2nd write, this is the 2nd write most likely
+                self.hack_count = 2
         self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x' % (memory.logical_address, value))
         if self.cpu.architecture != 'arm':
             eip = self.top.getEIP()
