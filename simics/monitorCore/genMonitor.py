@@ -2443,7 +2443,7 @@ class GenMonitor():
                 tf = '/tmp/syscall_trace-%s.txt' % target
                 cpu, comm, pid = self.task_utils[target].curProc() 
 
-            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, msg='traceAll')
             self.traceMgr[target].open(tf, cpu)
             if not self.context_manager[self.target].watchingTasks():
                 self.traceProcs[target].watchAllExits()
@@ -4262,7 +4262,7 @@ class GenMonitor():
         if cpu is None:
             cpu = this_cpu
         if trace_all:
-            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, msg='injectIO traceAll')
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
         self.dataWatch[self.target].resetWatch()
@@ -4729,7 +4729,9 @@ class GenMonitor():
         #if not self.checkUserSpace(cpu):
         #    return
         self.debugPidGroup(pid, to_user=False)
-        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        trace_buffer = traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 'playAFL')
+        if len(trace_buffer.addr_info) == 0:
+            trace_buffer = None
         bb_coverage = self.coverage
         if no_cover:
             bb_coverage = None
@@ -4737,7 +4739,7 @@ class GenMonitor():
         play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
               self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
-              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname, repeat=repeat)
+              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname, repeat=repeat, trace_buffer=trace_buffer)
         if play is not None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
@@ -5153,7 +5155,8 @@ class GenMonitor():
         self.lgr.debug('jumper set')
 
     def jumperStop(self):
-        self.jumper_dict[self.target].removeBreaks()
+        if self.target in self.jumper_dict:
+            self.jumper_dict[self.target].removeBreaks()
 
     def simicsQuitting(self, one, two):
         print('Simics quitting.')

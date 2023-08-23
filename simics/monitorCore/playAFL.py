@@ -13,7 +13,7 @@ from resimUtils import rprint
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None, repeat=False):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None, repeat=False, trace_buffer=None):
         self.top = top
         self.backstop = backstop
         self.coverage = coverage
@@ -30,6 +30,7 @@ class PlayAFL():
         self.orig_buffer = None
         self.cfg_file = cfg_file
         self.target = target
+        self.trace_buffer = trace_buffer
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
         self.afl_list = []
@@ -295,6 +296,8 @@ class PlayAFL():
             bp_count = self.coverage.bpCount()
             self.lgr.debug('playAFL goAlone pid:%d ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.pid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+            if self.trace_buffer is not None:
+                self.trace_buffer.msg('playAFL from '+self.afl_list[self.index])
 
             if self.afl_mode: 
                 if self.coverage is not None:
