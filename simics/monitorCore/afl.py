@@ -407,19 +407,24 @@ class AFL():
         self.lgr.debug('afl connect to port %d' % self.port)
         connected = False
         self.sock.settimeout(30)
-        while not connected:
+        count = 0
+        while not connected and count < 200:
             try:
                 self.sock.connect(server_address)
                 connected = True
             except socket.error:
                 print('Connect timeout, try again')
-        self.lgr.debug('afl back from connect')
-        self.sock.settimeout(None)
-        print('RESim connected to AFL port %d' % self.port)
-        self.sendMsg('hi from resim')
-        reply = self.getMsg()
-        self.iteration = int(reply.split()[-1].strip())+1
-        self.lgr.debug('afl synchAFL reply from afl: %s start with given iteration plus 1 %d' % (reply, self.iteration))
+            count = count + 1
+        if connected:    
+            self.lgr.debug('afl back from connect')
+            self.sock.settimeout(None)
+            print('RESim connected to AFL port %d' % self.port)
+            self.sendMsg('hi from resim')
+            reply = self.getMsg()
+            self.iteration = int(reply.split()[-1].strip())+1
+            self.lgr.debug('afl synchAFL reply from afl: %s start with given iteration plus 1 %d' % (reply, self.iteration))
+        else:
+            self.lgr.error('afl synchAFL failed to connect')
 
     def sendMsg(self, msg):
         msg_size = len(msg)
