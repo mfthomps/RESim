@@ -292,6 +292,9 @@ class WinDLLMap():
         return retval
 
     def isCode(self, addr_in, pid):
+        if addr_in is None:
+            self.lgr.error('winDLLMap isCode pid %d addr_in is none '% pid)
+            return False
         retval = False
         if pid in self.min_addr:
             if addr_in >= self.min_addr[pid] and addr_in <= self.max_addr[pid]:
@@ -342,7 +345,9 @@ class WinDLLMap():
                         section.size = size
                     if section.image_base is not None:
                         delta = (section.addr - section.image_base) 
-                        offset = delta + section.text_offset
+                        # TBD text offset already accounted for?  Changed to get coverage to work
+                        #offset = delta + section.text_offset
+                        offset = delta 
                         retval = self.HackCompat(section.addr, section.image_base, offset, section.size)
                     else:
                         self.lgr.error('winDLLMap no image base defined for %s' % section.fname)
