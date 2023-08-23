@@ -418,6 +418,11 @@ class GenMonitor():
 
             cpu = self.cell_config.cpuFromCell(cell_name)
             self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
+            if cell_name not in self.os_type:
+                # TBD move os type into params file so it need not be in the ini file?
+                self.lgr.error('Missing OS_TYPE for cell %s' % cell_name)
+                self.quit()
+                return
             if self.os_type[cell_name].startswith('LINUX'):
                 if 'RESIM_UNISTD' not in comp_dict[cell_name]:
                     print('Target is missing RESIM_UNISTD path')
@@ -690,7 +695,7 @@ class GenMonitor():
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
             self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.context_manager[cell_name], self.task_utils[cell_name], self.lgr, run_from_snap = self.run_from_snap)
-            if self.isWindows():
+            if self.isWindows(target=cell_name):
                 self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
                           self.context_manager[cell_name], self.run_from_snap, self.lgr)
             else:
@@ -717,10 +722,10 @@ class GenMonitor():
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
 
-            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[self.target], 
-                                        self.soMap[self.target], self.traceMgr[self.target], self.param[self.target], self.lgr)
+            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[cell_name], 
+                                        self.soMap[cell_name], self.traceMgr[cell_name], self.param[cell_name], self.lgr)
             self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
-                                        self.context_manager[self.target], self.soMap[self.target], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+                                        self.context_manager[cell_name], self.soMap[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
             ''' TBD compatability remove this'''
             if self.stack_base is not None and cell_name in self.stack_base:
                 self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
@@ -729,17 +734,18 @@ class GenMonitor():
             #        self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
             #        self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
 
-            if self.isWindows():
+            if self.isWindows(target=cell_name):
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
                                                self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
-                                               self.soMap[self.target], self.sharedSyscall[self.target], self.run_from_snap, self.lgr)
+                                               self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.lgr)
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             if self.run_from_snap is not None:
                 dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
                 if os.path.isfile(dmod_file):
                     dmod_dict = pickle.load( open(dmod_file, 'rb') )
-                    for dmod_path in dmod_dict[cell_name]:
-                        self.runToDmod(dmod_path, cell_name=cell_name)
+                    if cell_name in dmod_dict:
+                        for dmod_path in dmod_dict[cell_name]:
+                            self.runToDmod(dmod_path, cell_name=cell_name)
             self.handleMods(cell_name)
             
 
@@ -778,10 +784,10 @@ class GenMonitor():
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
                         self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
                     self.task_utils[cell_name] = task_utils
-                elif self.isWindows():
+                elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
                 else:
-                    self.lgr.error('snapInit unknown os type %s' % self.os_type)
+                    self.lgr.error('snapInit unknown os type %s for cell %s' % (self.os_type[cell_name], cell_name))
                     return
                 self.lgr.debug('snapInit for cell %s, now call to finishInit' % cell_name)
                 self.finishInit(cell_name)
