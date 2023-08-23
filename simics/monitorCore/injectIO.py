@@ -227,6 +227,7 @@ class InjectIO():
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
+            self.top.jumperStop()
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
