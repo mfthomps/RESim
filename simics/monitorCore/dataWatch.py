@@ -478,7 +478,7 @@ class DataWatch():
                 ''' TBD awkward method for deciding to watch function results going to memory'''
                 #ret_to = self.getReturnAddr(watch_mark.mark)
                 index = len(self.start)-1
-                self.lgr.debug('dataWatch setRange is it a stack buffer? start 0x%x check ret addr' % (start))
+                #self.lgr.debug('dataWatch setRange is it a stack buffer? start 0x%x check ret addr' % (start))
                 ret_to = self.getReturnAddr()
                 if ret_to is not None:
                     #self.lgr.debug('dataWatch setRange is stack buffer start 0x%x, ret_to 0x%x index %d' % (start, ret_to, index))
@@ -587,8 +587,9 @@ class DataWatch():
             ret_to = self.getReturnAddr()
             replace_index = []
             if -1 in self.stack_buffers:
+                ''' tack these failed ones to this eip as an expediant'''
                 for failed_index in self.stack_buffers[-1]:
-                    replace_index.append(failed_index)
+                    self.stack_buffers[eip].append(failed_index)
                 del self.stack_buffers[-1] 
             for range_index in self.stack_buffers[eip]:
                if range_index < len(self.read_hap):
@@ -596,7 +597,7 @@ class DataWatch():
                         #self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
                         continue
   
-                   if self.start[range_index] < sp:
+                   if self.start[range_index] <= sp:
                         #self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
                         hap = self.read_hap[range_index]
                         self.context_manager.genDeleteHap(hap, immediate=False)
@@ -614,7 +615,7 @@ class DataWatch():
                else:
                    self.lgr.debug('dataWatch stackBufHap range_index %d out of range of read_hap whose len is %d?' % (range_index, len(self.read_hap)))
                    self.lgr.debug('read_hap has %s' % str(self.read_hap))
-            self.lgr.debug('stackBufHap remove stack buf hap entry for 0x%x len of buffers for that will now be %d' % (eip, len(replace_index)))
+            #self.lgr.debug('stackBufHap remove stack buf hap entry for 0x%x len of buffers for that will now be %d' % (eip, len(replace_index)))
             del self.stack_buf_hap[eip] 
             del self.stack_buffers[eip] 
             if len(replace_index) > 0:
