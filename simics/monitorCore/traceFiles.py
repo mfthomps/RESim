@@ -99,11 +99,15 @@ class TraceFiles():
         index = 0
         #hx = ''.join('{:02x}'.format(x) for x in the_bytes)
         #print('the bytes is %s' % hx)
-        for i in the_bytes:
-            if i >= 32 and i<128:
-                #print('got nonzero at %d' % index)
-                retval.append(i)
-            index += 1
+        if the_bytes is not None:
+            for i in the_bytes:
+                if i is not None:
+                    if i >= 32 and i<128:
+                        #print('got nonzero at %d' % index)
+                        retval.append(i)
+                else:
+                    self.lgr.debug('TraceFiles nonull got None in the bytes: %s' % str(the_bytes))
+                index += 1
         return retval 
 
     def read(self, pid, fd, the_bytes):
