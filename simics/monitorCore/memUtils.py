@@ -755,7 +755,8 @@ class memUtils():
                 count += 1
                 holder = '%s%02x' % (holder, v)
                 #self.lgr.debug('add v of %2x holder now %s' % (v, holder))
-            retbytes = retbytes+read_data
+            if read_data is not None:
+                retbytes = retbytes+read_data
             del read_data
             bytes_to_go = bytes_to_go - bytes_to_read
             #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
