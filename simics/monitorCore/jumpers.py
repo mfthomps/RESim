@@ -124,7 +124,7 @@ class Jumpers():
 
     def removeBreaks(self):
         for f in self.fromto:
-            self.removeOneBreak(addr)
+            self.removeOneBreak(f)
         self.hap = {}
         self.breakpoints = {}
 
