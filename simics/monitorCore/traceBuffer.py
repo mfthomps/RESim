@@ -43,7 +43,7 @@ class BufferInfo():
         buf_addr = None
         
 class TraceBuffer():
-    def __init__(self, top, cpu, mem_utils, context_manager, lgr):
+    def __init__(self, top, cpu, mem_utils, context_manager, lgr, msg=None):
         self.lgr = lgr
         self.top = top
         self.cpu = cpu
@@ -76,6 +76,10 @@ class TraceBuffer():
                             if info.fh is None:
                                 self.lgr.error('TraceBuffer unable to open outfile %s from %s' % (outfile, buffer_file))
                                 return
+                            if msg is not None:
+                                info.fh.write(msg+'\n')
+                                info.fh.flush()
+                                self.lgr.debug('TraceBuffer wrote %s to trace info' % msg)
                             self.addr_info[addr] = info
                           
                     self.doBreaks() 
@@ -108,9 +112,18 @@ class TraceBuffer():
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, addr, proc_break, 'trace_buffer_return_hap')
         self.lgr.debug('TraceBuffer bufferHap set returnHap on 0x%x context %s cycle: 0x%x' % (next_addr, str(self.cpu.current_context), self.cpu.cycles))
 
-    def rmReturnHap(self, hap):
+    def rmHap(self, hap):
         self.context_manager.genDeleteHap(hap)
-    
+
+    def rmAllHaps(self):
+        for hap in self.buf_haps:
+            self.rmHap(hap)
+        self.buf_haps = []
+        if self.return_hap is not None:
+            hap = self.return_hap
+            self.rmHap(hap)
+            self.return_hap = None    
+
     def returnHap(self, addr, third, forth, memory):
         if self.return_hap is None:
             return
@@ -121,6 +134,10 @@ class TraceBuffer():
         info.fh.write(buf+'\n')
         info.fh.flush()
         hap = self.return_hap
-        SIM_run_alone(self.rmReturnHap, hap)
+        SIM_run_alone(self.rmHap, hap)
         self.return_hap = None
         #SIM_break_simulation('remove this')
+
+    def msg(self, msg):
+        for addr in self.addr_info: 
+            self.addr_info[addr].fh.write(msg+'\n')
