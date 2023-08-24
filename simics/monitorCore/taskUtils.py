@@ -910,7 +910,7 @@ class TaskUtils():
             val = callnum * self.mem_utils.WORD_SIZE - self.param.compat_32_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
-        self.lgr.debug('getSyscallEntry call 0x%x val 0x%x entry 0x%x syscall_jump 0x%x' % (callnum, val,entry, self.param.syscall_jump))
+        #self.lgr.debug('getSyscallEntry call 0x%x val 0x%x entry 0x%x syscall_jump 0x%x' % (callnum, val,entry, self.param.syscall_jump))
         return entry
 
     def frameFromStackSyscall(self):
