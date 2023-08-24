@@ -48,6 +48,7 @@ fi
 
 target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
+other_ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
 
 if [ -z "$IDA_ANALYSIS" ]; then
     export IDA_ANALYSIS=/mnt/resim_archive/analysis
@@ -62,7 +63,7 @@ mkdir -p "$ida_analysis_path"
 
 echo "target is $target"
 echo "dbpath $ida_db_path"
-if [[ -f $ida_db_path ]];then
+if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
     #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
@@ -73,4 +74,5 @@ else
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
     #$idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target_path $@" "$target"
     $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
+    echo $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
 fi
