@@ -494,27 +494,55 @@ class GenMonitor():
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-        self.lgr.debug('stopModeChanged eip 0x%x %s' % (eip, instruct[1]))
-        #SIM_run_alone(SIM_continue, 0)
+        cpl = memUtils.getCPL(cpu)
+        if cpl == 0:
+            reason = None
+            if eip == self.param[self.target].sysenter:
+                reason = "sysenter"
+            elif eip == self.param[self.target].sys_entry:
+                reason = "sys_entry"
+            elif eip == self.param[self.target].page_fault:
+                reason = "page_fault"
+            call_info = ''
+            if reason is not None and reason != 'page_fault':
+                callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+                callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32)
+                call_info = 'callnum %d (%s)  compat32: %r' % (callnum, callname, self.is_compat32)
+            self.lgr.debug('\tstopModeChanged entered kernel, eip 0x%x %s reason: %s %s' % (eip, instruct[1], reason, call_info))
+        SIM_run_alone(SIM_continue, 0)
 
     def modeChangeReport(self, want_pid, one, old, new):
         cpu, comm, this_pid = self.task_utils[self.target].curProc() 
         if want_pid != this_pid:
             #self.lgr.debug('mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return
-        new_mode = 'user'
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
-        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
-        #self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x' % (new_mode, eip))
-        phys = self.mem_utils[self.target].v2p(cpu, eip)
-        if phys is not None:
-            instruct = SIM_disassemble_address(cpu, phys, 0, 0)
-            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x %s --  eax 0x%x' % (new_mode, eip, instruct[1], callnum))
-        else:
-            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
         if new == Sim_CPU_Mode_Supervisor:
             new_mode = 'kernel'
-            SIM_break_simulation('mode changed')
+        else:
+            new_mode = 'user'
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        #self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x' % (new_mode, eip))
+        phys = self.mem_utils[self.target].v2p(cpu, eip)
+        callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+        if phys is not None:
+            instruct = SIM_disassemble_address(cpu, phys, 0, 0)
+            if new_mode == 'user':
+                reason = None
+                if eip == self.param[self.target].iretd:
+                    reason = "iretd"
+                elif eip == self.param[self.target].sysret64:
+                    reason = "sysret64"
+                elif eip == self.param[self.target].sysexit:
+                    reason = "sysexit"
+                self.lgr.debug('modeChangeReport returned to user from eip 0x%x %s reason: %s' % (eip, instruct[1], reason))
+            else:
+                self.lgr.debug('modeChangeReport entering kernel from eip 0x%x %s ' % (eip, instruct[1]))
+                
+        else:
+            self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
+
+
+        SIM_break_simulation('mode changed')
 
     def modeChanged(self, want_pid, one, old, new):
         dumb, comm, this_pid = self.task_utils[self.target].curProc() 
@@ -2972,7 +3000,7 @@ class GenMonitor():
         if self.isWindows():
             open_call_list = ['OpenFile']
         else:
-            open_call_name = ['open']
+            open_call_list = ['open']
         call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
         self.runTo(open_call_list, call_params, name='open')
@@ -3785,6 +3813,7 @@ class GenMonitor():
             print(pid)
         
     def reportMode(self):
+        self.rmDebugWarnHap()
         pid, cpu = self.context_manager[self.target].getDebugPid() 
         if pid is None:
             cpu, comm, pid = self.task_utils[self.target].curProc() 
