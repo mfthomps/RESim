@@ -95,6 +95,8 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
     return retval
 
 def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False):
+    lgr = resimUtils.getLogger('aflBNT', '/tmp', level=None)
+    lgr.debug('aflBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
     ida_path = resimUtils.getIdaDataFromIni(prog, ini)
     #print('prog: %s  ida_path is %s' % (prog, ida_path))
@@ -104,13 +106,14 @@ def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=F
     else:
         fname = '%s.%s.hits' % (ida_path, target)
     print('Using hits file %s' % fname)
+    lgr.debug('Using hits file %s' % fname)
     ''' hits are now just flat lists without functions '''
     if not os.path.isfile(fname):
         print('No file at %s.  Did you forget to specific the --target?' % fname)
         return None
     with open(fname) as fh:
         hits = json.load(fh)
-    blocks, prog_elf = resimUtils.getBasicBlocks(prog, ini)
+    blocks, prog_elf = resimUtils.getBasicBlocks(prog, ini, lgr=lgr)
     if blocks is None:
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
         return bnt_list
