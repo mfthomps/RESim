@@ -112,7 +112,16 @@ class TaskUtils():
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
-                self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
+                if self.param.current_task_gs:
+                    value = pickle.load( open(phys_current_task_file, 'rb') ) 
+                    self.phys_current_task = value['current_task_phys']
+                    saved_cr3 = value['saved_cr3']
+                    self.lgr.debug('taskUtils, snapshop had saved cr3, value 0x%x' % saved_cr3)
+                    #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                    self.mem_utils.saveKernelCR3(self.cpu, saved_cr3=saved_cr3)
+                else:
+                    self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
+
             exec_addrs_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
                 self.exec_addrs = pickle.load( open(exec_addrs_file, 'rb') ) 
@@ -209,7 +218,13 @@ class TaskUtils():
             os.mkdir(os.path.dirname(phys_current_task_file))
         except:
             pass
-        pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
+        if self.param.current_task_fs:
+            pickle.dump( self.phys_current_task, open( phys_current_task_file, "wb" ) )
+        else:
+            dict_val = {}
+            dict_val['current_task_phys'] = self.phys_current_task
+            dict_val['saved_cr3'] = self.mem_utils.getKernelSavedCR3()
+            pickle.dump(dict_val , open( phys_current_task_file, "wb" ) )
         exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
         pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
