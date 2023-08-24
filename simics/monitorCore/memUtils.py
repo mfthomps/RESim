@@ -253,7 +253,7 @@ class memUtils():
                 self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             if retval is None:
                 self.lgr.debug('memUtils v2p logical_to_physical got none for 0x%x' % v)
-            else: 
+            elif self.phys_cr3 is not None:
                cpl = getCPL(cpu)
                saved_cr3 = SIM_read_phys_memory(cpu, self.phys_cr3, self.WORD_SIZE)
                self.lgr.debug('memUtils v2p was none for v 0x%x, used iface and got 0x%x cpl %d, reload kernel_saved_cr3 was 0x%x now 0x%x' % (v, retval, cpl,
@@ -391,6 +391,8 @@ class memUtils():
 
 
     def readWord32(self, cpu, vaddr):
+        if vaddr is None:
+            return None
         paddr = self.v2p(cpu, vaddr) 
         if paddr is None:
             #self.lgr.debug('readWord32 phys of 0x%x is none' % vaddr)
@@ -901,11 +903,15 @@ class memUtils():
         else:
             return False
 
-    def saveKernelCR3(self, cpu, phys_cr3=None):
+    def saveKernelCR3(self, cpu, phys_cr3=None, saved_cr3=None):
         if phys_cr3 is None:
-            reg_num = cpu.iface.int_register.get_number("cr3")
-            self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+            if saved_cr3 is None:
+                reg_num = cpu.iface.int_register.get_number("cr3")
+                self.kernel_saved_cr3 = cpu.iface.int_register.read(reg_num)
+            else:
+                self.kernel_saved_cr3 = saved_cr3
         else:
+            # phys_cr3 is the physical address at which the cr3 value is saved by the kernel (windows anyway)
             self.phys_cr3 = phys_cr3
             saved_cr3 = SIM_read_phys_memory(cpu, phys_cr3, self.WORD_SIZE)
             self.kernel_saved_cr3 = saved_cr3
