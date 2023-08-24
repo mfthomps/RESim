@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # given a an AFL session named by the current target (workspace), compare all of the coverage
 # files and de-dupe them, creating a list of the smallest queue files
