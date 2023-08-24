@@ -1021,9 +1021,9 @@ class Syscall():
         comm = None
         if pid in self.comm_cache:
             comm = self.comm_cache[pid]
+        ida_msg = None
         if callname == 'socketcall':        
             ''' must be 32-bit get params from struct '''
-            ida_msg = None
             socket_callnum = frame['param1']
             socket_callname = net.callname[socket_callnum].lower()
             #self.lgr.debug('syscall socketParse is socketcall call %s from %d' % (socket_callname, pid))
@@ -1478,7 +1478,7 @@ class Syscall():
                              self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
                              exit_info.call_params = call_param
                     if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
-                        self.lgr.debug('syscall open, found match_param %s' % call_param.match_param)
+                        self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
                         exit_info.call_params = call_param
                         
                         break
@@ -1821,6 +1821,8 @@ class Syscall():
                 self.lgr.debug(ida_msg)
             else:
                 fd = frame['param5']
+                if fd == 0xffffffffffffffff:
+                    fd = -1
                 prot = frame['param3']
                 ida_msg = '%s pid:%d FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, pid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
@@ -2093,8 +2095,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-        #     pid, comm, break_eip, value, callnum, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s context %sfor pid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
+        #     pid, comm, break_eip, value, callnum, callname, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and pid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
@@ -2172,7 +2174,8 @@ class Syscall():
                     return
                 else:
                     self.lgr.debug('syscall was pending pid:%d call %d' % (pid, pending_call))
-                    return
+                    #SIM_break_simulation('remove this')
+                    #return
                  
 
         if callname in self.exit_calls:
@@ -2201,7 +2204,7 @@ class Syscall():
             return
 
         ''' Set exit breaks '''
-        #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x  EIP: 0x%x' % (pid, comm, callnum, break_eip))
+        #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x (%s)  EIP: 0x%x' % (pid, comm, callnum, callname, break_eip))
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
         frame_string = taskUtils.stringFromFrame(frame)
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
@@ -2244,7 +2247,7 @@ class Syscall():
                 
             else:
                 ''' TBD no longer reached.  callnum set to syscall_info to handle 32 bit compat mode where we don't know how we got here '''
-                self.lgr.debug('syscallHap looked for call %d, got %d, calculated 0x%x do nothing' % (syscall_info.callnum, callnum, syscall_info.calculated))
+                #self.lgr.debug('syscallHap looked for call %d, got %d, calculated 0x%x do nothing' % (syscall_info.callnum, callnum, syscall_info.calculated))
                 pass
         else:
             ''' tracing all syscalls, or watching for any syscall, e.g., during debug '''
