@@ -407,8 +407,8 @@ class SyscallManager():
             self.lgr.debug('getReadAddr bad call number %d' % callnum)
             return None, None
         frame = self.task_utils.frameFromRegs()
-        if self.top.isWindows():
-            pid = self.top.getPID()
+        if self.top.isWindows(self.cell_name):
+            pid = self.top.getPID(target=self.cell_name)
             word_size = 8 # default to 8 for 64 bit unless 
             if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
                 word_size = 4
