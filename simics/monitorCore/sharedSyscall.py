@@ -76,7 +76,7 @@ class SharedSyscall():
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
 
-        if self.top.isWindows():
+        if self.top.isWindows(target=self.cell_name):
             self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, 
                       context_manager, traceProcs, traceFiles, self.soMap, dataWatch, traceMgr, self.lgr)
         else:
