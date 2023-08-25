@@ -2078,12 +2078,16 @@ class GenMonitor():
             target = cell_name
         return self.cell_config.cpuFromCell(target)
 
-    def getPID(self):
-        cpu, comm, this_pid = self.task_utils[self.target].curProc() 
+    def getPID(self, target=None):
+        if target is None:
+            target = self.target
+        cpu, comm, this_pid = self.task_utils[target].curProc() 
         return this_pid
 
-    def getPIDThread(self):
-        pid_thread = self.task_utils[self.target].getPidAndThread() 
+    def getPIDThread(self, target=None):
+        if target is None:
+            target = self.target
+        pid_thread = self.task_utils[target].getPidAndThread() 
         return pid_thread
 
     def getCurrentProc(self, target_cpu=None):
@@ -2700,7 +2704,19 @@ class GenMonitor():
         self.lgr.debug('noWatchSysEnter')
         self.rev_to_call[self.target].noWatchSysenter()
 
- 
+    def stopWatchTasks(self, target=None, immediate=False):
+        if target is None:
+            target = self.target
+        if immediate:   
+           self.context_manager[target].stopWatchTasksAlone(None)
+        else:
+           self.context_manager[target].stopWatchTasks()
+
+    def watchGroupExits(self, target=None): 
+        if target is None:
+            target = self.target
+        self.context_manager[target].watchGroupExits()
+
     def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
         ''' return true if breaks were set and we removed them '''
         self.lgr.debug('genMon removeDebugBreaks was set: %r' % self.debug_breaks_set)
@@ -3207,6 +3223,7 @@ class GenMonitor():
                 calls.append(scall.lower())
         if self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('recv')
+            calls.remove('_newselect')
         skip_and_mail = True
         if flist_in is not None:
             ''' Given callback functions, use those instead of skip_and_mail '''
@@ -3825,6 +3842,7 @@ class GenMonitor():
     def setTarget(self, target):
         if target not in self.cell_config.cell_context:
             print('Unknown target: %s' % target)
+            self.lgr.error('Unknown target: %s' % target)
             return
         self.target = target  
         print('Target is now: %s' % target)
@@ -4293,26 +4311,44 @@ class GenMonitor():
             save_json = '/tmp/track.json'
         if self.bookmarks is not None:
             self.goToOrigin()
+
+        target_cell = self.target
+        target_proc = None
+        if target is not None:
+            if ':' in target:
+                parts = target.rsplit(':',1)
+                target_cell = parts[0]
+                target_proc = parts[1]
+            else:
+                target_proc = target
+            self.lgr.debug('target_cell %s target_proc %s' % (target_cell, target_proc))
+
         this_cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu is None:
             cpu = this_cpu
+        if target_cell != self.target:
+            target_cpu = self.cell_config.cpuFromCell(target_cell)
+
         if trace_all:
-            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, msg='injectIO traceAll')
+            traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, msg='injectIO traceAll')
+
         self.lgr.debug('genMonitor injectIO pid %d' % pid)
         cell_name = self.getTopComponentName(cpu)
-        self.dataWatch[self.target].resetWatch()
+        self.dataWatch[target_cell].resetWatch()
         if max_marks is not None:
-            self.dataWatch[self.target].setMaxMarks(max_marks) 
-        self.page_faults[self.target].stopWatchPageFaults()
-        self.watchPageFaults(pid)
+            self.dataWatch[target_cell].setMaxMarks(max_marks) 
+        if target_proc is None:
+            self.page_faults[target_cell].stopWatchPageFaults()
+            self.watchPageFaults(pid)
         if mark_logs:
-            self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
+            self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
-        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[self.target], self.bookmarks, 
+        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, pid, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
-                  target=target, targetFD=targetFD, trace_all=trace_all, save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, 
+                  target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
+                  save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, 
                   no_rop=no_rop, instruct_trace=instruct_trace, break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread)
 
         if go:
@@ -4417,12 +4453,15 @@ class GenMonitor():
                 print('writable? %r' % pei.writable)
         return ptable_info
 
-    def toPid(self, pid, callback = None):
+    def toPid(self, pid, callback = None, run=True):
+        ''' advance to the given pid.  default callback is toUser.  If pid is -1, then advance to any pid.
+            If pid is -2, then advance to any non-zero pid and there is no default callback'''
         self.lgr.debug('genMonitor toPid %d' % pid)
-        if callback is None:
+        if callback is None and pid != -2 and pid !=0:
             callback = self.toUser
         self.context_manager[self.target].catchPid(pid, callback)
-        SIM_continue(0)
+        if run:
+            SIM_continue(0)
 
     def cleanMode(self, dumb):
         if self.mode_hap is not None:
@@ -5634,6 +5673,10 @@ class GenMonitor():
     def traceBuffer(self):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+
+    def toRunningProc(self, proc, plist, flist):
+        self.run_to[self.target].toRunningProc(proc, plist, flist)
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

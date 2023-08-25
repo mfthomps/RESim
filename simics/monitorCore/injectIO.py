@@ -1,3 +1,31 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+Inject data into application or kernel memory and track data references.
+Alternately generate syscall or instruction traces.
+'''
 from simics import *
 import writeData
 import memUtils
@@ -10,7 +38,7 @@ import resimUtils
 class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, fname=None, target=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
+           coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
         self.dfile = dfile
         self.stay = stay
@@ -54,7 +82,7 @@ class InjectIO():
         else:
             hang_callback = self.recordHang
         self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
-        self.backstop.setHangCallback(hang_callback, hang_cycles)
+        self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         #if self.packet_count > 1: 
@@ -98,7 +126,8 @@ class InjectIO():
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         self.write_data = None
         ''' process name and FD to track, i.e., if process differs from the one consuming injected data. '''
-        self.target = target
+        self.target_proc = target_proc
+        self.target_cell = target_cell
         self.targetFD = targetFD
 
         # No data tracking, just trace all system calls
@@ -184,7 +213,7 @@ class InjectIO():
         self.lgr.info('injectIO go, write data total size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging, or unless modifying kernel buffer '''
-        if self.target is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
+        if self.target_proc is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
             self.dataWatch.goToRecvMark()
 
         lenreg = None
@@ -204,7 +233,7 @@ class InjectIO():
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        if self.target is None and not self.trace_all and not self.instruct_trace and not self.no_track:
+        if self.target_proc is None and not self.trace_all and not self.instruct_trace and not self.no_track:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
@@ -233,7 +262,7 @@ class InjectIO():
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
-        elif self.trace_all:
+        elif self.trace_all and self.target_proc is None:
             self.top.debugPidGroup(self.pid, to_user=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
@@ -262,7 +291,7 @@ class InjectIO():
             self.lgr.error('got None for bytes_wrote in injectIO')
             return
         eip = self.top.getEIP(self.cpu)
-        if self.target is None:
+        if self.target_proc is None:
             self.dataWatch.clearWatchMarks(record_old=True)
             self.dataWatch.clearWatches()
             if self.coverage:
@@ -333,21 +362,25 @@ class InjectIO():
                     self.top.runToIO(self.fd, linger=True, break_simulation=False)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
-            self.lgr.debug('injectIO debug to %s' % self.target)
+            self.lgr.debug('injectIO debug to %s' % self.target_proc)
             self.top.resetOrigin()
             ''' watch for death of this process as well '''
-            self.context_manager.stopWatchTasksAlone(None)
-            self.context_manager.watchGroupExits()
-            self.top.watchPageFaults()
+            self.top.stopWatchTasks(target=self.target_cell, immediate=True)
             #self.context_manager.setExitCallback(self.recordExit)
-            self.top.debugProc(self.target, final_fun=self.injectCallback)
+
+            self.top.setTarget(self.target_cell)
+
+            self.top.debugProc(self.target_proc, final_fun=self.injectCallback)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):
         ''' called at the end of the debug hap chain, meaning we are in the target process. 
-            Intended for watching process other than the one reading the data. '''
+            Intended for watching process other than the one reading the data. 
+            GenMonitor default target has been switched to given target cell if needed
+        '''
         self.lgr.debug('injectIO injectCallback')
-        self.context_manager.watchGroupExits()
+        self.top.watchGroupExits()
+        self.top.watchPageFaults()
         self.bookmarks = self.top.getBookmarksInstance()
         if self.save_json is not None:
             self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
