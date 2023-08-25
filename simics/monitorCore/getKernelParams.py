@@ -41,7 +41,6 @@ import os
 
 import w7Params
 import winKParams
-import win7Syscalls
 
 class GetKernelParams():
     def __init__(self, comp_dict, run_from_snap):
@@ -399,7 +398,7 @@ class GetKernelParams():
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 addr = self.mem_utils.getUnsigned(int(addr, 16))
-                if addr < 0x1000:
+                if not self.isWindows() and addr < 0x1000:
                     self.lgr.debug('gs offset looks dicey, skip this 0x%x' % addr)
                     continue
                 self.gs_base = self.cpu.ia32_gs_base
@@ -413,7 +412,7 @@ class GetKernelParams():
                 #phys = (self.gs_base + self.param.current_task)-self.param.kernel_base
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
                 cur_task = SIM_read_phys_memory(self.cpu, phys, self.mem_utils.WORD_SIZE)
-                if cur_task < 0x10000:
+                if not self.isWindows() and cur_task < 0x10000:
                     self.lgr.debug('cur task looks dicey, skip this 0x%x' % cur_task)
                     continue
                 self.current_task_phys = phys
@@ -612,7 +611,7 @@ class GetKernelParams():
         SIM_run_alone(self.getWin7Params, None)
 
     def getWin7Params(self, dumb):
-        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.lgr)
+        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.current_task_phys, self.lgr)
         if self.param.ts_pid is not None:
             print('got pid %d' % self.param.ts_pid)
         else:
@@ -1601,15 +1600,11 @@ class GetKernelParams():
                 x = b.decode('ascii', errors='ignore')
                 print('decoded ascii %s' % x)
 
-    def win7Syscalls(self, run_to=None):
-        ''' either trace all syscalls or run to the given call name and stop. '''
-        cell_name = self.target 
-        if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
-            param_file = self.comp_dict[cell_name]['RESIM_PARAM']
-            if os.path.isfile(param_file):
-                self.param = pickle.load(open(param_file, 'rb'))
-                self.lgr.debug('w7Tasks loaded params from %s' % param_file)
-        self.win7Syscalls = win7Syscalls.Win7Syscalls(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, run_to=run_to)
+    def isWindows(self):
+        if self.os_type.startswith('WIN'):
+            return True
+        else:
+            return False
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
