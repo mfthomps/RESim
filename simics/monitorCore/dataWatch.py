@@ -1520,7 +1520,7 @@ class DataWatch():
             retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
-        elif self.top.isWindows() and self.mem_utils.wordSize(self.cpu) == 8:
+        elif self.top.isWindows(target=self.cell_name) and self.mem_utils.wordSize(self.cpu) == 8:
             retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r8')
@@ -2487,7 +2487,7 @@ class DataWatch():
                 elif new_sp is not None:
                     #self.lgr.debug('dataWatch loopAdHoc is stack adjust, now 0x%x' % new_sp)
                     track_sp = new_sp
-                elif not self.top.isWindows() and next_instruct[1].startswith('push') and self.top.isCode(next_ip): 
+                elif not self.top.isWindows(target=self.cell_name) and next_instruct[1].startswith('push') and self.top.isCode(next_ip): 
                     ''' TBD extend for arm stm,  use for windows?'''
                     if self.decode.isReg(op1) and self.decode.regIsPartList(op1, our_reg_list):
                         ''' Pushed our register '''
@@ -2939,7 +2939,7 @@ class DataWatch():
                 fun = eip
 
             ''' TBD seems impossible for a push to trigger a load.  huh?'''
-            if not self.top.isWindows() and instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
+            if not self.top.isWindows(target=self.cell_name) and instruct[1].startswith('push') and self.top.isCode(eip) and op_type == Sim_Trans_Load:
                 self.lgr.debug('********* is a push, provide an explaination please!')
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp') - self.mem_utils.wordSize(self.cpu)
                 self.trackPush(sp, instruct, addr, start, length, eip)

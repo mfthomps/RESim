@@ -257,7 +257,7 @@ class PageFaultGen():
             elif page_info.ptable_addr is not None:
                 #self.lgr.debug('pageFaultGen pageFaultHapAlone page_addr was None')
                 self.watchPtable(page_info.ptable_addr, prec)
-            elif not self.top.isWindows():
+            elif not self.top.isWindows(target=self.target):
                 self.lgr.error('pageFaultGen pageFaultHapAlone got zilch')
 
 
@@ -265,7 +265,7 @@ class PageFaultGen():
         if self.fault_hap1 is not None or self.fault_hap is not None:
             self.lgr.debug('pageFaultGen watchPageFaults, already watching.  Do nothing.')
             return
-        if self.top.isWindows():
+        if self.top.isWindows(target=self.target):
             ''' TBD fix for windows '''
             return 
         self.debugging_pid = pid
