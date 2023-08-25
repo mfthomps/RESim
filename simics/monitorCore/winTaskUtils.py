@@ -60,6 +60,8 @@ class WinTaskUtils():
         self.exit_cycles = 0
         self.exit_pid = 0
 
+        self.system_proc_rec = None
+
         resim_dir = os.getenv('RESIM_DIR')
         self.call_map = {}
         self.call_num_map = {}
@@ -86,6 +88,12 @@ class WinTaskUtils():
                 else:
                     self.phys_current_task = value['current_task_phys']
                     self.phys_saved_cr3 = value['saved_cr3_phys']
+                    if 'system_proc_rec' in value:
+                        self.system_proc_rec = value['system_proc_rec']
+                    else:
+                        self.system_proc_rec = self.getRecAddrForPid(4)
+                        if self.system_proc_rec is None:
+                            self.lgr.error('WinTaskUtils failed to get system thread record')
                     self.lgr.debug('winTaskUtils, snapshop had saved cr3, value 0x%x' % self.phys_saved_cr3)
                 #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
                 self.mem_utils.saveKernelCR3(self.cpu, self.phys_saved_cr3)
@@ -122,6 +130,9 @@ class WinTaskUtils():
                     self.lgr.debug('winTaskUtils from pickle got pid:%d  %s' % (pid, self.program_map[pid]))
             else:
                 self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
+        else:
+            pass
+            # fix to saved values gather from booted system
 
     def commSize(self):
         return 14
@@ -344,6 +355,7 @@ class WinTaskUtils():
         dict_val = {}
         dict_val['current_task_phys'] = self.phys_current_task
         dict_val['saved_cr3_phys'] = self.phys_saved_cr3
+        dict_val['system_proc_rec'] = self.system_proc_rec 
         pickle.dump(dict_val , open( phys_current_task_file, "wb" ) )
         exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
         pickle.dump( self.program_map, open( exec_addrs_file, "wb" ) )
@@ -426,7 +438,15 @@ class WinTaskUtils():
         got = []
         done = False
         #self.lgr.debug('getTaskList ')
-        task_ptr = self.getCurTaskRec()
+        dum, dum1, pid = self.curProc()
+        if pid != 0:
+            task_ptr = self.getCurTaskRec()
+        elif self.system_proc_rec is not None:
+            task_ptr = self.system_proc_rec
+        else:
+            elf.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
+            return got
+          
         #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
         #self.lgr.debug('getTaskList returning %d tasks' % len(got))
@@ -509,13 +529,13 @@ class WinTaskUtils():
     def getPidsForComm(self, comm_in):
         comm = os.path.basename(comm_in).strip()
         retval = []
-        #self.lgr.debug('getPidsForComm %s' % comm_in)
+        self.lgr.debug('getPidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
-                #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
+                self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
                 if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
                     retval.append(ts_list[ts].pid)
