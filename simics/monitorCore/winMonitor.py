@@ -102,13 +102,32 @@ class WinMonitor():
 
     def debugProc(self, proc, final_fun=None, pre_fun=None):
         ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
-        self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
-        #f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
-        f1 = stopFunction.StopFunction(self.debugAlone, [None], nest=False)
-        flist = []
-        #flist = [f1]
-        self.toCreateProc(proc, flist=flist, break_simulation=False) 
 
+        plist = self.task_utils.getPidsForComm(proc)
+        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils.getExitPid()):
+            self.lgr.debug('winMonitor debugProc plist len %d plist[0] %d  exitpid %d' % (len(plist), plist[0], self.task_utils.getExitPid()))
+
+            self.lgr.debug('winMonitor debugProc process %s found, run until some instance is scheduled' % proc)
+            print('%s is running.  Will continue until some instance of it is scheduled' % proc)
+            f1 = stopFunction.StopFunction(self.top.toUser, [], nest=True)
+            f2 = stopFunction.StopFunction(self.top.debugExitHap, [], nest=False)
+            f3 = stopFunction.StopFunction(self.top.debug, [], nest=False)
+            flist = [f1, f3, f2]
+            if final_fun is not None:
+                f4 = stopFunction.StopFunction(final_fun, [], nest=False)
+                flist.append(f4)
+            if pre_fun is not None:
+                fp = stopFunction.StopFunction(pre_fun, [], nest=False)
+                flist.insert(0, fp)
+            ''' If not yet loaded SO files, e.g., we just did a toProc, then execToText ''' 
+            self.top.toRunningProc(proc, plist, flist)
+        else:
+            self.lgr.debug('winMonitor debugProc call toCreateProc %s' % proc)
+            #f1 = stopFunction.StopFunction(self.toNewProc, [proc], nest=False)
+            f1 = stopFunction.StopFunction(self.debugAlone, [None], nest=False)
+            flist = []
+            #flist = [f1]
+            self.toCreateProc(proc, flist=flist, break_simulation=False) 
 
     def tasks(self, filter=None, file=None):
         plist = {}
