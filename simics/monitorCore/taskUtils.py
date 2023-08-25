@@ -148,7 +148,10 @@ class TaskUtils():
                 else:
                     self.lgr.error('TaskUtils init phys of current_task 0x%x is None' % self.param.current_task)
                     return None
-            self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
+            if phys is not None:
+                self.lgr.debug('taskUtils param.current_task 0x%x phys 0x%x' % (param.current_task, phys))
+            else:
+                self.lgr.debug('taskUtils param.current_task 0x%x phys is None' % (param.current_task))
             self.phys_current_task = phys
 
             if self.mem_utils.WORD_SIZE == 4 and self.phys_current_task > 0xffffffff:
