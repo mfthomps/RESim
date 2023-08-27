@@ -609,6 +609,9 @@ class GenContextMgr():
                 SIM_run_alone(self.restoreDefaultContext, None)
                 if len(self.watch_for_prog) > 0:
                     self.checkFirstSchedule(new_addr, pid, comm)
+                if pid not in self.task_rec_bp or self.task_rec_bp[pid] is None:
+                    self.lgr.debug('contextManager is in only_prog, watch exit for pid: %d' % pid)
+                    self.watchExit(pid=pid)
                 #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
             retval = True 
@@ -1089,7 +1092,7 @@ class GenContextMgr():
 
     def deadParrot(self, pid):
         ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
-        self.lgr.debug('contextManager deadParror pid %d' % pid)
+        self.lgr.debug('contextManager deadParrot pid %d' % pid)
         exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
         if exit_syscall is not None and not self.watching_page_faults:
             ida_msg = 'pid:%d exit via kill?' % pid
@@ -1142,9 +1145,16 @@ class GenContextMgr():
         if pid not in self.task_rec_hap or pid in self.demise_cache:
             return
         dumb, comm, cur_pid  = self.task_utils.curProc()
-        self.lgr.debug('contextManager taskRecHap demise of pid:%d by the hand of cur_pid %d?' % (pid, cur_pid))
+        self.lgr.debug('contextManager taskRecHap rec point to that of pid:%d altered by cur_pid %d?' % (pid, cur_pid))
         dead_rec = self.task_utils.getRecAddrForPid(pid)
-        if dead_rec is not None:
+        if self.top.isWindows(target=self.cell_name) and dead_rec is not None and cur_pid == 4:
+            #TBD could it be any other pid?
+            self.lgr.debug('contextManager System (pid 4) wrote to task rec that had pointed to %d' % pid)
+            list_addr = self.task_utils.getTaskListPtr(dead_rec)
+            if list_addr is not None:
+                self.lgr.debug('contextManager list_addr now 0x%x' % list_addr)
+
+        elif dead_rec is not None:
             if pid != cur_pid:
                 self.lgr.debug('contextManager taskRecHap got record 0x%x for %d, call resetAlone' % (dead_rec, pid))
                 self.demise_cache.append(pid)
@@ -1222,7 +1232,10 @@ class GenContextMgr():
                 self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
                 return False
             self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on 0x%x context: %s' % (watch_pid, watch_comm, pid, list_addr, cell))
-            self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
+            #self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
+            ''' Use physical so it works with an Only list '''
+            list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
+            self.task_rec_bp[pid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, list_addr_phys, self.mem_utils.WORD_SIZE, 0)
             SIM_run_alone(self.watchTaskHapAlone, pid)
             self.task_rec_watch[pid] = list_addr
         else:
