@@ -4328,6 +4328,8 @@ class GenMonitor():
             cpu = this_cpu
         if target_cell != self.target:
             target_cpu = self.cell_config.cpuFromCell(target_cell)
+        else:
+            target_cpu = this_cpu
 
         if trace_all:
             traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, msg='injectIO traceAll')
