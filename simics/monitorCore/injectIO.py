@@ -144,7 +144,7 @@ class InjectIO():
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
         self.break_on_hap = None
-        if not self.coverage:
+        if not self.coverage and not self.trace_all:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
@@ -257,6 +257,7 @@ class InjectIO():
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
             self.top.jumperStop()
+            self.top.stopThreadTrack(immediate=True)
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
@@ -264,6 +265,7 @@ class InjectIO():
             self.top.instructTrace(trace_file, watch_threads=True)
         elif self.trace_all and self.target_proc is None:
             self.top.debugPidGroup(self.pid, to_user=False) 
+            self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
 
@@ -381,11 +383,20 @@ class InjectIO():
         self.lgr.debug('injectIO injectCallback')
         self.top.watchGroupExits()
         self.top.watchPageFaults()
+        self.top.stopThreadTrack(immediate=True)
+        if self.trace_all:
+            self.top.traceAll()
+        elif self.instruct_trace:
+            base = os.path.basename(self.dfile)
+            print('base is %s' % base)
+            trace_file = base+'.trace'
+            self.top.instructTrace(trace_file, watch_threads=True)
         self.bookmarks = self.top.getBookmarksInstance()
-        if self.save_json is not None:
-            self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
-        else:
-            self.top.trackIO(self.targetFD, quiet=True)
+        if not self.coverage and not self.trace_all:
+            if self.save_json is not None:
+                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
+            else:
+                self.top.trackIO(self.targetFD, quiet=True)
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:
