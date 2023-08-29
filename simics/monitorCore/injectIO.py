@@ -39,7 +39,8 @@ class InjectIO():
     def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
-           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
+           count=1):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -55,6 +56,7 @@ class InjectIO():
         self.context_manager = context_manager
         self.top = top
         self.lgr = lgr
+        self.count = count
         self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
         self.break_on = break_on
         if break_on is not None and fname is not None:
@@ -394,9 +396,9 @@ class InjectIO():
         self.bookmarks = self.top.getBookmarksInstance()
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
-                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
+                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count)
             else:
-                self.top.trackIO(self.targetFD, quiet=True)
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count)
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:
