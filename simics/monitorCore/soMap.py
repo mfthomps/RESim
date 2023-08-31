@@ -249,7 +249,7 @@ class SOMap():
             text_seg = elfText.getText(full_path, self.lgr)
             if text_seg is None:
                 self.lgr.debug('SOMap addSO, no file at %s' % full_path)
-                return
+                text_seg = elfText.Text(addr, 0, 0)
        
             text_seg.locate = addr
             #text_seg.size = count
@@ -383,8 +383,8 @@ class SOMap():
                         return p
         if not quiet:
             self.lgr.error('SOMap getThreadPid requested unknown pid %d' % pid)
-        else:
-            self.lgr.debug('SOMap getThreadPid requested unknown pid %d' % pid)
+        #else:
+        #    self.lgr.debug('SOMap getThreadPid requested unknown pid %d' % pid)
         return None
  
     def getSOPid(self, pid):
@@ -428,11 +428,11 @@ class SOMap():
         if pid is None:
             return None
         if pid in self.so_file_map:
-            if pid not in self.prog_start and self.prog_start[pid] is not None:
-                self.lgr.warning('SOMap getSOFile pid %d in so_file map but not text_start' % pid)
+            if pid not in self.prog_start or self.prog_start[pid] is None:
+                self.lgr.warning('SOMap getSOFile pid %d in so_file map but not prog_start' % pid)
                 return None
             if self.prog_end[pid] is None:
-                self.lgr.warning('SOMap getSOFile pid %d in so_file map but None for text_end' % pid)
+                self.lgr.warning('SOMap getSOFile pid %d in so_file map but None for prog_end' % pid)
                 return None
             if addr_in >= self.prog_start[pid] and addr_in <= self.prog_end[pid]:
                 retval = self.text_prog[pid]
