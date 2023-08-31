@@ -68,16 +68,18 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultGen rmExit remove pending for %d %s' % (pid, str(self.pending_faults[pid])))
             del self.pending_faults[pid]
         
+    def rmPDirHap(self, hap):
+        RES_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
+        RES_delete_breakpoint(self.pdir_break)
+
     def pdirWriteHap(self, prec, third, forth, memory):
         pdir_entry = SIM_get_mem_op_value_le(memory)
         cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultGen dirWriteHap, %d (%s) new entry value 0x%x set by pid %d' % (pid, comm, pdir_entry, prec.pid))
         if self.pdir_break is not None:
-            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.pdir_hap)
+            hap = self.pdir_hap
+            SIM_run_alone(self.rmPDirHap, hap)
             #self.lgr.debug('pageFaultGen pdirWriteHap delete bp %d' % self.pdir_break)
-            RES_delete_breakpoint(self.pdir_break)
-            #self.context_manager.genDeleteHap(self.pdir_hap)
-            self.pdir_break = None
             self.pdir_hap = None
             if pdir_entry != 0xff:
                 self.rmExit(pid)
@@ -85,6 +87,9 @@ class PageFaultGen():
                 self.lgr.debug('pageFaultGen pdirWriteHap assuming entry of 0xff implies a segv')
 
     def watchPdir(self, pdir_addr, prec):
+        if self.pdir_break is not None:
+            #self.lgr.debug('pageFaultGen watchPdir already a break. wanted to set one one 0x%x' % pdir_addr)
+            return
         pcell = self.cpu.physical_memory
         #self.pdir_break = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
         self.pdir_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
@@ -92,20 +97,25 @@ class PageFaultGen():
         #self.pdir_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pdirWriteHap, prec, self.pdir_break, name='watchPdir')
         self.pdir_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.pdirWriteHap, prec, self.pdir_break)
 
+    def rmPtableHap(self, hap):
+        RES_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
+        RES_delete_breakpoint(self.ptable_break)
+
     def ptableWriteHap(self, prec, third, forth, memory):
         ptable_entry = SIM_get_mem_op_value_le(memory)
         cpu, comm, pid = self.task_utils.curProc() 
         #self.lgr.debug('pageFaultGen tableWriteHap, %d (%s) new entry value 0x%x was set for pid: %d' % (pid, comm, ptable_entry, prec.pid))
         if self.ptable_break is not None:
-            RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ptable_hap)
+            hap = self.ptable_hap
+            SIM_run_alone(self.rmPtableHap, hap)
             #self.lgr.debug('pageFaultGen ptableWrite delete bp %d' % self.ptable_break)
-            RES_delete_breakpoint(self.ptable_break)
-            #self.context_manager.genDeleteHap(self.ptable_hap)
-            self.ptable_break = None
             self.ptable_hap = None
             self.rmExit(pid)
 
     def watchPtable(self, ptable_addr, prec):
+        if self.ptable_break is not None:
+            #self.lgr.debug('pageFaultGen watchPtable wanted break on 0x%x but already a break set' % (ptable_addr))
+            return
         pcell = self.cpu.physical_memory
         #self.ptable_break = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, ptable_addr, self.page_entry_size, 0)
         self.ptable_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, ptable_addr, self.page_entry_size, 0)
@@ -209,12 +219,20 @@ class PageFaultGen():
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if pid in self.pending_faults:
-                #self.lgr.debug('pageFaultHap user space, was a pending fault for addr 0x%x' % self.pending_faults[pid].cr2)
+                #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x' % self.pending_faults[pid].cr2)
                 prec = self.pending_faults[pid]
                 phys_block = cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
                 if phys_block.address is not None and phys_block.address != 0:
-                    #self.lgr.debug('pageFaultHap in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
+                    #self.lgr.debug('pageFaultGen modeChanged in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
                     del self.pending_faults[pid]
+                    if self.ptable_hap is not None:
+                        hap = self.ptable_hap
+                        SIM_run_alone(self.rmPtableHap, hap)
+                        self.ptable_hap = None
+                    if self.pdir_hap is not None:
+                        hap = self.pdir_hap
+                        SIM_run_alone(self.rmPDirHap, hap)
+                        self.pdir_hap = None
                 elif self.cpu.architecture != 'arm':
                     ''' TBD handle reflection of segv to user space for arm? '''
                     sp = self.mem_utils.getRegValue(cpu, 'sp')
@@ -222,7 +240,7 @@ class PageFaultGen():
                         ''' growing stack '''
                         del self.pending_faults[pid]
                     else:
-                        self.lgr.debug('pageFaultHap in user space but 0x%x still not mapped' % prec.cr2)
+                        #self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped' % prec.cr2)
                         SIM_run_alone(self.hapAlone, self.pending_faults[pid])
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
