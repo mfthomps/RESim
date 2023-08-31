@@ -94,6 +94,8 @@ class WinTaskUtils():
                         self.system_proc_rec = self.getRecAddrForPid(4)
                         if self.system_proc_rec is None:
                             self.lgr.error('WinTaskUtils failed to get system thread record')
+                        else:
+                            self.lgr.debug('winTaskUtils, snapshop lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
                     self.lgr.debug('winTaskUtils, snapshop had saved cr3, value 0x%x' % self.phys_saved_cr3)
                 #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
                 self.mem_utils.saveKernelCR3(self.cpu, self.phys_saved_cr3)
@@ -115,6 +117,14 @@ class WinTaskUtils():
                     else:
                         self.phys_current_task = value['current_task_phys']
                         self.phys_saved_cr3 = value['saved_cr3_phys']
+                        if 'system_proc_rec' in value:
+                            self.system_proc_rec = value['system_proc_rec']
+                        else:
+                            self.system_proc_rec = self.getRecAddrForPid(4)
+                            if self.system_proc_rec is None:
+                                self.lgr.error('WinTaskUtils temp hack failed to get system thread record')
+                            else:
+                                self.lgr.debug('winTaskUtils, hacked snapshop lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
                         self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
                            self.phys_saved_cr3))
                     #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
@@ -444,7 +454,7 @@ class WinTaskUtils():
         elif self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
         else:
-            elf.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
+            self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
             return got
           
         #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
