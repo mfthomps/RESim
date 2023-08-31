@@ -1190,8 +1190,8 @@ class GenMonitor():
     
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
-        cell = self.cell_config.cell_context[self.target]
         cpu = self.cell_config.cpuFromCell(self.target)
+        cell_name = self.getTopComponentName(cpu)
         if self.target not in self.magic_origin:
             self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         if not self.disable_reverse:
@@ -1270,7 +1270,7 @@ class GenMonitor():
                         self.bookmarks.setFunMgr(self.fun_mgr)
                         self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
-                        self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell, self.context_manager[self.target],  self.mem_utils[self.target],
+                        self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell_name, self.context_manager[self.target],  self.mem_utils[self.target],
                              elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % self.full_path)
@@ -1284,7 +1284,11 @@ class GenMonitor():
                         self.lgr.debug('debug, create Coverage ida_path %s, analysis path: %s' % (ida_path, analysis_path))
                         
                         self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
-                           cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+                           cell_name, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+                        if self.coverage is None:
+                            self.lgr.error('debug: Coverage is None!')
+                        else:
+                            self.lgr.debug('debug: Coverage %s' % str(coverage))
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
                 else:
@@ -1594,10 +1598,16 @@ class GenMonitor():
         pid_dict = self.task_utils[self.target].getGroupPids(leader_pid)
         pid_list = list(pid_dict.keys())
         self.lgr.debug('debugPidGroup cell %s pid %d found leader %d and %d pids' % (self.target, pid, leader_pid, len(pid_list)))
-        self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun, to_user=to_user)
+        if len(pid_list) == 0:
+            self.lgr.error('debugPidGroup pid %d not on current target?' % pid)
+        else: 
+            self.debugPidList(pid_list, self.debugGroup, final_fun=final_fun, to_user=to_user)
 
     def debugPidList(self, pid_list, debug_function, final_fun=None, to_user=True):
         #self.stopTrace()
+        if len(pid_list) == 0:
+            self.lgr.error('debugPidList with empty list')
+            return
         cpu = self.cell_config.cpuFromCell(self.target)
         if self.target not in self.magic_origin:
             self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
@@ -2039,18 +2049,21 @@ class GenMonitor():
         ''' TBD broken '''
         self.pfamily[self.target].traceExecve(comm)
 
-    def watchPageFaults(self, pid=None):
-
+    def watchPageFaults(self, pid=None, target=None):
+        if target is None:
+            target = self.target
         if pid is None:
-            pid, cpu = self.context_manager[self.target].getDebugPid() 
+            pid, cpu = self.context_manager[target].getDebugPid() 
         self.lgr.debug('genMonitor watchPageFaults pid %s' % pid)
-        self.page_faults[self.target].watchPageFaults(pid=pid, compat32=self.is_compat32)
+        self.page_faults[target].watchPageFaults(pid=pid, compat32=self.is_compat32)
         #self.lgr.debug('genMonitor watchPageFaults back')
 
-    def stopWatchPageFaults(self, pid=None):
+    def stopWatchPageFaults(self, pid=None, target=None):
+        if target is None:
+            target = self.target
         self.lgr.debug('genMonitor stopWatchPageFaults')
-        self.page_faults[self.target].stopWatchPageFaults(pid)
-        self.page_faults[self.target].stopPageFaults()
+        self.page_faults[target].stopWatchPageFaults(pid)
+        self.page_faults[target].stopPageFaults()
 
     def catchCorruptions(self):
         self.watchPageFaults()
@@ -4312,6 +4325,7 @@ class GenMonitor():
         if self.bookmarks is not None:
             self.goToOrigin()
 
+        ''' See if the target cell or/and process differs from the current process into which data will be injected '''
         target_cell = self.target
         target_proc = None
         if target is not None:
@@ -4331,6 +4345,7 @@ class GenMonitor():
         else:
             target_cpu = this_cpu
 
+        ''' Record any debuggerish buffers that were specified in the ini file '''
         if trace_all:
             traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, msg='injectIO traceAll')
 
@@ -4794,35 +4809,60 @@ class GenMonitor():
         ''' Once set, cannot go back '''
         self.disable_reverse = True
 
-    def playAFLTCP(self, target, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None):
-        self.playAFL(target,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname)
+    def playAFLTCP(self, dfile, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, 
+                   target=None, fname=None):
+        self.playAFL(dfile,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, 
+                     only_thread=only_thread, target=target, fname=fname)
 
-    def playAFL(self, target, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, fname=None, trace_all=False, repeat=False):
-        ''' replay all AFL discovered paths for purposes of updating BNT in code coverage '''
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        cell_name = self.getTopComponentName(cpu)
+    def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
+            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None):
+        ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
+            Use fname to name a binary such as a library.
+        '''
+
+        ''' See if the target cell or/and process differs from the current process into which data will be injected '''
+        target_cell = self.target
+        target_proc = None
+        if target is not None:
+            if ':' in target:
+                parts = target.rsplit(':',1)
+                target_cell = parts[0]
+                target_proc = parts[1]
+            else:
+                target_proc = target
+            self.lgr.debug('target_cell %s target_proc %s' % (target_cell, target_proc))
+
+        this_cpu, comm, pid = self.task_utils[self.target].curProc() 
+        if target_cell != self.target:
+            target_cpu = self.cell_config.cpuFromCell(target_cell)
+        else:
+            target_cpu = this_cpu
+        cell_name = self.getTopComponentName(this_cpu)
         #if not self.checkUserSpace(cpu):
         #    return
-        self.debugPidGroup(pid, to_user=False)
-        trace_buffer = traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 'playAFL')
+        #
+        # 
+
+        ''' Record any debuggerish buffers that were specified in the ini file '''
+        trace_buffer = traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, 'playAFL')
         if len(trace_buffer.addr_info) == 0:
             trace_buffer = None
-        bb_coverage = self.coverage
+
         if no_cover:
             bb_coverage = None
         self.rmDebugWarnHap()
-        play = playAFL.PlayAFL(self, cpu, cell_name, self.back_stop[self.target], bb_coverage, 
-              self.mem_utils[self.target], self.dataWatch[self.target], target, self.run_from_snap, self.context_manager[self.target], 
+        play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover, 
+              self.mem_utils[self.target], self.dataWatch[self.target], dfile, self.run_from_snap, self.context_manager[self.target], 
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
-              crashes=crashes, parallel=parallel, only_thread=only_thread, fname=fname, repeat=repeat, trace_buffer=trace_buffer)
-        if play is not None:
+              crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
+              repeat=repeat, trace_buffer=trace_buffer, fname=fname)
+        if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
                 self.traceAll()
                 #self.trace_all = True
             play.go()
-        else:
+        elif play is None:
             print('playAFL failed?')
 
     def findBB(self, target, bb):
@@ -5043,7 +5083,7 @@ class GenMonitor():
         retval = True
         self.rmDebugWarnHap()
         if self.debug_info is not None and 'pid' in self.debug_info:
-            self.lgr.debug('debugSnap call debugPidGroup for pid %d' % self.debug_info['pid'])
+            self.lgr.debug('debugSnap call debugPidGroup for pid %d cpu name %s current target %s' % (self.debug_info['pid'], self.debug_info['cpu'], self.target))
             self.debugPidGroup(self.debug_info['pid'], to_user=False, final_fun=final_fun)
             self.lgr.debug('debugSnap did debugPidGroup for pid %d' % self.debug_info['pid'])
         else:
@@ -5258,18 +5298,20 @@ class GenMonitor():
         cmd = 'c %d' % n
         SIM_run_alone(SIM_run_command, cmd)
 
-    def getProgName(self, pid):
+    def getProgName(self, pid, target=None):
+        if target is None:
+            target = self.target
         if pid is None:
             self.lgr.debug('genMonitor getProgName pid is none')
             return None
-        prog_name = self.traceProcs[self.target].getProg(pid)
+        prog_name = self.traceProcs[target].getProg(pid)
         self.lgr.debug('genMonitor getProgName pid %d progname is %s' % (pid, prog_name))
         if prog_name is None or prog_name == 'unknown':
-            prog_name, dumb = self.task_utils[self.target].getProgName(pid) 
+            prog_name, dumb = self.task_utils[target].getProgName(pid) 
             self.lgr.debug('genMonitor getProgName pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
             if prog_name is None:
-                comm = self.task_utils[self.target].getCommFromPid(pid) 
-                prog_name = self.task_utils[self.target].getProgNameFromComm(comm) 
+                comm = self.task_utils[target].getCommFromPid(pid) 
+                prog_name = self.task_utils[target].getProgNameFromComm(comm) 
                 if prog_name is None:
                     prog_name = comm
                     self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
@@ -5502,9 +5544,11 @@ class GenMonitor():
             phys = cpu.ia32_fs_base + (self.param[self.target].current_task-self.param[self.target].kernel_base)
             print('current task phys addr is 0x%x' % phys)
 
-    def getIdaData(self, path):
+    def getIdaData(self, path, target=None):
+        if target is None:
+            target = self.target
         self.lgr.debug('getIdaData path %s' % path)
-        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
+        root_prefix = self.comp_dict[target]['RESIM_ROOT_PREFIX']
         ida_path = resimUtils.getIdaData(path, root_prefix)
         return ida_path
 
