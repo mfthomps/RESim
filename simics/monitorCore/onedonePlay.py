@@ -1,6 +1,6 @@
 '''
 Example of a ONE_DONE script that will be called by RESim after it has
-been initialized.  This one calls AFL
+been initialized.  This one calls playAFL
 '''
 import os
 def onedone(top):
@@ -19,7 +19,7 @@ def onedone(top):
         fh.write('in onedone of onedonePlay\n') 
         if protocol == 'tcp': 
             fh.write('call playAFLTCP target %s only_thread %r\n' % (base, only_thread))
-            top.playAFLTCP(base, parallel=True, only_thread=only_thread, fname=program)
+            top.playAFLTCP(base, parallel=True, only_thread=only_thread, target=program)
         else:
             fh.write('call playAFL target %s only_thread %r\n' % (base, only_thread))
-            top.playAFL(base, parallel=True, only_thread=only_thread, fname=program)
+            top.playAFL(base, parallel=True, only_thread=only_thread, target=program)
