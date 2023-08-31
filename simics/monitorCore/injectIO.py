@@ -260,7 +260,7 @@ class InjectIO():
                 self.top.watchROP(watching=False)
             self.top.jumperStop()
             self.top.stopThreadTrack(immediate=True)
-        elif self.instruct_trace:
+        elif self.instruct_trace and self.target_proc is None:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
             trace_file = base+'.trace'
