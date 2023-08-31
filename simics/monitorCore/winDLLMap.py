@@ -107,7 +107,8 @@ class WinDLLMap():
                     if section.pid not in self.min_addr:
                         self.min_addr[section.pid] = None
                         self.max_addr[section.pid] = None
-                    if self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr:
+                    if (self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr) and section.addr != 0:
+                        #TBD what is being loaded at addr 0?  Are we getting confused by mapped memory that is not code?
                         self.min_addr[section.pid] = section.addr + section.text_offset
                     if section.size is None:
                         self.lgr.error('winDLL loadPickle no size for %s, addr 0x%x pid:%d' % (section.fname, section.addr, section.pid))
@@ -230,7 +231,8 @@ class WinDLLMap():
                     if pid not in self.max_addr:
                         self.max_addr[pid] = None
                         self.min_addr[pid] = None
-                    if self.min_addr[pid] is None or self.min_addr[pid] > load_addr:
+                    if (self.min_addr[pid] is None or self.min_addr[pid] > load_addr) and load_addr != 0:
+                        # TBD what is loaded at zero?  
                         self.min_addr[pid] = load_addr
                     ma = load_addr + size
                     if self.max_addr[pid] is None or self.max_addr[pid] < ma:
@@ -298,9 +300,12 @@ class WinDLLMap():
         retval = False
         if pid in self.min_addr:
             if addr_in >= self.min_addr[pid] and addr_in <= self.max_addr[pid]:
+                #self.lgr.debug('winDLL isCode 0x%x falls in min/max' % addr_in)
                 retval = True
             else:
                 for section in self.section_list:
+                    if section.addr == 0:
+                        continue
                     if section.pid == pid:
                         end = section.addr+section.size
                         if addr_in >= section.addr and addr_in <= end:
