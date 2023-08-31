@@ -11,12 +11,14 @@ import json
 from resimUtils import rprint
 
 class PlayAFL():
-    def __init__(self, top, cpu, cell_name, backstop, coverage, mem_utils, dataWatch, target, 
+    def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dataWatch, dfile, 
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, fname=None, repeat=False, trace_buffer=None):
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None, 
+             fname=None, repeat=False, trace_buffer=None):
         self.top = top
         self.backstop = backstop
-        self.coverage = coverage
+        self.no_cover = no_cover
+        self.coverage = None
         self.mem_utils = mem_utils
         self.dataWatch = dataWatch
         self.snap_name = snap_name
@@ -29,8 +31,15 @@ class PlayAFL():
         self.write_data = None
         self.orig_buffer = None
         self.cfg_file = cfg_file
-        self.target = target
+        self.dfile = dfile
         self.trace_buffer = trace_buffer
+        self.target_proc = target_proc
+        self.target_cell = target_cell
+        self.fname = fname
+        self.afl_mode = afl_mode
+        self.only_thread = only_thread
+        self.create_dead_zone = create_dead_zone
+        self.linear = linear
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
         self.afl_list = []
@@ -59,32 +68,33 @@ class PlayAFL():
         if packet_count > 1 and not (self.udp_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return None
-        if os.path.isfile(target):
+        if os.path.isfile(dfile):
             ''' single file to play '''
-            self.target = 'oneplay'
-            relative = target[(len(self.afl_dir)+1):]
-            if target.startswith(aflPath.getAFLOutput()) and len(relative.strip()) > 0:
+            self.dfile = 'oneplay'
+            relative = dfile[(len(self.afl_dir)+1):]
+            if dfile.startswith(aflPath.getAFLOutput()) and len(relative.strip()) > 0:
                 self.afl_list = [relative]
                 self.lgr.debug('playAFL, single file, path relative to afl_dir is %s' % relative)
             else:
-                self.afl_list = [target]
-                self.lgr.debug('playAFL, single file, abs path is %s' % target)
+                self.afl_list = [dfile]
+                self.lgr.debug('playAFL, single file, abs path is %s' % dfile)
         else:
             if not crashes:
-                print('get target queue')
-                self.lgr.debug('playAFL get queue for target %s' % target)
-                self.afl_list = aflPath.getTargetQueue(target, get_all=True)
+                print('get dfile queue')
+                self.lgr.debug('playAFL get queue for dfile %s' % dfile)
+                self.afl_list = aflPath.getTargetQueue(dfile, get_all=True)
                 if len(self.afl_list) == 0:
-                    print('No queue files found for %s' % target)
-                    self.lgr.debug('playAFL No queue files found for %s' % target)
+                    print('No queue files found for %s' % dfile)
+                    self.lgr.debug('playAFL No queue files found for %s' % dfile)
                     return
             else:
-                self.afl_list = aflPath.getTargetCrashes(target)
+                self.afl_list = aflPath.getTargetCrashes(dfile)
                 if len(self.afl_list) == 0:
-                    print('No crashes found for %s' % target)
+                    print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
-        self.lgr.debug('playAFL afl list has %d items.  current context %s' % (len(self.afl_list), self.cpu.current_context))
+        pid = self.top.getPID()
+        self.lgr.debug('playAFL afl list has %d items.  current context %s current pid:%d fname:%s' % (len(self.afl_list), self.cpu.current_context, pid, self.fname))
         self.initial_context = cpu.current_context
         self.index = -1
         self.stop_hap = None
@@ -93,7 +103,7 @@ class PlayAFL():
         self.addr = None
         self.in_data = None
         #self.backstop_cycles =   100000
-        if afl_mode:
+        if self.afl_mode:
             if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
                 self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
                 self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
@@ -118,6 +128,10 @@ class PlayAFL():
         ''' replay file names that hit the given bb '''
         self.bnt_list = []
         self.pid = self.top.getPID()
+        if target_proc is None:
+            self.target_pid = self.pid
+        else:
+            self.target_pid = None
         self.stop_on_break = False
         self.exit_list = []
         if self.cpu.architecture == 'arm':
@@ -130,25 +144,63 @@ class PlayAFL():
         if not self.loadPickle(snap_name):
             print('No AFL data stored for checkpoint %s, cannot play AFL.' % snap_name)
             return None
-        if self.target != 'oneplay' or self.repeat:
+
+        if target_proc is None:
+            self.top.debugPidGroup(pid, to_user=False)
+            self.finishInit()
+        else:
+            ''' generate a bookmark so we can return here after setting coverage breakpoints on target'''
+            self.top.resetOrigin()
+            self.top.setTarget(target_cell)
+            self.top.debugProc(target_proc, self.playInitCallback)
+
+    def playInitCallback(self):
+        self.target_pid = self.top.getPID()
+        ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
+        self.lgr.debug('playAFL playInitCallback. target pid: %d finish init' % self.target_pid)
+        self.finishInit()
+        cmd = 'skip-to bookmark = bookmark0'
+        cli.quiet_run_command(cmd)
+        self.top.setTarget(self.cell_name)
+        pid = self.top.getPID()
+        self.lgr.debug('playAFL playInitCallback, restored to original bookmark and reset target to %s pid: %d' % (self.cell_name, pid))
+        self.go()
+
+
+    def finishInit(self):
+        self.lgr.debug('playAFL finishInit')
+        if self.dfile != 'oneplay' or self.repeat:
             cli.quiet_run_command('disable-reverse-execution')
             self.top.setDisableReverse()
             cli.quiet_run_command('enable-unsupported-feature internals')
             cli.quiet_run_command('save-snapshot name = origin')
+            self.lgr.debug('playAFL finishInit call to remove debug breaks')
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
-        else:
+        elif self.target_proc is None:
             self.top.resetOrigin()
+
+        self.top.stopThreadTrack(immediate=True)
+
+        if not self.no_cover:
+            self.lgr.debug('playAFL finishInit call to get coverage')
+            self.coverage = self.top.getCoverage()
+            if self.coverage is None:
+                self.lgr.error('playAFL finishInit failed getting coverage')
+ 
 
         self.physical=False
         if self.coverage is not None:
             full_path = None
-            analysis_path = self.top.getAnalysisPath(fname)
-            self.lgr.debug('playAFL call enableCoverage')
-            self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=afl_mode, linear=linear, create_dead_zone=create_dead_zone, only_thread=only_thread, fname=analysis_path)
+            if self.fname is None:
+                analysis_path = self.top.getAnalysisPath(self.target_proc)
+            else:
+                analysis_path = self.top.getAnalysisPath(self.fname)
+            self.lgr.debug('playAFL call enableCoverage analysis_path is %s' % analysis_path)
+            self.coverage.enableCoverage(self.target_pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
-            if linear:
+            if self.linear:
                 self.physical = False
                 self.lgr.debug('afl, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
@@ -182,7 +234,7 @@ class PlayAFL():
         if hang is not None:
             hang_cycles = int(hang)
         self.backstop.setHangCallback(self.hangCallback, hang_cycles)
-        self.initial_cycle = cpu.cycles
+        self.initial_cycle = self.cpu.cycles
 
     def go(self, findbb=None):
         if len(self.afl_list) == 0:
@@ -212,7 +264,7 @@ class PlayAFL():
         self.cpu.current_context = self.initial_context 
         self.lgr.debug('playAFL goAlone, len of afl list is %d, index now %d context %s' % (len(self.afl_list), self.index, str(self.cpu.current_context)))
         done = False
-        if self.target != 'oneplay':
+        if self.dfile != 'oneplay':
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
@@ -236,7 +288,7 @@ class PlayAFL():
                     self.index += 1
         if self.index < len(self.afl_list) or self.repeat:
             self.lgr.debug('playAFL goAlone index %d' % self.index)
-            if self.target != 'oneplay' or self.repeat:
+            if self.dfile != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
@@ -250,7 +302,7 @@ class PlayAFL():
                 full = os.path.join(self.afl_dir, self.afl_list[self.index])
                 if not os.path.isfile(full):
                     self.lgr.debug('No file at %s, non-parallel file' % full)
-                    full = os.path.join(self.afl_dir, self.target, 'queue', self.afl_list[self.index])
+                    full = os.path.join(self.afl_dir, self.dfile, 'queue', self.afl_list[self.index])
                 if not os.path.isfile(full):
                     self.lgr.debug('No file at %s, try local file' % full)
                     full = self.afl_list[self.index]
@@ -280,10 +332,12 @@ class PlayAFL():
             #    self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #self.top.restoreRESimContext()
             #self.context_manager.restoreDebugContext()
+            self.lgr.debug('playAFL here')
             if self.write_data is None:
                 force_default_context = True
-                if self.target == 'oneplay' and not self.repeat:
+                if self.dfile == 'oneplay' and not self.repeat:
                     force_default_context = False
+                self.lgr.debug('playAFL gen writeData')
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
@@ -292,10 +346,12 @@ class PlayAFL():
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
+            self.lgr.debug('playAFL call writeData write')
             count = self.write_data.write()
             bp_count = self.coverage.bpCount()
             self.lgr.debug('playAFL goAlone pid:%d ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.pid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
-            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+            # TBD just rely on coverage?
+            #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.trace_buffer is not None:
                 self.trace_buffer.msg('playAFL from '+self.afl_list[self.index])
 
@@ -307,15 +363,16 @@ class PlayAFL():
                     self.lgr.error('playAFL afl_mode but not coverage?')
                     return
             elif self.coverage is not None:
-                self.coverage.watchExits(callback=self.reportExit)
+                self.coverage.watchExits(callback=self.reportExit, pid=self.target_pid)
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
             if self.stop_hap is None:
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
-            self.top.watchPageFaults()
-            if self.target == 'oneplay' and not self.repeat:
+            self.lgr.debug('playAFL goAlone watch page faults for pid %d cell %s' % (self.target_pid, self.target_cell))
+            self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
+            if self.dfile == 'oneplay' and not self.repeat:
                 self.top.resetOrigin()
 
             self.lgr.debug('playAFL goAlone now continue')
@@ -332,11 +389,11 @@ class PlayAFL():
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
                 hits = self.coverage.getHitCount()
-                self.lgr.info('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.target))
+                self.lgr.info('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.dfile))
                 hits_path = self.coverage.getHitsPath()
   
                 s = json.dumps(self.all_hits)
-                save_name = '%s.%s.hits' % (hits_path, self.target)
+                save_name = '%s.%s.hits' % (hits_path, self.dfile)
                 try:
                     os.makedirs(os.path.dirname(hits_path))
                 except:
@@ -373,7 +430,7 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
-            if self.target != 'oneplay' or self.repeat:
+            if self.dfile != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
             if len(self.exit_list)>0:
                 print('%d Sessions that called exit:' % len(self.exit_list))
