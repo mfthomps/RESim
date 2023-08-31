@@ -679,9 +679,9 @@ class Syscall():
         #    SIM_break_simulation('fname zip')
         return fname, fname_addr, flags, mode, ida_msg
 
-    #def fnamePhysAlone(self, (pid, fname_addr, exit_info)):
     def fnamePhysAlone(self, pinfo):
         pid, fname_addr, exit_info = pinfo 
+        #self.lgr.debug('fnamePhysAlone 0x%x' % fname_addr)
         self.finish_break[pid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, fname_addr, 1, 0)
         self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[pid])
 
@@ -1478,8 +1478,13 @@ class Syscall():
                              self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
                              exit_info.call_params = call_param
                     if type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[pid])):
-                        self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
-                        exit_info.call_params = call_param
+                        #if exit_info.fname is None:
+                        #    self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
+                        #else:
+                        #    self.lgr.debug('syscall open, file is %s' % exit_info.fname)
+                        if exit_info.fname is None or exit_info.fname == call_param.match_param: 
+                            #self.lgr.debug('syscall open, found actual match_param %s' % call_param.match_param)
+                            exit_info.call_params = call_param
                         
                         break
 
