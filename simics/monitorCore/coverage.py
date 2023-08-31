@@ -20,9 +20,9 @@ Tracks a single code file at a time, e.g., main or a single so file.  TBD expand
 Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
-    def __init__(self, top, analysis_path, hits_path, context_manager, cell, so_map, cpu, run_from_snap, lgr):
+    def __init__(self, top, analysis_path, hits_path, context_manager, cell_name, so_map, cpu, run_from_snap, lgr):
         self.lgr = lgr
-        self.cell = cell
+        self.cell_name = cell_name
         self.cpu = cpu
         self.top = top
         self.so_map = so_map
@@ -90,6 +90,7 @@ class Coverage():
         self.record_hits = True
         self.did_missing = []
         self.packet_num = None
+        self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
     def loadBlocks(self, block_file):
         if os.path.isfile(block_file):
@@ -177,14 +178,14 @@ class Coverage():
         so_entry = self.so_map.getSOAddr(self.analysis_path, pid=self.pid)
         if so_entry is None:
            
-            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.pid), pid=self.pid)
+            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.pid, target=self.cell_name), pid=self.pid)
             if so_entry is None:
                 self.lgr.error('coverage no SO entry for %s' % self.analysis_path)
                 return
         self.so_entry = so_entry
         if so_entry.address is not None:
             if so_entry.locate is not None:
-                if self.top.isWindows():
+                if self.top.isWindows(target=self.cell_name):
                     self.offset = so_entry.offset
                 else:
                     self.offset = so_entry.locate+so_entry.offset
@@ -571,7 +572,7 @@ class Coverage():
 
         ''' 
         NOTE!  reading simulated memory may slow down fuzzing by a factor of 2!
-        pid = self.top.getPID()
+        pid = self.top.getPID(target=self.cell_name)
         if pid != self.pid:
             self.lgr.debug('converage bbHap, bp on addr 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
             #return
@@ -580,13 +581,13 @@ class Coverage():
         dead_set = False
         if self.create_dead_zone:
             ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
-            pid = self.top.getPID()
+            pid = self.top.getPID(target=self.cell_name)
             if pid != self.pid:
                 self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
                 dead_set = True
 
         if self.only_thread:
-            pid = self.top.getPID()
+            pid = self.top.getPID(target=self.cell_name)
             if pid != self.pid:
                 self.lgr.debug('coverage bbHap, wrong thread: %d' % pid)
                 return
@@ -604,18 +605,20 @@ class Coverage():
         if this_addr in self.afl_del_breaks:
             ''' already 255 hits, see if a jumper will alter the PC'''
             if self.backstop_cycles is not None and self.backstop_cycles > 0:
-                self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+                #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+                self.backstop.setFutureCycle(self.backstop_cycles, now=False)
             if self.jumpers is not None and this_addr in self.jumpers:
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             #self.lgr.debug('coverage bbHap 0x%x in del_breaks, return' % this_addr)
             return
 
 
-        #pid = self.top.getPID()
+        pid = self.top.getPID(target=self.cell_name)
         #self.lgr.debug('coverage bbHap address 0x%x bp %d pid: %d cycle: 0x%x' % (this_addr, break_num, pid, self.cpu.cycles))
 
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
-            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+            #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=False)
         if (not self.linear or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
             ''' see if a jumper should skip over code by changing the PC '''
@@ -646,7 +649,7 @@ class Coverage():
                 ''' AFL mode '''
                 if this_addr not in self.afl_map:
                     self.lgr.debug('broke at wrong addr linear 0x%x' % this_addr)
-                    pid = self.top.getPID()
+                    pid = self.top.getPID(target=self.cell_name)
                     if pid != self.pid:
                         self.lgr.debug('converage bbHap, not my pid, got %d I am %d context: %s' % (pid, self.pid, str(self.cpu.current_context)))
                     #SIM_break_simulation('broken')
@@ -932,8 +935,9 @@ class Coverage():
             self.blocks_hit = OrderedDict()
             self.lgr.debug('coverage reset blocks_hit')
 
-        if self.backstop_cycles is not None and self.backstop_cycles > 0:
-            self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+        # TBD try not setting backstop until at least first coverage hit.
+        #if self.backstop_cycles is not None and self.backstop_cycles > 0:
+        #    self.backstop.setFutureCycle(self.backstop_cycles, now=True)
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
@@ -980,10 +984,10 @@ class Coverage():
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
             self.analysis_path = fname
-            self.hits_path = self.top.getIdaData(fname)
+            self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             #self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
         
-        ida_path = self.top.getIdaData(self.analysis_path)
+        ida_path = self.top.getIdaData(self.analysis_path, target=self.cell_name)
         # dynamically alter control flow, e.g., to avoid CRC checks
         self.loadJumpers(ida_path)
 
