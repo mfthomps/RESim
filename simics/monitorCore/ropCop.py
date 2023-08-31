@@ -3,11 +3,11 @@ import decode
 import decodeArm
 from resimHaps import *
 class RopCop():
-    def __init__(self, top, cpu, cell, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
+    def __init__(self, top, cpu, cell_name, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
         self.context_manager = context_manager
         self.top = top
         self.cpu = cpu
-        self.cell = cell
+        self.cell_name = cell_name
         self.mem_utils = mem_utils
         self.text = text
         self.size = size
