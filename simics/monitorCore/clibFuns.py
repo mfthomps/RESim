@@ -105,6 +105,11 @@ def adjustFunName(frame, fun_mgr, lgr):
                 fun = fun[len('crt_stdio_output::'):]
                 if '<' in fun:
                     fun = fun.split('<', 1)[0]
+            elif fun.startswith('??'):
+                # windows eh?
+                if 'basic_string' in fun:
+                    fun = 'string_basic_windows'
+                    
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy'):
