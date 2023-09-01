@@ -3307,7 +3307,7 @@ class GenMonitor():
 
     def getSO(self, eip, show_orig=False):
         fname = self.getSOFile(eip)
-        #self.lgr.debug('getCurrentSO fname for eip 0x%x is %s' % (eip, fname))
+        #self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
         retval = None
         if fname is not None:
             elf_info  = self.soMap[self.target].getSOAddr(fname) 
@@ -3864,7 +3864,10 @@ class GenMonitor():
     def showTargets(self):
         print('Targets:')
         for target in self.context_manager:
-            print('\t'+target)
+            if target == self.target:
+                print('\t'+target+' --current')
+            else:
+                print('\t'+target)
 
     def reverseEnabled(self):
         # TBD Simics VT_revexec_active is broken.  Often gives the wrong answer
