@@ -118,7 +118,7 @@ class StackTrace():
     def followCall(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
-        if return_to == 0 or not self.soMap.isCode(return_to, self.pid):
+        if return_to <= 10 or not self.soMap.isCode(return_to, self.pid):
             self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
             return None
         if self.cpu.architecture == 'arm':
@@ -135,7 +135,7 @@ class StackTrace():
             # TBD use instruction length to confirm it is a true call
             # not always 2* word size?
             count = 0
-            while retval is None and count < 4*self.mem_utils.wordSize(self.cpu):
+            while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s' % (count, eip, instruct[1]))
                 ''' TBD hack.  Fix this by getting bb start and walking forward '''
@@ -388,7 +388,7 @@ class StackTrace():
             #if not self.soMap.isMainText(eip):
             if True:
                 ''' TBD need to be smarter to avoid bogus frames.  Cannot rely on not being main because such things are called in static-linked programs. '''
-                #self.lgr.debug('doX86 is call findReturnFromCall')
+                #self.lgr.debug('doX86 is call do findReturnFromCall esp 0x%x  eip 0x%x' % (esp, eip))
                 delta = bp - esp
                 num_bytes = min(0x22, delta)
                 quick_return = self.findReturnFromCall(esp, cur_fun, max_bytes=num_bytes, eip=eip)
@@ -553,7 +553,7 @@ class StackTrace():
                 continue
             #self.lgr.debug('findReturnFromCall ptr 0x%x val 0x%x  limit 0x%x' % (ptr, val, limit))    
             if self.soMap.isCode(val, self.pid):
-                #self.lgr.debug('findReturnFromCall is code')
+                #self.lgr.debug('findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                     fname = self.soMap.getSOFile(call_ip)
