@@ -262,7 +262,7 @@ class WinDLLMap():
             if section.pid == pid:
                 sort_map[section.addr] = section
 
-        self.lgr.debug('WinDLLMap showSO %d sections' % (len(sort_map)))
+        self.lgr.debug('WinDLLMap showSO %d sections, %d in section_list' % (len(sort_map), len(self.section_list)))
         for section_addr in sorted(sort_map):
             section = sort_map[section_addr]
             if filter is None or filter in section.fname:
@@ -284,13 +284,21 @@ class WinDLLMap():
         retval = None
         cpu, comm, pid = self.task_utils.curProc() 
         if addr_in is not None:
+            got_unknown = False
             for section in self.section_list:
                 if section.pid == pid:
                     if section.size is not None:
                         end = section.addr+section.size
                         if addr_in >= section.addr and addr_in <= end:
-                            retval = ntpath.basename(section.fname)
-                            break 
+                            if section.fname != 'unknown':
+                                retval = ntpath.basename(section.fname)
+                                break 
+                            else:
+                                got_unknown = True
+                    else:
+                        self.lgr.debug('winDLL getSOFile section size is None for %s' % section.fname)
+            if retval is None and got_unknown:
+                retval = 'unknown'     
         return retval
 
     def isCode(self, addr_in, pid):
