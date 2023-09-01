@@ -393,6 +393,8 @@ class InjectIO():
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
+        else:
+            self.top.jumperStop()
         self.bookmarks = self.top.getBookmarksInstance()
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
