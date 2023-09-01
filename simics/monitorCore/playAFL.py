@@ -2,6 +2,7 @@ from simics import *
 import writeData
 import aflPath
 import resimUtils
+import traceBuffer
 import cli
 import sys
 import os
@@ -11,18 +12,19 @@ import json
 from resimUtils import rprint
 
 class PlayAFL():
-    def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dataWatch, dfile, 
-             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False, 
-             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None, 
-             fname=None, repeat=False, trace_buffer=None):
+    def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
+             snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
+             create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
+             fname=None, repeat=False):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
         self.coverage = None
+        # mem_utils is instance for cell into which data gets injected
         self.mem_utils = mem_utils
-        self.dataWatch = dataWatch
         self.snap_name = snap_name
         self.cpu = cpu
+        # mem_utils is instance for cell whose coverage is to be tracked
         self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
@@ -32,7 +34,7 @@ class PlayAFL():
         self.orig_buffer = None
         self.cfg_file = cfg_file
         self.dfile = dfile
-        self.trace_buffer = trace_buffer
+        self.trace_buffer = None
         self.target_proc = target_proc
         self.target_cell = target_cell
         self.fname = fname
@@ -147,6 +149,11 @@ class PlayAFL():
 
         if target_proc is None:
             self.top.debugPidGroup(pid, to_user=False)
+            target_cpu = self.top.getCPU(self.target_cell)
+            self.trace_buffer = traceBuffer.TraceBuffer(self.top, target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
+            if len(self.trace_buffer.addr_info) == 0:
+                self.trace_buffer = None
+
             self.finishInit()
         else:
             ''' generate a bookmark so we can return here after setting coverage breakpoints on target'''
@@ -157,7 +164,11 @@ class PlayAFL():
     def playInitCallback(self):
         self.target_pid = self.top.getPID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('playAFL playInitCallback. target pid: %d finish init' % self.target_pid)
+        self.lgr.debug('playAFL playInitCallback. target pid: %d finish init to set coverage and such' % self.target_pid)
+        target_cpu = self.top.getCPU(self.target_cell)
+        self.trace_buffer = traceBuffer.TraceBuffer(self.top, target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
+        if len(self.trace_buffer.addr_info) == 0:
+            self.trace_buffer = None
         self.finishInit()
         cmd = 'skip-to bookmark = bookmark0'
         cli.quiet_run_command(cmd)
@@ -234,6 +245,7 @@ class PlayAFL():
         if hang is not None:
             hang_cycles = int(hang)
         self.backstop.setHangCallback(self.hangCallback, hang_cycles)
+        self.backstop.setCallback(self.backstopCallback)
         self.initial_cycle = self.cpu.cycles
 
     def go(self, findbb=None):
@@ -249,8 +261,22 @@ class PlayAFL():
         self.findbb = findbb
         SIM_run_alone(self.goAlone, False)
 
+    def backstopCallback(self):
+        SIM_run_alone(self.backstopCallbackAlone, None)
+
+    def backstopCallbackAlone(self, cycles):
+        self.lgr.info('playAFL backstop detected')
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+        SIM_break_simulation('backstop')
+
     def hangCallback(self, cycles):
+        SIM_run_alone(self.hangCallbackAlone, cycles)
+
+    def hangCallbackAlone(self, cycles):
         self.lgr.info('playAFL hang detected')
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('hang')
 
     def goAlone(self, clear_hits):
@@ -367,8 +393,8 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
-            if self.stop_hap is None:
-                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            #if self.stop_hap is None:
+            #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
             self.lgr.debug('playAFL goAlone watch page faults for pid %d cell %s' % (self.target_pid, self.target_cell))
             self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
@@ -534,6 +560,10 @@ class PlayAFL():
         return retval
 
     def reportExit(self):
+        SIM_run_alone(self.reportExitAlone, None)
+    def reportExitAlone(self, dumb):
         print('Process exit  cycles 0x%x' % self.cpu.cycles)
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('process exit')
  

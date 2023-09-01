@@ -4846,19 +4846,19 @@ class GenMonitor():
         #
         # 
 
-        ''' Record any debuggerish buffers that were specified in the ini file '''
-        trace_buffer = traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, 'playAFL')
-        if len(trace_buffer.addr_info) == 0:
-            trace_buffer = None
+        #''' Record any debuggerish buffers that were specified in the ini file '''
+        #trace_buffer = traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, 'playAFL')
+        #if len(trace_buffer.addr_info) == 0:
+        #    trace_buffer = None
 
         if no_cover:
             bb_coverage = None
         self.rmDebugWarnHap()
-        play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover, 
-              self.mem_utils[self.target], self.dataWatch[self.target], dfile, self.run_from_snap, self.context_manager[self.target], 
+        play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover,
+              self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
-              repeat=repeat, trace_buffer=trace_buffer, fname=fname)
+              repeat=repeat, fname=fname)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
