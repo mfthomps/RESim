@@ -50,6 +50,7 @@ class Jumpers():
         self.top = top
         self.lgr = lgr
         self.cpu = cpu
+        self.cell_name = self.top.getTopComponentName(cpu)
         self.context_manager = context_manager
         self.so_map = so_map
         self.fromto = {}
@@ -91,26 +92,29 @@ class Jumpers():
         #self.lgr.debug('doJump')
         ''' callback when jumper breakpoint is hit'''
         #curr_addr = memory.logical_address 
-        self.lgr.debug('doJump addr is 0x%x' % addr)
+        self.lgr.debug('doJump addr is 0x%x current_context (not that it effects this phys break) is %s' % (addr, self.cpu.current_context))
         if addr not in self.hap:
             self.lgr.debug('jumper doJump addr 0x%x not in haps' % addr)
             return
         if addr in self.comm_name:
-            cpu, comm, pid = self.top.getCurrentProc()
+            cpu, comm, pid = self.top.getCurrentProc(cell_name=self.cell_name)
             if comm != self.comm_name[addr]:
                 self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, self.comm_name[addr]))
                 return
         if self.reverse_enabled is None:
             self.reverse_enabled = self.top.reverseEnabled()
             self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
-        self.top.writeRegValue('pc', self.fromto[addr], alone=True)
+        self.top.writeRegValue('pc', self.fromto[addr], alone=True, target_cpu=self.cpu)
         self.lgr.debug('jumper doJump wrote 0x%x to pc' % (self.fromto[addr]))
         if addr in self.comm_name:
             self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (addr, self.fromto[addr], self.comm_name[addr]))
         else:
             self.lgr.debug('jumper doJump from 0x%x to 0x%x' % (addr, self.fromto[addr]))
+        eip = self.top.getReg('pc', self.cpu)
         if addr in self.break_simulation:
             SIM_break_simulation('Jumper request')
+            self.lgr.debug('jumper doJump did break_simulation')
+        self.lgr.debug('jumper doJump did it, eip now 0x%x' % eip)
 
     def removeOneBreak(self, addr):
         if addr not in self.hap:
@@ -209,7 +213,7 @@ class Jumpers():
         if len(parts) > 3 and parts[3] == 'break':
             break_at_dest = True
 
-        cpu, this_comm, pid = self.top.getCurrentProc()
+        cpu, this_comm, pid = self.top.getCurrentProc(cell_name=self.cell_name)
         prog_info = self.so_map.getSOAddr(prog, pid)
         if prog_info is None:
             self.lgr.debug('jumpers handleOrig, no prog info for %s, set callback with soMap' % prog)
@@ -249,6 +253,14 @@ class Jumpers():
         if break_at_dest:
             self.break_simulation.append(from_addr) 
 
+    def disableBreaks(self):
+        for addr in self.breakpoints:
+            SIM_disable_breakpoint(self.breakpoints[addr])
+ 
+    def enableBreaks(self):
+        for addr in self.breakpoints:
+            SIM_enable_breakpoint(self.breakpoints[addr])
+ 
     class JumperRec():
         def __init__(self, prog, from_addr, to_addr, comm, break_at_dest):
             self.prog = prog
@@ -256,3 +268,4 @@ class Jumpers():
             self.to_addr = to_addr
             self.comm = comm
             self.break_at_dest = break_at_dest
+
