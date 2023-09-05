@@ -677,13 +677,7 @@ class WinSyscall():
              
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
             #SIM_break_simulation('starting Read')
-            self.lgr.debug('winSyscall ReadFile set asynch_handler')
-            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, None,
-                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.lgr)
-            if self.watchData(exit_info):
-                self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
-                exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-
+            skip_this = False
             for call_param in syscall_info.call_params:
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
@@ -705,8 +699,17 @@ class WinSyscall():
                                 self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                         break
-
-            exit_info.asynch_handler.setExitInfo(exit_info)
+                    else:
+                        self.lgr.debug('winSyscall read match_param was int, no match?')
+                        skip_this = True
+            if not skip_this:
+                self.lgr.debug('winSyscall ReadFile set asynch_handler')
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, None,
+                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.lgr)
+                if self.watchData(exit_info):
+                    self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
+                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                exit_info.asynch_handler.setExitInfo(exit_info)
 
 
         elif callname == 'WriteFile':
