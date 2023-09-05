@@ -19,7 +19,7 @@ AFL_CRASH=1
 AFL_HANG=2
 AFL_CLOSED=3
 class AFL():
-    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, dataWatch, snap_name, context_manager, page_faults, lgr,
+    def __init__(self, top, cpu, cell_name, coverage, backstop, mem_utils, snap_name, context_manager, page_faults, lgr,
                  packet_count=1, stop_on_read=False, fname=None, linear=False, target=None, create_dead_zone=False, port=8765, 
                  one_done=False):
         pad_env = os.getenv('AFL_PAD') 
@@ -47,7 +47,6 @@ class AFL():
         self.top = top
         self.mem_utils = mem_utils
         self.stop_on_read = stop_on_read
-        self.dataWatch = dataWatch
         self.coverage = coverage
         self.context_manager = context_manager
         self.linear = linear
@@ -357,13 +356,6 @@ class AFL():
             self.afl_packet_count = (current_length / self.pad_to_size) + 1
             self.lgr.debug('afl packet count now %d' % self.afl_packet_count)
        
-
-        ''' TBD remove this?  addr always from pickle?'''
-        #if self.addr is None:
-        #   self.addr, max_len = self.dataWatch.firstBufferAddress()
-        #   if self.addr is None:
-        #       self.lgr.error('AFL, no firstBufferAddress found')
-        #       return
 
         if self.create_dead_zone:
             self.lgr.debug('afl goN dead zone iteration %d' % self.iteration)
