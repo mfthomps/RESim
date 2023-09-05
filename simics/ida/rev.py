@@ -535,6 +535,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     #isim.resynch()
     print('IDA SDK VERSION: %d' %  idaapi.IDA_SDK_VERSION)
     print('RESim IDA Client Version 1.2a')
+    simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.setTargetToDebugger()")')
 
 if __name__ == "__main__":
     #Hooks must be done in main.  Also see runsFirst.py
