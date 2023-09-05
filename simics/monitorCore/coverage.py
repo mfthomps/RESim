@@ -159,7 +159,8 @@ class Coverage():
  
     def cover(self, force_default_context=False, physical=False):
         self.force_default_context = force_default_context
-        self.lgr.debug('coverage: cover physical: %r linear: %r' % (physical, self.linear))
+        pid = self.top.getPID(target=self.cell_name)
+        self.lgr.debug('coverage: cover physical: %r linear: %r cpu: %s pid: %d' % (physical, self.linear, self.cpu.name, pid))
         self.offset = 0
         self.physical = physical
         block_file = self.analysis_path+'.blocks'
@@ -898,6 +899,9 @@ class Coverage():
  
 
     def doCoverage(self, no_merge=False, physical=False):
+        '''
+        Set coverage haps if not already set
+        '''
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
@@ -1123,3 +1127,15 @@ class Coverage():
 
     def bpCount(self):
         return len(self.bp_list)
+
+    def disableAll(self):
+        for bp in self.bp_list:
+            SIM_disable_breakpoint(bp) 
+        for addr in self.missing_breaks:
+            SIM_disable_breakpoint(self.missing_break[addr])
+
+    def enableAll(self):
+        for bp in self.bp_list:
+            SIM_enable_breakpoint(bp) 
+        for addr in self.missing_breaks:
+            SIM_enable_breakpoint(self.missing_break[addr])
