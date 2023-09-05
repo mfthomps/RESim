@@ -29,7 +29,8 @@ generate output) and record entries made to them.
 from simics import *
 import os
 class BufferInfo():
-    def __init__(self, reg, outfile):
+    def __init__(self, kind, reg, outfile):
+        self.kind = kind
         self.reg = reg
         out_path = os.path.join('./logs', 'trace_buffer', outfile)
         try:
@@ -60,7 +61,7 @@ class TraceBuffer():
                     for line in fh:
                         if line.startswith ('#'):
                             continue
-                        if line.startswith('call_reg'):
+                        if line.startswith('call_reg') or line.startswith('string_reg'):
                             parts = line.strip().split()
                             if len(parts) != 4:
                                 self.lgr.error('TraceBuffer bad entry %s in %s' % (line, buffer_file))
@@ -72,7 +73,7 @@ class TraceBuffer():
                                 return
                             reg = parts[2]
                             outfile = parts[3]
-                            info = BufferInfo(reg, outfile)
+                            info = BufferInfo(parts[0], reg, outfile)
                             if info.fh is None:
                                 self.lgr.error('TraceBuffer unable to open outfile %s from %s' % (outfile, buffer_file))
                                 return
@@ -88,7 +89,7 @@ class TraceBuffer():
 
     def doBreaks(self):
         for addr in self.addr_info:  
-            self.lgr.debug('TraceBuffer doBreaks addr: 0x%x' % addr)
+            self.lgr.debug('TraceBuffer doBreaks addr: 0x%x current context %s' % (addr, self.cpu.current_context))
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
             self.lgr.debug('TraceBuffer doBreaks addr: 0x%x break %d' % (addr, proc_break))
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.bufferHap, addr, proc_break, 'trace_buffer_hap')
@@ -104,13 +105,22 @@ class TraceBuffer():
             SIM_break_simulation('TraceBuffer error')
             return
         self.lgr.debug('TraceBuffer bufferHap addr: 0x%x reg: %s contains: 0x%x' % (addr, info.reg, reg_value))
-        info.buf_addr = reg_value
-        eip = self.top.getEIP()
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        next_addr = addr + instruct[0]
-        proc_break = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, next_addr, 1, 0)
-        self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, addr, proc_break, 'trace_buffer_return_hap')
-        self.lgr.debug('TraceBuffer bufferHap set returnHap on 0x%x context %s cycle: 0x%x' % (next_addr, str(self.cpu.current_context), self.cpu.cycles))
+        if info.kind == 'call_reg':
+            info.buf_addr = reg_value
+            eip = self.top.getEIP(cpu = self.cpu)
+            instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
+            next_addr = addr + instruct[0]
+            proc_break = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, next_addr, 1, 0)
+            self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, addr, proc_break, 'trace_buffer_return_hap')
+            self.lgr.debug('TraceBuffer bufferHap set returnHap on 0x%x context %s cycle: 0x%x' % (next_addr, str(self.cpu.current_context), self.cpu.cycles))
+        elif info.kind == 'string_reg':
+            buf = self.mem_utils.readString(self.cpu, reg_value, 256)
+            self.lgr.debug('TraceBuffer bufferHap string_reg read: %s' % buf)
+            info.fh.write(buf+'\n')
+            info.fh.flush()
+            
+        else:
+            self.lgr.error('TraceBuffer bufferHap unknown kind: %s' % info.kind)
 
     def rmHap(self, hap):
         self.context_manager.genDeleteHap(hap)
@@ -136,7 +146,7 @@ class TraceBuffer():
         hap = self.return_hap
         SIM_run_alone(self.rmHap, hap)
         self.return_hap = None
-        #SIM_break_simulation('remove this')
+        #SIM_break_simulation('remove this info.buf_addr 0x%x' % info.buf_addr)
 
     def msg(self, msg):
         for addr in self.addr_info: 
