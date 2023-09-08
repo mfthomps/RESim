@@ -1240,9 +1240,11 @@ class GenMonitor():
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            self.trackThreads()
-            ''' By default, no longer watch for new SO files '''
-            self.track_threads[self.target].stopSOTrack()
+            if self.track_threads is not None:
+                # cheesy hack of setting dict to None if we don't want to track threads
+                self.trackThreads()
+                ''' By default, no longer watch for new SO files '''
+                self.track_threads[self.target].stopSOTrack()
 
             self.watchPageFaults(pid)
 
@@ -1521,7 +1523,9 @@ class GenMonitor():
                 self.toExecve(comm=proc, flist=[], binary=binary)
 
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True):
+        if not track_threads:
+            self.track_threads = None
         if self.isWindows():
             self.rmDebugWarnHap()
             self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun)
@@ -1594,7 +1598,9 @@ class GenMonitor():
         self.rmDebugWarnHap()
         self.debugPidList([pid], self.debug)
 
-    def debugPidGroup(self, pid, final_fun=None, to_user=True):
+    def debugPidGroup(self, pid, final_fun=None, to_user=True, track_threads=True):
+        if not track_threads:
+            self.track_threads = None
         leader_pid = self.task_utils[self.target].getGroupLeaderPid(pid)
         if leader_pid is None:
             self.lgr.error('debugPidGroup leader_pid is None, asked about %d' % pid)
@@ -2554,16 +2560,18 @@ class GenMonitor():
         self.sharedSyscall[self.target].setDebugging(True)
 
     def startThreadTrack(self):
-        for cell_name in self.track_threads:
-            self.lgr.debug('startThreadTrack for %s' % cell_name)
-            self.track_threads[cell_name].startTrack()
+        if self.track_threads is not None:
+            for cell_name in self.track_threads:
+                self.lgr.debug('startThreadTrack for %s' % cell_name)
+                self.track_threads[cell_name].startTrack()
         
     def stopThreadTrack(self, immediate=False):
-        self.lgr.debug('stopThreadTrack ')
-        for cell_name in self.track_threads:
-            self.lgr.debug('stopThreadTrack for %s' % cell_name)
-            self.track_threads[cell_name].stopTrack(immediate=immediate)
-        self.track_threads = {}
+        if self.track_threads is not None:
+            self.lgr.debug('stopThreadTrack ')
+            for cell_name in self.track_threads:
+                self.lgr.debug('stopThreadTrack for %s' % cell_name)
+                self.track_threads[cell_name].stopTrack(immediate=immediate)
+            self.track_threads = {}
 
     def showProcTrace(self):
         ''' TBD this looks like a hack, why are the precs none?'''
@@ -2695,7 +2703,7 @@ class GenMonitor():
                 if self.rev_execution_enabled:
                     prec = Prec(cpu, None, pid)
                     self.rev_to_call[self.target].watchSysenter(prec)
-                    if self.target in self.track_threads:
+                    if self.track_threads is not None and self.target in self.track_threads:
                         self.track_threads[self.target].startTrack()
                     if self.target in self.ropCop:
                         self.ropCop[self.target].setHap()
@@ -2748,7 +2756,7 @@ class GenMonitor():
             pid, cpu = self.context_manager[self.target].getDebugPid() 
             self.stopWatchPageFaults(pid)
             self.rev_to_call[self.target].noWatchSysenter()
-            if self.target in self.track_threads:
+            if self.track_threads is not None and self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
             if self.target in self.exit_group_syscall:
                 self.syscallManager[self.target].rmSyscall('debugExit', immediate=immediate, context=self.context_manager[self.target].getRESimContextName())
@@ -3025,7 +3033,7 @@ class GenMonitor():
         self.lgr.debug('runToWrite to %s' % substring)
 
     def runToOpen(self, substring):
-        if self.target in self.track_threads:
+        if self.track_threads is not None and self.target in self.track_threads:
             self.track_threads[self.target].stopSOTrack()
         else:
             ''' do not hook mmap calls to track SO maps '''
@@ -3050,7 +3058,7 @@ class GenMonitor():
         self.runTo(open_call_list, call_params, name='open')
 
     def runToCreate(self, substring):
-        if self.target in self.track_threads:
+        if self.track_threads is not None and self.target in self.track_threads:
             self.track_threads[self.target].stopSOTrack()
         else:
             ''' do not hook mmap calls to track SO maps '''
@@ -3314,7 +3322,7 @@ class GenMonitor():
 
     def getSO(self, eip, show_orig=False):
         fname = self.getSOFile(eip)
-        #self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
+        self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
         retval = None
         if fname is not None:
             elf_info  = self.soMap[self.target].getSOAddr(fname) 
@@ -4718,7 +4726,7 @@ class GenMonitor():
         ''' not hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
-    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, dead=None, port=8765, one_done=False):
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, one_done=False, test_file=None):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
@@ -4729,11 +4737,11 @@ class GenMonitor():
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
         if target is None:
-            if not self.checkUserSpace(cpu):
+            if not self.checkUserSpace(target_cpu):
                 return
             # keep gdb 9123 port free
             self.gdb_port = 9124
-            self.debugPidGroup(pid, to_user=False)
+            #self.debugPidGroup(pid, to_user=False)
         full_path = None
         if fname is not None and target is None:
             full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
@@ -4742,13 +4750,15 @@ class GenMonitor():
                 return
         else: 
             full_path=fname
-        fuzz_it = afl.AFL(self, cpu, cell_name, self.coverage, self.back_stop[self.target], self.mem_utils[self.target], 
+        fuzz_it = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
-            linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD , create_dead_zone=dead, port=port, one_done=one_done)
+            linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
+            one_done=one_done, test_file=test_file)
         if target is None:
             self.noWatchSysEnter()
             fuzz_it.goN(0)
 
+    # TBD unused?
     def aflFD(self, fd, snap_name, count=1):
         self.prepInject(fd, snap_name, count=count)
 
@@ -5308,10 +5318,13 @@ class GenMonitor():
             self.lgr.debug('genMonitor getProgName pid %d NOT in traceProcs task_utils got %s' % (pid, prog_name))
             if prog_name is None:
                 comm = self.task_utils[target].getCommFromPid(pid) 
-                prog_name = self.task_utils[target].getProgNameFromComm(comm) 
-                if prog_name is None:
-                    prog_name = comm
-                    self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
+                if comm is None:
+                    self.lgr.error('genMonitor getProgNmae pid %d on target %s got None' % (pid, target))
+                else: 
+                    prog_name = self.task_utils[target].getProgNameFromComm(comm) 
+                    if prog_name is None:
+                        prog_name = comm
+                        self.lgr.debug('genMonitor getProgName pid %d reverted to getCommFromPid, got %s' % (pid, prog_name))
         return prog_name
  
     def getSharedSyscall(self):
@@ -5743,6 +5756,9 @@ class GenMonitor():
     def setTargetToDebugger(self):
         self.lgr.debug('setTargetToDebugger %s' % self.debugger_target)
         self.setTarget(self.debugger_target)
+
+    def getBytes(self, target, cpu, count, addr):
+        return self.mem_utils[target].getBytes(cpu, count, addr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
