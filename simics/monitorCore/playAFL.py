@@ -44,7 +44,7 @@ class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=0, trace_all=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -65,7 +65,10 @@ class PlayAFL():
         self.dfile = dfile
         self.trace_buffer = None
         self.target_proc = target_proc
-        self.target_cell = target_cell
+        if target_cell is None:
+            self.target_cell = cell_name
+        else:
+            self.target_cell = target_cell
         self.target_cpu = self.top.getCPU(self.target_cell)
         self.fname = fname
         self.afl_mode = afl_mode
@@ -79,7 +82,17 @@ class PlayAFL():
         self.all_hits = []
         self.afl_list = []
         self.commence_coverage = None
+        self.commence_after_exits = None
+        self.counter_bp = None
+        self.counter_hap = None
+        self.exit_counter = 0
+        self.exit_eip = None
+        self.stop_hap_cycle = None
         self.back_stop_cycle = None
+        self.hang_cycles = 90000000
+        hang = os.getenv('HANG_CYCLES')
+        if hang is not None:
+            self.hang_cycles = int(hang)
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
         ''' for testing, replay same data file over and over. only works with single file '''
@@ -189,21 +202,64 @@ class PlayAFL():
             self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
             if len(self.trace_buffer.addr_info) == 0:
                 self.trace_buffer = None
-
             self.finishInit()
+            self.disableReverse()
         else:
             ''' generate a bookmark so we can return here after setting coverage breakpoints on target'''
-            self.lgr.debug('playAFL reset origin and set target to %s' % target_cell)
+            self.lgr.debug('playAFL target_proc %s reset origin and set target to %s' % (target_proc, target_cell))
             self.top.resetOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback)
 
     def ranToIO(self, dumb):
-        #SIM_break_simulation('remove this')
         self.commence_coverage = self.target_cpu.cycles - self.initial_cycle
         self.lgr.debug('playAFL ran to IO cycles for commence coverage after: 0x%x cycles' % self.commence_coverage)
         self.top.rmSyscall('runToIO', cell_name=self.cell_name)
-        self.finishCallback()
+
+        # return to origin and run forward again, this time counting syscall exits
+        self.exit_eip = self.top.getEIP(cpu=self.target_cpu)
+        self.pid = self.top.getPID(target=self.target_cell)
+
+        cmd = 'skip-to bookmark = bookmark0'
+        cli.quiet_run_command(cmd)
+
+        SIM_run_alone(self.setCycleHap, None)
+        SIM_run_alone(self.setCounterHap, None)
+        self.lgr.debug('ranToIO set counter hap and cycle hap now continue')
+        SIM_run_alone(SIM_run_command, 'continue')
+
+    def setCounterHap(self, dumb=None):
+        self.exit_counter = 0
+        self.lgr.debug('playAFL setCounterHap currentContext %s' % self.target_cpu.current_context)
+
+
+        if self.commence_after_exits is None or self.dfile != 'oneplay' or self.repeat:
+            context = self.target_cpu.current_context
+        else:
+            context = self.context_manager.getRESimContext()
+        self.counter_bp = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Execute, self.exit_eip, 1, 0)
+        self.counter_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.counterHap, None, self.counter_bp)
+
+    def counterHap(self, dumb, third, break_num, memory):
+        if self.counter_hap is None:
+            return
+        pid = self.top.getPID(target=self.target_cell)
+        if pid != self.target_pid:
+            self.lgr.debug('playAFL counterHap wrong pid %d, wanted %d cycle: 0x%x' % (pid, self.target_pid, self.target_cpu.cycles))
+            return
+        self.exit_counter = self.exit_counter+1
+        self.lgr.debug('playAFL counterHap, count now %d' % self.exit_counter)
+        if self.commence_after_exits is not None and self.exit_counter == self.commence_after_exits:
+            self.lgr.debug('alf counterHap reached desired count, enable coverage breaks')
+            self.coverage.enableAll()
+            SIM_run_alone(self.setHangCallback, None)
+            hap = self.counter_hap
+            SIM_run_alone(self.rmCounterHap, hap)
+            self.counter_hap = None
+
+    def setHangCallback(self, dumb):
+        self.lgr.debug('playAFL setHangCallback')
+        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
     def playInitCallback(self):
         self.target_pid = self.top.getPID()
@@ -214,7 +270,7 @@ class PlayAFL():
             self.top.traceAll()
         if len(self.trace_buffer.addr_info) == 0:
             self.trace_buffer = None
-        if self.targetFD is not None and self.count > 1:
+        if self.targetFD is not None and self.count > 0:
             ''' run to IO before finishing init '''
             self.top.jumperDisable(target=self.cell_name)
             self.top.setCommandCallback(self.ranToIO)
@@ -222,23 +278,30 @@ class PlayAFL():
         else:
             self.finishCallback()
 
-    def finishCallback(self):
+    def finishCallback(self, dumb=None):
         ''' restore origin and go '''
+        self.lgr.debug('playAFL finishCallback')
         self.finishInit()
+        self.lgr.debug('playAFL finishCallback skip to bookmark')
         cmd = 'skip-to bookmark = bookmark0'
+        # TBD this will break on repeat or playing multiple files
         cli.quiet_run_command(cmd)
+        self.disableReverse()
         self.top.setTarget(self.cell_name)
         pid = self.top.getPID()
-        self.lgr.debug('playAFL playInitCallback, restored to original bookmark and reset target to %s pid: %d' % (self.cell_name, pid))
+        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s pid: %d' % (self.cell_name, pid))
         self.go()
+
+    def disableReverse(self):
+        self.lgr.debug('playAFL disabling reverse execution')
+        cli.quiet_run_command('disable-reverse-execution')
+        self.top.setDisableReverse()
+        cli.quiet_run_command('enable-unsupported-feature internals')
+        cli.quiet_run_command('save-snapshot name = origin')
 
     def finishInit(self):
         self.lgr.debug('playAFL finishInit')
         if self.dfile != 'oneplay' or self.repeat:
-            cli.quiet_run_command('disable-reverse-execution')
-            self.top.setDisableReverse()
-            cli.quiet_run_command('enable-unsupported-feature internals')
-            cli.quiet_run_command('save-snapshot name = origin')
             self.lgr.debug('playAFL finishInit call to remove debug breaks')
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         elif self.target_proc is None:
@@ -268,12 +331,14 @@ class PlayAFL():
             self.physical = True
             if self.linear:
                 self.physical = False
-                self.lgr.debug('afl, linear use context manager to watch tasks')
+                self.lgr.debug('playAFL, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
                 self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
-            if self.commence_coverage is None:
+            if self.commence_coverage is not None:
                 self.coverage.disableAll()
+            else:
+                self.backstop.setHangCallback(self.coverage.recordHang, self.hang_cycles)
 
             if True:
                 ''' TBD, multple writers?'''
@@ -297,11 +362,6 @@ class PlayAFL():
                     pass
                     #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
-        hang_cycles = 90000000
-        hang = os.getenv('HANG_CYCLES')
-        if hang is not None:
-            hang_cycles = int(hang)
-        self.backstop.setHangCallback(self.hangCallback, hang_cycles)
         self.backstop.setCallback(self.backstopCallback)
 
     def go(self, findbb=None):
@@ -370,15 +430,17 @@ class PlayAFL():
                     self.index += 1
         if self.index < len(self.afl_list) or self.repeat:
             self.lgr.debug('playAFL goAlone index %d' % self.index)
+            if self.commence_coverage is not None:
+                self.coverage.disableAll()
             if self.dfile != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
+            if self.commence_coverage is not None:
+                self.lgr.debug('playAFL goAlone set counter hap')
+                self.setCounterHap()
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
                     self.coverage.stopCover() 
-                    if self.commence_coverage is not None:
-                        self.setCycleHap()
-                    else:
-                        self.coverage.doCoverage(no_merge=True, physical=self.physical) 
+                    self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
@@ -461,10 +523,6 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, resetOrigin')
                 self.top.resetOrigin()
 
-            if self.commence_coverage is not None:
-                self.lgr.debug('playAFL goAlone call to set cycle hap for commence coverage')
-                self.setCycleHap()
-
             self.lgr.debug('playAFL goAlone now continue')
             if self.repeat:
                 #if self.repeat_counter > 20:
@@ -502,7 +560,7 @@ class PlayAFL():
                     count = 0
                     for hit in self.all_hits:
                         if hit not in all_prev_hits:
-                            print('New hit found at 0x%x' % hit)
+                            #print('New hit found at 0x%x' % hit)
                             gotone = True
                             count = count+1
                     if count == 0:
@@ -632,7 +690,7 @@ class PlayAFL():
                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('process exit')
  
-    def setCycleHap(self):
+    def setCycleHap(self, dumb=None):
         if self.cycle_event is None:
             self.cycle_event = SIM_register_event("playAFL commence", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
             self.lgr.debug('playAFL setCycleHap set playAFL commence')
@@ -643,7 +701,41 @@ class PlayAFL():
         self.lgr.debug('playAFL setCycleHap posted cycle of 0x%x cpu: %s look for cycle 0x%x (%d)' % (self.commence_coverage, self.target_cpu.name, commence_cycle, commence_cycle))
         SIM_event_post_cycle(self.target_cpu, self.cycle_event, self.target_cpu, self.commence_coverage, self.commence_coverage)
 
+
     def cycle_handler(self, obj, cycles):
-        self.lgr.debug('playAFL cycle_handler call enable coverage breakpoints')
-        self.coverage.enableAll()
-        self.top.jumperEnable(target=self.cell_name)
+        if self.cycle_event is None:
+            return
+        self.lgr.debug('playAFL cycle_handler exit counter is %d' % self.exit_counter)
+        self.commence_after_exits = self.exit_counter
+        self.exit_counter = 0
+        hap = self.counter_hap
+        SIM_run_alone(self.rmCounterHap, hap)
+        self.counter_hap = None
+        self.lgr.debug('playAFL cycle_handler now set stopHapCycle and stop')
+        SIM_run_alone(self.doCycleStop, None)
+        # TBD jumpers should match playAFL?  Two kinds: one for diagnostics and one for real control flow around crc's
+        #self.top.jumperEnable(target=self.cell_name)
+
+    def doCycleStop(self, dumb):
+        SIM_event_cancel_time(self.target_cpu, self.cycle_event, self.target_cpu, None, None)
+        self.cycle_event = None
+        self.lgr.debug('playAFL doCycleStop cycle_event set to None')
+        self.stop_hap_cycle = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapCycle,  None)
+        SIM_break_simulation('playAFL cycle_handler')
+
+    def rmCounterHap(self, hap):
+        self.lgr.debug('playAFL rmCounterHap')
+        SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
+        SIM_delete_breakpoint(self.counter_bp)
+        self.counter_bp = None
+
+    def stopHapCycle(self, dumb, one, exception, error_string):
+        if self.stop_hap_cycle is not None:
+            SIM_run_alone(self.rmStopHapCycle, None)
+            SIM_run_alone(self.finishCallback, None)
+
+    def rmStopHapCycle(self, dumb):
+        if self.stop_hap_cycle is not None:
+            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
+            self.lgr.debug('playAFL stop_hap_cycle removed')
+            self.stop_hap_cycle = None

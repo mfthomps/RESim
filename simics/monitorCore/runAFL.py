@@ -222,6 +222,15 @@ def runAFLTilRestart(args, lgr):
     if args.linear:
         os.environ['ONE_DONE_PARAM5']='TRUE'
 
+    if args.target is not None: 
+        os.environ['ONE_DONE_PARAM6']=args.target
+
+    if args.targetFD is not None: 
+        os.environ['ONE_DONE_PARAM7']=args.targetFD
+
+    if args.count is not None: 
+        os.environ['ONE_DONE_PARAM8']=args.count
+
     if args.max_bytes is not None:
         size_str = '-s %d' % args.max_bytes 
     else:
@@ -330,6 +339,9 @@ def main():
     parser.add_argument('-m', '--max_bytes', action='store', help='Maximum number of bytes for a write, will truncate AFL genereated inputs.')
     parser.add_argument('-x', '--dictionary', action='store', help='path to dictionary relative to AFL_DIR/dictionaries.')
     parser.add_argument('-f', '--fname', action='store', help='Optional name of shared library to fuzz.')
+    parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')
+    parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
+    parser.add_argument('-C', '--count', action='store', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     parser.add_argument('-s', '--seconds', action='store', type=int, help='Run for given number of seconds, then exit.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-n', '--no_afl', action='store_true', default=False, help='Do not start AFL, restarting RESim and reusing existing AFL.')

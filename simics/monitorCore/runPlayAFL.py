@@ -33,12 +33,14 @@ def ioHandler(read_array, stop, lgr):
                 lgr.debug('select error, must be closed.')
                 return
             for item in r:
+                file_num = item.fileno()
                 try:
-                    data = os.read(item.fileno(), 800)
+                    data = os.read(file_num, 800)
                 except:
                     lgr.debug('read error, must be closed.')
                     return
-                fh.write(data+b'\n')
+                finfo = str.encode('fnum: %d ' % file_num)
+                fh.write(finfo+data+b'\n')
                 if 'Error' in str(data):
                     print(data)
                     print("use ctrl-C, fatal error.")
@@ -94,8 +96,10 @@ def runPlay(args, lgr, prog_path):
         os.environ['ONE_DONE_PARAM']='udp'
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
-    
     os.environ['ONE_DONE_PARAM3']=args.program
+    os.environ['ONE_DONE_PARAM4']=args.target
+    os.environ['ONE_DONE_PARAM5']=args.targetFD
+    os.environ['ONE_DONE_PARAM6']=args.count
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     for cfile in cover_list:
@@ -162,6 +166,9 @@ def main():
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
+    parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')
+    parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
+    parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
