@@ -524,7 +524,8 @@ class StackTrace():
         current_instruct = None
         if eip is not None:
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
-            lib_file = self.top.getSO(eip)
+            #lib_file = self.top.getSO(eip)
+            lib_file = self.soMap.getSOFile(eip)
             if isClib(lib_file):
                 cur_is_clib = True
             #self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
