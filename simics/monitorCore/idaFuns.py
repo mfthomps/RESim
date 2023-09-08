@@ -108,8 +108,8 @@ class IDAFuns():
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
                     self.funs[fun]['name'] = fun_name
-                    if fun_name == 'memcpy':
-                        self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
+                    #if fun_name == 'memcpy':
+                    #    self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
                     if fun_name in add_mangle:
                         #self.lgr.debug('****************** %s in add mangle as %s' % (fun_name, add_mangle[fun_name]))
