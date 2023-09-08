@@ -160,7 +160,7 @@ class Coverage():
     def cover(self, force_default_context=False, physical=False):
         self.force_default_context = force_default_context
         pid = self.top.getPID(target=self.cell_name)
-        self.lgr.debug('coverage: cover physical: %r linear: %r cpu: %s pid: %d' % (physical, self.linear, self.cpu.name, pid))
+        self.lgr.debug('coverage: cover physical: %r (afl overrides) linear: %r cpu: %s pid: %d' % (physical, self.linear, self.cpu.name, pid))
         self.offset = 0
         self.physical = physical
         block_file = self.analysis_path+'.blocks'
@@ -227,11 +227,8 @@ class Coverage():
                     prev_bp = bp
                     
 
-        if self.afl or self.force_default_context:
-            self.lgr.debug('coverage generated ?? context %d breaks' % (len(self.bp_list)))
-        else:
-            ''' physical breaks, context does not matter'''
-            self.lgr.debug('coverage generated %d breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
+        ''' physical breaks, context does not matter'''
+        self.lgr.debug('coverage generated %d breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
         self.block_total = len(self.bp_list)
         if len(tmp_list) > 0:
             self.doHapRange(tmp_list)
@@ -614,8 +611,16 @@ class Coverage():
             return
 
 
-        pid = self.top.getPID(target=self.cell_name)
+        #pid = self.top.getPID(target=self.cell_name)
         #self.lgr.debug('coverage bbHap address 0x%x bp %d pid: %d cycle: 0x%x' % (this_addr, break_num, pid, self.cpu.cycles))
+        '''
+        byte_array = self.top.getBytes(self.cell_name, self.cpu, 100, 0xad1c40)
+        if byte_array is not None:
+            read_data = resimUtils.getHexDump(byte_array)
+            self.lgr.debug(read_data)
+        self.lgr.debug('now quit')
+        self.top.quit()
+        '''
 
         if self.backstop_cycles is not None and self.backstop_cycles > 0:
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
@@ -1132,10 +1137,10 @@ class Coverage():
         for bp in self.bp_list:
             SIM_disable_breakpoint(bp) 
         for addr in self.missing_breaks:
-            SIM_disable_breakpoint(self.missing_break[addr])
+            SIM_disable_breakpoint(self.missing_breaks[addr])
 
     def enableAll(self):
         for bp in self.bp_list:
             SIM_enable_breakpoint(bp) 
         for addr in self.missing_breaks:
-            SIM_enable_breakpoint(self.missing_break[addr])
+            SIM_enable_breakpoint(self.missing_breaks[addr])
