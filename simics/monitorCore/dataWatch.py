@@ -661,7 +661,7 @@ class DataWatch():
         self.lgr.debug('dataWatch getReturnAddr %d frames' % len(frames))
         for frame in frames:
             if stackTrace.isClib(frame.fname):
-                self.lgr.debug('dataWatch getReturnFromCall stack frame is clib, skip')
+                #self.lgr.debug('dataWatch getReturnFromCall stack frame is clib, skip')
                 continue
             if frame.ret_addr is not None:
                 self.lgr.debug('dataWatch getReturnAddr got 0x%x' % frame.ret_addr)
@@ -1548,6 +1548,10 @@ class DataWatch():
             retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r8')
+        elif self.top.isWindows(target=self.cell_name):
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'eax')
+            retval2 = self.mem_utils.getRegValue(self.cpu, 'ebx')
+            retval3 = self.mem_utils.getRegValue(self.cpu, 'ecx')
         else:
             retval1 = self.mem_utils.readAppPtr(self.cpu, sp)
             retval2 = self.mem_utils.readAppPtr(self.cpu, sp+self.mem_utils.wordSize(self.cpu))
@@ -1673,6 +1677,10 @@ class DataWatch():
             self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp)
             self.lgr.debug('dataWatch gatherCallParams %s got count %d src 0x%x dest 0x%x' % (self.mem_something.fun, self.mem_something.count,
                 self.mem_something.src, self.mem_something.dest))
+
+            SIM_break_simulation('remove this')
+            return
+
             if self.cpu.architecture == 'arm':
                 self.mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
             else:
