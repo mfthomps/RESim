@@ -2217,9 +2217,9 @@ class GenMonitor():
         self.rev_to_call[self.target].setCallback(callback)
         self.rev_to_call[self.target].doRevToModReg(reg, kernel=kernel, taint=taint)
 
-    def revTaintReg(self, reg, kernel=False):
+    def revTaintReg(self, reg, kernel=False, no_increments=False):
         ''' back track the value in a given register '''
-        self.reverseTrack[self.target].revTaintReg(reg, self.bookmarks, kernel=kernel)
+        self.reverseTrack[self.target].revTaintReg(reg, self.bookmarks, kernel=kernel, no_increments=no_increments)
 
     def satisfyCondition(self, pc):
         ''' Assess a simple condition, modify input data to satisfy it '''
