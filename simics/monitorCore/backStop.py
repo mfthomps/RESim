@@ -115,7 +115,7 @@ class BackStop():
             self.hang_callback(self.cpu.cycles)
         if self.hang_cycles is None and self.hang_cycles_delta >0:
             # curde way to defer hang cycle watch until first data read
-            self.setHangCallback(self.hang_callback, self.hang_cycles_delta)
+            SIM_run_alone(self.setHangCallbackAlone, None)
          
         if not now:
             SIM_run_alone(self.setFutureCycleAlone, cycles)
@@ -124,11 +124,14 @@ class BackStop():
 
         if self.hang_event is not None:
             SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
-            
+           
 
     def hang_handler(self, obj, cycles):
         self.lgr.debug('backstop hang_handler will call callback %s' % str(self.hang_callback))
         self.hang_callback(self.cpu.cycles)
+
+    def setHangCallbackAlone(self, dumb):
+        self.setHangCallback(self.hang_callback, self.hang_cycles_delta)
 
     def setHangCallback(self, callback, cycles, now=True):
         self.hang_cycles_delta = cycles
