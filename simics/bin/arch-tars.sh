@@ -48,7 +48,7 @@ cp -a $aflseed/* $seed_dest/
 
 echo "archive workspace"
 workspace_dest=$fuzz_archive/workspace.tar
-tar -cvf /tmp/workspace.tar . --exclude=logs --exclude='*.tgz'
+tar --exclude=logs --exclude='*.tgz' -cvf /tmp/workspace.tar .
 echo "tar done now copy"
 cp /tmp/workspace.tar $workspace_dest
 echo "done"
