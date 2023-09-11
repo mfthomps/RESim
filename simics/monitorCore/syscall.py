@@ -920,6 +920,7 @@ class Syscall():
                         SIM_run_alone(self.stopAlone, 'execve of %s %s' % (prog_string, sw))
 
     def parseExecve(self, syscall_info):
+        self.lgr.debug('parseExecve')
         retval = True
         cpu, comm, pid = self.task_utils.curProc() 
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
@@ -933,6 +934,8 @@ class Syscall():
           
         pid_list = self.context_manager.getThreadPids()
         db_pid, dumbcpu = self.context_manager.getDebugPid()
+        if db_pid is not None:
+            self.lgr.debug('parseExecve db_pid:%d pid_list: %s' % (db_pid, str(pid_list)))
         
         if pid in pid_list and pid != db_pid:
             self.lgr.debug('syscall parseExecve remove %d from list being watched.' % (pid))
