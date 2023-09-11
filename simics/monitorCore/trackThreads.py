@@ -8,8 +8,6 @@ class TrackThreads():
         self.top = top
         self.traceProcs = traceProcs
         self.parent_pid = pid
-        if pid is not None:
-            self.pid_list = [pid]
         self.cpu = cpu
         self.cell_name = cell_name
         self.param = param
@@ -52,7 +50,7 @@ class TrackThreads():
             execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
             self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
             self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-            #self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+            self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
         self.trackSO()
         #self.trackClone()
@@ -90,16 +88,15 @@ class TrackThreads():
             return
         
         cpu, comm, pid = self.task_utils.curProc() 
-        if pid not in self.pid_list:
-            #self.lgr.debug('TrackThreads  execveHap looked for pid %s, found %d.  Do nothing after parsing and updating proc trace' % (str(self.pid_list), pid))
+        if not self.context_manager.amWatching(pid):
+            self.lgr.debug('TrackThreads  execveHap failed to find pid %s in context manager ' % (pid))
             self.parseExecve()
             return
-        if len(self.pid_list) == 1:
-            self.lgr.debug('TrackThreads execveHap who is execing to what? eh? pid: %d' % pid)
+        if len(self.context_manager.getWatchPids()) == 1:
+            self.lgr.debug('TrackThreads execveHap context manager pid list has only one, assume it is us? pid: %d' % pid)
             return
-        #self.lgr.debug('TrackThreads execveHap remove pid %d from lists' % pid)
+        self.lgr.debug('TrackThreads execveHap remove pid %d from context manager watch' % pid)
         self.context_manager.rmTask(pid)
-        self.pid_list.remove(pid)
         self.parseExecve()
 
 
