@@ -39,7 +39,7 @@ class ReverseTrack():
         self.value = None
         self.top_command_callback = None
 
-    def revTaintReg(self, reg, bookmarks, kernel=False):
+    def revTaintReg(self, reg, bookmarks, kernel=False, no_increments=False):
         ''' back track the value in a given register '''
         #TBD why store this? would it change?
         self.top_command_callback = self.top.getCommandCallback()
@@ -78,7 +78,7 @@ class ReverseTrack():
                 bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
                 self.bookmarks.setDebugBookmark(bm)
                 self.context_manager.setIdaMessage('')
-                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel)
+                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel, no_increments=no_increments)
         else:
             print('reverse execution disabled')
             self.top.skipAndMail()

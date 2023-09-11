@@ -729,7 +729,7 @@ class reverseToCall():
     '''
     BEWARE syntax errors are not seen.  TBD make unit test
     '''
-    def doRevToModReg(self, reg, taint=False, offset=0, value=None, num_bytes=None, kernel=False):
+    def doRevToModReg(self, reg, taint=False, offset=0, value=None, num_bytes=None, kernel=False, no_increments=False):
         '''
         Run backwards until a write to the given register
         '''
@@ -827,7 +827,20 @@ class reverseToCall():
                         self.followTaint(reg_mod_type)
                 else:
                     if not self.tooFarBack():
-                        self.followTaint(reg_mod_type)
+                        if no_increments:
+                            eip = self.top.getEIP(self.cpu)
+                            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                            if instruct[1].startswith('add'):
+                                self.lgr.debug('reverseToModReg, %s is an add, but asked for no increments, done' % instruct[1])
+                                bm = "eip:0x%x %s" % (eip, instruct[1])
+                                self.bookmarks.setBacktrackBookmark(bm)
+                                done = True
+                                self.cleanup(None)
+                            else:
+                                self.followTaint(reg_mod_type)
+                        else:
+                            self.followTaint(reg_mod_type)
+                            
                     else:
                         self.lgr.debug('doRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
             else:
