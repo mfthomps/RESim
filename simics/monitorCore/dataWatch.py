@@ -1678,9 +1678,6 @@ class DataWatch():
             self.lgr.debug('dataWatch gatherCallParams %s got count %d src 0x%x dest 0x%x' % (self.mem_something.fun, self.mem_something.count,
                 self.mem_something.src, self.mem_something.dest))
 
-            SIM_break_simulation('remove this')
-            return
-
             if self.cpu.architecture == 'arm':
                 self.mem_something.count = self.mem_utils.getRegValue(self.cpu, 'r2')
             else:
