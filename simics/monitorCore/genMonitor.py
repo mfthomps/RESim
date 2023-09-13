@@ -1205,8 +1205,10 @@ class GenMonitor():
             cpu, comm, pid = self.task_utils[self.target].curProc() 
             ''' This will set full_path'''
             self.setPathToProg(pid)
-            self.lgr.debug('genMonitor debug call doDebugCmd')
-            self.doDebugCmd()
+            # TBD already called in debugPidList.  Does a group==True cover it?
+            if not group:
+                self.lgr.debug('genMonitor debug call doDebugCmd')
+                self.doDebugCmd()
             self.did_debug=True
             if not self.rev_execution_enabled:
                 self.lgr.debug('debug enable reverse execution')
@@ -3321,32 +3323,35 @@ class GenMonitor():
         return self.getSO(eip, show_orig=True)
 
     def getSO(self, eip, show_orig=False):
-        fname = self.getSOFile(eip)
-        self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
         retval = None
-        if fname is not None:
-            elf_info  = self.soMap[self.target].getSOAddr(fname) 
-            if elf_info is None:
-                self.lgr.error('getSO no map for %s' % fname)
-                return
-            if elf_info.address is not None:
-                if elf_info.locate is not None:
-                    start = elf_info.locate+elf_info.offset
-                    end = start + elf_info.size
-                else:
-                    start = elf_info.address
-                    end = elf_info.address + elf_info.size
-                orig_str = ''
-                if show_orig:
+        if show_orig: 
+            fname = self.getSOFile(eip)
+            self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
+            if fname is not None:
+                elf_info  = self.soMap[self.target].getSOAddr(fname) 
+                if elf_info is None:
+                    self.lgr.error('getSO no map for %s' % fname)
+                    return
+                if elf_info.address is not None:
+                    if elf_info.locate is not None:
+                        start = elf_info.locate+elf_info.offset
+                        end = start + elf_info.size
+                    else:
+                        start = elf_info.address
+                        end = elf_info.address + elf_info.size
                     orig_eip = eip - elf_info.offset
                     orig_str = ' orig address: 0x%x' % orig_eip
-                retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
+                    retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
+                else:
+                    #print('None')
+                    pass
             else:
                 #print('None')
                 pass
         else:
-            #print('None')
-            pass
+            fname, start, end = self.soMap[self.target].getSOInfo(eip)
+            if fname is not None:
+                retval = ('%s:0x%x-0x%x' % (fname, start, end))
         return retval
 
      
@@ -4742,14 +4747,20 @@ class GenMonitor():
             # keep gdb 9123 port free
             self.gdb_port = 9124
             #self.debugPidGroup(pid, to_user=False)
+        '''
+        TBD remove this?
         full_path = None
         if fname is not None and target is None:
+            self.lgr.debug('afl get full for %s' % fname)
             full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
+            self.lgr.debug('afl back from get full for %s' % fname)
             if full_path is None:
                 self.lgr.error('unable to get full path from %s' % fname)
                 return
         else: 
             full_path=fname
+        '''
+        full_path=fname
         fuzz_it = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
@@ -5461,7 +5472,14 @@ class GenMonitor():
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
         fname = self.fun_mgr.funFromAddr(addr)
-        print('fun for 0x%x is %s' % (addr, fname))
+        if fname is not None:
+            print('Function for address 0x%x is %s' % (addr, fname))
+        else:
+            so = self.soMap[self.target].getSOInfo(addr)
+            if so is not None:
+                print('No function for 0x%x (perhaps no analysis?).  Program is %s' % (addr, so))
+            else:
+                print('No function or program found for address 0x%x' % addr)
 
     def rmDebugWarnHap(self):
         if self.snap_warn_hap is not None:
@@ -5594,7 +5612,13 @@ class GenMonitor():
             reg_name = target_cpu.iface.int_register.get_name(i)
             print('%d %s' % (i, reg_name))
 
-    def wordSize(self):
+    def wordSize(self, pid, target=None):
+        if target is None:
+            target = self.target
+        retval = self.soMap[target].wordSize(pid)
+        return retval
+
+    def wordSizexx(self):
         target_cpu = self.cell_config.cpuFromCell(self.target)
         ws = self.mem_utils[self.target].wordSize(target_cpu)
         print('word size: %d' % ws)
