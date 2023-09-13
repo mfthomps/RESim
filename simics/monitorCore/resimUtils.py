@@ -332,7 +332,7 @@ def getHexDump(b):
         return s2
 
 
-def getIniTargetValue(input_ini_file, field):
+def getIniTargetValue(input_ini_file, field, target=None):
     retval = None
     config = ConfigParser.ConfigParser()
     config.optionxform = str
@@ -344,11 +344,11 @@ def getIniTargetValue(input_ini_file, field):
         print('File not found: %s' % ini_file)
         exit(1)
     config.read(ini_file)
-    target = None
-    for name, value in config.items('ENV'):
-        if name == 'RESIM_TARGET':
-            target = value
-            break
+    if target is None:
+        for name, value in config.items('ENV'):
+            if name == 'RESIM_TARGET':
+                target = value
+                break
     if target is not None:
         for section in config.sections():
             if section == target:
