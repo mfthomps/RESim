@@ -475,8 +475,10 @@ class memUtils():
         else:
             return None
 
-    def readAppPtr(self, cpu, vaddr):
-        size = self.wordSize(cpu)
+    def readAppPtr(self, cpu, vaddr, size=None):
+        # careful, this breaks on 32-bit windows apps without explicit word size
+        if size is None: 
+            size = self.wordSize(cpu)
         #if vaddr < self.param.kernel_base:
         #    size = min(size, 6)
         phys = self.v2p(cpu, vaddr)
