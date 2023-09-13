@@ -109,6 +109,8 @@ def adjustFunName(frame, fun_mgr, lgr):
                 # windows eh?
                 if 'basic_string' in fun:
                     fun = 'string_basic_windows'
+                elif fun.startswith('??_'):
+                    fun = fun[3:]
                     
 
             ''' TBD clean up this hack?'''
