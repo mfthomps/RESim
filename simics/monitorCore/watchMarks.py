@@ -472,6 +472,16 @@ class CharPtrMark():
     def getMsg(self):
         msg = 'Char Ptr reference at 0x%08x, pointer to 0x%08x value: 0x%x' % (self.addr, self.ptr, self.value)
         return msg
+class UuidStringMark():
+    def __init__(self, src, dest, count, buf_start):
+        self.src = src
+        self.dest = dest
+        self.length = count
+        offset = src - buf_start
+        self.msg = 'UuidToString from 0x%x (%d bytes into buffer at 0x%x) to 0x%x' % (src, offset, buf_start, dest)
+    def getMsg(self):
+        return self.msg
+
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
@@ -853,8 +863,9 @@ class WatchMarks():
             dst_str = ''
             src_str = ''
         cm = CompareMark(fun, dest, src, count, dst_str, src_str, buf_start) 
-        self.addWatchMark(cm)
+        wm = self.addWatchMark(cm)
         self.lgr.debug('watchMarks compare (%s) %s' % (fun, cm.getMsg()))
+        return wm
 
     def strchr(self, start, the_chr, count):
         cm = StrChrMark(start, the_chr, count)
@@ -1009,6 +1020,11 @@ class WatchMarks():
     def charPtrMark(self, addr, ptr, value):
         cm = CharPtrMark(addr, ptr, value)
         self.addWatchMark(cm)
+
+    def uuidToString(self, src, dest, count, buf_start):
+        um = UuidStringMark(src, dest, count, buf_start)
+        self.addWatchMark(um)
+        self.lgr.debug(um.getMsg())
         
     def mscMark(self, fun, src):
         fm = MscMark(fun, src)
