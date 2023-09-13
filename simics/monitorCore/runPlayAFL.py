@@ -39,6 +39,8 @@ def ioHandler(read_array, stop, lgr):
                 except:
                     lgr.debug('read error, must be closed.')
                     return
+                if len(data.strip()) == 0:
+                    continue
                 finfo = str.encode('fnum: %d ' % file_num)
                 fh.write(finfo+data+b'\n')
                 if 'Error' in str(data):
@@ -97,8 +99,10 @@ def runPlay(args, lgr, prog_path):
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
     os.environ['ONE_DONE_PARAM3']=args.program
-    os.environ['ONE_DONE_PARAM4']=args.target
-    os.environ['ONE_DONE_PARAM5']=args.targetFD
+    if args.target is not None:
+        os.environ['ONE_DONE_PARAM4']=args.target
+    if args.targetFD is not None:
+        os.environ['ONE_DONE_PARAM5']=args.targetFD
     os.environ['ONE_DONE_PARAM6']=args.count
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
@@ -152,7 +156,8 @@ def runPlay(args, lgr, prog_path):
         s = json.dumps(all_hits)
         with open(hits_path, 'w') as fh:
             fh.write(s)
-        
+        print('Wrote hits to %s' % hits_path) 
+        lgr.debug('Wrote hits to %s' % hits_path) 
         print('all hits total %d' % len(all_hits))
     else:
         print('Nothing to do.')
@@ -176,7 +181,16 @@ def main():
     args = parser.parse_args()
 
     ida_data = os.getenv('RESIM_IDA_DATA')
-    root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
+
+    target_cell = None
+    if args.target is not None:
+        if ':' in args.target:
+            parts = args.target.rsplit(':',1)
+            target_cell = parts[0]
+    if target_cell is not None:
+        root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX', target=target_cell)
+    else:
+        root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
     root_name = os.path.basename(root_prefix)
     prog_path = os.path.join(ida_data, root_name, args.program)
     os.makedirs(prog_path, exist_ok=True)
