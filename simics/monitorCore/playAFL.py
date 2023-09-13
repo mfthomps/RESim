@@ -199,9 +199,6 @@ class PlayAFL():
 
         if target_proc is None:
             self.top.debugPidGroup(pid, to_user=False)
-            self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
-            if len(self.trace_buffer.addr_info) == 0:
-                self.trace_buffer = None
             self.finishInit()
             self.disableReverse()
         else:
@@ -307,6 +304,11 @@ class PlayAFL():
         elif self.target_proc is None:
             self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
             self.top.resetOrigin()
+        if self.target_proc is None:
+            # otherwise traceBuffer set up in playInitCallback
+            self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
+            if len(self.trace_buffer.addr_info) == 0:
+                self.trace_buffer = None
 
         self.top.stopThreadTrack(immediate=True)
 
@@ -520,8 +522,8 @@ class PlayAFL():
             self.lgr.debug('playAFL goAlone watch page faults for pid %d cell %s' % (self.target_pid, self.target_cell))
             self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
-                self.lgr.debug('playAFL goAlone is onePlay and not repeat, resetOrigin')
-                self.top.resetOrigin()
+                self.lgr.debug('playAFL goAlone is onePlay and not repeat, not calling resetOrigin')
+                #self.top.resetOrigin()
 
             self.lgr.debug('playAFL goAlone now continue')
             if self.repeat:
