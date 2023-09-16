@@ -5454,8 +5454,8 @@ class GenMonitor():
         else:
             print('No IDA functions loaded.')
 
-    def showRelocate(self):
-        self.fun_mgr.showRelocate()
+    def showRelocate(self, search=None):
+        self.fun_mgr.showRelocate(search=search)
 
     def showMangle(self, search=None):
         if self.fun_mgr is not None:
