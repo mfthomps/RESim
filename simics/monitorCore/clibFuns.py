@@ -79,6 +79,15 @@ def adjustFunName(frame, fun_mgr, lgr):
                         if 'char' in param1:
                             fun = 'compare_chr'
 
+            elif fun.startswith('std::basic_string'):
+                lgr.debug('clibFuns windows fun %s' % fun)
+                pre_paren, in_paren = fun.split('(', 1)
+                fun = pre_paren.split('::')[-1]
+                if fun.startswith('allocator'):
+                    if in_paren.startswith('char'):
+                        lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
+                        fun = 'string_win_basic_char' 
+                      
             elif fun.startswith('std::__cxx11::'):
                 fun = fun[len('std::__cxx11::'):]
                 if '(' in fun:
@@ -106,8 +115,9 @@ def adjustFunName(frame, fun_mgr, lgr):
                 if '<' in fun:
                     fun = fun.split('<', 1)[0]
             elif fun.startswith('??'):
-                # windows eh?
+                # windows TBD remove this since demangle should make it never happen
                 if 'basic_string' in fun:
+                    lgr.debug('clibFuns basic string fun: %s' % fun)
                     fun = 'string_basic_windows'
                 elif fun.startswith('??_'):
                     fun = fun[3:]
