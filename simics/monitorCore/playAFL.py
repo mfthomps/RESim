@@ -580,8 +580,6 @@ class PlayAFL():
                     print('%-30s  packet %d' % (f, n))
                 print('Found %d sessions that hit address 0x%x' % (len(self.bnt_list), self.findbb))
             print('Played %d sessions' % len(self.afl_list))
-            if self.dfile != 'oneplay' or self.repeat:
-                cli.quiet_run_command('restore-snapshot name = origin')
             if len(self.exit_list)>0:
                 print('%d Sessions that called exit:' % len(self.exit_list))
                 for exit in sorted(self.exit_list):
@@ -591,6 +589,10 @@ class PlayAFL():
                 for item in sorted(self.afl_list):
                     if item not in self.exit_list:
                         print(item)
+            if self.dfile != 'oneplay' or self.repeat:
+                cli.quiet_run_command('restore-snapshot name = origin')
+            else:
+                self.top.stopCoverage() 
                 
 
     def getHitsPath(self, index):
