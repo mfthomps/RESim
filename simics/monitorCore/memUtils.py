@@ -164,6 +164,7 @@ class memUtils():
                 i+=1    
             self.regs['syscall_num'] = self.regs['eax']
             self.regs['syscall_ret'] = self.regs['eax']
+            self.regs['this'] = self.regs['ecx']
             self.regs['pc'] = self.regs['eip']
             self.regs['sp'] = self.regs['esp']
         elif arch == 'arm':
