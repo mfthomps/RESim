@@ -185,11 +185,19 @@ class FunMgr():
             with open(relocate_path) as fh:
                 funs = json.load(fh)
                 for addr_s in funs:
+                    demang = self.demangle(funs[addr_s])
+                    if demang is not None:
+                        rel_fun_name = demang
+                    else:
+                        rel_fun_name = funs[addr_s]
                     addr = int(addr_s)
                     adjust = addr+offset
-                    #self.lgr.debug('funMgr setRelocateFuns addr 0x%x offset 0x%x adjusted [0x%x] to %s' % (addr, offset, adjust, funs[addr_s]))
-                    self.relocate_funs[adjust] = funs[addr_s]
-                self.lgr.debug('funMgr setRelocateFuns loaded %d relocates for path %s num relocates now %d' % (len(funs), relocate_path, len(self.relocate_funs))) 
+                    #if 'FNET' in relocate_path:
+                    #    self.lgr.debug('funMgr setRelocateFuns addr 0x%x offset 0x%x adjusted [0x%x] to %s' % (addr, offset, adjust, funs[addr_s]))
+                    if adjust in self.relocate_funs:
+                        self.lgr.debug('funMgr 0x%x already in relocate as %s' % (adjust, self.relocate_funs[adjust]))
+                    self.relocate_funs[adjust] = rel_fun_name
+                self.lgr.debug('funMgr setRelocateFuns loaded %s relocates for path %s num relocates now %s' % (len(funs), relocate_path, len(self.relocate_funs))) 
         else:
             ''' TBD need to adjust per offset'''
             new_relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
@@ -202,6 +210,7 @@ class FunMgr():
     def getFunNameFromInstruction(self, instruct, eip):
         ''' get the called function address and its name, if known '''
         # TBD duplicates much of resolveCall.  merge?
+        self.lgr.debug('stackTrace getFunNameFromInstruct insturct: %s' % instruct[1])
         if self.cpu.architecture != 'arm' and instruct[1].startswith('jmp dword'):
             parts = instruct[1].split()
             addrbrack = parts[3].strip()
@@ -225,9 +234,9 @@ class FunMgr():
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
+            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
-                #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
+                self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr, fun = self.indirectCall(instruct, eip)
           
             elif len(parts) == 2:
@@ -238,11 +247,11 @@ class FunMgr():
                     pass
                 if call_addr is not None:
                     fun = str(self.funFromAddr(call_addr))
-                #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
+                    self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
-        #if call_addr is not None:
-        #    self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
+        if call_addr is not None:
+            self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
         return call_addr, fun
 
     def resolveCall(self, instruct, eip):      
@@ -273,9 +282,10 @@ class FunMgr():
     def isRelocate(self, addr):
         return addr in self.relocate_funs
 
-    def showRelocate(self):
-        for fun in self.relocate_funs:
-            print('0x%x %s' % (fun, self.relocate_funs[fun]))
+    def showRelocate(self, search=None):
+        for fun in sorted(self.relocate_funs):
+            if search is None or search in self.relocate_funs[fun]:
+                print('0x%x %s' % (fun, self.relocate_funs[fun]))
 
     def showFuns(self, search = False):
         self.ida_funs.showFuns(search=search)
@@ -309,16 +319,18 @@ class FunMgr():
                     except:
                         pass
                     if addr is not None:
+                        self.lgr.debug('funMgr indirectCall got addr 0x%x' % addr)
                         fun_name = self.funFromAddr(addr)
                         if fun_name is None:
                             retval = self.mem_utils.readAppPtr(self.cpu, addr)
-                            fun_name = self.funFromAddr(retval)
+                            if retval is not None:
+                                self.lgr.debug('funMgr indirectCall got 0x%x when reading addr' % retval)
+                                fun_name = self.funFromAddr(retval)
+                                self.lgr.debug('funMgr indirectCall got fun %s' % fun_name)
                         else: 
                             retval = addr
-                #else:
-                #    self.lgr.debug('funMgr indirectCall <%s> does not start with rip+' % content)
-            #if retval is not None:
-            #    self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
+            if retval is not None:
+                self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
             return retval, fun_name
 
 
