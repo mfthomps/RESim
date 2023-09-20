@@ -1,4 +1,5 @@
 from simics import *
+import os
 import memUtils
 import pageUtils
 import hapCleaner
@@ -53,6 +54,7 @@ class PageFaultGen():
         self.exception_hap2 = None
         self.pending_faults = {}
         self.mode_hap = None
+        self.ignore_probes = []
         ''' hack to tell context manager to call back to PageFaultGen on context switches to watched processes '''
         context_manager.callMe(self)
 
@@ -145,10 +147,16 @@ class PageFaultGen():
         #if self.debugging_pid is not None:
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
+        sp = self.mem_utils.getRegValue(cpu, 'sp')
+        user_ip_addr = sp + self.mem_utils.WORD_SIZE
+        user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
+        if user_eip in self.ignore_probes:
+            self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % user_eip)
+            return
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         #self.lgr.debug('pageFaultHap pid:%d eip: 0x%x cycle 0x%x' % (pid, eip, self.cpu.cycles))
         if not self.context_manager.watchingThis():
-            self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
+            #self.lgr.debug('pageFaultHap pid:%d, contextManager says not watching' % pid)
             return
         if self.exception_eip is None:
             eip = self.mem_utils.getRegValue(cpu, 'pc')
@@ -182,7 +190,7 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for pid:%d cur_pc: 0x%x' % (cr2, pid, cur_pc))
             return
         self.faulted_pages[pid].append(cr2)
-        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x' % (pid, comm, cr2, cur_pc, self.cpu.cycles))
+        #self.lgr.debug('pageFaultHapAlone for %d (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s' % (pid, comm, cr2, cur_pc, self.cpu.cycles, self.cpu.current_context))
         #self.lgr.debug('pageFaultHap for %d (%s) at 0x%x  faulting address: 0x%x' % (pid, comm, eip, cr2))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
@@ -281,11 +289,12 @@ class PageFaultGen():
 
     def watchPageFaults(self, pid=None, compat32=False):
         if self.fault_hap1 is not None or self.fault_hap is not None:
-            self.lgr.debug('pageFaultGen watchPageFaults, already watching.  Do nothing.')
-            return
-        if self.top.isWindows(target=self.target):
-            ''' TBD fix for windows '''
-            return 
+            self.lgr.debug('pageFaultGen watchPageFaults, already watching, do reset.  current context %s' % self.cpu.current_context)
+            self.stopWatchPageFaults(pid=pid)
+            #return
+        #if self.top.isWindows(target=self.target):
+        #    ''' TBD fix for windows '''
+        #    return 
         self.debugging_pid = pid
         ''' TBD explain why arm only uses faultCallback yet x86 also uses pageFaultHap '''
         if self.cpu.architecture == 'arm':
@@ -303,7 +312,7 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, 0, max_intr) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         else:
-            #self.lgr.debug('watchPageFaults not arm set break at 0x%x pid %s' % (self.param.page_fault, pid))
+            #self.lgr.debug('watchPageFaults not arm set break at 0x%x pid %s current context %s' % (self.param.page_fault, pid, self.cpu.current_context))
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             ''' TBD catch illegal instruction '''
@@ -312,6 +321,7 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, 0, 13) 
             self.fault_hap2 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
                  self.faultCallback, self.cpu, 15, max_intr) 
+        self.loadProbes()
 
     def recordFault(self, cpu, pid, eip):
         if pid not in self.faulting_cycles:
@@ -461,7 +471,7 @@ class PageFaultGen():
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
        
-        if self.top.hasBookmarks():
+        if self.top.hasBookmarks() and self.top.reverseEnabled():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             print('skipping back to user space, please wait.')
@@ -629,3 +639,24 @@ class PageFaultGen():
             return self.pending_faults[pid].cycles
         else:
             return None
+
+    def addProbe(self, probe):
+        self.ignore_probes.append(probe)
+
+    def loadProbes(self):
+        fname = '%s.probes' % self.target
+        if os.path.isfile(fname):
+            with open(fname) as fh:
+                for line in fh:
+                    if line.strip().startswith('#'):
+                        continue
+                    try:
+                        probe = int(line.strip(), 16)
+                    except:
+                        self.lgr.error('pageFaultGen bad line in %s %s' % (fname, line))
+                        continue     
+                    if probe not in self.ignore_probes:
+                        self.ignore_probes.append(probe)
+                        #self.lgr.debug('pageFaultGen added probe 0x%x' % probe)
+        
+    
