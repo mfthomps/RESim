@@ -195,9 +195,14 @@ class PrepInject():
         ''' Otherwise console has no indiation of when done. '''
 
         if exit_info.fname_addr is not None:
-            count = self.mem_utils.readWord32(self.cpu, exit_info.count)
-            pickDict['addr_addr'] = exit_info.fname_addr
-            pickDict['addr_size'] = count
+            if self.top.isWindows():
+                pickDict['addr_addr'] = exit_info.sock_addr
+                pickDict['addr_size'] = 8
+                self.lgr.debug('prepInject pickleit addr_addr is 0x%x' % exit_info.sock_addr)
+            else:
+                count = self.mem_utils.readWord32(self.cpu, exit_info.count)
+                pickDict['addr_addr'] = exit_info.fname_addr
+                pickDict['addr_size'] = count
 
         pickDict['orig_buffer'] = orig_buffer
         if self.top.isWindows():
