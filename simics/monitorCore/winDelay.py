@@ -96,6 +96,8 @@ class WinDelay():
             self.data_watch.setRange(self.count_addr, 4, msg='read count')
             if self.sock_addr is not None:
                 self.data_watch.setRange(self.sock_addr, 8, msg='source address')
+                self.exit_info.sock_addr = self.sock_addr
+                self.lgr.debug('winDelay doDataWatch sock_struct addr 0x%x' % self.sock_addr)
             if self.linger: 
                 self.data_watch.stopWatch() 
                 self.data_watch.watch(break_simulation=False, i_am_alone=True)
@@ -167,6 +169,7 @@ class WinDelay():
                 self.lgr.debug('winDelay writeCountHap have not yet done exit so log SAVE the trace message %s' % trace_msg)
             if self.call_name == 'RECV_DATAGRAM':
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
+                self.exit_info.sock_addr = self.sock_addr
                 sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
                 sock_string = sock_struct.getString()
                 trace_msg = trace_msg + ' '+sock_string+'\n'
