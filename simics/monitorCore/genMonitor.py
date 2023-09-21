@@ -1206,7 +1206,7 @@ class GenMonitor():
             ''' This will set full_path'''
             self.setPathToProg(pid)
             # TBD already called in debugPidList.  Does a group==True cover it?
-            if not group:
+            if not group or self.bookmarks is None:
                 self.lgr.debug('genMonitor debug call doDebugCmd')
                 self.doDebugCmd()
             self.did_debug=True
@@ -4334,7 +4334,7 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1):
+            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -4377,7 +4377,7 @@ class GenMonitor():
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
-                  break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count)
+                  break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults)
 
         if go:
             self.injectIOInstance.go()
@@ -4834,7 +4834,7 @@ class GenMonitor():
                      only_thread=only_thread, target=target, fname=fname)
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1):
+            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, no_page_faults=False):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -4859,7 +4859,7 @@ class GenMonitor():
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
-              repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all)
+              repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
@@ -5188,7 +5188,7 @@ class GenMonitor():
         return self.param[self.target]
 
     def syscallName(self, callnum):
-        self.lgr.debug('syscallName %d' % callnum)
+        #self.lgr.debug('syscallName %d' % callnum)
         return self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
 
     def showLinks(self):
@@ -5629,6 +5629,12 @@ class GenMonitor():
     def findThreads(self):
         self.task_utils[self.target].findThreads()
 
+    def showThreads(self):
+        thread_list = self.task_utils[self.target].findThreads()
+        for t in thread_list:
+            print('0x%x' % t)
+        print('%d threads' % (len(thread_list)))
+
     def isReverseExecutionEnabled(self):
         return self.rev_execution_enabled
 
@@ -5783,6 +5789,13 @@ class GenMonitor():
 
     def getBytes(self, target, cpu, count, addr):
         return self.mem_utils[target].getBytes(cpu, count, addr)
+
+    def addPageProbe(self, addr, target=None):
+        if target is None:
+            target = self.target
+        if target in self.page_faults:
+            self.page_faults[target].addProbe(addr)
+            self.lgr.debug('addPageProbe cell %s addr 0x%x' % (target, addr))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
