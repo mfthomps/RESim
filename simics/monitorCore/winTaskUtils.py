@@ -572,6 +572,7 @@ class WinTaskUtils():
             return False
         
     def findThreads(self):
+        thread_id_list = []
         cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
         if cur_thread is None:
             self.lgr.error('winTaskUtils getCurTaskRecPhys got cur_thread of None reading 0x%x' % self.phys_current_task)
@@ -594,7 +595,7 @@ class WinTaskUtils():
             got = []
             got.append(next_thread)
             thread_recs = []
-            for i in range(50):
+            for i in range(250):
           
                 next_thread = self.mem_utils.readPtr(self.cpu, next_thread+8)
                 if next_thread is None or next_thread in got:
@@ -604,6 +605,7 @@ class WinTaskUtils():
                 rec_start = next_thread - 0x428
                 thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
                 thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
+                thread_id_list.append(thread_id)
                 this_proc = self.mem_utils.readPtr(self.cpu, rec_start+self.param.proc_ptr)
                 if this_proc != 0: 
                     self.lgr.debug('next thread %d id 0x%x is 0x%x  rec_start 0x%x  proc_ptr 0x%x' % (i, thread_id, next_thread, rec_start, this_proc))
@@ -611,7 +613,7 @@ class WinTaskUtils():
 
             #offset=w7Params.hackpid(self.cpu, self.mem_utils, thread_recs, self.lgr, max_zeros=0)
                 
-            return
+        return thread_id_list
 
 
     def recentExitPid(self):
