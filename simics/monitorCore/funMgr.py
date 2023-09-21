@@ -195,8 +195,10 @@ class FunMgr():
                     #if 'FNET' in relocate_path:
                     #    self.lgr.debug('funMgr setRelocateFuns addr 0x%x offset 0x%x adjusted [0x%x] to %s' % (addr, offset, adjust, funs[addr_s]))
                     if adjust in self.relocate_funs:
-                        self.lgr.debug('funMgr 0x%x already in relocate as %s' % (adjust, self.relocate_funs[adjust]))
-                    self.relocate_funs[adjust] = rel_fun_name
+                        #self.lgr.debug('funMgr 0x%x already in relocate as %s' % (adjust, self.relocate_funs[adjust]))
+                        pass
+                    else:
+                        self.relocate_funs[adjust] = rel_fun_name
                 self.lgr.debug('funMgr setRelocateFuns loaded %s relocates for path %s num relocates now %s' % (len(funs), relocate_path, len(self.relocate_funs))) 
         else:
             ''' TBD need to adjust per offset'''
@@ -210,7 +212,7 @@ class FunMgr():
     def getFunNameFromInstruction(self, instruct, eip):
         ''' get the called function address and its name, if known '''
         # TBD duplicates much of resolveCall.  merge?
-        self.lgr.debug('stackTrace getFunNameFromInstruct insturct: %s' % instruct[1])
+        #self.lgr.debug('funMgr getFunNameFromInstruct insturct: %s' % instruct[1])
         if self.cpu.architecture != 'arm' and instruct[1].startswith('jmp dword'):
             parts = instruct[1].split()
             addrbrack = parts[3].strip()
@@ -224,7 +226,7 @@ class FunMgr():
             if fun is None:
                 call_addr = self.mem_utils.readAppPtr(self.cpu, addr)
                 fun = str(self.funFromAddr(call_addr))
-                self.lgr.debug('funMgr fun from addr 0x%x was None used readAddPtr to get call_addr 0x%x' % (addr, call_addr))
+                #self.lgr.debug('funMgr fun from addr 0x%x was None used readAddPtr to get call_addr 0x%x' % (addr, call_addr))
             else:
                 #self.lgr.debug('funMgr got fun %s from addr 0x%x' % (fun, addr))
                 call_addr = addr
@@ -234,9 +236,9 @@ class FunMgr():
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
+            #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
-                self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
+                #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr, fun = self.indirectCall(instruct, eip)
           
             elif len(parts) == 2:
@@ -247,11 +249,11 @@ class FunMgr():
                     pass
                 if call_addr is not None:
                     fun = str(self.funFromAddr(call_addr))
-                    self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
+                    #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
-        if call_addr is not None:
-            self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
+        #if call_addr is not None:
+        #    self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
         return call_addr, fun
 
     def resolveCall(self, instruct, eip):      
@@ -319,18 +321,18 @@ class FunMgr():
                     except:
                         pass
                     if addr is not None:
-                        self.lgr.debug('funMgr indirectCall got addr 0x%x' % addr)
+                        #self.lgr.debug('funMgr indirectCall got addr 0x%x' % addr)
                         fun_name = self.funFromAddr(addr)
                         if fun_name is None:
                             retval = self.mem_utils.readAppPtr(self.cpu, addr)
                             if retval is not None:
-                                self.lgr.debug('funMgr indirectCall got 0x%x when reading addr' % retval)
+                                #self.lgr.debug('funMgr indirectCall got 0x%x when reading addr' % retval)
                                 fun_name = self.funFromAddr(retval)
-                                self.lgr.debug('funMgr indirectCall got fun %s' % fun_name)
+                                #self.lgr.debug('funMgr indirectCall got fun %s' % fun_name)
                         else: 
                             retval = addr
-            if retval is not None:
-                self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
+            #if retval is not None:
+            #    self.lgr.debug('funMgr indirectCall returning 0x%x' % retval)
             return retval, fun_name
 
 
