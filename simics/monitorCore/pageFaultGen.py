@@ -55,6 +55,7 @@ class PageFaultGen():
         self.pending_faults = {}
         self.mode_hap = None
         self.ignore_probes = []
+        self.user_eip = None
         ''' hack to tell context manager to call back to PageFaultGen on context switches to watched processes '''
         context_manager.callMe(self)
 
@@ -148,10 +149,11 @@ class PageFaultGen():
         #    use_cell = self.context_manager.getRESimContext()
         cpu, comm, pid = self.task_utils.curProc() 
         sp = self.mem_utils.getRegValue(cpu, 'sp')
+
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
-        user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
-        if user_eip in self.ignore_probes:
-            self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % user_eip)
+        self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
+        if self.user_eip in self.ignore_probes:
+            self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         #self.lgr.debug('pageFaultHap pid:%d eip: 0x%x cycle 0x%x' % (pid, eip, self.cpu.cycles))
@@ -243,8 +245,8 @@ class PageFaultGen():
                         self.pdir_hap = None
                 elif self.cpu.architecture != 'arm':
                     ''' TBD handle reflection of segv to user space for arm? '''
-                    sp = self.mem_utils.getRegValue(cpu, 'sp')
-                    if sp > prec.cr2 and sp < (prec.cr2 + 80):
+                    instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
+                    if instruct[1].startswith('push'):
                         ''' growing stack '''
                         del self.pending_faults[pid]
                     else:
