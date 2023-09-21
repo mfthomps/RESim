@@ -124,7 +124,7 @@ def adjustFunName(frame, fun_mgr, lgr):
                     
 
             ''' TBD clean up this hack?'''
-            if fun.endswith('destroy'):
+            if fun.endswith('destroy') or 'destructor' in fun:
                 #lgr.debug('is destroy')
                 fun = 'destroy'
             elif fun.startswith('operator new'):
