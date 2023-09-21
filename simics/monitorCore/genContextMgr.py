@@ -693,7 +693,7 @@ class GenContextMgr():
            else:
                pass
                #self.lgr.debug('contextManager pid:%d (%s) not in cache, group leader 0x%x  leader pid %d' % (pid, comm, group_leader, leader_pid))
-        elif pid in self.pid_cache and new_addr not in self.watch_rec_list:
+        elif not self.top.isWindows(target=self.cell_name) and pid in self.pid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
 
         self.alterWatches(new_addr, prev_task, pid, win_thread)
