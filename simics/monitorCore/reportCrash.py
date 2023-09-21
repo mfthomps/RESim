@@ -73,7 +73,7 @@ class ReportCrash():
         self.dataWatch.clearWatchMarks()
         self.top.setCommandCallback(self.doneForward)
         self.top.resetBookmarks()
-        self.top.removeDebugBreaks()
+        self.top.removeDebugBreaks(immediate=True)
 
         self.crash_report.write("Crash report for %s\n" % self.flist[self.index])
         self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
