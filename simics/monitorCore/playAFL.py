@@ -44,7 +44,7 @@ class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=1, trace_all=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -193,6 +193,7 @@ class PlayAFL():
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
         
         self.snap_name = snap_name
+        self.no_page_faults = no_page_faults
         if not self.loadPickle(snap_name):
             print('No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
             return None
@@ -201,6 +202,7 @@ class PlayAFL():
             self.top.debugPidGroup(pid, to_user=False)
             self.finishInit()
             self.disableReverse()
+            self.initial_context = self.target_cpu.current_context
         else:
             ''' generate a bookmark so we can return here after setting coverage breakpoints on target'''
             self.lgr.debug('playAFL target_proc %s reset origin and set target to %s' % (target_proc, target_cell))
@@ -263,6 +265,7 @@ class PlayAFL():
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
         self.lgr.debug('playAFL playInitCallback. target pid: %d finish init to set coverage and such' % self.target_pid)
         self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
+        self.initial_context = self.target_cpu.current_context
         if self.trace_all:
             self.top.traceAll()
         if len(self.trace_buffer.addr_info) == 0:
@@ -520,7 +523,11 @@ class PlayAFL():
             #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
             self.lgr.debug('playAFL goAlone watch page faults for pid %d cell %s' % (self.target_pid, self.target_cell))
-            self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
+            if not self.no_page_faults:
+                self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
+            else:
+                self.lgr.debug('playAFL goAlone will not watch page faults, will miss segv')
+                self.top.stopWatchPageFaults()
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not calling resetOrigin')
                 #self.top.resetOrigin()

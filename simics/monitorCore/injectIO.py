@@ -40,7 +40,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1):
+           count=1, no_page_faults=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -159,6 +159,7 @@ class InjectIO():
         self.no_track = no_track
         self.hit_break_on = False
         self.no_reset = no_reset
+        self.no_page_faults = no_page_faults
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -251,10 +252,13 @@ class InjectIO():
 
             self.top.stopDebug()
             self.lgr.debug('injectIO call debugPidGroup')
-            self.top.debugPidGroup(self.pid, to_user=False) 
+            self.top.debugPidGroup(self.pid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
-            self.top.watchPageFaults()
+            if not self.no_page_faults:
+                self.top.watchPageFaults()
+            else:
+                self.top.stopWatchPageFaults()
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
@@ -266,7 +270,7 @@ class InjectIO():
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
         elif self.trace_all and self.target_proc is None:
-            self.top.debugPidGroup(self.pid, to_user=False) 
+            self.top.debugPidGroup(self.pid, to_user=False, track_threads=False) 
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
@@ -305,8 +309,8 @@ class InjectIO():
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
             env_max_len = os.getenv('AFL_MAX_LEN')
             if env_max_len is not None:
-                self.lgr.debug('injectIO overrode max_len value from pickle with value from environment')
                 self.max_len = int(env_max_len)
+                self.lgr.debug('injectIO overrode max_len value from pickle with value %d from environment' % self.max_len)
             if self.max_len is not None and self.max_len < bytes_wrote:
                 self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
             if not self.stay:
@@ -327,7 +331,7 @@ class InjectIO():
                         #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                         self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.orig_max_len)
                         if self.addr_of_count is not None:
-                            self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
+                            self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
                             self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
      
                         ''' special case'''
@@ -374,7 +378,7 @@ class InjectIO():
 
             self.top.setTarget(self.target_cell)
 
-            self.top.debugProc(self.target_proc, final_fun=self.injectCallback)
+            self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):
@@ -384,7 +388,10 @@ class InjectIO():
         '''
         self.lgr.debug('injectIO injectCallback')
         self.top.watchGroupExits()
-        self.top.watchPageFaults()
+        if not self.no_page_faults:
+            self.top.watchPageFaults()
+        else:
+            self.top.stopWatchPageFaults()
         self.top.stopThreadTrack(immediate=True)
         if self.trace_all:
             self.top.traceAll()
@@ -500,6 +507,7 @@ class InjectIO():
                 self.addr_size = so_pickle['addr_size']
                 if self.addr_size is None:
                     self.addr_size = 4
+                self.lgr.debug('injectIO addr_addr is 0x%x size %d' % (self.addr_addr, self.addr_size))
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
             if 'addr_of_count' in so_pickle: 
