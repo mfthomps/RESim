@@ -2878,6 +2878,7 @@ class DataWatch():
                         self.lgr.debug('dataWatch back from checkMove')
                     else:
                         self.lgr.debug('dataWatch 0x%x in non_ad_hoc_copy' % eip)
+                        self.watchMarks.dataRead(addr, start, length, self.getCmp(), trans_size)
                 if self.break_simulation:
                     self.lgr.debug('dataWatch told to break simulation')
                     SIM_break_simulation('DataWatch read data')
@@ -2953,13 +2954,8 @@ class DataWatch():
             if self.checkFailedStackBufs(index):
                 self.lgr.debug('dataWatch readHap is a write to dead stack buf %d, skip it' % index)
                 return
-            if self.top.isWindows(target=self.cell_name):
-                fun_name = self.fun_mgr.funFromAddr(eip)
-                self.lgr.debug('dataWatch readHap is write addr 0x%x eip: 0x%x fun_name %s' % (addr, eip, fun_name))
-                if fun_name is not None and fun_name in mem_funs:
-                    self.lgr.debug('dataWatch readHap mod within memsomething. Remove buffer TBD too crude.')
-                    self.rmRange(addr)
-                    return
+            if self.cheapReuse(eip, addr):
+                return
         else:
             #self.lgr.debug('****************dataWatch readHap pid:%s read addr: 0x%x index: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (pid_thread, memory.logical_address, index, str(self.watchMarks.markCount()), str(self.max_marks), 
             #     self.cpu.cycles, eip))
@@ -3059,7 +3055,7 @@ class DataWatch():
 
         self.prev_cycle = self.cpu.cycles
 
-        self.lgr.debug('**** dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s' % (pid, index, addr, eip, self.cpu.cycles, op_type))
+        self.lgr.debug('**** dataWatch readHap pid:%d index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s' % (pid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -3118,6 +3114,29 @@ class DataWatch():
                         pass
         else:
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, pid, index=index)
+
+    def cheapReuse(self, eip, addr):
+        retval = False
+        if self.top.isWindows(target=self.cell_name):
+            fun_name = self.fun_mgr.funFromAddr(eip)
+            self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s' % (addr, eip, fun_name))
+            if fun_name is not None:
+                if fun_name in mem_funs:
+                    self.lgr.debug('dataWatch cheapReuse mod within memsomething. Remove buffer TBD too crude.')
+                    self.rmRange(addr)
+                    retval = True
+                elif 'destructor' in fun_name:
+                    self.lgr.debug('dataWatch cheapReuse mod looks like destructor, TBD roll into other free functions?')
+                    self.rmRange(addr)
+                    retval = True
+        if not retval:
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            if sp >= addr and sp <= (addr+4):
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
+                    self.lgr.debug('cheapReuse, looks like stack push into buffer, assume we missed free.')
+                    retval = True
+        return retval
 
     def rmFree(self, fun, index):
         self.lgr.debug('dataWatch rmFree delete hap for %s' % fun)
