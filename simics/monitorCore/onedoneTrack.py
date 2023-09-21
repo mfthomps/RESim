@@ -26,7 +26,12 @@ def onedone(top):
     only_thread = False 
     if only_thread_s is not None and only_thread_s.lower() == 'true':
         only_thread = True
-    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread)
+
+    no_page_faults_s=os.getenv('ONE_DONE_PARAM3')
+    no_page_faults = False
+    if no_page_faults_s is not None and no_page_faults_s.lower() == 'true':
+        no_page_faults = True
+    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults)
     myinject.setExitCallback(reportExit)
     myinject.go()
 

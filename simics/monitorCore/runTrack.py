@@ -31,7 +31,7 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, instance_path):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, stop_threads, lgr, instance_path):
     if instance_path is not None:
         os.chdir(instance_path)
     here = os.getcwd()
@@ -41,6 +41,8 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, stop_threads, lgr, in
     if only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
     count = 0
+    if no_page_faults:
+        os.environ['ONE_DONE_PARAM3']='True'
     with open(log, 'wb') as fh:
         for f in afl_list:
             #os.chdir(here)
@@ -96,6 +98,7 @@ def main():
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
+    parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
     
     args = parser.parse_args()
     resim_ini = args.ini
@@ -131,7 +134,7 @@ def main():
     stop_threads=False
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, lambda: stop_threads, lgr, None))
+    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, lambda: stop_threads, lgr, None))
     thread_list.append(track_thread)
     track_thread.start()
    

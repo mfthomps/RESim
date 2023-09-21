@@ -16,6 +16,12 @@ def onedone(top):
             targetFD = int(targetFD)
         
     count=os.getenv('ONE_DONE_PARAM6')
+    no_page_faults_string=os.getenv('ONE_DONE_PARAM7')
+    if no_page_faults_string.lower() == 'true':
+        no_page_faults = True
+    else:
+        no_page_faults = False
+    
     if count is not None:
         count = int(count)
     else:
@@ -35,4 +41,4 @@ def onedone(top):
             top.playAFLTCP(base, parallel=True, only_thread=only_thread, target=program)
         else:
             fh.write('call playAFL target %s only_thread %r\n' % (base, only_thread))
-            top.playAFL(base, parallel=True, only_thread=only_thread, fname=program, target=target, targetFD=targetFD, count=count)
+            top.playAFL(base, parallel=True, only_thread=only_thread, fname=program, target=target, targetFD=targetFD, count=count, no_page_faults=no_page_faults)

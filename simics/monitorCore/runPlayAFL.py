@@ -104,6 +104,7 @@ def runPlay(args, lgr, prog_path):
     if args.targetFD is not None:
         os.environ['ONE_DONE_PARAM5']=args.targetFD
     os.environ['ONE_DONE_PARAM6']=args.count
+    os.environ['ONE_DONE_PARAM7']=str(args.no_page_faults)
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     for cfile in cover_list:
@@ -174,6 +175,7 @@ def main():
     parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')
     parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
     parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
+    parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
