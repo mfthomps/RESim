@@ -4,6 +4,7 @@ import os
 import pickle
 import taskUtils
 import winDelay
+import winSocket
 from resimUtils import rprint
 from resimHaps import *
 class WriteData():
@@ -146,6 +147,11 @@ class WriteData():
         self.no_call_hap = os.getenv('AFL_NO_CALL_HAP')
         if self.no_call_hap:
             self.lgr.debug('Preventing set of callHap')
+
+        if self.top.isWindows():
+            self.ioctl_op_map = winSocket.getOpMap()
+        else:
+            self.ioctl_op_map = None
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -454,13 +460,29 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
             return
         pid_thread = self.top.getPIDThread()
-        #if self.top.isWindows():
-        #    eip = self.top.getEIP(self.cpu)
-        #    self.lgr.debug('writeData callHap,  pid_thread:%s eip: 0x%x cycles: 0x%x' % (pid_thread, eip, self.cpu.cycles))
-        #    return
-        self.read_count = self.read_count + 1
-        #self.lgr.debug('writeData callHap, read_count is %d pid_thread:%s' % (self.read_count, pid_thread))
-        self.handleCall()
+        skip_it = False
+        if self.top.isWindows():
+            eip = self.top.getEIP(self.cpu)
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            callname = self.top.syscallName(callnum)
+            if callname == 'DeviceIoControlFile':
+                frame = self.top.frameFromRegs()
+                operation = frame['param6'] & 0xffffffff
+                if operation in self.ioctl_op_map:
+                    op_cmd = self.ioctl_op_map[operation]
+                    #self.lgr.debug('writeData callHap,  is Windows TBD bail if RECV pid_thread:%s eip: 0x%x cycles: 0x%x callname %s op: %s' % (pid_thread, eip, 
+                    #     self.cpu.cycles, callname, op_cmd))
+                    if op_cmd != 'RECV':
+                        skip_it = True
+            else:
+                #self.lgr.debug('writeData callHap, windows expected DeviceIoControFile got %s' % callname)
+                skip_it = True
+
+            #    return
+        if not skip_it:
+            self.read_count = self.read_count + 1
+            self.lgr.debug('writeData callHap, read_count is %d pid_thread:%s' % (self.read_count, pid_thread))
+            self.handleCall()
 
     def handleCall(self):
         pid = self.top.getPID()
@@ -512,7 +534,13 @@ class WriteData():
                 elif len(self.in_data) == 0:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
                     SIM_run_alone(self.write_callback, 0)
+                    #if not self.top.isWindows():
+                    #    SIM_run_alone(self.write_callback, 0)
+                    #else:
+                    #    self.lgr.debug('writeData handleCall current packet %d no data left, has a callback, but this is windows so break simulation' % self.current_packet)
+                    #    SIM_break_simulation('buffer data consumed.')
             else:
+                # no callback
                 if self.mem_utils.isKernel(self.addr):
                     if self.closed_fd:
                         SIM_run_alone(self.delCallHap, None)
@@ -532,6 +560,10 @@ class WriteData():
                         SIM_run_alone(self.delCallHap, None)
                         #self.lgr.debug('writeData handleCall current packet %d no data left, stop_on_read set so stop' % self.current_packet)
                         SIM_break_simulation('writeData out of data')
+                    elif self.top.isWindows():
+                        SIM_run_alone(self.delCallHap, None)
+                        self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
+                        SIM_break_simulation('writeData out of data windows')
                     else:
                         #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
                         pass
