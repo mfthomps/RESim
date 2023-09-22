@@ -3,6 +3,8 @@
 # Dump function/block IDA analysis for a given program.
 # The output is placed in the analysis directory.  The IDA
 # data base (idb, id0, etc.) is placed in the RESIM_IDA_DATA directory.
+# WARNING this dumps the current IDA analysis addresses, which may reflect
+# a rebasing.  You should run this program before rebasing.
 #
 if [ -z "$IDA_DIR" ]; then
     echo "IDA_DIR not defined."
@@ -46,7 +48,7 @@ if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
     exit
 fi
 
-target_path=$(realpath "$target")
+export ida_target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 other_ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
 
@@ -64,15 +66,19 @@ mkdir -p "$ida_analysis_path"
 echo "target is $target"
 echo "dbpath $ida_db_path"
 if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
-    #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
-    #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
+    # Get image base from readelf / readpe and set an env with it and have idaDump do a rebase
+    # using ida_segment.rebase_program(offset, MSF_FIXONCE) and exit WITHOUT saving db
+    export target_image_base=$(readpe "$ida_target_path" | grep ImageBase | awk '{print$2}')
+    if [ -z $target_image_base ]; then
+        export target_image_base=$(readelf -WS "$ida_target_path" | grep .text | awk '{print $4}')
+    fi
+    echo "image_base is $target_image_base"
     echo $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
-    $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
+    $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py "$ida_db_path"
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
-    #$idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target_path $@" "$target"
-    $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
+    $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target"
     echo $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
 fi
