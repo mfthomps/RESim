@@ -4,7 +4,14 @@ import ida_search
 import idaapi
 import idaversion
 import idautils
+import ida_segment
+import ida_loader
 import os
+import sys
+import logging
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
+import winProg
 def demangle(fname):
     mangle_map = {}
     for mangled in idautils.Functions():
@@ -34,7 +41,16 @@ def dumpFuns(fname=None):
         if fname is None:
             print('No ida_analysis_path defined')
             fname = idaversion.get_input_file_path()
-    print('dumpFuns inputfile %s' % fname)
+    image_base = os.getenv('target_image_base')
+    if image_base is not None:
+        current_base = idautils.peutils_t().imagebase
+        image_base = int(image_base, 16)
+        delta = image_base - current_base 
+        print('image base is 0x%x current_base is 0x%X, delta 0x%x' % (image_base, current_base, delta))
+        ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
+        ida_loader.set_database_flag(ida_loader.DBFL_KILL)
+    else:
+        print('No image base found as env variable, using existing image_base')
     for ea in idautils.Segments():
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
         end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
@@ -70,7 +86,7 @@ def dumpBlocks():
     blocks = {}
     for fun in fun_json:
         fun_addr = int(fun)
-        print('name %s 0x%x' % (fun_json[fun]['name'], fun_addr))
+        #print('name %s 0x%x' % (fun_json[fun]['name'], fun_addr))
         block_list = []
         f = idaapi.get_func(fun_addr)
         if f is not None:
@@ -145,7 +161,16 @@ class ImportNames():
             #print "%08x: ord#%d" % (ea, ord)
             pass
         else:
-            self.imports[ea] = name 
+
+            demangled = idc.demangle_name(
+                name,
+                idc.get_inf_attr(idc.INF_SHORT_DN)
+            )
+            if demangled is None:
+                self.imports[ea] = name 
+            else:
+                self.imports[ea] = demangled 
+                print('was manged %s to %s' % (name, demangled))
             #print "%08x: %s (ord#%d)" % (ea, name, ord)
         return True
     def printit(self):
@@ -171,5 +196,5 @@ def dumpImports(fname):
 
         print "Walking-> %s" % name
         idaapi.enum_import_names(i, import_names.imp_cb)
-    #import_names.printit()
+    import_names.printit()
     import_names.dumpit(fname)
