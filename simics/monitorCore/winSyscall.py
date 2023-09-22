@@ -457,7 +457,7 @@ class WinSyscall():
                                         if exit_info.call_params is None or exit_info.call_params.name != 'runToCall':
                                             cp = syscall.CallParams('stop_on_call', None, None, break_simulation=True)
                                             exit_info.call_params = cp
-                                    #self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
+                                    self.lgr.debug('exit_info.call_params pid %d is %s' % (pid, str(exit_info.call_params)))
 
                                     if self.dataWatch is not None and not self.dataWatch.disabled:
                                         self.lgr.debug('winSyscall calling dataWatch to stop watch to ignore kernel fiddle with data')
@@ -546,8 +546,13 @@ class WinSyscall():
                     self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % alter_callname)
                     return
                 else:
-                    exit_info.call_params = call_param
-                    self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % alter_callname)
+                    if self.stop_on_call:
+                        self.lgr.debug('syscall syscallParse %s, pid filter matched, breaking simulation' % callname)
+                        SIM_break_simulation(callname)
+                        self.top.rmSyscall(call_param.name)
+                    else:
+                        exit_info.call_params = call_param
+                        self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % alter_callname)
 
 
         frame_string = taskUtils.stringFromFrame(frame)
