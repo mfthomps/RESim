@@ -107,7 +107,7 @@ class WinDLLMap():
                     if section.pid not in self.min_addr:
                         self.min_addr[section.pid] = None
                         self.max_addr[section.pid] = None
-                    if (self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr) and section.addr != 0:
+                    if (self.min_addr[section.pid] is None or self.min_addr[section.pid] > section.addr) and section.addr != 0 and section.text_offset is not None:
                         #TBD what is being loaded at addr 0?  Are we getting confused by mapped memory that is not code?
                         self.min_addr[section.pid] = section.addr + section.text_offset
                     if section.size is None:
@@ -225,6 +225,16 @@ class WinDLLMap():
                         if rm_pp is not None:
                             self.pending_procs.remove(rm_pp)
 
+                    # TBD is pending_procs necessary?  Why not always add text if missing for pid?
+                    if pid not in self.text:
+                        cpu, comm, pid = self.task_utils.curProc() 
+                        eproc = self.task_utils.getCurTaskRec()
+                        full_path = self.top.getFullPath(fname=comm)
+                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                        self.addText(comm, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
+                                        win_prog_info.image_base, win_prog_info.text_offset)
+                        self.lgr.debug('WinDLLMap text mapSection added, text section for %s' % full_path)
+
                     self.lgr.debug('WinDLLMap mapSection appended, len now %d' % len(self.section_list))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
                     self.checkSOWatch(self.sections[pid][section_handle])
@@ -266,9 +276,13 @@ class WinDLLMap():
         for section_addr in sorted(sort_map):
             section = sort_map[section_addr]
             if filter is None or filter in section.fname:
-                end = section.addr+section.size
-                print('pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
-                self.lgr.debug('winDLLMap showSO pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
+                if section.size is None:
+                    print('pid:%d 0x%x size UNKNOWN %s' % (section.pid, section.addr, section.fname)) 
+                   
+                else:
+                    end = section.addr+section.size
+                    print('pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
+                    self.lgr.debug('winDLLMap showSO pid:%d 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
 
 
     def isMainText(self, address):
@@ -472,7 +486,7 @@ class WinDLLMap():
             self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
             if section.image_base is None:
                 full_path = self.top.getFullPath(fname=section.fname)
-                self.lgr.debug('winDLL setIdaFuns got %s from getFullPath' % full_path)
+                self.lgr.debug('winDLL addSectionFunction got %s from getFullPath' % full_path)
                 size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
                 section.image_base = image_base
                 section.text_offset = text_offset
