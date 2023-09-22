@@ -2468,9 +2468,6 @@ class GenMonitor():
             if not retval:
                 retval = self.onlyProgList() 
             self.ignoreThreadList()
-        if retval:
-            ''' do not delete/recreate exit haps '''
-            self.sharedSyscall[self.target].preserveExit()
         return retval
  
     def traceAll(self, target=None, record_fd=False, swapper_ok=False):
@@ -2484,6 +2481,10 @@ class GenMonitor():
             return
         if self.checkOnlyIgnore():
             self.rmDebugWarnHap()
+
+        if self.context_manager[self.target].didListLoad():
+            self.lgr.debug('Will preserve syscall exits')
+            self.sharedSyscall[self.target].preserveExit()
 
         if self.isWindows():
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
