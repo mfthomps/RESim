@@ -39,5 +39,7 @@ def main():
     for line in output[0].decode("utf-8").splitlines():
          print(line)
 
+#ls -lrt ~/afl/output/ibssvc_20002/wer-7910_resim_*/queue | grep -v sync | grep -v orig | grep "id:" | wc
+
 if __name__ == '__main__':
     sys.exit(main())
