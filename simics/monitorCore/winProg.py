@@ -48,6 +48,10 @@ def getLoadAddress(cpu, mem_utils, eproc, lgr):
             image_load_addr_addr = peb + 0x10
             lgr.debug('winProg getLoadAddress pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
             retval = mem_utils.readWord(cpu, image_load_addr_addr)
+            if retval is None:
+                lgr.debug('winProg getLoadAddress got None reading 0x%x' % image_load_addr_addr)
+            else:
+                lgr.debug('winProg getLoadAddress got load addr 0x%x reading 0x%x' % (retval, image_load_addr_addr))
         else:
             lgr.error('winProg getLoadAddress pep read as None')
         return retval
