@@ -560,6 +560,8 @@ class GenContextMgr():
             Assumes we only ignore when not debugging.
             However we could be switching to a suspended thread
         '''
+        if pid is None:
+            return
         retval = False       
         if thread_id is None:
             pid_thread = '%s' % pid
@@ -615,6 +617,15 @@ class GenContextMgr():
                 #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for pid:%s comm %s' % (pid_thread, comm))
             retval = True 
+            if pid is not None and self.catch_pid == pid:
+                self.lgr.debug('contextManager onlyOrIgnore thread do catch_callback for pid %d' % pid)
+                #SIM_break_simulation('in pid %d' % pid)
+                if self.catch_callback is not None: 
+                    SIM_run_alone(self.catch_callback, None)
+                else:
+                    SIM_break_simulation('changed thread, now in pid %d' % pid)
+                self.catch_pid = None
+              
         return retval
     
       
@@ -713,7 +724,8 @@ class GenContextMgr():
     def catchPid(self, pid, callback):
         self.catch_pid = pid
         self.catch_callback = callback 
-        self.setTaskHap()
+        self.lgr.debug('contectManager catchPid %d' % pid)
+        self.setTaskHap(pid=pid)
 
     def watchAll(self):
         self.watch_only_this = False
@@ -960,7 +972,7 @@ class GenContextMgr():
                 else:
                     self.addTask(pid)
 
-    def setTaskHap(self):
+    def setTaskHap(self, pid=None):
         print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
@@ -968,8 +980,9 @@ class GenContextMgr():
             #self.lgr.debug('genContextManager setTaskHap bp %d' % self.task_break)
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
             #self.lgr.debug('setTaskHap cell %s break %d set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
-        cpu, comm, pid = self.task_utils.curProc()
-        self.onlyOrIgnore(pid, comm, None, None, None)
+        cpu, comm, cur_pid = self.task_utils.curProc()
+        if pid is None or pid == cur_pid:
+            self.onlyOrIgnore(pid, comm, None, None, None)
 
     def restoreWatchTasks(self):
         self.watching_tasks = True
@@ -1228,8 +1241,9 @@ class GenContextMgr():
                     watch_pid, watch_comm = self.task_utils.getPidCommFromGroupNext(list_addr)
                     if self.debugging_pid is not None and self.amWatching(watch_pid):
                         cell = self.resim_context
-            if watch_pid == 0:
-                self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
+            if watch_pid == 0 and not self.top.isWindows():
+                # TBD um, windows pid zero points to this process as being next?
+                #self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
                 return False
             self.lgr.debug('Watching next record of pid:%d (%s) for death of pid:%d break on 0x%x context: %s' % (watch_pid, watch_comm, pid, list_addr, cell))
             #self.task_rec_bp[pid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
@@ -1239,7 +1253,7 @@ class GenContextMgr():
             SIM_run_alone(self.watchTaskHapAlone, pid)
             self.task_rec_watch[pid] = list_addr
         else:
-            #self.lgr.debug('contextManager watchExit, already watching for pid %d' % pid)
+            self.lgr.debug('contextManager watchExit, already watching for pid %d' % pid)
             pass
         return retval
 
@@ -1415,6 +1429,7 @@ class GenContextMgr():
         return retval 
 
     def didListLoad(self):
+        ''' was an "only" or "ignore" list loaded? '''
         retval = False
         if len(self.only_progs) > 0 or len(self.ignore_progs) > 0:
             retval = True
