@@ -52,7 +52,10 @@ class RunTo():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
             SIM_run_alone(self.delStopHap, None)
-            self.stop_action.run()
+            if self.stop_action is not None:
+                self.stop_action.run()
+            else:
+                self.top.skipAndMail()
 
             '''
 
@@ -198,10 +201,13 @@ class RunTo():
                continue
            if section.fname == 'unknown':
                continue
-           end = section.addr+section.size
-           proc_break = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
-           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, pid_and_thread, proc_break, 'runToKnown'))
-           self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x context %s' % (section.addr, section.size, str(context)))
+           if section.size is None:
+               self.lgr.debug('runto setSkipList size of section %s is None' % section.fname)
+           else:
+               end = section.addr+section.size
+               proc_break = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
+               self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, pid_and_thread, proc_break, 'runToKnown'))
+               self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x context %s' % (section.addr, section.size, str(context)))
 
     def skipBreakoutHap(self, pid_and_thread, third, forth, memory):
         ''' We hit a DLL whose syscalls are not to be skipped.  Restore debug context.  TBD modify to handle non-debug case as well
