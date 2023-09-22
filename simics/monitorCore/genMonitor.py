@@ -663,19 +663,20 @@ class GenMonitor():
     def run2User(self, cpu, flist=None):
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
-            dumb, dumb, pid = self.task_utils[self.target].curProc() 
+            pid = self.task_utils[self.target].curPID() 
             ''' use debug process if defined, otherwise default to current process '''
             debug_pid, dumb = self.context_manager[self.target].getDebugPid() 
+            pid_thread = self.task_utils[self.target].getPidAndThred()
             if debug_pid is not None:
                 if debug_pid != pid:
                     self.lgr.debug('debug_pid %d  pid %d' % (debug_pid, pid))
                     ''' debugging, but not this pid.  likely a clone '''
                     if not self.context_manager[self.target].amWatching(pid):
                         ''' stick with original debug pid '''
-                        pid = debug_pid
+                        pid_thread = str(debug_pid)
                     
-            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid)
-            self.lgr.debug('run2User pid %d in kernel space (%d), set mode hap %d' % (pid, cpl, self.mode_hap))
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, pid_thread)
+            self.lgr.debug('run2User pid %s in kernel space (%d), set mode hap %d' % (pid_thread, cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
@@ -1003,12 +1004,12 @@ class GenMonitor():
                 ss = frame['ss']
                 socket_callnum = frame['param1']
                 socket_callname = net.callname[socket_callnum].lower()
-                print('\tpid: %d syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
+                print('\tpid: %s syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
                      call, socket_callname, ss.fd, frame['sp'], frame['pc'], cycles))
             else:
-                print('\tpid: %d socketcall but no ss in frame?' % pid)
+                print('\tpid: %s socketcall but no ss in frame?' % pid)
         else:
-            print('\tpid: %d syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
+            print('\tpid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (pid, 
                  call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
 
     def tasksDBG(self):
@@ -1143,7 +1144,7 @@ class GenMonitor():
             cpu, comm, this_pid = self.task_utils[self.target].curProc() 
             if pid is None:
                 pid = this_pid 
-            self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Pid is %d compat32 %r' % (cpu.name, self.gdb_port, pid, self.is_compat32))
+            self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Pid is %s compat32 %r' % (cpu.name, self.gdb_port, pid, self.is_compat32))
             if self.bookmarks is None:
                 if cpu.architecture == 'arm':
                     cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
@@ -1375,8 +1376,6 @@ class GenMonitor():
                 print('%s%5d  %s' % (tabs, prec.pid, prec.proc))
                 tabs += '\t'
 
-
-
     def signalHap(self, signal_info, one, exception_number):
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         if signal_info.callnum is None:
@@ -1386,11 +1385,11 @@ class GenMonitor():
                self.hack_list.append(exception_number)
         if signal_info.pid is not None:
             if pid == signal_info.pid:
-                self.lgr.error('signalHap from %d (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
+                self.lgr.error('signalHap from %s (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
                 SIM_break_simulation('signal %d' % exception_number)
         else: 
            SIM_break_simulation('signal %d' % exception_number)
-           self.lgr.debug('signalHap from %d (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
+           self.lgr.debug('signalHap from %s (%s) signal 0x%x at 0x%x' % (pid, comm, exception_number, self.getEIP(cpu)))
          
     def readStackFrame(self):
         cpu, comm, pid = self.task_utils[self.target].curProc()
@@ -1401,8 +1400,8 @@ class GenMonitor():
     def int80Hap(self, cpu, one, exception_number):
         cpu, comm, pid = self.task_utils[self.target].curProc()
         eax = self.mem_utils[self.target].getRegValue(cpu, 'eax')
-        self.lgr.debug('int80Hap in proc %d (%s), eax: 0x%x' % (pid, comm, eax))
-        self.lgr.debug('syscall 0x%d from %d (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(cpu)))
+        self.lgr.debug('int80Hap in proc %s (%s), eax: 0x%x' % (pid, comm, eax))
+        self.lgr.debug('syscall 0x%d from %s (%s) at 0x%x ' % (eax, pid, comm, self.getEIP(cpu)))
         if eax != 5:
             return
         SIM_break_simulation('syscall')
@@ -2003,22 +2002,22 @@ class GenMonitor():
                 self.lgr.error('no cpu defined in context manager')
             else: 
                 dum_cpu, comm, pid  = self.task_utils[self.target].curProc()
-                self.lgr.debug('getEIPWhenStopped, pid %d' % (pid)) 
+                self.lgr.debug('getEIPWhenStopped, pid %s' % (pid)) 
                 if self.gdb_mailbox is not None:
-                    self.lgr.debug('getEIPWhenStopped mbox is %s pid is %d (%s) cycle: 0x%x' % (self.gdb_mailbox, pid, comm, cpu.cycles))
+                    self.lgr.debug('getEIPWhenStopped mbox is %s pid is %s (%s) cycle: 0x%x' % (self.gdb_mailbox, pid, comm, cpu.cycles))
                     retval = 'mailbox:%s' % self.gdb_mailbox
                     print(retval)
                 else:
                     self.lgr.debug('getEIPWhenStopped, mbox must be empty?')
                     cpl = memUtils.getCPL(cpu)
                     if cpl == 0 and not kernel_ok:
-                        self.lgr.debug('getEIPWhenStopped in kernel pid:%d (%s) eip is %x' % (pid, comm, eip))
+                        self.lgr.debug('getEIPWhenStopped in kernel pid:%s (%s) eip is %x' % (pid, comm, eip))
                         retval = 'in kernel'
                         print(retval)
                     else:
-                        self.lgr.debug('getEIPWhenStopped pid:%d (%s) eip is %x' % (pid, comm, eip))
+                        self.lgr.debug('getEIPWhenStopped pid:%s (%s) eip is %x' % (pid, comm, eip))
                         if not self.context_manager[self.target].amWatching(pid):
-                            self.lgr.debug('getEIPWhenStopped not watching process pid:%d (%s) eip is %x' % (pid, comm, eip))
+                            self.lgr.debug('getEIPWhenStopped not watching process pid:%s (%s) eip is %x' % (pid, comm, eip))
                             retval = 'wrong process'
                             print(retval)
                         else:
@@ -2042,10 +2041,10 @@ class GenMonitor():
     def resynch(self):
         ''' poor name? If not in user space of one of the thread group, go there '''
         debug_pid, debug_cpu = self.context_manager[self.target].getDebugPid() 
-        cpu, comm, pid = self.task_utils[self.target].curProc() 
-        self.lgr.debug('resynch to pid: %d' % debug_pid)
+        cur_pid = self.task_utils[self.target].curPID() 
+        self.lgr.debug('resynch to debug_pid:%s' % debug_pid)
         #self.is_monitor_running.setRunning(True)
-        if self.context_manager[self.target].amWatching(pid):
+        if self.context_manager[self.target].amWatching(cur_pid):
             self.lgr.debug('rsynch, already in proc')
             f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
             self.toUser([f1])
@@ -2627,7 +2626,7 @@ class GenMonitor():
             return
         cpu, comm, pid = self.task_utils[self.target].curProc() 
         if cpu != prec.cpu or pid not in prec.pid:
-            self.lgr.debug('%s hap, wrong something pid:%d prec pid list %s' % (prec.who, pid, str(prec.pid)))
+            self.lgr.debug('%s hap, wrong something pid:%s prec pid list %s' % (prec.who, pid, str(prec.pid)))
             return
         #cur_eip = SIM_get_mem_op_value_le(memory)
         eip = self.getEIP(cpu)
@@ -2694,7 +2693,7 @@ class GenMonitor():
     def restoreDebugBreaks(self, was_watching=False):
          
         cpu, comm, cur_pid = self.task_utils[self.target].curProc() 
-        self.lgr.debug('restoreDebugBreaks cur pid:%d  but may not be the debug pid' % cur_pid)
+        self.lgr.debug('restoreDebugBreaks cur pid:%s  but may not be the debug pid' % cur_pid)
         self.context_manager[self.target].resetWatchTasks() 
         if not self.debug_breaks_set and not self.track_finished:
             self.lgr.debug('restoreDebugBreaks breaks not set and not track finished')
@@ -3270,10 +3269,10 @@ class GenMonitor():
         frames = self.getDbgFrames()
         for pid in list(frames):
             if frames[pid] is None:
-                self.lgr.error('frame for pid %d is none?' % pid)
+                self.lgr.error('frame for pid %s is none?' % pid)
                 continue
             call = self.task_utils[self.target].syscallName(frames[pid]['syscall_num'], self.is_compat32) 
-            self.lgr.debug('runToInput found %s in kernel for pid:%d' % (call, pid))
+            self.lgr.debug('runToInput found %s in kernel for pid:%s' % (call, pid))
             if call not in calls:
                del frames[pid]
         if len(frames) > 0:
@@ -3669,13 +3668,13 @@ class GenMonitor():
         print('maze status')
         for m in self.exit_maze:
             pid, planted, broke = m.getStatus()
-            print('%d planted: %d  broke: %d' % (pid, planted, broke))
+            print('%s planted: %d  broke: %d' % (pid, planted, broke))
         no_watch_list = self.context_manager[self.target].getNoWatchList()
         cpu = self.cell_config.cpuFromCell(self.target)
         print('No watch list:')
         for rec in no_watch_list:
             pid = self.mem_utils[self.target].readWord32(cpu, rec + self.param[self.target].ts_pid)
-            print('  %d' % pid)
+            print('  %s' % pid)
         
 
     def showParams(self):

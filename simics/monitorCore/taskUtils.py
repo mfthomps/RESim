@@ -232,17 +232,27 @@ class TaskUtils():
         exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
         pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
-    def curProc(self):
-        #self.lgr.debug('taskUtils curProc')
+    def curPID(self):
         cur_task_rec = self.getCurTaskRec()
-        #self.lgr.debug('taskUtils curProc cur_task_rec 0x%x' % cur_task_rec)
-        comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
-        #self.lgr.debug('taskUtils curProc comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
-        #self.lgr.debug('taskUtils curProc pid %s' % str(pid))
+        return pid
+
+    def curTID(self):
+        cur_task_rec = self.getCurTaskRec()
+        pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+        return str(pid)
+
+    def curThread(self):
+        #self.lgr.debug('taskUtils curThread')
+        cur_task_rec = self.getCurTaskRec()
+        #self.lgr.debug('taskUtils curThread cur_task_rec 0x%x' % cur_task_rec)
+        comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
+        #self.lgr.debug('taskUtils curThread comm %s' % comm)
+        pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+        #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
-        return self.cpu, comm, pid 
+        return self.cpu, comm, str(pid)
 
     def findSwapper(self):
         task = None
@@ -537,7 +547,7 @@ class TaskUtils():
           
         return retval
 
-    def getPidsForComm(self, comm_in):
+    def getTidsForComm(self, comm_in):
         comm = os.path.basename(comm_in).strip()
         retval = []
         #self.lgr.debug('getPidsForComm %s' % comm_in)
@@ -545,11 +555,11 @@ class TaskUtils():
         for ts in ts_list:
             #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
-                pid = ts_list[ts].pid
+                pid = str(ts_list[ts].pid)
                 #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
                 ''' skip if exiting as recorded by syscall '''
                 if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                    retval.append(ts_list[ts].pid)
+                    retval.append(pid)
         return retval
 
     def getPidCommMap(self):
@@ -1046,8 +1056,8 @@ class TaskUtils():
         return uid, eu_id
 
 
-    def getPidAndThread(self):
-        dum, dum1, pid = self.curProc()
-        retval = '%d' % (pid)
-        return retval
+    #def getPidAndThread(self):
+    #    dum, dum1, pid = self.curProc()
+    #    retval = '%d' % (pid)
+    #    return retval
 
