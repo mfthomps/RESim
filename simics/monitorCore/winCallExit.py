@@ -125,6 +125,9 @@ class WinCallExit():
         if eax == 0x40000003:
             self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
             eax = 0
+        if eax == 0xc000023f:
+            self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
+            eax = 0
         
         # variable to determine if we are going to be doing 32 or 64 bit syscall
         word_size = exit_info.word_size
