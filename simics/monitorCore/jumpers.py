@@ -213,7 +213,7 @@ class Jumpers():
         if len(parts) > 3 and parts[3] == 'break':
             break_at_dest = True
 
-        cpu, this_comm, pid = self.top.getCurrentProc(cell_name=self.cell_name)
+        cpu, this_comm, pid = self.top.getCurrentProc(target_cpu=self.cpu)
         prog_info = self.so_map.getSOAddr(prog, pid)
         if prog_info is None:
             self.lgr.debug('jumpers handleOrig, no prog info for %s, set callback with soMap' % prog)
