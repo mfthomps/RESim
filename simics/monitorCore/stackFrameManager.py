@@ -94,7 +94,7 @@ class StackFrameManager():
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
                     if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('getSTackTraceQuiet not in expected tid:%s, current is %d' % (tid, cur_tid))
+                        self.lgr.debug('getSTackTraceQuiet not in expected tid:%s, current is %s' % (tid, cur_tid))
                         return None
                     else:
                         tid = cur_tid
@@ -168,7 +168,7 @@ class StackFrameManager():
         if self.mode_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('modeChangeForStack tid:%s wanted: %d old: %d new: %d' % (tid, want_tid, old, new))
+        self.lgr.debug('modeChangeForStack tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
         self.mode_hap = None
         
@@ -185,7 +185,7 @@ class StackFrameManager():
         self.stack_base[tid] = sp
 
     def recordStackClone(self, tid, parent):
-        self.lgr.debug('recordStackClone tid: %d parent: %d' % (tid, parent))
+        self.lgr.debug('recordStackClone tid: %s parent: %s' % (tid, parent))
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     ''' TBD remove, only here for compatability with old snapshots'''

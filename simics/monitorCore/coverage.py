@@ -48,7 +48,7 @@ class Coverage():
         self.proc_status = 0
         self.hit_count = 0
         self.afl_del_breaks = []
-        self.pid = None
+        self.tid = None
         self.linear = False
         # TBD not currently used
         self.physical = False
@@ -159,8 +159,8 @@ class Coverage():
  
     def cover(self, force_default_context=False, physical=False):
         self.force_default_context = force_default_context
-        pid = self.top.getPID(target=self.cell_name)
-        self.lgr.debug('coverage: cover physical: %r (afl overrides) linear: %r cpu: %s pid: %d' % (physical, self.linear, self.cpu.name, pid))
+        tid = self.top.getTID(target=self.cell_name)
+        self.lgr.debug('coverage: cover physical: %r (afl overrides) linear: %r cpu: %s tid: %s' % (physical, self.linear, self.cpu.name, tid))
         self.offset = 0
         self.physical = physical
         block_file = self.analysis_path+'.blocks'
@@ -176,10 +176,10 @@ class Coverage():
                 self.lgr.error('coverage: No blocks file at %s' % block_file)
                 return
         self.loadBlocks(block_file)         
-        so_entry = self.so_map.getSOAddr(self.analysis_path, pid=self.pid)
+        so_entry = self.so_map.getSOAddr(self.analysis_path, tid=self.tid)
         if so_entry is None:
            
-            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.pid, target=self.cell_name), pid=self.pid)
+            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.tid, target=self.cell_name), tid=self.tid)
             if so_entry is None:
                 self.lgr.error('coverage no SO entry for %s' % self.analysis_path)
                 return
@@ -310,8 +310,8 @@ class Coverage():
         self.lgr.debug('coverage recordhang of program under test cycle 0x%x' % cycles)
         SIM_break_simulation('did hang')
 
-    def watchExits(self, pid=None, callback=None):
-        self.context_manager.watchGroupExits(pid=pid)
+    def watchExits(self, tid=None, callback=None):
+        self.context_manager.watchGroupExits(tid=tid)
         if self.afl:
             self.context_manager.setExitCallback(self.recordExit)
         elif callback is not None:
@@ -570,24 +570,24 @@ class Coverage():
 
         ''' 
         NOTE!  reading simulated memory may slow down fuzzing by a factor of 2!
-        pid = self.top.getPID(target=self.cell_name)
-        if pid != self.pid:
-            self.lgr.debug('converage bbHap, bp on addr 0x%x not my pid, got %d I am %d' % (addr, pid, self.pid))
+        tid = self.top.getTID(target=self.cell_name)
+        if tid != self.tid:
+            self.lgr.debug('converage bbHap, bp on addr 0x%x not my tid, got %d I am %d' % (addr, tid, self.tid))
             #return
         ''' 
         
         dead_set = False
         if self.create_dead_zone:
             ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
-            pid = self.top.getPID(target=self.cell_name)
-            if pid != self.pid:
-                self.lgr.debug('converage bbHap, not my pid, got %d I am %d  num spots %d' % (pid, self.pid, len(self.dead_map)))
+            tid = self.top.getTID(target=self.cell_name)
+            if tid != self.tid:
+                self.lgr.debug('converage bbHap, not my tid, got %d I am %d  num spots %d' % (tid, self.tid, len(self.dead_map)))
                 dead_set = True
 
         if self.only_thread:
-            pid = self.top.getPID(target=self.cell_name)
-            if pid != self.pid:
-                self.lgr.debug('coverage bbHap, wrong thread: %d' % pid)
+            tid = self.top.getTID(target=self.cell_name)
+            if tid != self.tid:
+                self.lgr.debug('coverage bbHap, wrong thread: %d' % tid)
                 return
         
         if addr == 0:
@@ -611,8 +611,8 @@ class Coverage():
             return
 
 
-        #pid = self.top.getPID(target=self.cell_name)
-        #self.lgr.debug('coverage bbHap address 0x%x bp %d pid: %d cycle: 0x%x' % (this_addr, break_num, pid, self.cpu.cycles))
+        #tid = self.top.getTID(target=self.cell_name)
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
         '''
         byte_array = self.top.getBytes(self.cell_name, self.cpu, 100, 0xad1c40)
         if byte_array is not None:
@@ -655,9 +655,9 @@ class Coverage():
                 ''' AFL mode '''
                 if this_addr not in self.afl_map:
                     self.lgr.debug('broke at wrong addr linear 0x%x' % this_addr)
-                    pid = self.top.getPID(target=self.cell_name)
-                    if pid != self.pid:
-                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d context: %s' % (pid, self.pid, str(self.cpu.current_context)))
+                    tid = self.top.getTID(target=self.cell_name)
+                    if tid != self.tid:
+                        self.lgr.debug('converage bbHap, not my tid, got %d I am %d context: %s' % (tid, self.tid, str(self.cpu.current_context)))
                     #SIM_break_simulation('broken')
                     return
                 if dead_set:
@@ -667,8 +667,8 @@ class Coverage():
                         ''' dead zone should be physical addresses '''
                         self.dead_map.append(addr)
                         self.time_start = time.time()
-                        self.lgr.debug('converage bbHap, not my pid, got %d I am %d add phys addr 0x%x to dead map num dead spots %d ' % (pid, 
-                               self.pid, addr, len(self.dead_map)))
+                        self.lgr.debug('converage bbHap, not my tid, got %d I am %d add phys addr 0x%x to dead map num dead spots %d ' % (tid, 
+                               self.tid, addr, len(self.dead_map)))
                 if self.create_dead_zone:
                     now = time.time()
                     delta = int(now - self.time_start)
@@ -982,10 +982,10 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, pid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
+    def enableCoverage(self, tid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
                        create_dead_zone=False, no_save=False, only_thread=False, record_hits=True):
         self.enabled = True
-        self.pid = pid
+        self.tid = tid
         self.create_dead_zone = create_dead_zone
         self.no_save = no_save
         self.record_hits = record_hits

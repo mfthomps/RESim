@@ -1083,11 +1083,13 @@ class TaskUtils():
     def getTidFromThreadRec(self, thread_rec):
         pid = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_pid)
         tid = '%d' %(pid)
+        return tid
 
     def getTidCommFromThreadRec(self, thread_rec):
         pid = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_pid)
         comm = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_comm)
-        tid = '%d' %(pid), comm
+        tid = '%d' %(pid)
+        return tid, comm
 
     def getTidList(self):
         task_list = self.getTaskStructs()

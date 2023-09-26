@@ -84,7 +84,7 @@ class TraceProcs():
             return True
         else:
             if tid is not None:
-                self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (tid, len(self.plist)))
+                self.lgr.debug('traceProcs %s not in plist, len of plist is %d' % (tid, len(self.plist)))
             else:
                 self.lgr.error('traceProcs given tid is None')
             return False

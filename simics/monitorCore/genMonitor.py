@@ -1026,8 +1026,9 @@ class GenMonitor():
         print('Status of debugging threads')
         plist = {}
         for t in tasks:
-            if tasks[t].tid in tid_list:
-                plist[tasks[t].tid] = t 
+            tid = str(tasks[t].pid)
+            if tid in tid_list:
+                plist[tid] = t 
         for tid in sorted(plist):
             t = plist[tid]
             if tasks[t].state > 0:
@@ -1041,15 +1042,15 @@ class GenMonitor():
                         ss = frame['ss']
                         socket_callnum = frame['param1']
                         socket_callname = net.callname[socket_callnum].lower()
-                        print('tid: %d syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
+                        print('tid: %s syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
                              call, socket_callname, ss.fd, tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
                     else:
-                        print('tid: %d socketcall but no ss in frame?' % tid)
+                        print('tid: %s socketcall but no ss in frame?' % tid)
                 else:
-                    print('tid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
+                    print('tid: %s syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
                          call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
             else:
-                print('tid: %d in user space?' % tid)
+                print('tid: %s in user space?' % tid)
 
     def getThreads(self):
         ''' Return a json rep of tasksDBG '''
@@ -1059,8 +1060,9 @@ class GenMonitor():
         self.lgr.debug('getThreads, tid_list is %s' % str(tid_list))
         plist = {}
         for t in tasks:
-            if tasks[t].tid in tid_list:
-                plist[tasks[t].tid] = t 
+            tid = str(tasks[t].pid)
+            if tid in tid_list:
+                plist[tid] = t 
         retval = []
         for tid in sorted(plist):
             tid_state = {} 
@@ -1069,7 +1071,7 @@ class GenMonitor():
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                 if frame is None:
-                    #print('frame for %d was none' % tid)
+                    #print('frame for %s was none' % tid)
                     continue
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
                 if call == 'socketcall' or call.upper() in net.callname:
@@ -1083,12 +1085,12 @@ class GenMonitor():
                         tid_state['pc'] = frame['pc']
                         tid_state['cycles'] = cycles
                         tid_state['state'] = tasks[t].state
-                        #print('tid: %d syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
+                        #print('tid: %s syscall %s %s fd: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
                         #     call, socket_callname, ss.fd, tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
                     else:
-                        print('tid: %d socketcall but no ss in frame?' % tid)
+                        print('tid: %s socketcall but no ss in frame?' % tid)
                 else:
-                    #print('tid: %d syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
+                    #print('tid: %s syscall %s param1: %d task_addr: 0x%x sp: 0x%x pc: 0x%x cycle: 0x%x state: %d' % (tid, 
                     #     call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles, tasks[t].state))
                     tid_state['call'] = call
                     tid_state['param1'] = frame['param1']
@@ -1098,7 +1100,7 @@ class GenMonitor():
                     tid_state['state'] = tasks[t].state
             else:
                 tid_state['call'] = None
-                #print('tid: %d in user space?' % tid)
+                #print('tid: %s in user space?' % tid)
             retval.append(tid_state)
         print(json.dumps(retval))
 
@@ -1375,7 +1377,7 @@ class GenMonitor():
             tabs = ''
             while len(pfamily) > 0:
                 prec = pfamily.pop()
-                print('%s%5d  %s' % (tabs, prec.tid, prec.proc))
+                print('%s%5s  %s' % (tabs, prec.tid, prec.proc))
                 tabs += '\t'
 
     def signalHap(self, signal_info, one, exception_number):

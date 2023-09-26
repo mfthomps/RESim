@@ -39,7 +39,7 @@ class TrackFunctionWrite():
         self.cpu = cpu
         self.cell = cell
         self.param = param
-        self.pid = None
+        self.tid = None
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.read_watch_marks = None
@@ -55,8 +55,8 @@ class TrackFunctionWrite():
         self.writeMarks = writeMarks.WriteMarks(mem_utils, cpu, lgr)
 
     
-    def trackFunction(self, pid, fun, fun_mgr, read_watch_marks, show_compare):
-        self.pid = pid
+    def trackFunction(self, tid, fun, fun_mgr, read_watch_marks, show_compare):
+        self.tid = tid
         self.fun = fun
         self.read_watch_marks = read_watch_marks
         self.show_compare = show_compare
@@ -81,9 +81,9 @@ class TrackFunctionWrite():
     def funEnterHap(self, dumb, third, forth, memory):
         if self.fun_entry_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curThread() 
-        self.lgr.debug('funEnterHap, pid:%d wanted %d' % (cur_pid, self.pid))
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.lgr.debug('funEnterHap, tid:%s wanted %s' % (cur_tid, self.tid))
+        if cur_tid != self.tid:
             return
         self.lgr.debug('funEnterHap, set blanket writes')
         self.blanketWrites()
@@ -105,8 +105,8 @@ class TrackFunctionWrite():
     def funExitHap(self, dumb, third, forth, memory):
         if self.fun_exit_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curThread() 
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        if cur_tid != self.tid:
             return
         self.context_manager.genDeleteHap(self.fun_exit_hap)
         self.fun_exit_hap = None 
@@ -119,8 +119,8 @@ class TrackFunctionWrite():
     def writeHap(self, dumb, third, forth, memory):
         if self.write_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curThread() 
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        if cur_tid != self.tid:
             return
         addr = memory.logical_address
         if addr >= self.param.kernel_base:

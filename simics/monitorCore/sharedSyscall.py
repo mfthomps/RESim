@@ -125,9 +125,9 @@ class SharedSyscall():
             for tid in my_exit_tids[eip]:
                 prog = self.task_utils.getProgName(tid)
                 if prog is not None:
-                    print('\t%d %s' % (tid, prog))
+                    print('\t%s %s' % (tid, prog))
                 else:
-                    print('\t%d' % (tid))
+                    print('\t%s' % (tid))
 
     def rmExitHap(self, tid, context=None):
         if context is not None:
@@ -258,11 +258,11 @@ class SharedSyscall():
 
     def rmPendingExecve(self, tid):
         if tid in self.pending_execve:
-            self.lgr.debug('sharedSyscall rmPendingExecve remove %d' % tid)
+            self.lgr.debug('sharedSyscall rmPendingExecve remove %s' % tid)
             self.pending_execve.remove(tid)
             self.rmExitHap(tid)
         else:
-            self.lgr.debug('sharedSyscall rmPendingExecve nothing pending for %d' % tid)
+            self.lgr.debug('sharedSyscall rmPendingExecve nothing pending for %s' % tid)
 
     def isPendingExecve(self, tid):
         if tid in self.pending_execve:
@@ -711,14 +711,14 @@ class SharedSyscall():
             self.top.recordStackBase(eax, exit_info.fname_addr)
             if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True):
                 trace_msg = ('\treturn from clone (tracing), new tid:%s  calling tid:%s (%s)\n' % (eax, tid, comm))
-                #self.lgr.debug('exitHap clone called addProc for tid:%s parent %d' % (eax, tid))
+                #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))
                 self.traceProcs.copyOpen(tid, eax)
             elif tid not in self.trace_procs:
-                trace_msg = ('\treturn from clone, new tid:%s  calling tid:%d\n' % (eax, tid))
+                trace_msg = ('\treturn from clone, new tid:%s  calling tid:%s\n' % (eax, tid))
             else:
                 ''' must be repeated hap or trackThreads already added the clone '''
-                self.lgr.debug('exitHap clone repeated call? tid: %d eax %d' % (tid, eax))
-                trace_msg = ('\treturn from clone, new tid:%s  calling tid:%d\n' % (eax, tid))
+                self.lgr.debug('exitHap clone repeated call? tid: %s eax %d' % (tid, eax))
+                trace_msg = ('\treturn from clone, new tid:%s  calling tid:%s\n' % (eax, tid))
                 
             if exit_info.call_params is not None:
                 if exit_info.call_params.nth is not None:
@@ -766,7 +766,7 @@ class SharedSyscall():
                     if open_syscall is not None: 
                         open_syscall.watchFirstMmap(tid, exit_info.fname, eax, exit_info.compat32)
                     else:
-                        self.lgr.debug('sharedSyscall no syscall_instance in exit_info %d' % tid)
+                        self.lgr.debug('sharedSyscall no syscall_instance in exit_info %s' % tid)
                 if self.traceFiles is not None:
                     self.traceFiles.open(exit_info.fname, eax)
 
@@ -1111,7 +1111,7 @@ class SharedSyscall():
             exit_info.call_params = None
 
         elif callname == 'vfork':
-            trace_msg = ('\treturn from vfork in parent %d child tid:%s\n' % (tid, ueax))
+            trace_msg = ('\treturn from vfork in parent %s child tid:%s\n' % (tid, ueax))
             if tid in self.trace_procs:
                 self.traceProcs.addProc(ueax, tid)
                 self.traceProcs.copyOpen(tid, eax)
@@ -1140,7 +1140,7 @@ class SharedSyscall():
         dumb_tid, dumb2 = self.context_manager.getDebugTid() 
         if dumb_tid is not None and callname == 'clone':
             if eax == 0:
-                self.lgr.debug('sharedSyscall clone but eax is zero ??? tid is %d' % tid)
+                self.lgr.debug('sharedSyscall clone but eax is zero ??? tid is %s' % tid)
                 return True
             self.lgr.debug('sharedSyscall adding clone %d to watched tids' % eax)
             self.context_manager.addTask(eax)

@@ -297,11 +297,13 @@ class RunTo():
         if self.cur_task_hap is None:
             return
 
-        tid, comm = self.task_utils.getTidCommFromThreadRec(cur_task_rec)
-        #self.lgr.debug('runToProc look for %s tid is %d cycle: 0x%x' % (prec.proc, tid, self.cpu.cycles))
+        cur_thread = SIM_get_mem_op_value_le(memory)
+        self.lgr.debug('runToProc cur_thread 0x%x' % cur_thread)
+        tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
+        self.lgr.debug('runToProc look for %s tid is %s cycle: 0x%x' % (prec.proc, tid, self.cpu.cycles))
         if tid is not None and tid != 0:
             if (prec.tid is not None and tid in prec.tid) or (prec.tid is None and comm == prec.proc):
-                self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, str(prec.tid)))
+                self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, prec.tid))
                 SIM_run_alone(self.stopAlone, prec)
             else:
                 #self.proc_list[self.target][tid] = comm
