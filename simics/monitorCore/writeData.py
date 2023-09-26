@@ -106,7 +106,7 @@ class WriteData():
             self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
                  self.addr, self.max_len, len(in_data), str(self.cell), self.stop_on_read, self.udp_header))
 
-        self.pid = self.top.getPID()
+        self.tid = self.top.getTID()
         self.filter = filter
         self.dataWatch = dataWatch
         env_max_len = os.getenv('AFL_MAX_LEN')
@@ -427,7 +427,7 @@ class WriteData():
                 #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read callback is None')
             return
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         if self.stop_on_read and len(self.in_data) == 0:
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
@@ -435,8 +435,8 @@ class WriteData():
                 self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
-        if pid != self.pid:
-            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        if tid != self.tid:
+            self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
@@ -455,11 +455,10 @@ class WriteData():
         ''' Hit a call to recv '''
         if self.call_hap is None:
             return
-        pid = self.top.getPID()
-        if pid != self.pid:
-            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        tid = self.top.getTID()
+        if tid != self.tid:
+            #self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        pid_thread = self.top.getPIDThread()
         skip_it = False
         if self.top.isWindows():
             eip = self.top.getEIP(self.cpu)
@@ -470,7 +469,7 @@ class WriteData():
                 operation = frame['param6'] & 0xffffffff
                 if operation in self.ioctl_op_map:
                     op_cmd = self.ioctl_op_map[operation]
-                    #self.lgr.debug('writeData callHap,  is Windows TBD bail if RECV pid_thread:%s eip: 0x%x cycles: 0x%x callname %s op: %s' % (pid_thread, eip, 
+                    #self.lgr.debug('writeData callHap,  is Windows TBD bail if RECV tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s' % (tid, eip, 
                     #     self.cpu.cycles, callname, op_cmd))
                     if op_cmd != 'RECV':
                         skip_it = True
@@ -481,16 +480,16 @@ class WriteData():
             #    return
         if not skip_it:
             self.read_count = self.read_count + 1
-            self.lgr.debug('writeData callHap, read_count is %d pid_thread:%s' % (self.read_count, pid_thread))
+            self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
             self.handleCall()
 
     def handleCall(self):
-        pid = self.top.getPID()
-        if pid != self.pid:
-            #self.lgr.debug('writeData handleCall wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        tid = self.top.getTID()
+        if tid != self.tid:
+            #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         eip = self.top.getEIP(self.cpu)
-        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (pid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
+        #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             #if self.closed_fd:
             #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
@@ -595,8 +594,8 @@ class WriteData():
                 
     def doRetFixup(self, fd):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-        pid = self.top.getPID()
-        if pid != self.pid or fd != self.fd:
+        tid = self.top.getTID()
+        if tid != self.tid or fd != self.fd:
             return eax
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 

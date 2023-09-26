@@ -81,7 +81,7 @@ class TrackFunctionWrite():
     def funEnterHap(self, dumb, third, forth, memory):
         if self.fun_entry_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
+        cpu, comm, cur_pid = self.task_utils.curThread() 
         self.lgr.debug('funEnterHap, pid:%d wanted %d' % (cur_pid, self.pid))
         if cur_pid != self.pid:
             return
@@ -105,7 +105,7 @@ class TrackFunctionWrite():
     def funExitHap(self, dumb, third, forth, memory):
         if self.fun_exit_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
+        cpu, comm, cur_pid = self.task_utils.curThread() 
         if cur_pid != self.pid:
             return
         self.context_manager.genDeleteHap(self.fun_exit_hap)
@@ -119,7 +119,7 @@ class TrackFunctionWrite():
     def writeHap(self, dumb, third, forth, memory):
         if self.write_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
+        cpu, comm, cur_pid = self.task_utils.curThread() 
         if cur_pid != self.pid:
             return
         addr = memory.logical_address

@@ -110,15 +110,15 @@ class TraceFiles():
                 index += 1
         return retval 
 
-    def read(self, pid, fd, the_bytes):
+    def read(self, tid, fd, the_bytes):
         self.lgr.debug('traceFiles read')
-        self.io(pid, fd, the_bytes, read=True)
+        self.io(tid, fd, the_bytes, read=True)
 
-    def write(self, pid, fd, the_bytes):
+    def write(self, tid, fd, the_bytes):
         self.lgr.debug('traceFiles write')
-        self.io(pid, fd, the_bytes, read=False)
+        self.io(tid, fd, the_bytes, read=False)
 
-    def io(self, pid, fd, the_bytes, read=False):
+    def io(self, tid, fd, the_bytes, read=False):
         suf = '-write'
         if read:
             suf = '-read'
@@ -134,7 +134,7 @@ class TraceFiles():
             stripped = self.nonull(the_bytes)
             did_write = False
             if self.traceProcs is not None and len(self.path_list) > 0:
-                fname = self.traceProcs.getFileName(pid, fd)
+                fname = self.traceProcs.getFileName(tid, fd)
                 self.lgr.debug('TraceFiles write got fname %s' % fname)
                 if fname is not None and fname in self.path_list:
                     file_watch = self.path_list[fname]

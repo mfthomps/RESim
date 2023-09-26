@@ -35,8 +35,11 @@ import win7CallParams
 import syscall
 import traceBuffer
 from resimHaps import *
+def pidFromTID(tid):
+    return tid.split('-')[0]                    
+
 class WinMonitor():
-    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, sharedSyscall, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, syscallManager, traceMgr, traceProcs, context_manager, soMap, sharedSyscall, run_from_snap, rev_to_call, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -51,6 +54,7 @@ class WinMonitor():
         self.soMap = soMap
         self.sharedSyscall = sharedSyscall
         self.run_from_snap = run_from_snap
+        self.rev_to_call = rev_to_call
         if run_from_snap is not None:
             self.snap_start_cycle = cpu.cycles
         else:
@@ -103,9 +107,9 @@ class WinMonitor():
     def debugProc(self, proc, final_fun=None, pre_fun=None):
         ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
 
-        plist = self.task_utils.getPidsForComm(proc)
-        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils.getExitPid()):
-            self.lgr.debug('winMonitor debugProc plist len %d plist[0] %d  exitpid %d' % (len(plist), plist[0], self.task_utils.getExitPid()))
+        plist = self.task_utils.getTidsForComm(proc)
+        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils.getExitTid()):
+            self.lgr.debug('winMonitor debugProc plist len %d plist[0] %d  exittid %s' % (len(plist), plist[0], self.task_utils.getExitTid()))
 
             self.lgr.debug('winMonitor debugProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
@@ -143,7 +147,7 @@ class WinMonitor():
             pid = self.mem_utils.readWord(self.cpu, pid_ptr)
             ''' TBD need better test for undefined pid '''
             if pid is not None and pid < 0xfffff:
-                #self.lgr.debug('getCurPid task_ptr, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (task_ptr, self.param.ts_pid, pid_ptr, pid))
+                #self.lgr.debug('getCurTid task_ptr, 0x%x pid_offset %d pid_ptr 0x%x pid %d' % (task_ptr, self.param.ts_pid, pid_ptr, pid))
                 comm = self.mem_utils.readString(self.cpu, task_ptr+self.param.ts_comm, 16)
                 if filter is None or filter in comm:
                     if pid in plist and pid != 0:
@@ -165,13 +169,14 @@ class WinMonitor():
         self.lgr.debug('traceAll')
         if True:
             context = self.context_manager.getDefaultContext()
-            pid, cpu = self.context_manager.getDebugPid() 
-            if pid is not None:
-                tf = '/tmp/syscall_trace-%s-%d.txt' % (self.cell_name, pid)
+            tid, cpu = self.context_manager.getDebugTid() 
+            if tid is not None:
+                pid = pidFromTID(tid)
+                tf = '/tmp/syscall_trace-%s-%s.txt' % (self.cell_name, pid)
                 context = self.context_manager.getRESimContext()
             else:
                 tf = '/tmp/syscall_trace-%s.txt' % self.cell_name
-                cpu, comm, pid = self.task_utils.curProc() 
+                cpu, comm, tid = self.task_utils.curThread() 
 
             traceBuffer.TraceBuffer(self.top, cpu, self.mem_utils, self.context_manager, self.lgr)
             self.traceMgr.open(tf, cpu)
@@ -259,17 +264,17 @@ class WinMonitor():
                 ''' find processes that are in the kernel on IO calls '''
                 frames = self.top.getDbgFrames()
                 skip_calls = []
-                for pid in list(frames):
-                    if frames[pid] is None:
-                        self.lgr.error('frames[%d] is None' % pid)
+                for tid in list(frames):
+                    if frames[tid] is None:
+                        self.lgr.error('frames[%s] is None' % tid)
                         continue
-                    call = self.task_utils.syscallName(frames[pid]['syscall_num'], False) 
-                    self.lgr.debug('winMonitor runToIO found %s in kernel for pid:%d' % (call, pid))
+                    call = self.task_utils.syscallName(frames[tid]['syscall_num'], False) 
+                    self.lgr.debug('winMonitor runToIO found %s in kernel for pid:%s' % (call, tid))
                     if call != 'DeviceIoControlFile' and (call not in calls or call in skip_calls):
-                       del frames[pid]
-                       self.lgr.debug('winMonitor runToIO removed %s in kernel for pid:%d' % (call, pid))
+                       del frames[tid]
+                       self.lgr.debug('winMonitor runToIO removed %s in kernel for tid:%s' % (call, tid))
                     else:
-                       self.lgr.debug('winMonitor runToIO kept frames for pid %d' % pid)
+                       self.lgr.debug('winMonitor runToIO kept frames for tid %s' % tid)
                 if len(frames) > 0:
                     self.lgr.debug('wnMonitor runToIO, call to setExits')
                     the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager.getRESimContext()) 
@@ -289,3 +294,12 @@ class WinMonitor():
             exit_calls = ['TerminateProcess', 'TerminateThread']
             self.terminate_syscall = self.syscallManager.watchSyscall(context, exit_calls, [], 'debugExit')
             self.lgr.debug('winMonitor debugExitHap')
+
+    def getDbgFrames(self):
+        ''' Get stack frames from kernel entries as recorded by the reverseToCall module 
+            Do this for all siblings of the currently scheduled thread.
+        '''
+        retval = {}
+        plist = {}
+        tid_dict = self.task_utils.findThreads()
+        return retval

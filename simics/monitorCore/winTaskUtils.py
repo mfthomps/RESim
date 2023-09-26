@@ -35,6 +35,14 @@ import pageUtils
 import w7Params
 import taskUtils
 import winSocket
+THREAD_STATE_INITIALIZED = 0
+THREAD_STATE_READY = 1
+THREAD_STATE_RUNNING = 2
+THREAD_STATE_STANDBY = 3
+THREAD_STATE_TERMINATED = 4
+THREAD_STATE_WAITING = 5
+THREAD_STATE_TRANSITION = 6
+THREAD_STATES = ['initialized', 'ready', 'running', 'standby', 'terminated', 'waiting', 'transistion']
 class TaskStruct():
     def __init__(self, pid, comm, next):
         self.pid = pid
@@ -44,7 +52,15 @@ class TaskStruct():
         self.state = 0
 
 class WinTaskUtils():
+    # These are based on build 6.1
+    # offset within ETHREAD of thread id
     THREAD_ID_OFFSET = 0x3c0
+    # offset within EPROCESS of thread head
+    THREAD_HEAD = 0x308
+    # offset of head within ETHREAD
+    THREAD_NEXT = 0x428
+    ACTIVE_THREADS = 0x328
+    THREAD_STATE = 0x164
     def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
@@ -58,7 +74,7 @@ class WinTaskUtils():
 
         self.program_map = {}
         self.exit_cycles = 0
-        self.exit_pid = 0
+        self.exit_tid = 0
 
         self.system_proc_rec = None
 
@@ -91,7 +107,7 @@ class WinTaskUtils():
                     if 'system_proc_rec' in value:
                         self.system_proc_rec = value['system_proc_rec']
                     else:
-                        self.system_proc_rec = self.getRecAddrForPid(4)
+                        self.system_proc_rec = self.getRecAddrForTid('4')
                         if self.system_proc_rec is None:
                             self.lgr.error('WinTaskUtils failed to get system thread record')
                         else:
@@ -120,7 +136,7 @@ class WinTaskUtils():
                         if 'system_proc_rec' in value:
                             self.system_proc_rec = value['system_proc_rec']
                         else:
-                            self.system_proc_rec = self.getRecAddrForPid(4)
+                            self.system_proc_rec = self.getRecAddrForTid('4')
                             if self.system_proc_rec is None:
                                 self.lgr.error('WinTaskUtils temp hack failed to get system thread record')
                             else:
@@ -136,8 +152,8 @@ class WinTaskUtils():
             exec_addrs_file = os.path.join('./', run_from_snap, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
                 self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
-                for pid in self.program_map:
-                    self.lgr.debug('winTaskUtils from pickle got pid:%d  %s' % (pid, self.program_map[pid]))
+                for tid in self.program_map:
+                    self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[tid]))
             else:
                 self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
         else:
@@ -181,18 +197,17 @@ class WinTaskUtils():
         return cur_thread_rec
 
     def getThreadId(self, rec=None):
+        ''' return the thread identifier from the ETHREAD record (either current or given) '''
         if rec == None:
             rec = self.getCurThreadRec()
         ptr = rec + self.THREAD_ID_OFFSET
         retval = self.mem_utils.readWord32(self.cpu, ptr)
         return retval
 
-    def getCurTaskRec(self):
-        cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
-        retval = self.mem_utils.getUnsigned(cur_thread)
-        return retval
-
     def getCurProcRec(self, cur_thread_in=None):
+        ''' Get the address of the current process record (EPROCESS).  Or get the process record
+            for pointed to by the given address of a thread record.
+        '''
         retval = None
         if cur_thread_in is None:
             cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
@@ -201,12 +216,12 @@ class WinTaskUtils():
             cur_thread = cur_thread_in
 
         if cur_thread is None:
-            self.lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % self.phys_current_task)
+            self.lgr.error('winTaskUtils getCurProcRec got cur_thread of None reading 0x%x' % self.phys_current_task)
         else:
-            #self.lgr.debug('winTaskUtils getCurTaskRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
+            #self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
             ptr = cur_thread + self.param.proc_ptr
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
-            #self.lgr.debug('winTaskUtils getCurTaskRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
+            #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
                if ptr > self.param.kernel_base: 
                     try:
@@ -217,14 +232,14 @@ class WinTaskUtils():
             if ptr_phys is not None:
                 retval = SIM_read_phys_memory(self.cpu, ptr_phys, self.mem_utils.WORD_SIZE)
             else:
-                self.lgr.error('winTaskUtils getCurTaskRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
+                self.lgr.error('winTaskUtils getCurProcRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
                 if cur_thread_in is not None:
                     self.lgr.debug('cur_thread passed in as 0x%x' % cur_thread_in)
                 #SIM_break_simulation('remove this')
                 pass
         if retval is not None:
             retval = self.mem_utils.getUnsigned(retval)
-            #self.lgr.debug('winTaskUtils getCurTaskRec returning 0x%x' % retval)
+            #self.lgr.debug('winTaskUtils getCurProcRec returning 0x%x' % retval)
         return retval
 
     def getMemUtils(self):
@@ -273,35 +288,37 @@ class WinTaskUtils():
         return computed
 
     def curPID(self):
-        cur_task_rec = self.getCurTaskRec()
+        cur_task_rec = self.getThreadId()
         if cur_task_rec is None:
             return None
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         return pid
 
     def curTID(self):
-        cur_task_rec = self.getCurTaskRec()
+        ''' Return pid-thread_id per the current scheduled thread '''
+        cur_task_rec = self.getCurProcRec()
         if cur_task_rec is None:
             return None
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
-        thread = self.getCurThread()
+        thread = self.getThreadId()
         pid_thread = '%d-%d' % (pid, thread)
         return pid_thread
 
     def curThread(self):
-        #self.lgr.debug('taskUtils curThread')
-        cur_task_rec = self.getCurTaskRec()
-        #self.lgr.debug('taskUtils curThread cur_task_rec 0x%x' % cur_task_rec)
-        if cur_task_rec is None:
+        ''' Return tuple of cpu, comm and tid '''
+        self.lgr.debug('taskUtils curThread')
+        cur_proc_rec = self.getCurProcRec()
+        self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
+        if cur_proc_rec is None:
             return None, None, None
-        comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
+        comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
-        pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
-        thread = self.getCurThread()
+        pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
+        thread = self.getThreadId()
         pid_thread = '%d-%d' % (pid, thread)
         #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
-        #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
-        #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
+        #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)
+        #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_proc_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid_thread
 
     def frameFromRegs(self, compat32=None, swap_r10=True):
@@ -384,7 +401,7 @@ class WinTaskUtils():
         return mode
 
     def currentProcessInfo(self, cpu=None):
-        cur_addr = self.getCurTaskRec()
+        cur_addr = self.getCurProcRec()
         #self.lgr.debug('currentProcessInfo cur_addr is 0x%x' % cur_addr)
         if cur_addr is not None:
             comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, self.commSize())
@@ -398,7 +415,7 @@ class WinTaskUtils():
         ''' return address of the task list "next" entry that points to the current task '''
         retval = None
         if rec is None:
-            task_rec_addr = self.getCurTaskRec()
+            task_rec_addr = self.getCurProcRec()
         else:
             task_rec_addr = rec
         comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, self.commSize())
@@ -414,9 +431,9 @@ class WinTaskUtils():
         return retval 
  
 
-    def getGroupLeaderPid(self, pid):
+    def getGroupLeaderTid(self, tid):
         ''' TBD '''
-        return pid
+        return tid
 
     def walk(self, task_ptr_in, offset):
         done = False
@@ -455,15 +472,15 @@ class WinTaskUtils():
         got = []
         done = False
         #self.lgr.debug('getTaskList ')
-        dum, dum1, pid = self.curThread()
-        if pid != 0:
-            task_ptr = self.getCurTaskRec()
-        elif self.system_proc_rec is not None:
+        if self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
         else:
-            self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
-            return got
-          
+            dum, dum1, pid = self.curThread()
+            if pid != 0:
+                task_ptr = self.getCurProcRec()
+            else:
+                self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
+                return got
         #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
         #self.lgr.debug('getTaskList returning %d tasks' % len(got))
@@ -480,68 +497,91 @@ class WinTaskUtils():
 
         return retval
 
-    def getCommFromPid(self, pid):
+    def getCommFromTid(self, tid):
         ts_list = self.getTaskStructs()
+        pid = int(tid.split('-')[0])
         for ts in ts_list:
            if ts_list[ts].pid == pid:
                return ts_list[ts].comm
         return None
 
-    def addProgram(self, pid, program):
-        self.program_map[pid] = program
+    def addProgram(self, tid, program):
+        self.program_map[tid] = program
 
-    def getProgName(self, pid):
+    def getProgName(self, tid):
         retval = None
-        if pid in self.program_map:
-            retval = self.program_map[pid]
+        if tid in self.program_map:
+            retval = self.program_map[tid]
         ''' TBD find arg list? '''
         return retval, []
 
     def getProgNameFromComm(self, comm):
-        for pid in self.program_map:
-            if self.program_map[pid].endswith(comm):
-                return self.program_map[pid]
+        for tid in self.program_map:
+            if self.program_map[tid].endswith(comm):
+                return self.program_map[tid]
         return None
 
-    def clearExitPid(self):
-        self.exit_pid = 0
+    def clearExitTid(self):
+        self.exit_tid = 0
         self.exit_cycles = 0
 
-    def getCurrentThreadLeaderPid(self):
+    def getCurrentThreadLeaderTid(self):
         ''' TBD see taskUtils'''
-        dumb, comm, pid = self.curThread()
-        return pid
+        return self.curTID()
 
-    def getRecAddrForPid(self, pid):
-        #self.lgr.debug('getRecAddrForPid %d' % pid)
+    def getRecAddrForTid(self, tid):
+        ret_rec = None
+        if tid is None:
+            return None
+        pid = int(tid.split('-')[0])
+        thread_part = int(tid.split('-')[1])
+        #self.lgr.debug('getRecAddrFortid %d' % pid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
            if ts_list[ts].pid == pid:
-               return ts
-        #self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
-        return None
+               thread_head_addr = ts+self.THREAD_HEAD
+               thread_head = self.mem_utils.readPtr(self.cpu, thread_head_addr)
+               rec_start = thread_head - self.THREAD_NEXT
+               ret_rec = self.getThreadRecForThreadId(rec_start, thread_part)
+               break
+        #self.lgr.debug('TaksUtils getRecAddrFortid %s no task rec found. %d task records found.' % (tid, len(ts_list)))
+        return ret_rec
 
-    def getGroupPids(self, leader_pid):
-        ''' TBD fix for windows'''
+    def tidDictFromProcRec(self, ts):
+        thread_head_addr = ts+self.THREAD_HEAD
+        thread_head = self.mem_utils.readPtr(self.cpu, thread_head_addr)
+        rec_start = thread_head - self.THREAD_NEXT
+        self.lgr.debug('tidDictFromProcRec ts: 0x%x thread_head 0x%x rec_start %x' % (ts, thread_head, rec_start))
+        threads = self.findThreads(cur_thread=rec_start)
+        return threads
+
+    def getGroupTids(self, leader_tid):
         retval = {}
-        #self.lgr.debug('getGroupPids for %d' % leader_pid)
+        self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
+        pid = int(leader_tid.split('-')[0])
         for ts in ts_list:
-            if ts_list[ts].pid == leader_pid:
-                retval[leader_pid] = ts
+            if ts_list[ts].pid == pid:
+                thread_dict = self.tidDictFromProcRec(ts)
+                for t in thread_dict:
+                    tid = '%d-%d' % (pid, t)
+                    ''' skip if exiting as recorded by syscall '''
+                    if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                        retval[tid] = thread_dict[t]
                 break
         return retval
 
-    def getExitPid(self):
+    def getExitTid(self):
         ''' if we are at or past the point of exit, return the most recently exitied pid. 
             TBD, more robust, multiple PIDs? '''
         if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
-            return self.exit_pid
+            return self.exit_tid
         else:
             return None
-    def recentExitPid(self):
-        return self.exit_pid
+
+    def recentExitTid(self):
+        return self.exit_tid
 
     def getTidsForComm(self, comm_in):
         comm = os.path.basename(comm_in).strip()
@@ -549,25 +589,34 @@ class WinTaskUtils():
         self.lgr.debug('getTidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
-                
-                #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
-                ''' skip if exiting as recorded by syscall '''
-                if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                    retval.append(ts_list[ts].pid)
+                self.lgr.debug('getTidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
+                thread_dict = self.tidDictFromProcRec(ts)
+                for t in thread_dict:
+                    tid = '%d-%d' % (pid, t)
+                    ''' skip if exiting as recorded by syscall '''
+                    if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                        retval.append(tid)
         return retval
 
-    def getPidCommMap(self):
+
+    def getTidCommMap(self):
         retval = {}
         ts_list = self.getTaskStructs()
+        self.lgr.debug('winTaskUtils getTidCommMap')
         for ts in ts_list:
-            retval[ts_list[ts].pid] = ts_list[ts].comm
+            thread_dict = self.tidDictFromProcRec(ts)
+            comm = ts_list[ts].comm
+            pid = ts_list[ts].pid
+            for t in thread_dict:
+                tid = '%d-%d' % (pid, t)
+                retval[tid] = comm
         return retval
 
     #def getPidAndThread(self):
-    #    dum, dum1, pid = self.curProc()
+    #    dum, dum1, pid = self.curThread()
     #    thread = self.getCurThread()
     #    retval = '%d-%d' % (pid, thread)
     #    return retval
@@ -578,31 +627,50 @@ class WinTaskUtils():
     #        return True
     #    else:
     #        return False
+    def getThreadRecForThreadId(self, rec_start, thread_id_in):
+        ''' return the address of the thread record (ETHREAD) given a thread head and the id '''
+        retval = None
+        got = []
+        for i in range(250):
+            thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
+            thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
+            if str(thread_id) == thread_id_in:
+                retval = thread_id_ptr
+                break
+            next_thread_addr = rec_start + self.THREAD_NEXT
+            next_thread = self.mem_utils.readWord32(self.cpu, next_thread_addr)
+            if next_thread is None or next_thread in got:
+                break
+            got.append(next_thread)
+            rec_start = next_thread - self.THREAD_NEXT
         
-    def findThreads(self):
-        thread_id_list = []
-        cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+    def findThreads(self, cur_thread=None, quiet=True):
+        ''' return a dictionary of all threads for the current thread or given thread record address'''
         if cur_thread is None:
-            self.lgr.error('winTaskUtils getCurTaskRecPhys got cur_thread of None reading 0x%x' % self.phys_current_task)
+            cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        thread_id_dict = {}
+        if cur_thread is None:
+            self.lgr.error('winTaskUtils findThreads got cur_thread of None reading 0x%x' % self.phys_current_task)
         else:
             ptr = cur_thread + self.param.proc_ptr
             cur_proc = self.mem_utils.readPtr(self.cpu, ptr)
+            self.lgr.debug('winTaskUtils findThreads ptr 0x%x  cur_proc 0x%x ' % (ptr, cur_proc))
             comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
 
-            active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + 0x328)
-            self.lgr.debug('findThreads cur_thread 0x%x  ptr 0x%x  cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_thread, ptr, cur_proc, pid, comm, active_threads))
-            if active_threads < 4:
+            active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + self.ACTIVE_THREADS)
+            self.lgr.debug('winTaskUtils findThreads cur_thread 0x%x  ptr 0x%x  cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_thread, ptr, cur_proc, pid, comm, active_threads))
+            if active_threads < 1:
                 print('not enough threads %d' % active_threads)
+                self.lgr.debug('winTaskUtils findThreads not enough threads %d' % active_threads)
                 return
-            thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + 0x308)
+            thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + self.THREAD_HEAD)
             self.lgr.debug('thread list head is 0x%x' % thread_list_head)
 
 
             next_thread = self.mem_utils.readPtr(self.cpu, thread_list_head+8)
             got = []
             got.append(next_thread)
-            thread_recs = []
             for i in range(250):
           
                 next_thread = self.mem_utils.readPtr(self.cpu, next_thread+8)
@@ -610,46 +678,99 @@ class WinTaskUtils():
                     break
                 got.append(next_thread)
                 ''' TBD compute this delta by looping each next_thread we find and computing the smallest delta from the cur_thread values'''
-                rec_start = next_thread - 0x428
+                rec_start = next_thread - self.THREAD_NEXT
                 thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
                 thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
-                thread_id_list.append(thread_id)
-                this_proc = self.mem_utils.readPtr(self.cpu, rec_start+self.param.proc_ptr)
-                if this_proc != 0: 
-                    self.lgr.debug('next thread %d id 0x%x is 0x%x  rec_start 0x%x  proc_ptr 0x%x' % (i, thread_id, next_thread, rec_start, this_proc))
-                thread_recs.append(rec_start)
+                thread_id_dict[thread_id] = rec_start
 
-            #offset=w7Params.hackpid(self.cpu, self.mem_utils, thread_recs, self.lgr, max_zeros=0)
-                
-        return thread_id_list
+        return thread_id_dict
 
 
-    def recentExitPid(self):
-        return self.exit_pid
+    def recentExitTid(self):
+        return self.exit_tid
 
-    def getExitPid(self):
-        ''' if we are at or past the point of exit, return the most recently exitied pid. 
+    def getExitTid(self):
+        ''' if we are at or past the point of exit, return the most recently exitied tid. 
             TBD, more robust, multiple PIDs? '''
         if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
-            return self.exit_pid
+            return self.exit_tid
         else:
             return None
 
-    def setExitPid(self, pid):
-        self.exit_pid = pid
+    def setExitTid(self, tid):
+        self.exit_tid = tid
         self.exit_cycles = self.cpu.cycles
-        self.lgr.debug('taskUtils setExitPid pid:%d cycles 0x%x' % (pid, self.exit_cycles))
+        self.lgr.debug('taskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
 
-    def clearExitPid(self):
-        self.exit_pid = 0
+    def clearExitTid(self):
+        self.exit_tid = 0
         self.exit_cycles = 0
         
-    def getPidCommFromNext(self, next_addr):
-        pid = None
+    def getTidCommFromNext(self, next_addr):
+        tid = None
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_next
             comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, taskUtils.COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
-        return pid, comm
+            if pid is not None:
+                tid = str(pid)
+        return tid, comm
 
+    def getTidFromThreadRec(self, thread_rec):
+        thread_id = self.getThreadId(thread_rec)
+        proc_rec = self.getCurProcRec(cur_thread_in=thread_rec)
+        pid = self.mem_utils.readWord32(self.cpu, proc_rec + self.param.ts_pid)
+        tid = '%d-%d' %(pid, thread_id)
+        return tid
+
+    def getTidCommFromThreadRec(self, thread_rec):
+        thread_id = self.getThreadId(thread_rec)
+        proc_rec = self.getCurProcRec(cur_thread_in=thread_rec)
+        pid = self.mem_utils.readWord32(self.cpu, proc_rec + self.param.ts_pid)
+        comm = self.mem_utils.readWord32(self.cpu, proc_rec + self.param.ts_comm)
+        tid = '%d-%d' %(pid, thread_id)
+        return tid, comm
+
+    def getTidList(self):
+        task_list = self.getTaskStructs()
+        tid_list = []
+        self.lgr.debug('winTaskUtils getTidList')
+        for t in task_list:
+            pid = task_list[t].pid
+            if pid is None: 
+                break
+            if pid is 0:
+                break
+            self.lgr.debug('winTaskUtils getTidList for pid %d' % pid)
+            thread_dict = self.tidDictFromProcRec(t)
+            for thread_id in thread_dict:
+                tid = '%d-%d' % (pid, thread_id)
+                tid_list.append(tid)
+        return tid_list
+
+    def showThreads(self):
+        thread_dict = self.findThreads()
+        for thread_id in thread_dict:
+            state = self.mem_utils.readByte(self.cpu, thread_dict[thread_id]+self.THREAD_STATE)
+            if state in range(len(THREAD_STATES)):
+                print('thread_id: %s  rec: 0x%x state: %s' % (thread_id, thread_dict[thread_id], THREAD_STATES[state]))
+            else:
+                print('thread_id: %s  rec: 0x%x state: 0x%x' % (thread_id, thread_dict[thread_id], state))
+        print('%d threads' % (len(thread_dict)))
+
+    def showTidsForComm(self, comm):
+        ts_list = self.getTaskStructs()
+        for ts in ts_list:
+            #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
+                pid = ts_list[ts].pid
+                self.lgr.debug('getTidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
+                thread_dict = self.tidDictFromProcRec(ts)
+                for thread_id in thread_dict:
+                    tid = '%d-%d' % (pid, thread_id)
+                    state = self.mem_utils.readByte(self.cpu, thread_dict[thread_id]+self.THREAD_STATE)
+                    if state in range(len(THREAD_STATES)):
+                        print('%s %s' % (tid, THREAD_STATES[state]))
+                    else:
+                        print('%s 0x%x' % (tid, state))

@@ -104,7 +104,7 @@ class TaskUtils():
         self.mem_utils = mem_utils
         self.phys_current_task = None
         self.exit_cycles = 0
-        self.exit_pid = 0
+        self.exit_tid = 0
         self.exec_addrs = {}
         self.swapper = None
         self.ia32_gs_base = None
@@ -177,9 +177,6 @@ class TaskUtils():
         return self.phys_current_task
 
     def getCurThreadRec(self):
-        return self.getCurTaskRec()
-
-    def getCurTaskRec(self):
         if self.phys_current_task == 0:
             return 0
         '''
@@ -206,7 +203,7 @@ class TaskUtils():
                     offset = va - phys
                     self.mem_utils.setHackedPhysOffset(offset)
         '''
-        #self.lgr.debug('taskUtils getCurTaskRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
+        #self.lgr.debug('taskUtils getCurThreadRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         #if cur_task_rec is None:
         #    self.lgr.debug('FAILED')
@@ -233,18 +230,18 @@ class TaskUtils():
         pickle.dump( self.exec_addrs, open( exec_addrs_file, "wb" ) )
 
     def curPID(self):
-        cur_task_rec = self.getCurTaskRec()
+        cur_task_rec = self.getCurThreadRec()
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         return pid
 
     def curTID(self):
-        cur_task_rec = self.getCurTaskRec()
+        cur_task_rec = self.getCurThreadRec()
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         return str(pid)
 
     def curThread(self):
         #self.lgr.debug('taskUtils curThread')
-        cur_task_rec = self.getCurTaskRec()
+        cur_task_rec = self.getCurThreadRec()
         #self.lgr.debug('taskUtils curThread cur_task_rec 0x%x' % cur_task_rec)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
@@ -258,7 +255,7 @@ class TaskUtils():
         task = None
         cpl = memUtils.getCPL(self.cpu)
         if True: 
-            task = self.getCurTaskRec()
+            task = self.getCurThreadRec()
             if task is not None:
                 done = False
                 while not done and task is not None:
@@ -283,7 +280,7 @@ class TaskUtils():
                             done = True
                 self.swapper = task
             else:
-                self.lgr.error('taskUtils getCurTaskRect got none')
+                self.lgr.error('taskUtils getCurThreadRec got none')
         return task    
     
     def is_kernel_virtual(self, addr):
@@ -473,75 +470,77 @@ class TaskUtils():
                         #self.lgr.debug('appending sib 0x%x' % s)
 
         ''' TBD: why does current task need to be seperately added, does not appear in task walk? '''
-        task_rec_addr = self.getCurTaskRec()
+        task_rec_addr = self.getCurThreadRec()
         if task_rec_addr not in tasks:
             task = self.readTaskStruct(task_rec_addr, cpu)
             tasks[task_rec_addr] = task
         return tasks
 
-    def recentExitPid(self):
-        return self.exit_pid
+    def recentExitTid(self):
+        return self.exit_tid
 
-    def getExitPid(self):
-        ''' if we are at or past the point of exit, return the most recently exitied pid. 
+    def getExitTid(self):
+        ''' if we are at or past the point of exit, return the most recently exitied tid. 
             TBD, more robust, multiple PIDs? '''
         if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
-            return self.exit_pid
+            return self.exit_tid
         else:
             return None
 
-    def setExitPid(self, pid):
-        self.exit_pid = pid
+    def setExitTid(self, tid):
+        self.exit_tid = tid
         self.exit_cycles = self.cpu.cycles
-        self.lgr.debug('taskUtils setExitPid pid:%d cycles 0x%x' % (pid, self.exit_cycles))
+        self.lgr.debug('taskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
 
-    def clearExitPid(self):
-        self.exit_pid = 0
+    def clearExitTid(self):
+        self.exit_tid = 0
         self.exit_cycles = 0
 
-    def getGroupLeaderPid(self, pid):
+    def getGroupLeaderTid(self, tid):
         retval = None
         ts_list = self.getTaskStructs()
+        ipid=int(tid)
         for ts in ts_list:
-            if ts_list[ts].pid == pid:
+            if ts_list[ts].pid == ipid:
                 group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
                 if group_leader != ts:
-                    retval = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                    retval = str(self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid))
                 else:
-                    retval = self.getCommLeaderPid(ts)
+                    retval = self.getCommLeaderTid(ts)
                 break
         return retval
 
-    def getGroupPids(self, leader_pid):
+    def getGroupTids(self, leader_tid):
         retval = {}
-        #self.lgr.debug('getGroupPids for %d' % leader_pid)
+        #self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
+        leader_tid = int(leader_tid)
         for ts in ts_list:
-            if ts_list[ts].pid == leader_pid:
+            if ts_list[ts].pid == leader_tid:
                 leader_rec = ts
                 break
         if leader_rec is None:
-            self.lgr.debug('taskUtils getGroupPids did not find record for leader pid %d' % leader_pid)
+            self.lgr.debug('taskUtils getGroupTids did not find record for leader tid %d' % leader_tid)
             return None 
-        #self.lgr.debug('getGroupPids leader_rec 0x%x' % leader_rec)
+        #self.lgr.debug('getGroupTids leader_rec 0x%x' % leader_rec)
         for ts in ts_list:
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
             if group_leader != ts:
                 if group_leader == leader_rec:
                     pid = self.mem_utils.readWord32(self.cpu, ts + self.param.ts_pid)
                     ''' skip if exiting as recorded by syscall '''
-                    if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                    if str(pid) != self.exit_pid or self.cpu.cycles != self.exit_cycles:
                         #retval.append(ts_list[ts].pid)
-                        retval[pid] = ts
+                        retval[str(pid)] = ts
             else:
                 ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
-                comm_leader_pid = self.getCommLeaderPid(ts)
-                ts_pid = ts_list[ts].pid
-                #self.lgr.debug('getGroupPids comm leader_pid %d  ts_pid %d' % (comm_leader_pid, ts_pid))
-                if comm_leader_pid == leader_pid and ts_pid not in retval:
-                    if ts_pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                        #self.lgr.debug('getGroupPids added %d' % ts_pid)
+                comm_leader_tid = int(self.getCommLeaderTid(ts))
+                ts_pid = str(ts_list[ts].pid)
+                #self.lgr.debug('getGroupTids comm leader_pid %d  ts_pid %s' % (comm_leader_pid, ts_pid))
+                if comm_leader_tid == leader_tid and ts_pid not in retval:
+                    if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                        #self.lgr.debug('getGroupTids added %d' % ts_pid)
                         #retval.append(ts_pid)
                         retval[ts_pid] = ts
           
@@ -550,42 +549,46 @@ class TaskUtils():
     def getTidsForComm(self, comm_in):
         comm = os.path.basename(comm_in).strip()
         retval = []
-        #self.lgr.debug('getPidsForComm %s' % comm_in)
+        #self.lgr.debug('getTidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            #self.lgr.debug('getPidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
-                pid = str(ts_list[ts].pid)
-                #self.lgr.debug('getPidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
+                tid = str(ts_list[ts].pid)
+                #self.lgr.debug('getTidsForComm MATCHED ? %s to %s  tid %s' % (comm, ts_list[ts].comm, tid))
                 ''' skip if exiting as recorded by syscall '''
-                if pid != self.exit_pid or self.cpu.cycles != self.exit_cycles:
-                    retval.append(pid)
+                if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    retval.append(tid)
         return retval
 
-    def getPidCommMap(self):
+    def getTidCommMap(self):
         retval = {}
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            retval[ts_list[ts].pid] = ts_list[ts].comm
+            retval[str(ts_list[ts].pid)] = ts_list[ts].comm
         return retval
 
-    def getPidParent(self, pid):
-        rec = self.getRecAddrForPid(pid)
+    def getTidParent(self, tid):
+        tid = None
+        rec = self.getRecAddrForTid(tid)
         parent = self.mem_utils.readPtr(self.cpu, rec + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
-        return pid 
+        if pid is not None:
+            tid = str(pid)
+        return tid 
  
-    def getRecAddrForPid(self, pid):
-        #self.lgr.debug('getRecAddrForPid %d' % pid)
+    def getRecAddrForTid(self, tid):
+        #self.lgr.debug('getRecAddrForTid %s' % tid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-           if ts_list[ts].pid == pid:
+           if str(ts_list[ts].pid) == tid:
                return ts
-        #self.lgr.debug('TaksUtils getRecAddrForPid %d no task rec found. %d task records found.' % (pid, len(ts_list)))
+        #self.lgr.debug('TaksUtils getRecAddrForTid %s no task rec found. %d task records found.' % (tid, len(ts_list)))
         return None
 
-    def getCommFromPid(self, pid):
+    def getCommFromTid(self, tid):
         ts_list = self.getTaskStructs()
+        pid = int(tid)
         for ts in ts_list:
            if ts_list[ts].pid == pid:
                return ts_list[ts].comm
@@ -594,7 +597,7 @@ class TaskUtils():
     def getTaskListPtr(self, rec=None):
         ''' return address of the task list "next" entry that points to the current task '''
         if rec is None:
-            task_rec_addr = self.getCurTaskRec()
+            task_rec_addr = self.getCurThreadRec()
         else:
             task_rec_addr = rec
         comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, COMM_SIZE)
@@ -672,48 +675,59 @@ class TaskUtils():
     
         return None
 
-    def getPidCommFromNext(self, next_addr):
-        pid = None
+    def getTidCommFromNext(self, next_addr):
+        tid = None
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_next
             comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
-        return pid, comm
+            if pid is not None:
+                tid = str(pid)
+        return tid, comm
 
-    def getPidCommFromGroupNext(self, next_addr):
-        pid = None
+    def getTidCommFromGroupNext(self, next_addr):
+        tid = None
         comm = None
         if next_addr is not None:
             rec = next_addr - self.param.ts_thread_group_list_head
-            #self.lgr.debug('taskUtils getPidCommFromGroupNext try rec 0x%x' % rec)
+            #self.lgr.debug('taskUtils getTidCommFromGroupNext try rec 0x%x' % rec)
             comm = self.mem_utils.readString(self.cpu, rec + self.param.ts_comm, COMM_SIZE)
             pid = self.mem_utils.readWord32(self.cpu, rec + self.param.ts_pid)
-        return pid, comm
+            if pid is not None:
+                tid = str(pid)
+        return tid, comm
 
     def currentProcessInfo(self, cpu=None):
-        cur_addr = self.getCurTaskRec()
+        tid = None
+        cur_addr = self.getCurThreadRec()
         comm = self.mem_utils.readString(self.cpu, cur_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, cur_addr + self.param.ts_pid)
-        return self.cpu, cur_addr, comm, pid
+        if pid is not None:
+            tid = str(pid)
+        return self.cpu, cur_addr, comm, tid
 
     def getCurrentThreadParent(self):
-        cur_addr = self.getCurTaskRec()
+        tid = None
+        cur_addr = self.getCurThreadRec()
         parent = self.mem_utils.readPtr(self.cpu, cur_addr + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
         comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, COMM_SIZE)
-        return pid, comm
+        if pid is not None:
+            tid = str(pid)
+        return tid, comm
                
-    def getCommLeaderPid(self, cur_rec): 
+    def getCommLeaderTid(self, cur_rec): 
         ''' return pid of oldest ancestor having same comm as cur_rec, which may be self'''
+        leader_tid = None
         comm = self.mem_utils.readString(self.cpu, cur_rec + self.param.ts_comm, 16)
         leader_pid = self.mem_utils.readWord32(self.cpu, cur_rec + self.param.ts_pid)
         parent = None
         prev_parent = None
-        #self.lgr.debug('getCommLeaderPid 0x%x pid:%d (%s)' % (cur_rec, leader_pid, comm))
+        #self.lgr.debug('getCommLeaderTid 0x%x pid:%d (%s)' % (cur_rec, leader_pid, comm))
         while(True):
             parent = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_real_parent)
-            #self.lgr.debug('getCommLeaderPid parent 0x%x' % parent)
+            #self.lgr.debug('getCommLeaderTid parent 0x%x' % parent)
             if parent == cur_rec:
                 break
             else:
@@ -721,61 +735,66 @@ class TaskUtils():
                 if leader_comm != comm:
                     break
                 leader_pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
-                #self.lgr.debug('getCommLeaderPid parent pid %d comm %s' % (leader_pid, leader_comm))
+                #self.lgr.debug('getCommLeaderTid parent pid %d comm %s' % (leader_pid, leader_comm))
             cur_rec = parent
-        #self.lgr.debug('getCommLeaderPid returning %d' % leader_pid)
-        return leader_pid
+        if leader_pid is not None:
+            leader_tid = str(leader_pid)
+        #self.lgr.debug('getCommLeaderTid returning %s' % leader_tid)
+        return leader_tid
 
-    def getCurrentThreadLeaderPid(self):
+    def getCurrentThreadLeaderTid(self):
         ''' NOT really.  Our notion of leader includes parent of procs that were cloned.  Modern linux does not use
             group_leader if distinct processes '''
-        cur_rec = self.getCurTaskRec()
+        leader_tid = None
+        cur_rec = self.getCurThreadRec()
         group_leader = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_group_leader)
         leader_pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
-        #self.lgr.debug('getCurrentThreadLeaderPid cur_rec 0x%x  group_leader 0x%x' % (cur_rec, group_leader))
+        #self.lgr.debug('getCurrentThreadLeaderTid cur_rec 0x%x  group_leader 0x%x' % (cur_rec, group_leader))
         if group_leader == cur_rec:
-            leader_pid = self.getCommLeaderPid(cur_rec)
-        return leader_pid
+            leader_pid = self.getCommLeaderTid(cur_rec)
+        if leader_pid is not None:
+            leader_tid = str(leader_pid)
+        return leader_tid
 
     def getMemUtils(self):
         return self.mem_utils
 
-    def getExecProgAddr(self, pid, cpu):
-        return self.exec_addrs[pid].prog_addr
+    def getExecProgAddr(self, tid, cpu):
+        return self.exec_addrs[tid].prog_addr
 
-    def modExecParam(self, pid, cpu, dmod):
-        for arg_addr in self.exec_addrs[pid].arg_addr_list:
+    def modExecParam(self, tid, cpu, dmod):
+        for arg_addr in self.exec_addrs[tid].arg_addr_list:
             if dmod.checkString(cpu, arg_addr, 100):
                 SIM_break_simulation('modified execve param')
      
-    def readExecParamStrings(self, pid, cpu):
-        #self.lgr.debug('readExecParamStrings with pid %d' % pid)
-        if pid is None:
-            self.lgr.debug('readExecParamStrings called with pid of None')
+    def readExecParamStrings(self, tid, cpu):
+        #self.lgr.debug('readExecParamStrings with tid %s' % tid)
+        if tid is None:
+            self.lgr.debug('readExecParamStrings called with tid of None')
             return None, None, None
-        if pid not in self.exec_addrs:
-            self.lgr.debug('readExecParamStrings called with unknown pid %d' % pid)
+        if tid not in self.exec_addrs:
+            self.lgr.debug('readExecParamStrings called with unknown tid %s' % tid)
             return None, None, None
         arg_string_list = []
-        prog_string = self.mem_utils.readString(cpu, self.exec_addrs[pid].prog_addr, 512)
+        prog_string = self.mem_utils.readString(cpu, self.exec_addrs[tid].prog_addr, 512)
         if prog_string is not None:
             #self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
-            for arg_addr in self.exec_addrs[pid].arg_addr_list:
+            for arg_addr in self.exec_addrs[tid].arg_addr_list:
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
                     arg_string_list.append(arg_string.strip())
                     #self.lgr.debug('readExecParamStrings adding arg %s' % (arg_string))
 
             prog_string = prog_string.strip()
-            self.exec_addrs[pid].prog_name = prog_string
-            self.exec_addrs[pid].arg_list = arg_string_list
+            self.exec_addrs[tid].prog_name = prog_string
+            self.exec_addrs[tid].arg_list = arg_string_list
         else:
-            self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[pid].prog_addr)
+            self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[tid].prog_addr)
         return prog_string, arg_string_list
 
-    def getProcArgsFromStack(self, pid, at_enter, cpu):
+    def getProcArgsFromStack(self, tid, at_enter, cpu):
         ''' NOTE side effect of populating exec_addrs '''
-        if pid is None:
+        if tid is None:
             return None, None
 
         mult = 0
@@ -837,7 +856,7 @@ class TaskUtils():
                         i = i + 1
                     
             if prog_addr == 0:
-                self.lgr.error('getProcArgsFromStack pid: %d esp: 0x%x argv 0x%x prog_addr 0x%x' % (pid, esp, argv, prog_addr))
+                self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
         else:
             reg_num = cpu.iface.int_register.get_number("rsi")
             rsi = cpu.iface.int_register.read(reg_num)
@@ -863,10 +882,10 @@ class TaskUtils():
         #     argv, xaddr, saddr, arg2_string)
 
 
-        self.exec_addrs[pid] = osUtils.execStrings(cpu, pid, arg_addr_list, prog_addr, None)
-        prog_string, arg_string_list = self.readExecParamStrings(pid, cpu)
-        self.exec_addrs[pid].prog_name = prog_string
-        self.exec_addrs[pid].arg_list = arg_string_list
+        self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
+        prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
+        self.exec_addrs[tid].prog_name = prog_string
+        self.exec_addrs[tid].arg_list = arg_string_list
         #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
         #if prog_string == 'cfe-poll-player':
         #    SIM_break_simulation('debug')
@@ -886,29 +905,29 @@ class TaskUtils():
 
         return prog_string, arg_string_list
 
-    def getProgName(self, pid):
-        if pid not in self.exec_addrs:
-            pid = self.getGroupLeaderPid(pid)
-        if pid in self.exec_addrs:
-            return self.exec_addrs[pid].prog_name, self.exec_addrs[pid].arg_list
+    def getProgName(self, tid):
+        if tid not in self.exec_addrs:
+            tid = self.getGroupLeaderTid(tid)
+        if tid in self.exec_addrs:
+            return self.exec_addrs[tid].prog_name, self.exec_addrs[tid].arg_list
         else: 
-            self.lgr.debug('taskUtils getProgName pid %d not in exec_addrs' % pid)
+            self.lgr.debug('taskUtils getProgName tid %s not in exec_addrs' % tid)
             return None, None
 
     def getProgNameFromComm(self, comm):
-        for pid in self.program_map:
-            if self.program_map[pid].endswith(comm):
-                return self.program_map[pid]
+        for tid in self.program_map:
+            if self.program_map[tid].endswith(comm):
+                return self.program_map[tid]
         return None
 
-    def swapExecPid(self, old, new):
+    def swapExecTid(self, old, new):
         if old in self.exec_addrs and new in self.exec_addrs:
             self.exec_addrs[new] = self.exec_addrs[old]
-            self.exec_addrs[new].pid = new
+            self.exec_addrs[new].tid = new
             del self.exec_addrs[old]
-            self.lgr.debug('taskUtils, swapExecPid set exec pid from %d to %d  TBD deep copy/delete' % (old, new))
+            self.lgr.debug('taskUtils, swapExecTid set exec tid from %s to %s  TBD deep copy/delete' % (old, new))
         else:
-            self.lgr.error('taskUtils, swapExecPid some pid not in exec_addrs?  %d to %d  ' % (old, new))
+            self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32):
         if self.cpu.architecture == 'arm':
@@ -1046,7 +1065,7 @@ class TaskUtils():
 
     def getCred(self, task_addr=None):
         if task_addr is None:
-            cur_addr = self.getCurTaskRec()
+            cur_addr = self.getCurThreadRec()
         else:
             cur_addr = task_addr
         real_cred_addr = cur_addr + (self.param.ts_comm - 2*self.mem_utils.WORD_SIZE)
@@ -1056,8 +1075,23 @@ class TaskUtils():
         return uid, eu_id
 
 
-    #def getPidAndThread(self):
-    #    dum, dum1, pid = self.curProc()
+    #def getTidAndThread(self):
+    #    dum, dum1, pid = self.curThread()
     #    retval = '%d' % (pid)
     #    return retval
 
+    def getTidFromThreadRec(self, thread_rec):
+        pid = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_pid)
+        tid = '%d' %(pid)
+
+    def getTidCommFromThreadRec(self, thread_rec):
+        pid = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_pid)
+        comm = self.mem_utils.readWord32(self.cpu, thread_rec + self.param.ts_comm)
+        tid = '%d' %(pid), comm
+
+    def getTidList(self):
+        task_list = self.getTaskStructs()
+        tid_list = []
+        for t in task_list:
+            tid_list.append(str(task_list[t].pid))
+        return tid_list

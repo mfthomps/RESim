@@ -185,7 +185,7 @@ class WinProg():
             return
         #self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
-        cur_proc = self.task_utils.getCurTaskRec(cur_thread_in=cur_thread)
+        cur_proc = self.task_utils.getCurThreadRec(cur_thread_in=cur_thread)
         pid_ptr = cur_proc + self.param.ts_pid
         pid = self.mem_utils.readWord(self.cpu, pid_ptr)
         self.context_manager.newProg(prog_string, pid)
@@ -230,7 +230,7 @@ class WinProg():
 
     def runToText(self, want_pid):
         self.lgr.debug('winProg runToText want_pid %d' % want_pid)
-        eproc = self.task_utils.getCurTaskRec()
+        eproc = self.task_utils.getCurThreadRec()
         load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
@@ -253,7 +253,7 @@ class WinProg():
     def findText(self, want_pid, one, old, new):
         if self.mode_hap is None:
             return
-        cpu, comm, this_pid = self.task_utils.curProc() 
+        cpu, comm, this_pid = self.task_utils.curThread() 
         if want_pid != this_pid:
             self.lgr.debug('findText, mode changed but wrong pid, wanted %d got %d' % (want_pid, this_pid))
             return

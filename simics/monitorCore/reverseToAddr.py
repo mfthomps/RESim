@@ -35,7 +35,7 @@ class reverseToAddr():
         self.extra_back = extra_back
         self.is_monitor_running.setRunning(True)
         self.task_utils = task_utils
-        cpu, comm, pid  = task_utils.curProc()
+        cpu, comm, pid  = task_utils.curThread()
         self.cpu = cpu
         self.pid = pid
         #resim = self.top.getRESimContext()
@@ -72,7 +72,7 @@ class reverseToAddr():
     def stopHap(self, cpu, one, exception, error_string):
         if self.stop_hap is None:
             return
-        cpu, comm, pid  = self.task_utils.curProc()
+        cpu, comm, pid  = self.task_utils.curThread()
         eip = self.top.getEIP()
         if pid != self.pid:
             self.lgr.debug('reverseToAddr stopHap at 0x%x wrong pid got %d wanted %d cycles: 0x%x excpt: %s  errorstring %s' % (eip, pid, 

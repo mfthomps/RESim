@@ -145,8 +145,8 @@ class SyscallManager():
 
     def getDebugContextName(self):
         ''' return the debugging context if debugging.  Otherwise return default context '''
-        debug_pid, debug_cpu = self.context_manager.getDebugPid()
-        if debug_pid is not None:
+        debug_tid, debug_cpu = self.context_manager.getDebugTid()
+        if debug_tid is not None:
             context = self.context_manager.getRESimContextName()
         else:
             context = self.context_manager.getDefaultContextName()
@@ -408,9 +408,9 @@ class SyscallManager():
             return None, None
         frame = self.task_utils.frameFromRegs()
         if self.top.isWindows(self.cell_name):
-            pid = self.top.getPID(target=self.cell_name)
+            tid = self.top.getTID(target=self.cell_name)
             word_size = 8 # default to 8 for 64 bit unless 
-            if self.soMap.getMachineSize(pid) == 32: # we find out otherwise
+            if self.soMap.getMachineSize(tid) == 32: # we find out otherwise
                 word_size = 4
             retval = winSyscall.paramOffPtrUtil(7, [0, word_size], frame, word_size, self.cpu, self.mem_utils, self.lgr)
             value = winSyscall.paramOffPtrUtil(7, [0, 0], frame, word_size, self.cpu, self.mem_utils, self.lgr) 

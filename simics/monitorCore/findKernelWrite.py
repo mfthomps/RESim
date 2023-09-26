@@ -113,8 +113,8 @@ class findKernelWrite():
         else:
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys_block.address, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
@@ -459,8 +459,8 @@ class findKernelWrite():
         cpl = memUtils.getCPL(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         orig_cycle = self.bookmarks.getFirstCycle()
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'in thinkWeWrote pid:%d, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (pid, cycle, eip, str(instruct), cpl, orig_cycle))
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug( 'in thinkWeWrote tid:%s, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (tid, cycle, eip, str(instruct), cpl, orig_cycle))
         if self.stop_write_hap is not None:
                 self.lgr.debug('thinkWeWrote delete stop_write_hap')
                 SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
@@ -477,8 +477,8 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
-        elif pid == 0:
-            ida_msg = "Content of 0x%x was modified in pid ZERO?" % self.addr
+        elif tid == 0:
+            ida_msg = "Content of 0x%x was modified in tid ZERO?" % self.addr
             self.lgr.error('findKernelWrite thinkWeWrote '+ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
             SIM_run_alone(self.cleanup, False)
@@ -530,7 +530,7 @@ class findKernelWrite():
             SIM_run_alone(SIM_run_command, 'continue')
 
         elif self.found_kernel_write:
-            self.lgr.debug('thinkWeWrote, BACKTRACK pid:%d user space address 0x%x after finding kernel write to  0x%x' % (pid, eip, self.addr))
+            self.lgr.debug('thinkWeWrote, BACKTRACK tid:%s user space address 0x%x after finding kernel write to  0x%x' % (tid, eip, self.addr))
             if not self.checkWriteValue(eip):
                 return
 
@@ -635,8 +635,8 @@ class findKernelWrite():
             self.prev_addr = self.addr
             self.iter_count = 0
             
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('backOne user space pid: %d write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (pid, 
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('backOne user space tid: %d write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
                value, self.addr, current, eip, offset))
         if not self.forward:
             previous = current - 1

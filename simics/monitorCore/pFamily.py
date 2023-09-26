@@ -25,7 +25,7 @@ class Pfamily():
 
     def getPfamily(self):
         retval = []
-        cpu, comm, pid = self.task_utils.curProc()
+        cpu, comm, pid = self.task_utils.curThread()
         retval.append(Prec(cpu, comm, pid))
         tasks = self.task_utils.getTaskStructs()
         tabs = ''
@@ -56,7 +56,7 @@ class Pfamily():
         #if cpu != look4_prec.cpu:
         #    self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
         #    return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, None, cpu)
         if look4_prec.proc is not None:
             if prog_string is None:

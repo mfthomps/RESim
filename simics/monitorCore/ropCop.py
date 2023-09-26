@@ -89,7 +89,7 @@ class RopCop():
                     self.lgr.error('ropCop looking for sighandler failed to disassble instruct %x ' % (eip))
                     return
                 if instruct[1].startswith('int') or instruct[1].startswith('sysenter'):
-                    dumb, comm, cur_pid  = self.task_utils.curProc()
+                    dumb, comm, cur_pid  = self.task_utils.curThread()
                     self.lgr.debug('ropCop found signal in pid %d' % cur_pid)
                     done = True
                     break
@@ -142,7 +142,7 @@ class RopCop():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
-        dumb, comm, cur_pid  = self.task_utils.curProc()
+        dumb, comm, cur_pid  = self.task_utils.curThread()
         self.lgr.debug('ropCop stopHap %s pid:%d' % (bm, cur_pid))
         self.top.removeDebugBreaks()
         self.top.stopDataWatch()

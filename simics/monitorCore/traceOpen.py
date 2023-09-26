@@ -5,7 +5,7 @@ class TraceOpen():
     def __init__(self, param, mem_utils, task_utils, cpu, cell, lgr):
         self.cpu = cpu
         self.cell = cell
-        self.pid = None
+        self.tid = None
         self.param = param
         self.mem_utils = mem_utils
         self.task_utils = task_utils
@@ -16,9 +16,9 @@ class TraceOpen():
         self.lgr.debug('TraceOpen __init__ done')
 
 
-    def traceOpenSyscall(self, pid = None):
+    def traceOpenSyscall(self, tid = None):
         self.lgr.debug('traceOpen called')
-        self.pid = pid
+        self.tid = tid
         callnum = self.task_utils.syscallNumber('open', False)
         entry = self.task_utils.getSyscallEntry(callnum, False)
         self.lgr.debug('traceOpen set break at 0x%x' % entry)
@@ -31,7 +31,7 @@ class TraceOpen():
         #if cpu != hap_cpu:
         #    self.lgr.debug('openHap, wrong cpu %s %s' % (cpu.name, hap_cpu.name))
         #    return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, tid = self.task_utils.curThread() 
         #stack_frame = self.task_utils.frameFromStack()
         stack_frame = self.task_utils.frameFromStackSyscall()
         self.lgr.debug('frame: %s' % taskUtils.stringFromFrame(stack_frame))
@@ -40,5 +40,5 @@ class TraceOpen():
         flags = stack_frame['param2']
         mode = stack_frame['param3']
         fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
-        self.report_fh.write('fopen from %d (%s) mode: 0x%x file: %s  \n' % (pid, comm, mode, fname))
-        #SIM_break_simulation('fopen from %d (%s) ebx: 0x%x\n' % (pid, comm, stack_frame['ebx'])) 
+        self.report_fh.write('fopen from %s (%s) mode: 0x%x file: %s  \n' % (tid, comm, mode, fname))
+        #SIM_break_simulation('fopen from %s (%s) ebx: 0x%x\n' % (tid, comm, stack_frame['ebx'])) 

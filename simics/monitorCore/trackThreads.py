@@ -87,7 +87,7 @@ class TrackThreads():
         if self.execve_hap is None:
             return
         
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         if not self.context_manager.amWatching(pid):
             self.lgr.debug('TrackThreads  execveHap failed to find pid %s in context manager ' % (pid))
             self.parseExecve()
@@ -101,7 +101,7 @@ class TrackThreads():
 
 
     def finishParseExecve(self, call_info, third, forth, memory):
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         if cpu != call_info.cpu or pid != call_info.pid:
             return
         if pid not in self.finish_hap:
@@ -128,7 +128,7 @@ class TrackThreads():
                 self.lgr.debug('trackThreads addSO, could not get elf info from %s' % full_path)
 
     def parseExecve(self):
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, False, cpu)
         
@@ -165,7 +165,7 @@ class TrackThreads():
         ''' TBD remove not used '''
         if self.clone_hap is None:
             return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         if cpu.architecture == 'arm':
             frame = self.task_utils.frameFromRegs()
         else:

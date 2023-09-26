@@ -2,8 +2,8 @@
 import pickle
 import os
 class Pinfo():
-    def __init__(self, pid, clone=None, parent=None):
-        self.pid = pid
+    def __init__(self, tid, clone=None, parent=None):
+        self.tid = tid
         self.prog = None
         self.args = None
         self.clone = clone
@@ -27,27 +27,27 @@ class TraceProcs():
         self.cell_name = cell_name
         self.context_manager = context_manager
         self.task_utils = task_utils
-        ''' dict of Pinfo indexed by pid -- WHICH ARE STRINGS! '''
+        ''' dict of Pinfo indexed by tid -- WHICH ARE STRINGS! '''
         self.plist = {}
         self.did_that = []
         self.pipe_handle = {}
         self.socket_handle = {}
-        self.latest_pid_instance = {}
+        self.latest_tid_instance = {}
         self.init_proc_list = {}
         self.watch_all_exits = False
         self.lgr.debug('traceProcs init')
-        ''' init_proc_list is the pid/comm pair read from a checkpoint json
+        ''' init_proc_list is the tid/comm pair read from a checkpoint json
             On display, we'll the entries that do not have children
         '''
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
-            self.lgr.debug('traceProcs init %d pids' % len(self.plist))
+            self.lgr.debug('traceProcs init %d tids' % len(self.plist))
         else:
             pass
-            #for pid in proc_list:
-            #    spid = str(pid)
-            #    self.setName(spid, proc_list[pid], None, quiet=False)
-            #    self.init_proc_list[spid] = proc_list[pid]
+            #for tid in proc_list:
+            #    stid = str(tid)
+            #    self.setName(stid, proc_list[tid], None, quiet=False)
+            #    self.init_proc_list[stid] = proc_list[tid]
 
     def loadPickle(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
@@ -58,9 +58,13 @@ class TraceProcs():
             self.plist = proc_pickle['plist']
             self.pipe_handle = proc_pickle['pipe_handle']
             self.socket_handle = proc_pickle['socket_handle']
-            self.latest_pid_instance = proc_pickle['latest_pid_instance']
+            if 'latest_tid_instance' not in proc_pickle:
+                #TBD remove after snapshots updated.
+                self.latest_tid_instance = proc_pickle['latest_pid_instance']
+            else:
+                self.latest_tid_instance = proc_pickle['latest_tid_instance']
             self.init_proc_list = proc_pickle['init_proc_list']
-            self.lgr.debug('traceProcs %s loaded %d pids' % (self.cell_name, len(self.plist)))
+            self.lgr.debug('traceProcs %s loaded %d tids' % (self.cell_name, len(self.plist)))
             
 
     def pickleit(self, name):
@@ -70,348 +74,348 @@ class TraceProcs():
         proc_pickle['plist'] = self.plist
         proc_pickle['pipe_handle'] = self.pipe_handle
         proc_pickle['socket_handle'] = self.socket_handle
-        proc_pickle['latest_pid_instance'] = self.latest_pid_instance
+        proc_pickle['latest_tid_instance'] = self.latest_tid_instance
         proc_pickle['init_proc_list'] = self.init_proc_list
         pickle.dump( proc_pickle, open( proc_file, "wb" ) )
         self.lgr.debug('traceProcs pickleit to %s ' % (proc_file))
 
-    def pidExists(self, pid):
-        if str(pid) in self.plist:
+    def tidExists(self, tid):
+        if str(tid) in self.plist:
             return True
         else:
-            if pid is not None:
-                self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (pid, len(self.plist)))
+            if tid is not None:
+                self.lgr.debug('traceProcs %d not in plist, len of plist is %d' % (tid, len(self.plist)))
             else:
-                self.lgr.error('traceProcs given pid is None')
+                self.lgr.error('traceProcs given tid is None')
             return False
 
-    def exit(self, pid):
-        pid = str(pid)
-        self.pipe_handle.pop(pid, None)
-        self.socket_handle.pop(pid, None)
-        self.lgr.debug('traceProc exit pid %s' % pid)
-        entry = self.plist.pop(pid, None)
+    def exit(self, tid):
+        tid = str(tid)
+        self.pipe_handle.pop(tid, None)
+        self.socket_handle.pop(tid, None)
+        self.lgr.debug('traceProc exit tid %s' % tid)
+        entry = self.plist.pop(tid, None)
         if entry is not None:
-            if pid not in self.latest_pid_instance:
-                self.latest_pid_instance[pid] = 0
-            self.latest_pid_instance[pid] += 1
-            pidq = '%s-%d' % (pid, self.latest_pid_instance[pid])
-            entry.pid = pidq
-            self.lgr.debug('traceProc exit pid:%s  pidq %s prog %s' % (pid, pidq, entry.prog))
+            if tid not in self.latest_tid_instance:
+                self.latest_tid_instance[tid] = 0
+            self.latest_tid_instance[tid] += 1
+            tidq = '%s-%s' % (tid, self.latest_tid_instance[tid])
+            entry.tid = tidq
+            self.lgr.debug('traceProc exit tid:%s  tidq %s prog %s' % (tid, tidq, entry.prog))
             ''' find my children and change my name in their records '''
-            for tpid in self.plist:
-                if self.plist[tpid].parent == pid:
-                    self.plist[tpid].parent = pidq
-                    self.lgr.debug('traceProcs exit change parent of %s to %s' % (tpid, pidq))
+            for ttid in self.plist:
+                if self.plist[ttid].parent == tid:
+                    self.plist[ttid].parent = tidq
+                    self.lgr.debug('traceProcs exit change parent of %s to %s' % (ttid, tidq))
             ''' now find my parent and change name in that record '''
-            for tpid in self.plist:
-                if pid in self.plist[tpid].children:
-                    self.plist[tpid].children.remove(pid) 
-                    self.plist[tpid].children.append(pidq)
-                    self.lgr.debug('traceProcs exit switched child name of %s from %s to %s' % (tpid, pid, pidq))
-            self.plist[pidq] = entry 
-        if pid in self.init_proc_list:
-           comm = self.init_proc_list.pop(pid, None)
-           self.init_proc_list[pidq] = comm
-           self.lgr.debug('traceProc exit from proc in initial list pid:%d comm %s' % (pid, comm))
+            for ttid in self.plist:
+                if tid in self.plist[ttid].children:
+                    self.plist[ttid].children.remove(tid) 
+                    self.plist[ttid].children.append(tidq)
+                    self.lgr.debug('traceProcs exit switched child name of %s from %s to %s' % (ttid, tid, tidq))
+            self.plist[tidq] = entry 
+        if tid in self.init_proc_list:
+           comm = self.init_proc_list.pop(tid, None)
+           self.init_proc_list[tidq] = comm
+           self.lgr.debug('traceProc exit from proc in initial list tid:%s comm %s' % (tid, comm))
 
     def getPrecs(self):
         return self.plist
 
-    def nextPipe(self, pid):
-        pid = str(pid)
-        if pid not in self.pipe_handle:
-            self.pipe_handle[pid] = 0 
-        self.pipe_handle[pid] = self.pipe_handle[pid]+1
-        return self.pipe_handle[pid]
+    def nextPipe(self, tid):
+        tid = str(tid)
+        if tid not in self.pipe_handle:
+            self.pipe_handle[tid] = 0 
+        self.pipe_handle[tid] = self.pipe_handle[tid]+1
+        return self.pipe_handle[tid]
 
-    def nextSocket(self, pid):
-        pid = str(pid)
-        if pid not in self.socket_handle:
-            self.socket_handle[pid] = 0 
-        self.socket_handle[pid] = self.socket_handle[pid]+1
-        return self.socket_handle[pid]
+    def nextSocket(self, tid):
+        tid = str(tid)
+        if tid not in self.socket_handle:
+            self.socket_handle[tid] = 0 
+        self.socket_handle[tid] = self.socket_handle[tid]+1
+        return self.socket_handle[tid]
 
-    def addProc(self, pid, parent, clone=False, comm=None):
-        ''' TBD fix this, handle reuse of PIDs'''
-        if pid == 0:
+    def addProc(self, tid, parent, clone=False, comm=None):
+        ''' TBD fix this, handle reuse of TIDs'''
+        if tid == 0:
             return False
-        if pid is None:
-            self.lgr.error('traceProcs pid is None')
+        if tid is None:
+            self.lgr.error('traceProcs tid is None')
             return False
-        pid = str(pid)
+        tid = str(tid)
         if parent is not None:
             parent = str(parent)
-        if pid in self.plist:      
+        if tid in self.plist:      
             ''' edge case of snapshot created during execve '''
-            if pid not in self.init_proc_list:
-                self.lgr.debug('traceProc addProc, pid:%s already in plist parent: %s' % (pid, parent))
+            if tid not in self.init_proc_list:
+                self.lgr.debug('traceProc addProc, tid:%s already in plist parent: %s' % (tid, parent))
             return False
-        self.lgr.debug('traceProc addProc pid:%s  parent %s  plist now %d' % (pid, parent, len(self.plist)))
+        self.lgr.debug('traceProc addProc tid:%s  parent %s  plist now %d' % (tid, parent, len(self.plist)))
         if parent is not None:
             if parent not in self.plist:
-                self.lgr.debug('No parent %s yet for pid:%s, add it.' % (parent, pid)) 
+                self.lgr.debug('No parent %s yet for tid:%s, add it.' % (parent, tid)) 
                 parent_pinfo = Pinfo(parent)
                 self.plist[parent] = parent_pinfo 
-            self.plist[parent].children.append(pid)
-        newproc = Pinfo(pid, clone=clone, parent=parent)
-        self.plist[pid] = newproc 
-        #self.lgr.debug('procTrace addProc pid:%s parent:%s clone: %r comm: %s' % (pid, parent, clone, comm))
+            self.plist[parent].children.append(tid)
+        newproc = Pinfo(tid, clone=clone, parent=parent)
+        self.plist[tid] = newproc 
+        #self.lgr.debug('procTrace addProc tid:%s parent:%s clone: %r comm: %s' % (tid, parent, clone, comm))
         if clone:
             if parent is not None and self.plist[parent].prog is not None:
-                self.plist[pid].prog = '%s' % self.plist[parent].prog
-                #self.lgr.debug('procTrace addProc plist[%s].prog set to %s' % (pid, self.plist[parent].prog))
+                self.plist[tid].prog = '%s' % self.plist[parent].prog
+                #self.lgr.debug('procTrace addProc plist[%s].prog set to %s' % (tid, self.plist[parent].prog))
             else:
-                #self.lgr.debug('procTrace addProc plist[%s].prog set to <clone>' % (pid))
-                self.plist[pid].prog = '<clone>'
+                #self.lgr.debug('procTrace addProc plist[%s].prog set to <clone>' % (tid))
+                self.plist[tid].prog = '<clone>'
         elif comm is not None:  
-            self.plist[pid].prog = comm
+            self.plist[tid].prog = comm
         if self.watch_all_exits:
-            self.context_manager.watchExit(pid = int(pid))
+            self.context_manager.watchExit(tid = tid)
         return True
 
-    def setName(self, pid, prog, args, quiet=True):
-        pid = str(pid)
-        if pid not in self.plist:
+    def setName(self, tid, prog, args, quiet=True):
+        tid = str(tid)
+        if tid not in self.plist:
             if not quiet:
-                self.lgr.debug('TraceProcs, setName, no pid yet %s, add it' % pid)
-            newproc = Pinfo(pid)
-            self.plist[pid] = newproc
+                self.lgr.debug('TraceProcs, setName, no tid yet %s, add it' % tid)
+            newproc = Pinfo(tid)
+            self.plist[tid] = newproc
         if not quiet:
-            self.lgr.debug('TraceProcs, setName, pid:%s, to %s' % (pid, prog))
-        self.plist[pid].prog = prog        
-        self.plist[pid].args = args        
+            self.lgr.debug('TraceProcs, setName, tid:%s, to %s' % (tid, prog))
+        self.plist[tid].prog = prog        
+        self.plist[tid].args = args        
    
 
-    def open(self, pid, comm, filename, fd):
-        pid = str(pid)
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs open no pid:%s, add it ' % pid)
-            newproc = Pinfo(pid)
+    def open(self, tid, comm, filename, fd):
+        tid = str(tid)
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs open no tid:%s, add it ' % tid)
+            newproc = Pinfo(tid)
             newproc.prog = comm
-            self.plist[pid] = newproc
-        if filename in self.plist[pid].files:
-            #self.lgr.debug('traceProcs open append fd %d to file %s for pid %s' % (fd, filename, pid))
-            self.plist[pid].files[filename].append(fd)
+            self.plist[tid] = newproc
+        if filename in self.plist[tid].files:
+            #self.lgr.debug('traceProcs open append fd %d to file %s for tid %s' % (fd, filename, tid))
+            self.plist[tid].files[filename].append(fd)
         else:
-            #self.lgr.debug('traceProcs open first fd %d to file %s for pid %s' % (fd, filename, pid))
-            self.plist[pid].files[filename] = [fd]
+            #self.lgr.debug('traceProcs open first fd %d to file %s for tid %s' % (fd, filename, tid))
+            self.plist[tid].files[filename] = [fd]
 
-    def pipe(self, pid, fd1, fd2):
-        pid = str(pid)
-        pname = 'pipe-%s-%d' % (pid, self.nextPipe(pid))
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs pipe no pid:%s, add it ' % pid)
-            newproc = Pinfo(pid)
-            self.plist[pid] = newproc
-        self.plist[pid].rpipe[pname] = [fd1]
-        self.plist[pid].wpipe[pname] = [fd2]
+    def pipe(self, tid, fd1, fd2):
+        tid = str(tid)
+        pname = 'pipe-%s-%s' % (tid, self.nextPipe(tid))
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs pipe no tid:%s, add it ' % tid)
+            newproc = Pinfo(tid)
+            self.plist[tid] = newproc
+        self.plist[tid].rpipe[pname] = [fd1]
+        self.plist[tid].wpipe[pname] = [fd2]
 
-    def socket(self, pid, fd):
-        pid = str(pid)
-        sname = 'socket-%s-%d' % (pid, self.nextSocket(pid))
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs socket no pid:%s, add it ' % pid)
-            newproc = Pinfo(pid)
-            self.plist[pid] = newproc
-        self.plist[pid].sockets[sname] = [fd]
+    def socket(self, tid, fd):
+        tid = str(tid)
+        sname = 'socket-%s-%s' % (tid, self.nextSocket(tid))
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs socket no tid:%s, add it ' % tid)
+            newproc = Pinfo(tid)
+            self.plist[tid] = newproc
+        self.plist[tid].sockets[sname] = [fd]
 
-    def connect(self, pid, fd, name):
-        pid = str(pid)
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs connect no pid:%s' % pid)
+    def connect(self, tid, fd, name):
+        tid = str(tid)
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs connect no tid:%s' % tid)
             return
         gotit = None
-        for s in self.plist[pid].sockets:
-            if fd in self.plist[pid].sockets[s]:
+        for s in self.plist[tid].sockets:
+            if fd in self.plist[tid].sockets[s]:
                 gotit = s
                 break
         if gotit is not None:
-            self.plist[pid].sockets[name] = list(self.plist[pid].sockets[gotit])
-            del self.plist[pid].sockets[gotit] 
+            self.plist[tid].sockets[name] = list(self.plist[tid].sockets[gotit])
+            del self.plist[tid].sockets[gotit] 
         else:
             ''' assume we did not record the socket call '''
-            self.lgr.debug('TraceProcs, connect pid %s, could not find fd %d' % (pid, fd))
-            self.plist[pid].sockets[name] = [fd]
+            self.lgr.debug('TraceProcs, connect tid %s, could not find fd %d' % (tid, fd))
+            self.plist[tid].sockets[name] = [fd]
 
-    def socketpair(self, pid, fd1, fd2):
-        pid = str(pid)
-        sname = 'socket-%s-%d' % (pid, self.nextSocket(pid))
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs socketpair no pid %s, add it ' % pid)
-            newproc = Pinfo(pid)
-            self.plist[pid] = newproc
-        self.plist[pid].sockets[sname] = [fd1, fd2]
+    def socketpair(self, tid, fd1, fd2):
+        tid = str(tid)
+        sname = 'socket-%s-%s' % (tid, self.nextSocket(tid))
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs socketpair no tid %s, add it ' % tid)
+            newproc = Pinfo(tid)
+            self.plist[tid] = newproc
+        self.plist[tid].sockets[sname] = [fd1, fd2]
 
-    def isExternal(self, pid, fd):
-        if pid in self.plist:
-            for s in self.plist[pid].sockets:
-                if fd in self.plist[pid].sockets[s]:
+    def isExternal(self, tid, fd):
+        if tid in self.plist:
+            for s in self.plist[tid].sockets:
+                if fd in self.plist[tid].sockets[s]:
                     if ':' in s:
                         return True
         return False
     
-    def bind(self, pid, fd, name):
-        pid = str(pid)
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs connect no pid %s' % pid)
+    def bind(self, tid, fd, name):
+        tid = str(tid)
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs connect no tid %s' % tid)
             return
         ''' socket call got the FD, associate a meaningful name '''
         gotit = None
-        for s in self.plist[pid].sockets:
-            if fd in self.plist[pid].sockets[s]:
+        for s in self.plist[tid].sockets:
+            if fd in self.plist[tid].sockets[s]:
                 gotit = s
                 break
         if gotit is not None:
             ''' replace the dict entry with the more meaningful name '''
-            self.plist[pid].sockets[name] = list(self.plist[pid].sockets[gotit])
-            del self.plist[pid].sockets[gotit] 
+            self.plist[tid].sockets[name] = list(self.plist[tid].sockets[gotit])
+            del self.plist[tid].sockets[gotit] 
         else:
             ''' assume we did not record the socket call '''
-            self.lgr.debug('TraceProcs, bind pid %s, could not find fd %d' % (pid, fd))
-            self.plist[pid].sockets[name] = [fd]
+            self.lgr.debug('TraceProcs, bind tid %s, could not find fd %d' % (tid, fd))
+            self.plist[tid].sockets[name] = [fd]
 
-    def accept(self, pid, socket_fd, new_fd, name):
-        pid = str(pid)
-        if pid not in self.plist:
-            self.lgr.debug('TraceProcs accept no pid %s' % pid)
+    def accept(self, tid, socket_fd, new_fd, name):
+        tid = str(tid)
+        if tid not in self.plist:
+            self.lgr.debug('TraceProcs accept no tid %s' % tid)
             return
         if name is None:
-            for s in self.plist[pid].sockets:
-                if socket_fd in self.plist[pid].sockets[s]:
-                    self.plist[pid].sockets[s].append(new_fd)
+            for s in self.plist[tid].sockets:
+                if socket_fd in self.plist[tid].sockets[s]:
+                    self.plist[tid].sockets[s].append(new_fd)
                     break
         else:
-            self.plist[pid].sockets[name] = [new_fd]
+            self.plist[tid].sockets[name] = [new_fd]
         
 
-    def rmFD(self, pid, fd):
-        pid = str(pid)
-        for fname in self.plist[pid].files: 
-            if fd in self.plist[pid].files[fname]:
-                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, fname))
-                self.plist[pid].files[fname].remove(fd)
+    def rmFD(self, tid, fd):
+        tid = str(tid)
+        for fname in self.plist[tid].files: 
+            if fd in self.plist[tid].files[fname]:
+                #self.lgr.debug('GOT close tid %s fd %d file %s' % (tid, fd, fname))
+                self.plist[tid].files[fname].remove(fd)
                 return
-        for pname in self.plist[pid].rpipe: 
-            if fd in self.plist[pid].rpipe[pname]:
-                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, pname))
-                self.plist[pid].rpipe[pname].remove(fd)
+        for pname in self.plist[tid].rpipe: 
+            if fd in self.plist[tid].rpipe[pname]:
+                #self.lgr.debug('GOT close tid %s fd %d file %s' % (tid, fd, pname))
+                self.plist[tid].rpipe[pname].remove(fd)
                 return
-        for pname in self.plist[pid].wpipe: 
-            if fd in self.plist[pid].wpipe[pname]:
-                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, pname))
-                self.plist[pid].wpipe[pname].remove(fd)
+        for pname in self.plist[tid].wpipe: 
+            if fd in self.plist[tid].wpipe[pname]:
+                #self.lgr.debug('GOT close tid %s fd %d file %s' % (tid, fd, pname))
+                self.plist[tid].wpipe[pname].remove(fd)
                 return
-        for sname in self.plist[pid].sockets: 
-            if fd in self.plist[pid].sockets[sname]:
-                #self.lgr.debug('GOT close pid %s fd %d file %s' % (pid, fd, sname))
-                self.plist[pid].sockets[sname].remove(fd)
+        for sname in self.plist[tid].sockets: 
+            if fd in self.plist[tid].sockets[sname]:
+                #self.lgr.debug('GOT close tid %s fd %d file %s' % (tid, fd, sname))
+                self.plist[tid].sockets[sname].remove(fd)
                 return
 
-    def close(self, pid, fd):
-        pid = str(pid)
-        if pid not in self.plist:
-            #self.lgr.debug('traceProcs close on unknown pid %d' % pid)
+    def close(self, tid, fd):
+        tid = str(tid)
+        if tid not in self.plist:
+            #self.lgr.debug('traceProcs close on unknown tid %s' % tid)
             return
-        #self.lgr.debug('try close pid %s fd %d' % (pid, fd))
-        self.rmFD(pid, fd)
+        #self.lgr.debug('try close tid %s fd %d' % (tid, fd))
+        self.rmFD(tid, fd)
 
-    def dup(self, pid, fd_old, fd_new):
-        pid = str(pid)
-        if pid not in self.plist:
-            self.lgr.debug('traceProcs dup on unknown pid %s' % pid)
+    def dup(self, tid, fd_old, fd_new):
+        tid = str(tid)
+        if tid not in self.plist:
+            self.lgr.debug('traceProcs dup on unknown tid %s' % tid)
             return
 
         ''' close any file/pipe/socket having the new fd '''
-        self.rmFD(pid, fd_new) 
+        self.rmFD(tid, fd_new) 
 
-        for fname in self.plist[pid].files:
-            if fd_old in self.plist[pid].files[fname]:
-                self.plist[pid].files[fname].append(fd_new)
+        for fname in self.plist[tid].files:
+            if fd_old in self.plist[tid].files[fname]:
+                self.plist[tid].files[fname].append(fd_new)
                 return
-        for pname in self.plist[pid].rpipe:
-            if fd_old in self.plist[pid].rpipe[pname]:
-                self.plist[pid].rpipe[pname].append(fd_new)
+        for pname in self.plist[tid].rpipe:
+            if fd_old in self.plist[tid].rpipe[pname]:
+                self.plist[tid].rpipe[pname].append(fd_new)
                 return
-        for pname in self.plist[pid].wpipe:
-            if fd_old in self.plist[pid].wpipe[pname]:
-                self.plist[pid].wpipe[pname].append(fd_new)
+        for pname in self.plist[tid].wpipe:
+            if fd_old in self.plist[tid].wpipe[pname]:
+                self.plist[tid].wpipe[pname].append(fd_new)
                 return
 
-        self.lgr.debug('traceProcs, dup pid %s, did not find file with old fd of %d' % (pid, fd_old)) 
-        fname = 'unknown-%s-%d' % (pid, fd_old)
-        self.plist[pid].files[fname] = [fd_old, fd_new]
+        self.lgr.debug('traceProcs, dup tid %s, did not find file with old fd of %d' % (tid, fd_old)) 
+        fname = 'unknown-%s-%d' % (tid, fd_old)
+        self.plist[tid].files[fname] = [fd_old, fd_new]
 
-    def copyOpen(self, parent_pid, child_pid):
-        parent_pid = str(parent_pid)
-        child_pid = str(child_pid)
-        if parent_pid not in self.plist:
-            self.lgr.debug('traceProcs copyOpen on unknown pid %s' % parent_pid)
+    def copyOpen(self, parent_tid, child_tid):
+        parent_tid = str(parent_tid)
+        child_tid = str(child_tid)
+        if parent_tid not in self.plist:
+            self.lgr.debug('traceProcs copyOpen on unknown tid %s' % parent_tid)
             return
-        if child_pid not in self.plist[parent_pid].children:
-            self.plist[parent_pid].children.append(child_pid)
-        self.plist[child_pid].parent = child_pid
-        for fname in self.plist[parent_pid].files:
-            self.plist[child_pid].files[fname] = []
-            for fd in self.plist[parent_pid].files[fname]:
-                self.plist[child_pid].files[fname].append(fd)
-                #self.lgr.debug('traceProcs copyOpen file %s from %s to %s fd: %d' % (fname, parent_pid, child_pid, fd))
-            #if len(self.plist[parent_pid].files[fname]) > 0:
-            #    self.lgr.debug('traceProcs copyOpen file %s from %s to %s' % (fname, parent_pid, child_pid))
-            #    self.plist[child_pid].files[fname] = list(self.plist[parent_pid].files[fname])
-        for pname in self.plist[parent_pid].rpipe:
-            if len(self.plist[parent_pid].rpipe[pname]) > 0:
-                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))
-                self.plist[child_pid].rpipe[pname] = list(self.plist[parent_pid].rpipe[pname])
-        for pname in self.plist[parent_pid].wpipe:
-            if len(self.plist[parent_pid].wpipe[pname]) > 0:
-                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))
-                self.plist[child_pid].wpipe[pname] = list(self.plist[parent_pid].wpipe[pname])
-        for sname in self.plist[parent_pid].sockets:
-            if len(self.plist[parent_pid].sockets[sname]) > 0:
-                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_pid, child_pid))
-                self.plist[child_pid].sockets[sname] = list(self.plist[parent_pid].sockets[sname])
+        if child_tid not in self.plist[parent_tid].children:
+            self.plist[parent_tid].children.append(child_tid)
+        self.plist[child_tid].parent = child_tid
+        for fname in self.plist[parent_tid].files:
+            self.plist[child_tid].files[fname] = []
+            for fd in self.plist[parent_tid].files[fname]:
+                self.plist[child_tid].files[fname].append(fd)
+                #self.lgr.debug('traceProcs copyOpen file %s from %s to %s fd: %d' % (fname, parent_tid, child_tid, fd))
+            #if len(self.plist[parent_tid].files[fname]) > 0:
+            #    self.lgr.debug('traceProcs copyOpen file %s from %s to %s' % (fname, parent_tid, child_tid))
+            #    self.plist[child_tid].files[fname] = list(self.plist[parent_tid].files[fname])
+        for pname in self.plist[parent_tid].rpipe:
+            if len(self.plist[parent_tid].rpipe[pname]) > 0:
+                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_tid, child_tid))
+                self.plist[child_tid].rpipe[pname] = list(self.plist[parent_tid].rpipe[pname])
+        for pname in self.plist[parent_tid].wpipe:
+            if len(self.plist[parent_tid].wpipe[pname]) > 0:
+                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_tid, child_tid))
+                self.plist[child_tid].wpipe[pname] = list(self.plist[parent_tid].wpipe[pname])
+        for sname in self.plist[parent_tid].sockets:
+            if len(self.plist[parent_tid].sockets[sname]) > 0:
+                #self.lgr.debug('traceProcs copyOpen from %s to %s' % (parent_tid, child_tid))
+                self.plist[child_tid].sockets[sname] = list(self.plist[parent_tid].sockets[sname])
   
-    def showOne(self, pid, tabs):
-        pid = str(pid)
+    def showOne(self, tid, tabs):
+        tid = str(tid)
         files = ''
         sockets = ''
         pipes = ''
-        if pid not in self.plist:
-            print('pid %s not in plist' % pid)
+        if tid not in self.plist:
+            print('tid %s not in plist' % tid)
             return
-        for f in self.plist[pid].files:
-            if len(self.plist[pid].files[f]) > 0:
-                files = files + ' %s(%s)' % (f, str(self.plist[pid].files[f]))
+        for f in self.plist[tid].files:
+            if len(self.plist[tid].files[f]) > 0:
+                files = files + ' %s(%s)' % (f, str(self.plist[tid].files[f]))
             else:
                 files = files + ' %s' % (f)
 
-        for p in self.plist[pid].rpipe:
-            if len(self.plist[pid].rpipe[p]) > 0:
-                pipes = pipes + ' %s(R%s)' % (p, str(self.plist[pid].rpipe[p]))
+        for p in self.plist[tid].rpipe:
+            if len(self.plist[tid].rpipe[p]) > 0:
+                pipes = pipes + ' %s(R%s)' % (p, str(self.plist[tid].rpipe[p]))
             else:
                 pipes = pipes + ' %s' % (p)
-        for p in self.plist[pid].wpipe:
-            if len(self.plist[pid].wpipe[p]) > 0:
-                pipes = pipes + ' %s(W%s)' % (p, str(self.plist[pid].wpipe[p]))
+        for p in self.plist[tid].wpipe:
+            if len(self.plist[tid].wpipe[p]) > 0:
+                pipes = pipes + ' %s(W%s)' % (p, str(self.plist[tid].wpipe[p]))
             else:
                 pipes = pipes + ' %s' % (p)
-        for s in self.plist[pid].sockets:
-            if len(self.plist[pid].sockets[s]) > 0:
-                sockets = sockets + ' %s(S%s)' % (s, str(self.plist[pid].sockets[s]))
+        for s in self.plist[tid].sockets:
+            if len(self.plist[tid].sockets[s]) > 0:
+                sockets = sockets + ' %s(S%s)' % (s, str(self.plist[tid].sockets[s]))
             else:
                 #sockets = sockets + ' %s' % (s)
                 pass
 
         ftype = ''
-        if self.plist[pid].ftype is not None:
-            ftype = 'file type: '+self.plist[pid].ftype
-        if self.plist[pid].args is None:
-            self.trace_fh.write('%s %s  %s %s\n' % (tabs, pid, self.plist[pid].prog, ftype))
-            print('%s %s  %s' % (tabs, pid, self.plist[pid].prog))
+        if self.plist[tid].ftype is not None:
+            ftype = 'file type: '+self.plist[tid].ftype
+        if self.plist[tid].args is None:
+            self.trace_fh.write('%s %s  %s %s\n' % (tabs, tid, self.plist[tid].prog, ftype))
+            print('%s %s  %s' % (tabs, tid, self.plist[tid].prog))
         else:
-            self.trace_fh.write('%s %s  %s %s %s\n' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args, ftype)) 
-            print('%s %s  %s %s' % (tabs, pid, self.plist[pid].prog, self.plist[pid].args)) 
+            self.trace_fh.write('%s %s  %s %s %s\n' % (tabs, tid, self.plist[tid].prog, self.plist[tid].args, ftype)) 
+            print('%s %s  %s %s' % (tabs, tid, self.plist[tid].prog, self.plist[tid].args)) 
 
         if len(files) > 0:
             print('%s    files: %s\n' % (tabs, files))
@@ -423,93 +427,90 @@ class TraceProcs():
             print('%s    sockets: %s' % (tabs, sockets))
             self.trace_fh.write('%s    sockets: %s\n' % (tabs, sockets))
 
-    def showFamily(self, pid, tabs):
-        pid = str(pid)
-        #self.lgr.debug('traceProcs showFamily pid:<%s> type %s' % (pid, type(pid)))
-        self.showOne(pid, tabs)
-        if pid not in self.did_that:
-            self.did_that.append(pid)
+    def showFamily(self, tid, tabs):
+        tid = str(tid)
+        #self.lgr.debug('traceProcs showFamily tid:<%s> type %s' % (tid, type(tid)))
+        self.showOne(tid, tabs)
+        if tid not in self.did_that:
+            self.did_that.append(tid)
         tabs = tabs+'\t'
-        if pid in self.plist:
-            for child in self.plist[pid].children:
+        if tid in self.plist:
+            for child in self.plist[tid].children:
                 self.showFamily(child, tabs)
 
     def showAll(self, quiet=False):
         trace_path = '/tmp/procTrace.txt'
         self.trace_fh = open(trace_path, 'w') 
         del self.did_that[:]
-        for pid in self.plist:
-            if self.plist[pid].parent is not None:
-                #self.lgr.debug('traceProcs showAll parent is %s, skip' % self.plist[pid].parent)
+        for tid in self.plist:
+            if self.plist[tid].parent is not None:
+                #self.lgr.debug('traceProcs showAll parent is %s, skip' % self.plist[tid].parent)
                 continue
             ''' ignore items from initial set of processes that did not subsequently create children '''
-            if pid in self.init_proc_list and len(self.plist[pid].children) == 0:
+            if tid in self.init_proc_list and len(self.plist[tid].children) == 0:
                 continue
-            if pid not in self.did_that:
-                self.did_that.append(pid)
+            if tid not in self.did_that:
+                self.did_that.append(tid)
                 tabs = ''
-                #self.lgr.debug('traceProcs showAll showFamily for %s' % pid)
-                self.showFamily(pid, tabs)                
+                #self.lgr.debug('traceProcs showAll showFamily for %s' % tid)
+                self.showFamily(tid, tabs)                
         self.getNetworkAddresses()
         self.trace_fh.close()
         print('Trace report at: %s' % trace_path)
                  
-    def getProg(self, pid):
-        pid = str(pid)
-        if pid in self.plist: 
-            return self.plist[pid].prog
+    def getProg(self, tid):
+        tid = str(tid)
+        if tid in self.plist: 
+            return self.plist[tid].prog
         else:
             return 'unknown'
 
     def getNetworkAddresses(self):
-        for pid in self.plist:
-            info = self.plist[pid].args
+        for tid in self.plist:
+            info = self.plist[tid].args
             if info is not None and '/bin/ip addr add' in info:
                 print(info)
 
-    def getFileName(self, pid, fd):
-        pid = str(pid)
-        if pid in self.plist:
-            for f in self.plist[pid].files:
-                self.lgr.debug('traceProcs pid %s look for file for fd %d file %s' % (pid, fd, f))
-                if fd in self.plist[pid].files[f]:
+    def getFileName(self, tid, fd):
+        tid = str(tid)
+        if tid in self.plist:
+            for f in self.plist[tid].files:
+                self.lgr.debug('traceProcs tid %s look for file for fd %d file %s' % (tid, fd, f))
+                if fd in self.plist[tid].files[f]:
                     return f
         return None
 
-    def setFileType(self, pid, ftype):
-        pid = str(pid)
+    def setFileType(self, tid, ftype):
+        tid = str(tid)
         if 'elf' in ftype.lower():
-            self.plist[pid].ftype = 'elf'
+            self.plist[tid].ftype = 'elf'
         elif 'shell' in ftype.lower(): 
-            self.plist[pid].ftype = 'shell'
+            self.plist[tid].ftype = 'shell'
         else:
-            self.lgr.debug('traceProcs pid:%s unknown file type %s' % (pid, ftype))
-        self.lgr.debug('traceProcs setFileType pid:%s file type %s' % (pid, self.plist[pid].ftype))
+            self.lgr.debug('traceProcs tid:%s unknown file type %s' % (tid, ftype))
+        self.lgr.debug('traceProcs setFileType tid:%s file type %s' % (tid, self.plist[tid].ftype))
 
-    def getFileType(self, pid):
-        pid = str(pid)
-        if pid in self.plist:
-            return self.plist[pid].ftype
+    def getFileType(self, tid):
+        tid = str(tid)
+        if tid in self.plist:
+            return self.plist[tid].ftype
         else:
             return None
 
     def watchAllExits(self):
-        self.lgr.debug('traceProcs watchAllExits for %d pids' % len(self.plist))
+        self.lgr.debug('traceProcs watchAllExits for %d tids' % len(self.plist))
         self.cleanProcs()
-        for pid in self.plist:
-            self.context_manager.watchExit(pid=int(pid))
+        for tid in self.plist:
+            self.context_manager.watchExit(tid=tid)
         self.watch_all_exits = True
 
     def cleanProcs(self):
-        task_list = self.task_utils.getTaskStructs()
-        pid_list = []
-        for t in task_list:
-            pid_list.append(str(task_list[t].pid)) 
-        self.lgr.debug('traceProcs cleanProcs start with %d pids, task utils gave %d' % (len(self.plist), len(pid_list)))
+        tid_list = self.task_utils.getTidList()
+        self.lgr.debug('traceProcs cleanProcs start with %d tids, task utils gave %d' % (len(self.plist), len(tid_list)))
         tmp_list = list(self.plist.keys())
         for p in tmp_list:
-            if p not in pid_list:
+            if p not in tid_list:
                 self.plist.pop(p, None)
-        self.lgr.debug('traceProcs cleanProcs end with %d pids' % len(self.plist))
+        self.lgr.debug('traceProcs cleanProcs end with %d tids' % len(self.plist))
       
                 

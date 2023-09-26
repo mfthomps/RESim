@@ -145,8 +145,8 @@ class PlayAFL():
                     print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
-        pid = self.top.getPID()
-        self.lgr.debug('playAFL afl list has %d items.  current context %s current pid:%d fname:%s' % (len(self.afl_list), self.target_cpu.current_context, pid, self.fname))
+        tid = self.top.getTID()
+        self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname))
         self.initial_context = self.target_cpu.current_context
         self.index = -1
         self.stop_hap = None
@@ -179,11 +179,11 @@ class PlayAFL():
 
         ''' replay file names that hit the given bb '''
         self.bnt_list = []
-        self.pid = self.top.getPID()
+        self.tid = self.top.getTID()
         if target_proc is None:
-            self.target_pid = self.pid
+            self.target_tid = self.tid
         else:
-            self.target_pid = None
+            self.target_tid = None
         self.stop_on_break = False
         self.exit_list = []
         if self.cpu.architecture == 'arm':
@@ -199,7 +199,7 @@ class PlayAFL():
             return None
 
         if target_proc is None:
-            self.top.debugPidGroup(pid, to_user=False)
+            self.top.debugTidGroup(tid, to_user=False)
             self.finishInit()
             self.disableReverse()
             self.initial_context = self.target_cpu.current_context
@@ -217,7 +217,7 @@ class PlayAFL():
 
         # return to origin and run forward again, this time counting syscall exits
         self.exit_eip = self.top.getEIP(cpu=self.target_cpu)
-        self.pid = self.top.getPID(target=self.target_cell)
+        self.tid = self.top.getTID(target=self.target_cell)
 
         cmd = 'skip-to bookmark = bookmark0'
         cli.quiet_run_command(cmd)
@@ -242,9 +242,9 @@ class PlayAFL():
     def counterHap(self, dumb, third, break_num, memory):
         if self.counter_hap is None:
             return
-        pid = self.top.getPID(target=self.target_cell)
-        if pid != self.target_pid:
-            self.lgr.debug('playAFL counterHap wrong pid %d, wanted %d cycle: 0x%x' % (pid, self.target_pid, self.target_cpu.cycles))
+        tid = self.top.getTID(target=self.target_cell)
+        if tid != self.target_tid:
+            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %d cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
             return
         self.exit_counter = self.exit_counter+1
         self.lgr.debug('playAFL counterHap, count now %d' % self.exit_counter)
@@ -261,9 +261,9 @@ class PlayAFL():
         self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
     def playInitCallback(self):
-        self.target_pid = self.top.getPID()
+        self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('playAFL playInitCallback. target pid: %d finish init to set coverage and such' % self.target_pid)
+        self.lgr.debug('playAFL playInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
         self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
         self.initial_context = self.target_cpu.current_context
         if self.trace_all:
@@ -288,8 +288,8 @@ class PlayAFL():
         cli.quiet_run_command(cmd)
         self.disableReverse()
         self.top.setTarget(self.cell_name)
-        pid = self.top.getPID()
-        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s pid: %d' % (self.cell_name, pid))
+        tid = self.top.getTID()
+        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
         self.go()
 
     def disableReverse(self):
@@ -330,7 +330,7 @@ class PlayAFL():
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
             self.lgr.debug('playAFL call enableCoverage analysis_path is %s' % analysis_path)
-            self.coverage.enableCoverage(self.target_pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+            self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
@@ -501,7 +501,7 @@ class PlayAFL():
             self.lgr.debug('playAFL call writeData write')
             count = self.write_data.write()
             bp_count = self.coverage.bpCount()
-            self.lgr.debug('playAFL goAlone pid:%d ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.pid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
+            self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             # TBD just rely on coverage?
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.trace_buffer is not None:
@@ -515,16 +515,16 @@ class PlayAFL():
                     self.lgr.error('playAFL afl_mode but not coverage?')
                     return
             elif self.coverage is not None:
-                self.coverage.watchExits(callback=self.reportExit, pid=self.target_pid)
+                self.coverage.watchExits(callback=self.reportExit, tid=self.target_tid)
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
             #if self.stop_hap is None:
             #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
-            self.lgr.debug('playAFL goAlone watch page faults for pid %d cell %s' % (self.target_pid, self.target_cell))
+            self.lgr.debug('playAFL goAlone watch page faults for tid:%s cell %s' % (self.target_tid, self.target_cell))
             if not self.no_page_faults:
-                self.top.watchPageFaults(pid=self.target_pid, target=self.target_cell)
+                self.top.watchPageFaults(tid=self.target_tid, target=self.target_cell)
             else:
                 self.lgr.debug('playAFL goAlone will not watch page faults, will miss segv')
                 self.top.stopWatchPageFaults()
@@ -665,9 +665,9 @@ class PlayAFL():
                 if self.coverage.didExit():
                     self.exit_list.append(self.afl_list[self.index])
 
-                if self.top.hasPendingPageFault(self.pid):
-                    print('PID %d has pending page fault' % self.pid)
-                    self.lgr.debug('PID %d has pending page fault' % self.pid)
+                if self.top.hasPendingPageFault(self.tid):
+                    print('TID %s has pending page fault' % self.tid)
+                    self.lgr.debug('TID %s has pending page fault' % self.tid)
             else:
                 self.lgr.debug('playAFL stopHap')
             SIM_run_alone(self.goAlone, True)

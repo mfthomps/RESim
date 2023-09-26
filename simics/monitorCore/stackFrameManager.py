@@ -49,7 +49,7 @@ class StackFrameManager():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
-    def stackTrace(self, verbose=False, in_pid=None, use_cache=True):
+    def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -58,21 +58,21 @@ class StackFrameManager():
         if cycle in self.stack_cache and use_cache:
             st = self.stack_cache[cycle]
         else:
-            cpu, comm, cur_pid = self.task_utils.curProc() 
-            if in_pid is not None:
-                pid = in_pid
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            if in_tid is not None:
+                tid = in_tid
             else:
-                pid = cur_pid
-            if pid not in self.stack_base:
+                tid = cur_tid
+            if tid not in self.stack_base:
                 stack_base = None
             else:
-                stack_base = self.stack_base[pid]
-            if pid == cur_pid:
+                stack_base = self.stack_base[tid]
+            if tid == cur_tid:
                 reg_frame = self.task_utils.frameFromRegs()
             else:
-                reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(pid)
+                reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(tid)
            
-            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                      self.task_utils, stack_base, fun_mgr, self.targetFS, 
                      reg_frame, self.lgr)
             self.stack_cache[cycle] = st
@@ -87,23 +87,23 @@ class StackFrameManager():
         if cycle in self.stack_cache:
             st = self.stack_cache[cycle]
         else:
-            pid, cpu = self.context_manager.getDebugPid() 
-            if pid is None:
-                cpu, comm, pid = self.task_utils.curProc() 
+            tid, cpu = self.context_manager.getDebugTid() 
+            if tid is None:
+                cpu, comm, tid = self.task_utils.curThread() 
             else:
-                cpu, comm, cur_pid = self.task_utils.curProc() 
-                if pid != cur_pid:
-                    if not self.context_manager.amWatching(cur_pid):
-                        self.lgr.debug('getSTackTraceQuiet not in expected pid %d, current is %d' % (pid, cur_pid))
+                cpu, comm, cur_tid = self.task_utils.curThread() 
+                if tid != cur_tid:
+                    if not self.context_manager.amWatching(cur_tid):
+                        self.lgr.debug('getSTackTraceQuiet not in expected tid:%s, current is %d' % (tid, cur_tid))
                         return None
                     else:
-                        pid = cur_pid
-            if pid not in self.stack_base:
+                        tid = cur_tid
+            if tid not in self.stack_base:
                 stack_base = None
             else:
-                stack_base = self.stack_base[pid]
+                stack_base = self.stack_base[tid]
             reg_frame = self.task_utils.frameFromRegs()
-            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                     self.task_utils, stack_base, fun_mgr, self.targetFS, 
                     reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
             self.stack_cache[cycle] = st
@@ -119,24 +119,24 @@ class StackFrameManager():
         if cycle in self.stack_cache:
             st = self.stack_cache[cycle]
         else:
-            pid, cpu = self.context_manager.getDebugPid() 
-            if pid is None:
-                cpu, comm, pid = self.task_utils.curProc() 
+            tid, cpu = self.context_manager.getDebugTid() 
+            if tid is None:
+                cpu, comm, tid = self.task_utils.curThread() 
             else:
-                cpu, comm, cur_pid = self.task_utils.curProc() 
-                if pid != cur_pid:
-                    if not self.context_manager.amWatching(cur_pid):
-                        self.lgr.debug('stackFrameManager getSTackTrace not expected pid %d, current is %d  -- not a thread?' % (pid, cur_pid))
+                cpu, comm, cur_tid = self.task_utils.curThread() 
+                if tid != cur_tid:
+                    if not self.context_manager.amWatching(cur_tid):
+                        self.lgr.debug('stackFrameManager getSTackTrace not expected tid %s, current is %s  -- not a thread?' % (tid, cur_tid))
                         return "{}"
                     else:
-                        pid = cur_pid
-            self.lgr.debug('stackFrameManager getStackTrace pid %d' % pid)
-            if pid not in self.stack_base:
+                        tid = cur_tid
+            self.lgr.debug('stackFrameManager getStackTrace tid %s' % tid)
+            if tid not in self.stack_base:
                 stack_base = None
             else:
-                stack_base = self.stack_base[pid]
+                stack_base = self.stack_base[tid]
             reg_frame = self.task_utils.frameFromRegs()
-            st = stackTrace.StackTrace(self.top, cpu, pid, self.soMap, self.mem_utils, 
+            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                       self.task_utils, stack_base, fun_mgr, self.targetFS, 
                       reg_frame, self.lgr)
             self.stack_cache[cycle] = st
@@ -160,15 +160,15 @@ class StackFrameManager():
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-        cpu, comm, pid  = self.task_utils.curProc()
-        self.stack_base[pid] = esp
-        self.lgr.debug('setStackBase pid:%d to 0x%x init eip is 0x%x' % (pid, esp, eip))
+        cpu, comm, tid  = self.task_utils.curThread()
+        self.stack_base[tid] = esp
+        self.lgr.debug('setStackBase tid:%s to 0x%x init eip is 0x%x' % (tid, esp, eip))
 
-    def modeChangeForStack(self, want_pid, one, old, new):
+    def modeChangeForStack(self, want_tid, one, old, new):
         if self.mode_hap is None:
             return
-        cpu, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('modeChangeForStack pid:%d wanted: %d old: %d new: %d' % (pid, want_pid, old, new))
+        cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('modeChangeForStack tid:%s wanted: %d old: %d new: %d' % (tid, want_tid, old, new))
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
         self.mode_hap = None
         
@@ -180,13 +180,13 @@ class StackFrameManager():
             self.lgr.debug('stackFrameManager modeChangedForStack, calling into  kernel mode eip: 0x%x esp: 0x%x' % (eip, esp))
             self.setStackBase()
 
-    def recordStackBase(self, pid, sp):
-        self.lgr.debug('recordStackBase pid:%d 0x%x' % (pid, sp))
-        self.stack_base[pid] = sp
+    def recordStackBase(self, tid, sp):
+        self.lgr.debug('recordStackBase tid:%s 0x%x' % (tid, sp))
+        self.stack_base[tid] = sp
 
-    def recordStackClone(self, pid, parent):
-        self.lgr.debug('recordStackClone pid: %d parent: %d' % (pid, parent))
-        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, pid)
+    def recordStackClone(self, tid, parent):
+        self.lgr.debug('recordStackClone tid: %d parent: %d' % (tid, parent))
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     ''' TBD remove, only here for compatability with old snapshots'''
     def initStackBase(self, stack_base):
@@ -204,8 +204,8 @@ class StackFrameManager():
         self.top.revToAddr(frames[1].ip)
 
     def dumpStack(self, count=80):
-        cpu, comm, pid = self.task_utils.curProc() 
-        offset = self.soMap.wordSize(pid)
+        cpu, comm, tid = self.task_utils.curThread() 
+        offset = self.soMap.wordSize(tid)
         esp = self.mem_utils.getRegValue(self.cpu, 'sp')
         ptr = esp
         fun_mgr = self.top.getFunMgr()
@@ -215,7 +215,7 @@ class StackFrameManager():
             else:
                 value = self.mem_utils.readWord(self.cpu, ptr) 
             name = ''
-            if self.soMap.isCode(value, pid):
+            if self.soMap.isCode(value, tid):
                 self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
                 fun_addr = fun_mgr.getFun(value)
                 if fun_addr is not None:

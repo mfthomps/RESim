@@ -16,8 +16,8 @@ class TraceMalloc():
         self.setBreaks()
 
     class MallocRec():
-        def __init__(self, pid, size, cycle):
-            self.pid = pid
+        def __init__(self, tid, size, cycle):
+            self.tid = tid
             self.size = size
             self.addr = None
             self.cycle = cycle
@@ -47,8 +47,8 @@ class TraceMalloc():
 
     def mallocHap(self, dumb, context, break_num, memory):
         if self.malloc_hap is not None:
-            cpu, comm, pid = self.task_utils.curProc() 
-            #self.lgr.debug('TraceMalloc mallocHap pid:%d' % pid)
+            cpu, comm, tid = self.task_utils.curThread() 
+            #self.lgr.debug('TraceMalloc mallocHap tid:%s' % tid)
             if cpu.architecture == 'arm':
                 size = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc size %d' % size)
@@ -58,14 +58,14 @@ class TraceMalloc():
                 ret_addr = self.mem_utils.readPtr(self.cpu, sp)
                 size = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
                 #self.lgr.debug('malloc size %d' % size)
-            malloc_rec = self.MallocRec(pid, size, cpu.cycles)
+            malloc_rec = self.MallocRec(tid, size, cpu.cycles)
             malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
             self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
 
     def freeHap(self, dumb, context, break_num, memory):
         if self.free_hap is not None:
-            cpu, comm, pid = self.task_utils.curProc() 
-            #self.lgr.debug('TraceMalloc freeHap pid:%d' % pid)
+            cpu, comm, tid = self.task_utils.curThread() 
+            #self.lgr.debug('TraceMalloc freeHap tid:%s' % tid)
             if cpu.architecture == 'arm':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('free addr 0x%x' % addr)
@@ -77,8 +77,8 @@ class TraceMalloc():
 
     def mallocEndHap(self, malloc_rec, context, break_num, memory):
         if self.malloc_hap_ret is not None:
-            cpu, comm, pid = self.task_utils.curProc() 
-            #self.lgr.debug('TraceMalloc mallocEndHap pid:%d' % pid)
+            cpu, comm, tid = self.task_utils.curThread() 
+            #self.lgr.debug('TraceMalloc mallocEndHap tid:%s' % tid)
             if cpu.architecture == 'arm':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
@@ -93,4 +93,4 @@ class TraceMalloc():
 
     def showList(self):
         for rec in self.malloc_list:
-            print('%4d \t0x%x\t%d' % (rec.pid, rec.addr, rec.size))
+            print('%4d \t0x%x\t%d' % (rec.tid, rec.addr, rec.size))
