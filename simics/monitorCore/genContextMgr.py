@@ -542,14 +542,14 @@ class GenContextMgr():
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
-                self.lgr.debug('contextManager alterWatches tid:%s restored debug context' % tid)
+                #self.lgr.debug('contextManager alterWatches tid:%s restored debug context' % tid)
                 SIM_run_alone(self.restoreDebugContext, None)
                 #self.restoreDebugContext()
             else:
-                self.lgr.debug('contextManager alterWatches tid:%s already was debug context' % tid)
+                #self.lgr.debug('contextManager alterWatches tid:%s already was debug context' % tid)
                 pass
         elif self.isDebugContext():
-            self.lgr.debug('contextManager alterWatches tid:%s restored default context' % tid)
+            #self.lgr.debug('contextManager alterWatches tid:%s restored default context' % tid)
             SIM_run_alone(self.restoreDefaultContext, None)
             #self.restoreDefaultContext()
 
@@ -655,22 +655,22 @@ class GenContextMgr():
         
         #DEBUG BLOCK  Every thing until END can be commented out for performance/noise
         # TBD fix to use prev_tid
-        if self.top.isWindows():
-            prev_proc = self.task_utils.getCurProcRec()
-            prev_pid = self.mem_utils.readWord32(cpu, prev_proc + self.param.ts_pid)
-            prev_thread_id = self.task_utils.getThreadId(rec=prev_task)
-            prev_tid = '%d-%d' % (prev_pid, prev_thread_id)
-        else:
-            prev_proc = prev_task
-            prev_tid = str(self.mem_utils.readWord32(cpu, prev_proc + self.param.ts_pid))
-        prev_comm = self.mem_utils.readString(cpu, prev_proc + self.param.ts_comm, 16)
-
-        if self.top.isWindows(target=self.cell_name):
-            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
-                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
-        else:
-            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
-                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        #if self.top.isWindows():
+        #    prev_proc = self.task_utils.getCurProcRec()
+        #    prev_pid = self.mem_utils.readWord32(cpu, prev_proc + self.param.ts_pid)
+        #    prev_thread_id = self.task_utils.getThreadId(rec=prev_task)
+        #    prev_tid = '%d-%d' % (prev_pid, prev_thread_id)
+        #else:
+        #    prev_proc = prev_task
+        #    prev_tid = str(self.mem_utils.readWord32(cpu, prev_proc + self.param.ts_pid))
+        #prev_comm = self.mem_utils.readString(cpu, prev_proc + self.param.ts_comm, 16)
+#
+#        if self.top.isWindows(target=self.cell_name):
+#            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
+#                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+#        else:
+#            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
+#                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
         #END DEBUG BLOCK
 
         if self.onlyOrIgnore(tid, comm, new_addr):
@@ -743,9 +743,15 @@ class GenContextMgr():
                 self.catch_tid = None
               
     def catchTid(self, tid, callback):
-        self.catch_tid = tid
+        if self.top.isWindows():
+            if '-' not in tid:
+                self.catch_tid = tid+'-'
+            else:
+                self.catch_tid = tid
+        else:
+            self.catch_tid = tid
         self.catch_callback = callback 
-        self.lgr.debug('contectManager catchTid %s' % tid)
+        self.lgr.debug('contectManager catchTid %s' % self.catch_tid)
         self.setTaskHap(tid=tid)
 
     def watchAll(self):
@@ -1222,21 +1228,24 @@ class GenContextMgr():
     def watchExit(self, rec=None, tid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) tid '''
-        #self.lgr.debug('contextManager watchExit')
+        # TBD for windows, this sets a watch on the ETHREAD next pointer.  Should also set
+        # a watch on the EPROCESS next pointer for the process of these threads.
+        self.lgr.debug('contextManager watchExit')
         #if self.top.isWindows():
         #    ''' TBD fix this!'''
         #    return True
         cur_tid  = self.task_utils.curTID()
-        if tid is None and cur_tid == 1:
+        if tid is None and cur_tid == '1':
             self.lgr.debug('watchExit for tid 1, ignore')
             return False
         if tid is None:
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
         elif rec is None:
+            self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
             rec = self.task_utils.getRecAddrForTid(tid)
         if rec is None:
-            #self.lgr.debug('contextManager watchExit failed to get list_addr tid:%s cur_tid %s ' % (tid, cur_tid))
+            self.lgr.debug('contextManager watchExit failed to get list_addr tid:%s cur_tid %s ' % (tid, cur_tid))
             return False
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
@@ -1249,14 +1258,14 @@ class GenContextMgr():
             cell = self.default_context
             watch_tid, watch_comm = self.task_utils.getTidCommFromNext(list_addr)
             if not self.top.isWindows(target=self.cell_name):
-                if watch_tid == 0:
+                if watch_tid == '0':
                     self.lgr.debug('genContext watchExit, try group next')
                     watch_tid, watch_comm = self.task_utils.getTidCommFromGroupNext(list_addr)
                     if self.debugging_tid is not None and self.amWatching(watch_tid):
                         cell = self.resim_context
-            if watch_tid == 0 and not self.top.isWindows():
+            if watch_tid == '0' and not self.top.isWindows():
                 # TBD um, windows pid zero points to this process as being next?
-                #self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
+                self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
                 return False
             self.lgr.debug('Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
             #self.task_rec_bp[tid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)

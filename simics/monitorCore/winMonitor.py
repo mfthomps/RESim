@@ -197,7 +197,7 @@ class WinMonitor():
                         ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
                         self.trace_all.setExits(exit_info_list, context_override = context)
 
-            frames = self.top.getDbgFrames()
+            frames = self.getDbgFrames()
             self.lgr.debug('traceAll, call to setExits')
             self.trace_all.setExits(frames, context_override=self.context_manager.getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
@@ -262,7 +262,7 @@ class WinMonitor():
                 the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
                 ''' find processes that are in the kernel on IO calls '''
-                frames = self.top.getDbgFrames()
+                frames = self.getDbgFrames()
                 skip_calls = []
                 for tid in list(frames):
                     if frames[tid] is None:
@@ -302,4 +302,8 @@ class WinMonitor():
         retval = {}
         plist = {}
         tid_dict = self.task_utils.findThreads()
+        for tid in tid_dict:
+            frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+            if frame is not None:
+                retval[tid] = frame
         return retval

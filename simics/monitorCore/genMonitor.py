@@ -1269,6 +1269,7 @@ class GenMonitor():
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
                     if self.isWindows():
                         ''' Assumes winProg has already populated soMap'''
+                        # Note this call will add the text section after getting the load address from the peb
                         elf_info = self.soMap[self.target].getText(tid)
                     else:
                         elf_info = self.soMap[self.target].addText(real_path, prog_name, tid)
@@ -4156,117 +4157,6 @@ class GenMonitor():
             self.gdbMailbox('address %s not in blocks hit.' % addr)
         return cycle
        
-    def mft4(self, tid): 
-        want =  0xdf953b00
-        wantX = 0xdf950000
-        ts_next = self.param[self.target].ts_next
-        cpu = self.cell_config.cpuFromCell(self.target)
-        tr = self.task_utils[self.target].getRecAddrForTid(tid)
-        ts_group_lead = self.param[self.target].ts_group_leader
-        print('group lead 0x%x' % ts_group_lead)
-        group_head = ts_group_lead + 0xe*4
-        ts_group_head = self.param[self.target].ts_thread_group_list_head
-        print('group head 0x%x ts_group_head 0x%x' % (group_head, ts_group_head))
-        group_tr = self.mem_utils[self.target].readPtr(cpu, tr+group_head) - group_head
-        lh = self.task_utils[self.target].read_list_head(cpu, group_tr, group_head)
-
-        s = self.task_utils[self.target].readTaskStruct(group_tr-group_head, cpu)
-        print('tid:%s' % s.tid)
-        print('tid: %s tr: 0x%x group_head: %d group_tr: 0x%x head_tid: %d' % (tid, tr, group_head, group_tr, s.tid))
-
-        print('lh next 0x%x' % lh.next)
-
-
-    def mft3(self, tid): 
-        want =  0xdf953b00
-        wantX = 0xdf950000
-        ts_next = self.param[self.target].ts_next
-        cpu = self.cell_config.cpuFromCell(self.target)
-        tr = self.task_utils[self.target].getRecAddrForTid(tid)
-        ts_group_lead = self.param[self.target].ts_group_leader
-        group_head = ts_group_lead + 17*4
-        print('group head 0x%x' % group_head)
-        for i in range(0, 120, 4):
-            offset = ts_group_lead + i
-            '''
-            value = self.mem_utils[self.target].readPtr(cpu, tr+offset)
-            masked = value & 0xffff0000
-            print('got 0x%x offset 0x%x ' % (value, offset))
-            if masked == wantX:
-                print('got#### 0x%x offset 0x%x ' % (value, offset))
-            
-            '''
-            lh = self.task_utils[self.target].read_list_head(cpu, tr, offset)
-            #if lh is not None and lh.next == want:
-            if lh is not None and lh.next is not None:
-                masked = lh.next and 0xffff0000
-                try:
-                    value = self.mem_utils[self.target].readPtr(cpu, tr+offset)
-                    s = self.task_utils[self.target].readTaskStruct(value-offset, cpu)
-                except:
-                    continue
-                if s is not None:
-                    print('value 0x%x got 0x%x offset 0x%x tid: %d' % (value, lh.next, i/4, s.tid))
-                
-
-
-        '''
-        group_head = ts_group_lead + 17*4
-        value = self.mem_utils[self.target].readPtr(cpu, tr+group_head) 
-        print('tr 0x%x  tr_group head is 0x%x' % (tr, tr+group_head))
-        print('leader 0x%x  group_head 0x%x   value there is 0x%x' % (ts_group_lead, group_head, value))
-        #ts_childr = self.param[self.target].ts_thread_group_list_head
-        ts_childr = group_head
-        lh = self.task_utils[self.target].read_list_head(cpu, tr, ts_childr)
-        print('list head next 0x%x  list head prev 0x%x' % (lh.next, lh.prev))
-        '''
-        
-    def mft2(self, tid):
-        ts_next = self.param[self.target].ts_next
-        ts_prev = self.param[self.target].ts_prev
-        ts_thread = self.param[self.target].ts_thread_group_list_head
-        ts_childr = self.param[self.target].ts_children_list_head
-        print('ts_next %d  ts_prev %d  thread_group %d child_list %d' % (ts_next, ts_prev, ts_thread, ts_childr))
-        ts_parent = self.param[self.target].ts_parent
-        ts_real_parent = self.param[self.target].ts_real_parent
-        cpu = self.cell_config.cpuFromCell(self.target)
-        leader_tid = self.task_utils[self.target].getGroupLeaderTid(tid)
-        print('leader of %d is %d' % (tid, leader_tid))
-
-        tr = self.task_utils[self.target].getRecAddrForTid(tid)
-        s = self.task_utils[self.target].readTaskStruct(tr, cpu)
-        print('tr is 0x%x  tid:%s ' % (tr, tid))
-        prev_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_prev) 
-        prev_tr = prev_trx - ts_next
-        prev_s = self.task_utils[self.target].readTaskStruct(prev_tr, cpu)
-
-        next_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_next)
-        next_tr = next_trx - ts_next
-        next_s = self.task_utils[self.target].readTaskStruct(next_tr, cpu)
-
-        childr_trx = self.mem_utils[self.target].readPtr(cpu, tr+ts_childr)
-        childr_tr = childr_trx 
-        childr_s = self.task_utils[self.target].readTaskStruct(childr_tr, cpu)
-
-        print('prev trx 0x%x prev rec 0x%x tid: %d' % (prev_trx, prev_tr, prev_s.tid))
-        print('next trx 0x%x next rec 0x%x tid: %d' % (next_trx, next_tr, next_s.tid))
-        print('childr trx 0x%x childr rec 0x%x tid: %d' % (childr_trx, childr_tr, childr_s.tid))
-        ''' 
-        print('tid:%s  comm %s group_leader 0x%x prev 0x%x next 0x%x' % (s.tid, s.comm, s.group_leader, (s.next-ts_next), (s.prev-ts_prev)))
-        clh = self.param[self.target].ts_children_list_head
-        if clh is not None:
-            val = self.mem_utils[self.target].readPtr(cpu, tr+clh) - clh
-            print('child list head is 0x%x' % val)
-            child = self.task_utils[self.target].readTaskStruct(val, cpu)
-            print('child tid:%s' % child.tid)
-        slh = self.param[self.target].ts_sibling_list_head
-        if slh is not None:
-            val = self.mem_utils[self.target].readPtr(cpu, tr+slh) - slh
-            print('sib list head is 0x%x' % val)
-            sib = self.task_utils[self.target].readTaskStruct(val, cpu)
-            print('sib tid:%s' % sib.tid)
-        ''' 
-
     
     def addProc(self, tid, leader_tid, comm, clone=False):    
         self.traceProcs[self.target].addProc(tid, leader_tid, comm=comm, clone=clone)

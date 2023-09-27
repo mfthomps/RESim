@@ -27,7 +27,7 @@ class TraceProcs():
         self.cell_name = cell_name
         self.context_manager = context_manager
         self.task_utils = task_utils
-        ''' dict of Pinfo indexed by tid -- WHICH ARE STRINGS! '''
+        ''' dict of Pinfo indexed by tid '''
         self.plist = {}
         self.did_that = []
         self.pipe_handle = {}
@@ -459,7 +459,7 @@ class TraceProcs():
         print('Trace report at: %s' % trace_path)
                  
     def getProg(self, tid):
-        tid = str(tid)
+        tid = tid
         if tid in self.plist: 
             return self.plist[tid].prog
         else:

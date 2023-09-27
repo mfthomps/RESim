@@ -111,7 +111,8 @@ class WinDLLMap():
                 self.lgr.debug('windDLL %d sections %d section_list' % (len(self.sections), len(self.section_list)))
                 for section in self.section_list:
                     if section.addr is None:
-                        self.lgr.debug('winDLL loadPickle not section.addr for %s' % section.fname)
+                        self.lgr.debug('winDLL loadPickle no section.addr for %s' % section.fname)
+                        continue
                     if section.pid not in self.min_addr:
                         self.min_addr[section.pid] = None
                         self.max_addr[section.pid] = None
@@ -159,7 +160,10 @@ class WinDLLMap():
             self.lgr.debug('winDLL loadPickle have text for pid:%s' % pid)
 
     def pidFromTID(self, tid):
-        return int(tid.split('-')[0])
+        if '-' in tid:
+            return int(tid.split('-')[0])
+        else:
+            return int(tid)
 
     def addFile(self, fname, fd, tid):
         pid = self.pidFromTID(tid)
@@ -224,8 +228,11 @@ class WinDLLMap():
                         rm_pp = None
                         for pp in self.pending_procs:
                             proc_base = ntpath.basename(pp)
-                            #self.lgr.debug('winDLL mapSection does %s start with %s' % (proc_base, comm))
+                            self.lgr.debug('winDLL mapSection does %s start with %s' % (proc_base, comm))
                             if proc_base.startswith(comm):
+                                #
+                                #  Pending processes. Below is not for DLLs
+                                #
                                 eproc = self.task_utils.getCurThreadRec()
                                 full_path = self.top.getFullPath(fname=pp)
                                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
@@ -233,6 +240,10 @@ class WinDLLMap():
                                             win_prog_info.image_base, win_prog_info.text_offset)
                                 if win_prog_info.text_size is None:
                                     self.lgr.error('WinDLLMap mapSection text_size is None for %s' % comm)
+                                if win_prog_info.load_addr is None:
+                                    self.lgr.error('WinDLLMap mapSection load_addr is None for %s' % comm)
+                                else:
+                                    self.lgr.error('WinDLLMap mapSection load_addr is 0x%x for %s' % (win_prog_info.load_addr, comm))
                                 self.lgr.debug('WinDLLMap text mapSection added, len now %d' % len(self.text))
                                 rm_pp = pp
                                 break
@@ -241,13 +252,7 @@ class WinDLLMap():
 
                     # TBD is pending_procs necessary?  Why not always add text if missing for pid?
                     if pid not in self.text:
-                        dump, comm, dumb2 = self.task_utils.curThread() 
-                        eproc = self.task_utils.getCurThreadRec()
-                        full_path = self.top.getFullPath(fname=comm)
-                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
-                        self.addText(comm, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
-                                        win_prog_info.image_base, win_prog_info.text_offset)
-                        self.lgr.debug('WinDLLMap text mapSection added, text section for %s' % full_path)
+                        self.getText(tid)
 
                     self.lgr.debug('WinDLLMap mapSection appended, len now %d' % len(self.section_list))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
@@ -285,9 +290,12 @@ class WinDLLMap():
         sort_map = {}
         for section in self.section_list:
             if section.pid == pid:
-                sort_map[section.addr] = section
+                if section.addr is not None:
+                    sort_map[section.addr] = section
+                else:
+                    self.lgr.debug('WinDLLMap no addr for section %s' % section.fname)
 
-        self.lgr.debug('WinDLLMap showSO %d sections, %d in section_list' % (len(sort_map), len(self.section_list)))
+        self.lgr.debug('WinDLLMap showSO pid:%d %d sections, %d in section_list' % (pid, len(sort_map), len(self.section_list)))
         for section_addr in sorted(sort_map):
             section = sort_map[section_addr]
             if filter is None or filter in section.fname:
@@ -317,6 +325,9 @@ class WinDLLMap():
         if addr_in is not None:
             got_unknown = False
             for section in self.section_list:
+                if section.addr is None:
+                    self.lgr.debug('getSOFile got no addr for section %s' % section.fname)
+                    continue
                 if section.pid == pid:
                     if section.size is not None:
                         end = section.addr+section.size
@@ -433,16 +444,19 @@ class WinDLLMap():
         if pid in self.text:
             retval = Text(self.text[pid].addr, self.text[pid].size, self.text[pid].image_base)
         else:
-            cpu, comm, cur_pid = self.task_utils.curThread() 
-            if pid == cur_pid:
-                prog_name = self.top.getProgName(pid)
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            if tid == cur_tid:
+                prog_name = self.top.getProgName(tid)
                 full_path = self.top.getFullPath(fname=prog_name)
                 self.lgr.debug('winDLL getText, no text yet for %s, try reading it from winProg' % prog_name)
                 eproc = self.task_utils.getCurThreadRec()
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                 self.top.setFullPath(full_path)
-                self.addText(prog_name, pid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset)
-                retval = Text(win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.image_base)
+                if win_prog_info.load_addr is not None:
+                    self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset)
+                    retval = Text(win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.image_base)
+                else:
+                    self.lgr.debug('winDLL getText, NO LOAD ADDR for  %s' % prog_name)
         return retval
             
     def getAnalysisPath(self, fname):
