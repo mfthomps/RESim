@@ -114,12 +114,15 @@ class TaskUtils():
             if os.path.isfile(phys_current_task_file):
                 if not self.param.current_task_fs:
                     value = pickle.load( open(phys_current_task_file, 'rb') ) 
-                    self.phys_current_task = value['current_task_phys']
-                    saved_cr3 = value['saved_cr3']
-                    if saved_cr3 is not None:
-                        self.lgr.debug('taskUtils, snapshop had saved cr3, value 0x%x' % saved_cr3)
-                        #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                        self.mem_utils.saveKernelCR3(self.cpu, saved_cr3=saved_cr3)
+                    if type(value) is int:
+                        self.phys_current_task = value
+                    else:
+                        self.phys_current_task = value['current_task_phys']
+                        saved_cr3 = value['saved_cr3']
+                        if saved_cr3 is not None:
+                            self.lgr.debug('taskUtils, snapshop had saved cr3, value 0x%x' % saved_cr3)
+                            #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
+                            self.mem_utils.saveKernelCR3(self.cpu, saved_cr3=saved_cr3)
                 else:
                     self.phys_current_task = pickle.load( open(phys_current_task_file, 'rb') ) 
 
