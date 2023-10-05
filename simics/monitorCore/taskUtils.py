@@ -533,7 +533,7 @@ class TaskUtils():
                 if group_leader == leader_rec:
                     pid = self.mem_utils.readWord32(self.cpu, ts + self.param.ts_pid)
                     ''' skip if exiting as recorded by syscall '''
-                    if str(pid) != self.exit_pid or self.cpu.cycles != self.exit_cycles:
+                    if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
                         #retval.append(ts_list[ts].pid)
                         retval[str(pid)] = ts
             else:
