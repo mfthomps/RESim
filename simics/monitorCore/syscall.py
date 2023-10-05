@@ -1153,7 +1153,8 @@ class Syscall():
             #    SIM_break_simulation('bind')
             
             for call_param in syscall_info.call_params:
-                if call_param.subcall == 'bind' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                self.lgr.debug('socketParse bind subcall %s' % call_param.subcall)
+                if call_param.subcall is not None and call_param.subcall.lower() == 'bind' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                      if call_param.match_param is not None:
                          go = None
                          if ss.port is not None:
@@ -1166,7 +1167,9 @@ class Syscall():
                                  self.lgr.error('invalid expression: %s' % pat)
                                  return None
                          
-                         #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                             self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                         else:
+                             self.lgr.debug('socketParse bind ss.port is None')
                          if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == ss.sa_data: 
                              self.lgr.debug('socketParse found match %s' % (call_param.match_param))
                              exit_info.call_params = call_param
@@ -2265,7 +2268,7 @@ class Syscall():
             if exit_info is not None:
                 if comm != 'tar':
                     name = callname+'-exit' 
-                    self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
+                    #self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
                     if self.stop_on_call:
                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params = cp
