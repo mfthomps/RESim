@@ -29,9 +29,9 @@ def getKeyValue(item):
     return key, value
 
 class DmodSeek():
-    def __init__(self, delta, pid, fd):
+    def __init__(self, delta, tid, fd):
         self.delta = delta
-        self.pid = pid
+        self.tid = tid
         self.fd = fd
 
 class Dmod():
@@ -56,7 +56,7 @@ class Dmod():
         self.operation = None
         self.count = 1
         self.fd = None
-        self.pid = None
+        self.tid = None
         self.fname_addr = None
         if os.path.isfile(path):
             with open(path) as fh:
@@ -179,7 +179,7 @@ class Dmod():
             rm_this = True
         return rm_this
 
-    def scriptReplace(self, cpu, s, addr, pid, fd):
+    def scriptReplace(self, cpu, s, addr, tid, fd):
         rm_this = False
         checkline = None
         lines = s.splitlines()
@@ -211,13 +211,13 @@ class Dmod():
             if len(checkline) != len(new_line):
                 ''' Adjust future _lseek calls, which are caught in syscall.py '''
                 delta = len(checkline) - len(new_line)
-                diddle_lseek = DmodSeek(delta, pid, fd)
+                diddle_lseek = DmodSeek(delta, tid, fd)
                 operation = ['_llseek', 'close']
                 call_params = syscall.CallParams('DmodReplace', operation, diddle_lseek)        
                 cell = self.top.getCell(cell_name=self.cell_name)
                 ''' Provide explicit cell to avoid defaulting to the contextManager.  Cell is typically None.'''
                 self.top.runTo(operation, call_params, run=False, ignore_running=True, cell_name=self.cell_name, cell=cell)
-                self.lgr.debug('Dmod set syscall for lseek diddle delta %d pid:%d fd %d' % (delta, pid, fd))
+                self.lgr.debug('Dmod set syscall for lseek diddle delta %d tid:%s fd %d' % (delta, tid, fd))
             else:
                 self.lgr.debug('replace caused no change %s\n%s' % (checkline, new_line))
         else:
@@ -262,7 +262,7 @@ class Dmod():
                 SIM_run_alone(self.stopAlone, self.fiddle)
         return rm_this
 
-    def checkString(self, cpu, addr, count, pid=None, fd=None):
+    def checkString(self, cpu, addr, count, tid=None, fd=None):
         ''' Modify content at the given addr if content meets the Dmod criteria '''
         retval = False
         byte_array = self.mem_utils.getBytes(cpu, count, addr)
@@ -274,7 +274,7 @@ class Dmod():
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
         elif self.kind == 'script_replace':
-            rm_this = self.scriptReplace(cpu, s, addr, pid, fd)
+            rm_this = self.scriptReplace(cpu, s, addr, tid, fd)
         elif self.kind == 'full_replace':
             rm_this = self.fullReplace(cpu, s, addr)
         elif self.kind == 'match_cmd':
@@ -309,8 +309,8 @@ class Dmod():
     def getComm(self):
         return self.comm
 
-    def setPid(self, pid):
-        self.pid = pid
+    def setPid(self, tid):
+        self.tid = tid
 
     def setFD(self, fd):
         self.fd = fd
@@ -342,7 +342,7 @@ class Dmod():
     def resetOpen(self):
         self.lgr.debug('Dmod resetOpen')
         self.fd = None
-        self.pid = None
+        self.tid = None
 
     def getCellName(self):
         return self.cell_name
