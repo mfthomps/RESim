@@ -1613,7 +1613,9 @@ class reverseToCall():
             self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
             #rev_call_pickle = pickle.load( open(rev_call_file, 'rb') ) 
             self.recent_cycle = pickle.load( open(rev_call_file, 'rb') ) 
-            for tid in self.recent_cycle:
+            pickle_cycle = pickle.load( open(rev_call_file, 'rb') ) 
+            for tid in pickle_cycle:
+                self.recent_cycle[str(tid)] = pickle_cycle[tid]
                 self.lgr.debug('loadPickle tid %s frame %s' % (tid, str(self.recent_cycle[tid])))
             #self.recent_cycle = rev_call_pickle['recent_cycle']
 

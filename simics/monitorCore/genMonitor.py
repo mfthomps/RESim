@@ -1034,7 +1034,7 @@ class GenMonitor():
             if tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                 if frame is None:
-                    print('frame for %d was none' % tid)
+                    print('frame for %s was none' % tid)
                     continue
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
                 if call == 'socketcall' or call.upper() in net.callname:
