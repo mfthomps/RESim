@@ -4,10 +4,10 @@ import elfText
 from resimHaps import *
 ''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
-    def __init__(self, top, cpu, cell_name, pid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
+    def __init__(self, top, cpu, cell_name, tid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
         self.top = top
         self.traceProcs = traceProcs
-        self.parent_pid = pid
+        self.parent_tid = tid
         self.cpu = cpu
         self.cell_name = cell_name
         self.param = param
@@ -66,12 +66,12 @@ class TrackThreads():
         if self.execve_hap is not None:
             self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
             self.execve_hap = None
-        for pid in self.exit_hap:
-            self.context_manager.genDeleteHap(self.exit_hap[pid], immediate=immediate)
+        for tid in self.exit_hap:
+            self.context_manager.genDeleteHap(self.exit_hap[tid], immediate=immediate)
         self.stopSOTrack(immediate)
-        for pid in self.first_mmap_hap:
-            #self.lgr.debug('syscall stopTrace, delete mmap hap pid %d' % pid)
-            self.context_manager.genDeleteHap(self.first_mmap_hap[pid], immediate=immediate)
+        for tid in self.first_mmap_hap:
+            #self.lgr.debug('syscall stopTrace, delete mmap hap tid:%s' % tid)
+            self.context_manager.genDeleteHap(self.first_mmap_hap[tid], immediate=immediate)
         self.first_mmap_hap = {}
         self.stopTrackClone(immediate)
         ''' try deleting both contexts '''
@@ -87,65 +87,65 @@ class TrackThreads():
         if self.execve_hap is None:
             return
         
-        cpu, comm, pid = self.task_utils.curProc() 
-        if not self.context_manager.amWatching(pid):
-            self.lgr.debug('TrackThreads  execveHap failed to find pid %s in context manager ' % (pid))
+        cpu, comm, tid = self.task_utils.curThread() 
+        if not self.context_manager.amWatching(tid):
+            self.lgr.debug('TrackThreads  execveHap failed to find tid %s in context manager ' % (tid))
             self.parseExecve()
             return
-        if len(self.context_manager.getWatchPids()) == 1:
-            self.lgr.debug('TrackThreads execveHap context manager pid list has only one, assume it is us? pid: %d' % pid)
+        if len(self.context_manager.getWatchTids()) == 1:
+            self.lgr.debug('TrackThreads execveHap context manager tid list has only one, assume it is us? tid: %d' % tid)
             return
-        self.lgr.debug('TrackThreads execveHap remove pid %d from context manager watch' % pid)
-        self.context_manager.rmTask(pid)
+        self.lgr.debug('TrackThreads execveHap remove tid:%s from context manager watch' % tid)
+        self.context_manager.rmTask(tid)
         self.parseExecve()
 
 
     def finishParseExecve(self, call_info, third, forth, memory):
-        cpu, comm, pid = self.task_utils.curProc() 
-        if cpu != call_info.cpu or pid != call_info.pid:
+        cpu, comm, tid = self.task_utils.curThread() 
+        if cpu != call_info.cpu or tid != call_info.tid:
             return
-        if pid not in self.finish_hap:
+        if tid not in self.finish_hap:
             return
-        prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.pid, call_info.cpu)
+        prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.tid, call_info.cpu)
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
         #self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
-        self.traceProcs.setName(pid, prog_string, None)
-        self.addSO(prog_string, pid)
-        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[pid])
-        RES_delete_breakpoint(self.finish_break[pid])
-        del self.finish_hap[pid]
-        del self.finish_break[pid]
+        self.traceProcs.setName(tid, prog_string, None)
+        self.addSO(prog_string, tid)
+        RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
+        RES_delete_breakpoint(self.finish_break[tid])
+        del self.finish_hap[tid]
+        del self.finish_break[tid]
 
-    def addSO(self, prog_name, pid):
+    def addSO(self, prog_name, tid):
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         if full_path is not None:
             #self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
-            elf_info = self.soMap.addText(full_path, prog_name, pid)
+            elf_info = self.soMap.addText(full_path, prog_name, tid)
             if elf_info is None:
                 self.lgr.debug('trackThreads addSO, could not get elf info from %s' % full_path)
 
     def parseExecve(self):
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, tid = self.task_utils.curThread() 
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
-        prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, False, cpu)
+        prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, False, cpu)
         
         if prog_string is None:
             ''' prog string not in ram, break on kernel read of the address and then read it '''
-            prog_addr = self.task_utils.getExecProgAddr(pid, cpu)
-            call_info = syscall.SyscallInfo(cpu, pid, None, None, None)
+            prog_addr = self.task_utils.getExecProgAddr(tid, cpu)
+            call_info = syscall.SyscallInfo(cpu, tid, None, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
-                self.lgr.error('trackThreads parseExecve zero prog_addr pid %d' % pid)
-                SIM_break_simulation('trackThreads parseExecve zero prog_addr pid %d' % pid)
-            self.finish_break[pid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
-            self.finish_hap[pid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[pid])
+                self.lgr.error('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+                SIM_break_simulation('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+            self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
+            self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[tid])
             return
         else:
-            self.traceProcs.setName(pid, prog_string, None)
-            self.addSO(prog_string, pid)
+            self.traceProcs.setName(tid, prog_string, None)
+            self.addSO(prog_string, tid)
 
 
     def trackSO(self):
@@ -165,22 +165,22 @@ class TrackThreads():
         ''' TBD remove not used '''
         if self.clone_hap is None:
             return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, tid = self.task_utils.curThread() 
         if cpu.architecture == 'arm':
             frame = self.task_utils.frameFromRegs()
         else:
             frame = self.task_utils.frameFromStackSyscall()
         flags = frame['param1']
         child_stack = frame['param2']
-        self.lgr.debug('cloneHap pid:%d flags:0x%x  stack:0x%x' % (pid, flags, child_stack))
-        if pid not in self.child_stacks:
-            self.child_stacks[pid] = []
-        self.child_stacks[pid].append(child_stack)
+        self.lgr.debug('cloneHap tid:%s flags:0x%x  stack:0x%x' % (tid, flags, child_stack))
+        if tid not in self.child_stacks:
+            self.child_stacks[tid] = []
+        self.child_stacks[tid].append(child_stack)
 
-    def getChildStack(self, pid):
+    def getChildStack(self, tid):
         ''' TBD assumes first scheduled clone is the one first created '''
-        if pid in self.child_stacks and len(self.child_stacks[pid]) > 0:
-            return self.child_stacks[pid].pop(0)
+        if tid in self.child_stacks and len(self.child_stacks[tid]) > 0:
+            return self.child_stacks[tid].pop(0)
         else:
             return None
 

@@ -47,15 +47,15 @@ class ReverseTrack():
         self.bookmarks = bookmarks
         reg = reg.lower()
         self.reg = reg
-        pid, cpu = self.context_manager.getDebugPid() 
+        tid, cpu = self.context_manager.getDebugTid() 
         self.cpu = cpu
         value = self.mem_utils.getRegValue(cpu, reg)
         self.value = value
-        self.lgr.debug('revTaintReg pid:%d for %s value 0x%x' % (pid, reg, value))
+        self.lgr.debug('revTaintReg tid:%s for %s value 0x%x' % (tid, reg, value))
         if self.top.reverseEnabled():
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
-                self.lgr.debug('revTaintReg stack trace is None, wrong pid?')
+                self.lgr.debug('revTaintReg stack trace is None, wrong tid?')
                 return
             frames = st.getFrames(20)
             mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)

@@ -155,7 +155,7 @@ class WinDelay():
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
                 # TBD add traceFiles to windows
                 #if self.traceFiles is not None:
-                #    self.traceFiles.read(pid, exit_info.old_fd, byte_array)
+                #    self.traceFiles.read(tid, exit_info.old_fd, byte_array)
             else:
                 read_data = '<< NOT MAPPED >>'
 
@@ -204,16 +204,16 @@ class WinDelay():
         self.count_write_hap = None
 
     def toUserAlone(self, dumb):
-        pid = self.top.getPID()
-        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, pid)
-        self.lgr.debug('windDelay toUserAlone, set mode hap for pid %d' % pid)
+        tid = self.top.getTID()
+        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, tid)
+        self.lgr.debug('windDelay toUserAlone, set mode hap for tid:%s' % tid)
 
-    def modeChanged(self, want_pid, one, old, new):
+    def modeChanged(self, want_tid, one, old, new):
         if self.mode_hap is None:
             return
-        this_pid = self.top.getPID()
-        if want_pid != this_pid:
-            self.lgr.debug('windDelay mode changed wrong pid, wanted %d got %d' % (want_pid, this_pid))
+        this_tid = self.top.getTID()
+        if want_tid != this_tid:
+            self.lgr.debug('windDelay mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         cpl = memUtils.getCPL(self.cpu)
         if new == Sim_CPU_Mode_Supervisor:

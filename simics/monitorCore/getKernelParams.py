@@ -868,7 +868,7 @@ class GetKernelParams():
         self.hack_stop = False
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         self.lgr.debug('entryModeChanged eip 0x%x compat32: %r cycles: 0x%x' % (eip, compat32, self.cpu.cycles)) 
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         if pid is None:
             self.lgr.debug('entryModeChanged failed to get pid, continue?')
             return
@@ -1298,7 +1298,7 @@ class GetKernelParams():
             return
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('stopCompat32Hap pid:%d instruct is %s prev %s  eip 0x%x  len %d' % (pid, instruct[1], self.prev_instruct, eip, instruct[0]))
        
         if self.prev_instruct == 'sysenter' and self.param.compat_32_entry is None:
@@ -1372,7 +1372,7 @@ class GetKernelParams():
         SIM_run_alone(self.setPageFaultHap, None)
         
     def findUserEIP(self, user_eip, third, forth, memory):
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('findUserEIP of 0x%x pid %d wanted %d' % (user_eip, pid, self.current_pid))
         if self.current_pid != pid:
             return
@@ -1416,7 +1416,7 @@ class GetKernelParams():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if instruct[1].startswith('int 128'):
                 eax = self.mem_utils.getRegValue(self.cpu, 'eax')
-                dumb, comm, self.current_pid = self.taskUtils.curProc() 
+                dumb, comm, self.current_pid = self.taskUtils.curThread() 
                 self.lgr.debug('fixFrameModeChanged eip is 0x%x pid %d' % (eip, self.current_pid))
                 #SIM_break_simulation('here maybe?')
                 SIM_run_alone(self.fixFrameHap, eip)

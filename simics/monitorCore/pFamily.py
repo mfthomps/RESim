@@ -5,10 +5,10 @@ def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
 class Prec():
-    def __init__(self, cpu, proc, pid=None):
+    def __init__(self, cpu, proc, tid=None):
         self.cpu = cpu
         self.proc = proc
-        self.pid = pid
+        self.tid = tid
         self.debugging = False
 
 class Pfamily():
@@ -25,28 +25,29 @@ class Pfamily():
 
     def getPfamily(self):
         retval = []
-        cpu, comm, pid = self.task_utils.curProc()
-        retval.append(Prec(cpu, comm, pid))
+        cpu, comm, tid = self.task_utils.curThread()
+        retval.append(Prec(cpu, comm, tid))
         tasks = self.task_utils.getTaskStructs()
         tabs = ''
-        while pid != 0:
-            parent_pid, parent_comm, parent_parent = self.parentInfo(pid, tasks)
-            if parent_pid is None:
+        while tid != '0':
+            parent_tid, parent_comm, parent_parent = self.parentInfo(tid, tasks)
+            if parent_tid is None:
                 return retval
-            if parent_pid != 0:
-                retval.append(Prec(cpu, parent_comm, parent_pid))
-            pid = parent_pid
+            if parent_tid != '0':
+                retval.append(Prec(cpu, parent_comm, parent_tid))
+            tid = parent_tid
         return retval
 
-    def parentInfo(self, pid, tasks):
+    def parentInfo(self, tid, tasks):
+        # TBD for windows?
         for t in tasks:
-            if tasks[t].pid == pid:
+            if str(tasks[t].pid) == tid:
                 if tasks[t].group_leader != t:
                     prec_addr = tasks[t].group_leader
                 else:
                     prec_addr = tasks[t].parent
                 if prec_addr in tasks:
-                    return tasks[prec_addr].pid, tasks[prec_addr].comm, tasks[prec_addr].parent
+                    return str(tasks[prec_addr].pid), tasks[prec_addr].comm, tasks[prec_addr].parent
                 else:
                     break
         return None, None, None
@@ -56,8 +57,8 @@ class Pfamily():
         #if cpu != look4_prec.cpu:
         #    self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
         #    return
-        cpu, comm, pid = self.task_utils.curProc() 
-        prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(pid, None, cpu)
+        cpu, comm, tid = self.task_utils.curThread() 
+        prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, None, cpu)
         if look4_prec.proc is not None:
             if prog_string is None:
                 return
@@ -79,18 +80,18 @@ class Pfamily():
         dumb = pfamily.pop(0)
         flen = len(pfamily)
         if flen > 0:
-            self.lgr.debug('flen is %d, parent_pid is %d  prev %s' % (flen, pfamily[0].pid, str(self.prev_parent)))
-            if pfamily[0].pid != self.prev_parent:
+            self.lgr.debug('flen is %d, parent_tid is %s  prev %s' % (flen, pfamily[0].tid, str(self.prev_parent)))
+            if pfamily[0].tid != self.prev_parent:
                 tabs = ''
                 while len(pfamily) > 0:
                     prec = pfamily.pop()
-                    self.report_fh.write('%s%5d  %s\n' % (tabs, prec.pid, prec.proc))
+                    self.report_fh.write('%s%5s  %s\n' % (tabs, prec.tid, prec.proc))
                     tabs += '\t'
-                    self.prev_parent = prec.pid
-                self.report_fh.write('%s%5d  %s %s\n' % (tabs, pid, prog_string, arg_string))
+                    self.prev_parent = prec.tid
+                self.report_fh.write('%s%5s  %s %s\n' % (tabs, tid, prog_string, arg_string))
                 self.prev_tabs = tabs
             else:
-                self.report_fh.write('%s%5d  %s %s\n' % (self.prev_tabs, pid, prog_string, arg_string))
+                self.report_fh.write('%s%5s  %s %s\n' % (self.prev_tabs, tid, prog_string, arg_string))
         else:
             self.report_fh.write('%s %s\n' % (prog_string, arg_string))
             self.prev_parent = None
@@ -98,7 +99,7 @@ class Pfamily():
         if look4_prec.proc is not None:
             self.report_fh.flush() 
             SIM_break_simulation('execve %s' % prog_string)
-        #print('execve from %d (%s) prog_string %s' % (pid, comm, prog_string))
+        #print('execve from %d (%s) prog_string %s' % (tid, comm, prog_string))
         #for arg in arg_string_list:
         #    print(arg)
          

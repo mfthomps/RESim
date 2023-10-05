@@ -532,7 +532,7 @@ class WatchMarks():
                 cycle = ' '
                 if verbose:
                     cycle = ' 0x%x ' % mark.cycle
-                print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
+                print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
                 i += 1
             print('Begin active watch marks.')
         elif len(self.stale_marks)>0:
@@ -542,24 +542,24 @@ class WatchMarks():
             cycle = ' '
             if verbose:
                 cycle = ' 0x%x ' % mark.cycle
-            print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
+            print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, pid, mark):
+        def __init__(self, return_cycle, call_cycle, ip, tid, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
-            self.pid = pid
+            self.tid = tid
             self.mark = mark
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
             retval['ip'] = self.ip
-            retval['pid'] = self.pid
+            retval['tid'] = self.tid
             retval['msg'] = self.mark.getMsg()
             return retval
 
@@ -767,10 +767,10 @@ class WatchMarks():
                 self.lgr.debug('dataWatch addWatchMark got so_map')
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, pid, mark)
+        wm = self.WatchMark(cycles, self.call_cycle, ip, tid, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -797,7 +797,7 @@ class WatchMarks():
         else:
             st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
             if st is None:
-                self.lgr.debug('getStackBase stack trace is None, wrong pid?')
+                self.lgr.debug('getStackBase stack trace is None, wrong tid?')
                 return
             frames = st.getFrames(2)
             for f in frames:

@@ -52,7 +52,7 @@ class WinCallExit():
         self.traceProcs = traceProcs
         self.exit_info = {}
         self.matching_exit_info = None
-        self.exit_pids = {}
+        self.exit_tids = {}
         self.trace_procs = []
         self.exit_hap = {}
         self.exit_names = {} 
@@ -82,7 +82,7 @@ class WinCallExit():
         else:
             return False
 
-    def handleExit(self, exit_info, pid, comm):
+    def handleExit(self, exit_info, tid, comm):
         ''' 
            Invoked on (almost) return to user space after a system call.
            Includes parameter checking to see if the call meets criteria given in
@@ -91,8 +91,8 @@ class WinCallExit():
         if exit_info is None:
             ''' TBD why does this get called, windows and linux?'''
             return False
-        if pid == 0:
-            #self.lgr.debug('winCallExit cell %s pid is zero' % (self.cell_name))
+        if tid == 0:
+            #self.lgr.debug('winCallExit cell %s tid is zero' % (self.cell_name))
             return False
 
         if self.dataWatch is not None and not self.dataWatch.disabled:
@@ -108,13 +108,12 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        #self.lgr.debug('winCallExit cell %s callnum %d name %s  pid %d  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, pid, exit_info.frame['param1']))
-        pid_thread = self.task_utils.getPidAndThread()
+        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
         
-        trace_msg = 'pid:%s (%s) return from %s with status %s (0x%x)' % (pid_thread, comm, callname, status, eax)
+        trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
 
         ''' who taught bill about error codes? '''
         #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
@@ -153,12 +152,12 @@ class WinCallExit():
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
                 if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
-                    self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
-                    self.soMap.addFile(exit_info.fname, fd, pid)
+                    self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
+                    self.soMap.addFile(exit_info.fname, fd, tid)
 
                     if callname == 'OpenSection':
                         self.lgr.debug('this is an OpenSection WITHOUT an Open/CreateFile --> make section')
-                        self.soMap.createSection(fd, fd, pid)
+                        self.soMap.createSection(fd, fd, tid)
                 self.openCallParams(exit_info)
             else:
                 exit_info.call_params = None
@@ -173,8 +172,8 @@ class WinCallExit():
                     self.lgr.debug('winCallExit %s' % (trace_msg))
 
                     if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
-                        self.lgr.debug('adding fname: %s with fd: %d to pid: %d' % (exit_info.fname, fd, pid))
-                        self.soMap.addFile(exit_info.fname, fd, pid)
+                        self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
+                        self.soMap.addFile(exit_info.fname, fd, tid)
                     self.openCallParams(exit_info)
 
                 else:
@@ -212,7 +211,7 @@ class WinCallExit():
             fd = exit_info.old_fd
             if fd is not None:
                 section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
-                self.soMap.createSection(fd, section_handle, pid)
+                self.soMap.createSection(fd, section_handle, tid)
                 trace_msg = trace_msg+' Handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
             else:
                 trace_msg = trace_msg+' handle was None'
@@ -225,9 +224,9 @@ class WinCallExit():
             if load_address is not None and size is not None:
                 trace_msg = trace_msg+' section_handle: 0x%x load_address: 0x%x size: 0x%x' % (section_handle, load_address, size)
                 self.lgr.debug('winCallExit '+trace_msg)
-                self.soMap.mapSection(pid, section_handle, load_address, size)
+                self.soMap.mapSection(tid, section_handle, load_address, size)
             else:
-                self.lgr.debug('winCallExit %s pid:%d (%s) returned bad load address or size?' % (callname, pid, comm))
+                self.lgr.debug('winCallExit %s tid:%s (%s) returned bad load address or size?' % (callname, tid, comm))
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -253,7 +252,7 @@ class WinCallExit():
         elif callname in ['QueryValueKey', 'EnumerateValueKey']: 
             timer_syscall = self.top.getSyscall(self.cell_name, 'QueryValueKey')
             if timer_syscall is not None:
-                timer_syscall.checkTimeLoop('gettimeofday', pid)
+                timer_syscall.checkTimeLoop('gettimeofday', tid)
             if self.dataWatch is not None:
                 self.lgr.debug('winCallExit %s doDataWatch call setRange for 0x%x count 0x%x' % (callname, exit_info.retval_addr, exit_info.count))
                 self.dataWatch.setRange(exit_info.retval_addr, exit_info.count, msg=trace_msg, 
@@ -369,12 +368,12 @@ class WinCallExit():
         return True
 
     def stopTrace(self):
-        for context in self.exit_pids:
+        for context in self.exit_tids:
             #self.lgr.debug('sharedSyscall stopTrace context %s' % str(context))
             for eip in self.exit_hap:
                 self.context_manager.genDeleteHap(self.exit_hap[eip], immediate=True)
                 #self.lgr.debug('sharedSyscall stopTrace removed exit hap for eip 0x%x context %s' % (eip, str(context)))
-            self.exit_pids[context] = {}
+            self.exit_tids[context] = {}
         for eip in self.exit_hap:
             self.exit_info[eip] = {}
 

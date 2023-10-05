@@ -185,22 +185,19 @@ class WinProg():
             return
         #self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
-        cur_proc = self.task_utils.getCurTaskRec(cur_thread_in=cur_thread)
-        pid_ptr = cur_proc + self.param.ts_pid
-        pid = self.mem_utils.readWord(self.cpu, pid_ptr)
-        self.context_manager.newProg(prog_string, pid)
+        tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
+        self.context_manager.newProg(prog_string, tid)
         if cur_proc not in self.current_tasks:
-            comm = self.mem_utils.readString(self.cpu, cur_proc+self.param.ts_comm, 16)
             proc = ntpath.basename(prog_string)
             self.lgr.debug('winProg does %s start with %s?' % (proc, comm))
             if proc.startswith(comm):
-                self.lgr.debug('winProg toNewProcHap got new %s pid:%d' % (comm, pid))
+                self.lgr.debug('winProg toNewProcHap got new %s tid:%s' % (comm, tid))
                 SIM_run_alone(self.rmNewProcHap, self.cur_task_hap)
                 self.cur_task_hap = None
-                self.task_utils.addProgram(pid, prog_string)
-                self.context_manager.addTask(pid)
+                self.task_utils.addProgram(tid, prog_string)
+                self.context_manager.addTask(tid)
 
-                self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.findText, pid)
+                self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.findText, tid)
 
                 '''
                 find_text = stopFunction.StopFunction(self.findText, [], nest=False)
@@ -228,9 +225,9 @@ class WinProg():
     def rmFindTextHap(self, dumb):
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
 
-    def runToText(self, want_pid):
-        self.lgr.debug('winProg runToText want_pid %d' % want_pid)
-        eproc = self.task_utils.getCurTaskRec()
+    def runToText(self, want_tid):
+        self.lgr.debug('winProg runToText want_tid %s' % want_tid)
+        eproc = self.task_utils.getCurThreadRec()
         load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
@@ -245,21 +242,21 @@ class WinProg():
             return 
         text_addr = load_addr + text_offset
         self.lgr.debug('winProg runToText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_pid, load_addr, size, machine, image_base, text_offset)
+        self.so_map.addText(self.prog_string, want_tid, load_addr, size, machine, image_base, text_offset)
         self.top.trackThreads()
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
-        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
+        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_tid, proc_break, 'text_hap')
 
-    def findText(self, want_pid, one, old, new):
+    def findText(self, want_tid, one, old, new):
         if self.mode_hap is None:
             return
-        cpu, comm, this_pid = self.task_utils.curProc() 
-        if want_pid != this_pid:
-            self.lgr.debug('findText, mode changed but wrong pid, wanted %d got %d' % (want_pid, this_pid))
+        cpu, comm, this_tid = self.task_utils.curThread() 
+        if want_tid != this_tid:
+            self.lgr.debug('findText, mode changed but wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
-        self.lgr.debug('winProg findText pid %d' % this_pid)
+        self.lgr.debug('winProg findText tid %s' % this_tid)
         SIM_run_alone(self.rmFindTextHap, None)
-        SIM_run_alone(self.runToText, want_pid)
+        SIM_run_alone(self.runToText, want_tid)
 
     def rmHapAlone(self, param_name):
         self.top.rmSyscall(param_name, context = self.context_manager.getDefaultContextName())
@@ -268,10 +265,10 @@ class WinProg():
         self.lgr.debug('winMonitor debugAlone, call top debug')
         SIM_run_alone(self.top.debug, False)
 
-    def textHap(self, pid, third, forth, memory):
+    def textHap(self, tid, third, forth, memory):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        self.lgr.debug('winProg textHap record stack base pid:%d sp 0x%x' % (pid, sp))
-        self.top.recordStackBase(pid, sp)
+        self.lgr.debug('winProg textHap record stack base tid:%s sp 0x%x' % (tid, sp))
+        self.top.recordStackBase(tid, sp)
         self.context_manager.genDeleteHap(self.text_hap)
         self.lgr.debug('winProg textHap call stopAndAction')
         SIM_run_alone(self.top.stopAndGo, self.debugAlone)

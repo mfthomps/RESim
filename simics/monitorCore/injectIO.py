@@ -36,7 +36,7 @@ import pickle
 from resimHaps import *
 import resimUtils
 class InjectIO():
-    def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
+    def __init__(self, top, cpu, cell_name, tid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
@@ -45,7 +45,7 @@ class InjectIO():
         self.stay = stay
         self.cpu = cpu
         self.cell_name = cell_name
-        self.pid = pid
+        self.tid = tid
         self.backstop = backstop
         self.dataWatch = dataWatch
         self.bookmarks = bookmarks
@@ -61,7 +61,7 @@ class InjectIO():
         self.break_on = break_on
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
-            so_entry = self.top.getSOAddr(fname, pid=self.pid)
+            so_entry = self.top.getSOAddr(fname, tid=self.tid)
             if so_entry is None:
                 self.lgr.error('injectIO no SO entry for %s' % prog)
             if so_entry.address is not None:
@@ -251,8 +251,8 @@ class InjectIO():
                     return 
 
             self.top.stopDebug()
-            self.lgr.debug('injectIO call debugPidGroup')
-            self.top.debugPidGroup(self.pid, to_user=False, track_threads=False) 
+            self.lgr.debug('injectIO call debugTidGroup')
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             if not self.no_page_faults:
@@ -270,7 +270,7 @@ class InjectIO():
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
         elif self.trace_all and self.target_proc is None:
-            self.top.debugPidGroup(self.pid, to_user=False, track_threads=False) 
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()

@@ -11,7 +11,7 @@ class CloneChild():
         self.task_utils = task_utils
         self.param = param
         self.context_manager = context_manager
-        self.cpu, self.comm, self.pid = self.task_utils.curProc() 
+        self.cpu, self.comm, self.pid = self.task_utils.curThread() 
         callnum = task_utils.syscallNumber('clone')
         entry = self.task_utils.getSyscallEntry(callnum)
         self.lgr.debug('cloneChild callnum is %s entry 0x%x' % (callnum, entry))
@@ -29,7 +29,7 @@ class CloneChild():
         if cpu != self.cpu:
             self.lgr.debug('cloneChild syscallHap, wrong cpu %s %s' % (cpu.name, self.cpu.name))
             return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         if self.pid != pid: 
             self.lgr.debug('cloneChild syscallHap looked for pid %d, found %d.  Do nothing' % (self.pid, pid))
             return
@@ -50,7 +50,7 @@ class CloneChild():
     def exitHap(self, dumb, third, forth, memory):
         if self.exit_hap is None:
             return
-        cpu, comm, pid = self.task_utils.curProc() 
+        cpu, comm, pid = self.task_utils.curThread() 
         self.lgr.debug('cloneChild exitHap pid %d' % pid)
         if self.cpu != cpu:
                 return

@@ -124,11 +124,11 @@ class AFL():
         self.sock.settimeout(2)
         self.server_address = ('localhost', self.port)
         self.iteration = 1
-        self.pid = self.top.getPID()
+        self.tid = self.top.getTID()
         if target_proc is None:
-            self.target_pid = self.pid
+            self.target_tid = self.tid
         else:
-            self.target_pid = None
+            self.target_tid = None
         self.total_hits = 0
         self.bad_trick = False
         self.trace_snap1 = None
@@ -164,7 +164,7 @@ class AFL():
         self.total_cycles = 0
         self.tmp_time = time.time()
         self.fname = fname
-        self.pid_list = []
+        self.tid_list = []
         self.commence_coverage = None
         self.commence_after_exits = None
         self.counter_bp = None
@@ -175,7 +175,7 @@ class AFL():
 
         self.test_file = test_file
         if target_proc is None:
-            self.top.debugPidGroup(self.pid, to_user=False, track_threads=False)
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
             self.finishInit()
             self.disableReverse()
 
@@ -196,7 +196,7 @@ class AFL():
 
         # return to origin and run forward again, this time counting syscall exits
         self.exit_eip = self.top.getEIP(cpu=self.target_cpu)
-        self.pid = self.top.getPID(target=self.target_cell)
+        self.tid = self.top.getTID(target=self.target_cell)
 
         cmd = 'skip-to bookmark = bookmark0'
         cli.quiet_run_command(cmd)
@@ -215,9 +215,9 @@ class AFL():
     def counterHap(self, dumb, third, break_num, memory):
         if self.counter_hap is None:
             return
-        pid = self.top.getPID(target=self.target_cell)
-        if pid != self.target_pid:
-            #self.lgr.debug('afl counterHap wrong pid %d, wanted %d' % (pid, self.target_pid))
+        tid = self.top.getTID(target=self.target_cell)
+        if tid != self.target_tid:
+            #self.lgr.debug('afl counterHap wrong tid:%s, wanted %d' % (tid, self.target_tid))
             return
         self.exit_counter = self.exit_counter+1
         #self.lgr.debug('afl counterHap, count now %d' % self.exit_counter)
@@ -237,14 +237,14 @@ class AFL():
         ''' Now in target process'''
         '''
         self.coverage = self.top.getCoverage()
-        self.pid = self.top.getPID(target=self.target_cell)
+        self.tid = self.top.getTID(target=self.target_cell)
         
-        self.pid_list = self.context_manager.getWatchPids()
-        self.lgr.debug('afl aflInitCallback %d pids in list' % len(self.pid_list))
+        self.tid_list = self.context_manager.getWatchPids()
+        self.lgr.debug('afl aflInitCallback %d tids in list' % len(self.tid_list))
 
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         analysis_path = self.top.getAnalysisPath(self.fname)
-        self.coverage.enableCoverage(self.pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+        self.coverage.enableCoverage(self.tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
             afl=True, fname=analysis_path)
         self.coverage.doCoverage()
         cmd = 'skip-to bookmark = bookmark0'
@@ -260,9 +260,9 @@ class AFL():
         self.goN(0) 
         '''
 
-        self.target_pid = self.top.getPID()
+        self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('afl aflInitCallback. target pid: %d finish init to set coverage and such' % self.target_pid)
+        self.lgr.debug('afl aflInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
         if self.targetFD is not None and self.count > 0:
             ''' run to IO before finishing init '''
             self.lgr.debug('afl aflInitCallback targetFD 0x%x' % self.targetFD)
@@ -281,8 +281,8 @@ class AFL():
         cli.quiet_run_command(cmd)
         self.disableReverse()
         self.top.setTarget(self.cell_name)
-        pid = self.top.getPID()
-        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s pid: %d' % (self.cell_name, pid))
+        tid = self.top.getTID()
+        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
         self.goN(0)
 
     def disableReverse(self):
@@ -291,15 +291,15 @@ class AFL():
         cli.quiet_run_command('save-snapshot name = origin')
 
     def finishInit(self, dumb=None):
-            self.pid_list = self.context_manager.getWatchPids()
-            self.lgr.debug('afl finishInit %d pids in list' % len(self.pid_list))
+            self.tid_list = self.context_manager.getWatchTids()
+            self.lgr.debug('afl finishInit %d tids in list' % len(self.tid_list))
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             #if self.orig_buffer is not None:
             #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             analysis_path = self.top.getAnalysisPath(self.fname)
             self.coverage = self.top.getCoverage()
-            self.coverage.enableCoverage(self.target_pid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
+            self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=analysis_path, linear=self.linear, create_dead_zone=self.create_dead_zone, record_hits=False)
 
             if not self.linear:
@@ -356,12 +356,12 @@ class AFL():
             else:
                 status = self.coverage.getStatus()
             if status == AFL_OK:
-                #pid_list = self.context_manager.getWatchPids()
-                if len(self.pid_list) == 0:
-                    self.lgr.error('afl no pids from getThreadPids')
-                for pid in self.pid_list:
-                    if self.page_faults.hasPendingPageFault(pid):
-                        self.lgr.debug('afl finishUp found pending page fault for pid %d' % pid)
+                #tid_list = self.context_manager.getWatchTids()
+                if len(self.tid_list) == 0:
+                    self.lgr.error('afl no tids from getThreadTids')
+                for tid in self.tid_list:
+                    if self.page_faults.hasPendingPageFault(tid):
+                        self.lgr.debug('afl finishUp found pending page fault for tid:%s' % tid)
                         status = AFL_CRASH
                         break
             self.page_faults.stopWatchPageFaults()
@@ -520,7 +520,7 @@ class AFL():
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang, watch exits, cpu cycle was 0x%x context %s' % (self.target_cpu.cycles, self.target_cpu.current_context))
-            self.coverage.watchExits(pid=self.pid)
+            self.coverage.watchExits(tid=self.tid)
 
         if self.write_data is None:
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 

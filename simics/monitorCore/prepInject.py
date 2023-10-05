@@ -59,8 +59,8 @@ class PrepInject():
         SIM_run_command('si')
         self.select_return_ip = self.top.getEIP(self.cpu)
         self.ret_cycle = self.cpu.cycles
-        pid = self.top.getPID()
-        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.select_return_ip, pid, self.cpu.cycles))
+        tid = self.top.getTID()
+        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
@@ -71,7 +71,7 @@ class PrepInject():
             previous = cycle - 1
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
             self.select_call_ip = self.top.getEIP(self.cpu)
-            self.lgr.debug('instrumentSelect skipped to call: 0x%x pid:%d cycle is 0x%x' % (self.select_call_ip, pid, self.cpu.cycles))
+            self.lgr.debug('instrumentSelect skipped to call: 0x%x tid:%s cycle is 0x%x' % (self.select_call_ip, tid, self.cpu.cycles))
             ''' now back to return '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
         self.top.restoreDebugBreaks()
@@ -93,8 +93,8 @@ class PrepInject():
         else:
             self.lgr.error('prepInject finishNoCall falled to get syscall ?')
 
-    def pidScheduled(self, dumb):
-        self.lgr.debug('prepInject pidScheduled')
+    def tidScheduled(self, dumb):
+        self.lgr.debug('prepInject tidScheduled')
         pinfo = self.top.pageInfo(self.exit_info.retval_addr, quiet=True)
         self.lgr.debug('%s' % pinfo.valueString())
         self.top.stopAndGo(self.finishNoCall)
@@ -126,14 +126,14 @@ class PrepInject():
         else:
             self.return_ip = current_ip
         self.ret_cycle = self.cpu.cycles
-        pid = self.top.getPID()
-        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, 
-              current_ip, pid, self.cpu.cycles))
+        tid = self.top.getTID()
+        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x tid:%s cycle is 0x%x' % (self.snap_name, self.return_ip, 
+              current_ip, tid, self.cpu.cycles))
 
         ''' Find the exit info from the system call that did the read.'''
         self.exit_info = self.top.getMatchingExitInfo()
 
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         length = self.getLength()
 
         frame, cycle = self.top.getRecentEnterCycle()
@@ -143,7 +143,7 @@ class PrepInject():
             self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
             if self.top.didMagicOrigin():
                 self.top.goToOrigin()
-                self.top.toPid(pid, callback = self.pidScheduled)
+                self.top.totid(tid, callback = self.tidScheduled)
             else:
                 print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
                 print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
@@ -159,7 +159,7 @@ class PrepInject():
 
             ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
             orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
-            self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
+            self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
             ''' skip back to return so the snapshot is ready to inject input '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
             current_ip = self.top.getEIP(self.cpu)

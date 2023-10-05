@@ -211,7 +211,7 @@ class pageFaults():
     def cr2_read_callback(self, my_args, obj, num):
         cell_name = self.top.getTopComponentName(my_args.cpu)
         if self.cell_config.os_type[cell_name] == 'linux':
-            cpu, cur_addr, comm, pid =  self.os_p_utils[cell_name].currentProcessInfo()
+            dum_cpu, comm, tid = self.task_utils.curThread()
         else:
             cpu, cur_addr, comm, pid = self.os_p_utils[cell_name].getPinfo(my_args.cpu)
         if pid == my_args.pid:
