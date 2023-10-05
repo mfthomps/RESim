@@ -63,7 +63,7 @@ class SOMap():
                 for tid in self.so_file_map:
                     if tid in self.text_prog:
                         full_path = self.targetFS.getFull(self.text_prog[tid], lgr=self.lgr)
-                        self.lgr.debug('soMap loadPickle tid in text_prog %d full is %s' % (tid, full_path))
+                        self.lgr.debug('soMap loadPickle tid in text_prog %s full is %s' % (tid, full_path))
                         elf_info = elfText.getText(full_path, self.lgr)
                         if elf_info.text_start is not None:
                             self.prog_text_start[tid] = elf_info.text_start        
@@ -76,6 +76,41 @@ class SOMap():
                 self.prog_start = {}
                 self.prog_end = {}
                 self.text_prog = {}
+
+            ''' pid to tid compatability'''
+            add_so_addr_map = {}
+            for pid in self.so_addr_map:
+                if type(pid) is int:
+                    add_so_addr_map[str(pid)] = self.so_addr_map[pid]
+            for tid in add_so_addr_map:
+                self.so_addr_map[tid] = add_so_addr_map[tid]
+
+            add_so_file_map = {}
+            for pid in self.so_file_map:
+                if type(pid) is int:
+                    add_so_file_map[str(pid)] = self.so_file_map[pid]
+
+            for tid in add_so_file_map:
+                self.so_file_map[tid] = add_so_file_map[tid]
+
+            add_text_prog = {}
+            for pid in self.text_prog:
+                if type(pid) is int:
+                    add_text_prog[str(pid)] = self.text_prog[pid]
+            for tid in add_text_prog:
+                self.text_prog[tid] = add_text_prog[tid]
+            add_prog_start = {}
+            for pid in self.prog_start:
+                if type(pid) is int:
+                    add_prog_start[str(pid)] = self.prog_start[pid]
+            for tid in add_prog_start:
+                self.prog_start[tid] = add_prog_start[tid]
+            add_prog_end = {}
+            for pid in self.prog_end:
+                if type(pid) is int:
+                    add_prog_end[str(pid)] = self.prog_end[pid]
+            for tid in add_prog_end:
+                self.prog_end[tid] = add_prog_end[tid]
             
             #self.lgr.debug('SOMap  loadPickle text 0x%x 0x%x' % (self.prog_start, self.prog_end))
 
@@ -170,12 +205,14 @@ class SOMap():
         self.prog_end[tid] = None
 
     def setContext(self, tid_list):
+        self.lgr.debug('so_file map now %s' % (str(self.so_file_map)))
         tid = None
         for in_tid in tid_list:
             if in_tid in self.so_file_map:
                 tid = in_tid
         if tid is None:
             self.lgr.error('soMap setContext found for any input tids %s' % (str(tid_list)))
+            self.lgr.error('%s' % (str(self.so_file_map)))
         elif tid in self.prog_start and self.prog_start[tid] is not None:
             self.context_manager.recordText(self.prog_start[tid], self.prog_end[tid])
         else:
@@ -277,8 +314,8 @@ class SOMap():
         tid = self.getSOTid(tid)
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
-            print('no so map for %d' % tid)
-        print('SO Map for threads led by group leader tid: %d' % tid)
+            print('no so map for %s' % tid)
+        print('SO Map for threads led by group leader tid: %s' % tid)
         if tid in self.so_file_map:
             if tid in self.prog_start and self.prog_start[tid] is not None:
                 print('0x%x - 0x%x   %s' % (self.prog_start[tid], self.prog_end[tid], self.text_prog[tid]))
@@ -296,7 +333,7 @@ class SOMap():
                     end = locate + text_seg.size
                     print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, end, text_seg.offset, text_seg.size, self.so_file_map[tid][text_seg])) 
         else:
-            print('no so map for %d' % tid)
+            print('no so map for %s' % tid)
             
     def getSO(self, tid=None, quiet=False):
         retval = {}
@@ -329,7 +366,7 @@ class SOMap():
                 section['file'] = self.so_file_map[tid][text_seg]
                 retval['sections'].append(section)
         else:
-            self.lgr.debug('no so map for %d' % tid)
+            self.lgr.debug('no so map for %s' % tid)
         ret_json = json.dumps(retval) 
         if not quiet:
             print(ret_json)
@@ -356,7 +393,7 @@ class SOMap():
                             self.prog_end[ttid] = self.prog_end[tid]
                             self.text_prog[ttid] = self.text_prog[tid]
                         else:
-                            self.lgr.debug('SOMap handle exit, missing text_start entry tid: %d ttid:%s' % (tid, ttid))
+                            self.lgr.debug('SOMap handle exit, missing text_start entry tid: %s ttid:%s' % (tid, ttid))
         
             else:
                 self.lgr.debug('SOMap handleExit tid:%s NOT in tidlist' % tid)
@@ -446,7 +483,7 @@ class SOMap():
                         break
             
         else:
-            self.lgr.debug('getSOFile no so map for %d' % tid)
+            self.lgr.debug('getSOFile no so map for %s' % tid)
         #self.lgr.debug('getSOFile returning %s' % retval)
         return retval
 
@@ -470,7 +507,7 @@ class SOMap():
                         break
             
         else:
-            self.lgr.debug('getSOInfo no so map for %d' % tid)
+            self.lgr.debug('getSOInfo no so map for %s' % tid)
         return retval
 
     def getSOAddr(self, in_fname, tid=None):
@@ -523,11 +560,11 @@ class SOMap():
                         break
 
             if retval is None:
-                self.lgr.debug('SOMap getSOAddr could not find so map for %d <%s>' % (tid, in_fname))
+                self.lgr.debug('SOMap getSOAddr could not find so map for %s <%s>' % (tid, in_fname))
                 self.lgr.debug('text_prog is <%s>' % self.text_prog[tid])
                 
         else:
-            self.lgr.debug('SOMap getSOAddr no so map for %d %s' % (tid, in_fname))
+            self.lgr.debug('SOMap getSOAddr no so map for %s %s' % (tid, in_fname))
             if tid in self.text_prog:
                 self.lgr.debug('text_prog is <%s>' % self.text_prog[tid])
         return retval
@@ -577,7 +614,7 @@ class SOMap():
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
            #self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
        else:
-           self.lgr.debug('soMap runToKnown no text for %d' % map_tid)
+           self.lgr.debug('soMap runToKnown no text for %s' % map_tid)
        if map_tid in self.so_file_map:
             for text_seg in self.so_file_map[map_tid]:
                 start = text_seg.locate+text_seg.offset
@@ -590,7 +627,7 @@ class SOMap():
                     self.lgr.debug('soMap runToKnow, skip %s' % (self.so_file_map[map_tid][text_seg]))
                 #self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x' % (self.so_file_map[map_tid][text_seg], start, length))
        else:
-           self.lgr.debug('soMap runToKnown no so_file_map for %d' % map_tid)
+           self.lgr.debug('soMap runToKnown no so_file_map for %s' % map_tid)
        if len(self.hap_list) > 0:  
            return True
        else:

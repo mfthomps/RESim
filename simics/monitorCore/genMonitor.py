@@ -1122,7 +1122,7 @@ class GenMonitor():
             tasks = self.task_utils[target].getTaskStructs()
             plist = {}
             for t in tasks:
-                plist[tasks[t].tid] = t 
+                plist[tasks[t].pid] = t 
             for tid in sorted(plist):
                 t = plist[tid]
                 if filter is None or filter in tasks[t].comm:
@@ -1131,10 +1131,10 @@ class GenMonitor():
                         id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
                     else:
                         id_str = ''
-                    print('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].tid, t, 
+                    print('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
                         tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
                     if fh is not None:
-                        fh.write('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s\n' % (tasks[t].tid, t, 
+                        fh.write('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s\n' % (tasks[t].pid, t, 
                             tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
             
 
@@ -4975,6 +4975,8 @@ class GenMonitor():
     def debugSnap(self, final_fun=None):
         retval = True
         self.rmDebugWarnHap()
+        if self.debug_info is not None and 'pid' in self.debug_info:
+            self.debug_info['tid'] = self.debug_info['pid']
         if self.debug_info is not None and 'tid' in self.debug_info:
             self.lgr.debug('debugSnap call debugTidGroup for tid:%s cpu name %s current target %s' % (self.debug_info['tid'], self.debug_info['cpu'], self.target))
             self.debugTidGroup(self.debug_info['tid'], to_user=False, final_fun=final_fun)

@@ -574,6 +574,9 @@ class TaskUtils():
     def getTidParent(self, tid):
         tid = None
         rec = self.getRecAddrForTid(tid)
+        if rec is None:
+            self.lgr.error('TaskUtils getTidParent got none for tid %s' % tid)
+            return None
         parent = self.mem_utils.readPtr(self.cpu, rec + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
         if pid is not None:
@@ -581,12 +584,13 @@ class TaskUtils():
         return tid 
  
     def getRecAddrForTid(self, tid):
-        #self.lgr.debug('getRecAddrForTid %s' % tid)
+        self.lgr.debug('getRecAddrForTid %s' % tid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
+           self.lgr.debug('getRecAddrForTid compare %s to %s' % (str(ts_list[ts].pid), tid))
            if str(ts_list[ts].pid) == tid:
                return ts
-        #self.lgr.debug('TaksUtils getRecAddrForTid %s no task rec found. %d task records found.' % (tid, len(ts_list)))
+        self.lgr.debug('TaksUtils getRecAddrForTid %s no task rec found. %d task records found.' % (tid, len(ts_list)))
         return None
 
     def getCommFromTid(self, tid):
