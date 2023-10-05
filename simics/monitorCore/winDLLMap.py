@@ -204,8 +204,8 @@ class WinDLLMap():
         retval = True
         for dll_info in self.section_list:
             if dll_info.match(new_dll):
-                self.lgr.debug('WinDLLMap is new %s' % new_dll.toString())
-                self.lgr.debug('already in list as %s' % dll_info.toString())
+                #self.lgr.debug('WinDLLMap is new %s' % new_dll.toString())
+                #self.lgr.debug('already in list as %s' % dll_info.toString())
                 retval = False
                 break
         return retval
