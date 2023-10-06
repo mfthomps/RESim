@@ -400,6 +400,12 @@ class PlayAFL():
                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('hang')
 
+    def stopOnRead(self, counter):
+        self.lgr.info('playAFL stopOnRead callback counter %d' % counter)
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+        SIM_break_simulation('stopOnRead')
+
     def goAlone(self, clear_hits):
         self.current_packet=1
         if not self.repeat:
@@ -490,10 +496,13 @@ class PlayAFL():
                 if self.dfile == 'oneplay' and not self.repeat:
                     force_default_context = False
                 self.lgr.debug('playAFL gen writeData')
+                write_callback = None
+                if self.stop_on_read:
+                    write_callback = self.stopOnRead
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
-                         filter=self.filter_module, stop_on_read=self.stop_on_read)
+                         filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
                          #filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
@@ -537,9 +546,11 @@ class PlayAFL():
                 #if self.repeat_counter > 20:
                 #    return
                 SIM_continue(0)
+                self.lgr.debug('playAFL goAlone repeat set, did continue')
                 pass
             else:
                 SIM_continue(0)
+                self.lgr.debug('playAFL goAlone repeat not set, did continue')
                 pass
         else:
             self.lgr.info('playAFL did all sessions.')
