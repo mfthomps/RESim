@@ -480,7 +480,7 @@ class WriteData():
             #    return
         if not skip_it:
             self.read_count = self.read_count + 1
-            self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
+            #self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
             self.handleCall()
 
     def handleCall(self):

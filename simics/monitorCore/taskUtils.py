@@ -584,10 +584,10 @@ class TaskUtils():
         return tid 
  
     def getRecAddrForTid(self, tid):
-        self.lgr.debug('getRecAddrForTid %s' % tid)
+        #self.lgr.debug('getRecAddrForTid %s' % tid)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-           self.lgr.debug('getRecAddrForTid compare %s to %s' % (str(ts_list[ts].pid), tid))
+           #self.lgr.debug('getRecAddrForTid compare %s to %s' % (str(ts_list[ts].pid), tid))
            if str(ts_list[ts].pid) == tid:
                return ts
         self.lgr.debug('TaksUtils getRecAddrForTid %s no task rec found. %d task records found.' % (tid, len(ts_list)))
