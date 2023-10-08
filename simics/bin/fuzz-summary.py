@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # given a an AFL session named by target, provide a summary of
 # queue files and unique hits files (post playAFL).

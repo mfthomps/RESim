@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # given a target and two AFL sessions named by instance/index, show differences in their
 # respective hits based on coverage files.  Also will take to explicit coverage files.
