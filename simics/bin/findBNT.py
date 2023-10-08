@@ -106,7 +106,7 @@ def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=F
     else:
         fname = '%s.%s.hits' % (ida_path, target)
     print('Using hits file %s' % fname)
-    lgr.debug('Using hits file %s' % fname)
+    lgr.debug('Using hits file %s prog: %s' % (fname, prog))
     ''' hits are now just flat lists without functions '''
     if not os.path.isfile(fname):
         print('No file at %s.  Did you forget to specific the --target?' % fname)
