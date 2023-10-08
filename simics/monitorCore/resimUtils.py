@@ -356,6 +356,10 @@ def getIniTargetValue(input_ini_file, field, target=None):
                     if name == field:
                         retval = value 
                         break
+    if retval is not None and retval.startswith('$'):
+        env, path = retval.split('/',1)
+        env_value = os.getenv(env[1:]) 
+        retval = os.path.join(env_value, path)
     return retval
 
 def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
