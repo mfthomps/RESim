@@ -193,8 +193,8 @@ def checkMulti(flist, all_hits, udp_header, hit_dict):
 
 def main():
     parser = argparse.ArgumentParser(prog='dedupCoverage', description='Create a deduped file of all unique coverage files.')
-    parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('ini', action='store', help='The name of the ini file.')
+    parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
