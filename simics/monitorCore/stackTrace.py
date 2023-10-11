@@ -316,6 +316,9 @@ class StackTrace():
         return retval
 
     def funMatch(self, fun1, fun2):
+        if fun1 is None or fun2 is None:
+            self.lgr.debug('dataWatch funMatch called with fun of None')
+            return False
         # TBD make data files for libc fu?
         retval = False
         if fun1.startswith(fun2) or fun2.startswith(fun1):
@@ -328,8 +331,11 @@ class StackTrace():
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
             lr_fun_name = self.fun_mgr.funFromAddr(lr)
             #self.lgr.debug('stackTrace funMatch, try lr fun name %s' % lr_fun_name)
-            if fun1.startswith(lr_fun_name) or lr_fun_name.startswith(fun1):
-                retval = True
+            if lr_fun_name is None:
+                self.lgr.debug('stackTrace funMatch, lr fun name None for lr 0x%x' % lr)
+            else:
+                if fun1.startswith(lr_fun_name) or lr_fun_name.startswith(fun1):
+                    retval = True
         return retval
 
     def doX86(self):

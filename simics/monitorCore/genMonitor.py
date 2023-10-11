@@ -432,6 +432,7 @@ class GenMonitor():
                     self.quit()
                     return
                 self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
+                self.lgr.debug('RESIM_UNISTD for cell %s' % cell_name)
                 if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                     self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
                 if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
@@ -1212,8 +1213,9 @@ class GenMonitor():
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
-            ''' This will set full_path'''
-            self.setPathToProg(tid)
+            if self.full_path is None:
+                ''' This will set full_path'''
+                self.setPathToProg(tid)
             # TBD already called in debugTidList.  Does a group==True cover it?
             if not group or self.bookmarks is None:
                 self.lgr.debug('genMonitor debug call doDebugCmd')
@@ -1649,7 +1651,9 @@ class GenMonitor():
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
         self.rev_execution_enabled = True
-        self.setPathToProg(tid_list[0])
+        if self.full_path is None:
+            self.lgr.debug('debugTidList full_path is None, set it')
+            self.setPathToProg(tid_list[0])
         self.doDebugCmd(tid_list[0])
         #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)

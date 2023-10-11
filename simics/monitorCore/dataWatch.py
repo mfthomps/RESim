@@ -1692,7 +1692,7 @@ class DataWatch():
             self.lgr.debug('dataWatch getMemParams, pending_call set True,  fun is %s' % self.mem_something.fun)
             cell = self.top.getCell()
             ''' use massive if block to get parameters. ''' 
-            skip_fun = self.gatherCallParams(sp, eip, word_size)
+            skip_fun = self.gatherCallParams(sp, eip, word_size, data_hit)
 
             if data_hit: 
                 ''' Assume we have disabled debugging in context manager while fussing with parameters. '''
@@ -1745,7 +1745,7 @@ class DataWatch():
                     self.lgr.debug('getMemParams, not running, kick it.')
                     SIM_continue(0)
 
-    def gatherCallParams(self, sp, eip, word_size):
+    def gatherCallParams(self, sp, eip, word_size, data_hit):
         skip_fun = False
         if self.mem_something.fun in ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']:
             
@@ -2309,7 +2309,7 @@ class DataWatch():
         self.lgr.debug('dataWatch finishCheckMoveHap dest_op %s' % self.move_stuff.dest_op)
         dest_addr = self.decode.getAddressFromOperand(self.cpu, self.move_stuff.dest_op, self.lgr)
         ad_hoc = False
-        if self.move_stuff.function is None:
+        if self.move_stuff.function is None and our_reg is not None:
             if our_reg.startswith('xmm'):
                 '''  TBD bad assumption?  think it is always like a memcpy '''
                 ad_hoc = True
@@ -3079,7 +3079,10 @@ class DataWatch():
 
 
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            fun = self.fun_mgr.getFun(eip)
+            if self.fun_mgr is not None:
+                fun = self.fun_mgr.getFun(eip)
+            else:
+                fun = None 
             if fun is None:
                 ''' This value is only used to check if we've looked to see if the current funtion is a memsomething.'''
                 fun = eip

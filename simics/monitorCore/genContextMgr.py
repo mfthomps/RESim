@@ -1228,12 +1228,9 @@ class GenContextMgr():
     def watchExit(self, rec=None, tid=None):
         retval = True
         ''' set breakpoint on task record that points to this (or the given) tid '''
-        # TBD for windows, this sets a watch on the ETHREAD next pointer.  Should also set
-        # a watch on the EPROCESS next pointer for the process of these threads.
-        self.lgr.debug('contextManager watchExit')
-        #if self.top.isWindows():
-        #    ''' TBD fix this!'''
-        #    return True
+        # TBD This asssume all threads die together.  On windows we assume the EPROCESS record is removed
+        # and in Linux we assume the group leader is removed.
+        self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
             self.lgr.debug('watchExit for tid 1, ignore')
@@ -1251,7 +1248,7 @@ class GenContextMgr():
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
-            self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
+            #self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
             return False
         
         if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
