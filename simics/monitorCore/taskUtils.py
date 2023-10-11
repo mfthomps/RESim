@@ -590,7 +590,7 @@ class TaskUtils():
         for ts in ts_list:
            #self.lgr.debug('getRecAddrForTid compare %s to %s' % (str(ts_list[ts].pid), tid))
            if str(ts_list[ts].pid) == tid:
-               self.lgr.debug('getRecAddrForTid got it returning ts 0x%x' % ts)
+               #self.lgr.debug('getRecAddrForTid got it returning ts 0x%x' % ts)
                retval = ts
                break
         if retval is None:
