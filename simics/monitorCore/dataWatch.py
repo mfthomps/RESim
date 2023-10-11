@@ -1266,15 +1266,20 @@ class DataWatch():
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
                     self.lgr.debug('dataWatch string return size x86 got %d' % self.mem_something.count)
                 if not skip_it:
-                    self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
-                       self.mem_something.count))
-                    buf_start = self.findRange(self.mem_something.src)
-                    mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
-                    self.lgr.debug('dataWatch returnHap, call setRange dest 0x%x  count %d' % (self.mem_something.dest, self.mem_something.count))
-                    if self.mem_something.count > 0:
-                        self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
-                        self.setBreakRange()
-                        self.watchStackObject(obj_ptr)
+                    if self.mem_something.src is None:
+                        self.lgr.error('dataWatch returnHap src is None')
+                    elif self.mem_something.dest is None:
+                        self.lgr.error('dataWatch returnHap dest is None')
+                    else:
+                        self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+                           self.mem_something.count))
+                        buf_start = self.findRange(self.mem_something.src)
+                        mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+                        self.lgr.debug('dataWatch returnHap, call setRange dest 0x%x  count %d' % (self.mem_something.dest, self.mem_something.count))
+                        if self.mem_something.count > 0:
+                            self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
+                            self.setBreakRange()
+                            self.watchStackObject(obj_ptr)
         elif self.mem_something.fun == 'str':
             ''' TBD crude copy, clean up'''
             skip_it = False
@@ -1954,7 +1959,7 @@ class DataWatch():
 
             if self.mem_something.length == 0:
                 self.mem_something.length = self.getStrLen(self.mem_something.src)        
-            self.lgr.debug('dataWatch getMemParms 0x%x %s src(r3) is 0x%x len %d, this: 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, self.mem_something.length, this))
+            self.lgr.debug('dataWatch getMemParms 0x%x %s src(r3) is 0x%x len %d' % (eip, self.mem_something.fun, self.mem_something.src, self.mem_something.length))
 
         elif self.mem_something.fun == 'append_chr_n':
             this, self.mem_something.src, self.mem_something.length = self.getCallParams(sp, word_size)
