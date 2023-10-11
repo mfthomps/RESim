@@ -63,7 +63,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     fname = idaversion.get_input_file_path()
 
     orig_image_base = os.getenv('original_image_base')
-    if orig_image_base is not None:
+    if orig_image_base is not None and len(orig_image_base.strip())>0:
         offset = image_base - int(orig_image_base,16)
     else:
         offset = image_base
