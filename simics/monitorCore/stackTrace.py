@@ -249,7 +249,7 @@ class StackTrace():
                 cur_fun = self.fun_mgr.getFun(eip)
                 if cur_fun is not None:
                     fun_name = self.fun_mgr.getFunName(cur_fun)
-                    self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
+                    #self.lgr.debug('isCallToMe eip: 0x%x is in fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.fun_mgr.getFun(lr)
                 if cur_fun is not None and ret_to is not None:
                     #self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to 0x%x) ' % (eip, cur_fun, lr, ret_to))
@@ -719,9 +719,10 @@ class StackTrace():
         been_in_main = False
         prev_ip = None
         if self.soMap.isMainText(eip):
-            self.lgr.debug('stackTrace starting in main text set prev_ip to 0x%x' %eip)
             been_in_main = True
-            prev_ip = eip
+            if not self.soMap.isMainText(self.reg_frame['lr']):
+                self.lgr.debug('stackTrace starting in main with lr that is not in main, text set prev_ip to 0x%x' %eip)
+                prev_ip = eip
         #prev_ip = eip
         if self.fun_mgr is None:
             self.lgr.warning('stackTrace has no ida functions')
@@ -877,6 +878,9 @@ class StackTrace():
                     if instruct_str.startswith(self.callmn):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_ip)
                         #self.lgr.debug('StackTrace clean this up, got fun %s' % fun)
+                        if prev_ip is not None:
+                            cur_fun_name = self.fun_mgr.getFunName(prev_ip)
+                            #self.lgr.debug('StackTrace prev_ip 0x%x, fun %s' % (prev_ip, cur_fun_name))
                         if fun is not None:
                             if cur_fun_name is not None:
                                 if not self.funMatch(fun, cur_fun_name): 
@@ -942,7 +946,7 @@ class StackTrace():
                                         if self.soMap.isMainText(call_to):
                                             #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail. call-to is 0x%x' % call_to)
                                             first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
-                                            if self.fun_mgr.isRelocate(call_to) and not first_instruct[1].startswith('jmp'):
+                                            if not self.fun_mgr.isRelocate(call_to) and not first_instruct[1].startswith('jmp'):
                                                 skip_this = True
                                                 #self.lgr.debug('stackTrace not a PLT, skipped it first_instruct %s' % first_instruct[1])
 
