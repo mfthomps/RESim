@@ -36,7 +36,8 @@ def resetBlocks(in_path=None):
     print('current_image_base 0x%x' % current_image_base)
 
     orig_image_base = os.getenv('original_image_base')
-    if orig_image_base is not None:
+    if orig_image_base is not None and len(orig_image_base.strip())>0:
+        print('orig_image_base %s' % orig_image_base)
         offset = current_image_base - int(orig_image_base,16)
     else:
         offset = 0
