@@ -42,7 +42,7 @@ def dumpFuns(fname=None):
             print('No ida_analysis_path defined')
             fname = idaversion.get_input_file_path()
     image_base = os.getenv('target_image_base')
-    if image_base is not None:
+    if image_base is not None and len(image_base.strip())>0:
         current_base = idautils.peutils_t().imagebase
         image_base = int(image_base, 16)
         delta = image_base - current_base 
@@ -161,16 +161,19 @@ class ImportNames():
             #print "%08x: ord#%d" % (ea, ord)
             pass
         else:
-
+            # ad hoc pain
+            if '@@' in name:
+                name = name.split('@@')[0]
             demangled = idc.demangle_name(
                 name,
                 idc.get_inf_attr(idc.INF_SHORT_DN)
             )
             if demangled is None:
                 self.imports[ea] = name 
+                print('was NOT demangled %s ea: 0x%x ' % (name, ea))
             else:
                 self.imports[ea] = demangled 
-                print('was manged %s to %s' % (name, demangled))
+                print('was demangled %s to %s ea: 0x%x ' % (name, demangled, ea))
             #print "%08x: %s (ord#%d)" % (ea, name, ord)
         return True
     def printit(self):
