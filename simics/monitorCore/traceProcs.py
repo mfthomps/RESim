@@ -250,6 +250,8 @@ class TraceProcs():
     def isExternal(self, tid, fd):
         if tid in self.plist:
             for s in self.plist[tid].sockets:
+                if s is None:
+                    continue
                 if fd in self.plist[tid].sockets[s]:
                     if ':' in s:
                         return True

@@ -312,7 +312,7 @@ class SharedSyscall():
                     
         elif socket_callname == "bind":
             if eax < 0:
-                trace_msg = ('\texception from socketcall BIND eax:%d, %s\n' % (tid, eax))
+                trace_msg = ('\texception from socketcall tid:%s BIND eax:%d\n' % (tid, eax))
             else:
                 ss = exit_info.sock_struct
                 if tid in self.trace_procs:
