@@ -242,7 +242,7 @@ class DataWatch():
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
-        SIM_break_simulation('handle memstuff')
+        SIM_break_simulation('addFreadAlone')
 
     def checkFread(self, start, length):
         retval = False
@@ -4132,7 +4132,7 @@ class DataWatch():
         self.finish_check_move_hap = None
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.memcpyCheck)
         self.lgr.debug('stopForMemcpyCheck, is big move, look for memcpy')
-        SIM_break_simulation('handle memstuff')
+        SIM_break_simulation('stopForMemcpyCheck')
 
     def setUserIterators(self, iterators):
         self.fun_mgr.setUserIterators(iterators)
