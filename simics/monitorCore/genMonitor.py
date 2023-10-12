@@ -1184,7 +1184,10 @@ class GenMonitor():
                 else:
                     cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
                 self.lgr.debug('cmd: %s' % cmd)
-                SIM_run_command(cmd)
+                try:
+                    SIM_run_command(cmd)
+                except simics.SimExc_General:
+                    self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack?')
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
                 self.debugger_target = self.target
 
