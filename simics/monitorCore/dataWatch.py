@@ -1209,6 +1209,10 @@ class DataWatch():
             self.recent_fgets = self.mem_something.dest
         elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
+            if self.mem_something.fun == 'ostream_insert':
+                # TBD assuming this is always a temporary string
+                self.rmRange(self.mem_something.addr) 
+                self.lgr.debug('dataWatch returnHap assuming ostream_insert is temp string.')
         elif self.mem_something.fun.startswith('string_basic'):
             if self.mem_something.ret_addr_addr is not None:
                 self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, self.mem_something.ret_addr_addr, size=word_size)
