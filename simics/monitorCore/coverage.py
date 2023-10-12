@@ -581,13 +581,13 @@ class Coverage():
             ''' User wants to identify breakpoints hit by other threads so they can later be masked '''
             tid = self.top.getTID(target=self.cell_name)
             if tid != self.tid:
-                self.lgr.debug('converage bbHap, not my tid, got %d I am %d  num spots %d' % (tid, self.tid, len(self.dead_map)))
+                self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_map)))
                 dead_set = True
 
         if self.only_thread:
             tid = self.top.getTID(target=self.cell_name)
             if tid != self.tid:
-                self.lgr.debug('coverage bbHap, wrong thread: %d' % tid)
+                self.lgr.debug('coverage bbHap, wrong thread: %s' % tid)
                 return
         
         if addr == 0:
@@ -657,7 +657,7 @@ class Coverage():
                     self.lgr.debug('broke at wrong addr linear 0x%x' % this_addr)
                     tid = self.top.getTID(target=self.cell_name)
                     if tid != self.tid:
-                        self.lgr.debug('converage bbHap, not my tid, got %d I am %d context: %s' % (tid, self.tid, str(self.cpu.current_context)))
+                        self.lgr.debug('converage bbHap, not my tid, got %s I am %s context: %s' % (tid, self.tid, str(self.cpu.current_context)))
                     #SIM_break_simulation('broken')
                     return
                 if dead_set:
@@ -667,7 +667,7 @@ class Coverage():
                         ''' dead zone should be physical addresses '''
                         self.dead_map.append(addr)
                         self.time_start = time.time()
-                        self.lgr.debug('converage bbHap, not my tid, got %d I am %d add phys addr 0x%x to dead map num dead spots %d ' % (tid, 
+                        self.lgr.debug('converage bbHap, not my tid, got %s I am %s add phys addr 0x%x to dead map num dead spots %d ' % (tid, 
                                self.tid, addr, len(self.dead_map)))
                 if self.create_dead_zone:
                     now = time.time()

@@ -24,6 +24,12 @@ def getFuns(prog_path):
     retval = json.load(open(prog))
     return retval
 
+def getBlocks(prog_path):
+    retval = None
+    prog = prog_path+'.blocks'
+    retval = json.load(open(prog))
+    return retval
+
 def getCover(fpath, funs):
     hits1 = json.load(open(fpath))
     funs_hit = []
@@ -56,6 +62,12 @@ def getPackets(f, header):
         retval = data.count(header) 
     return retval  
 
+def totalBlocks(blocks):
+    tot = 0
+    for fun in blocks:
+        tot = tot + len(blocks[fun]['blocks'])
+    return tot
+
 def main():
     parser = argparse.ArgumentParser(prog='showCoverage', description='Show number of hits (coverage) of one or more hits files')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
@@ -65,12 +77,15 @@ def main():
     parser.add_argument('-n', '--instance', action='store', help='instance')
     args = parser.parse_args()
 
+    '''
     ida_data = os.getenv('RESIM_IDA_DATA')
     if ida_data is None:
         print('RESIM_IDA_DATA not defined')
         exit(1)
-    root_dir = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX'):
+    root_dir = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
+    print('root_dir is %s' % root_dir)
     data_path = os.path.join(ida_data, root_dir, args.prog, args.prog+'.prog')
+    print('data_path is %s' % data_path)
     funs = None
     with open(data_path) as fh:
         lines = fh.read().strip().splitlines()
@@ -79,7 +94,10 @@ def main():
         funs = getFuns(prog_file)
         if funs is None:
             exit(1)
-
+    '''
+    prog_path = resimUtils.getProgPath(args.prog, args.ini)
+    print('prog_path is %s' % prog_path)
+    funs = getFuns(prog_path)
     udp_header = getHeader(args.ini)
     if args.index is not None:
         path = aflPath.getAFLCoveragePath(args.target, args.instance, args.index)
@@ -100,8 +118,10 @@ def main():
                 print('hits: %04d  funs: %04d packets: %02d  %s' % (num_hits, num_funs, num_packets, f))
             else:
                 print('hits: %04d  funs: %04d   %s' % (num_hits, num_funs, f))
+        blocks = getBlocks(prog_path)
+        total_blocks = totalBlocks(blocks)
         print('%d sessions' % len(flist))
-        print('total functions: %d  total hits: %d' % (len(all_funs), len(all_hits)))        
+        print('total functions: %d of %d  total hits: %d of %d' % (len(all_funs), len(funs), len(all_hits), total_blocks))        
          
 
 if __name__ == '__main__':

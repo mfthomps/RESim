@@ -1238,6 +1238,7 @@ class WatchMarks():
             entry = {}
             entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
+            entry['tid'] = mark.tid
             entry['packet'] = packet
             entry['index'] = index
             index = index + 1

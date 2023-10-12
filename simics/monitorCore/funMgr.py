@@ -200,9 +200,10 @@ class FunMgr():
                     else:
                         self.relocate_funs[adjust] = rel_fun_name
                 self.lgr.debug('funMgr setRelocateFuns loaded %s relocates for path %s num relocates now %s' % (len(funs), relocate_path, len(self.relocate_funs))) 
-        else:
-            ''' TBD need to adjust per offset'''
-            new_relocate_funs = elfText.getRelocate(full_path, self.lgr, self.ida_funs)
+        if not self.top.isWindows():
+            prog_path = self.top.getFullPath()
+            ''' TBD need to adjust per offset?'''
+            new_relocate_funs = elfText.getRelocate(prog_path, self.lgr, self.ida_funs)
             if new_relocate_funs is not None:
                 for fun in new_relocate_funs:
                     self.relocate_funs[fun] = new_relocate_funs[fun]
