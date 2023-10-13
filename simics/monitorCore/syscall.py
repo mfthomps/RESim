@@ -481,8 +481,8 @@ class Syscall():
         self.exit_calls.append('exit')
         self.exit_calls.append('tkill')
         self.exit_calls.append('tgkill')
-        self.stop_on_exit = False
 
+        self.sig_handler = {}
         self.platform = self.top.getTargetPlatform()
 
     def breakOnExecve(self):
@@ -512,7 +512,7 @@ class Syscall():
             self.syscall_info = SyscallInfo(self.cpu, None, None, None, self.trace)
             if self.cpu.architecture == 'arm':
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
-                #self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
+                self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 if self.syscall_context is None:
                     self.syscall_context = self.context_manager.getBPContext(proc_break)
@@ -1418,7 +1418,7 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        #self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
+        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
             #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
             if call_param.match_param.__class__.__name__ == 'TidFilter':
@@ -1801,8 +1801,9 @@ class Syscall():
         elif callname == 'mmap' or callname == 'mmap2':        
             #self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
-            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0 and self.platform == 'arm5':
-                #self.lgr.debug(taskUtils.stringFromFrame(frame))
+            # TBD added arm_svc check to this.
+            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0 and self.platform == 'arm5' and self.param.arm_svc:
+                self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
                 length = self.mem_utils.readPtr(self.cpu, arg_addr+4)
@@ -1810,8 +1811,12 @@ class Syscall():
                 flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
+                if fd == 0xffffffff:
+                    fd = 'NULL'
+                elif fd is not None:
+                    fd = str(fd)  
                 if fd is not None:
-                    self.lgr.debug('mmap tid:%s FD: %d' % (tid, fd))
+                    self.lgr.debug('mmap tid:%s FD: %s' % (tid, fd))
                     pass
                 if tid is None:
                     self.lgr.error('TID is NONE?')
@@ -1821,31 +1826,40 @@ class Syscall():
                 elif fd is None:
                     ida_msg = '%s tid:%s FD: NONE' % (callname, tid)
                 else:
-                    ida_msg = '%s tid:%s FD: %d buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, tid, fd, arg_addr, length, prot, flags, offset)
+                    ida_msg = '%s tid:%s FD: %s buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, tid, fd, arg_addr, length, prot, flags, offset)
             elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
                 ''' tbd wth? the above seems wrong, why key on addr of zero? '''
                 fd = frame['param5']
+                if fd == 0xffffffff:
+                    fd = 'NULL'
+                elif fd is not None:
+                    fd = str(fd)  
                 prot = frame['param3']
-                ida_msg = '%s tid:%s FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
+                ida_msg = '%s tid:%s FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
                 self.lgr.debug(ida_msg)
             else:
                 fd = frame['param5']
                 if fd == 0xffffffffffffffff:
-                    fd = -1
+                    fd = 'NULL'
+                elif fd is not None:
+                    fd = str(fd)  
                 prot = frame['param3']
-                ida_msg = '%s tid:%s FD: %d addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
+                ida_msg = '%s tid:%s FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 #if self.watch_first_mmap is not None:
                 #    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
                 #else:
                 #    self.lgr.debug('syscall mmap watch_first_mmap is none')
                 self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
-            is_ex = prot & 4
-            self.lgr.debug('syscall mmap fd %d  watch_first_mmap %s  is exec? %d' % (fd, self.watch_first_mmap, is_ex))
-            if self.watch_first_mmap == fd and is_ex:
-                self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % fd)
+            if prot is not None:
+                is_ex = prot & 4
+            else:
+                is_ex = 0
+            self.lgr.debug('syscall mmap fd %s  watch_first_mmap %s  is exec? %d' % (fd, self.watch_first_mmap, is_ex))
+            if fd is not None and fd != 'NULL' and self.watch_first_mmap == int(fd) and is_ex:
+                self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % int(fd))
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
 
@@ -1909,8 +1923,18 @@ class Syscall():
         elif callname == 'wait4':
             ida_msg = '%s tid:%s waitfortid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, tid, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
 
+        elif callname == 'rt_sigaction':
+            handler = self.mem_utils.readPtr(self.cpu, frame['param2'])
+            if handler is not None and handler > 100:
+                proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
+                self.sig_handler[tid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, self.syscall_info, proc_break, 'sig_handler')
+                self.lgr.debug('syscallHap %s set break on handler 0x%x' % (callname, handler))
+            ida_msg = '%s tid:%s signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, frame['param1'], frame['param2'], handler)
+            self.lgr.debug(ida_msg)
+            #SIM_break_simulation(ida_msg)
+
         else:
-            ida_msg = '%s %s   tid:%s (%s)' % (callname, taskUtils.stringFromFrame(frame), tid, comm)
+            ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
         if exit_info is not None:
@@ -2043,6 +2067,11 @@ class Syscall():
             #self.lgr.debug('frame string %s' % frame_string)
         return frame, exit_eip1, exit_eip2, exit_eip3
         
+    def sigHandlerHap(self, syscall_info, context, break_num, memory):
+        cpu, comm, tid = self.task_utils.curThread() 
+        ida_msg = 'signal handler tid: %s' % tid
+        SIM_break_simulation(ida_msg)
+
     def syscallHap(self, syscall_info, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
             return to user space so as to collect remaining parameters, or to stop
@@ -2201,7 +2230,7 @@ class Syscall():
                     return
             else: 
                 ida_msg = '%s tid:%s' % (callname, tid)
-            self.lgr.debug('syscallHap %s exit of tid:%s stop_on_exit: %r' % (self.name, tid, self.stop_on_exit))
+            self.lgr.debug('syscallHap %s exit of tid:%s stop_on_exit: %r' % (self.name, tid, self.top.getStopOnExit(target=self.cell_name)))
             if callname == 'exit_group':
                 self.handleExit(tid, ida_msg, exit_group=True)
             elif callname == 'tgkill' and sig == 6:
@@ -2209,7 +2238,7 @@ class Syscall():
             else:
                 self.handleExit(tid, ida_msg)
             self.context_manager.stopWatchTid(tid)
-            if self.stop_on_exit:
+            if self.top.getStopOnExit(target=self.cell_name):
                 self.lgr.debug('syscall break simulation for stop_on_exit')
                 SIM_break_simulation(ida_msg)
             return
@@ -2309,6 +2338,10 @@ class Syscall():
                 print('exit tid:%s' % tid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
                 self.context_manager.checkExitCallback()
+            else:
+                if self.top.hasPendingPageFault(tid):
+                    self.lgr.debug('syscall hangleExit %s HAD pending fault, do something!' % tid)
+
 
     def getBinders(self):
         return self.binders
@@ -2612,6 +2645,6 @@ class Syscall():
         return retval 
 
 
-    def stopOnExit(self):
-        self.stop_on_exit=True
-        self.lgr.debug('syscall stopOnExit')
+    #def stopOnExit(self):
+    #    self.stop_on_exit=True
+    #    self.lgr.debug('syscall stopOnExit')
