@@ -147,10 +147,10 @@ class SharedSyscall():
                     if len(my_exit_tids[eip]) == 0:
                         if  self.preserve_exit:
                             ''' add a dummy entry to preserve exit haps '''
-                            self.lgr.debug('rmExitHap len of exit_tids[0x%x] is zero, but we are preserving os add a dummy entry' % eip)
+                            #self.lgr.debug('rmExitHap len of exit_tids[0x%x] is zero, but we are preserving os add a dummy entry' % eip)
                             my_exit_tids[eip].append(-1)
                         else:
-                            self.lgr.debug('rmExitHap len of exit_tids[0x%x] is zero, delete exit hap' % eip)
+                            #self.lgr.debug('rmExitHap len of exit_tids[0x%x] is zero, delete exit hap' % eip)
                             self.context_manager.genDeleteHap(self.exit_hap[eip])
             self.exit_info[tid] = {}     
 
@@ -165,7 +165,7 @@ class SharedSyscall():
                     #self.lgr.debug('sharedSyscall rmExitHap, call contextManager to delete exit hap')
                     self.context_manager.genDeleteHap(self.exit_hap[eip])
                     del self.exit_hap[eip]
-                self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
+                #self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
 
 
     def addExitHap(self, cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name, context_override=None):
@@ -194,12 +194,12 @@ class SharedSyscall():
         if exit_eip1 is not None: 
             #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit tids is %d' % (exit_eip1, len(my_exit_tids[exit_eip1])))
             if len(my_exit_tids[exit_eip1]) == 0:
-                self.lgr.debug('addExitHap new exit EIP1 0x%x for tid:%s cell: %s' % (exit_eip1, tid, cell))
+                #self.lgr.debug('addExitHap new exit EIP1 0x%x for tid:%s cell: %s' % (exit_eip1, tid, cell))
                 exit_break = self.context_manager.genBreakpoint(cell, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
                 self.exit_hap[exit_eip1] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap')
-                self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
+                #self.lgr.debug('sharedSyscall addExitHap added exit hap %d' % self.exit_hap[exit_eip1])
             my_exit_tids[exit_eip1].append(tid)
             #self.lgr.debug('sharedSyscall addExitHap appended tid:%s for exitHap for 0x%x' % (tid, exit_eip1))
         else:
@@ -216,7 +216,7 @@ class SharedSyscall():
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip2, 1, 0)
                 self.exit_hap[exit_eip2] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
                                    None, exit_break, 'exit hap2')
-                self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
+                #self.lgr.debug('sharedSyscall added exit hap2 %d' % self.exit_hap[exit_eip2])
             else:
                 #self.lgr.debug('sharedSyscall has exit tid for EIP2, len is %d' % len(my_exit_tids[exit_eip2]))
                 #for tid in my_exit_tids[exit_eip2]:
