@@ -101,7 +101,7 @@ def getWatchMark(trackio, bb, prog, quiet=False):
             if mark['mark_type'] in read_marks:
                 eip = mark['ip'] - offset
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
-                if eip >= bb['start_ea'] and eip <= bb['end_ea']:
+                if eip >= bb['start_ea'] and eip < bb['end_ea']:
                     #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
                     retval = (eip, mark['packet'])
                     break
