@@ -225,7 +225,7 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultGen modeChanged wrong tid  tid:%s wanted: %d old: %d new: %d' % (tid, want_tid, old, new))
             return
 
-        #self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %d old: %d new: %d' % (tid, want_tid, old, new))
+        #self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if tid in self.pending_faults:
@@ -254,6 +254,10 @@ class PageFaultGen():
                         SIM_run_alone(self.hapAlone, self.pending_faults[tid])
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
+                else:
+                    instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
+                    self.lgr.debug('pageFaultGen modeChanged arm user space instruct %s' % instruct[1])
+                    
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
 
