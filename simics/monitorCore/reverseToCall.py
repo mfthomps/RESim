@@ -665,7 +665,7 @@ class reverseToCall():
                 retval = True
             else:
                 self.lgr.debug('tryRecentCycle got None looking for previous cycle')
-        elif closet_fault is not None: 
+        elif closest_fault is not None: 
             self.lgr.debug('tryRecentCycle skipping to recent fault')
             self.skipToTest(closest_fault-1)
             retval = True
