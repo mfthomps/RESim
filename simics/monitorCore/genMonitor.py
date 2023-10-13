@@ -304,6 +304,8 @@ class GenMonitor():
         self.track_started = False
         self.track_finished = False
 
+        self.stop_on_exit = {}
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -466,6 +468,10 @@ class GenMonitor():
                 if os.path.isfile(net_file):
                     self.netInfo[cell_name].loadfile(net_file)
                     self.lgr.debug('loaded net_list from %s' % net_file)
+
+            if 'ARM_SVC' in comp_dict[cell_name]:
+                if comp_dict[cell_name]['ARM_SVC'].lower() in ['false', 'no']:
+                    self.param[cell_name].arm_svc = False 
 
     def runPreScripts(self):
         ''' run the PRE_INIT_SCRIPT and the one_done module, if any '''
@@ -2134,6 +2140,7 @@ class GenMonitor():
     def skipBackToUser(self, extra=0):
         if self.reverseEnabled():
             self.lgr.debug('skipBackToUser')
+            self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             cpu, comm, tid = self.task_utils[self.target].curThread() 
             self.rev_to_call[self.target].jumpOverKernel(tid)
         else:
@@ -2671,11 +2678,19 @@ class GenMonitor():
             #self.exit_group_syscall[self.target].stopTrace()
             del self.exit_group_syscall[self.target]
 
-    def stopOnExit(self):
-        if self.target in self.exit_group_syscall:
-            self.exit_group_syscall[self.target].stopOnExit()
-        else:
-            print('stopOnExit, no exit_group_syscall, are you debugging?')
+    def stopOnExit(self, stop=True, target=None):
+        if target is None:
+            target = self.target
+        self.lgr.debug('stopOnExit target %s is %r' % (target, stop))
+        self.stop_on_exit[target] = stop 
+        
+    def getStopOnExit(self, target=None):
+        retval = False
+        if target is None:
+            target = self.target
+        if target in self.stop_on_exit and self.stop_on_exit[target] == True:
+            retval = True
+        return retval
        
     def noReverse(self, watch_enter=True):
         cmd = 'disable-reverse-execution'
