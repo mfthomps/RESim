@@ -138,8 +138,8 @@ def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=F
 
 def main():
     parser = argparse.ArgumentParser(prog='findBNT', description='Show branches not taken for a given program.')
-    parser.add_argument('prog', action='store', help='The target program')
     parser.add_argument('ini', action='store', help='The ini file')
+    parser.add_argument('prog', action='store', help='The target program')
     parser.add_argument('-t', '--target', action='store', help='Optional target name, e.g., name of the workspace.')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
