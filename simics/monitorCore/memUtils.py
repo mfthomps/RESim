@@ -875,7 +875,14 @@ class memUtils():
             sub = sub.ljust(4, b'0')
             #print('sub is %s' % sub)
             #value = int(sub.encode('hex'), 16)
-            value = struct.unpack("<L", sub)[0]
+            if len(sub) < 4:
+                self.lgr.error('writeString failed writing sub %s, len less than 4?' % (str(sub)))
+                continue
+            try:
+                value = struct.unpack("<L", sub)[0]
+            except:
+                self.lgr.error('writeString failed unpacking sub %s,???' % (str(sub)))
+                continue
             sindex +=4
             #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
             phys = self.v2p(cpu, address)

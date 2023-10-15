@@ -2588,7 +2588,10 @@ class Syscall():
         return return_list
 
     def getCallParams(self):
-        return self.syscall_info.call_params
+        if self.syscall_info is not None:
+            return self.syscall_info.call_params
+        else:
+            return None
 
     def remainingDmod(self):
         for call_param in self.syscall_info.call_params:

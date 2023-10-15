@@ -340,10 +340,11 @@ class SyscallManager():
                 rm_list.append(instance_name)
                 
                 params = self.syscall_dict[context][instance_name].syscall.getCallParams()
-                for p in params:
-                    retval.append(p)
-                self.syscall_dict[context][instance_name].stopTrace()
-                self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
+                if params is not None:
+                    for p in params:
+                        retval.append(p)
+                    self.syscall_dict[context][instance_name].stopTrace()
+                    self.lgr.debug('syscallManager mrSyscallByContext remove %s' % instance_name)
 
             for instance_name in rm_list:
                 del self.syscall_dict[context][instance_name]
