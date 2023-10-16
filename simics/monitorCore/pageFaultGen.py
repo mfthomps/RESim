@@ -255,8 +255,11 @@ class PageFaultGen():
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
                 else:
-                    instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
-                    self.lgr.debug('pageFaultGen modeChanged arm user space instruct %s' % instruct[1])
+                    if self.user_eip is not None:
+                        instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
+                        self.lgr.debug('pageFaultGen modeChanged arm user space instruct %s' % instruct[1])
+                    else:
+                        self.lgr.debug('pageFaultGen modeChanged arm user space user_eip None')
                     
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
