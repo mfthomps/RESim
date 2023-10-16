@@ -1418,7 +1418,7 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
+        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s cycle: 0x%x' % (self.name, tid, callname, str(syscall_info.call_params), self.cpu.cycles))
         for call_param in syscall_info.call_params:
             #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
             if call_param.match_param.__class__.__name__ == 'TidFilter':
@@ -1707,7 +1707,7 @@ class Syscall():
         elif callname == 'read':        
             exit_info.old_fd = frame['param1']
             ida_msg = 'read tid:%s (%s) FD: %s buf: 0x%x count: %s' % (str(tid), comm, str(frame['param1']), frame['param2'], str(frame['param3']))
-            #self.lgr.debug(ida_msg)
+            self.lgr.debug(ida_msg)
             #ida_msg = 'read tid:%s (%s) FD: %d buf: 0x%x count: %d' % (tid, comm, frame['param1'], frame['param2'], frame['param3'])
             exit_info.retval_addr = frame['param2']
             exit_info.count = frame['param3']
@@ -1737,9 +1737,9 @@ class Syscall():
                         break
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
-                    #self.lgr.debug('syscall read, is dmod from %s' % call_param.match_param.getPath())
-                    if call_param.match_param.tid is not None and (tid != call_param.match_param.tid or exit_info.old_fd == call_param.match_param.fd):
-                        #self.lgr.debug('syscall read, is dmod, but tid or fd does not match')
+                    self.lgr.debug('syscall read, is dmod from %s' % call_param.match_param.getPath())
+                    if call_param.match_param.tid is not None and (tid != call_param.match_param.tid or exit_info.old_fd != call_param.match_param.fd):
+                        self.lgr.debug('syscall read, is dmod, but tid or fd does not match, tid:%s match:%s fd:%d  match %d' % (tid, call_param.match_param.tid, exit_info.old_fd, call_param.match_param.fd))
                         continue
                     exit_info.call_params = call_param
                     '''
@@ -2539,6 +2539,7 @@ class Syscall():
         gotone = False
         for call in call_params:
             if call not in self.syscall_info.call_params:
+                self.lgr.debug('syscall addCallParams %s' % call.name)
                 self.syscall_info.call_params.append(call)
                 gotone = True
         ''' TBD inconsistent stop actions????'''
