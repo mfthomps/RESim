@@ -309,7 +309,7 @@ class Dmod():
     def getComm(self):
         return self.comm
 
-    def setPid(self, tid):
+    def setTid(self, tid):
         self.tid = tid
 
     def setFD(self, fd):
