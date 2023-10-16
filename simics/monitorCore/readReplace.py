@@ -97,8 +97,8 @@ class ReadReplace():
             self.lgr.debug('ReadReplace: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, comm))
         else:
             bstring = binascii.unhexlify(bytes(self.breakmap[break_num].hexstring.encode())) 
-            self.lgr.debug('ReadReplace comm %s would write %s to 0x%x' % (comm, bstring, memory.logical_address)) 
-            self.top.writeString(memory.logical_address, bstring, target_cpu=self.cpu)
+            self.lgr.debug('ReadReplace comm %s would write %s to 0x%x, addr of interest is 0x%x' % (comm, bstring, memory.logical_address, self.breakmap[break_num].addr)) 
+            self.top.writeString(self.breakmap[break_num].addr, bstring, target_cpu=self.cpu)
             #SIM_break_simulation('remove me')
             done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
             self.done_list.append(done) 
