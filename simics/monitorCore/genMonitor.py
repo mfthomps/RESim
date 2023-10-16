@@ -936,17 +936,30 @@ class GenMonitor():
         self.runScripts()
 
     def handleMods(self, cell_name):
-        ''' Load DMODs.  Snapshot contains dmod state, so only load if not a snapshot '''
-        if self.run_from_snap is None and 'DMOD' in self.comp_dict[cell_name]:
+        ''' Load DMODs.  Snapshot contains dmod state, so only load if not not in the snapshot '''
+        already_loaded = []
+        if 'DMOD' in self.comp_dict[cell_name]:
+            if self.run_from_snap is not None:
+                dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
+                if os.path.isfile(dmod_file):
+                    dmod_dict = pickle.load( open(dmod_file, 'rb') )
+                    if cell_name in dmod_dict:
+                        for dmod_path in dmod_dict[cell_name]:
+                            already_loaded.append(dmod_path)
             self.is_monitor_running.setRunning(False)
             dlist = self.comp_dict[cell_name]['DMOD'].split(';')
             for dmod in dlist:
-                dmod = dmod.strip()
-                if self.runToDmod(dmod, cell_name=cell_name):
-                    print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                else:
-                    print('Dmod is missing, cannot continue.')
-                    self.quit()
+                if dmod not in already_loaded:
+                    dmod = dmod.strip()
+                    if self.run_from_snap is not None:
+                        self.lgr.debug('handleMods, got dmod not in snapshot: %s' % dmod)
+                    if self.runToDmod(dmod, cell_name=cell_name):
+                        self.lgr.debug('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                        print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
+                    else:
+                        self.lgr.debug('Dmod is missing, cannot continue.')
+                        print('Dmod is missing, cannot continue.')
+                        self.quit()
         ''' Load readReplace items. '''
         if 'READ_REPLACE' in self.comp_dict[cell_name]:
             self.is_monitor_running.setRunning(False)
@@ -2418,11 +2431,12 @@ class GenMonitor():
  
  
     def stopTrace(self):
+        self.lgr.debug('stopTrace')
         self.syscallManager[self.target].rmAllSyscalls()
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
-        #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
+        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
             the_call = self.call_traces[cell_name][callname]
             rm_list = []
