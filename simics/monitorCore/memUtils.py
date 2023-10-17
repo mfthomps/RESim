@@ -882,6 +882,8 @@ class memUtils():
                 value = struct.unpack("<L", sub)[0]
             except:
                 self.lgr.error('writeString failed unpacking sub %s,???' % (str(sub)))
+                sindex +=4
+                address += 4
                 continue
             sindex +=4
             #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
