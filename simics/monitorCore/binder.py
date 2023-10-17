@@ -49,7 +49,10 @@ class Binder():
             s = fh.read()
             jload = json.loads(s)
             for jrec in jload:
-                bind_rec = self.add(jrec['tid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
+                if 'tid' in jrec:
+                    bind_rec = self.add(jrec['tid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
+                else:
+                    bind_rec = self.add(str(jrec['pid']), jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
                 if 'new_fd' in jrec:
                     bind_rec.new_fd = jrec['new_fd'] 
             self.lgr.debug('binder loadJson loaded %d from %s' % (len(jload), fname))
