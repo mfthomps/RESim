@@ -636,7 +636,7 @@ class findKernelWrite():
             self.iter_count = 0
             
         dumb, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('backOne user space tid: %d write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
+        self.lgr.debug('backOne user space tid: %s write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
                value, self.addr, current, eip, offset))
         if not self.forward:
             previous = current - 1
