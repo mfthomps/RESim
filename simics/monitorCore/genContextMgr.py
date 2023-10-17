@@ -926,12 +926,14 @@ class GenContextMgr():
             self.watching_tasks = False
             if tid in self.watch_rec_list_saved:
                 self.watch_rec_list_saved.remove(tid)
-            if tid in self.watch_rec_list:
-                self.watch_rec_list.remove(tid)
+            ctask = self.task_utils.getCurThreadRec()
+            if ctask in self.watch_rec_list:
+                del self.watch_rec_list[ctask]
             SIM_run_alone(self.restoreDefaultContext, None)
             self.lgr.debug('genContextManager No longer watching tid:%s' % tid)
             if tid in self.tid_cache:
                 self.tid_cache.remove(tid)
+
         
     def stopWatchTasks(self):
         self.lgr.debug('stopWatchTasks')
