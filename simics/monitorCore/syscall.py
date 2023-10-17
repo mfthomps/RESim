@@ -938,7 +938,7 @@ class Syscall():
             self.lgr.debug('parseExecve db_tid:%s tid_list: %s' % (db_tid, str(tid_list)))
         
         if tid in tid_list and tid != db_tid:
-            self.lgr.debug('syscall parseExecve remove %d from list being watched.' % (tid))
+            self.lgr.debug('syscall parseExecve remove %s from list being watched.' % (tid))
             #self.context_manager.rmTask(tid)
             self.context_manager.stopWatchTid(tid)
         
@@ -1929,7 +1929,10 @@ class Syscall():
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
                 self.sig_handler[tid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, self.syscall_info, proc_break, 'sig_handler')
                 self.lgr.debug('syscallHap %s set break on handler 0x%x' % (callname, handler))
-            ida_msg = '%s tid:%s signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, frame['param1'], frame['param2'], handler)
+            if handler is not None:
+                ida_msg = '%s tid:%s signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, frame['param1'], frame['param2'], handler)
+            else:
+                ida_msg = '%s tid:%s signum: %d sigaction: 0x%x no handler found' % (callname, tid, frame['param1'], frame['param2'])
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
@@ -2195,10 +2198,13 @@ class Syscall():
                 self.lgr.debug('syscallHap uname called from within execve %d' % tid)
                 return
             else:
-                self.lgr.error('fix this, syscall within exec? tid:%s call: %s' % (tid, callname))
-                SIM_break_simulation('fix this')
-                return
-
+                if self.context_manager.watchingThis():
+                    self.lgr.error('fix this, syscall within exec? tid:%s call: %s' % (tid, callname))
+                    SIM_break_simulation('fix this')
+                    return
+                else:
+                    self.lgr.debug('syscall with pending exec, but no longer watching.  TBD, remove pending exec when no longer watching?')
+                    return
         if self.name is None:
             exit_info_name = '%s-exit' % (callname)
         else:
