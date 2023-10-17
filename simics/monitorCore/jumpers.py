@@ -97,7 +97,7 @@ class Jumpers():
             self.lgr.debug('jumper doJump addr 0x%x not in haps' % addr)
             return
         if addr in self.comm_name:
-            cpu, comm, pid = self.top.getCurrentProc(cell_name=self.cell_name)
+            cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu)
             if comm != self.comm_name[addr]:
                 self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, self.comm_name[addr]))
                 return
