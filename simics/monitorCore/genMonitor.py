@@ -110,6 +110,7 @@ import jumpers
 import kbuffer
 import funMgr
 import readReplace
+import regSet
 import syscallManager
 import testSnap
 import winTaskUtils
@@ -292,6 +293,9 @@ class GenMonitor():
 
         ''' ReadReplace module if any '''
         self.read_replace = {}
+
+        ''' RegSet module if any '''
+        self.reg_set = {}
 
         self.os_type = {}
 
@@ -675,7 +679,7 @@ class GenMonitor():
             debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
             if debug_tid is not None:
                 if debug_tid != tid:
-                    self.lgr.debug('debug_tid:%s  tid %d' % (debug_tid, tid))
+                    self.lgr.debug('debug_tid:%s  tid %s' % (debug_tid, tid))
                     ''' debugging, but not this tid.  likely a clone '''
                     if not self.context_manager[self.target].amWatching(tid):
                         ''' stick with original debug tid '''
@@ -970,6 +974,16 @@ class GenMonitor():
                     print('ReadReplace %s set for cell %s' % (read_replace, cell_name))
                 else:
                     print('ReadReplace file %s is missing, cannot continue.' % read_replace)
+                    self.quit()
+        if 'REG_SET' in self.comp_dict[cell_name]:
+            self.is_monitor_running.setRunning(False)
+            dlist = self.comp_dict[cell_name]['REG_SET'].split(';')
+            for reg_set in dlist:
+                reg_set = reg_set.strip()
+                if self.regSet(reg_set, cell_name=cell_name, snapshot=self.run_from_snap):
+                    print('RegSet %s set for cell %s' % (reg_set, cell_name))
+                else:
+                    print('RegSet file %s is missing, cannot continue.' % reg_set)
                     self.quit()
        
     def getDbgFrames(self):
@@ -1360,6 +1374,8 @@ class GenMonitor():
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
         if self.target in self.read_replace:
              self.read_replace[self.target].swapContext()
+        if self.target in self.reg_set:
+             self.reg_set[self.target].swapContext()
 
     def trackThreads(self):
         if self.target not in self.track_threads:
@@ -5066,6 +5082,7 @@ class GenMonitor():
         self.goAddr(next_ip)
 
     def goAddr(self, addr):
+        ''' Run to a given address'''
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = cpu.current_context
         bp = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, addr, self.mem_utils[self.target].WORD_SIZE, 0)
@@ -5485,6 +5502,16 @@ class GenMonitor():
         self.lgr.debug('readReplace %s' % fname)
         cpu, comm, tid = self.task_utils[cell_name].curThread() 
         self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.lgr, snapshot=snapshot)
+        return True
+
+    def regSet(self, fname, cell_name=None, snapshot=None):
+        if not os.path.isfile(fname):
+            return False
+        if cell_name is None:
+            cell_name = self.target
+        self.lgr.debug('regSet %s' % fname)
+        cpu, comm, tid = self.task_utils[cell_name].curThread() 
+        self.reg_set[cell_name] = regSet.RegSet(self, cpu, cell_name, fname, self.lgr, snapshot=snapshot)
         return True
 
     def testSnap(self):
