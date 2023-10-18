@@ -233,7 +233,7 @@ class findKernelWrite():
     def writeCallback(self, cpu, third, forth, memory):
         location = memory.logical_address
         physical = memory.physical_address
-        if location is 0 and physical is 0:
+        if location == 0 and physical == 0:
            self.lgr.debug('findKernelWrite writeCallback, location zero?')
            ''' recursive callback triggered by this Hap '''
            return

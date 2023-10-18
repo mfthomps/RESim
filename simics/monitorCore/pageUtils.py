@@ -106,11 +106,11 @@ def adjust(start, length, page_size):
     boundary = start % page_size
     #print 'page range for %x %x' % (start, end)
     #logging.debug('noncode break range for %x %x' % (start, end))
-    if boundary is not 0:
+    if boundary != 0:
         #logging.debug('start %x not on page boundary, adjust to %x' % (start, start- boundary))
         start = start - boundary
     boundary = (end+1) % page_size
-    if boundary is not 0 and end < 0xffffffffffffffff:
+    if boundary != 0 and end < 0xffffffffffffffff:
         adjust = page_size - boundary
         #logging.debug('end %x not on page boundary, adjust to %x' % (start, end+adjust))
         end = end + adjust
@@ -124,7 +124,7 @@ def pageLen(start, page_size):
 def pageStart(start, page_size):
     page_start = start
     boundary = start % page_size
-    if boundary is not 0:
+    if boundary != 0:
        page_start = start - boundary
     return page_start
 

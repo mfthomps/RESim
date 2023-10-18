@@ -137,7 +137,7 @@ def getOperands(instruct):
     ret1 = None
     ret2 = None
     parts = instruct.split(',')
-    if len(parts) is 1:
+    if len(parts) == 1:
         ''' no comma '''
         parts = instruct.split(' ')
         if parts[0] == 'rep':
@@ -274,7 +274,7 @@ def getUnmapped(cpu, instruct, lgr):
         address = getAddressFromOperand(cpu, operand, lgr)
         if address is not None:
             phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-            if phys_block.address is 0:
+            if phys_block.address == 0:
                 #print 'found unmapped at %x' % address
                 return address
             else:
