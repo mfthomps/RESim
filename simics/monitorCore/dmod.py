@@ -192,8 +192,6 @@ class Dmod():
             elif line.startswith(self.fiddle.match):
                 checkline = line
                 break
-            else:
-                return None
         if checkline is None:
             return False
         #self.lgr.debug('Dmod checkString  %s to line %s' % (self.fiddle.match, checkline))
@@ -270,6 +268,7 @@ class Dmod():
             self.lgr.debug('Dmod checkstring bytearray None from 0x%x' % addr)
             return retval
         s = ''.join(map(chr,byte_array))
+        #self.lgr.debug('dMod checkString %d bytes' % len(byte_array))
         rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
