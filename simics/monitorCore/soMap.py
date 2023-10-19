@@ -221,7 +221,7 @@ class SOMap():
     def getAnalysisPath(self, fname):
         retval = None
         #self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
-        analysis_path = os.getenv('IDA_ANALYIS')
+        analysis_path = os.getenv('IDA_ANALYSIS')
         if analysis_path is None:
             analysis_path = '/mnt/resim_archive/analysis'
             if len(self.fun_list_cache) == 0:
