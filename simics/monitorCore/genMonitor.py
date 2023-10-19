@@ -3165,7 +3165,7 @@ class GenMonitor():
     def runToBind(self, addr, proc=None, run=True):
         #addr = '192.168.31.52:20480'
         if type(addr) is int:
-            addr = '.*:%d' % addr
+            addr = '.*:%d$' % addr
         try:
             test = re.search(addr, 'nothing', re.M|re.I)
         except:
