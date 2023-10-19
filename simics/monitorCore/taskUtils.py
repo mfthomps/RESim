@@ -945,6 +945,7 @@ class TaskUtils():
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
+            #self.lgr.debug('getSyscallEntry syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
