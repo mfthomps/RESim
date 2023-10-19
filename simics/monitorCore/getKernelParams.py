@@ -241,7 +241,7 @@ class GetKernelParams():
             self.lgr.debug('taskModeChanged32 eip 0x%x %s' % (eip, instruct[1]))
             if 'illegal' in instruct[1]:
                 self.lgr.debug('taskModeChanged32 page fault, continue')
-            elif 'sys' not in instruct[1] and 'int' not in instruct[1]:
+            elif 'sys' not in instruct[1] and 'int' not in instruct[1] and 'svc' not in instruct[1]:
                 self.lgr.debug('taskModeChanged32 not a syscall, page fault, continue')
             else:
                 self.lgr.debug('taskModeChanged32 must be a call, look for FS')
@@ -284,8 +284,10 @@ class GetKernelParams():
             self.param.current_task_fs = False
         if self.mem_utils.WORD_SIZE == 4:
             ''' use mode haps and brute force search for values that match the current task value '''
-            #self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
-            self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged32, self.cpu)
+            if self.cpu.architecture == 'arm':
+                self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
+            else:
+                self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged32, self.cpu)
             self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.currentTaskStopHap, None)
             #self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.supervisor32StopHap, None)
             self.lgr.debug('getCurrentTaskPtr added mode and stop haps')
