@@ -479,7 +479,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None):
     if os.path.isfile(quick_check):
         retval = fname
     else:
-        analysis_path = os.getenv('IDA_ANALYIS')
+        analysis_path = os.getenv('IDA_ANALYSIS')
         if analysis_path is None:
             analysis_path = '/mnt/resim_archive/analysis'
             if len(fun_list_cache) == 0:
