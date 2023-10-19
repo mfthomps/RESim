@@ -760,7 +760,7 @@ class SharedSyscall():
                     self.traceProcs.open(tid, comm, exit_info.fname, eax)
                 ''' TBD cleaner way to know if we are getting ready for a debug session? '''
                 if ('.so.' in exit_info.fname or exit_info.fname.endswith('.so')) and self.track_so:
-                    #self.lgr.debug('is open so')
+                    #self.lgr.debug('sharedSyscall is open so')
                     #open_syscall = self.top.getSyscall(self.cell_name, 'open')
                     open_syscall = exit_info.syscall_instance
                     if open_syscall is not None: 
@@ -865,10 +865,10 @@ class SharedSyscall():
                   exit_info.call_params = None
                   if eax < 16000:
                     call_params = exit_info.syscall_instance.getCallParams()
-                    self.lgr.debug('read dmod check %d params' % len(call_params))
+                    #self.lgr.debug('read dmod check %d params' % len(call_params))
                     tmp_params = list(call_params)
                     for call_param in tmp_params:
-                        self.lgr.debug('dmod check %s' % call_param.match_param.__class__.__name__) 
+                        #self.lgr.debug('dmod check %s' % call_param.match_param.__class__.__name__) 
                         if call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
                             self.lgr.debug('sharedSyscall %s read check dmod %s count %d %s' % (self.cell_name, dmod.getPath(), eax, s))
