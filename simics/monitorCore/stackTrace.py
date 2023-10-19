@@ -720,7 +720,7 @@ class StackTrace():
         prev_ip = None
         if self.soMap.isMainText(eip):
             been_in_main = True
-            if not self.soMap.isMainText(self.reg_frame['lr']):
+            if self.cpu.architecture != 'arm' or not self.soMap.isMainText(self.reg_frame['lr']):
                 self.lgr.debug('stackTrace starting in main with lr that is not in main, text set prev_ip to 0x%x' %eip)
                 prev_ip = eip
         #prev_ip = eip
@@ -999,7 +999,8 @@ class StackTrace():
             if self.fun_mgr is not None and not self.fun_mgr.isFun(eip):
                 fname, start, end = self.soMap.getSOInfo(eip)
                 if fname is not None:
-                    full = self.targetFS.getFull(fname, self.lgr)
+                    #full = self.targetFS.getFull(fname, self.lgr)
+                    full = self.top.getAnalysisPath(fname)
                     self.lgr.debug('stackTrace soCheck eip 0x%x not a fun? Adding it.  fname %s full %s start 0x%x' % (eip, fname,full, start))
                     self.fun_mgr.add(full, start)
             self.fun_mgr.soCheckAdd(eip) 
