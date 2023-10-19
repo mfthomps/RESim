@@ -65,6 +65,7 @@ class FunMgr():
  
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0, text_offset=0):
+        #self.lgr.debug('funMgr add path %s' % path)
         if self.ida_funs is not None:
             use_offset = start
             if offset != 0:
@@ -149,21 +150,14 @@ class FunMgr():
             ''' much of the link mess is due to linux target file systems with links.  Also using links while
                 figuring out the windows directory structures. '''
             full_path = resimUtils.realPath(full_path)
-        self.lgr.debug('getIDAFuns full_path %s  root_prefix %s' % (full_path, root_prefix))
+        #self.lgr.debug('getIDAFuns full_path %s  root_prefix %s' % (full_path, root_prefix))
         if full_path.startswith(root_prefix):
-            rel_path = full_path[(len(root_prefix)+1):]
-            analysis_path = os.getenv('IDA_ANALYSIS')
-            if analysis_path is None:
-                analysis_path = '/mnt/resim_archive/analysis' 
-                self.lgr.debug('IDA_ANALYSIS is not defined using %s' % analysis_path)
-            root_dir = os.path.basename(root_prefix)
-            self.lgr.debug('getIDAFuns root_dir  %s  rel_path %s offset 0x%x' % (root_dir, rel_path, offset))
-          
-            analysis_path = os.path.join(analysis_path, root_dir, rel_path) 
-            self.lgr.debug('getIDAFuns analysis_path %s' % analysis_path) 
+            analysis_path = self.top.getAnalysisPath(full_path)
+            #self.lgr.debug('getIDAFuns analysis_path %s' % analysis_path) 
 
             fun_path = analysis_path+'.funs'
             iterator_path = analysis_path+'.iterators'
+            root_dir = os.path.basename(root_prefix)
             self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
             
             if os.path.isfile(fun_path):
@@ -179,7 +173,9 @@ class FunMgr():
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
 
     def setRelocateFuns(self, full_path, offset=0):
-        self.lgr.debug('funMgr setRelocateFuns %s offset is 0x%x' % (full_path, offset))
+        #self.lgr.debug('funMgr setRelocateFuns %s offset is 0x%x' % (full_path, offset))
+        if full_path.endswith('.funs'):
+            full_path = full_path[:-5]
         relocate_path = full_path+'.imports'
         if os.path.isfile(relocate_path):
             with open(relocate_path) as fh:

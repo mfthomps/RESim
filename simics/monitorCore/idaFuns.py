@@ -28,7 +28,7 @@ class IDAFuns():
                        fun = rmPrefix(m)
                        self.mangle[fun] = mangle_file[m]
             else:
-                lgr.debug('no mangle file at %s' % mpath)
+                lgr.debug('idaFuns init no mangle file at %s' % mpath)
             upath = path[:-4]+'unwind' 
             if os.path.isfile(upath):
                with open(upath) as fh:
@@ -64,7 +64,10 @@ class IDAFuns():
     def getFunPath(self, path):
         if path is None:
             return None
-        fun_path = path+'.funs'
+        if path.endswith('.funs'):
+            fun_path = path
+        else:
+            fun_path = path+'.funs'
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
             #self.lgr.debug('is link? %s' % path)
@@ -80,6 +83,7 @@ class IDAFuns():
         else:
             self.did_paths.append(path)
         funfile = self.getFunPath(path)
+        #self.lgr.debug('idaFuns add path %s funfile %s' % (path, funfile))
 
         add_mangle = []
         mpath = funfile[:-4]+'mangle' 
@@ -92,11 +96,11 @@ class IDAFuns():
                        self.mangle[fun] = add_mangle[m]
                self.lgr.debug('Loaded additional mangle from %s' % mpath)
         else:
-            self.lgr.debug('no mangle file at %s' % mpath)
+            self.lgr.debug('idaFuns add no mangle file at %s' % mpath)
 
         if os.path.isfile(funfile):
             with open(funfile) as fh:
-                self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
+                #self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
                     fun_int = int(f)

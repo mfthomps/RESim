@@ -230,16 +230,25 @@ class SOMap():
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
+        self.lgr.debug('soMap getAnalysisPath fname %s top_dir %s  ap %s' % (fname, top_dir, analysis_path))
         if len(self.fun_list_cache) == 0:
             self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
-            self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
+            self.lgr.debug('soMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
+            for item in self.fun_list_cache:
+                self.lgr.debug('\t fun_list_cache item %s' % item)
 
         base = os.path.basename(fname)+'.funs'
-        if base.upper() in map(str.upper, self.fun_list_cache):
+        self.lgr.debug('base is %s' % base)
+        if base in self.fun_list_cache:
             #with_funs = fname+'.funs'
-            retval = fname
+            if fname.startswith(root_prefix):
+                fname = fname[len(root_prefix):]
+            if fname.startswith('/'):
+                fname = fname[1:]
+            retval = os.path.join(top_dir, fname)
+            self.lgr.debug('getAnalysisPath got it %s' % retval)
         else:
-            #self.lgr.debug('getAnalysisPath %s not in cache' % base)
+            self.lgr.debug('getAnalysisPath %s not in cache' % base)
             pass
 
         return retval
