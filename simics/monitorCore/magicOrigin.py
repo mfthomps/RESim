@@ -121,13 +121,13 @@ class MagicOrigin():
         cmd = 'enable-reverse-execution'
         SIM_run_command(cmd)
         self.did_magic = True
-        self.lgr.debug('MagicOrigin to pid and then set origin')
+        self.lgr.debug('MagicOrigin to tid and then set origin')
         if self.top.isRunningTo():
             self.top.setOriginWhenStopped()
             self.lgr.debug('MagicOrigin back from calling setOriginWhen stopped, now continue')
             SIM_run_command('c')
         else:
-            self.top.toPid(-1, callback=self.top.setOrigin)
+            self.top.toTid(-1, callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
         #self.lgr.debug('MagicOrigin, continue')
         #SIM_run_command('c')
