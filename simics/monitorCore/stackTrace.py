@@ -28,21 +28,13 @@ import os
 import memUtils
 import decode
 import decodeArm
+import resimUtils
 def cppClean(fun):
     if fun.startswith('std::'):
         fun = fun[len('std::'):]
         if fun.startswith('__cxx11::'):
             fun = fun[len('__cxx11::'):]
     return fun
-
-def isClib(lib_file):
-    retval = False
-    if lib_file is not None:
-        lf = lib_file.lower()
-        if 'libc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
-            retval = True
-    return retval
- 
 
 class StackTrace():
     class FrameEntry():
@@ -373,7 +365,7 @@ class StackTrace():
                 fname = self.soMap.getSOFile(call_inst)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, eip)
                 #self.lgr.debug('doX86 initial sp call to fun_name %s resolve call got %s fname %s' % (fun_name, instruct_1, fname))
-                was_clib = isClib(fname)
+                was_clib = resimUtils.isClib(fname)
                 prev_sp = esp
                 frame = self.FrameEntry(call_inst, fname, instruct_1, esp, fun_addr=call_addr, 
                         fun_name=fun_name, ret_addr=stack_val, ret_to_addr = esp)
@@ -390,7 +382,7 @@ class StackTrace():
                 #self.lgr.debug('doX86, cur_fun 0x%x name %s' % (cur_fun, cur_fun_name))
                 pass
             fname = self.soMap.getSOFile(eip)
-            was_clib = isClib(fname)
+            was_clib = resimUtils.isClib(fname)
             #if not self.soMap.isMainText(eip):
             if True:
                 ''' TBD need to be smarter to avoid bogus frames.  Cannot rely on not being main because such things are called in static-linked programs. '''
@@ -442,7 +434,7 @@ class StackTrace():
                 break
 
             ret_to_fname = self.soMap.getSOFile(ret_to)
-            if was_clib and not isClib(ret_to_fname):
+            if was_clib and not resimUtils.isClib(ret_to_fname):
                 #self.lgr.debug('stackTrace dox86 Was clib, now not, look for other returns? prev_sp is 0x%x bp is 0x%x, pushed_bp is 0x%x' % (prev_sp, bp, pushed_bp))
                 max_bytes = bp - prev_sp
                 other_ret_to = self.findReturnFromCall(prev_sp, cur_fun, max_bytes=max_bytes, eip=call_inst)
@@ -462,7 +454,8 @@ class StackTrace():
                 instruct_1 = self.fun_mgr.resolveCall(instruct, call_inst)
                 fname = self.soMap.getSOFile(call_inst)
         
-                if call_addr is not None and been_to_main and not self.soMap.isMainText(call_addr):
+                #if call_addr is not None and been_to_main and not self.soMap.isMainText(call_addr):
+                if call_addr is not None and been_to_main and not self.soMap.isAboveLibc(call_addr):
                     #self.lgr.debug('stackTrace doX86 been to main but now see lib? 0x%x bail' % call_addr)
                     ''' TBD hacky return value'''
                     bp = 0
@@ -478,18 +471,20 @@ class StackTrace():
                     if not self.top.isWindows() and call_addr != cur_fun and quick_return is None:
                         #self.lgr.debug('stackTrace doX86 call findReturnFromCall')
                         ret_addr = self.findReturnFromCall(esp, cur_fun)
-                        if ret_addr is not None and self.soMap.isMainText(ret_addr):
+                        #if ret_addr is not None and self.soMap.isMainText(ret_addr):
+                        if ret_addr is not None and self.soMap.isAboveLibc(ret_addr):
                              been_to_main = True
                         #self.lgr.debug('stackTrace doX86 back from findReturnFromCall')
                         if ret_addr is not None:
                             added_frame = True
                     else:
-                        if self.soMap.isMainText(call_addr):
+                        #if self.soMap.isMainText(call_addr):
+                        if self.soMap.isAboveLibc(call_addr):
                              been_to_main = True
                     
                 else:
                     #self.lgr.debug('stackTrace x86 no call_addr add frame add call_inst 0x%x  inst: %s fname %s' % (call_inst, instruct_1, fname)) 
-                    was_clib = isClib(fname)
+                    was_clib = resimUtils.isClib(fname)
                     prev_sp = ret_to_addr - self.mem_utils.wordSize(self.cpu)
                     frame = self.FrameEntry(call_inst, fname, instruct_1, prev_sp, 
                         fun_name=fun_name, ret_addr=ret_to, ret_to_addr = ret_to_addr)
@@ -502,7 +497,7 @@ class StackTrace():
                 ''' only add if not done by findReturnFromCall'''
                 if call_addr is not None and not added_frame:
                     #self.lgr.debug('stackTrace x86 add frame add call_inst 0x%x  inst: %s fname: %s' % (call_inst, instruct_1, fname)) 
-                    was_clib = isClib(fname)
+                    was_clib = resimUtils.isClib(fname)
                     prev_sp = ret_to_addr - self.mem_utils.wordSize(self.cpu)
                     frame = self.FrameEntry(call_inst, fname, instruct_1, prev_sp, fun_addr=call_addr, 
                         fun_name=fun_name, ret_addr=ret_to, ret_to_addr = ret_to_addr)
@@ -532,7 +527,7 @@ class StackTrace():
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
             #lib_file = self.top.getSO(eip)
             lib_file = self.soMap.getSOFile(eip)
-            if isClib(lib_file):
+            if resimUtils.isClib(lib_file):
                 cur_is_clib = True
             #self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
         retval = None
@@ -541,8 +536,8 @@ class StackTrace():
         #while retval is None and ptr < limit:
         while ptr < limit:
             if retval is not None and call_ip is not None:
-                if self.soMap.isMainText(call_ip):
-                    #self.lgr.debug('stackTrace findReturnFromCall, call_ip is in main, we are done')
+                if self.soMap.isAboveLibc(call_ip):
+                    self.lgr.debug('stackTrace findReturnFromCall, call_ip is in main, we are done')
                     break
             val = self.readAppPtr(ptr)
             if val is None:
@@ -718,10 +713,11 @@ class StackTrace():
         ptr = esp
         been_in_main = False
         prev_ip = None
-        if self.soMap.isMainText(eip):
+        #if self.soMap.isMainText(eip):
+        if self.soMap.isAboveLibc(eip):
             been_in_main = True
             if self.cpu.architecture != 'arm' or not self.soMap.isMainText(self.reg_frame['lr']):
-                self.lgr.debug('stackTrace starting in main with lr that is not in main, text set prev_ip to 0x%x' %eip)
+                self.lgr.debug('stackTrace starting in main with lr that is not above libc, text set prev_ip to 0x%x' %eip)
                 prev_ip = eip
         #prev_ip = eip
         if self.fun_mgr is None:
@@ -965,9 +961,9 @@ class StackTrace():
                         if not skip_this:
                             prev_fname = fname
                             prev_ip = call_ip
-                            if self.soMap.isMainText(call_ip):
+                            if self.soMap.isAboveLibc(call_ip):
                                 been_in_main = True
-                                #self.lgr.debug('stackTrace been in main')
+                                self.lgr.debug('stackTrace been in main')
                     else:
                         #self.lgr.debug('doTrace not a call? %s' % instruct_str)
                         frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, None, None)

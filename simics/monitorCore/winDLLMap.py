@@ -318,6 +318,19 @@ class WinDLLMap():
                 retval = True
         return retval
 
+    def isAboveLibc(self, address):
+        # TBD fix for windows
+        retval = False
+        if self.isMainText(address):
+            retval = True
+        else:
+            so_file = self.getSOFile(address)
+            if so_file is not None and not resimUtils.isClib(so_file):
+                fun = self.fun_mgr.getFunName(address)
+                if fun is not None:
+                    retval = True 
+        return retval           
+
     def getSOFile(self, addr_in):
         retval = None
         dumb, comm, tid = self.task_utils.curThread() 
