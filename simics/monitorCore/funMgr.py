@@ -186,6 +186,8 @@ class FunMgr():
                         rel_fun_name = demang
                     else:
                         rel_fun_name = funs[addr_s]
+                    rel_fun_name = idaFuns.rmPrefix(rel_fun_name)
+
                     addr = int(addr_s)
                     adjust = addr+offset
                     #if 'FNET' in relocate_path:
@@ -195,8 +197,10 @@ class FunMgr():
                         pass
                     else:
                         self.relocate_funs[adjust] = rel_fun_name
+                        #self.lgr.debug('relocate: %s' % rel_fun_name)
                 self.lgr.debug('funMgr setRelocateFuns loaded %s relocates for path %s num relocates now %s' % (len(funs), relocate_path, len(self.relocate_funs))) 
-        if not self.top.isWindows():
+        elif False and not self.top.isWindows():
+            #TBD Fix this
             prog_path = self.top.getFullPath()
             ''' TBD need to adjust per offset?'''
             new_relocate_funs = elfText.getRelocate(prog_path, self.lgr, self.ida_funs)
@@ -342,3 +346,13 @@ class FunMgr():
     def soCheckAdd(self, addr):
         if addr not in self.so_checked: 
             self.so_checked.append(addr)
+
+    def showFunAddrs(self, fun_name):
+        ''' given a function name, return its entry points? '''
+        for fun in self.relocate_funs:
+            if self.relocate_funs[fun] == fun_name:
+                print('relocate 0x%x' % fun)
+        self.ida_funs.showFunEntries(fun_name)
+
+    def getFunEntry(self, fun_name):
+        return self.ida_funs.getFunEntry(fun_name)

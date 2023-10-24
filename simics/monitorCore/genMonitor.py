@@ -4040,7 +4040,7 @@ class GenMonitor():
         print('Track IO has stopped at a backstop.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
-                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None):
+                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None):
         self.lgr.debug('trackIO') 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
@@ -4065,7 +4065,7 @@ class GenMonitor():
                 self.dataWatch[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
 
-        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet)
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet, offset=offset, length=length)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
 
         if self.coverage is not None:
@@ -5752,6 +5752,13 @@ class GenMonitor():
         if target in self.page_faults:
             self.page_faults[target].addProbe(addr)
             self.lgr.debug('addPageProbe cell %s addr 0x%x' % (target, addr))
+
+    def showFunEntries(self, fun_name):
+        self.fun_mgr.getAddr(fun_name)
+
+    def getFunEntry(self, fun_name):
+        ''' get the entry of a given function name, with preference to the largest function '''
+        return self.fun_mgr.getFunEntry(fun_name)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

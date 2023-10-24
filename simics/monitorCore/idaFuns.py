@@ -1,10 +1,14 @@
 import os
 import json
+import clibFuns
 def rmPrefix(fun):
     if fun.startswith('.'):
         fun = fun[1:]
-    if fun.startswith('_'):
-        fun = fun[1:]
+    for pre in clibFuns.mem_prefixes:
+        if fun.startswith(pre):
+            fun = fun[len(pre):]
+    #if fun.startswith('_'):
+    #    fun = fun[1:]
     return fun
 
 class IDAFuns():
@@ -46,12 +50,13 @@ class IDAFuns():
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
                         fun_name = fun_name[7:]
-                    else:
-                        fun_name = rmPrefix(fun_name)
+                    fun_name = rmPrefix(fun_name)
                     if fun_name in self.mangle:
-                        #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
-                        fun_rec['name'] = self.mangle[fun_name]
-                        #lgr.debug('function name for 0x%x (%s) changed to %s' % (fun, fun_name, fun_rec['name']))
+                        lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
+                        demangled = self.mangle[fun_name]
+                        fun_name = rmPrefix(demangled)
+                        fun_rec['name'] = fun_name
+                        lgr.debug('demangled function name for 0x%x changed to %s' % (fun, fun_name))
                     adjusted = fun_rec['start'] + offset
                     fun = adjusted
                     fun_rec['start'] = adjusted
@@ -111,13 +116,16 @@ class IDAFuns():
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
+                    fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
                     #if fun_name == 'memcpy':
                     #    self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
                     if fun_name in add_mangle:
                         #self.lgr.debug('****************** %s in add mangle as %s' % (fun_name, add_mangle[fun_name]))
-                        self.funs[fun]['name'] = add_mangle[fun_name]
+                        demangled = add_mangle[fun_name]
+                        fun_name = rmPrefix(demangled)
+                        self.funs[fun]['name'] = fun_name
                     elif fun_name.startswith('_ZNK'):
                         self.lgr.debug('#################### %s not in mangle? ' % fun_name)
                    
@@ -229,4 +237,22 @@ class IDAFuns():
             fun = self.getFun(ip)
         if fun in self.unwind:
             retval = True
+        return retval
+
+    def showFunEntries(self, fun_name):
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                print('fun entry 0x%x size %d' % (fun, size))
+
+    def getFunEntry(self, fun_name):
+        ''' get the entry of a given function name, with preference to the largest function '''
+        big = 0
+        retval = None
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                if size > big:
+                    big = size
+                    retval = fun
         return retval
