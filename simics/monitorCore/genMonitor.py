@@ -1588,7 +1588,7 @@ class GenMonitor():
         #self.stopTrace()
         plist = self.task_utils[self.target].getTidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
-            self.lgr.debug('debugProc plist len %d plist[0] %d  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
+            self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
             self.lgr.debug('debugProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
