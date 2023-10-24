@@ -607,7 +607,7 @@ class WinTaskUtils():
         if '-' in leader_tid:
             pid = int(leader_tid.split('-')[0])
         else:
-            pid = int(leader_dit)
+            pid = int(leader_tid)
         for ts in ts_list:
             if ts_list[ts].pid == pid:
                 thread_dict = self.tidDictFromProcRec(ts)

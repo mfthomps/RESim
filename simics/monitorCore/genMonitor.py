@@ -1545,7 +1545,7 @@ class GenMonitor():
         plist = self.task_utils[self.target].getTidsForComm(proc)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
-            print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
+            print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
             self.run_to[self.target].toRunningProc(proc, plist, flist)
@@ -5028,7 +5028,7 @@ class GenMonitor():
         retval = True
         self.rmDebugWarnHap()
         if self.debug_info is not None and 'pid' in self.debug_info:
-            self.debug_info['tid'] = self.debug_info['pid']
+            self.debug_info['tid'] = str(self.debug_info['pid'])
         if self.debug_info is not None and 'tid' in self.debug_info:
             self.lgr.debug('debugSnap call debugTidGroup for tid:%s cpu name %s current target %s' % (self.debug_info['tid'], self.debug_info['cpu'], self.target))
             self.debugTidGroup(self.debug_info['tid'], to_user=False, final_fun=final_fun)
