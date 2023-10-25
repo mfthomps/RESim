@@ -2080,7 +2080,8 @@ class Syscall():
     def sigHandlerHap(self, syscall_info, context, break_num, memory):
         cpu, comm, tid = self.task_utils.curThread() 
         ida_msg = 'signal handler tid: %s' % tid
-        SIM_break_simulation(ida_msg)
+        self.lgr.debug(ida_msg)
+        #SIM_break_simulation(ida_msg)
 
     def syscallHap(self, syscall_info, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
