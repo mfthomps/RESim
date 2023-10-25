@@ -926,8 +926,8 @@ class TaskUtils():
             return None, None
 
     def getProgNameFromComm(self, comm):
-        for tid in self.program_map:
-            if self.program_map[tid].endswith(comm):
+        for tid in self.exec_addrs:
+            if self.exec_addrs[tid].prog_name.endswith(comm):
                 return self.program_map[tid]
         return None
 

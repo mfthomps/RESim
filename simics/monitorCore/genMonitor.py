@@ -2430,7 +2430,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         if new_log:
-            self.traceMgr[self.target].open('/tmp/syscall_trace.txt', cpu)
+            self.traceMgr[self.target].open('logs/syscall_trace.txt', cpu)
         for call in call_list: 
             #TBD fix 32-bit compat
             self.call_traces[self.target][call] = self.traceSyscall(callname=call, trace_procs=True, soMap=self.soMap[self.target], swapper_ok=swapper_ok)
@@ -2471,7 +2471,7 @@ class GenMonitor():
     def traceFile(self, path):
         ''' Create mirror of reads/write to the given file.'''
         self.lgr.debug('traceFile %s' % path)
-        outfile = os.path.join('/tmp', os.path.basename(path))
+        outfile = os.path.join('logs/', os.path.basename(path))
         self.traceFiles[self.target].watchFile(path, outfile)
         ''' TBD reduce to only track open/write/close? '''
         if self.target not in self.trace_all:
@@ -2480,7 +2480,7 @@ class GenMonitor():
     def traceFD(self, fd, raw=False):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
         self.lgr.debug('traceFD %d' % fd)
-        outfile = '/tmp/output-fd-%d.log' % fd
+        outfile = 'logs/output-fd-%d.log' % fd
         self.traceFiles[self.target].watchFD(fd, outfile, raw=raw)
 
     def exceptHap(self, cpu, one, exception_number):
@@ -2542,10 +2542,11 @@ class GenMonitor():
             cell = self.cell_config.cell_context[target]
             tid, cpu = self.context_manager[target].getDebugTid() 
             if tid is not None:
-                tf = '/tmp/syscall_trace-%s-%s.txt' % (target, tid)
+                #tf = '/tmp/syscall_trace-%s-%s.txt' % (target, tid)
+                tf = 'logs/syscall_trace-%s-%s.txt' % (target, tid)
                 context = self.context_manager[target].getRESimContext()
             else:
-                tf = '/tmp/syscall_trace-%s.txt' % target
+                tf = 'logs/syscall_trace-%s.txt' % target
                 cpu, comm, tid = self.task_utils[target].curThread() 
 
             traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, msg='traceAll')
@@ -2640,7 +2641,7 @@ class GenMonitor():
         else:
             call_params = []
             cpu = self.cell_config.cpuFromCell(self.target)
-            self.traceMgr[self.target].open('/tmp/execve.txt', cpu)
+            self.traceMgr[self.target].open('logs/execve.txt', cpu)
 
         self.syscallManager[self.target].watchSyscall(None, ['execve'], call_params, 'execve', flist=flist)
         SIM_continue(0)
@@ -3447,7 +3448,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         cpu, comm, tid = self.task_utils[self.target].curThread() 
-        self.traceMgr[self.target].open('/tmp/syscall_trace.txt', cpu)
+        self.traceMgr[self.target].open('logs/syscall_trace.txt', cpu)
         for call in call_list: 
             this_call_params = []
             if call in call_params:
@@ -3466,7 +3467,7 @@ class GenMonitor():
         calls = ' '.join(s for s in call_list)
         print('tracing these system calls: %s' % calls)
         cpu, comm, tid = self.task_utils[self.target].curThread() 
-        self.traceMgr[self.target].open('/tmp/syscall_trace.txt', cpu)
+        self.traceMgr[self.target].open('logs/syscall_trace.txt', cpu)
         for call in call_list: 
             this_call_params = []
             if call in call_params:
@@ -3474,19 +3475,19 @@ class GenMonitor():
             self.call_traces[self.target][call] = self.traceSyscall(callname=call, call_params=this_call_params, trace_procs=True)
 
     def showBinders(self):
-            self.binders.showAll('/tmp/binder.txt')
-            self.binders.dumpJson('/tmp/binder.json')
+            self.binders.showAll('logs/binder.txt')
+            self.binders.dumpJson('logs/binder.json')
 
     def showConnectors(self):
-            self.connectors.showAll('/tmp/connector.txt')
-            self.connectors.dumpJson('/tmp/connector.json')
+            self.connectors.showAll('logs/connector.txt')
+            self.connectors.dumpJson('logs/connector.json')
 
     def saveTraces(self):
         self.showBinders()
         self.showConnectors()
         self.showProcTrace()
         self.showNets()
-        print('Traces saved in /tmp.  Move them to artifact repo and run postScripts')
+        print('Traces saved in ./logs.  Move them to artifact repo and run postScripts')
 
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
         self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache)
@@ -3860,7 +3861,7 @@ class GenMonitor():
            print('No exec of ip addr or ifconfig found')
         for c in net_commands:
             print(c)
-        with open('/tmp/networks.txt', 'w') as fh:
+        with open('logs/networks.txt', 'w') as fh:
             for c in net_commands:
                 fh.write(c+'\n')   
 
@@ -4140,7 +4141,7 @@ class GenMonitor():
         except Exception as e:
             self.lgr.debug('getWatchMarks, json dumps failed on %s' % str(watch_marks))
             self.lgr.debug('error %s' % str(e))
-            with open('/tmp/badjson.txt', 'w') as fh:
+            with open('logs/badjson.txt', 'w') as fh:
                 fh.write(str(watch_marks))
                 #print(str(watch_marks))
             for bad in watch_marks:
@@ -4287,7 +4288,7 @@ class GenMonitor():
             else:
                 dfile = dfile.replace('trackio', 'queue')
         if type(save_json) is bool:
-            save_json = '/tmp/track.json'
+            save_json = 'logs/track.json'
         if self.bookmarks is not None:
             self.goToOrigin()
 
@@ -4326,7 +4327,7 @@ class GenMonitor():
         afl_file = aflPath.getAFLPath(target, index, instance)
         save_json_file = None
         if save_json:
-            save_json_file = '/tmp/trackio.json' 
+            save_json_file = 'logs/trackio.json' 
         if afl_file is not None:
             self.injectIO(afl_file, cover=cover, save_json=save_json_file)
 
@@ -4334,7 +4335,7 @@ class GenMonitor():
         afl_file = aflPath.getAFLPath(target, index, instance)
         if afl_file is not None:
             if save_json:
-                self.injectIO(afl_file, cover=cover, n=-1, save_json='/tmp/track.json')
+                self.injectIO(afl_file, cover=cover, n=-1, save_json='logs/track.json')
             else:
                 self.injectIO(afl_file, cover=cover, n=-1)
         else:
@@ -4351,7 +4352,7 @@ class GenMonitor():
     def aflTrack(self, target, index, FD, port, instance = None):
         afl_file = aflPath.getAFLPath(target, index, instance)
         if afl_file is not None:
-            shutil.copyfile(afl_file, '/tmp/sendudp')
+            shutil.copyfile(afl_file, 'logs/sendudp')
             self.trackIO(FD, run_fun=self.doudp)
             print('tracking %s' % afl_file)
  
