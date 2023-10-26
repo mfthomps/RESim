@@ -1418,7 +1418,7 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, callname, str(syscall_info.call_params), 
+        self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, str(syscall_info.call_params), 
             str(self.cpu.current_context), self.cpu.cycles))
         for call_param in syscall_info.call_params:
             #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
