@@ -127,7 +127,7 @@ class MagicOrigin():
             self.lgr.debug('MagicOrigin back from calling setOriginWhen stopped, now continue')
             SIM_run_command('c')
         else:
-            self.top.toPid(-1, callback=self.top.setOrigin)
+            self.top.toTid('-1', callback=self.top.setOrigin)
         #self.bookmarks.setOrigin(self.cpu)
         #self.lgr.debug('MagicOrigin, continue')
         #SIM_run_command('c')
