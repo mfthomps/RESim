@@ -2583,10 +2583,10 @@ class Syscall():
     def getContext(self):
         return self.cell
 
-    def rmCallParam(self, call_param):
+    def rmCallParam(self, call_param, quiet=False):
         if call_param in self.syscall_info.call_params: 
             self.syscall_info.call_params.remove(call_param)
-        else: 
+        elif not quiet:
             self.lgr.error('sycall rmCallParam, but param does not exist?')
 
     def rmCallParamName(self, call_param_name):
