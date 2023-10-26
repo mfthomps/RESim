@@ -1542,7 +1542,7 @@ class GenMonitor():
 
 
     def toProc(self, proc, binary=True, run=True):
-        plist = self.task_utils[self.target].getTidsForComm(proc)
+        plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
@@ -1586,7 +1586,7 @@ class GenMonitor():
             print('Process name truncated to %s to match Linux comm name' % proc)
         self.rmDebugWarnHap()
         #self.stopTrace()
-        plist = self.task_utils[self.target].getTidsForComm(proc)
+        plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
@@ -2435,10 +2435,16 @@ class GenMonitor():
             #TBD fix 32-bit compat
             self.call_traces[self.target][call] = self.traceSyscall(callname=call, trace_procs=True, soMap=self.soMap[self.target], swapper_ok=swapper_ok)
 
-    def rmSyscall(self, call_param_name, context=None, cell_name=None):
+    def rmSyscall(self, call_param_name, context=None, cell_name=None, all_contexts=False):
+        self.lgr.debug('rmSyscall call_param_name %s, cell_name %s context: %s all_contexts: %r' % (call_param_name, cell_name, context, all_contexts))
         if cell_name is None:
             cell_name = self.target 
-        self.syscallManager[self.target].rmSyscall(call_param_name, context=context)
+        if not all_contexts:
+            self.syscallManager[self.target].rmSyscall(call_param_name, context=context)
+        else:
+            context_list = self.context_manager[self.target].getContexts()
+            for context in context_list:
+                self.syscallManager[self.target].rmSyscall(call_param_name, context=context)
    
     def rmAllSyscalls(self, cell_name=None):
         if cell_name is None:
@@ -2573,7 +2579,8 @@ class GenMonitor():
             self.trace_all[target].setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
             ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
 
-    def noDebug(self, dumb=None):
+    def noDebugXXXXXXXXXX(self, dumb=None):
+        # TBD clarify difference between this and stopDebug.  remove this one?
         self.lgr.debug('noDebug')
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
@@ -2581,9 +2588,10 @@ class GenMonitor():
         self.removeDebugBreaks(keep_watching=True, keep_coverage=False)
         self.sharedSyscall[self.target].setDebugging(False)
         self.noWatchSysEnter()
+        self.context_manager[self.target].restoreDefaultContext()
 
     def stopDebug(self):
-        ''' stop all debugging '''
+        ''' stop all debugging.  called by injectIO '''
         self.lgr.debug('stopDebug')
         if self.rev_execution_enabled:
             cmd = 'disable-reverse-execution'
@@ -2595,6 +2603,8 @@ class GenMonitor():
         #self.stopTrace()
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
+        self.noWatchSysEnter()
+        self.context_manager[self.target].restoreDefaultContext()
 
     def restartDebug(self):
         self.lgr.debug('restartDebug')
@@ -3030,7 +3040,8 @@ class GenMonitor():
                            callback=callback)
  
         else:
-            self.syscallManager[cell_name].watchSyscall(None, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+            context = self.context_manager[self.target].getContextName(cell)
+            self.syscallManager[cell_name].watchSyscall(context, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                    callback=callback)
         if run and not self.is_monitor_running.isRunning():
             self.is_monitor_running.setRunning(True)
@@ -3072,10 +3083,14 @@ class GenMonitor():
             run = True
         else:
             run = False
-        operation = mod.getOperation()
         self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
         name = 'dmod-%s' % operation
-        self.runTo([operation], call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
+        if operation == 'open':
+           op_set = ['open', 'read','close','lseek','_llseek']
+           self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
+        else:
+           op_set = [operation]
+        self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
         return retval
 
@@ -5490,6 +5505,7 @@ class GenMonitor():
     def setPacketNumber(self, packet_number):
         if self.coverage is not None:
             self.coverage.setPacketNumber(packet_number)
+
     def getPhys(self, linear):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         phys_block = cpu.iface.processor_info.logical_to_physical(linear, Sim_Access_Read)
@@ -5753,6 +5769,14 @@ class GenMonitor():
         if target in self.page_faults:
             self.page_faults[target].addProbe(addr)
             self.lgr.debug('addPageProbe cell %s addr 0x%x' % (target, addr))
+
+    def curThreadRec(self):
+        cur_thread_rec = self.task_utils[self.target].getCurThreadRec()
+        phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
+
+        cpu = self.cell_config.cpuFromCell(self.target)
+        mem_cur_task = self.mem_utils[self.target].getCurrentTask(cpu)
+        print('cur_thread_rec 0x%x  phys_current_task 0x%x mem_cur_task: 0x%x' % (cur_thread_rec, phys_current_task, mem_cur_task))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
