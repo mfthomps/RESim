@@ -169,8 +169,11 @@ class SOMap():
             self.prog_start[new] = self.prog_start[old]
             self.prog_end[new] = self.prog_end[old]
             self.text_prog[new] = self.text_prog[old]
-            self.so_addr_map[new] = self.so_addr_map[old]
-            self.so_file_map[new] = self.so_file_map[old]
+            if old in self.so_addr_map:
+                self.so_addr_map[new] = self.so_addr_map[old]
+                self.so_file_map[new] = self.so_file_map[old]
+            else:
+                self.lgr.debug('soMap swaptid tid:%s not in so_addr_map' % old)
         else:
             self.lgr.debug('soMap swaptid tid:%s not in text_start' % old)
             retval = False
