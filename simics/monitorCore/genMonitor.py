@@ -1545,7 +1545,7 @@ class GenMonitor():
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
-            print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
+            print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
             self.run_to[self.target].toRunningProc(proc, plist, flist)
