@@ -549,7 +549,7 @@ class TaskUtils():
           
         return retval
 
-    def getTidsForComm(self, comm_in):
+    def getTidsForComm(self, comm_in, ignore_exits=False):
         comm = os.path.basename(comm_in).strip()
         retval = []
         #self.lgr.debug('getTidsForComm %s' % comm_in)
@@ -560,7 +560,7 @@ class TaskUtils():
                 tid = str(ts_list[ts].pid)
                 #self.lgr.debug('getTidsForComm MATCHED ? %s to %s  tid %s' % (comm, ts_list[ts].comm, tid))
                 ''' skip if exiting as recorded by syscall '''
-                if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
                     retval.append(tid)
         return retval
 
