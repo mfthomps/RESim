@@ -1545,7 +1545,7 @@ class GenMonitor():
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
-            print('%s is running as %d.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
+            print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
             self.run_to[self.target].toRunningProc(proc, plist, flist)
@@ -3771,18 +3771,11 @@ class GenMonitor():
 
     def showDmods(self):
         for target in self.context_manager:
-            for call in self.call_traces[target]:
-                dmod_list = self.call_traces[target][call].getDmods()
-                for dmod in dmod_list:
-                    path = dmod.getPath()
-                    print('%s %s %s' % (target, call, path))                    
+            self.syscallManager[target].showDmods()
 
     def rmAllDmods(self):
         for target in self.context_manager:
-            call_copy = list(self.call_traces[target])
-            for call in call_copy:
-                self.call_traces[target][call].rmDmods()
-                    
+            self.syscallManager[target].rmAllDmods()
 
     def writeConfig(self, name):
         if '-' in name:

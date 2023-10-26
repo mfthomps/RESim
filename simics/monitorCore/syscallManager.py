@@ -448,3 +448,38 @@ class SyscallManager():
        
         return retval, length
 
+    def rmAllDmods(self):
+        self.lgr.debug('syscallManager rmAllDmods')
+        rm_dict = {}
+        for context in self.syscall_dict:
+            for instance in self.syscall_dict[context]:
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                params_copy = list(call_parameters)
+
+                for call_param in params_copy:
+                    if call_param.match_param.__class__.__name__ == 'Dmod':
+                        self.lgr.debug('syscallManager rmDmods, removing dmod %s' % call_param.match_param.path)
+                        if context not in rm_dict:
+                            rm_dict[context] = {}
+                        if instance not in rm_dict[context]:
+                            rm_dict[context][instance] = []
+                        rm_dict[context][instance].append(call_param)
+
+        for context in rm_dict:
+            for instance in rm_dict[context]:
+                for call_param in rm_dict[context][instance]:
+                    self.syscall_dict[context][instance].syscall.rmCallParam(call_param, quiet=True)
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                if len(call_parameters) == 0:
+                    self.lgr.debug('syscallManager rmAllDmods, no more call_params, remove syscall')
+                    self.syscall_dict[context][instance].stopTrace()
+                    del self.syscall_dict[context][instance]
+
+    def showDmods(self):
+        self.lgr.debug('syscallManager showDmods')
+        for context in self.syscall_dict:
+            for instance in self.syscall_dict[context]:
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                for call_param in call_parameters:
+                    if call_param.match_param.__class__.__name__ == 'Dmod':
+                        print('context %s instance %s param %s' % (context, instance, call_param.name))
