@@ -120,17 +120,20 @@ class GenHap():
                 SIM_run_alone(self.hapAlone, (bs, be))
         elif len(self.breakpoint_list) == 1:
             bp = self.breakpoint_list[0]
-            self.lgr.debug('bp.cell is %s addr %s' % (str(bp.cell), str(bp.addr)))
+            #self.lgr.debug('bp.cell is %s addr %s' % (str(bp.cell), str(bp.addr)))
             if bp.addr is None:
                 self.lgr.error('contextManager, set bp.addr is none within HAP %s' % self.name)
                 return
+            #self.lgr.debug('GenHap set call breakpoint')
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+            #self.lgr.debug('GenHap set back from call breakpoint')
             if bp.prefix is not None:
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                #self.lgr.debug('contextManager prefix cmd: %s' % command)
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
-            self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
-                          self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
+            #self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
+            #              self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
             self.hap_num = RES_hap_add_callback_index(self.hap_type, self.callback, self.parameter, bp.break_num)
             #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on break %s (0x%x) break_handle %s' % (str(self.handle), str(self.hap_num), 
             #                self.name, str(bp.break_num), bp.addr, str(bp.handle)))
@@ -324,7 +327,7 @@ class GenContextMgr():
             #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
-        self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s context %s' % (handle, len(self.breakpoints), prefix, cell))
+        #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s context %s' % (handle, len(self.breakpoints), prefix, cell))
         return handle
 
     def genDeleteBreakpoint(self, handle):
