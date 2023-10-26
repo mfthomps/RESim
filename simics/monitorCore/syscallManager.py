@@ -159,11 +159,11 @@ class SyscallManager():
             Assumes all of the call_params have the same call parameter name for purposes of managing the
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
-        self.lgr.debug('watchSyscall given context %s' % context)
+        self.lgr.debug('syscallManager watchSyscall given context %s' % context)
         retval = None 
         if context is None:
             context = self.getDebugContextName()
-            self.lgr.debug('watchSyscall given context was none, now set to %s' % context)
+            self.lgr.debug('syscallManager watchSyscall given context was none, now set to %s' % context)
 
         cell = self.context_manager.getCellFromContext(context)
 
@@ -180,6 +180,7 @@ class SyscallManager():
                 self.lgr.debug('syscallManager watchSyscall found traceAll, add params to that.')
                 retval.addCallParams(call_params_list)
             else:
+                self.lgr.debug('syscallManager watchSyscall context %s, create new instance for %s, cell %s' % (context, name, cell))
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                    self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
@@ -197,6 +198,7 @@ class SyscallManager():
                 self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s, call_param_name: %s' % (context, name, call_param_name))
                 call_instance = SyscallInstance(name, call_list, retval, call_param_name, self.lgr)
                 if context not in self.syscall_dict:
+                    self.lgr.debug('syscalManager added context %s to syscall_dict' % context)
                     self.syscall_dict[context] = {}
                 self.syscall_dict[context][name] = call_instance
         else:
@@ -210,7 +212,7 @@ class SyscallManager():
                 for p in params_now:
                     self.lgr.debug('\t\t%s' % p.name)
             else:
-                self.lgr.debug('syscallManager watchSyscall given call list is superset of existing calls.  Delete and recreate')
+                self.lgr.debug('syscallManager watchSyscall given call list is superset of existing calls.  Delete and recreate. given %s' % str(call_list))
                 existing_call_params = call_instance.syscall.getCallParams()
                 for cp in call_params_list:
                     existing_call_params.append(cp)
@@ -250,7 +252,7 @@ class SyscallManager():
         if call_instance is None:
             self.lgr.debug('syscallManager rmSyscall did not find syscall instance with context %s and param name %s' % (context, call_param_name))
         else:
-            self.lgr.debug('syscallManager rmSyscall call_param_name %s' % call_param_name)
+            self.lgr.debug('syscallManager rmSyscall call_param_name %s context %s' % (call_param_name, context))
             remaining_params = call_instance.syscall.rmCallParamName(call_param_name)       
             other_calls = call_instance.hasOtherCalls(call_param_name)
             if rm_all or len(other_calls) == 0:
@@ -292,17 +294,23 @@ class SyscallManager():
 
     def findCalls(self, call_list, context):
         ''' Return the Syscallinstance that contains at least one call in the given call list if any.
-            Does not look for multiple instances with same call.  TBD?
+            Favor the the one with the most matches.
         '''
-       
+        self.lgr.debug('syscallManager findCalls context %s call: %s' % (context, str(call_list)))   
         retval = None
+        best_count = 0
         if context in self.syscall_dict:
             for instance_name in self.syscall_dict[context]:
                 call_instance = self.syscall_dict[context][instance_name]
+                self.lgr.debug('syscallManager findCalls check instance %s call names: %s' % (instance_name, str(call_instance.call_names)))
+                match_count = 0
                 for call in call_list:
                     if call_instance.hasCall(call):
-                        retval = call_instance
-                        break
+                        match_count = match_count + 1
+                if match_count > best_count:
+                    retval = call_instance
+        else:
+            self.lgr.debug('syscallManager findCalls context %s not in syscall_dict' % context)
         return retval 
 
     def rmAllSyscalls(self):
@@ -440,3 +448,38 @@ class SyscallManager():
        
         return retval, length
 
+    def rmAllDmods(self):
+        self.lgr.debug('syscallManager rmAllDmods')
+        rm_dict = {}
+        for context in self.syscall_dict:
+            for instance in self.syscall_dict[context]:
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                params_copy = list(call_parameters)
+
+                for call_param in params_copy:
+                    if call_param.match_param.__class__.__name__ == 'Dmod':
+                        self.lgr.debug('syscallManager rmDmods, removing dmod %s' % call_param.match_param.path)
+                        if context not in rm_dict:
+                            rm_dict[context] = {}
+                        if instance not in rm_dict[context]:
+                            rm_dict[context][instance] = []
+                        rm_dict[context][instance].append(call_param)
+
+        for context in rm_dict:
+            for instance in rm_dict[context]:
+                for call_param in rm_dict[context][instance]:
+                    self.syscall_dict[context][instance].syscall.rmCallParam(call_param, quiet=True)
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                if len(call_parameters) == 0:
+                    self.lgr.debug('syscallManager rmAllDmods, no more call_params, remove syscall')
+                    self.syscall_dict[context][instance].stopTrace()
+                    del self.syscall_dict[context][instance]
+
+    def showDmods(self):
+        self.lgr.debug('syscallManager showDmods')
+        for context in self.syscall_dict:
+            for instance in self.syscall_dict[context]:
+                call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
+                for call_param in call_parameters:
+                    if call_param.match_param.__class__.__name__ == 'Dmod':
+                        print('context %s instance %s param %s' % (context, instance, call_param.name))

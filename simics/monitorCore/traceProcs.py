@@ -356,6 +356,9 @@ class TraceProcs():
             return
         if child_tid not in self.plist[parent_tid].children:
             self.plist[parent_tid].children.append(child_tid)
+        if child_tid not in self.plist:
+            self.lgr.debug('traceProcs copyOpen child_tid unknown %s' % child_tid)
+            return
         self.plist[child_tid].parent = child_tid
         for fname in self.plist[parent_tid].files:
             self.plist[child_tid].files[fname] = []

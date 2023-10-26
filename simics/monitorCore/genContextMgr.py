@@ -124,9 +124,12 @@ class GenHap():
             if bp.addr is None:
                 self.lgr.error('contextManager, set bp.addr is none within HAP %s' % self.name)
                 return
+            #self.lgr.debug('GenHap set call breakpoint')
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+            #self.lgr.debug('GenHap set back from call breakpoint')
             if bp.prefix is not None:
                 command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                #self.lgr.debug('contextManager prefix cmd: %s' % command)
                 SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
             #self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
@@ -800,7 +803,7 @@ class GenContextMgr():
                
                 if len(self.pending_watch_tids) > 0:
                     self.debugging_tid = self.pending_watch_tids[0]
-                    self.lgr.debug('contextManager rmTask, list empty but found pending watch tid %s, make it the debugging_tid' % self.debugging_sid)
+                    self.lgr.debug('contextManager rmTask, list empty but found pending watch tid %s, make it the debugging_tid' % self.debugging_tid)
                 else:
                     #self.debugging_comm = None
                     #self.debugging_cell = None
@@ -816,11 +819,11 @@ class GenContextMgr():
                     else:
                         ''' TBD fix to handle multiple comms '''
                         self.lgr.debug('contextManager rmTask, still tids for comm %s, was fork? set dbg tid to %s tids was %s' % (str(self.debugging_comm), tids[-1], str(tids)))
-                        if self.top.swapSOPid(tid, tids[-1]):
+                        if self.top.swapSOTid(tid, tids[-1]):
                             ''' replace SOMap pid with new one from fork '''
-                            self.lgr.debug('Adding task %s and setting debugging_tid' % sids[-1])
-                            self.addTask(sids[-1])
-                            self.debugging_sid = sids[-1]
+                            self.lgr.debug('Adding task %s and setting debugging_tid' % tids[-1])
+                            self.addTask(tids[-1])
+                            self.debugging_tid = tids[-1]
                         else:
                             ''' TBD poor hueristic for deciding it was not a fork '''
                             #self.cpu.current_context = self.default_context
@@ -1101,7 +1104,7 @@ class GenContextMgr():
                     break
             if add_task is not None:
                 self.lgr.debug('contextManager killGroup add_task is not None, swap tids')
-                self.top.swapSOPid(self.debugging_tid, p)
+                self.top.swapTOPid(self.debugging_tid, p)
                 self.addTask(add_task)
             else:
                 self.lgr.debug('contextManager killGroup %s is leader, tid_cache is %s' % (lead_tid, str(self.tid_cache)))
