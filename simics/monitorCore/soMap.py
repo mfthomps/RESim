@@ -148,6 +148,18 @@ class SOMap():
                 return True
         return False
 
+    def isAboveLibc(self, address):
+        retval = False
+        if self.isMainText(address):
+            retval = True
+        else:
+            so_file = self.getSOFile(address)
+            if so_file is not None and not resimUtils.isClib(so_file):
+                fun = self.fun_mgr.getFunName(address)
+                if fun is not None:
+                    retval = True 
+        return retval           
+
     def isMainText(self, address):
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)

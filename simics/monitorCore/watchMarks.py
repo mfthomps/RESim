@@ -88,6 +88,7 @@ class DataMark():
             #self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
+        # becomes the length of an ad-hoc copy
         self.loop_count = 0
         self.modify = modify
         self.ad_hoc = ad_hoc
@@ -671,6 +672,17 @@ class WatchMarks():
             return self.mark_list[index]
         else:
             return None
+
+    def getRecentMark(self, prev=0):
+        if len(self.mark_list)>prev:
+            index = -1 - prev
+            return self.mark_list[index]
+        else:
+            return None
+
+    def rmLast(self, count):
+        for i in range(count):
+            self.mark_list.pop() 
 
     def getWatchMarks(self, origin=0):
         retval = []

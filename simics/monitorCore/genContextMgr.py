@@ -1002,7 +1002,7 @@ class GenContextMgr():
                     self.addTask(tid)
 
     def setTaskHap(self, tid=None):
-        print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
+        #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)

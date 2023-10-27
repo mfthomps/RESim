@@ -2231,7 +2231,7 @@ class Syscall():
                 else:
                     self.lgr.debug('syscall was pending tid:%s call %d' % (tid, pending_call))
                     #SIM_break_simulation('remove this')
-                    #return
+                    return
                  
 
         if callname in self.exit_calls:
