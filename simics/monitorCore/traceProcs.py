@@ -444,7 +444,7 @@ class TraceProcs():
                 self.showFamily(child, tabs)
 
     def showAll(self, quiet=False):
-        trace_path = '/tmp/procTrace.txt'
+        trace_path = './logs/procTrace.txt'
         self.trace_fh = open(trace_path, 'w') 
         del self.did_that[:]
         for tid in self.plist:
