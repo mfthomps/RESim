@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
 import sys
 import procTrace
@@ -6,7 +6,7 @@ import netLinks
 import glob
 class FileLinks():
     def __init__(self, path):
-        open_tok = 'return from open pid'
+        open_tok = 'return from open tid'
         proc_trace_file = os.path.join(path, 'procTrace.txt')
         self.proc_trace = procTrace.ProcTrace(proc_trace_file) 
         trace_file = os.path.join(path, 'syscall_trace.txt')
@@ -17,9 +17,9 @@ class FileLinks():
             for line in fh:
                 if open_tok in line:
                     if ' /proc' not in line and '.so' not in line and '/dev/null' not in line:
-                        pid_id = netLinks.getTokValue(line, 'pid')
-                        pname = self.proc_trace.getPname(pid_id)
-                        #print('pid %s pname is %s' % (pid_id, pname))
+                        tid_id = netLinks.getTokValue(line, 'tid')
+                        pname = self.proc_trace.getPname(tid_id)
+                        #print('tid %s pname is %s' % (tid_id, pname))
                         fname = netLinks.getTokValue(line, 'file')
                         mode = netLinks.getTokValue(line, 'mode')
                         if fname not in self.readers:
