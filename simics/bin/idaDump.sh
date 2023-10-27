@@ -6,6 +6,10 @@
 # WARNING this dumps the current IDA analysis addresses, which may reflect
 # a rebasing.  You should run this program before rebasing.
 #
+if [ ! -z "$IDA_DUMP_DIR" ]; then
+    IDA_DIR=$IDA_DUMP_DIR
+    echo "Redefind IDA_DIR to $IDA_DIR"
+fi
 if [ -z "$IDA_DIR" ]; then
     echo "IDA_DIR not defined."
     exit

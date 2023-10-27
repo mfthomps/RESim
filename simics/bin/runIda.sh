@@ -106,7 +106,7 @@ if [[ $target = $here/* ]]; then
 fi
 
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
-mkdir -p "$ida_analysis_path"
+mkdir -p "$ida_analysis_path" > /dev/null 2>&1
 
 echo "target is $target"
 tt=$(readpe -H "$target" | grep ImageBase | awk '{print $2}')
