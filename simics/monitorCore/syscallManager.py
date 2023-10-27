@@ -61,6 +61,17 @@ class SyscallInstance():
             retval = False
         return retval
 
+    def hasAllCalls(self, call_list):
+        retval = True
+        if len(call_list) <= len(self.call_names):
+            for call in call_list:
+                if call not in self.call_names:
+                    retval = False
+                    break
+        else:
+            retval = False
+        return retval
+
     def hasParamName(self, param_name):
         retval = self.syscall.hasCallParam(param_name)
         return retval
@@ -202,7 +213,7 @@ class SyscallManager():
                     self.syscall_dict[context] = {}
                 self.syscall_dict[context][name] = call_instance
         else:
-            if call_instance.callsMatch(call_list):
+            if call_instance.callsMatch(call_list) or call_instance.hasAllCalls(call_list):
                 call_instance.addCallParams(call_params_list, call_list)
                 self.lgr.debug('syscallManager watchSyscall, did not create new instance for %s, added params to %s' % (name, call_instance.name))
                 retval = call_instance.syscall
@@ -212,7 +223,7 @@ class SyscallManager():
                 for p in params_now:
                     self.lgr.debug('\t\t%s' % p.name)
             else:
-                self.lgr.debug('syscallManager watchSyscall given call list is superset of existing calls.  Delete and recreate. given %s' % str(call_list))
+                self.lgr.debug('syscallManager watchSyscall given call list has some calls that are and some that are not present in existing calls.  Delete and recreate. given %s' % str(call_list))
                 existing_call_params = call_instance.syscall.getCallParams()
                 for cp in call_params_list:
                     existing_call_params.append(cp)
@@ -223,6 +234,7 @@ class SyscallManager():
                 if callback is None:
                     callback = call_instance.syscall.callback
                 call_instance.syscall.stopTrace()
+                #del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about flist and stop action?'''
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
@@ -236,7 +248,8 @@ class SyscallManager():
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 call_instance.syscall = retval
                 call_instance.addCallParams(call_params_list, call_list)
-
+                call_instance.call_names = list(call_list)
+                self.lgr.debug('syscallManager watchSyscall replace syscall, call_list and params for call instance %s' % call_instance.name)
  
         return retval
 
