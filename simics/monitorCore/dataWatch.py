@@ -3640,12 +3640,9 @@ class DataWatch():
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
 
     def setFunMgr(self, fun_mgr):
-        self.lgr.debug('DataWatch setIdaFuns')
-        self.fun_mgr = fun_mgr
-
-    def setFunMgr(self, fun_mgr):
         self.lgr.debug('DataWatch setFunMgr')
         self.fun_mgr = fun_mgr
+        self.initRingChar()
 
     def setCallback(self, callback):
         ''' what should backStop call when no activity for N cycles? '''
@@ -4045,7 +4042,7 @@ class DataWatch():
 
     def enable(self):
         if self.disabled:
-            self.initRingChar()
+            self.lgr.debug('dataWatch enable')
             self.disabled = False
 
     def setReadLimit(self, limit, callback):
