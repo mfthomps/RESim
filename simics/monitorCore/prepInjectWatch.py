@@ -95,6 +95,7 @@ class PrepInjectWatch():
             return 
         self.k_start_ptr = min(buf_addr_list[0], buf_addr_list[1]) 
         self.k_end_ptr = max(buf_addr_list[0], buf_addr_list[1]) 
+        self.lgr.debug('prepInjectWatch handleDelta k_start_ptr 0x%x k_end_ptr 0x%x' % (self.k_start_ptr, self.k_end_ptr))
         self.handleReadBuffer()
 
     def instrumentAlone(self, buf_addr_list): 
