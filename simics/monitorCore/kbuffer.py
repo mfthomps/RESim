@@ -134,7 +134,9 @@ class Kbuffer():
                             continue
                     self.lgr.debug('findArmBuf buf found at 0x%x' % value)
                     if self.kernel_cycle_of_write is None:
-                        self.kernel_cycle_of_write = self.cpu.cycles - 1
+                        # before kernel starts reading buffer
+                        self.kernel_cycle_of_write = self.cpu.cycles - (i+3)
+                        self.lgr.debug('findArmBuf buf kernel_cycle_of_write is 0x%x' % self.kernel_cycle_of_write)
                     self.updateBuffers(value)
                     gotone = True
                     break
