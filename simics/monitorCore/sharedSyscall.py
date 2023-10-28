@@ -348,7 +348,7 @@ class SharedSyscall():
             new_fd = eax
             if new_fd < 0:
                 trace_msg = ('\terror return from socketcall ACCEPT tid:%s, error: %d\n' % (tid, eax))
-            elif exit_info.sock_struct.addr != 0:
+            elif exit_info.sock_struct is not None and exit_info.sock_struct.addr != 0:
                 in_ss = exit_info.sock_struct
                 addr_len = self.mem_utils.readWord32(self.cpu, in_ss.length)
                 self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (in_ss.addr, in_ss.length, addr_len))
@@ -386,8 +386,10 @@ class SharedSyscall():
                     binders = socket_syscall.getBinders()
                     if binders is not None:
                         binders.accept(tid, exit_info.sock_struct.fd, new_fd)
-            else:
+            elif exit_info.sock_struct is not None:
                 trace_msg = ('\treturn from socketcall ACCEPT tid:%s, sock_fd: %d  new_fd: %d NULL addr\n' % (tid, exit_info.sock_struct.fd, new_fd))
+            else:
+                trace_msg = ('\treturn from socketcall ACCEPT tid:%s, no sock struct, maybe half baked setExits?\n' % (tid))
         elif socket_callname == "socketpair":
             if exit_info.retval_addr is None:
                 self.lgr.error('sharedSyscall socketpair got null retval addr')
@@ -860,6 +862,7 @@ class SharedSyscall():
                         self.traceFiles.read(tid, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
+                self.lgr.debug('sharedSyscall return from read fd %d' % exit_info.old_fd)
                 trace_msg = ('\treturn from read tid:%s (%s) FD: %d returned length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (tid, comm, exit_info.old_fd, 
                               eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
                 my_syscall = exit_info.syscall_instance
