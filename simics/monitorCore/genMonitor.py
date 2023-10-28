@@ -1053,6 +1053,7 @@ class GenMonitor():
                  call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
 
     def tasksDBG(self):
+        cpu, cur_comm, cur_tid = self.task_utils[self.target].curThread() 
         plist = {}
         tid_list = self.context_manager[self.target].getThreadTids()
         tasks = self.task_utils[self.target].getTaskStructs()
@@ -1064,8 +1065,13 @@ class GenMonitor():
             if tid in tid_list:
                 plist[tid] = t 
         for tid in sorted(plist):
+            this_in_kernel = False
+            if tid == cur_tid:
+                cpl = memUtils.getCPL(cpu)
+                if cpl == 0:
+                    this_in_kernel = True   
             t = plist[tid]
-            if tasks[t].state > 0:
+            if this_in_kernel or tasks[t].state > 0:
                 frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                 if frame is None:
                     print('frame for %s was none' % tid)
@@ -3760,13 +3766,7 @@ class GenMonitor():
     def getDmodPaths(self):
         dmod_dict = {}
         for target in self.context_manager:
-            dmod_dict[target] = [] 
-            for call in self.call_traces[target]:
-                dmod_list = self.call_traces[target][call].getDmods()
-                for dmod in dmod_list:
-                    path = dmod.getPath()
-                    if path not in dmod_dict[target]:
-                        dmod_dict[target].append(path)
+            dmod_dict[target] = self.syscallManager[target].getDmodPaths()
         return dmod_dict
 
     def showDmods(self):
@@ -5769,7 +5769,11 @@ class GenMonitor():
 
     def getFunEntry(self, fun_name):
         ''' get the entry of a given function name, with preference to the largest function '''
+        if self.fun_mgr is None:
+            self.lgr.error('getFunEntry, no function manager')
+            return None
         return self.fun_mgr.getFunEntry(fun_name)
+
 
     def curThreadRec(self):
         cur_thread_rec = self.task_utils[self.target].getCurThreadRec()
@@ -5778,6 +5782,10 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         mem_cur_task = self.mem_utils[self.target].getCurrentTask(cpu)
         print('cur_thread_rec 0x%x  phys_current_task 0x%x mem_cur_task: 0x%x' % (cur_thread_rec, phys_current_task, mem_cur_task))
+
+    def clearAllHaps(self):
+        for target in self.context_manager:
+            self.context_manager.clearAllHaps()
 
 
 if __name__=="__main__":        
