@@ -326,7 +326,7 @@ class CallParams():
         self.count = 0
         self.call_list = []
     def toString(self):
-        retval = 'subcall %s  match_param %s' % (self.subcall, str(self.match_param))
+        retval = 'name: %s subcall %s  match_param %s call_list: %s' % (self.name, self.subcall, str(self.match_param), str(self.call_list))
         return retval
 
 class TidFilter():
@@ -2521,6 +2521,8 @@ class Syscall():
 
     def setExits(self, frames, origin_reset=False, context_override=None):
         ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        eip = self.top.getEIP()
         for tid in frames:
             self.lgr.debug('setExits frame of tid:%s is %s' % (tid, taskUtils.stringFromFrame(frames[tid])))
             if frames[tid] is None:
@@ -2531,6 +2533,10 @@ class Syscall():
             callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
 
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[tid])
+            if tid == cur_tid:
+                if eip in [exit_eip1, exit_eip2, exit_eip3]:
+                    self.lgr.debug('sharedSyscall setExits is current thread about to exit, skip this one')
+                    continue   
 
             exit_info = ExitInfo(self, self.cpu, tid, callnum, syscall_info.compat32, frame)
             exit_info.retval_addr = frames[tid]['param2']
@@ -2544,6 +2550,15 @@ class Syscall():
             elif callname in ['select','_newselect', 'pselect6']:        
                 self.handleSelect(callname, tid, frames[tid], exit_info, syscall_info)
 
+            #TBD what the heck?  where should call_params come from do we care here? Must be something or dataWatch.setRange won't be called.
+            for cp in self.call_params:
+                if type(cp.match_param) is int:
+                    self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
+                    exit_info.call_params = cp
+                    break
+                else:
+                    self.lgr.debug('setExits call param not integer, is %s' % cp.toString())
+                     
             if exit_info.call_params is not None:
                 exit_info.origin_reset = origin_reset
                 if exit_info.retval_addr is not None:
@@ -2553,7 +2568,7 @@ class Syscall():
                 exit_info_name = '%s-%s-exit' % (the_callname, self.name)
                 self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
             else:
-                self.lgr.debug('setExits call_param is none')
+                self.lgr.debug('setExits call_param is none, NO EXIT set.')
 
     def addCallParams(self, call_params):
         gotone = False
