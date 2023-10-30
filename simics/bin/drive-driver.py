@@ -38,6 +38,8 @@ def main():
     parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
+    parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
+    parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file')
     args = parser.parse_args()
     sshport = args.port
     print('Drive driver')
@@ -55,6 +57,10 @@ def main():
         client_cmd = None
     elif args.broadcast:
         client_cmd = 'clientudpBroad'
+    elif args.json:
+        client_cmd = 'clientudpJson'
+    elif args.command:
+        client_cmd = None
     else:
         client_cmd = 'clientudpMult'
     if client_cmd is not None:
@@ -102,13 +108,24 @@ def main():
             parts = line.split()
             if len(parts) == 2 and parts[0] == 'sleep':
                 driver_file.write(line)
+            elif args.command:
+                for p in parts[:-1]:
+                    tfile = p.strip()
+                    cmd = 'scp -P %d %s  mike@localhost:/tmp/%s' % (sshport, tfile, os.path.basename(tfile))
+                    os.system(cmd)
+                command = parts[-1].strip()
+                cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, command)
+                os.system(cmd)
+                directive = 'sudo /tmp/%s' % (command)
+                driver_file.write(directive+'\n')
+
             elif len(parts) == 1:
                 ''' multiple data files to be sent, last line will include directive info'''
                 iofile = parts[0].strip()
                 file_list.append(iofile)
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
-            elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast and not args.replay:
+            elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast and not args.replay and not args.json:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')
                 exit(1)
@@ -126,7 +143,7 @@ def main():
                 ip = parts[1]
                 port = parts[2]
                 local_ip = ''
-                if not args.tcp and not args.server:
+                if not args.tcp and not args.server and not args.json:
                     header = parts[3]
                     if args.broadcast:
                         local_ip = parts[4]

@@ -23,6 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 import resimUtils
+import winSocket
 class ParamRefTracker():
         ''' Track kernel references to user space during a system call '''        
         def __init__(self, rsp, rcx, rdx, r8, r9, mem_utils, task_utils, cpu, call_name, lgr):
@@ -55,6 +56,12 @@ class ParamRefTracker():
             self.base_params['rsp2'] = rsp+0x30
             self.base_params['rsp3'] = rsp+0x38
             self.base_params['rsp4'] = rsp+0x40
+            if self.call_name == 'DeviceIoControlFile':
+                ioctl_op_map = winSocket.getOpMap()
+                operation = self.mem_utils.readWord32(self.cpu, self.base_params['rsp2']) & 0xffffffff
+                if operation in ioctl_op_map:
+                    self.call_name = ioctl_op_map[operation]
+                
             self.other_addrs = {}
             self.refs = []
             self.wrote_values = {}
@@ -198,7 +205,8 @@ class ParamRefTracker():
 
             if self.prev_read_addr is not None and (addr == (self.prev_read_addr-self.mem_utils.WORD_SIZE)):
                 self.read_sequence = self.read_sequence + 1
-                if self.read_sequence > 5:
+                #if self.read_sequence > 5:
+                if self.read_sequence > 5000:
                     retval = False
             else:
                 self.read_sequence = 0
@@ -283,7 +291,7 @@ class ParamRefTracker():
             self.wrote_values[addr] = new_ref
             if self.prev_wrote_addr is not None and (addr == (self.prev_wrote_addr+self.mem_utils.WORD_SIZE)):
                 self.wrote_sequence = self.wrote_sequence + 1
-                if self.wrote_sequence > 5:
+                if self.wrote_sequence > 500:
                     retval = False
             else:
                 self.wrote_sequence = 0

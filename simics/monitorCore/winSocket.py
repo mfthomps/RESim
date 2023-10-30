@@ -49,6 +49,13 @@ op_map_vals["SET_DISCONNECT_OPTIONS_SIZE"]= 0x12077
 op_map_vals["SET_INFO"]= 0x1203B
 op_map_vals["START_LISTEN"]= 0x1200B
 op_map_vals["WAIT_FOR_LISTEN"]= 0x1200C
+# from web
+op_map_vals["TCP_FASTOPEN"]= 0x120BF
+op_map_vals["SUPER_CONNECT?"]= 0x120C7
+# from digging
+op_map_vals["12083_ACCEPT"]=0x12083
+op_map_vals["RANDOM_VALUE"]=0x390008
+
 
 def getOpMap():
     retval = {}

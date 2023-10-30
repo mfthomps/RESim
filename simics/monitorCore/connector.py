@@ -9,8 +9,8 @@ class Connector():
         self.lgr = lgr
 
     class ConnectRec():
-        def __init__(self, pid, fd, prog, address, port):
-            self.pid = pid
+        def __init__(self, tid, fd, prog, address, port):
+            self.tid = tid
             self.fd = fd
             self.prog = prog
             self.address = address
@@ -18,7 +18,7 @@ class Connector():
 
         def getJson(self):
             retval = {}
-            retval['pid'] = self.pid
+            retval['tid'] = self.tid
             retval['fd'] = self.fd
             retval['prog'] = self.prog
             retval['address'] = self.address
@@ -28,11 +28,11 @@ class Connector():
     def getConnectors(self):
         return self.connectors
 
-    def add(self, pid, fd, prog, address, port):
+    def add(self, tid, fd, prog, address, port):
         for connect_rec in self.connectors:
             if connect_rec.prog == prog and connect_rec.address == address and connect_rec.port == port:
                 return
-        connect_rec = self.ConnectRec(pid, fd, prog, address, port)
+        connect_rec = self.ConnectRec(tid, fd, prog, address, port)
         self.connectors.append(connect_rec) 
         self.lgr.debug('connector add %s' % self.toString(connect_rec))
 
@@ -50,14 +50,14 @@ class Connector():
             s = fh.read()
             jload = json.loads(s)
             for jrec in jload:
-                self.add(jrec['pid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
+                self.add(jrec['tid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
             self.lgr.debug('connectors read %d records from %s' % (len(jload), fname))
 
     def toString(self, connect_rec):        
         if connect_rec.port is not None:
-            line = '%-60s %d \t%d \t%s:%s' % (connect_rec.prog, connect_rec.pid, connect_rec.fd, connect_rec.address, str(connect_rec.port))
+            line = '%-60s %s \t%d \t%s:%s' % (connect_rec.prog, connect_rec.tid, connect_rec.fd, connect_rec.address, str(connect_rec.port))
         else:
-            line = '%-60s %d \t%d \t%s' % (connect_rec.prog,  connect_rec.pid, connect_rec.fd, connect_rec.address)
+            line = '%-60s %s \t%d \t%s' % (connect_rec.prog,  connect_rec.tid, connect_rec.fd, connect_rec.address)
         return line
 
     def showAll(self, fname):

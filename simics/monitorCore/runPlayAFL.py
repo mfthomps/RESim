@@ -33,12 +33,21 @@ def ioHandler(read_array, stop, lgr):
                 lgr.debug('select error, must be closed.')
                 return
             for item in r:
+                file_num = item.fileno()
                 try:
-                    data = os.read(item.fileno(), 800)
+                    data = os.read(file_num, 800)
                 except:
                     lgr.debug('read error, must be closed.')
                     return
-                fh.write(data+b'\n')
+                if len(data.strip()) == 0:
+                    continue
+                finfo = str.encode('fnum: %d ' % file_num)
+                fh.write(finfo+data+b'\n')
+                if 'Error' in str(data):
+                    print(data)
+                    print("use ctrl-C, fatal error.")
+                    exit(1)
+                    return
                    
 
 def handleClose(resim_procs, read_array, remote, lgr):
@@ -89,8 +98,13 @@ def runPlay(args, lgr, prog_path):
         os.environ['ONE_DONE_PARAM']='udp'
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
-    
     os.environ['ONE_DONE_PARAM3']=args.program
+    if args.target is not None:
+        os.environ['ONE_DONE_PARAM4']=args.target
+    if args.targetFD is not None:
+        os.environ['ONE_DONE_PARAM5']=args.targetFD
+    os.environ['ONE_DONE_PARAM6']=args.count
+    os.environ['ONE_DONE_PARAM7']=str(args.no_page_faults)
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     for cfile in cover_list:
@@ -143,7 +157,8 @@ def runPlay(args, lgr, prog_path):
         s = json.dumps(all_hits)
         with open(hits_path, 'w') as fh:
             fh.write(s)
-        
+        print('Wrote hits to %s' % hits_path) 
+        lgr.debug('Wrote hits to %s' % hits_path) 
         print('all hits total %d' % len(all_hits))
     else:
         print('Nothing to do.')
@@ -157,6 +172,10 @@ def main():
     parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
+    parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')
+    parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
+    parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
+    parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
@@ -164,7 +183,16 @@ def main():
     args = parser.parse_args()
 
     ida_data = os.getenv('RESIM_IDA_DATA')
-    root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
+
+    target_cell = None
+    if args.target is not None:
+        if ':' in args.target:
+            parts = args.target.rsplit(':',1)
+            target_cell = parts[0]
+    if target_cell is not None:
+        root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX', target=target_cell)
+    else:
+        root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
     root_name = os.path.basename(root_prefix)
     prog_path = os.path.join(ida_data, root_name, args.program)
     os.makedirs(prog_path, exist_ok=True)

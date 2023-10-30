@@ -3,11 +3,13 @@ import sys
 import os
 import pickle
 import taskUtils
+import winDelay
+import winSocket
 from resimUtils import rprint
 from resimHaps import *
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
-                 mem_utils, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
+                 mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
                   dataWatch=None, shared_syscall=None, no_reset=False):
         ''' expected_packet_count == -1 for TCP '''
@@ -63,6 +65,7 @@ class WriteData():
             self.udp_header = udp_header
         self.pad_to_size = pad_to_size
         self.mem_utils = mem_utils
+        self.context_manager = context_manager
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
         self.write_callback = write_callback
@@ -89,24 +92,28 @@ class WriteData():
         self.orig_buffer = None
         # for restoring user space to what it was, less what we read from the kernel
         self.user_space_addr = None
+        self.user_space_count = None
+
+        # for windows
+        self.addr_of_count = None
 
         self.loadPickle(snapshot_name)
 
         if self.call_ip is not None:
-            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len (before adjust) %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
                  self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
         else:
             self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
                  self.addr, self.max_len, len(in_data), str(self.cell), self.stop_on_read, self.udp_header))
 
-        self.pid = self.top.getPID()
+        self.tid = self.top.getTID()
         self.filter = filter
         self.dataWatch = dataWatch
         env_max_len = os.getenv('AFL_MAX_LEN')
         if env_max_len is not None:
-            if self.max_len is None or self.max_len > int(env_max_len):
-                self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
-                self.max_len = int(env_max_len)
+            #if self.max_len is None or self.max_len > int(env_max_len):
+            self.lgr.debug('writeData Overrode max_len value from pickle with value from environment')
+            self.max_len = int(env_max_len)
 
         stop_on_close_env = os.getenv('AFL_STOP_ON_CLOSE')
         self.stop_on_close = False
@@ -141,6 +148,11 @@ class WriteData():
         if self.no_call_hap:
             self.lgr.debug('Preventing set of callHap')
 
+        if self.top.isWindows():
+            self.ioctl_op_map = winSocket.getOpMap()
+        else:
+            self.ioctl_op_map = None
+
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
         self.addr = addr
@@ -151,6 +163,7 @@ class WriteData():
         self.closed_fd = False
 
     def writeKdata(self, data):
+        ''' write data to kernel buffers '''
         if self.k_bufs is None:
             ''' TBD remove this, all kernel buffers should now use k_bufs'''
             self.lgr.error('writeKdata, missing k_bufs')
@@ -159,8 +172,12 @@ class WriteData():
             remain = len(data)
             offset = 0
             index = 0
-            self.user_space_addr, length = self.top.getReadAddr()
-            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
+            ''' So we can restore use space content to what it was, less what we read from kernel 
+                We are in a read system call, but not at the kernel entry.'''
+            if self.user_space_count is None: 
+                self.user_space_addr, self.user_space_count = self.top.getReadAddr()
+            #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+            self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
             #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             #self.lgr.debug('writeData writeKdata, call setCallHap')
             if not self.no_call_hap:
@@ -177,6 +194,14 @@ class WriteData():
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
+
+            if self.top.isWindows() and self.dataWatch is not None:
+                self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
+                asynch_handler = winDelay.WinDelay(self.top, self.cpu, None, self.user_space_addr,
+                        self.mem_utils, self.context_manager, None, None, None, self.fd, self.cuser_space_count, self.lgr, watch_count_addr=False)
+                asynch_handler.setDataWatch(self.dataWatch, True)
+                asynch_handler.toUserAlone(None)
+
           
     
     def write(self, record=False):
@@ -205,6 +230,7 @@ class WriteData():
             ''' not done, no control over size. prep must use maximum buffer'''
             if len(self.in_data) > self.max_len:
                 self.in_data = self.in_data[:self.max_len]
+                self.lgr.debug('writeData  write truncated in data to %d bytes' % self.max_len)
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
                 if len(result) > self.max_len:
@@ -243,6 +269,17 @@ class WriteData():
             self.call_break = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
+    def setCountValue(self, count):
+        if self.top.isWindows():
+            word_size = self.top.getWordSize()
+            if word_size == 4:
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+            else: 
+                self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
+            #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
+        else:
+            self.cpu.iface.int_register.write(self.len_reg_num, count)
+
     def userBufWrite(self, record=False):
         retval = None
         if self.current_packet > 1 and self.no_reset:
@@ -261,7 +298,7 @@ class WriteData():
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
                 #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 #self.lgr.debug('%s' % next_data)
-                self.cpu.iface.int_register.write(self.len_reg_num, len(next_data))
+                self.setCountValue(len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
@@ -286,7 +323,7 @@ class WriteData():
                     self.mem_utils.writeString(self.cpu, next_addr, b) 
                     #self.lgr.debug('writeData TCP last packet, padded %d bytes' % pad_count)
                     tot_len = tot_len + pad_count
-                self.cpu.iface.int_register.write(self.len_reg_num, tot_len)
+                self.setCountValue(tot_len)
                 self.in_data = ''
                 retval = tot_len
         elif self.udp_header is not None:
@@ -326,7 +363,7 @@ class WriteData():
                 retval = len(result)
                 self.in_data = ''
                 #retval = 100
-            self.cpu.iface.int_register.write(self.len_reg_num, retval)
+            self.setCountValue(tot_len)
             ''' reflect current packet in artifacts, starting with one'''
             self.top.setPacketNumber((self.current_packet+1))
                 
@@ -343,6 +380,7 @@ class WriteData():
 
     def setCallHap(self):
         #if self.call_hap is None and (self.stop_on_read or len(self.in_data)>0):
+        # TBD fix for windows?  asynch hell?
         if self.call_hap is None:
             #if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             if self.k_start_ptr is None and self.call_ip is not None:
@@ -389,7 +427,7 @@ class WriteData():
                 #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read callback is None')
             return
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         if self.stop_on_read and len(self.in_data) == 0:
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
@@ -397,8 +435,8 @@ class WriteData():
                 self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
-        if pid != self.pid:
-            self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        if tid != self.tid:
+            self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
@@ -417,20 +455,41 @@ class WriteData():
         ''' Hit a call to recv '''
         if self.call_hap is None:
             return
-        pid = self.top.getPID()
-        if pid != self.pid:
-            #self.lgr.debug('writeData callHap wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        tid = self.top.getTID()
+        if tid != self.tid:
+            #self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        self.read_count = self.read_count + 1
-        #self.lgr.debug('writeData callHap, read_count is %d' % self.read_count)
-        self.handleCall()
+        skip_it = False
+        if self.top.isWindows():
+            eip = self.top.getEIP(self.cpu)
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            callname = self.top.syscallName(callnum)
+            if callname == 'DeviceIoControlFile':
+                frame = self.top.frameFromRegs()
+                operation = frame['param6'] & 0xffffffff
+                if operation in self.ioctl_op_map:
+                    op_cmd = self.ioctl_op_map[operation]
+                    #self.lgr.debug('writeData callHap,  is Windows TBD bail if RECV tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s' % (tid, eip, 
+                    #     self.cpu.cycles, callname, op_cmd))
+                    if op_cmd != 'RECV':
+                        skip_it = True
+            else:
+                #self.lgr.debug('writeData callHap, windows expected DeviceIoControFile got %s' % callname)
+                skip_it = True
+
+            #    return
+        if not skip_it:
+            self.read_count = self.read_count + 1
+            #self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
+            self.handleCall()
 
     def handleCall(self):
-        pid = self.top.getPID()
-        if pid != self.pid:
-            #self.lgr.debug('writeData handleCall wrong pid, got %d wanted %d' % (pid, self.pid)) 
+        tid = self.top.getTID()
+        if tid != self.tid:
+            #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        #self.lgr.debug('writeData handleCall, pid:%d write_callback %s closed_fd: %r' % (pid, self.write_callback, self.closed_fd))
+        eip = self.top.getEIP(self.cpu)
+        #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             #if self.closed_fd:
             #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
@@ -474,7 +533,13 @@ class WriteData():
                 elif len(self.in_data) == 0:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
                     SIM_run_alone(self.write_callback, 0)
+                    #if not self.top.isWindows():
+                    #    SIM_run_alone(self.write_callback, 0)
+                    #else:
+                    #    self.lgr.debug('writeData handleCall current packet %d no data left, has a callback, but this is windows so break simulation' % self.current_packet)
+                    #    SIM_break_simulation('buffer data consumed.')
             else:
+                # no callback
                 if self.mem_utils.isKernel(self.addr):
                     if self.closed_fd:
                         SIM_run_alone(self.delCallHap, None)
@@ -494,6 +559,10 @@ class WriteData():
                         SIM_run_alone(self.delCallHap, None)
                         #self.lgr.debug('writeData handleCall current packet %d no data left, stop_on_read set so stop' % self.current_packet)
                         SIM_break_simulation('writeData out of data')
+                    elif self.top.isWindows():
+                        SIM_run_alone(self.delCallHap, None)
+                        self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
+                        SIM_break_simulation('writeData out of data windows')
                     else:
                         #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
                         pass
@@ -525,8 +594,8 @@ class WriteData():
                 
     def doRetFixup(self, fd):
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-        pid = self.top.getPID()
-        if pid != self.pid or fd != self.fd:
+        tid = self.top.getTID()
+        if tid != self.tid or fd != self.fd:
             return eax
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 
@@ -554,7 +623,11 @@ class WriteData():
                  self.kernel_buf_consumed = True
                  if self.no_call_hap:
                      self.setCallHap()
-                 self.setSelectStopHap()
+                 if self.top.isWindows():
+                     ''' TBD '''
+                     pass
+                 else:
+                     self.setSelectStopHap()
                  SIM_run_alone(self.delRetHap, None)
                  #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
@@ -720,5 +793,15 @@ class WriteData():
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
-                self.lgr.debug('injectIO load orig_buffer from pickle')
-                
+                self.lgr.debug('writeData load orig_buffer from pickle')
+
+            if 'user_count' in so_pickle:
+                self.user_space_count = so_pickle['user_count']
+                self.user_space_addr = so_pickle['user_addr']
+                self.lgr.debug('writeData load user_addr 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+               
+            if 'addr_of_count' in so_pickle: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('writeData load add_of_count 0x%x' % (self.addr_of_count))
+        else:
+            self.lgr.debug('injectIO load, no pickle file at %s' % afl_file)

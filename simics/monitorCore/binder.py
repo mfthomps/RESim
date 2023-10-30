@@ -5,8 +5,8 @@ class Binder():
         self.lgr = lgr
 
     class BindRec():
-        def __init__(self, pid, fd, prog, address, port):
-            self.pid = pid
+        def __init__(self, tid, fd, prog, address, port):
+            self.tid = tid
             self.fd = fd
             self.prog = prog
             self.address = address
@@ -14,7 +14,7 @@ class Binder():
             self.new_fd = []
         def getJson(self):
             retval = {}
-            retval['pid'] = self.pid
+            retval['tid'] = self.tid
             retval['fd'] = self.fd
             retval['new_fd'] = self.new_fd
             retval['prog'] = self.prog
@@ -22,13 +22,13 @@ class Binder():
             retval['port'] = self.port
             return retval
 
-    def add(self, pid, fd, prog, address, port):
-        bind_rec = self.BindRec(pid, fd, prog, address, port)
+    def add(self, tid, fd, prog, address, port):
+        bind_rec = self.BindRec(tid, fd, prog, address, port)
         self.binders.append(bind_rec) 
         self.lgr.debug(('binder add %s' % self.toString(bind_rec)))
         return bind_rec
 
-    def accept(self, pid, fd, new_fd):
+    def accept(self, tid, fd, new_fd):
         for bind_rec in self.binders:
             if bind_rec.fd == fd:
                 bind_rec.new_fd.append(new_fd)
@@ -49,7 +49,10 @@ class Binder():
             s = fh.read()
             jload = json.loads(s)
             for jrec in jload:
-                bind_rec = self.add(jrec['pid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
+                if 'tid' in jrec:
+                    bind_rec = self.add(jrec['tid'], jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
+                else:
+                    bind_rec = self.add(str(jrec['pid']), jrec['fd'], jrec['prog'], jrec['address'], jrec['port'])
                 if 'new_fd' in jrec:
                     bind_rec.new_fd = jrec['new_fd'] 
             self.lgr.debug('binder loadJson loaded %d from %s' % (len(jload), fname))

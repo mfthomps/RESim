@@ -1,8 +1,17 @@
 import json
 import idc
+import ida_search
 import idaapi
 import idaversion
 import idautils
+import ida_segment
+import ida_loader
+import os
+import sys
+import logging
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
+import winProg
 def demangle(fname):
     mangle_map = {}
     for mangled in idautils.Functions():
@@ -28,8 +37,20 @@ def dumpFuns(fname=None):
     #print 'ea is %x' % ea
     if fname is None:
         #fname = idaversion.get_root_file_name()
-        fname = idaversion.get_input_file_path()
-    print('dumpFuns inputfile %s' % fname)
+        fname = os.getenv('ida_analysis_path')
+        if fname is None:
+            print('No ida_analysis_path defined')
+            fname = idaversion.get_input_file_path()
+    image_base = os.getenv('target_image_base')
+    if image_base is not None and len(image_base.strip())>0:
+        current_base = idautils.peutils_t().imagebase
+        image_base = int(image_base, 16)
+        delta = image_base - current_base 
+        print('image base is 0x%x current_base is 0x%X, delta 0x%x' % (image_base, current_base, delta))
+        ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
+        ida_loader.set_database_flag(ida_loader.DBFL_KILL)
+    else:
+        print('No image base found as env variable, using existing image_base')
     for ea in idautils.Segments():
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
         end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
@@ -49,19 +70,23 @@ def dumpFuns(fname=None):
         json.dump(funs, fh)
         print('Wrote functions to %s.funs' % fname)
     demangle(fname)
-    unwind(fname)
+    #unwind(fname)
+    dumpImports(fname)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
         basic blocks
     '''
-    fname = idaversion.get_input_file_path()
+    fname = os.getenv('ida_analysis_path')
+    if fname is None:
+        print('No ida_analysis_path defined')
+        fname = idaversion.get_input_file_path()
     funs_fh = open(fname+'.funs') 
     fun_json = json.load(funs_fh)
     blocks = {}
     for fun in fun_json:
         fun_addr = int(fun)
-        print('name %s 0x%x' % (fun_json[fun]['name'], fun_addr))
+        #print('name %s 0x%x' % (fun_json[fun]['name'], fun_addr))
         block_list = []
         f = idaapi.get_func(fun_addr)
         if f is not None:
@@ -98,6 +123,7 @@ def getHex(s):
     return retval
 
 def unwind(fname):
+    ''' TBD not used '''
     flag = idc.SEARCH_DOWN | idc.SEARCH_NEXT
     unwind_list = []
     count = 0
@@ -106,7 +132,9 @@ def unwind(fname):
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
         done = False
         while not done:
-            next = idc.find_text(ea, flag, 0, 0, "unwind")
+            print('ea is %s' % ea)
+            print('ea is 0x%x' % ea)
+            next = ida_search.find_text(ea, flag, 0, "unwind", 0)
             if next == prev_next:
                 break
             if next is None or next == 0:
@@ -123,3 +151,53 @@ def unwind(fname):
     with open(fname+'.unwind', 'w') as fh:
         fh.write(s)
     print('Wrote unwind addresses to %s.unwind' % fname)
+
+class ImportNames():
+    def __init__(self):
+        self.imports = {} 
+
+    def imp_cb(self, ea, name, ord):
+        if not name:
+            #print "%08x: ord#%d" % (ea, ord)
+            pass
+        else:
+            # ad hoc pain
+            if '@@' in name:
+                name = name.split('@@')[0]
+            demangled = idc.demangle_name(
+                name,
+                idc.get_inf_attr(idc.INF_SHORT_DN)
+            )
+            if demangled is None:
+                self.imports[ea] = name 
+                print('was NOT demangled %s ea: 0x%x ' % (name, ea))
+            else:
+                self.imports[ea] = demangled 
+                print('was demangled %s to %s ea: 0x%x ' % (name, demangled, ea))
+            #print "%08x: %s (ord#%d)" % (ea, name, ord)
+        return True
+    def printit(self):
+        for ea in self.imports:
+            print('0x%x %s' % (ea, self.imports[ea]))
+
+    def dumpit(self, fname):
+        with open(fname+'.imports', "w") as fh:
+            json.dump(self.imports, fh)
+            print('Wrote functions to %s.imports' % fname)
+
+def dumpImports(fname):
+    imports = {}
+    nimps = idaapi.get_import_module_qty()
+
+    print "Found %d import(s)..." % nimps
+    import_names = ImportNames()
+    for i in xrange(0, nimps):
+        name = idaapi.get_import_module_name(i)
+        if not name:
+            print "Failed to get import module name for #%d" % i
+            continue
+
+        print "Walking-> %s" % name
+        idaapi.enum_import_names(i, import_names.imp_cb)
+    import_names.printit()
+    import_names.dumpit(fname)

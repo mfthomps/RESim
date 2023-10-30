@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # given a an AFL session named by the current target (workspace), compare all of the coverage
 # files and de-dupe them, creating a list of the smallest queue files
@@ -38,6 +38,8 @@ def main():
          print(line)
     for line in output[0].decode("utf-8").splitlines():
          print(line)
+
+#ls -lrt ~/afl/output/ibssvc_20002/wer-7910_resim_*/queue | grep -v sync | grep -v orig | grep "id:" | wc
 
 if __name__ == '__main__':
     sys.exit(main())

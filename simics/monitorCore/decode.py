@@ -54,11 +54,16 @@ def regIsPartList(reg1, reg2_list):
     return False
 
 def isReg(reg):
+    if reg is None:
+        return False
     if reg in ia32_regs:
         return True
     if reg in ia64_regs:
         return True
     if reg.startswith('r') and (reg.endswith('b') or reg.endswith('w') or reg.endswith('d')):
+        return True
+
+    if reg.startswith('xmm'):
         return True
 
     if (len(reg) == 3 and reg.endswith('x')) or (len(reg) == 2 and reg[0] != '0'):
@@ -109,7 +114,7 @@ def getInBrackets(cpu, s, lgr):
         content = s.split('[', 1)[1].split(']')[0]
         if prefix is None:
             prebracket = s.split('[')[0]
-            #print 'cell_name: %s prebracket is %s' % (cell_name, prebracket)
+            #lgr.debug('cell_name: %s prebracket is %s' % (cell_name, prebracket))
             pieces = prebracket.split(' ')
             if len(pieces) > 0:
                 prefix = pieces[len(pieces)-1]
@@ -132,7 +137,7 @@ def getOperands(instruct):
     ret1 = None
     ret2 = None
     parts = instruct.split(',')
-    if len(parts) is 1:
+    if len(parts) == 1:
         ''' no comma '''
         parts = instruct.split(' ')
         if parts[0] == 'rep':
@@ -229,17 +234,21 @@ def getAddressFromOperand(cpu, operand, lgr):
             #lgr.debug('bracketed value was %x' % address)
             offset = 0
             if prefix is not None:
-               try:
-                  offset = int(prefix)
-                  address = address + offset
-               except:
-                  try:
-                      offset = getSigned(int(prefix, 16))
-                      #lgr.debug("adjusting by offset %d" % offset)
+               if prefix == 'fs:':
+                   address = cpu.ia32_fs_base + address
+                   #lgr.debug('prefix was fs, address now %x' % address)
+               else:
+                   try:
+                      offset = int(prefix)
                       address = address + offset
-                  except:
-                      #lgr.debug('did not parse offset %s' % prefix)
-                      pass
+                   except:
+                      try:
+                          offset = getSigned(int(prefix, 16))
+                          #lgr.debug("adjusting by offset %d" % offset)
+                          address = address + offset
+                      except:
+                          #lgr.debug('did not parse offset %s' % prefix)
+                          pass
 
         else:
             #lgr.debug('could not get reg number from %s' % bracketed)
@@ -265,7 +274,7 @@ def getUnmapped(cpu, instruct, lgr):
         address = getAddressFromOperand(cpu, operand, lgr)
         if address is not None:
             phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-            if phys_block.address is 0:
+            if phys_block.address == 0:
                 #print 'found unmapped at %x' % address
                 return address
             else:

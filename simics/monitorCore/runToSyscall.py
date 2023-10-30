@@ -57,7 +57,7 @@ class runToSyscall():
             SIM_run_command('reverse')
 
     def stoppedExecution(self, dumb, one, exception, error_string):
-        cpu, cur_addr, comm, pid = self.os_utils.currentProcessInfo(self.cpu)
+        dum_cpu, comm, tid = self.task_utils.curThread()
         self.lgr.debug('stoppedExecution, pid %d look for %d' % (pid, self.pid))
         if cpu == self.cpu and pid == self.pid:
             new_cycle = SIM_cycle_count(cpu)

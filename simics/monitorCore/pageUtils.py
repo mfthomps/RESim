@@ -106,11 +106,11 @@ def adjust(start, length, page_size):
     boundary = start % page_size
     #print 'page range for %x %x' % (start, end)
     #logging.debug('noncode break range for %x %x' % (start, end))
-    if boundary is not 0:
+    if boundary != 0:
         #logging.debug('start %x not on page boundary, adjust to %x' % (start, start- boundary))
         start = start - boundary
     boundary = (end+1) % page_size
-    if boundary is not 0 and end < 0xffffffffffffffff:
+    if boundary != 0 and end < 0xffffffffffffffff:
         adjust = page_size - boundary
         #logging.debug('end %x not on page boundary, adjust to %x' % (start, end+adjust))
         end = end + adjust
@@ -124,7 +124,7 @@ def pageLen(start, page_size):
 def pageStart(start, page_size):
     page_start = start
     boundary = start % page_size
-    if boundary is not 0:
+    if boundary != 0:
        page_start = start - boundary
     return page_start
 
@@ -495,14 +495,18 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
 
     dir_base, present, page_size = get40(cpu, dir_base_addr, lgr)                
     #lgr.debug('dir_base 0x%x present %d page_size 0x%x' % (dir_base, present, page_size))
-    if dir_base == 0:
+    if dir_base == 0 or dir_base is None:
         return ptable_info
     else:
         dir_entry = memUtils.bitRange(addr, 21, 29)
+        if dir_entry is None:
+            lgr.error('dir_entry is None reading addr 0x%x' % addr)
+            return ptable_info
+        
         #lgr.debug('dir_entry %d' % dir_entry)
         table_base_addr = dir_base + (dir_entry * 8)
         #lgr.debug('table_base_addr 0x%x' % table_base_addr)
-        ptable_info.table_addr = table_base_addr
+        ptable_info.ptable_addr = table_base_addr
         table_base, present, page_size = get40(cpu, table_base_addr, lgr)                
          
         if table_base is None or table_base == 0:

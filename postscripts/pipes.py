@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 import procTrace
 import os
 import sys
@@ -64,8 +64,8 @@ class Pipes():
         for name in self.pipes:
             if name is None:
                 continue
-            pid = name.split('-')[1]
-            pname = self.proc_trace.getPname(pid)
+            tid = name.split('-')[1]
+            pname = self.proc_trace.getPname(tid)
             outline = '%s %s' % (pname, name)
             for mode in self.pipes[name]:
                 outline = outline+' %s%s' % (mode, str(self.pipes[name][mode]))

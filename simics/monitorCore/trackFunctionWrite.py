@@ -39,7 +39,7 @@ class TrackFunctionWrite():
         self.cpu = cpu
         self.cell = cell
         self.param = param
-        self.pid = None
+        self.tid = None
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.read_watch_marks = None
@@ -55,18 +55,18 @@ class TrackFunctionWrite():
         self.writeMarks = writeMarks.WriteMarks(mem_utils, cpu, lgr)
 
     
-    def trackFunction(self, pid, fun, ida_funs, read_watch_marks, show_compare):
-        self.pid = pid
+    def trackFunction(self, tid, fun, fun_mgr, read_watch_marks, show_compare):
+        self.tid = tid
         self.fun = fun
         self.read_watch_marks = read_watch_marks
         self.show_compare = show_compare
-        start, end = ida_funs.getAddr(fun)
+        start, end = fun_mgr.getAddr(fun)
         if start is None:
             self.lgr.error('TrackFunctionWrite, no function found: %s' % fun)         
             return
         self.lgr.debug('trackFunction %s start 0x%x' % (fun, start))
         eip = self.mem_utils.getRegValue(self.cpu, 'pc') 
-        cur_fun = ida_funs.getFun(eip)
+        cur_fun = fun_mgr.getFun(eip)
         if cur_fun == start:
             ''' TBD need to be be prior to call to record return address '''
             self.lgr.error('TrackFunctionWrite starting in the function %s -- rev to prior' % fun)
@@ -81,9 +81,9 @@ class TrackFunctionWrite():
     def funEnterHap(self, dumb, third, forth, memory):
         if self.fun_entry_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
-        self.lgr.debug('funEnterHap, pid:%d wanted %d' % (cur_pid, self.pid))
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.lgr.debug('funEnterHap, tid:%s wanted %s' % (cur_tid, self.tid))
+        if cur_tid != self.tid:
             return
         self.lgr.debug('funEnterHap, set blanket writes')
         self.blanketWrites()
@@ -105,8 +105,8 @@ class TrackFunctionWrite():
     def funExitHap(self, dumb, third, forth, memory):
         if self.fun_exit_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        if cur_tid != self.tid:
             return
         self.context_manager.genDeleteHap(self.fun_exit_hap)
         self.fun_exit_hap = None 
@@ -119,8 +119,8 @@ class TrackFunctionWrite():
     def writeHap(self, dumb, third, forth, memory):
         if self.write_hap is None:
             return
-        cpu, comm, cur_pid = self.task_utils.curProc() 
-        if cur_pid != self.pid:
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        if cur_tid != self.tid:
             return
         addr = memory.logical_address
         if addr >= self.param.kernel_base:

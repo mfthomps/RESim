@@ -19,16 +19,16 @@ def allFuns(flist):
         runFun(f)
 
 class StopFunction():
-    def __init__(self, fun, args, nest=True, match_pid=False):
+    def __init__(self, fun, args, nest=True, match_tid=False):
         ''' the function '''
         self.fun = fun
         self.args = args
         ''' nest implies the function should be invoked with the flist as the parameter '''
         self.nest = nest
-        self.match_pid = match_pid
+        self.match_tid = match_tid
 
         
-    def run(self, flist, wrong_pid=False, cb_param=None):
+    def run(self, flist, wrong_tid=False, cb_param=None):
         if self.fun is None:
             print('Error in stopFunction, no function defined')
         elif self.nest:
@@ -38,7 +38,7 @@ class StopFunction():
             ''' args is a list of parameters.  likely a better way to hack this '''
             runFun(self, cb_param=cb_param)
             for f in flist:
-                if not (wrong_pid and f.match_pid):
+                if not (wrong_tid and f.match_tid):
                     runFun(f)
 
     def getFun(self):

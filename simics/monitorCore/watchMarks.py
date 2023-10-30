@@ -88,6 +88,7 @@ class DataMark():
             #self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
+        # becomes the length of an ad-hoc copy
         self.loop_count = 0
         self.modify = modify
         self.ad_hoc = ad_hoc
@@ -135,7 +136,7 @@ class DataMark():
     def addrRange(self, addr):
         self.end_addr = addr
         self.loop_count += 1
-        #self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
+        self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
 
     def noAdHoc(self):
         if self.ad_hoc:
@@ -148,7 +149,7 @@ class KernelMark():
         self.count = count
         self.callnum = callnum
         self.fd = fd
-        self.msg = 'Kernel read %d bytes from 0x%x call_num: %d FD: %d' % (count, addr, callnum, fd)
+        self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d FD: %d' % (count, addr, callnum, fd)
     def getMsg(self):
         return self.msg
 
@@ -172,9 +173,9 @@ class CompareMark():
         self.count = count    
         if buf_start is not None:
             offset = ours - buf_start
-            self.msg = '%s 0x%x %s (%d bytes into buffer at 0x%x) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dest_str, theirs, count)
+            self.msg = '%s 0x%x %s (%d bytes into buffer at 0x%08x) to %s (at 0x%08x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dest_str, theirs, count)
         else:
-            self.msg = '%s 0x%x %s (unknown buffer) to %s (at 0x%x, %d bytes)' % (fun, ours, src_str, dest_str, theirs, count)
+            self.msg = '%s 0x%08x %s (unknown buffer) to %s (at 0x%08x, %d bytes)' % (fun, ours, src_str, dest_str, theirs, count)
     def getMsg(self):
         return self.msg
 
@@ -184,9 +185,9 @@ class StrChrMark():
         self.start = start    
         self.count = count    
         if self.the_chr > 20 and self.the_chr < 256:
-            self.msg = 'strchr in string at 0x%x find 0x%x(%s) ' % (start, self.the_chr, chr(self.the_chr))
+            self.msg = 'strchr in string at 0x%x find 0x%08x(%s) ' % (start, self.the_chr, chr(self.the_chr))
         else:
-            self.msg = 'strchr in string at 0x%x find 0x%x' % (start, self.the_chr)
+            self.msg = 'strchr in string at 0x%x find 0x%08x' % (start, self.the_chr)
     def getMsg(self):
         return self.msg
 
@@ -205,9 +206,9 @@ class ScanMark():
         self.buf_start = buf_start    
         self.sp = sp    
         if dest is None:
-            self.msg = 'sscanf failed to parse from 0x%x' % src
+            self.msg = 'sscanf failed to parse from 0x%08x' % src
         else:
-            self.msg = 'sscanf src 0x%x to 0x%x' % (src, dest)
+            self.msg = 'sscanf src 0x%x to 0x%08x' % (src, dest)
 
     def getMsg(self):
         return self.msg
@@ -216,7 +217,7 @@ class XMLPropMark():
     def __init__(self, src, count, the_str, result):
         self.src = src    
         self.count = count    
-        self.msg = 'xmlProp %s src 0x%x len %d. Prop: %s' % (the_str, src, count, result)
+        self.msg = 'xmlProp %s src 0x%08x len %d. Prop: %s' % (the_str, src, count, result)
 
     def getMsg(self):
         return self.msg
@@ -225,7 +226,7 @@ class InetAddrMark():
     def __init__(self, src, count, the_str):
         self.src = src    
         self.count = count    
-        self.msg = 'InetAddr %s src 0x%x len %d' % (the_str, src, count)
+        self.msg = 'InetAddr %s src 0x%08x len %d' % (the_str, src, count)
 
     def getMsg(self):
         return self.msg
@@ -234,7 +235,7 @@ class InetNtopMark():
     def __init__(self, dest, count, the_str):
         self.dest = dest    
         self.count = count    
-        self.msg = 'InetAddr %s dest 0x%x len %d' % (the_str, dest, count)
+        self.msg = 'InetAddr %s dest 0x%08x len %d' % (the_str, dest, count)
 
     def getMsg(self):
         return self.msg
@@ -243,7 +244,7 @@ class LenMark():
     def __init__(self, src, count):
         self.src = src    
         self.count = count    
-        self.msg = 'strlen src 0x%x len %d' % (src, count)
+        self.msg = 'strlen src 0x%08x len %d' % (src, count)
 
     def getMsg(self):
         return self.msg
@@ -256,7 +257,7 @@ class SprintfMark():
         self.count = count    
         self.buf_start = buf_start    
         self.sp = sp    
-        self.msg = '%s src: 0x%x dest 0x%x len %d' % (fun, src, dest, count)
+        self.msg = '%s src: 0x%08x dest 0x%08x len %d' % (fun, src, dest, count)
 
     def getMsg(self):
         return self.msg
@@ -265,7 +266,7 @@ class FprintfMark():
     def __init__(self, fun, src):
         self.fun = fun    
         self.src = src    
-        self.msg = '%s src 0x%x' % (fun, src)
+        self.msg = '%s src 0x%08x' % (fun, src)
 
     def getMsg(self):
         return self.msg
@@ -275,7 +276,7 @@ class FwriteMark():
         self.fun = fun    
         self.src = src    
         self.count = count    
-        self.msg = '%s src 0x%x count %d' % (fun, src, count)
+        self.msg = '%s src 0x%08x count %d' % (fun, src, count)
 
     def getMsg(self):
         return self.msg
@@ -285,7 +286,7 @@ class GlobMark():
         self.fun = fun    
         self.src = src    
         self.count = count    
-        self.msg = '%s src 0x%x count %d' % (fun, src, count)
+        self.msg = '%s src 0x%08x count %d' % (fun, src, count)
 
     def getMsg(self):
         return self.msg
@@ -295,10 +296,10 @@ class IteratorMark():
         self.fun = fun
         self.addr = addr
         if buf_start is None:        
-            self.msg = 'iterator %s %x No buffer start found?)' % (fun, addr)
+            self.msg = 'iterator %s %08x No buffer start found?)' % (fun, addr)
         else:
             offset = addr - buf_start
-            self.msg = 'iterator %s %x (%d bytes into buffer at 0x%x)' % (fun, addr, offset, buf_start)
+            self.msg = 'iterator %s %08x (%d bytes into buffer at 0x%08x)' % (fun, addr, offset, buf_start)
     def getMsg(self):
         return self.msg
 
@@ -306,14 +307,14 @@ class MallocMark():
     def __init__(self, addr, size):
         self.addr = addr
         self.size = size
-        self.msg = 'malloc addr: 0x%x size: %d' % (addr, size)
+        self.msg = 'malloc addr: 0x%08x size: %d' % (addr, size)
     def getMsg(self):
         return self.msg
 
 class FreeMark():
     def __init__(self, addr, fun):
         self.addr = addr
-        self.msg = '%s addr: 0x%x' % (fun, addr)
+        self.msg = '%s addr: 0x%08x' % (fun, addr)
     def getMsg(self):
         return self.msg
 
@@ -327,14 +328,14 @@ class XMLParseFileMark():
     def __init__(self, addr, size):
         self.addr = addr
         self.size = size
-        self.msg = 'xmlParseFile addr: 0x%x size: %d' % (addr, size)
+        self.msg = 'xmlParseFile addr: 0x%08x size: %d' % (addr, size)
     def getMsg(self):
         return self.msg
 
 class GetTokenMark():
     def __init__(self, src, dest, the_string):
         self.addr = src
-        self.msg = 'GetToken addr: 0x%x token: %s' % (src, the_string)
+        self.msg = 'GetToken addr: 0x%08x token: %s' % (src, the_string)
     def getMsg(self):
         return self.msg
 
@@ -374,7 +375,7 @@ class PushMark():
         self.start = buf_start
         self.ip = ip
         if addr == buf_start and length == push_size:
-            self.msg = 'push from 0x%x to 0x%x' % (addr, dest)
+            self.msg = 'push from 0x%08x to 0x%08x' % (addr, dest)
         else:
             offset = addr - buf_start
             self.msg = 'push from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, buf_start, dest)
@@ -462,7 +463,7 @@ class CharLookupMark():
             length = self.length
         else:
             length = self.end_addr - self.addr
-        msg = 'Char Lookup buffer at 0x%x len %d, %s' % (self.addr, length, self.stuff)
+        msg = 'Char Lookup buffer at 0x%08x len %d, %s' % (self.addr, length, self.stuff)
         return msg
 class CharPtrMark():
     def __init__(self, addr, ptr, value):
@@ -470,13 +471,23 @@ class CharPtrMark():
         self.ptr = ptr
         self.value = value
     def getMsg(self):
-        msg = 'Char Ptr reference at 0x%x, pointer to 0x%x value: 0x%x' % (self.addr, self.ptr, self.value)
+        msg = 'Char Ptr reference at 0x%08x, pointer to 0x%08x value: 0x%x' % (self.addr, self.ptr, self.value)
         return msg
+class UuidStringMark():
+    def __init__(self, src, dest, count, buf_start):
+        self.src = src
+        self.dest = dest
+        self.length = count
+        offset = src - buf_start
+        self.msg = 'UuidToString from 0x%x (%d bytes into buffer at 0x%x) to 0x%x' % (src, offset, buf_start, dest)
+    def getMsg(self):
+        return self.msg
+
 class MscMark():
     def __init__(self, fun, addr):
         self.addr = addr
         if addr is not None:
-            self.msg = '%s read 0x%x' % (fun, addr)
+            self.msg = '%s read 0x%08x' % (fun, addr)
         else:
             self.msg = '%s read None' % (fun)
     def getMsg(self):
@@ -522,7 +533,7 @@ class WatchMarks():
                 cycle = ' '
                 if verbose:
                     cycle = ' 0x%x ' % mark.cycle
-                print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
+                print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
                 i += 1
             print('Begin active watch marks.')
         elif len(self.stale_marks)>0:
@@ -532,24 +543,24 @@ class WatchMarks():
             cycle = ' '
             if verbose:
                 cycle = ' 0x%x ' % mark.cycle
-            print('%d%s%s  ip:0x%x pid:%d' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.pid))
+            print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, pid, mark):
+        def __init__(self, return_cycle, call_cycle, ip, tid, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
-            self.pid = pid
+            self.tid = tid
             self.mark = mark
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
             retval['ip'] = self.ip
-            retval['pid'] = self.pid
+            retval['tid'] = self.tid
             retval['msg'] = self.mark.getMsg()
             return retval
 
@@ -603,15 +614,28 @@ class WatchMarks():
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
+            self.lgr.debug('watchMarks dataRead ad_hoc address 0x%x ' % (addr))
             if len(self.mark_list) > 0:
                 pm = self.mark_list[-1]
+                create_new = True   
                 if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                    end_addr = addr + trans_size - 1
-                    #self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
-                    pm.mark.addrRange(end_addr)
-                else:
-                    #self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
-                    #sp, base = self.getStackBase(dest)
+                    skip_this = False
+                    if dest is not None:
+                        self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
+                        cur_len = pm.mark.end_addr - pm.mark.addr
+                        ok_dest = pm.mark.dest + cur_len + 1
+                        self.lgr.debug('watchMarks dataRead cur_len 0x%x  ok_dest would be 0x%x' % (cur_len, ok_dest))
+                        if dest != ok_dest:
+                            skip_this = True
+                    if not skip_this:
+                        end_addr = addr + trans_size - 1
+                        self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                        pm.mark.addrRange(end_addr)
+                        pm.cycle = self.cpu.cycles
+                        create_new = False
+                if create_new:
+                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
+                    sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
                     dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
@@ -628,6 +652,7 @@ class WatchMarks():
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, DataMark):
                     pm.mark.addrRange(addr)
+                    pm.cycle = self.cpu.cycles
                     if pm.mark.ad_hoc:
                         #self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
@@ -637,6 +662,8 @@ class WatchMarks():
                     wm = self.addWatchMark(dm, cycles=cycles)
                     #self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
+        #if wm is None:
+        #    self.lgr.error('returning none for wm addr 0x%x' % addr)
         return wm
 
     def getMarkFromIndex(self, index):
@@ -645,6 +672,17 @@ class WatchMarks():
             return self.mark_list[index]
         else:
             return None
+
+    def getRecentMark(self, prev=0):
+        if len(self.mark_list)>prev:
+            index = -1 - prev
+            return self.mark_list[index]
+        else:
+            return None
+
+    def rmLast(self, count):
+        for i in range(count):
+            self.mark_list.pop() 
 
     def getWatchMarks(self, origin=0):
         retval = []
@@ -741,10 +779,10 @@ class WatchMarks():
                 self.lgr.debug('dataWatch addWatchMark got so_map')
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, pid, mark)
+        wm = self.WatchMark(cycles, self.call_cycle, ip, tid, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -771,7 +809,7 @@ class WatchMarks():
         else:
             st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
             if st is None:
-                self.lgr.debug('getStackBase stack trace is None, wrong pid?')
+                self.lgr.debug('getStackBase stack trace is None, wrong tid?')
                 return
             frames = st.getFrames(2)
             for f in frames:
@@ -825,17 +863,21 @@ class WatchMarks():
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
-            src_str = src_str.replace('\n\r','<newline>')
-            src_str = src_str.replace('\n','<newline>')
-            src_str = src_str.replace('\t','<tab>')
-            #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
-            #self.lgr.debug('srcdst_string hex is %s' % hexstring)
+                src_str = src_str.replace('\n\r','<newline>')
+                src_str = src_str.replace('\n','<newline>')
+                src_str = src_str.replace('\t','<tab>')
+                #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
+                #self.lgr.debug('srcdst_string hex is %s' % hexstring)
+            else:
+                src_str = ''
+                self.lgr.debug('watchMarks compare src_string is None reading from 0x%x' % src)
         else:
             dst_str = ''
             src_str = ''
         cm = CompareMark(fun, dest, src, count, dst_str, src_str, buf_start) 
-        self.addWatchMark(cm)
+        wm = self.addWatchMark(cm)
         self.lgr.debug('watchMarks compare (%s) %s' % (fun, cm.getMsg()))
+        return wm
 
     def strchr(self, start, the_chr, count):
         cm = StrChrMark(start, the_chr, count)
@@ -990,6 +1032,11 @@ class WatchMarks():
     def charPtrMark(self, addr, ptr, value):
         cm = CharPtrMark(addr, ptr, value)
         self.addWatchMark(cm)
+
+    def uuidToString(self, src, dest, count, buf_start):
+        um = UuidStringMark(src, dest, count, buf_start)
+        self.addWatchMark(um)
+        self.lgr.debug(um.getMsg())
         
     def mscMark(self, fun, src):
         fm = MscMark(fun, src)
@@ -1203,6 +1250,7 @@ class WatchMarks():
             entry = {}
             entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
+            entry['tid'] = mark.tid
             entry['packet'] = packet
             entry['index'] = index
             index = index + 1

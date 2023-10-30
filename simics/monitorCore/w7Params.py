@@ -1,5 +1,6 @@
 import pickle
 import resimUtils
+from simics import *
 '''
 Routines to tease out Windows 7 kernel parameters for use by RESim
 Assumes a task_list obtained by watching the current task
@@ -437,18 +438,67 @@ def hackpid(cpu, mem_utils, task_list, lgr, max_zeros=5):
     print('Smallest offset is %d (0x%x)' % (smallest_offset, smallest_offset))
     return smallest_offset
     
+def getCurTaskRec(cpu, mem_utils, param, current_task_phys, lgr):
+    retval = None
+    cur_thread = SIM_read_phys_memory(cpu, current_task_phys, 8)
+    if cur_thread is None:
+        lgr.error('winTaskUtils getCurTaskRec got cur_thread of None reading 0x%x' % current_task_phys)
+    else:
+        ptr = cur_thread + param.proc_ptr
+        phys = mem_utils.v2p(cpu, ptr)
+        lgr.debug('getCurTaskRec cur_thread 0x%x  proc_addr 0x%x phys 0x%x' % (cur_thread, ptr, phys))
+        retval = SIM_read_phys_memory(cpu, phys, 8)
+        
+    return retval
 
-def findParams(cpu, mem_utils, task_list, param, lgr):
-    #log_dir = './logs'
-    #lgr = resimUtils.getLogger('findParams', log_dir)
 
+def walk(cpu, mem_utils, param, task_ptr_in, lgr):
+        done = False
+        got = []
+        task_ptr = task_ptr_in
+        offset = param.ts_next
+        lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, param.ts_pid))
+        while not done:
+            pid_ptr = mem_utils.getUnsigned(task_ptr + param.ts_pid)
+            lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
+            pid = mem_utils.readWord(cpu, pid_ptr)
+            if pid is not None:
+                got.append(task_ptr)
+                lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
+            else:
+                lgr.debug('got no pid for pid_ptr 0x%x' % pid_ptr)
+                print('got no pid for pid_ptr 0x%x' % pid_ptr)
+                break
+            task_next = mem_utils.getUnsigned(task_ptr + offset)
+            val = mem_utils.readWord(cpu, task_next)
+            if val is None:
+                print('died on task_next 0x%x' % task_next)
+                break
+            else:
+                next_head = mem_utils.getUnsigned(val)
+            
+            task_ptr = next_head - param.ts_prev
+            task_ptr = mem_utils.getUnsigned(task_ptr)
+            #lgr.debug('winTaskUtils got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
+            if task_ptr in got:
+                #print('already got task_ptr 0x%x' % task_ptr)
+                #lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
+                break
+        return got
+
+
+def findParams(cpu, mem_utils, task_list, param, current_task_phys, lgr):
     # TBD fix this
     param.ts_comm = comm_offset
     param.proc_ptr = proc_ptr_offset
     param.ts_pid = 384
     param.ts_next = 952
     param.ts_prev = 944
+
     return
+
+    cur_task = getCurTaskRec(cpu, mem_utils, param, current_task_phys, lgr)
+    walk(cpu, mem_utils, param, cur_task, lgr)
 
     ''' TBD fix with saner approach taking advantage of what we know about head lists rather than
         looking for adjacent records, which is a loser'''
@@ -527,3 +577,4 @@ def findParams(cpu, mem_utils, task_list, param, lgr):
    
     param.ts_next = best_offset+8
     param.ts_prev = best_offset
+

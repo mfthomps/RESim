@@ -54,5 +54,11 @@ elif [[ "$2" == -b ]];then
     unset DISPLAY
     ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e "@SIM_main_loop()" -batch-mode
 else
-    ./simics $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+    if [ ! -d ./targets/qsp-x86 ]; then
+        ./simics -gui $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+    elif [ "$2" == -g ]; then
+        ./simics -gui $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+    else
+        ./simics $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+    fi
 fi

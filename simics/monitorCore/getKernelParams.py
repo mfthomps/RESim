@@ -40,9 +40,7 @@ import decode
 import os
 
 import w7Params
-import win7CallParams
 import winKParams
-import win7Syscalls
 
 class GetKernelParams():
     def __init__(self, comp_dict, run_from_snap):
@@ -77,6 +75,8 @@ class GetKernelParams():
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
         else:
             self.param = kParams.Kparams(self.cpu, word_size, platform)
+            # override a previous hack
+            self.param.sysexit = None
 
 
         ''' try first without reference to fs when finding current_task.  If that fails in 3 searches,
@@ -103,6 +103,7 @@ class GetKernelParams():
         self.trecs = []
         self.idle = None
         self.dumb_count = 0
+        self.mode_entry_limit = 10000
         self.stop_hap = None
         self.fs_stop_hap = None
         self.fs_start_cycle = None
@@ -139,12 +140,12 @@ class GetKernelParams():
         self.fs_base = None
         self.search_count = 0
         self.test_count = 0
+     
 
         self.win7_tasks = []
         self.win7_count = 0
-        self.w7_call_params = None
         self.win7_saved_cr3_phys = None
-
+  
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
             starting at 0xc1000000.  Record each address that contains a match,
@@ -240,7 +241,7 @@ class GetKernelParams():
             self.lgr.debug('taskModeChanged32 eip 0x%x %s' % (eip, instruct[1]))
             if 'illegal' in instruct[1]:
                 self.lgr.debug('taskModeChanged32 page fault, continue')
-            elif 'sys' not in instruct[1] and 'int' not in instruct[1]:
+            elif 'sys' not in instruct[1] and 'int' not in instruct[1] and 'svc' not in instruct[1]:
                 self.lgr.debug('taskModeChanged32 not a syscall, page fault, continue')
             else:
                 self.lgr.debug('taskModeChanged32 must be a call, look for FS')
@@ -262,7 +263,11 @@ class GetKernelParams():
             elif 'sys' not in instruct[1] and 'int' not in instruct[1]:
                 self.lgr.debug('taskModeChanged64 not a syscall, page fault, continue')
             else:
-                self.lgr.debug('taskModeChanged64 must be a call, look for GS')
+                rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+                self.lgr.debug('taskModeChanged64 must be a call rax is 0x%x, look for GS' % rax)
+                if rax > 100:
+                    self.lgr.debug('superstition about multiple jump tables, skip this one')
+                    return
                 #self.lookForFS(None)
                 self.lookForGS(None)
                 SIM_run_alone(self.delTaskModeAlone, None)
@@ -279,8 +284,10 @@ class GetKernelParams():
             self.param.current_task_fs = False
         if self.mem_utils.WORD_SIZE == 4:
             ''' use mode haps and brute force search for values that match the current task value '''
-            #self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
-            self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged32, self.cpu)
+            if self.cpu.architecture == 'arm':
+                self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged, self.cpu)
+            else:
+                self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged32, self.cpu)
             self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.currentTaskStopHap, None)
             #self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.supervisor32StopHap, None)
             self.lgr.debug('getCurrentTaskPtr added mode and stop haps')
@@ -329,7 +336,7 @@ class GetKernelParams():
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             self.gs_start_cycle = self.cpu.cycles
             self.lgr.debug('gsEnableReverse should be at kernel entry. eip is 0x%x, , now continue %d cycles' % (eip, self.gs_cycles))
-            ''' tbd point of going forward? to let us reverse?'''
+            ''' The point of going forward is to let us reverse'''
             SIM_continue(self.gs_cycles)
             self.gsFindAlone()
 
@@ -393,6 +400,9 @@ class GetKernelParams():
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 addr = self.mem_utils.getUnsigned(int(addr, 16))
+                if not self.isWindows() and addr < 0x1000:
+                    self.lgr.debug('gs offset looks dicey, skip this 0x%x' % addr)
+                    continue
                 self.gs_base = self.cpu.ia32_gs_base
                 self.param.current_task_gs  = True
                 self.param.gs_base = self.gs_base
@@ -403,6 +413,10 @@ class GetKernelParams():
                 phys = self.mem_utils.v2p(self.cpu, va)
                 #phys = (self.gs_base + self.param.current_task)-self.param.kernel_base
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
+                cur_task = SIM_read_phys_memory(self.cpu, phys, self.mem_utils.WORD_SIZE)
+                if not self.isWindows() and cur_task < 0x10000:
+                    self.lgr.debug('cur task looks dicey, skip this 0x%x' % cur_task)
+                    continue
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
                 if self.os_type == 'WIN7':
@@ -413,6 +427,8 @@ class GetKernelParams():
  
                     self.findWin7Params()
                 else:
+                    #SIM_break_simulation('remove this')
+                    #return
                     self.findSwapper()
                 break
                 
@@ -569,7 +585,7 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.task_hap = None
-        self.stop_hape = None
+        self.stop_hap = None
         result = self.getInit()
         if result != 0:
             self.lgr.error('error from getInit')
@@ -589,7 +605,7 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.task_hap = None
-        self.stop_hape = None
+        self.stop_hap = None
 
     def win7StopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('win7StopHap')
@@ -597,7 +613,7 @@ class GetKernelParams():
         SIM_run_alone(self.getWin7Params, None)
 
     def getWin7Params(self, dumb):
-        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.lgr)
+        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.current_task_phys, self.lgr)
         if self.param.ts_pid is not None:
             print('got pid %d' % self.param.ts_pid)
         else:
@@ -845,13 +861,16 @@ class GetKernelParams():
                 SIM_break_simulation('entryModeChanged found svc 9999')
 
     def entryModeChanged(self, compat32, one, old, new):
-        ''' HAP entered when mode changes looking for kernel entry '''
+        ''' HAP entered when mode changes looking for kernel entry and exits. 
+            Since on entry the eip is from user space, we need to stop the simulation
+            and then read eip.
+        '''
         if self.entry_mode_hap is None:
             return
         self.hack_stop = False
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         self.lgr.debug('entryModeChanged eip 0x%x compat32: %r cycles: 0x%x' % (eip, compat32, self.cpu.cycles)) 
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         if pid is None:
             self.lgr.debug('entryModeChanged failed to get pid, continue?')
             return
@@ -864,18 +883,33 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChanged pid:%d kernel exit eip 0x%x %s' % (pid, eip, instruct[1]))
                 if instruct[1].startswith('iret'):
                     self.param.iretd = eip
+                    self.lgr.debug('entryModeChanged found iret')
                 elif instruct[1] == 'sysexit':
                     self.param.sysexit = eip
+                    self.lgr.debug('entryModeChanged found sysexit')
                 elif instruct[1] == 'sysret64':
-                    self.param.sysret64 = eip
+                    if self.param.sysret64 is not None:
+                        ''' use sysexit to record 2nd sysret64 exit '''
+                        if self.param.sysexit is None:
+                            self.param.sysexit = eip
+                            self.lgr.debug('entryModeChanged found 2nd sysret64, save as sysexit 0x%x' % eip)
+                        else:
+                            self.lgr.error('entryModeChanged got sysret64 0x%x but already got sysret64 twice' % eip)
+                    else:
+                        self.param.sysret64 = eip
+                        self.lgr.debug('entryModeChanged found sysret64 0x%x' % eip)
                 
-                #if self.mem_utils.WORD_SIZE == 4:     
-                if True:
+                '''
+                TBD seems no reason to stop the simulation, we are gathering exits.
+                if self.mem_utils.WORD_SIZE == 4:     
                     if self.param.iretd is not None and self.param.sysexit is not None:
                         self.lgr.debug('entryModeChanged found exits')
                         self.hack_stop = True
                         SIM_break_simulation('found sysexit and iretd')
-                '''
+                else:
+                    if self.param.iretd is not None and self.param.sysret64 is not None:
+                        self.lgr.debug('entryModeChanged found exits')
+                        SIM_break_simulation('found iretd and sysret64')
                 else:
                     if self.param.iretd is not None and self.param.sysexit is not None and self.sysret64 is not None:
                         self.lgr.debug('entryModeChanged found exits')
@@ -909,14 +943,14 @@ class GetKernelParams():
                     self.hack_stop = True
                     SIM_break_simulation('entryModeChanged compat32 found sysenter')
             else:
-                self.lgr.debug('entryModeChanged what to do?')
+                self.lgr.debug('entryModeChanged nothing to do, continue')
             #if self.param.sys_entry is not None and self.skip_sysenter:
             #    self.lgr.debug('entryModeChanged got sys_entry and told to skip sysenter')
             #    SIM_break_simulation('skip sysenter')
-            if self.dumb_count > 1000000:
+            if self.dumb_count > self.mode_entry_limit:
                 self.lgr.debug('entryModeChanged did 1000')
                 self.hack_stop = True
-                SIM_break_simulation('did 10000')
+                SIM_break_simulation('did %s mode entries' % self.mode_entry_limit)
     
     def entryModeChangedWin(self, dumb, one, old, new):
         ''' HAP entered when mode changes looking for kernel entry '''
@@ -966,6 +1000,7 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.task_hap = None
+        self.stop_hap = None
         self.computeStopHap = None
         count = 0
         if self.cpu.architecture == 'arm':
@@ -1036,9 +1071,11 @@ class GetKernelParams():
             ''' find where we do the syscall jump table computation '''
             prefix = 'call dword ptr [eax*4'
             prefix1 = 'mov eax,dword ptr [eax*4'
+            prefix2 = 'mov eax,dword ptr [eax*4'
             if self.mem_utils.WORD_SIZE == 8:
                 prefix = 'call qword ptr [rax*8'
                 prefix1 = 'mov rax,qword ptr [rbx*8-'
+                prefix2 = 'mov rax,qword ptr [rax*8-'
             while True:
                 SIM_run_command('si -q')
                 eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -1047,7 +1084,7 @@ class GetKernelParams():
                     return
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('instruct: %s' % (instruct[1]))
-                if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1):
+                if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1) or instruct[1].startswith(prefix2):
                     if compat32:
                         self.param.compat_32_compute = eip
                         print(instruct[1])
@@ -1084,7 +1121,7 @@ class GetKernelParams():
             if rax > 500:
                 self.lgr.debug('skip this call...')
                 return
-        self.lgr.debug('computeDoStop must be at sys_entry rax is %d' % rax)
+            self.lgr.debug('computeDoStop must be at sys_entry rax is %d' % rax)
         SIM_break_simulation('computeDoStop')
 
     def testComputeHap(self, dumb, third, forth, memory):
@@ -1131,11 +1168,12 @@ class GetKernelParams():
         self.gs_stop_hap = False
 
     def getEntries(self):
+        ''' Get kernel entry point information.  We found a kernel entry via a mode hap, and then stopped the
+            simulation so that we can get the kernel address that is hit. (during mode hap entry, the eip is from where we came from.)'''
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('getEntries instruct is %s prev_instruct %s eip 0x%x  len %d' % (self.prev_instruct, instruct[1], eip, instruct[0]))
-        do_not_continue = False
         if self.prev_instruct.startswith('int 128') and self.param.sys_entry is None:
             self.lgr.debug('getEntries is int 128')
             self.param.sys_entry = eip 
@@ -1155,8 +1193,8 @@ class GetKernelParams():
             self.param.sysenter = eip 
             #SIM_run_alone(self.findCompute, None)
             
-        if (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
-                 and (self.param.sysexit is not None or self.skip_sysenter) and self.param.iretd is not None \
+        if self.dumb_count > self.mode_entry_limit and (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
+                 and (self.param.sysexit is not None or self.skip_sysenter or self.mem_tuils.WORD_SIZE==8) and self.param.iretd is not None \
                  and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None):
             SIM_run_alone(self.deleteHaps, None)
 
@@ -1166,7 +1204,7 @@ class GetKernelParams():
             #param_json = json.dumps(self.param)
             #SIM_run_alone(self.fixStackFrame, None)
             SIM_run_alone(self.findCompute, False)
-        elif not do_not_continue:
+        else: 
             self.lgr.debug('getEntries not done collecting sys enter/exit, so continue')
             SIM_run_alone(self.continueAhead, None)
 
@@ -1196,10 +1234,15 @@ class GetKernelParams():
             SIM_run_alone(self.continueAhead, None)
 
     def entryStopHap(self, dumb, one, exception, error_string):
-        ''' called when mode hap determines this is a kernel entry '''
+        ''' called when mode hap determines this is a kernel entry, and other times.  Needs cleanup, very obscure. '''
+        if self.stop_hap is None:
+            return
         self.lgr.debug('entryStopHap cycles: 0x%x exception %s  error_string %s' % (self.cpu.cycles, str(exception), error_string))
         if not self.hack_stop:
             self.lgr.debug('entryStopHap, hack stop not set')
+            if self.param.syscall_jump is None:
+                SIM_run_alone(self.deleteHaps, None)
+                SIM_run_alone(self.findCompute, False)
             return
         if self.cpu.cycles == self.hack_cycles:
             self.lgr.debug('entryStopHap, got nowhere before stop, continue and ignore?')
@@ -1257,7 +1300,7 @@ class GetKernelParams():
             return
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('stopCompat32Hap pid:%d instruct is %s prev %s  eip 0x%x  len %d' % (pid, instruct[1], self.prev_instruct, eip, instruct[0]))
        
         if self.prev_instruct == 'sysenter' and self.param.compat_32_entry is None:
@@ -1331,7 +1374,7 @@ class GetKernelParams():
         SIM_run_alone(self.setPageFaultHap, None)
         
     def findUserEIP(self, user_eip, third, forth, memory):
-        dumb, comm, pid = self.taskUtils.curProc() 
+        dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('findUserEIP of 0x%x pid %d wanted %d' % (user_eip, pid, self.current_pid))
         if self.current_pid != pid:
             return
@@ -1375,7 +1418,7 @@ class GetKernelParams():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if instruct[1].startswith('int 128'):
                 eax = self.mem_utils.getRegValue(self.cpu, 'eax')
-                dumb, comm, self.current_pid = self.taskUtils.curProc() 
+                dumb, comm, self.current_pid = self.taskUtils.curThread() 
                 self.lgr.debug('fixFrameModeChanged eip is 0x%x pid %d' % (eip, self.current_pid))
                 #SIM_break_simulation('here maybe?')
                 SIM_run_alone(self.fixFrameHap, eip)
@@ -1438,9 +1481,15 @@ class GetKernelParams():
             return
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         self.lgr.debug('pageFaultHap eip 0x%x' % eip)
+        if eip > self.param.kernel_base: 
+            self.lgr.debug('pageFaultHap from kernel, skip')
+            return
         SIM_break_simulation('pageFaultHap')
+        '''
         if eip < self.param.kernel_base: 
+            self.lgr.debug('pageFaultHap page_fault eip in user space?' % eip)
             SIM_break_simulation('pageFaultHap')
+            pass
         else:
             self.param.page_fault = eip
             self.lgr.debug('pageFaultHap page_fault right off at 0x%x' % self.param.page_fault)
@@ -1449,6 +1498,7 @@ class GetKernelParams():
                 self.saveParam()
             else:
                 SIM_run_alone(self.setDataAbortHap, None)
+        '''
         
     def dataAbortHap(self, kind, one, exception_number):
         if self.page_hap2 is None:
@@ -1534,11 +1584,6 @@ class GetKernelParams():
                     else:
                         self.lgr.error('getWin7CallParams, no file at %s, cannot run.  Generate params again.' % pfile)
                         return
-        self.w7_call_params = win7CallParams.Win7CallParams(self.cpu, self.cell, cell_name, self.mem_utils, self.current_task_phys, self.param, self.lgr, stop_on=stop_on, only=only)
-
-    def showW7CallParams(self):
-        ''' Show results of getWin7CallParams '''
-        self.w7_call_params.showParams()
 
     def test(self):
         rbx = self.mem_utils.getRegValue(self.cpu, 'rdi')
@@ -1557,15 +1602,11 @@ class GetKernelParams():
                 x = b.decode('ascii', errors='ignore')
                 print('decoded ascii %s' % x)
 
-    def win7Syscalls(self, run_to=None):
-        ''' either trace all syscalls or run to the given call name and stop. '''
-        cell_name = self.target 
-        if 'RESIM_PARAM' in self.comp_dict[cell_name] and self.param.ts_pid is None:
-            param_file = self.comp_dict[cell_name]['RESIM_PARAM']
-            if os.path.isfile(param_file):
-                self.param = pickle.load(open(param_file, 'rb'))
-                self.lgr.debug('w7Tasks loaded params from %s' % param_file)
-        self.win7Syscalls = win7Syscalls.Win7Syscalls(self.cpu, self.cell, self.mem_utils, self.current_task_phys, self.param, self.lgr, run_to=run_to)
+    def isWindows(self):
+        if self.os_type.startswith('WIN'):
+            return True
+        else:
+            return False
 
 if __name__ == '__main__':
     gkp = GetKernelParams()

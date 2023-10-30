@@ -1,3 +1,31 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
+'''
+Inject data into application or kernel memory and track data references.
+Alternately generate syscall or instruction traces.
+'''
 from simics import *
 import writeData
 import memUtils
@@ -8,15 +36,16 @@ import pickle
 from resimHaps import *
 import resimUtils
 class InjectIO():
-    def __init__(self, top, cpu, cell_name, pid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
+    def __init__(self, top, cpu, cell_name, tid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, fname=None, target=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
-           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False):
+           coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
+           limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
+           count=1, no_page_faults=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
         self.cell_name = cell_name
-        self.pid = pid
+        self.tid = tid
         self.backstop = backstop
         self.dataWatch = dataWatch
         self.bookmarks = bookmarks
@@ -27,11 +56,12 @@ class InjectIO():
         self.context_manager = context_manager
         self.top = top
         self.lgr = lgr
-        self.lgr.debug('break_on given as %s fname as %s' % (str(break_on), fname))
+        self.count = count
+        self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
         self.break_on = break_on
         if break_on is not None and fname is not None:
-            self.lgr.debug('break_on given as 0x%x' % break_on)
-            so_entry = self.top.getSOAddr(fname, pid=self.pid)
+            self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
+            so_entry = self.top.getSOAddr(fname, tid=self.tid)
             if so_entry is None:
                 self.lgr.error('injectIO no SO entry for %s' % prog)
             if so_entry.address is not None:
@@ -53,7 +83,8 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
-        self.backstop.setHangCallback(hang_callback, hang_cycles)
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
+        self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         #if self.packet_count > 1: 
@@ -61,14 +92,19 @@ class InjectIO():
         self.current_packet = 0
         self.addr = None
         self.addr_addr = None
+        self.addr_size = 4
 
         self.max_len = None
+        self.orig_max_len = None
         self.orig_buffer = None
         self.limit_one = limit_one
         self.clear_retrack = False
         self.fd = None
 
         self.snap_name = snap_name
+        self.addr_of_count = None
+        # Loading pickle below. init those variable above
+
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()
@@ -92,7 +128,8 @@ class InjectIO():
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         self.write_data = None
         ''' process name and FD to track, i.e., if process differs from the one consuming injected data. '''
-        self.target = target
+        self.target_proc = target_proc
+        self.target_cell = target_cell
         self.targetFD = targetFD
 
         # No data tracking, just trace all system calls
@@ -109,7 +146,7 @@ class InjectIO():
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
         self.break_on_hap = None
-        if not self.coverage:
+        if not self.coverage and not self.trace_all:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
@@ -122,6 +159,7 @@ class InjectIO():
         self.no_track = no_track
         self.hit_break_on = False
         self.no_reset = no_reset
+        self.no_page_faults = no_page_faults
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -149,6 +187,7 @@ class InjectIO():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        self.lgr.debug('injectIO go')
         if self.addr is None:
             return
         if self.callback is None:
@@ -177,7 +216,7 @@ class InjectIO():
         self.lgr.info('injectIO go, write data total size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging, or unless modifying kernel buffer '''
-        if self.target is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
+        if self.target_proc is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
             self.dataWatch.goToRecvMark()
 
         lenreg = None
@@ -193,35 +232,48 @@ class InjectIO():
             ''' restore receive buffer to original condition in case injected data is smaller than original and poor code
                 references data past the end of what is received. '''
             #self.mem_utils.writeString(self.cpu, self.addr, self.orig_buffer) 
+            self.lgr.debug('injectIO call to restore %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        if self.target is None and not self.trace_all and not self.instruct_trace and not self.no_track:
+        if self.target_proc is None and not self.trace_all and not self.instruct_trace and not self.no_track:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
-            if cpl == 0:
-                self.lgr.warning('The snapshot from prepInject left us in the kernel, try forward 1')
+            #if cpl == 0:
+            if cpl == 0 and not self.mem_utils.isKernel(self.addr):
+                self.lgr.warning('injectIO The snapshot from prepInject left us in the kernel, try forward 1')
                 SIM_run_command('pselect %s' % self.cpu.name)
                 SIM_run_command('si')
                 cpl = memUtils.getCPL(self.cpu)
                 if cpl == 0:
-                    self.lgr.error('Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
+                    self.lgr.error('injectIO Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
                     return 
 
             self.top.stopDebug()
-            self.top.debugPidGroup(self.pid) 
+            self.lgr.debug('injectIO call debugTidGroup')
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
-            self.top.watchPageFaults()
+            if not self.no_page_faults:
+                self.top.watchPageFaults()
+            else:
+                self.top.stopWatchPageFaults()
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
                 self.top.watchROP(watching=False)
-        elif self.instruct_trace:
+            self.top.jumperStop()
+            self.top.stopThreadTrack(immediate=True)
+        elif self.instruct_trace and self.target_proc is None:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
+        elif self.trace_all and self.target_proc is None:
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+            self.top.stopThreadTrack(immediate=True)
+            if self.only_thread:
+                self.context_manager.watchOnlyThis()
 
         self.bookmarks = self.top.getBookmarksInstance()
         force_default_context = False
@@ -236,7 +288,7 @@ class InjectIO():
         else:
             use_data_watch = self.dataWatch
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
-                 self.mem_utils, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
+                 self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
                  write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
@@ -247,13 +299,18 @@ class InjectIO():
             self.lgr.error('got None for bytes_wrote in injectIO')
             return
         eip = self.top.getEIP(self.cpu)
-        if self.target is None:
+        if self.target_proc is None:
             self.dataWatch.clearWatchMarks(record_old=True)
             self.dataWatch.clearWatches()
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
-                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=self.fname)
+                analysis_path = self.top.getAnalysisPath(self.fname) 
+                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
             self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
+            env_max_len = os.getenv('AFL_MAX_LEN')
+            if env_max_len is not None:
+                self.max_len = int(env_max_len)
+                self.lgr.debug('injectIO overrode max_len value from pickle with value %d from environment' % self.max_len)
             if self.max_len is not None and self.max_len < bytes_wrote:
                 self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
             if not self.stay:
@@ -271,7 +328,12 @@ class InjectIO():
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     if not self.mem_utils.isKernel(self.addr):
-                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                        #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.orig_max_len)
+                        if self.addr_of_count is not None:
+                            self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
+                            self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
+     
                         ''' special case'''
                         if self.max_len == 1:
                             self.addr += 1
@@ -298,7 +360,7 @@ class InjectIO():
                     #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
-                    self.top.stopTrackIO()
+                    self.top.stopTrackIO(immediate=True)
                     self.dataWatch.clearWatches()
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
@@ -308,26 +370,44 @@ class InjectIO():
                     self.top.runToIO(self.fd, linger=True, break_simulation=False)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
-            self.lgr.debug('injectIO debug to %s' % self.target)
+            self.lgr.debug('injectIO debug to %s' % self.target_proc)
             self.top.resetOrigin()
             ''' watch for death of this process as well '''
-            self.context_manager.stopWatchTasks()
-            self.context_manager.watchGroupExits()
-            self.top.watchPageFaults()
+            self.top.stopWatchTasks(target=self.target_cell, immediate=True)
             #self.context_manager.setExitCallback(self.recordExit)
-            self.top.debugProc(self.target, final_fun=self.injectCallback)
+
+            self.top.setTarget(self.target_cell)
+
+            self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):
         ''' called at the end of the debug hap chain, meaning we are in the target process. 
-            Intended for watching process other than the one reading the data. '''
+            Intended for watching process other than the one reading the data. 
+            GenMonitor default target has been switched to given target cell if needed
+        '''
         self.lgr.debug('injectIO injectCallback')
-        self.context_manager.watchGroupExits()
-        self.bookmarks = self.top.getBookmarksInstance()
-        if self.save_json is not None:
-            self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True)
+        self.top.watchGroupExits()
+        if not self.no_page_faults:
+            self.top.watchPageFaults()
         else:
-            self.top.trackIO(self.targetFD, quiet=True)
+            self.top.stopWatchPageFaults()
+        self.top.stopThreadTrack(immediate=True)
+        if self.trace_all:
+            self.top.traceAll()
+        elif self.instruct_trace:
+            base = os.path.basename(self.dfile)
+            print('base is %s' % base)
+            trace_file = base+'.trace'
+            self.top.instructTrace(trace_file, watch_threads=True)
+        else:
+            self.top.jumperStop()
+        self.bookmarks = self.top.getBookmarksInstance()
+        if not self.coverage and not self.trace_all:
+            if self.save_json is not None:
+                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count)
+            else:
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count)
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:
@@ -356,6 +436,7 @@ class InjectIO():
                 self.resetOrigin(None)
                 self.dataWatch.clearWatchMarks(record_old=True)
             if count != 0:
+                self.lgr.debug('resetReverseAlone call setRange')
                 self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                 ''' special case'''
                 if self.max_len == 1:
@@ -394,7 +475,8 @@ class InjectIO():
             self.lgr.debug('injectIO stopHap, count None, just stop?')
         
     def writeCallback(self, count):
-        self.lgr.debug('injectIO writeCallback')
+        eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('injectIO writeCallback eip: 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, count)
         SIM_break_simulation('writeCallback')
@@ -407,21 +489,30 @@ class InjectIO():
             #print('start %s' % str(so_pickle['text_start']))
             if 'addr' in so_pickle:
                 self.addr = so_pickle['addr']
+                self.lgr.debug('injectIO addr from pickle is 0x%x' % self.addr)
             else:
                 self.lgr.debug('injectIO no addr in pickle?')
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
                 if self.orig_buffer is not None:
-                    self.lgr.debug('injectiO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
+                    self.lgr.debug('injectIO load orig_buffer from pickle %d bytes' % len(self.orig_buffer))
             if 'size' in so_pickle and so_pickle['size'] is not None:
                 self.max_len = so_pickle['size']
-                self.lgr.debug('injectiO load max_len read %d' % self.max_len)
+                self.orig_max_len = so_pickle['size']
+                self.lgr.debug('injectIO load max_len read %d' % self.max_len)
             if 'addr_addr' in so_pickle:
+                # TBD windows should not be using this?
                 self.addr_addr = so_pickle['addr_addr']
                 self.addr_size = so_pickle['addr_size']
+                if self.addr_size is None:
+                    self.addr_size = 4
+                self.lgr.debug('injectIO addr_addr is 0x%x size %d' % (self.addr_addr, self.addr_size))
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
+            if 'addr_of_count' in so_pickle: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
         else:
             self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
 

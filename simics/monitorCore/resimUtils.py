@@ -6,6 +6,10 @@ import subprocess
 import imp 
 import elfText
 import json
+import re
+import fnmatch
+import winProg
+import ntpath
 try:
     import cli
     from simics import *
@@ -217,14 +221,28 @@ def getPacketFilter(packet_filter, lgr):
                 raise Exception('failed to find filter at %s' % packet_filter)
     return retval
 
-def getBasicBlocks(prog, ini):
+def getBasicBlocks(prog, ini, lgr=None):
     blocks = None
     prog_file = getProgPath(prog, ini)
+    print('prog_file at %s' % prog_file)
+    if lgr is not None:
+        lgr.debug('prog_file %s' % prog_file)
     prog_elf = None
+    os_type = getIniTargetValue(ini, 'OS_TYPE')
     if prog_file is not None:
-        prog_elf = elfText.getTextOfText(prog_file)
+        if os_type.startswith('WIN'):
+            if lgr is not None:
+                lgr.debug('is windows')
+            prog_elf = winProg.getText(prog_file, lgr)
+        else:
+            prog_elf = elfText.getTextOfText(prog_file)
         print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
-        block_file = prog_file+'.blocks'
+        if lgr is not None:
+            lgr.debug('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+        analysis_path = getAnalysisPath(ini, prog_file, lgr=lgr)
+        if lgr is not None:
+            lgr.debug('analysis_path: %s' % analysis_path)
+        block_file = analysis_path+'.blocks'
         print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
             if os.path.islink(prog_file):
@@ -314,7 +332,7 @@ def getHexDump(b):
         return s2
 
 
-def getIniTargetValue(input_ini_file, field):
+def getIniTargetValue(input_ini_file, field, target=None):
     retval = None
     config = ConfigParser.ConfigParser()
     config.optionxform = str
@@ -326,11 +344,11 @@ def getIniTargetValue(input_ini_file, field):
         print('File not found: %s' % ini_file)
         exit(1)
     config.read(ini_file)
-    target = None
-    for name, value in config.items('ENV'):
-        if name == 'RESIM_TARGET':
-            target = value
-            break
+    if target is None:
+        for name, value in config.items('ENV'):
+            if name == 'RESIM_TARGET':
+                target = value
+                break
     if target is not None:
         for section in config.sections():
             if section == target:
@@ -338,4 +356,164 @@ def getIniTargetValue(input_ini_file, field):
                     if name == field:
                         retval = value 
                         break
+    if retval is not None and retval.startswith('$'):
+        env, path = retval.split('/',1)
+        env_value = os.getenv(env[1:]) 
+        retval = os.path.join(env_value, path)
+    return retval
+
+def findPattern(path: str, glob_pat: str, ignore_case: bool = False):
+    ''' only works if pattern is glob-like, does not recurse '''
+    rule = re.compile(fnmatch.translate(glob_pat), re.IGNORECASE) if ignore_case \
+            else re.compile(fnmatch.translate(glob_pat))
+    return [n for n in os.listdir(path) if rule.match(n)]
+
+def findFrom(name, from_dir):
+    for root, dirs, files in os.walk(from_dir):
+        if name in files:
+            retval = os.path.join(from_dir, root, name)
+            abspath = os.path.abspath(retval)
+            return abspath
+    return None
+
+def findListFrom(pattern, from_dir):
+    retval = []
+    for root, dirs, files in os.walk(from_dir):
+        flist = fnmatch.filter(files, pattern)
+        for f in flist:
+            retval.append(f)
+    return retval
+
+def getfileInsensitive(path, root_prefix, lgr):
+    got_it = False
+    retval = root_prefix
+    cur_dir = root_prefix
+    if '/' in path:
+        parts = path.split('/')
+        for p in parts[:-1]:
+            #lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
+
+            for d in dlist:
+                if d.upper() == p.upper():
+                    retval = os.path.join(retval, d)
+                    cur_dir = os.path.join(cur_dir, d)
+                    break
+        p = parts[-1]
+        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        flist = os.listdir(cur_dir)
+        for f in flist:
+            if f.upper() == p.upper():
+                retval = os.path.join(retval, f) 
+                got_it = True
+                break
+    else:
+
+        for root, dirs, files in os.walk(root_prefix):
+            for f in files:
+                if f.upper() == path.upper():
+                    retval = os.path.join(root_prefix, root, f)
+                    abspath = os.path.abspath(retval)
+                    return abspath
+        return None
+
+
+    if not got_it:
+        retval = None
+    return retval
+
+def realPath(full_path):
+        retval = full_path
+        if os.path.islink(full_path):
+            parent = os.path.dirname(full_path)
+            actual = os.readlink(full_path)
+            retval = os.path.join(parent, actual)
+        return retval
+
+def disconnectServiceNode(name):
+        cmd = '%s.status' % name
+        try:
+            dumb,result = cli.quiet_run_command(cmd)
+        except:
+            print('resimUtils disconnectService node failed')
+            return
+       
+        ok = False 
+        for line in result.splitlines():
+            if 'connector_link0' in line:
+                parts = line.split(':')
+                node_connect = parts[0].strip()
+                switch = parts[1].strip()
+                cmd = '%s.status' % switch
+                dumb,result = cli.quiet_run_command(cmd)
+                for line in result.splitlines():
+                    if name in line:
+                        switch_device = line.split(':')[0].strip()
+                        cmd = 'disconnect %s.%s %s.%s' % (name, node_connect, switch, switch_device)
+                        dumb,result = cli.quiet_run_command(cmd)
+                        cmd = '%s.disable-service -all' % name
+                        dumb,result = cli.quiet_run_command(cmd)
+                        ok = True
+                        break
+                break
+
+def cutRealWorld():
+    driver_service_node = 'driver_service_node'
+    dhcp_service_node = 'dhcp_service_node'
+    cmd = 'disconnect-real-network'
+    SIM_run_command(cmd)
+    cmd = 'switch0.disconnect-real-network'
+    SIM_run_command(cmd)
+    cmd = 'switch1.disconnect-real-network'
+    SIM_run_command(cmd)
+    disconnectServiceNode(driver_service_node)
+    try:
+        disconnectServiceNode(dhcp_service_node)
+    except:
+        pass
+
+def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None):
+    retval = None
+    #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    quick_check = fname+'.funs'
+    if os.path.isfile(quick_check):
+        retval = fname
+    else:
+        analysis_path = os.getenv('IDA_ANALYSIS')
+        if analysis_path is None:
+            analysis_path = '/mnt/resim_archive/analysis'
+            if len(fun_list_cache) == 0:
+                lgr.warning('resimUtils getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
+         
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        root_dir = os.path.basename(root_prefix)
+        top_dir = os.path.join(analysis_path, root_dir)
+        if len(fun_list_cache) == 0:
+            fun_list_cache = findListFrom('*.funs', top_dir)
+            #lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+
+        fname = fname.replace('\\', '/')
+        if fname.startswith('/??/C:/'):
+                fname = fname[7:]
+
+        base = ntpath.basename(fname)+'.funs'
+        if base.upper() in map(str.upper, fun_list_cache):
+            with_funs = fname+'.funs'
+            #lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+            retval = getfileInsensitive(with_funs, top_dir, lgr)
+            if retval is not None:
+                #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
+                retval = retval[:-5]
+        else:
+            #lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
+            pass
+
+    return retval
+
+def isClib(lib_file):
+    retval = False
+    if lib_file is not None:
+        lf = lib_file.lower()
+        if 'libc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
+            retval = True
     return retval

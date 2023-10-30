@@ -13,7 +13,7 @@ State information includes instruction address of the syscall and the return add
 along with the address of the read buffer.
 '''
 class PrepInject():
-    def __init__(self, top, cpu, cell_name, fd, snap_name, count, mem_utils, lgr):
+    def __init__(self, top, cpu, cell_name, fd, snap_name, count, mem_utils, lgr, commence=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.fd = fd
@@ -29,6 +29,10 @@ class PrepInject():
         self.new_origin = None
         self.exit_info = None
         self.ret_cycle = None
+        # for windows 
+        self.addr_of_count = None
+
+        self.commence = commence
 
 
         ''' NOTHING below here '''
@@ -39,19 +43,24 @@ class PrepInject():
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('prepInject snap %s' % self.snap_name)
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
+        self.top.stopWatchPageFaults()
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
-        self.top.runToInput(self.fd, flist_in=flist, count=self.count)
+        if self.top.isWindows():
+            self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence)
+        else:
+            self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 
     def instrumentSelect(self, dumb):
-        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
+        #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
+        self.top.stopTracking(keep_coverage=True)
         ''' go forward one to user space and record the return IP '''
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')
         self.select_return_ip = self.top.getEIP(self.cpu)
         self.ret_cycle = self.cpu.cycles
-        pid = self.top.getPID()
-        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.select_return_ip, pid, self.cpu.cycles))
+        tid = self.top.getTID()
+        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
@@ -62,14 +71,14 @@ class PrepInject():
             previous = cycle - 1
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
             self.select_call_ip = self.top.getEIP(self.cpu)
-            self.lgr.debug('instrumentSelect skipped to call: 0x%x pid:%d cycle is 0x%x' % (self.select_call_ip, pid, self.cpu.cycles))
+            self.lgr.debug('instrumentSelect skipped to call: 0x%x tid:%s cycle is 0x%x' % (self.select_call_ip, tid, self.cpu.cycles))
             ''' now back to return '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
         self.top.restoreDebugBreaks()
         self.prepInject()
 
     def finishNoCall(self, read_original=True):
-        syscall = self.top.getSyscall(self.cell_name, 'runToInput')
+        syscall = self.top.getSyscall(self.cell_name, 'runToIO')
         if syscall is not None:
             if read_original:
                 length = self.getLength()
@@ -84,8 +93,8 @@ class PrepInject():
         else:
             self.lgr.error('prepInject finishNoCall falled to get syscall ?')
 
-    def pidScheduled(self, dumb):
-        self.lgr.debug('prepInject pidScheduled')
+    def tidScheduled(self, dumb):
+        self.lgr.debug('prepInject tidScheduled')
         pinfo = self.top.pageInfo(self.exit_info.retval_addr, quiet=True)
         self.lgr.debug('%s' % pinfo.valueString())
         self.top.stopAndGo(self.finishNoCall)
@@ -100,22 +109,31 @@ class PrepInject():
         else:
             length = self.exit_info.count
             self.lgr.debug('prepInject getLength length from count is %d' % length)
+            if self.top.isWindows():
+                self.addr_of_count = self.exit_info.fname_addr
+                self.lgr.debug('prepInject getLength length address of count 0x%x' % self.addr_of_count)
         return length
 
     def instrumentAlone(self, dumb): 
-        self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
-        ''' go forward one to user space and record the return IP '''
-        SIM_run_command('pselect %s' % self.cpu.name)
-        SIM_run_command('si')
-        self.return_ip = self.top.getEIP(self.cpu)
+        #self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
+        self.top.stopTracking(keep_watching=True, keep_coverage=True)
+        current_ip = self.top.getEIP(self.cpu)
+        if self.mem_utils.isKernel(current_ip): 
+            ''' go forward one to user space and record the return IP '''
+            SIM_run_command('pselect %s' % self.cpu.name)
+            SIM_run_command('si')
+            self.return_ip = self.top.getEIP(self.cpu)
+        else:
+            self.return_ip = current_ip
         self.ret_cycle = self.cpu.cycles
-        pid = self.top.getPID()
-        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x pid:%d cycle is 0x%x' % (self.snap_name, self.return_ip, pid, self.cpu.cycles))
+        tid = self.top.getTID()
+        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x tid:%s cycle is 0x%x' % (self.snap_name, self.return_ip, 
+              current_ip, tid, self.cpu.cycles))
 
-
+        ''' Find the exit info from the system call that did the read.'''
         self.exit_info = self.top.getMatchingExitInfo()
 
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         length = self.getLength()
 
         frame, cycle = self.top.getRecentEnterCycle()
@@ -125,7 +143,7 @@ class PrepInject():
             self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
             if self.top.didMagicOrigin():
                 self.top.goToOrigin()
-                self.top.toPid(pid, callback = self.pidScheduled)
+                self.top.totid(tid, callback = self.tidScheduled)
             else:
                 print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
                 print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
@@ -141,14 +159,19 @@ class PrepInject():
 
             ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
             orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
-            self.lgr.debug('instrument  skipped to call IP: 0x%x pid:%d callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, pid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
+            self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
             ''' skip back to return so the snapshot is ready to inject input '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+            current_ip = self.top.getEIP(self.cpu)
+            self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
 
     def instrumentIO(self, callname):
         self.lgr.debug("prepInject in instrument IO, callname is %s" % callname);
-        if callname.startswith('re') or callname == 'socketcall':
+        if self.top.isWindows():
+            self.lgr.debug("prepInject in instrument IO")
+            SIM_run_alone(self.instrumentAlone, None)
+        elif callname.startswith('re') or callname == 'socketcall':
             SIM_run_alone(self.instrumentAlone, None)
         elif 'select' in callname:
             SIM_run_alone(self.instrumentSelect, None)
@@ -172,11 +195,18 @@ class PrepInject():
         ''' Otherwise console has no indiation of when done. '''
 
         if exit_info.fname_addr is not None:
-            count = self.mem_utils.readWord32(self.cpu, exit_info.count)
-            pickDict['addr_addr'] = exit_info.fname_addr
-            pickDict['addr_size'] = count
+            if self.top.isWindows():
+                pickDict['addr_addr'] = exit_info.sock_addr
+                pickDict['addr_size'] = 8
+                self.lgr.debug('prepInject pickleit addr_addr is 0x%x' % exit_info.sock_addr)
+            else:
+                count = self.mem_utils.readWord32(self.cpu, exit_info.count)
+                pickDict['addr_addr'] = exit_info.fname_addr
+                pickDict['addr_size'] = count
 
         pickDict['orig_buffer'] = orig_buffer
+        if self.top.isWindows():
+            pickDict['addr_of_count'] = self.addr_of_count
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
         if self.call_ip is not None:

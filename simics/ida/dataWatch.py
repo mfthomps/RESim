@@ -108,7 +108,7 @@ class DataWatch(simplecustviewer_t):
         index = 1
         for entry in data_json:
             instruct = idc.GetDisasm(entry['ip'])
-            uline = '%3d 0x%08x 0x%08x %s pid:%d' % (index, entry['ip'], entry['cycle'], entry['msg'], entry['pid'])
+            uline = '%3d 0x%08x 0x%08x %s tid:%s' % (index, entry['ip'], entry['cycle'], entry['msg'], entry['tid'])
             line = uline.encode('ascii', 'replace')
             #print('do %s' % line)
             if 'return from' in str(line):

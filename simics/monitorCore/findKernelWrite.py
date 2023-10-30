@@ -113,8 +113,8 @@ class findKernelWrite():
         else:
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'findKernelWrite go pid:%d of 0x%x to addr %x, phys %x num_bytes: %d' % (pid, value, addr, phys_block.address, self.num_bytes))
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys_block.address, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
@@ -233,7 +233,7 @@ class findKernelWrite():
     def writeCallback(self, cpu, third, forth, memory):
         location = memory.logical_address
         physical = memory.physical_address
-        if location is 0 and physical is 0:
+        if location == 0 and physical == 0:
            self.lgr.debug('findKernelWrite writeCallback, location zero?')
            ''' recursive callback triggered by this Hap '''
            return
@@ -311,7 +311,7 @@ class findKernelWrite():
                 self.lgr.debug('checkWriteValue, We are near _start+1 desired value came from loader?')
                 return True
             #self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is 0x%x  skip forward until correct write' % (self.value, value))
-            if val is not None:
+            if value is not None:
                 self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is 0x%x  bail' % (self.value, value))
             else:
                 self.lgr.error('Simics reverse error, thought we wrote 0x%x, but value is none from reading addr  0x%x  bail' % (self.value, self.addr))
@@ -459,8 +459,8 @@ class findKernelWrite():
         cpl = memUtils.getCPL(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         orig_cycle = self.bookmarks.getFirstCycle()
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug( 'in thinkWeWrote pid:%d, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (pid, cycle, eip, str(instruct), cpl, orig_cycle))
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug( 'in thinkWeWrote tid:%s, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (tid, cycle, eip, str(instruct), cpl, orig_cycle))
         if self.stop_write_hap is not None:
                 self.lgr.debug('thinkWeWrote delete stop_write_hap')
                 SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
@@ -477,8 +477,8 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
-        elif pid == 0:
-            ida_msg = "Content of 0x%x was modified in pid ZERO?" % self.addr
+        elif tid == 0:
+            ida_msg = "Content of 0x%x was modified in tid ZERO?" % self.addr
             self.lgr.error('findKernelWrite thinkWeWrote '+ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
             SIM_run_alone(self.cleanup, False)
@@ -530,7 +530,7 @@ class findKernelWrite():
             SIM_run_alone(SIM_run_command, 'continue')
 
         elif self.found_kernel_write:
-            self.lgr.debug('thinkWeWrote, BACKTRACK pid:%d user space address 0x%x after finding kernel write to  0x%x' % (pid, eip, self.addr))
+            self.lgr.debug('thinkWeWrote, BACKTRACK tid:%s user space address 0x%x after finding kernel write to  0x%x' % (tid, eip, self.addr))
             if not self.checkWriteValue(eip):
                 return
 
@@ -562,6 +562,7 @@ class findKernelWrite():
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):
                 ida_message = "Content of %s came modified prior to enabling reverse." % self.addr
+                self.lgr.debug(ida_msg)
                 bm = "eip:0x%x content of memory:%s modified prior to enabling reverse" % (eip, self.addr)
                 self.bookmarks.setBacktrackBookmark(bm)
                 self.context_manager.setIdaMessage(ida_message)
@@ -579,7 +580,7 @@ class findKernelWrite():
                     if not self.rev_to_call.skipToTest(mark.call_cycle):
                         return
                     eip = self.top.getEIP(self.cpu)
-                    ida_message = "Content of 0x%x came resulted from a memory copy from 0x%x, offset %d bytes from start of copy" % (self.addr, copy_addr, offset)
+                    ida_message = "Content of 0x%x resulted from a memory copy from 0x%x, offset %d bytes from start of copy" % (self.addr, copy_addr, offset)
                     bm = "eip:0x%x content of memory:0x%x from memory copy from 0x%x, offset %d bytes from start of copy. %s" % (eip, self.addr, copy_addr, offset, mark.mark.getMsg())
                     self.bookmarks.setBacktrackBookmark(bm)
                     self.context_manager.setIdaMessage(ida_message)
@@ -593,16 +594,22 @@ class findKernelWrite():
                     self.lgr.debug('findKernelWrite, found mem copy, now look for address 0x%x, value is 0x%x' % (copy_addr, value))
                     SIM_run_alone(self.cleanup, False)
                     self.top.stopAtKernelWrite(copy_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
-                elif instruct[1].startswith('rep movs'):
+                elif instruct[1].startswith('rep movs') or instruct[1].startswith('rep movsd'):
                     src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+                    self.lgr.debug('findKernelWrite thinkWeWrote, is rep, %s  src add: 0x%x' % (instruct[1], src_addr))
                     if self.prev_buffer:
                         ''' TBD... assume break hit after first rep, thus subtract word from esi value... '''
-                        self.k_buffer_addrs.append(src_addr - self.mem_utils.WORD_SIZE)
+                        self.k_buffer_addrs.append(src_addr - self.mem_utils.wordSize(self.cpu))
                         #self.k_buffer_addrs.append(self.addr)
                         if True or len(self.k_buffer_addrs) > 2:
                             SIM_run_alone(self.cleanup, False)
                             self.lgr.debug('findKernelWrite got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
                             self.rev_to_call.cleanup(self.k_buffer_addrs)
+                    else:
+                        eip = self.top.getEIP(self.cpu)
+                        bm = "eip:0x%x content of memory:0x%x from %s from 0x%x" % (eip, self.addr, instruct[1], src_addr)
+                        self.bookmarks.setBacktrackBookmark(bm)
+                        self.top.stopAtKernelWrite(src_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
                 else:
                     self.lgr.debug('findKernelWrite thinkWeWrote, call backOneAlone with offset zero?')
                     SIM_run_alone(self.backOneAlone, 0)
@@ -628,8 +635,8 @@ class findKernelWrite():
             self.prev_addr = self.addr
             self.iter_count = 0
             
-        dumb, comm, pid = self.task_utils.curProc() 
-        self.lgr.debug('backOne user space pid: %d write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (pid, 
+        dumb, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('backOne user space tid: %s write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
                value, self.addr, current, eip, offset))
         if not self.forward:
             previous = current - 1

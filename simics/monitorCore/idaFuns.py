@@ -1,19 +1,25 @@
 import os
 import json
+import clibFuns
 def rmPrefix(fun):
     if fun.startswith('.'):
         fun = fun[1:]
-    if fun.startswith('_'):
-        fun = fun[1:]
+    for pre in clibFuns.mem_prefixes:
+        if fun.startswith(pre):
+            fun = fun[len(pre):]
+    #if fun.startswith('_'):
+    #    fun = fun[1:]
     return fun
 
 class IDAFuns():
 
-    def __init__(self, path, lgr):
+    def __init__(self, path, lgr, offset=0):
+        ''' self.funs primary dict key is the address of the function per initial IDA/ghidra analysis '''
         self.funs = {}
         self.lgr = lgr
+        self.offset = offset
         self.did_paths = []
-        self.lgr.debug('IDAFuns for path %s' % path)
+        self.lgr.debug('IDAFuns for path %s offset 0x%x' % (path, offset))
         self.mangle = {}
         self.unwind = {}
         if path.endswith('funs'):
@@ -26,7 +32,7 @@ class IDAFuns():
                        fun = rmPrefix(m)
                        self.mangle[fun] = mangle_file[m]
             else:
-                lgr.debug('no mangle file at %s' % mpath)
+                lgr.debug('idaFuns init no mangle file at %s' % mpath)
             upath = path[:-4]+'unwind' 
             if os.path.isfile(upath):
                with open(upath) as fh:
@@ -38,25 +44,35 @@ class IDAFuns():
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
+                self.lgr.debug('idaFuns read funs from %s' % path)
                 for sfun in jfuns:
-                    fun = int(sfun)
                     fun_rec = jfuns[sfun]
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
                         fun_name = fun_name[7:]
-                    else:
-                        fun_name = rmPrefix(fun_name)
+                    fun_name = rmPrefix(fun_name)
                     if fun_name in self.mangle:
-                        #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
-                        fun_rec['name'] = self.mangle[fun_name]
-                        #lgr.debug('function name for 0x%x (%s) changed to %s' % (fun, fun_name, fun_rec['name']))
+                        lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
+                        demangled = self.mangle[fun_name]
+                        fun_name = rmPrefix(demangled)
+                        fun_rec['name'] = fun_name
+                        lgr.debug('demangled function name for 0x%x changed to %s' % (fun, fun_name))
+                    adjusted = fun_rec['start'] + offset
+                    fun = adjusted
+                    fun_rec['start'] = adjusted
+                    fun_rec['end'] = fun_rec['end'] + offset
+                    ''' index by load address to avoid collisions '''
                     self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
+        self.lgr.debug('idaFuns loaded %d funs' % len(self.funs))
 
     def getFunPath(self, path):
         if path is None:
             return None
-        fun_path = path+'.funs'
+        if path.endswith('.funs'):
+            fun_path = path
+        else:
+            fun_path = path+'.funs'
         if not os.path.isfile(fun_path):
             ''' No functions file, check for symbolic links '''
             #self.lgr.debug('is link? %s' % path)
@@ -72,6 +88,7 @@ class IDAFuns():
         else:
             self.did_paths.append(path)
         funfile = self.getFunPath(path)
+        #self.lgr.debug('idaFuns add path %s funfile %s' % (path, funfile))
 
         add_mangle = []
         mpath = funfile[:-4]+'mangle' 
@@ -84,23 +101,31 @@ class IDAFuns():
                        self.mangle[fun] = add_mangle[m]
                self.lgr.debug('Loaded additional mangle from %s' % mpath)
         else:
-            self.lgr.debug('no mangle file at %s' % mpath)
+            self.lgr.debug('idaFuns add no mangle file at %s' % mpath)
 
         if os.path.isfile(funfile):
             with open(funfile) as fh:
-                self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
+                #self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
                 newfuns = json.load(fh) 
                 for f in newfuns:
-                    fun = int(f)+offset
+                    fun_int = int(f)
+                    fun = fun_int + offset
+                    if fun in self.funs:
+                        self.lgr.error('idaFuns collision on function 0x%x fun_int 0x%x offset 0x%x file: %s' % (fun, fun_int, offset, funfile))
                     self.funs[fun] = {}
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
+                    fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
+                    #if fun_name == 'memcpy':
+                    #    self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
                     if fun_name in add_mangle:
                         #self.lgr.debug('****************** %s in add mangle as %s' % (fun_name, add_mangle[fun_name]))
-                        self.funs[fun]['name'] = add_mangle[fun_name]
+                        demangled = add_mangle[fun_name]
+                        fun_name = rmPrefix(demangled)
+                        self.funs[fun]['name'] = fun_name
                     elif fun_name.startswith('_ZNK'):
                         self.lgr.debug('#################### %s not in mangle? ' % fun_name)
                    
@@ -112,33 +137,44 @@ class IDAFuns():
 
  
     def isFun(self, fun):
-        if fun in self.funs:
-            return True
+        ''' The given fun is the rebased value '''
+        retval = False
+        if fun is not None:
+            if fun in self.funs:
+                retval = True
         else:
-            return False
+            self.lgr.debug('idaFuns isFun called with fun of None')
+        return retval
 
     def getAddr(self, name):
+        ''' return the start and end of a function (loaded) given its name '''
         for fun in self.funs:
             if self.funs[fun]['name'] == name:
                 return self.funs[fun]['start'], self.funs[fun]['end']
         return None, None
  
     def getName(self, fun):
+        ''' Given a function address (loaded), return the name '''
         retval = None
-        if fun in self.funs:
-            retval = self.funs[fun]['name']
-            
+        if fun is not None:
+            if fun in self.funs:
+                retval = self.funs[fun]['name']
         return retval
 
     def inFun(self, ip, fun):
-        #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
-        if fun in self.funs:
-            #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
-            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                return True
+        ''' Is the given IP within the given function? '''
+        if fun is not None:
+            #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
+            if fun in self.funs:
+                #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
+                if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                    return True
+            else:
+                self.lgr.debug('idaFuns inFun given fun 0x%x is not a function' % fun)
         return False 
 
     def getFun(self, ip):
+        ''' Returns the loaded function address of the fuction containing a given ip '''
         for fun in self.funs:
             #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
             if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
@@ -146,13 +182,15 @@ class IDAFuns():
         return None
 
     def getFunName(self, ip):
+        ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
-        if ip in self.funs:
-            retval = self.getName(ip)
-        else:
-            fun = self.getFun(ip)
-            if fun is not None:
-                retval = self.getName(fun)
+        if ip is not None:
+            if ip in self.funs:
+                retval = self.funs[ip]['name']
+            else:
+                fun = self.getFun(ip)
+                if fun is not None:
+                    retval = self.funs[fun]['name']
         return retval
 
     def showFuns(self, search=None):
@@ -199,4 +237,22 @@ class IDAFuns():
             fun = self.getFun(ip)
         if fun in self.unwind:
             retval = True
+        return retval
+
+    def showFunEntries(self, fun_name):
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                print('fun entry 0x%x size %d' % (fun, size))
+
+    def getFunEntry(self, fun_name):
+        ''' get the entry of a given function name, with preference to the largest function '''
+        big = 0
+        retval = None
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                if size > big:
+                    big = size
+                    retval = fun
         return retval

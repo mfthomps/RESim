@@ -7,3 +7,4 @@
 ./shmLinks.py $1 > $1/shmLinks.txt
 ./fileLinks.py $1 > $1/filelinks.txt
 ./pipes.py $1 > $1/pipes.txt
+echo "Saved artifacts to $1"

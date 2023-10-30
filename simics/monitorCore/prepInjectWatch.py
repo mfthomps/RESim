@@ -7,8 +7,8 @@ import decode
 import decodeArm
 import resimUtils
 '''
-Create a snapshot from a given watch mark index value, intended to
-be an ioctl.  The snapshot will preceed the ioctl call, and
+Create a snapshot from a given watch mark index value, 
+which may be a read or an ioctl.  The snapshot will preceed the call, and
 will include the address of the kernel buffer, and the kernel pointers
 used ot calculate the ioctl return value.
 '''
@@ -44,22 +44,26 @@ class PrepInjectWatch():
 
 
     def doInject(self, snap_name, watch_mark):
-        ''' Assume the watch mark follows an ioctl 
-            that preceeds the read.  We will snapshot 
-            prior to the ioctl and record the address of the kernel buffer.'''
+        ''' Find kernel buffer used for read/recv calls '''
+        self.lgr.debug('prepInjectWatch doInject snap %s mark %d' % (snap_name, watch_mark))
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
         if self.kbuffer is not None:
-            #''' go forward one to user space and record the return IP '''
-            #SIM_run_command('pselect %s' % self.cpu.name)
-            #SIM_run_command('si')
+            ''' Watch mark should leave us after the return '''
             self.ret_ip = self.top.getEIP(self.cpu)
+           
+            ''' Jump to prior to call to record the call address ''' 
             self.top.precall()
             self.call_ip = self.top.getEIP(self.cpu)
-            ''' TBD need to set kbuf to a kernel buffer, though only used for indirect purposes, clean up writeData'''
+
+            ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
+            kcycle = self.kbuffer.getKernelCycleOfWrite() 
+            if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
+                self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
+                return
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
             self.pickleit(kbufs[0])  
@@ -91,6 +95,7 @@ class PrepInjectWatch():
             return 
         self.k_start_ptr = min(buf_addr_list[0], buf_addr_list[1]) 
         self.k_end_ptr = max(buf_addr_list[0], buf_addr_list[1]) 
+        self.lgr.debug('prepInjectWatch handleDelta k_start_ptr 0x%x k_end_ptr 0x%x' % (self.k_start_ptr, self.k_end_ptr))
         self.handleReadBuffer()
 
     def instrumentAlone(self, buf_addr_list): 
@@ -185,6 +190,7 @@ class PrepInjectWatch():
             k_buf_len = self.kbuffer.getBufLength()
             pickDict['k_buf_len'] = k_buf_len
             pickDict['user_addr'] = self.kbuffer.getUserAddr()
+            pickDict['user_count'] = self.kbuffer.getUserCount()
             orig_buf = self.kbuffer.getOrigBuf()
             pickDict['orig_buffer'] = orig_buf
             if orig_buf is not None:

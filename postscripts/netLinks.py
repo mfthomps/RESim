@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 import procTrace
 import os
 import sys
@@ -30,13 +30,13 @@ def getTokValue(line, field):
 class NetLinks():
                      
     def __init__(self, path):
-        sock_start = 'socket - socket pid:'
+        sock_start = 'socket - socket tid:'
         sock_sock = 'return from socketcall SOCKET'
         sock_bind = 'return from socketcall BIND'
         recv_from = '- recvfrom'
         send_to = '- sendto'
         #sock_connect = '--socketcall - CONNECT'
-        sock_connect = 'connect pid'
+        sock_connect = 'connect tid'
         proc_trace_file = os.path.join(path, 'procTrace.txt')
         self.proc_trace = procTrace.ProcTrace(proc_trace_file) 
         syscall_file = os.path.join(path, 'syscall_trace.txt')
@@ -57,20 +57,20 @@ class NetLinks():
         with open(syscall_file) as fh:
             for line in fh:
                 if sock_start in line:
-                    pid_tok = getTokValue(line, 'pid')
+                    tid_tok = getTokValue(line, 'tid')
                     type_tok = getTokValue(line, 'type')
-                    self.sock_start[pid_tok] = type_tok
+                    self.sock_start[tid_tok] = type_tok
                 elif sock_sock in line:
-                    pid_tok = getTokValue(line, 'pid')
-                    if pid_tok not in self.sock_socks:
-                        self.sock_socks[pid_tok] = {}
+                    tid_tok = getTokValue(line, 'tid')
+                    if tid_tok not in self.sock_socks:
+                        self.sock_socks[tid_tok] = {}
                     fd_tok = getTokValue(line, 'FD')
-                    if pid_tok in self.sock_start:
-                        self.sock_socks[pid_tok][fd_tok] = self.sock_start[pid_tok]
-                    #print('saved %s' % self.sock_socks[pid_tok][fd_tok]) 
+                    if tid_tok in self.sock_start:
+                        self.sock_socks[tid_tok][fd_tok] = self.sock_start[tid_tok]
+                    #print('saved %s' % self.sock_socks[tid_tok][fd_tok]) 
                 elif sock_bind in line:
-                    pid_tok = getTokValue(line, 'pid')
-                    pname = self.proc_trace.getPname(pid_tok)
+                    tid_tok = getTokValue(line, 'tid')
+                    pname = self.proc_trace.getPname(tid_tok)
                     fd_tok = getTokValue(line, 'FD')
                     parts = line.split()
                     if 'AF_LOCAL' in line:
@@ -83,8 +83,8 @@ class NetLinks():
                         else:
                             print('failed to get address/port token %s from %s' % (addr_port, line))
                             exit(1)
-                        if pid_tok in self.sock_socks and fd_tok in self.sock_socks[pid_tok]:
-                            contype = self.sock_socks[pid_tok][fd_tok]
+                        if tid_tok in self.sock_socks and fd_tok in self.sock_socks[tid_tok]:
+                            contype = self.sock_socks[tid_tok][fd_tok]
                             #print('addr-port %s contype %s' % (addr_port, contype))
                             if contype == '2' or contype == 'SOCK_DGRAM':
                                 port = port+'-UDP' 
@@ -100,20 +100,20 @@ class NetLinks():
                             ''' external '''
                             self.ext_port_sock_binders[addr_port] = pname
                         #if pname is None:
-                        #    print('binder port add %s none for pid %s' % (port, pid_tok))
+                        #    print('binder port add %s none for tid %s' % (port, tid_tok))
                         #else:
-                        #    print('binder port add %s as %s pid %s' % (port, pname, pid_tok))
+                        #    print('binder port add %s as %s tid %s' % (port, pname, tid_tok))
                     else:
                         continue
                 elif sock_connect in line:
                     parts = line.split()
-                    pid_tok = parts[3]
+                    tid_tok = parts[3]
                     fd = getTokValue(line, 'FD')
-                    if ':' in pid_tok:
-                        pid_id = pid_tok.split(':')[1]
-                        pname = self.proc_trace.getPname(pid_id)
+                    if ':' in tid_tok:
+                        tid_id = tid_tok.split(':')[1]
+                        pname = self.proc_trace.getPname(tid_id)
                     else:
-                        print('failed to get pid from %s' % line)
+                        print('failed to get tid from %s' % line)
                         exit(1) 
                     if 'AF_LOCAL' in line:
                         sock_file_index = parts.index('sa_data:')
@@ -150,16 +150,16 @@ class NetLinks():
                         continue
                 elif recv_from in line and 'AF_INET' in line:
                     addr_tok = getTokValue(line, 'address')
-                    pid_id = getTokValue(line, 'pid')
-                    pname = self.proc_trace.getPname(pid_id)
+                    tid_id = getTokValue(line, 'tid')
+                    pname = self.proc_trace.getPname(tid_id)
                     if pname not in self.recvfrom_addrs:
                         self.recvfrom_addrs[pname] = []
                     if addr_tok not in self.recvfrom_addrs[pname]:
                         self.recvfrom_addrs[pname].append(addr_tok)
                 elif send_to in line and 'AF_INET' in line:
                     addr_tok = getTokValue(line, 'address')
-                    pid_id = getTokValue(line, 'pid')
-                    pname = self.proc_trace.getPname(pid_id)
+                    tid_id = getTokValue(line, 'tid')
+                    pname = self.proc_trace.getPname(tid_id)
                     if pname not in self.send_to:
                         self.send_to[pname] = []
                     if addr_tok not in self.send_to[pname]:

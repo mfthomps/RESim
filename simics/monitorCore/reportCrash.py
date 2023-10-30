@@ -73,7 +73,7 @@ class ReportCrash():
         self.dataWatch.clearWatchMarks()
         self.top.setCommandCallback(self.doneForward)
         self.top.resetBookmarks()
-        self.top.removeDebugBreaks()
+        self.top.removeDebugBreaks(immediate=True)
 
         self.crash_report.write("Crash report for %s\n" % self.flist[self.index])
         self.lgr.debug('********reportCrash goAlone start for file %s' % self.flist[self.index])
@@ -82,7 +82,7 @@ class ReportCrash():
         ''' Either inject or track '''
         if self.trackFD is None:
             self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
-                   targetFD=self.targetFD, callback=self.top.stopTrackIO(), no_iterators=True)
+                   targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True)
             #       targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
             ''' Be sure we are debugging and then do the trackIO '''
@@ -94,6 +94,7 @@ class ReportCrash():
         self.top.trackIO(self.trackFD, reset=True, callback=top.stopTrackIO)
 
     def doneBackward(self, dumb):
+        self.lgr.debug('crashReport doneBackward')
         try:
             self.crash_report.write("\n\nBacktrace:\n")
         except:
@@ -101,11 +102,13 @@ class ReportCrash():
             return
         orig_stdout = sys.stdout
         sys.stdout = self.crash_report
+        self.lgr.debug('crashReport doneBackward now list bookmarks')
         self.top.listBookmarks()
         self.top.setCommandCallback(None)
         sys.stdout = orig_stdout 
         self.crash_report.close()
         self.index += 1
+        self.lgr.debug('crashReport doneBackward now go index %d' % self.index)
         self.go() 
 
     def doneNothing(self, dumb):
@@ -118,7 +121,7 @@ class ReportCrash():
         self.index += 1
         self.go() 
 
-    def tryCorruptRef(self, instruct):
+    def tryCorruptRef(self, instruct, no_increments=False):
         op2, op1 = self.decode.getOperands(instruct[1])
         self.lgr.debug('reportCrash op2: %s op1: %s' % (op2, op1))
         reg_find = re.findall(r'\[.*?\]', op2) 
@@ -142,7 +145,7 @@ class ReportCrash():
             else:
                 reg = brack_str
             if self.mem_utils.isReg(reg):
-                self.top.revTaintReg(reg)
+                self.top.revTaintReg(reg, no_increments=no_increments)
             else:
                 self.lgr.debug('reportCrash not a reg %s' % reg)
                 self.top.setCommandCallback(None)
@@ -253,7 +256,7 @@ class ReportCrash():
                         self.lgr.debug('reportCrash: Is strcpy, src > dest')
                 else:
                     if bad_addr % pageUtils.PAGE_SIZE == 0:
-                        self.lgr.debug('reportCrash thinks it is a page boundary')
+                        self.lgr.debug('reportCrash thinks it is a page boundary in a memcpy type function')
                         self.crash_report.write('\nPage boundary.\n')
                         self.doneBackward(None)
                     else:
@@ -265,7 +268,8 @@ class ReportCrash():
                 self.top.setCommandCallback(self.doneBackward)
                 self.reportStack()
                 self.crash_report.write('\nPage boundary.\n')
-                self.tryCorruptRef(instruct)
+                self.crash_report.flush()
+                self.tryCorruptRef(instruct, no_increments=True)
                 #self.doneBackward(None)
             else:
                 self.lgr.debug('reportCrash not a copy mark, look for bad reference.')

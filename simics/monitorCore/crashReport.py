@@ -102,13 +102,14 @@ def main():
     if os.path.isdir(args.report_dir):
         done_list = os.listdir(args.report_dir)
         for f in done_list:
-            path = os.path.join(args.report_dir, f)
-            if os.path.isfile(path):
-                with open(path) as fh:
-                    for line in fh:
-                        if 'Crash report for' in line:
-                            qfile = line.split()[-1]
-                            already_done.append(qfile)
+            if 'crash_report' in f:
+                path = os.path.join(args.report_dir, f)
+                if os.path.isfile(path):
+                    with open(path) as fh:
+                        for line in fh:
+                            if 'Crash report for' in line:
+                                qfile = line.split()[-1]
+                                already_done.append(qfile)
         
     resim_dir = os.getenv('RESIM_DIR')
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')

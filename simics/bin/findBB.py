@@ -20,7 +20,7 @@ def findBB(target, bb, quiet=False, get_all=False):
     cover_list = aflPath.getAFLCoverageList(target, get_all=get_all)
     if len(cover_list) == 0:
         print('No coverage found for %s' % target)
-    print('%d files found' % len(cover_list))
+    #print('%d files found' % len(cover_list))
     for cover in cover_list:
         with open(cover) as fh:
             try:
@@ -101,7 +101,7 @@ def getWatchMark(trackio, bb, prog, quiet=False):
             if mark['mark_type'] in read_marks:
                 eip = mark['ip'] - offset
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
-                if eip >= bb['start_ea'] and eip <= bb['end_ea']:
+                if eip >= bb['start_ea'] and eip < bb['end_ea']:
                     #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
                     retval = (eip, mark['packet'])
                     break

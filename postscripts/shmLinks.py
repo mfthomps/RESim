@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 import procTrace
 import os
 import sys
@@ -22,14 +22,14 @@ class SHMLinks():
             for line in fh:
                 if ipc_tok in line:
                     parts = line.split()
-                    pid_id = netLinks.getTokValue(line, 'pid')
-                    if pid_id is not None:
-                        pname = self.proc_trace.getPname(pid_id)
+                    tid_id = netLinks.getTokValue(line, 'tid')
+                    if tid_id is not None:
+                        pname = self.proc_trace.getPname(tid_id)
                         if pname is None:
-                            print('no pname for %s' % pid_id)
+                            print('no pname for %s' % tid_id)
                             pname = 'unknown'
                     else:
-                        print('could not find pid in %s' % line)
+                        print('could not find tid in %s' % line)
                         exit(1)
                     shm_key = netLinks.getTokValue(line, 'key')
                     if shm_key is not None:
@@ -48,7 +48,7 @@ class SHMLinks():
                  line = line + '(0x%x)' % self.shmsize[key]
             for pname in self.keymap[key]:
                 line = line + ' ' + pname
-            print line
+            print(line)
 
 if __name__ == "__main__":
     traces = sys.argv[1]

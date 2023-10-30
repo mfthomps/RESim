@@ -113,6 +113,9 @@ class BackStop():
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
             self.lgr.debug('backstop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
             self.hang_callback(self.cpu.cycles)
+        if self.hang_cycles is None and self.hang_cycles_delta >0:
+            # curde way to defer hang cycle watch until first data read
+            SIM_run_alone(self.setHangCallbackAlone, None)
          
         if not now:
             SIM_run_alone(self.setFutureCycleAlone, cycles)
@@ -121,20 +124,24 @@ class BackStop():
 
         if self.hang_event is not None:
             SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
-            
+           
 
     def hang_handler(self, obj, cycles):
         self.lgr.debug('backstop hang_handler will call callback %s' % str(self.hang_callback))
         self.hang_callback(self.cpu.cycles)
 
-    def setHangCallback(self, callback, cycles):
-        self.hang_cycles = self.cpu.cycles + cycles
+    def setHangCallbackAlone(self, dumb):
+        self.setHangCallback(self.hang_callback, self.hang_cycles_delta)
+
+    def setHangCallback(self, callback, cycles, now=True):
         self.hang_cycles_delta = cycles
         self.hang_callback = callback
-        self.lgr.debug('backstop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
-        if self.hang_event is None:
-            self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
-        SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
+        if now:
+            self.hang_cycles = self.cpu.cycles + cycles
+            #self.lgr.debug('backstop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
+            if self.hang_event is None:
+                self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
+            SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
 
     def reportBackstop(self, report):
         self.report_backstop = report

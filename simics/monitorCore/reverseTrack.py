@@ -39,7 +39,7 @@ class ReverseTrack():
         self.value = None
         self.top_command_callback = None
 
-    def revTaintReg(self, reg, bookmarks, kernel=False):
+    def revTaintReg(self, reg, bookmarks, kernel=False, no_increments=False):
         ''' back track the value in a given register '''
         #TBD why store this? would it change?
         self.top_command_callback = self.top.getCommandCallback()
@@ -47,15 +47,15 @@ class ReverseTrack():
         self.bookmarks = bookmarks
         reg = reg.lower()
         self.reg = reg
-        pid, cpu = self.context_manager.getDebugPid() 
+        tid, cpu = self.context_manager.getDebugTid() 
         self.cpu = cpu
         value = self.mem_utils.getRegValue(cpu, reg)
         self.value = value
-        self.lgr.debug('revTaintReg pid:%d for %s value 0x%x' % (pid, reg, value))
+        self.lgr.debug('revTaintReg tid:%s for %s value 0x%x' % (tid, reg, value))
         if self.top.reverseEnabled():
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
-                self.lgr.debug('revTaintReg stack trace is None, wrong pid?')
+                self.lgr.debug('revTaintReg stack trace is None, wrong tid?')
                 return
             frames = st.getFrames(20)
             mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)
@@ -78,7 +78,7 @@ class ReverseTrack():
                 bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
                 self.bookmarks.setDebugBookmark(bm)
                 self.context_manager.setIdaMessage('')
-                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel)
+                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel, no_increments=no_increments)
         else:
             print('reverse execution disabled')
             self.top.skipAndMail()

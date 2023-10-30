@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Apply an AFL packet filter to each unique (deduped) queue file to reflect what RESim 
 # injected.

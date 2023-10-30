@@ -54,15 +54,15 @@ class bookmarkMgr():
         self.context_mgr = context_mgr
         self.lgr = lgr
         self.track_num = 0
-        self.ida_funs = None
+        self.fun_mgr = None
         self.mark_json = {}
 
     def setTrackNum(self):
         self.track_num += 1
         return self.track_num
 
-    def setIdaFuns(self, ida_funs):
-        self.ida_funs = ida_funs
+    def setFunMgr(self, fun_mgr):
+        self.fun_mgr = fun_mgr
 
     def clearMarks(self):
         self.lgr.debug('bookmarkMgr, clearMarks')
@@ -87,7 +87,7 @@ class bookmarkMgr():
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None, msg=None):
         self.lgr.debug('setDebugBookmark mark: %s' % mark)
         if cpu is None: 
-            dum, cpu = self.context_mgr.getDebugPid() 
+            dum, cpu = self.context_mgr.getDebugTid() 
         cell_name = self.top.getTopComponentName(cpu)
         steps = None
         if cycles is None:
@@ -115,8 +115,8 @@ class bookmarkMgr():
             if mark.startswith('protected_memory:') and self.hasBookmarkDelta(delta):
                 self.lgr.debug('setDebugBookmark protected memory, return')
                 return
-            if self.ida_funs is not None:
-                fun = self.ida_funs.getFunName(eip)
+            if self.fun_mgr is not None:
+                fun = self.fun_mgr.getFunName(eip)
                 if fun is not None:
                     mark = mark +" %s " % fun
             mark = mark+" cycle:%x" % delta
@@ -144,8 +144,8 @@ class bookmarkMgr():
         entry['cycle'] = current
         entry['ip'] = eip
         entry['instruct'] = instruct[1]
-        pid = self.top.getPID()
-        entry['pid'] = pid
+        tid = self.top.getTID()
+        entry['tid'] = tid
         if fun is not None:
             entry['fun'] = fun
         if delta not in self.mark_json:
@@ -281,7 +281,7 @@ class bookmarkMgr():
                 return
         self.lgr.debug('goToDebugBookmark skip to debug bookmark: %s' % mark)
         sys.stderr = open('err.txt', 'w')
-        dum, cpu = self.context_mgr.getDebugPid() 
+        dum, cpu = self.context_mgr.getDebugTid() 
         self.context_mgr.clearExitBreaksAlone(None)
         start_cycle = self.getCycle('_start+1')
         done = False
@@ -341,7 +341,7 @@ class bookmarkMgr():
         return self.__mark_msg[self.__origin_bookmark]
 
     def skipToOrigin(self):
-        dum, cpu = self.context_mgr.getDebugPid() 
+        dum, cpu = self.context_mgr.getDebugTid() 
         origin = self.__bookmarks[self.__origin_bookmark].cycles
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % origin)
@@ -359,7 +359,7 @@ class bookmarkMgr():
     def skipToFirst(self, cpu=None):
         # TBD NOT USED
         if cpu is None:
-            dum, cpu = self.context_mgr.getDebugPid() 
+            dum, cpu = self.context_mgr.getDebugTid() 
         first = self.__bookmarks['_start+1'].cycles
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle=%d' % first)
@@ -383,9 +383,9 @@ class bookmarkMgr():
         entry['mark'] = 'origin'
         entry['cycle'] = cpu.cycles
         eip = self.top.getEIP(cpu)
-        pid = self.top.getPID()
+        tid = self.top.getTID()
         entry['ip'] = eip
-        entry['pid'] = pid
+        entry['tid'] = tid
         self.mark_json[0] = []
         self.mark_json[0].append(entry)
 
