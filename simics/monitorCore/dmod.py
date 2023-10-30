@@ -345,6 +345,10 @@ class Dmod():
 
     def getCellName(self):
         return self.cell_name
+
+    def toString(self):
+        retval = 'path: %s comm: %s operation: %s' % (self.getPath(), self.comm, self.operation)
+        return retval
         
 if __name__ == '__main__':
     print('begin')

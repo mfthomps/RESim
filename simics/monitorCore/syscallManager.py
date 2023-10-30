@@ -495,7 +495,7 @@ class SyscallManager():
                 call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
                 for call_param in call_parameters:
                     if call_param.match_param.__class__.__name__ == 'Dmod':
-                        print('context %s instance %s param %s' % (context, instance, call_param.name))
+                        print('context %s instance %s param %s %s' % (context, instance, call_param.name, call_param.match_param.toString()))
 
     def getDmodPaths(self):
         self.lgr.debug('syscallManager getDmodPaths')

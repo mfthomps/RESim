@@ -120,6 +120,7 @@ import runTo
 import winProg
 import stackFrameManager
 import traceBuffer
+import dmodMgr
 
 #import fsMgr
 import json
@@ -307,6 +308,8 @@ class GenMonitor():
         '''
         self.track_started = False
         self.track_finished = False
+
+        self.dmod_mgr = {}
 
         self.stop_on_exit = {}
 
@@ -780,15 +783,10 @@ class GenMonitor():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
                                                self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
                                                self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.rev_to_call[cell_name], self.lgr)
+
+            self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
+
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
-            if self.run_from_snap is not None:
-                dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
-                if os.path.isfile(dmod_file):
-                    dmod_dict = pickle.load( open(dmod_file, 'rb') )
-                    if cell_name in dmod_dict:
-                        for dmod_path in dmod_dict[cell_name]:
-                            self.runToDmod(dmod_path, cell_name=cell_name)
-            self.handleMods(cell_name)
             
 
 
@@ -939,53 +937,6 @@ class GenMonitor():
                 #self.lgr.debug('back from continue')
         self.runScripts()
 
-    def handleMods(self, cell_name):
-        ''' Load DMODs.  Snapshot contains dmod state, so only load if not not in the snapshot '''
-        already_loaded = []
-        if 'DMOD' in self.comp_dict[cell_name]:
-            if self.run_from_snap is not None:
-                dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
-                if os.path.isfile(dmod_file):
-                    dmod_dict = pickle.load( open(dmod_file, 'rb') )
-                    if cell_name in dmod_dict:
-                        for dmod_path in dmod_dict[cell_name]:
-                            already_loaded.append(dmod_path)
-            self.is_monitor_running.setRunning(False)
-            dlist = self.comp_dict[cell_name]['DMOD'].split(';')
-            for dmod in dlist:
-                if dmod not in already_loaded:
-                    dmod = dmod.strip()
-                    if self.run_from_snap is not None:
-                        self.lgr.debug('handleMods, got dmod not in snapshot: %s' % dmod)
-                    if self.runToDmod(dmod, cell_name=cell_name):
-                        self.lgr.debug('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                        print('Dmod %s pending for cell %s, need to run forward' % (dmod, cell_name))
-                    else:
-                        self.lgr.debug('Dmod is missing, cannot continue.')
-                        print('Dmod is missing, cannot continue.')
-                        self.quit()
-        ''' Load readReplace items. '''
-        if 'READ_REPLACE' in self.comp_dict[cell_name]:
-            self.is_monitor_running.setRunning(False)
-            dlist = self.comp_dict[cell_name]['READ_REPLACE'].split(';')
-            for read_replace in dlist:
-                read_replace = read_replace.strip()
-                if self.readReplace(read_replace, cell_name=cell_name, snapshot=self.run_from_snap):
-                    print('ReadReplace %s set for cell %s' % (read_replace, cell_name))
-                else:
-                    print('ReadReplace file %s is missing, cannot continue.' % read_replace)
-                    self.quit()
-        if 'REG_SET' in self.comp_dict[cell_name]:
-            self.is_monitor_running.setRunning(False)
-            dlist = self.comp_dict[cell_name]['REG_SET'].split(';')
-            for reg_set in dlist:
-                reg_set = reg_set.strip()
-                if self.regSet(reg_set, cell_name=cell_name, snapshot=self.run_from_snap):
-                    print('RegSet %s set for cell %s' % (reg_set, cell_name))
-                else:
-                    print('RegSet file %s is missing, cannot continue.' % reg_set)
-                    self.quit()
-       
     def getDbgFrames(self):
         ''' Get stack frames from kernel entries as recorded by the reverseToCall module 
             Do this for all siblings of the currently scheduled thread.
@@ -3763,11 +3714,6 @@ class GenMonitor():
     #    for tid in self.proc_list[self.target]:
     #        print('%d %s' % (tid, self.proc_list[self.target][tid]))
 
-    def getDmodPaths(self):
-        dmod_dict = {}
-        for target in self.context_manager:
-            dmod_dict[target] = self.syscallManager[target].getDmodPaths()
-        return dmod_dict
 
     def showDmods(self):
         for target in self.context_manager:
@@ -3815,6 +3761,7 @@ class GenMonitor():
                 pickle.dump(self.param[cell_name], open(param_file, 'wb'))
                 if cell_name in self.read_replace:
                     self.read_replace[cell_name].pickleit(name)
+                self.dmod_mgr[cell_name].pickleit(name)
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
@@ -3842,9 +3789,6 @@ class GenMonitor():
             binder_file = os.path.join('./', name, 'binder.json')
             self.binders.dumpJson(binder_file)
 
-        dmod_file = os.path.join('./', name, 'dmod.pickle')
-        dmod_dict = self.getDmodPaths()
-        pickle.dump(dmod_dict, open(dmod_file, "wb"))
 
         self.lgr.debug('writeConfig done to %s' % name)
 
