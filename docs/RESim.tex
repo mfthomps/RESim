@@ -595,6 +595,12 @@ and then rerun a trackIO, do so while at the first datamark.
 \item {\tt runToDmod(dmod\_file)} – Run until a specified read or write system call is encountered, and modify system memory such
 that the result of the read or write is augmented by a named Dmod directive file.  See \ref{dmod}
 
+\item {\tt rmAllDmods(} – Remove all Dmods.  Use this if the Dmods are needed to bring the system to a suitable state and that state has been reached, i.e.,
+you do not anticipate the need for further modifications going forward.  The intnended use is primarily to remove noise from the logs and potentially speed
+up the simulation.
+
+\item {\tt showDmods(} – Show all Dmods currently loaded.
+
 \item {\tt readReplace(readrelace\_file)} – Replace memory content with a given hex string when that memory address if first read by the program.
 
 \item {\tt modFunction(fun, offset, word)} Write the given word at an offset from the start of the named function.  Intended for use in setting return
@@ -649,12 +655,14 @@ Consider providing prepInject with largish amounts of data to ensure buffers tha
 
 Use the {\tt commence=string} option to ignore input that does not start with the given string.  
 
-\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when preparing to inject data directly into kernel buffers.  
+\item{\tt prepInjectWatch(watchmark, configfile)} -- For use when preparing to inject data directly into kernel buffers.  This call is intended for use when the application
+makes multiple kernel read/recv calls, e.g., character-at-a-time reads.
 Similar to prepInject but takes the index of a watch 
-mark that can be a call to ioctl, or a call to read/recieve. Generate the data marks by using trackIO, and providing the maximum amount of data you expect to 
+mark that is a call to read/recieve. Generate the data marks by using trackIO, and providing the maximum amount of data you expect to 
 read from kernel buffers.
 Use of the resulting snapshot with AFL or injectIO will cause the data to be injected
-into a kernel buffer. If the watch mark was an ioctl call, the kernel's buffer pointer values will be adjusted to reflect the new data size.  Note this command does not support running forward past the application
+into a kernel buffer. The snapshot is made just prior to the kernel commencing to move data from its buffer to the user space buffer. 
+Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
 It is important that received data all appears within the kernel buffer before the application is returned to from its recv call.  Otherwise, injectIO and AFL sessions
@@ -1309,7 +1317,7 @@ address the first time the address is read.
 
 Use the {\tt READ\_REPLACE} environment variable to automate execution of this function.
 
-The {\tt ReadReplace} is generally simpler than using Dmods.  Consider an example in which a program
+The {\tt readReplace} is generally simpler than using Dmods.  Consider an example in which a program
 repeatedly opens and reads from a file and compares the data read with a constant string in memory.
 And assume you'd like the compare operation to reflect a match despite the fact that the content of
 the file does not match the memory constant.  One approach is to use a Dmod to alter the value of what
@@ -1317,8 +1325,8 @@ is read from the file each time the file is read.  However, if the program repea
 then the Dmod will occur repeatedly, resulting in a reset of the reverse execution origin (if enabled).
 An alternative is to use readReplace to replace the constant value the first time it is read.  
 
-\subsubsection{ReadReplace}
-\label{read-replace}
+\subsubsection{regSet}
+\label{reg-set}
 The RESim {\tt regSet} function triggers on execution of a given program address
 by named programs and replace register content with a given hexidecimal value.  The function takes as an
 input the name of a file containing one or more directives of the format:
@@ -1342,7 +1350,23 @@ The format of directive files depend on the subfunction.  Each subfunction also 
 triggered on a {\tt read} or {\tt write} operation or {\tt open} operation, and may include an optional count value to control when
 the Dmod is removed from processing.
 
-Use the {\tt DMOD} environment variable to automate execution of Dmods.
+Dmod directive files start with a line that identifies the kind of dmod, the operation and optional values.
+The first field is the kind, which can be:
+\begin {itemize}
+\item {\tt sub\_replace} -- Replace a substring within a read or write buffer.
+\item {\tt script\_replace} -- Similar to {\tt sub\_replace} but intended for use on scripts.  See the examples below.
+\item {\tt full\_replace} -- Replace an entire read or write buffer.
+\item {\tt match\_cmd} -- Execute a series of Simics commands when a given string is read or written.
+\item {\tt open\_replace} -- Mask a failure to open an named file, and spoof subsequent reads from that file with content of a named file.
+\end{itemize}
+The second field in the first line of the directive is the operation type, e.g., {\tt read}, {\tt write}, {\tt open}.
+The operation can be followed by the following keyed options, e.g., {\tt key=value}
+\begin{itemize}
+\item count -- The Dmod will be removed after performing this number of operations. 
+\item comm -- The name of a program (comm) to filter on.  Only processes with this comm will be considered for the Dmod.
+\end{itemize}
+
+Use the {\tt DMOD} environment variable in the ini file to automate execution of Dmods.
  
 \begin{itemize}
 \item {\tt sub\_replace $<$operation$>$}-- Replace a substring within a read or write buffer (specified by the
@@ -1882,9 +1906,9 @@ the kernel does not know there is more data to inject into the application memor
 the use of {\tt injectIO} since each injection into application memory resets the origin used with reverse execution.
 
 The {\tt prepInjectWatch} operation can be used to
-prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes the ether that the application uses
-ioctl to determine who much data is in the kernel buffer, or that the initial buffer from the prepInjectWatch is as large as any data to be injected.
-The latter case, e.g., an application that simply reads a character at a time until it sees some delimiiter, will stop the simulation when the application
+prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes 
+that the initial buffer from the prepInjectWatch is as large as any data to be injected. The intended use includes an application that simply 
+reads a character at a time until it sees some delimiiter, will stop the simulation when the application
 has consumed all the data provided in the injection and again hits the read call.
 
 \subsubsection{TCP timing and packetizing}
@@ -3044,7 +3068,6 @@ trace0.start
 
 \section{Injecting to kernel buffers}
 TBD integrate all injection sections, and clarify different approaches: ioctl; select / read; x86 buffers
-
 
 The injectIO function is hamstrung if the application makes many single-byte read calls, because writing data into the
 simulation forces a reset of the orgin used for reverse execution.  This may also arise when protocols are implented
