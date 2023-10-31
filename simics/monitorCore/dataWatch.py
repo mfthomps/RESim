@@ -63,8 +63,9 @@ no_ghosts = ['charLookup']
 ''' TBD confirm end_cleanup is a good choice for free'''
 free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc']
 # remove allocators, should not get that as windows function
-allocators = ['string_basic_windows']
+allocators = ['string_basic_windows', 'malloc']
 char_ring_functions = ['ringqPutc']
+mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
 class MemSomething():
     def __init__(self, fun, fun_addr, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -1041,7 +1042,7 @@ class DataWatch():
         dum_cpu, comm, tid = self.task_utils.curThread()
         word_size = self.top.wordSize(tid, target=self.cell_name)
         #self.top.restoreDebugBreaks(was_watching=True)
-        if self.mem_something.fun in ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']:
+        if self.mem_something.fun in mem_copyish_functions:
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                    self.mem_something.dest, self.mem_something.count))
             if self.mem_something.count == 0:
@@ -1565,11 +1566,20 @@ class DataWatch():
 
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         # special case check for memcpy of 1 byte
-        if self.mem_something.fun in ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']:
+        if self.mem_something.fun in mem_copyish_functions:
             self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp, word_size)
             if self.mem_something.count == 1:
                 self.lgr.debug('dataWatch memSomethingEntry size one, src 0x%x dest 0x%x let it go.  Will catch special case in readHap' % (self.mem_something.src, self.mem_something.dest))
                 return
+            else:
+                buf_index, buf_start, buf_length = self.findRangeIndexForRange(self.mem_something.src, self.mem_something.count)
+                if buf_start is None:
+                    if self.mem_something.dest is not None:
+                        buf_start = self.findRange(self.mem_something.dest)
+                    if buf_start is None:
+                        self.lgr.debug('dataWatch memSomethingEntry, src 0x%x not something we care about and dest does not fall in a buffer, skip it' % self.mem_something.src)
+                        return
+                
 
         if self.cpu.architecture != 'arm':
             bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
@@ -1797,7 +1807,7 @@ class DataWatch():
 
     def gatherCallParams(self, sp, eip, word_size, data_hit):
         skip_fun = False
-        if self.mem_something.fun in ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']:
+        if self.mem_something.fun in mem_copyish_functions:
             self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp, word_size)
             ''' Too far in, hack this earlier
             # TBD generalize this. Or not.

@@ -94,7 +94,7 @@ class TaskStruct(object):
         return self.tasks.prev
 
 
-COMM_SIZE = 16
+COMM_SIZE = 15
 class TaskUtils():
     def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
         self.cpu = cpu
@@ -551,12 +551,15 @@ class TaskUtils():
 
     def getTidsForComm(self, comm_in, ignore_exits=False):
         comm = os.path.basename(comm_in).strip()
+        if len(comm) > COMM_SIZE:
+            comm = comm[:COMM_SIZE]
         retval = []
         #self.lgr.debug('getTidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
-            if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d COMM_SIZE %d' % (comm, ts_list[ts].comm, len(comm), COMM_SIZE))
+            #if comm == ts_list[ts].comm or (len(comm)>COMM_SIZE and len(ts_list[ts].comm) == COMM_SIZE and comm.startswith(ts_list[ts].comm)):
+            if comm == ts_list[ts].comm:
                 tid = str(ts_list[ts].pid)
                 #self.lgr.debug('getTidsForComm MATCHED ? %s to %s  tid %s' % (comm, ts_list[ts].comm, tid))
                 ''' skip if exiting as recorded by syscall '''
