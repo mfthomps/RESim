@@ -3267,8 +3267,8 @@ class GenMonitor():
             call_param.nth = count
             call_param_list.append(call_param)
 
-        self.lgr.debug('runToInput on FD %d' % fd)
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
+        cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
+        self.lgr.debug('runToInput on FD %d cycle: 0x%x' % (fd, cpu.cycles))
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
@@ -3301,7 +3301,9 @@ class GenMonitor():
         if len(frames) > 0:
             self.lgr.debug('runToInput, call to setExits')
             the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
-       
+        elif cpu in self.snap_start_cycle and self.snap_start_cycle[cpu] == cpu.cycles:
+            self.lgr.warning('runToInput, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+            print('WARNING: runToInput found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
         
         SIM_continue(0)
 
