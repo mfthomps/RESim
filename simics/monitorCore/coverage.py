@@ -758,60 +758,6 @@ class Coverage():
         self.lgr.debug('coverage saveCoverage to %s' % save_name)
         print('Coverage saveCoverage to %s' % save_name)
 
-    def saveCoverageNOT_USED(self, fname = None):
-        ''' Not used. More value in saving order of hits.  Function allocation can always be recalculated '''
-        if not self.enabled:
-            return
-        self.lgr.debug('saveCoverage for %d functions' % len(self.funs_hit))
-        ''' New dictionary for json.   Key is function address as a string '''
-        hit_blocks = {}
-        ''' funs_hit is list of addresses as integers '''
-        ''' new hit_blocks will all be relocated '''
-        '''
-        for fun in self.funs_hit:
-            fun_str = '%d' % fun
-            hit_blocks[fun] = []
-            self.lgr.debug('saveCoverage add %s (0x%x) to hit_blocks' % (fun_str, fun))
-        '''
-
-        ''' Create a list of bb hit per function '''
-        ''' blocks_hit addresses are relocated from offset self.offset'''
-        for bb in self.blocks_hit:
-            ''' Find the function that contains the bb '''
-            ''' self.blocks is not relocated '''
-            bb_org = bb - self.offset
-            got_it = False
-            for ofun in self.blocks:
-                for entry in self.blocks[ofun]['blocks']:
-                    if entry['start_ea'] == bb_org:
-                        ''' bb is in ofun '''
-                        ofun_val = int(ofun)
-                        ofun_rel = ofun_val + self.offset 
-                        ofun_str = str(ofun_rel)
-                        if ofun_str not in hit_blocks:
-                            #self.lgr.debug('saveCoverage fun %s (0x%x) not in hit_blocks add it' % (ofun_str, ofun_rel))
-                            hit_blocks[ofun_str] = []
-                        hit_blocks[ofun_str].append(bb)       
-                        got_it = True
-                        #break
-                # ida may put same block into multiple functions, e.g., arm "b fu"
-                #if got_it:
-                #    break
-        s = json.dumps(hit_blocks)
-        if fname is None:
-            save_name = '%s.hits' % self.hits_path
-        else:
-            save_name = '%s.%s.hits' % (self.hits_path, fname)
-        try:
-            os.makedirs(os.path.dirname(self.hits_path))
-        except:
-            pass
-        with open(save_name, 'w') as fh:
-            fh.write(s)
-            fh.flush()
-        self.lgr.debug('coverage saveCoverage to %s' % save_name)
-        print('Coverage saveCoverage to %s' % save_name)
-
 
     def restoreAFLBreaks(self):
         ''' leave unused code as cautionary tale re: pom '''
