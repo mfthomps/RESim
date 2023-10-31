@@ -664,7 +664,8 @@ class PlayAFL():
                     self.hit_total = hits 
                     self.lgr.debug('Found %d new hits' % delta)
                 hit_bbs = self.coverage.getBlocksHit()
-                self.lgr.debug('playAFL stophap gtBlocksHit returned %d hits' % len(hit_bbs))
+                delta = self.target_cpu.cycles - self.initial_cycle
+                self.lgr.debug('playAFL stophap gtBlocksHit returned %d hits over 0x%x cycles' % (len(hit_bbs), delta))
                 if self.findbb is not None and self.index < len(self.afl_list):
                     self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:
