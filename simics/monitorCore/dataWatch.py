@@ -4280,10 +4280,10 @@ class DataWatch():
             self.lgr.debug('dataWatch ringCharHap hap is gone for eip 0x%x' % eip)
             return
 
-        self.lgr.debug('dataWatch ringCharHap eip 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
+        #self.lgr.debug('dataWatch ringCharHap eip 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
  
         mark = self.watchMarks.getRecentMark()
-        if isinstance(mark.mark, watchMarks.DataMark) and mark.mark.length == 1:
+        if mark is not None and isinstance(mark.mark, watchMarks.DataMark) and mark.mark.length == 1:
             self.lgr.debug('dataWatch ringCharHap recent mark was 1 byte data.') 
             ''' do not use cycle delta, might be scheduling.  TBD how to tie read mark to this call.  EIP delta? No, wrappers break that.'''
             if True:
