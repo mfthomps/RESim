@@ -234,39 +234,8 @@ class SOMap():
             self.lgr.error('soMap setContext, no context for tid:%s' % tid)
       
     def getAnalysisPath(self, fname):
-        retval = None
-        #self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
-        analysis_path = os.getenv('IDA_ANALYSIS')
-        if analysis_path is None:
-            analysis_path = '/mnt/resim_archive/analysis'
-            if len(self.fun_list_cache) == 0:
-                self.lgr.warning('soMap getAnalysis path IDA_ANALYSIS not defined')
-         
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-        root_dir = os.path.basename(root_prefix)
-        top_dir = os.path.join(analysis_path, root_dir)
-        self.lgr.debug('soMap getAnalysisPath fname %s top_dir %s  ap %s' % (fname, top_dir, analysis_path))
-        if len(self.fun_list_cache) == 0:
-            self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
-            self.lgr.debug('soMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
-            for item in self.fun_list_cache:
-                self.lgr.debug('\t fun_list_cache item %s' % item)
-
-        base = os.path.basename(fname)+'.funs'
-        self.lgr.debug('base is %s' % base)
-        if base in self.fun_list_cache:
-            #with_funs = fname+'.funs'
-            if fname.startswith(root_prefix):
-                fname = fname[len(root_prefix):]
-            if fname.startswith('/'):
-                fname = fname[1:]
-            retval = os.path.join(top_dir, fname)
-            self.lgr.debug('getAnalysisPath got it %s' % retval)
-        else:
-            self.lgr.debug('getAnalysisPath %s not in cache' % base)
-            pass
-
-        return retval
+        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=root_prefix, lgr=self.lgr)
             
     def setFunMgr(self, fun_mgr, tid_in):
         if fun_mgr is None:

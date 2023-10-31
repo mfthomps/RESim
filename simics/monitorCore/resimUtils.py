@@ -472,7 +472,7 @@ def cutRealWorld():
     except:
         pass
 
-def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None):
+def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
     #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     quick_check = fname+'.funs'
@@ -484,8 +484,9 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None):
             analysis_path = '/mnt/resim_archive/analysis'
             if len(fun_list_cache) == 0:
                 lgr.warning('resimUtils getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
-         
-        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        
+        if root_prefix is None: 
+            root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
         if len(fun_list_cache) == 0:
