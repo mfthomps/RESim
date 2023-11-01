@@ -3724,6 +3724,10 @@ class GenMonitor():
     def rmAllDmods(self):
         for target in self.context_manager:
             self.syscallManager[target].rmAllDmods()
+            self.dmod_mgr[target].rmAllDmods()
+
+    def rmDmod(self, cell_name, path):
+        self.dmod_mgr[cell_name].rmDmod(path)
 
     def writeConfig(self, name):
         if '-' in name:
