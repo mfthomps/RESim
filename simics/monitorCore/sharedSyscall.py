@@ -904,6 +904,8 @@ class SharedSyscall():
                                         self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
                                         #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
+                                        # note rmDmod simply notes it has been removed so we know if future snapshot loads
+                                        self.top.rmDmod(cell_name, dmod.getPath())
                                         #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
                                         if not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
                                             self.top.notRunning(quiet=True)
@@ -1037,7 +1039,7 @@ class SharedSyscall():
                 exit_info.call_params.match_param.resetOpen()
                 if exit_info.syscall_instance.name == 'read-dmod':
                     self.lgr.debug('sharedSyscall close stopping read-dmod syscall, call_params.name %s' % exit_info.call_params.name)
-                    # want all contexts?
+                    # read-dmod is not a real dmod, it is created by the open dmod.  so just remove this instance and assume no concurrency...
                     context = self.context_manager.getContextName(self.cpu.current_context)
                     self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name, context=context)
                     #exit_info.syscall_instance.stopTrace()
