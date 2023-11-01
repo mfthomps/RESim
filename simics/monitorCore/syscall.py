@@ -2579,10 +2579,18 @@ class Syscall():
             else:
                 self.lgr.debug('setExits call_param is none, NO EXIT set.')
 
+    def hasCallParamName(self, name):
+        retval = False
+        for cp in self.syscall_info.call_params:
+            if cp.name == name:
+                retval = True
+                break
+        return retval
+
     def addCallParams(self, call_params):
         gotone = False
         for call in call_params:
-            if call not in self.syscall_info.call_params:
+            if not self.hasCallParamName(call.name):
                 self.lgr.debug('syscall addCallParams %s' % call.name)
                 self.syscall_info.call_params.append(call)
                 gotone = True
