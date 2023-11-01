@@ -224,9 +224,17 @@ class SyscallManager():
                     self.lgr.debug('\t\t%s' % p.name)
             else:
                 self.lgr.debug('syscallManager watchSyscall given call list has some calls that are and some that are not present in existing calls.  Delete and recreate. given %s' % str(call_list))
-                existing_call_params = call_instance.syscall.getCallParams()
+                new_call_params = list(call_instance.syscall.getCallParams())
+                existing_call_list = call_instance.call_names
+                new_call_list = list(call_list)
+                for call in existing_call_list:
+                    if call not in new_call_list:
+                        new_call_list.append(call)
                 for cp in call_params_list:
-                    existing_call_params.append(cp)
+                    if cp not in new_call_params:
+                        new_call_params.append(cp)
+                for cp in new_call_params:
+                    self.lgr.debug('syscallmanager watchSyscall new_call_param: %s' % cp.name)
                 if kbuffer is None:
                     kbuffer = call_instance.syscall.kbuffer
                 if callback is not None and call_instance.syscall.callback is not None and callback != call_instance.syscall.callback:
@@ -239,17 +247,17 @@ class SyscallManager():
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
-                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
+                               call_list=new_call_list, call_params=new_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
-                               call_list=call_list, call_params=existing_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
+                               call_list=new_call_list, call_params=new_call_params, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 call_instance.syscall = retval
-                call_instance.addCallParams(call_params_list, call_list)
-                call_instance.call_names = list(call_list)
-                self.lgr.debug('syscallManager watchSyscall replace syscall, call_list and params for call instance %s' % call_instance.name)
+                call_instance.addCallParams(call_params_list, new_call_list)
+                call_instance.call_names = new_call_list
+                self.lgr.debug('syscallManager watchSyscall replaced syscall, call_list and params for call instance %s' % call_instance.name)
  
         return retval
 
@@ -309,7 +317,7 @@ class SyscallManager():
         ''' Return the Syscallinstance that contains at least one call in the given call list if any.
             Favor the the one with the most matches.
         '''
-        self.lgr.debug('syscallManager findCalls context %s call: %s' % (context, str(call_list)))   
+        self.lgr.debug('syscallManager findCalls for given context %s call: %s' % (context, str(call_list)))   
         retval = None
         best_count = 0
         if context in self.syscall_dict:
