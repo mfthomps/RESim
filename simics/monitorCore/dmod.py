@@ -91,7 +91,7 @@ class Dmod():
                            elif key == 'comm':
                                self.comm = value
 
-               self.lgr.debug('Dmod of kind %s  cell is %s count is %d comm: %s' % (self.kind, self.cell_name, self.count, self.comm))
+               self.lgr.debug('Dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, self.comm))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
