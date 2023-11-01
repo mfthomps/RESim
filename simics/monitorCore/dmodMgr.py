@@ -84,6 +84,8 @@ class DmodMgr():
             dlist = self.comp_dict['DMOD'].split(';')
             for dmod in dlist:
                 dmod = dmod.strip()
+                if len(dmod) == 0:
+                    continue
                 if legacy:
                     self.lgr.debug('dmodMgr legacy now load any dmods from ini that were not either in snapshot or previously loaded.  %d previous loads' % len(self.loaded_dmods))
                     if dmod not in already_loaded and dmod not in self.loaded_dmods:
@@ -98,7 +100,7 @@ class DmodMgr():
                             print('Dmod is missing, cannot continue.')
                             self.top.quit()
                 else:
-                    self.lgr.debug('dmodMgr now load any dmods from ini that were not removed.')
+                    self.lgr.debug('dmodMgr target: %s now load any dmods from ini that were not removed.' % self.cell_name)
                     if dmod not in self.removed_dmods:
                         self.loaded_dmods.append(dmod)
                         if self.top.runToDmod(dmod, cell_name=self.cell_name):
