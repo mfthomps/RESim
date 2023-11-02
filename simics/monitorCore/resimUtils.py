@@ -177,20 +177,6 @@ def getIdaData(full_path, root_prefix):
         
     return retval
 
-def getProgPath(prog, ini):
-    ''' read the .prog file to get the path of the analyzed program, i.e., the program
-        whose basic blocks were watched.'''
-    ida_path = getIdaDataFromIni(prog, ini)
-    data_path = ida_path+'.prog'
-    prog_file = None
-    if not os.path.isfile(data_path):
-        print('failed to find prog file at %s' % data_path)
-    else:
-        with open(data_path) as fh:
-            lines = fh.read().strip().splitlines()
-            prog_file = lines[0].strip()
-    return prog_file
-
 def doLoad(packet_filter, path):
     #print('version is %d %d' % (sys.version_info[0], sys.version_info[1]))
     if sys.version_info[0] == 3:
@@ -223,7 +209,7 @@ def getPacketFilter(packet_filter, lgr):
 
 def getBasicBlocks(prog, ini, lgr=None):
     blocks = None
-    prog_file = getProgPath(prog, ini)
+    prog_file = getAnalysisPath(ini, prog)
     print('prog_file at %s' % prog_file)
     if lgr is not None:
         lgr.debug('prog_file %s' % prog_file)
@@ -349,13 +335,18 @@ def getIniTargetValue(input_ini_file, field, target=None):
             if name == 'RESIM_TARGET':
                 target = value
                 break
+    got_target = False
     if target is not None:
         for section in config.sections():
             if section == target:
+                got_target = True
                 for name, value in config.items(section):
                     if name == field:
                         retval = value 
                         break
+    if not got_target:
+        print('ERROR filed to find target %s in ini file %s' % (target, ini_file))
+       
     if retval is not None and retval.startswith('$'):
         env, path = retval.split('/',1)
         env_value = os.getenv(env[1:]) 
@@ -482,7 +473,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         analysis_path = os.getenv('IDA_ANALYSIS')
         if analysis_path is None:
             analysis_path = '/mnt/resim_archive/analysis'
-            if len(fun_list_cache) == 0:
+            if lgr is not None and len(fun_list_cache) == 0:
                 lgr.warning('resimUtils getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
         
         if root_prefix is None: 
