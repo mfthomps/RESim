@@ -941,8 +941,7 @@ class StackTrace():
                                     if call_to is not None:
                                         if self.soMap.isMainText(call_to):
                                             #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail. call-to is 0x%x' % call_to)
-                                            first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
-                                            if not self.fun_mgr.isRelocate(call_to) and not first_instruct[1].startswith('jmp'):
+                                            if not self.fun_mgr.isRelocate(call_to) and not self.isPLT(call_to):
                                                 skip_this = True
                                                 #self.lgr.debug('stackTrace not a PLT, skipped it first_instruct %s' % first_instruct[1])
 
@@ -951,7 +950,7 @@ class StackTrace():
                                     ret_addr = call_ip + 4
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
                                 else:
-                                    self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
+                                    #self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun)
                                 self.addFrame(frame)
                                 #self.lgr.debug('stackTrace fname %s fun is %s add frame %s' % (fname, fun, frame.dumpString()))
@@ -963,7 +962,7 @@ class StackTrace():
                             prev_ip = call_ip
                             if self.soMap.isAboveLibc(call_ip):
                                 been_in_main = True
-                                self.lgr.debug('stackTrace been in main')
+                                #self.lgr.debug('stackTrace been in main')
                     else:
                         #self.lgr.debug('doTrace not a call? %s' % instruct_str)
                         frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, None, None)
@@ -987,6 +986,15 @@ class StackTrace():
                 #self.lgr.debug('stackFrames got max bytes %d, done' % self.max_bytes)
                 done = True
 
+    def isPLT(self, eip):
+        # TBD replace this ad hoc hack with analysis output telling us where the PLT is
+        retval = False
+        first_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        if first_instruct[1].startswith('jmp'):
+            retval = True
+        elif first_instruct[1].startswith('add') and 'pc' in first_instruct[1]:
+            retval = True
+        return retval
 
     def soCheck(self, eip):
                 
