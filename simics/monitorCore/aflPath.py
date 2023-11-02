@@ -223,6 +223,22 @@ def getTargetCrashes(target):
             afl_list = [os.path.join(cdir, f) for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
     return afl_list
 
+def getTargetHangs(target):
+    afl_list = []
+    afl_output = getAFLOutput()
+    afl_dir = os.path.join(afl_output, target)
+    cpath = os.path.join(afl_dir, '*_resim_*', 'hangs', 'id:*')
+    glist = glob.glob(cpath)
+    if len(glist) > 0:
+        #for path in sorted(glist):
+        for path in glist:
+            afl_list.append(path)
+    else:
+        cdir = os.path.join(afl_dir, 'hangs')
+        if os.path.isdir(cdir):
+            afl_list = [os.path.join(cdir, f) for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
+    return afl_list
+
 def getTargetPath(target):
     afl_output = getAFLOutput()
     target_path = os.path.join(afl_output, target)
