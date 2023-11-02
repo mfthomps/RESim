@@ -345,8 +345,8 @@ class PlayAFL():
             else:
                 self.backstop.setHangCallback(self.coverage.recordHang, self.hang_cycles)
 
-            if True:
-                ''' TBD, multple writers?'''
+            if False:
+                ''' STOP USING prog file TBD'''
                 full_path = self.coverage.getFullPath()
                 full_path = os.path.abspath(full_path)
     
