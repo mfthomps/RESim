@@ -95,9 +95,13 @@ def main():
         if funs is None:
             exit(1)
     '''
-    prog_path = resimUtils.getProgPath(args.prog, args.ini)
-    print('prog_path is %s' % prog_path)
-    funs = getFuns(prog_path)
+    #prog_path = resimUtils.getProgPath(args.prog, args.ini)
+    #print('prog_path is %s' % prog_path)
+
+    analysis_path = resimUtils.getAnalysisPath(args.ini, args.prog)
+    print('analysis_path is %s' % analysis_path)
+
+    funs = getFuns(analysis_path)
     udp_header = getHeader(args.ini)
     if args.index is not None:
         path = aflPath.getAFLCoveragePath(args.target, args.instance, args.index)
@@ -118,7 +122,7 @@ def main():
                 print('hits: %04d  funs: %04d packets: %02d  %s' % (num_hits, num_funs, num_packets, f))
             else:
                 print('hits: %04d  funs: %04d   %s' % (num_hits, num_funs, f))
-        blocks = getBlocks(prog_path)
+        blocks = getBlocks(analysis_path)
         total_blocks = totalBlocks(blocks)
         print('%d sessions' % len(flist))
         print('total functions: %d of %d  total hits: %d of %d' % (len(all_funs), len(funs), len(all_hits), total_blocks))        
