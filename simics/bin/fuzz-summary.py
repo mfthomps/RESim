@@ -26,7 +26,11 @@ def main():
     
     unique_files = aflPath.getTargetQueue(args.target)
     queue_files = aflPath.getTargetQueue(args.target, get_all=True)
+    crash_files = aflPath.getTargetCrashes(args.target)
+    hang_files = aflPath.getTargetHangs(args.target)
     print('AFL found %d queue files (execution paths), some may be duplicates.' % len(queue_files))
     print('RESim sees %d unique execution paths.' % len(unique_files))
+    print('\t %d crashes' % len(crash_files))
+    print('\t %d hangs' % len(hang_files))
 if __name__ == '__main__':
     sys.exit(main())

@@ -28,6 +28,10 @@ def main():
     here=os.getcwd()
     base=os.path.basename(here)
     sync_dir = aflPath.getTargetPath(base)
+    qd = os.path.join(sync_dir, 'queue')
+    if os.path.isdir(qd):
+        print('There is a queue dir at %s.  AFL will complain.  If you have clones, then remove the artifacts from your single instance AFL test.' % qd)
+        exit(1)
     if args.verbose:
         cmd = '%s %s' % (wu, sync_dir)
     else:
