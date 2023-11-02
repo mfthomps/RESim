@@ -804,7 +804,7 @@ class SharedSyscall():
                     self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True, 
                        cell_name=dmod.getCellName(), cell=self.cpu.current_context)
 
-                    trace_msg = ('\treturn from open tid:%s DMOD! forced return FD of 99 \n' % (str(tid)))
+                    trace_msg = ('\treturn from open tid:%s file: %s DMOD! forced return FD of 99 \n' % (str(tid), exit_info.fname))
                 exit_info.call_params = None
 
             if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
