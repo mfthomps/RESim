@@ -432,14 +432,14 @@ class WriteData():
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
             else:
-                self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
+                #self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
         if tid != self.tid:
             self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
+            #self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
             pass
         else:
             if self.limit_one:
