@@ -209,25 +209,26 @@ def getPacketFilter(packet_filter, lgr):
 
 def getBasicBlocks(prog, ini, lgr=None):
     blocks = None
-    prog_file = getAnalysisPath(ini, prog)
-    print('prog_file at %s' % prog_file)
+    analysis_path = getAnalysisPath(ini, prog)
+    print('analysis_path at %s' % analysis_path)
     if lgr is not None:
-        lgr.debug('prog_file %s' % prog_file)
+        lgr.debug('getBasicBlocks analysis_path %s' % analysis_path)
     prog_elf = None
     os_type = getIniTargetValue(ini, 'OS_TYPE')
-    if prog_file is not None:
+    if analysis_path is not None:
+        prog_path = getProgPathFromAnalysis(analysis_path, ini, lgr=lgr) 
+        if lgr is not None:
+            lgr.debug('getBasicBlocks got prog_path %s' % prog_path)
+        print('getBasicBlocks got prog_path %s' % prog_path)
         if os_type.startswith('WIN'):
             if lgr is not None:
                 lgr.debug('is windows')
-            prog_elf = winProg.getText(prog_file, lgr)
+            prog_elf = winProg.getText(prog_path, lgr)
         else:
-            prog_elf = elfText.getTextOfText(prog_file)
+            prog_elf = elfText.getTextOfText(prog_path)
         print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
         if lgr is not None:
             lgr.debug('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
-        analysis_path = getAnalysisPath(ini, prog_file, lgr=lgr)
-        if lgr is not None:
-            lgr.debug('analysis_path: %s' % analysis_path)
         block_file = analysis_path+'.blocks'
         print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
@@ -318,7 +319,7 @@ def getHexDump(b):
         return s2
 
 
-def getIniTargetValue(input_ini_file, field, target=None):
+def getIniTargetValue(input_ini_file, field, target=None, lgr=None):
     retval = None
     config = ConfigParser.ConfigParser()
     config.optionxform = str
@@ -335,6 +336,8 @@ def getIniTargetValue(input_ini_file, field, target=None):
             if name == 'RESIM_TARGET':
                 target = value
                 break
+    if lgr is not None:
+        lgr.debug('getInitTargetValue target %s' % target)
     got_target = False
     if target is not None:
         for section in config.sections():
@@ -346,6 +349,8 @@ def getIniTargetValue(input_ini_file, field, target=None):
                         break
     if not got_target:
         print('ERROR filed to find target %s in ini file %s' % (target, ini_file))
+        if lgr is not None:
+            lgr.error('filed to find target %s in ini file %s' % (target, ini_file))
        
     if retval is not None and retval.startswith('$'):
         env, path = retval.split('/',1)
@@ -462,6 +467,19 @@ def cutRealWorld():
         disconnectServiceNode(dhcp_service_node)
     except:
         pass
+
+def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None):
+    analysis_path = os.getenv('IDA_ANALYSIS')
+    if analysis_path is None:
+        analysis_path = '/mnt/resim_archive/analysis'
+    relative = full_analysis_path[len(analysis_path)+1:] 
+    if lgr is not None:
+        lgr.debug('getProgPathFromAnalysis relative is %s' % relative)
+    root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
+    if lgr is not None:
+        lgr.debug('getProgPathFromAnalysis root_prefix %s' % root_prefix)
+    retval = os.path.join(os.path.dirname(root_prefix), relative)
+    return retval
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
