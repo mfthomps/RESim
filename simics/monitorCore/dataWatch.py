@@ -53,7 +53,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'output_processor',
-            'UuidToStringA']
+            'UuidToStringA', 'fgets']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -1707,7 +1707,7 @@ class DataWatch():
                     skip_fun = True
 
                 if (self.mem_something.fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[self.mem_something.fun]) and 'printf' not in self.mem_something.fun and \
-                                     'syslog' not in self.mem_something.fun and 'fgets' not in self.mem_something.fun:
+                                     'syslog' not in self.mem_something.fun and 'fgetsXXXXXXXXXXXXXXXXXXXXXXXXXX' not in self.mem_something.fun:
                     ret_addr_offset = None
                     if self.mem_something.ret_addr_addr is not None:
                         ret = self.mem_utils.readAppPtr(self.cpu, self.mem_something.ret_addr_addr, size=word_size)
@@ -2075,8 +2075,9 @@ class DataWatch():
             self.lgr.debug('dataWatch getMemParams %s this addr 0x%x src_addr 0x%x' % (self.mem_something.fun, this, src_addr))
             SIM_break_simulation('remove this')
                  
-        #elif self.mem_something.fun == 'fgets':
-        #    self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
+        elif self.mem_something.fun == 'fgets':
+            # TBD was commented out. 
+            self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':

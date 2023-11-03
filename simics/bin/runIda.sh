@@ -98,7 +98,7 @@ target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 
 if [ -z "$IDA_ANALYSIS" ]; then
-    export IDA_ANALYSIS=/mnt/resim_archive/analysis
+    export IDA_ANALYSIS=/mnt/resim_eems/resim/archive/analysis
 fi
 if [[ $target = $here/* ]]; then
     target=$(realpath --relative-to="${PWD}" "$target")
@@ -115,6 +115,15 @@ echo "original_image_base is $tt"
 
 echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
+
+
+export target_image_base=$(readpe "$target_path" | grep ImageBase | awk '{print$2}')
+if [ -z $target_image_base ]; then
+    export target_image_base=$(readelf -l "$target_path" | grep -m1 LOAD | awk '{print $3}')
+    echo "read ELF header got image base $target_image_base"
+fi
+
+
 if [[ -f $ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
     #echo "ida_db_path is $ida_db_path"

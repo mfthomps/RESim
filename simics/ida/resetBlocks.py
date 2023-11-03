@@ -50,7 +50,7 @@ def resetBlocks(in_path=None):
         #print('fun is %s' % str(f))
         if f is None:
             print('no function found for 0x%x' % fun_addr)
-            break
+            continue
         #print('doing function found for 0x%x' % fun_addr)
         graph = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
         for bb in graph:
