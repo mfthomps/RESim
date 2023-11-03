@@ -917,7 +917,8 @@ class StackTrace():
                             if prev_ip is not None and self.fun_mgr is not None:
                                 fun_hex = self.fun_mgr.getFun(prev_ip)
                                 if fun_hex is not None:
-                                    #self.lgr.debug('stackTrace fun_hex hacked to 0x%x using prev_ip.  TBD generalize this' % fun_hex)
+                                    fun = self.fun_mgr.getFunName(fun_hex)
+                                    #self.lgr.debug('stackTrace fun_hex hacked to 0x%x using prev_ip and fun to %s.  TBD generalize this' % (fun_hex, fun))
                                     pass
 
                                 
