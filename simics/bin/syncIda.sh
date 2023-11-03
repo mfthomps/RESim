@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # use rsync to copy ida_data files for a program from a remove server (e.g., blade)
-# to the local machine, e.g., where IDA runs.
+# to the local machine, e.g., where IDA runs.  Run from the RESIM_ROOT_PREFIX directory
 #
 if [ -z "$RESIM_IDA_DATA" ]; then
     echo "RESIM_IDA_DATA not defined."
@@ -10,6 +10,7 @@ fi
 if [ $# -lt 2 ] || [ $1 = "-h" ]; then
     echo "syncIda.sh <program> <server> [user]"
     echo "provide the optional user if id on remote differs from local."
+    echo "Run from the RESIM_ROOT_PREFIX directory"
     exit
 fi
 program=$1
