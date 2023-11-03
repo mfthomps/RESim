@@ -34,10 +34,12 @@ import resimUtils
 import aflPath
 import findTrack
 class InjectToWM():
-    def __init__(self, top, addr, lgr, fname=None):
+    def __init__(self, top, addr, dataWatch, lgr, fname=None):
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
         self.top = top
+        self.dataWatch = dataWatch
+        self.addr = addr
         self.lgr = lgr
         here = os.getcwd()
         self.target = os.path.basename(here)
@@ -83,8 +85,12 @@ class InjectToWM():
             return
         self.top.setCommandCallback(None)
         self.top.restoreBackstopCallback()
-        self.top.goToDataMark(self.mark_index)
-        print('Go to data mark %d.  Data file copied to /tmp/wm.io (and wm_filtered.io if there was a filter).' % self.mark_index)
+        wm_index = self.dataWatch.findMarkIp(self.addr)
+        if wm_index is not None:
+            self.top.goToDataMark(wm_index)
+            print('Go to data mark %d.  Artifact mark was %d.  Data file copied to /tmp/wm.io (and wm_filtered.io if there was a filter).' % (wm_index, self.mark_index))
+        else:
+            print('Did not find a watch mark for address 0x%x.  Perhaps it came from a stale trackio artifact?' % self.addr)
 
     def findOneTrack(self, addr):
         ''' Find a track having watchmark having the given address. 

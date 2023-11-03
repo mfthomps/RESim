@@ -1162,7 +1162,17 @@ class WatchMarks():
         return (len(self.mark_list) + len(self.stale_marks))
 
     def getMarks(self):
-        return self.mark.list
+        return self.mark_list
+
+    def findMarkIp(self, ip):
+        retval = None
+        index = 0
+        for mark in self.mark_list:
+            index += 1
+            if mark.ip == ip:
+                retval = index
+                break
+        return retval
 
     def loadPickle(self, name):
         mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
@@ -1200,7 +1210,7 @@ class WatchMarks():
             json.dump(combined, fh) 
 
     def getDataWatchList(self):
-        ''' get list intended for use in recontructing data watches '''
+        ''' get list intended for use in reconstructing data watches '''
         my_marks = []
         for mark in self.mark_list:
             if isinstance(mark.mark, ResetOrigin):
