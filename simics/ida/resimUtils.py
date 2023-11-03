@@ -43,11 +43,16 @@ def dumpFuns(fname=None):
             fname = idaversion.get_input_file_path()
     image_base = os.getenv('target_image_base')
     if image_base is not None and len(image_base.strip())>0:
-        current_base = idautils.peutils_t().imagebase
         image_base = int(image_base, 16)
+        current_base = idaapi.get_imagebase()
+        #current_base = idautils.peutils_t().imagebase
         delta = image_base - current_base 
         print('image base is 0x%x current_base is 0x%X, delta 0x%x' % (image_base, current_base, delta))
-        ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
+        if delta != 0:
+            print('image base is 0x%x current_base is 0x%X, delta 0x%x' % (image_base, current_base, delta))
+            ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
+        else:
+            print('image base is 0x%x current_base is 0x%X, no rebase needed' % (image_base, current_base))
         ida_loader.set_database_flag(ida_loader.DBFL_KILL)
     else:
         print('No image base found as env variable, using existing image_base')

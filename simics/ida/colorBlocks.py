@@ -59,13 +59,18 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     info = idaapi.get_inf_structure()
     if info.is_dll():
         image_base = ida_nalt.get_imagebase()
-    print('image_base is 0x%x' % image_base)
+        print('image_base is 0x%x, is_dll called ida_nalt.get_imagebase' % image_base)
+    else:
+        image_base = idaapi.get_imagebase()
+        print('image_base is 0x%x from idaapi.get_imagebase' % image_base)
     fname = idaversion.get_input_file_path()
 
-    orig_image_base = os.getenv('original_image_base')
+    orig_image_base = os.getenv('target_image_base')
     if orig_image_base is not None and len(orig_image_base.strip())>0:
         offset = image_base - int(orig_image_base,16)
+        print('offset set to image_base less orig_image_base 0x%x' % offset)
     else:
+        print('The orig_image_base (from target_image_base env) was None offset set to image_base 0x%x' % image_base)
         offset = image_base
 
     print('offset is 0x%x' % offset)
@@ -74,8 +79,8 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         f = idaapi.get_func(bb)
         if f is None:
             print('Error getting function for bb 0x%x' % bb)
-            return
-            #continue
+            #return
+            continue
         f_start = f.start_ea
         if f_start not in graph_dict:
             graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
