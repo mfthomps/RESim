@@ -51,14 +51,14 @@ class IDAFuns():
                     if fun_name.startswith('__imp__'):
                         fun_name = fun_name[7:]
                     fun_name = rmPrefix(fun_name)
+                    adjusted = fun_rec['start'] + offset
+                    fun = adjusted
                     if fun_name in self.mangle:
                         lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
                         demangled = self.mangle[fun_name]
                         fun_name = rmPrefix(demangled)
                         fun_rec['name'] = fun_name
                         lgr.debug('demangled function name for 0x%x changed to %s' % (fun, fun_name))
-                    adjusted = fun_rec['start'] + offset
-                    fun = adjusted
                     fun_rec['start'] = adjusted
                     fun_rec['end'] = fun_rec['end'] + offset
                     ''' index by load address to avoid collisions '''
