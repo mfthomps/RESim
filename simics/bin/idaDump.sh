@@ -57,7 +57,7 @@ ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
 other_ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
 
 if [ -z "$IDA_ANALYSIS" ]; then
-    export IDA_ANALYSIS=/mnt/resim_archive/analysis
+    export IDA_ANALYSIS=/mnt/resim_eems/resim/archive/analysis
 fi
 if [[ $target = $here/* ]]; then
     target=$(realpath --relative-to="${PWD}" "$target")
@@ -75,10 +75,11 @@ if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
     # using ida_segment.rebase_program(offset, MSF_FIXONCE) and exit WITHOUT saving db
     export target_image_base=$(readpe "$ida_target_path" | grep ImageBase | awk '{print$2}')
     if [ -z $target_image_base ]; then
-        export target_image_base=$(readelf -WS "$ida_target_path" | grep .text | awk '{print $4}')
+        echo "read ELF header to get image base"
+        export target_image_base=$(readelf -l "$ida_target_path" | grep -m1 LOAD | awk '{print $3}')
     fi
     echo "image_base is $target_image_base"
-    echo $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
+    echo $idacmd -L/tmp/idaDump.log -A -a -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
     $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py "$ida_db_path"
 else
     echo "No IDA db at $ida_db_path  create it."
