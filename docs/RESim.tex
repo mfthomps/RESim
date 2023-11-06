@@ -32,8 +32,8 @@ platform's high fidelity models of processors, peripheral devices (e.g., network
 rather than instrumenting the software.
 
 RESim aids reverse engineering of networks of Linux-based systems\footnote{And preliminary support for analyzing Windows applications, see \ref{Windows}.} by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is recorded through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of the kernel hosting the processes.
-The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicity modify memory or register content, and can also dynamically augment memory 
-based on system events, e.g., change a password file entry as it is read by the {\tt su} program (see the dmod function described in\ref{dmod}).
+The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicitly modify memory or register content, and can also dynamically augment memory 
+based on system events, e.g., change a password file entry as it is read by the {\tt su} program (see the Dmod function described in\ref{dmod}).
 
 RESim also provides interactive analysis of individual executing programs through use of either the IDA Pro or the Ghidra
 disassembler/debugger to control the running simulation.  The disassembler/debugger
@@ -55,7 +55,7 @@ information about currently running processes.
 \includegraphics{resimfig.eps}
 
 \subsection{This Guide}
-The remainer of this introduction provides an overview of RESim features and its limitations and availability.  Following the introduction:
+The remainder of this introduction provides an overview of RESim features and its limitations and availability.  Following the introduction:
 \begin{itemize}
 \item Section \ref{workflow} 
 describes a notional workflow, highlighting functions and features of RESim and how an analyst might use them to reverse engineer a 
@@ -181,7 +181,7 @@ processors and interface devices, e.g., network cards, disks and system consoles
 the initial RAM disk, one ethernet and serial ports.
 \end{itemize}
 
-Other platforms can be modeled via Simics, the detailes of which are beyond the scope of this manual.
+Other platforms can be modeled via Simics, the details of which are beyond the scope of this manual.
 Once a system is modeled and referenced by a RESim configuration file, a RESim script is run, naming the configuration file.
 
 \subsection{Kernel parameter extraction}
@@ -329,7 +329,7 @@ Use an optional {\tt run=False} to prevent RESim from continuing the simulation,
 See section \ref{maze}.
 
 \item {\tt instructTrace(file, all\_proc=False, kernel=False, watch\_threads=False) -- Generate an instruction trace and save it into the named file. Use the kernel
-flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all threads of the current process.}
+flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all threads of the current process.}  The file name is relative to /tmp.
 \end{itemize}
 
 \subsection{Saving state}
@@ -395,7 +395,7 @@ threads that are waiting in the kernel.  If you want to run ahead to let the sys
 \item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
 
 \item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
-uses the IDA-generated function database ({\tt .fun} files stored wtih the {\tt .idb} files to aid in determining if 
+uses the IDA-generated function database ({\tt .fun} files stored with the {\tt .idb} files to aid in determining if 
 potential instruction calls are to functions.  The monitor-local {\tt stackTrace} command displays a
 stack trace that uses the IDA function database to resolve names.  (TBD, does not yet handle plt, and thus shows call addresses for such calls).
 This function is not always reliable, e.g., phantom frames may appear based on calls that occurred previously. ARM stack frames may be
@@ -655,6 +655,17 @@ Consider providing prepInject with largish amounts of data to ensure buffers tha
 
 Use the {\tt commence=string} option to ignore input that does not start with the given string.  
 
+For TCP traffic, one approach is to use {\tt runToAccept} and then use prepInject on the resulting FD.
+
+The prepInject function works by observing buffers provided for data read via kernel system calls, e.g., {\tt recv}.  And this only works if when RESim has recorded 
+the system call, e.g., while debugging a process.
+If a process enters the kernel, e.g, via select, during a period in which the process is not being debugged, then RESim will not note its return
+to user space and thus will observe the location of its associated data.  This may not be an issue with TCP traffic in which you wish to inject data subsequent to
+the attach because the kernel will be blocking on a select or the attach itself and thus RESim will see the subsequent calls to recv.
+
+For UDP traffic, if you have a system state in which you've run forward subsequent to debugging, e.g., you used debugProc on the process and then subsequently ran forward without debugging,
+you can insure that RESim sees your data by sending multiple items to the target and using the count option.
+
 \item{\tt prepInjectWatch(watchmark, configfile)} -- For use when preparing to inject data directly into kernel buffers.  This call is intended for use when the application
 makes multiple kernel read/recv calls, e.g., character-at-a-time reads.
 Similar to prepInject but takes the index of a watch 
@@ -697,7 +708,7 @@ does not generate a new total hits file, it only creates coverage files.
 
 If processes exit during replay, those will be reported after {\tt playAFL} completes replaying the sessions.
 
-\item{\tt crashReport(dfile)} Generate crash reports for each crash discovred by AFL.  The given {\tt dfile} is as defined in the {\tt playAFL} command
+\item{\tt crashReport(dfile)} Generate crash reports for each crash discovered by AFL.  The given {\tt dfile} is as defined in the {\tt playAFL} command
 NOTE: when handling multi-packet data sets, use the {\tt crashReport.py} utility (see section \ref{utilities} to launch RESim multiple times,
 one for each data file.  The reports are written to /tmp/crash\_reports.
 
@@ -1532,7 +1543,9 @@ The associated hueristic is intended to catch reuse of stack buffers to avoid fa
 may miss accesses to buffers.  And beware of missed removals, i.e., you may spend time trying to account for access to data within memory
 no longer retaining any semblance of your input data.
 
-
+Tracking data read via kernel system calls, e.g., {\tt recv} only works if when RESim has recorded the system call, e.g., while debugging a process.
+If a process enters the kernel, e.g, via select, during a period in which the process is not being debugged, then RESim will not note its return
+to user space and thus will not track associated data.
 
 \subsubsection{Watch Marks}
 Watch marks identify references to input data.  Each mark describes the reference.  For example:
@@ -2127,24 +2140,58 @@ Then use the {\tt fuzzhappening.py} script to observe the status of the fuzzing 
 
 \section{Example workflows}
 \label{example-workflows}
-\subsection{Watch consumption of a UDP packet}
-Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
-Start the monitor and map the desired port to a real ethernet device.
-Debug the desired process/pid, e.g., {\tt @cgc.debugPidGroup(875)}.  Track the IO, e.g., {\tt @cgc.trackIO(14)},
-then cat the packet, e.g.,
-\begin{verbatim}
-    cat mypacket > /dev/udp/127.0.0.1/60005
-\end{verbatim}
+This section describes steps an analyst might take when using RESim to reverse engineer and analyze target systems.
 
-Start IDA with the desired program.  Attached to the process and run the rev.py plugin.  Then go to the ``data watch'' window and
-refresh.  That will list all instances of references to the content of the UDP packet. 
+\subsection{Analysis of a specific service behavior}
+This example describes the use of RESim to understand why a service is generating an unexpected response to an input.  Assume the target has
+a web server that you believe should respond to a specific URL, e.g., by proxying the request to another service, and yet you only see a 404 error.
+A first step is to use traceAll to generate a trace of all system calls made by the service when it receives the selected input.  Things you might
+look for in the trace output include attempts to open files; attempts to connect to sockets; and diagnostic messages provided by the programmer.
+In many cases, programmers provide debugging messages that can aid understanding of the program behavior.  You may see messages that are written
+to /dev/null, or other some other FD.  Using the traceFD function will redirect all of those messages to a file for your review.  
+
+A next step is to use trackIO and/or injectIO to generate watch marks denoting execution points at which the target application references
+ingested data.  This step typically uses the {\tt drive-driver.py} utility to send test data via the driver component.  This is necessary to 
+permit reverse execution, which is required by trackIO and injectIO.  Bringing the target up in the IDA or Ghidra debugger lets you see the execution
+context at the various watch marks and interactively debug the program.  Things you might look for include calls to logging subsystems that do
+not appear to generate any system calls, i.e., do not generate output and thus did not appear in the system trace.  This may be due to configuration 
+values within logging software, e.g., setting a ``debug level''.  Look for {\tt sprintf}-type functions
+and calls to generate timestamps.  You may be able to identify execution paths that you can alter with RESim jumpers or via the use of regSet.
+
+Other things to look for while using trackIO or injectIO include references to that portion of the URL that you think should lead to the function that is
+not occurring.  You may find {\tt strcmp}-type functions or configuration data that inhibit the expected paths.  You can then consider running AFL on the
+target, using HTTP that names your URL as the only seed.  That might expose execution paths that you were unable to foresee using the debugger.
+
+\subsection{Watch consumption of a UDP packet}
+\begin{itemize}
+\item Open a pcap with Wireshark. Select the data of the packet, right click and export the selected packet bytes into your simics workspace.
+
+\item Use the {\tt driver-script.sh} to configure the driver computer network to share a subnet with the target computer such that the driver
+can reach the target.  And use the mapdriver.sh to make sure you can ssh to the driver from your host.
+
+\item Create a \textit{directive} file within your workspace for use with {\tt drive-driver.py}.  Create a 2nd terminal with a shell in your workspace
+and tee up the drive-driver.y command.
+
+\item Debug the desired process e.g., {\tt debugProc('some-program')}, or {\tt debugSnap()} if the snapshot had been made of the process subsequent
+to a {\tt debugProc}.  Be sure the program state is beyond the bind system call and you know the FD upon which the bind occurred.
+
+\item Use {\tt trackIO(FD)} to track input on the FD returned by the bind call.
+ 
+\item Run the {\tt drive-driver.py} command from the other terminal and wait for RESim to report the data watch has completd.
+
+\item Start IDA with the desired program (e.g, use {\tt runIda program}.  Use shift-r to attach to the debugger and load the RESim plugin.
+Then go to the ``data watch'' window and refresh.  That will create a list of watch marks, i.e., program references to the content of the UDP packet. 
+
+\item Double click on  watch marks to jump to that execution state.
+
+\end{itemize}
 
 \subsection{Reverse engineer a service}
 This example assumes you want to understand how a program consumes
 data on a specific TCP port.
 
 \begin{itemize}
-\item Run the monitor on a configuration having the target and a driver.
+\item Run RESim on a configuration having the target and a driver.
 
 \item Use {\tt traceAll} to generate a system call trace and the {\tt saveTraces} to generate
 trace artifacts.
@@ -2160,7 +2207,7 @@ with the target.
 \item Restart RESim and debugProc the target program. 
 
 \item Use writeConfig to save a snapshot so that you can return to this point.
-If you exit RESim modify the ini file to reflect this snapshot and subsequently
+If you exit RESim, modify the ini file to reflect this snapshot and subsequently
 use {\tt debugSnap} to return to debugging.
 
 \item Use runToBind and observe the FD (either in the log
@@ -2787,6 +2834,9 @@ continued without debugging if there is a snapshot.  Use hap that catches contin
 
 \item The ida .idb files are per-user, but the function dumps are shared.  Thus function names may not match.  Add tool to upate idb based
 on function list?
+
+\item (DONE) runToWM may diverge if dataWatch code changes, e.g., the trackio artifacts differ from what you'd see now.  Change the function to
+look for the address as it does its processing, and then jump to it rather than relying on the watch mark  given by the trackio artifact.
 \end{itemize}
 
 \subsection{I/O via threads}
