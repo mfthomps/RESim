@@ -1176,8 +1176,9 @@ class GenMonitor():
                 self.lgr.debug('cmd: %s' % cmd)
                 try:
                     SIM_run_command(cmd)
-                except simics.SimExc_General:
-                    self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack?')
+                #except simics.SimExc_General:
+                except SimExc_General as e:
+                    self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
                 self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
                 self.debugger_target = self.target
 

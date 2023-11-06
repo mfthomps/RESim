@@ -1558,7 +1558,7 @@ class GetKernelParams():
             try:
                 SIM_continue(0)
                 self.lgr.debug('continueAhead did continue')
-            except simics.SimExc_General:
+            except SimExc_General:
                 self.lgr.debug('continueAhead exception on SIM_continue')
                 pass
         else:
