@@ -63,7 +63,7 @@ no_ghosts = ['charLookup']
 ''' TBD confirm end_cleanup is a good choice for free'''
 free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc']
 # remove allocators, should not get that as windows function
-allocators = ['string_basic_windows', 'malloc']
+allocators = ['string_basic_windows', 'malloc', 'ostream_insert']
 char_ring_functions = ['ringqPutc']
 mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
 class MemSomething():
@@ -3185,7 +3185,7 @@ class DataWatch():
                                 self.lgr.debug('DataWatch readHap not memsomething add fun 0x%x to not_mem_something' % fun)
                                 self.not_mem_something.append(fun)
                         else:
-                            self.lgr.debug('dataWatch not checkFree maybe memstuff?')
+                            self.lgr.debug('dataWatch not checkFree and not lookForMemStuf')
                     else:
                         #self.lgr.debug('dataWatch was checkFree')
                         pass
@@ -3945,11 +3945,13 @@ class DataWatch():
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
                     self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                else:
+                    self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
                 if fun is not None and fun == prev_fun and fun != 'None':
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
                 else:
-                    #self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
+                    self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
                     prev_fun = fun
                 if op_type == Sim_Trans_Store and fun in allocators:
                     # TBD generalize this mess
@@ -4328,3 +4330,6 @@ class DataWatch():
         else:
             self.lgr.debug('dataWatch oneByteCopy memsomething is none') 
         return retval
+
+    def findMarkIp(self, ip):
+        return self.watchMarks.findMarkIp(ip)

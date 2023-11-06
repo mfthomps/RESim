@@ -4131,6 +4131,9 @@ class GenMonitor():
         self.track_finished = True
 
     def goToDataMark(self, index):
+        if index is None:
+            print('goToDataMark called with no index, perhaps that mark does not exist?')
+            return None
         was_watching = self.context_manager[self.target].watchingThis()
         self.lgr.debug('goToDataMark(%d)' % index)
 
@@ -5085,7 +5088,7 @@ class GenMonitor():
         ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
 
     def injectToWM(self, addr, fname=None):
-        iwm = injectToWM.InjectToWM(self, addr, self.lgr, fname=fname)
+        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname)
 
     def getParam(self):
         return self.param[self.target]
@@ -5375,6 +5378,9 @@ class GenMonitor():
 
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
+        if self.fun_mgr is None:
+            print('No function manager yet, are you debugging?')
+            return
         fname = self.fun_mgr.funFromAddr(addr)
         if fname is not None:
             print('Function for address 0x%x is %s' % (addr, fname))
