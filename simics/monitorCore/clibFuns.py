@@ -146,6 +146,10 @@ def adjustFunName(frame, fun_mgr, lgr):
                 fun = fun.split('__')[1]
             if '<' in fun:
                 fun = fun.split('<')[0]
+      
+            if fun.startswith('_Rep::_'):
+                fun = fun[len('_Rep::_'):]
+            
         else:
             #lgr.debug('clibFuns fun name was none')
             pass
