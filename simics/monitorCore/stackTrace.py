@@ -907,7 +907,8 @@ class StackTrace():
                                 instruct_str = '%s   %s' % (self.callmn, fun)
                                 #self.lgr.debug('StackTrace no cur_fun_name, instruct_str set to %s' % instruct_str)
                         else:
-                            self.lgr.debug('stackTrace fun was None from instruct %s' % instruct[1])
+                            #self.lgr.debug('stackTrace fun was None from instruct %s' % instruct[1])
+                            pass
                         if fun_hex is not None:
                             #self.lgr.debug('stackTrace fun_hex 0x%x, fun %s instr %s' % (fun_hex, fun, instruct_str))
                             ''' TBD fix for windows '''
