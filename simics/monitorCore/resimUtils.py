@@ -471,9 +471,10 @@ def cutRealWorld():
 def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None):
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
-        analysis_path = '/mnt/resim_archive/analysis'
-    if lgr is not None:
-        lgr.error('getProgPathFromAnalysis no IDA_ANALYSIS defined as env variable.')
+        if lgr is not None:
+            lgr.error('getProgPathFromAnalysis no IDA_ANALYSIS defined as env variable.')
+        else:
+            print('ERROR getProgPathFromAnalysis no IDA_ANALYSIS defined as env variable.')
         return None
     relative = full_analysis_path[len(analysis_path)+1:] 
     if lgr is not None:
@@ -531,6 +532,6 @@ def isClib(lib_file):
     retval = False
     if lib_file is not None:
         lf = lib_file.lower()
-        if 'libc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
+        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
             retval = True
     return retval
