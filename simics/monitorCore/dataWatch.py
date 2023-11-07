@@ -44,6 +44,7 @@ import pickle
 import traceback
 import reWatch
 import clibFuns
+import markCompare
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strtok', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
@@ -63,7 +64,7 @@ no_ghosts = ['charLookup']
 ''' TBD confirm end_cleanup is a good choice for free'''
 free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc']
 # remove allocators, should not get that as windows function
-allocators = ['string_basic_windows', 'malloc', 'ostream_insert']
+allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
 mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
 class MemSomething():
@@ -788,18 +789,8 @@ class DataWatch():
                 print('%s  reg: 0x%x  addr:0x%x mval: 0x%08x' % (instruct[1], val, addr, mval))
           
     def getCmp(self):
-        retval = '' 
-        eip = self.top.getEIP(self.cpu)
-        for i in range(10):
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            if instruct[1].startswith('cmp') or instruct[1].startswith('test'):
-                retval = instruct[1]
-                break
-            elif instruct[1].startswith('pop') and 'pc' in instruct[1]:
-                break
-            else:
-                eip = eip + instruct[0]
-        return retval
+        mark_compare = markCompare.MarkCompare(self.top, self.cpu, self.lgr)
+        return mark_compare
            
     def deleteReturnHap(self, hap): 
         if hap is not None:
@@ -3945,8 +3936,15 @@ class DataWatch():
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
                     self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                elif frame.fun_addr is not None:
+                    if frame.ip is not None and frame.sp is not None:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
+                    else:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is None ip or sp is none' % i)
+                        continue
                 else:
-                    self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
+                    self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr is none' % i)
+                    continue
                 if fun is not None and fun == prev_fun and fun != 'None':
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue

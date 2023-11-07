@@ -113,9 +113,9 @@ class DataMark():
             if self.offset != 0 or self.trans_size != self.length:
                 offset_string = 'offset %4d into 0x%08x (buf size %4d)' % (self.offset, self.start, self.length)
             if self.note is None:
-                mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.cmp_ins)
+                mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.cmp_ins.toString())
             else:
-                mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins)
+                mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins.toString())
         elif self.ad_hoc or self.was_ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
@@ -130,7 +130,7 @@ class DataMark():
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
-                 self.end_addr, copy_length, self.offset, self.start, self.length, self.cmp_ins)
+                 self.end_addr, copy_length, self.offset, self.start, self.length, self.cmp_ins.toString())
         return mark_msg
 
     def addrRange(self, addr):
@@ -1302,6 +1302,8 @@ class WatchMarks():
                 entry['reference_buffer'] = mark.mark.start
                 entry['trans_size'] = mark.mark.trans_size
                 entry['value'] = mark.mark.value
+                if mark.mark.cmp_ins is not None:
+                    entry['compare'] = mark.mark.cmp_ins.toString()
             elif isinstance(mark.mark, DataMark) and mark.mark.modify:
                 entry['mark_type'] = 'write' 
                 entry['addr'] = mark.mark.addr
