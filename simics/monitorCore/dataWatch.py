@@ -484,7 +484,9 @@ class DataWatch():
                         self.watch(i_am_alone=True)
                         break
         #self.lgr.debug('dataWatch overlap %r test if copymark %s' % (overlap, str(watch_mark)))
-        if not overlap or self.isCopyMark(watch_mark):
+        #if not overlap or self.isCopyMark(watch_mark):
+        # TBD why care if a copy mark?
+        if not overlap:
             self.start.append(start)
             self.length.append(my_len)
             self.hack_reuse.append(0)
@@ -3172,9 +3174,10 @@ class DataWatch():
                         if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, fun):
                             #self.lgr.debug('dataWatch, not memstuff, do finishRead')
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
-                            if fun is not None and fun not in self.not_mem_something:
-                                self.lgr.debug('DataWatch readHap not memsomething add fun 0x%x to not_mem_something' % fun)
-                                self.not_mem_something.append(fun)
+                            # TBD already done in lookForMemStuff?
+                            #if fun is not None and fun not in self.not_mem_something:
+                            #    self.lgr.debug('DataWatch readHap not memsomething add fun 0x%x to not_mem_something' % fun)
+                            #    self.not_mem_something.append(fun)
                         else:
                             self.lgr.debug('dataWatch not checkFree and not lookForMemStuf')
                     else:
@@ -3185,10 +3188,10 @@ class DataWatch():
 
     def cheapReuse(self, eip, addr, size):
         retval = False
-        if self.top.isWindows(target=self.cell_name):
-            fun_name = self.fun_mgr.funFromAddr(eip)
-            self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s' % (addr, eip, fun_name))
-            if fun_name is not None:
+        fun_name = self.fun_mgr.funFromAddr(eip)
+        self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s' % (addr, eip, fun_name))
+        if fun_name is not None:
+            if self.top.isWindows(target=self.cell_name):
                 if fun_name in mem_funs:
                     if self.mem_something is None or self.mem_something.count != 1 or size != 1 or addr != self.mem_something.src:
                         self.lgr.debug('dataWatch cheapReuse mod within memsomething. Remove buffer 0x%x TBD too crude.' % addr)
@@ -3196,6 +3199,11 @@ class DataWatch():
                         retval = True
                 elif 'destructor' in fun_name:
                     self.lgr.debug('dataWatch cheapReuse mod looks like destructor addr 0x%x, TBD roll into other free functions?' % addr)
+                    self.rmRange(addr)
+                    retval = True
+            else:
+                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_'):
+                    self.lgr.debug('dataWatch cheapReuse mod is construtor of some kind and we think we missed a free.  Assume reuse')
                     self.rmRange(addr)
                     retval = True
         if not retval:
@@ -3949,7 +3957,7 @@ class DataWatch():
                     #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
                 else:
-                    self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
+                    #self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
                     prev_fun = fun
                 if op_type == Sim_Trans_Store and fun in allocators:
                     # TBD generalize this mess
