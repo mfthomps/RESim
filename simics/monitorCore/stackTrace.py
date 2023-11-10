@@ -60,10 +60,14 @@ class StackTrace():
             ''' where the ret_addr was read from '''
             self.ret_to_addr = ret_to_addr
         def dumpString(self):
-            if self.ret_addr is not None:
-                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, self.ret_addr)
+            if self.fun_addr is None:
+                fun_addr = 'fun_addr: None'
             else:
-                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x ' % (self.ip, self.fname, self.instruct, self.sp)
+                fun_addr = 'fun_addr: 0x%x' % self.fun_addr
+            if self.ret_addr is not None:
+                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x %s ret_addr: 0x%x' % (self.ip, self.fname, self.instruct, self.sp, fun_addr, self.ret_addr)
+            else:
+                return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x %s' % (self.ip, self.fname, self.instruct, self.sp, fun_addr)
 
     def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, fun_mgr, targetFS, 
                  reg_frame, lgr, max_frames=None, max_bytes=None):
@@ -717,7 +721,7 @@ class StackTrace():
         if self.soMap.isAboveLibc(eip):
             been_in_main = True
             if self.cpu.architecture != 'arm' or not self.soMap.isMainText(self.reg_frame['lr']):
-                self.lgr.debug('stackTrace starting in main with lr that is not above libc, text set prev_ip to 0x%x' %eip)
+                #self.lgr.debug('stackTrace starting in main with lr that is not above libc, text set prev_ip to 0x%x' %eip)
                 prev_ip = eip
         #prev_ip = eip
         if self.fun_mgr is None:
@@ -742,10 +746,10 @@ class StackTrace():
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         if prev_ip is None and self.cpu.architecture == 'arm':
             prev_ip = self.isCallToMe(fname, eip)
-            #if prev_ip is not None:
-            #    self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
-            #else:
-            #    self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
+            if prev_ip is not None:
+                self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+            else:
+                self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
         
         cur_fun = None
         cur_fun_name = None
@@ -915,15 +919,18 @@ class StackTrace():
                             if not self.top.isWindows():
                                 self.soCheck(fun_hex)
                         else:
-                            if prev_ip is not None and self.fun_mgr is not None:
-                                fun_hex = self.fun_mgr.getFun(prev_ip)
+                            if prev_ip is None:
+                                #self.lgr.debug('stackTrace fun_hex is none and no prev_ip??? but ip is 0x%x, use that to get fun_hex' % eip)
+                                use_ip = eip
+                            else:
+                                use_ip = prev_ip
+                            if self.fun_mgr is not None:
+                                fun_hex = self.fun_mgr.getFun(use_ip)
                                 if fun_hex is not None:
                                     fun = self.fun_mgr.getFunName(fun_hex)
                                     #self.lgr.debug('stackTrace fun_hex hacked to 0x%x using prev_ip and fun to %s.  TBD generalize this' % (fun_hex, fun))
                                     instruct_str = '%s   %s' % (self.callmn, fun)
-
                                     pass
-
                                 
                         #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct_str, ptr, call_ip))
                         fname = self.soMap.getSOFile(val)
@@ -952,6 +959,8 @@ class StackTrace():
                             if not skip_this:
                                 if self.cpu.architecture == 'arm':
                                     ret_addr = call_ip + 4
+                                    if fun_hex is None:
+                                        self.lgr.debug('stackTrace FUN HEX NONE')
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
                                 else:
                                     #self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
