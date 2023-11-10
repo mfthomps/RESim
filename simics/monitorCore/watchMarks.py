@@ -3,6 +3,7 @@ import pickle
 import json
 import os
 import sys
+import markCompare
 class CallMark():
     def __init__(self, msg, max_len, recv_addr, length, fd, is_lib=False):
         if recv_addr is not None:
@@ -69,7 +70,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, cmp_ins, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None):
+    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -81,11 +82,11 @@ class DataMark():
         self.start = start
         ''' length of the accessed buffer '''
         self.length = length
-        self.cmp_ins = cmp_ins
+        self.mark_compare = mark_compare
         ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
-            #self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
+            self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
         # becomes the length of an ad-hoc copy
@@ -113,9 +114,9 @@ class DataMark():
             if self.offset != 0 or self.trans_size != self.length:
                 offset_string = 'offset %4d into 0x%08x (buf size %4d)' % (self.offset, self.start, self.length)
             if self.note is None:
-                mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.cmp_ins.toString())
+                mark_msg = 'Read %d from 0x%08x %s %s' % (self.trans_size, self.addr, offset_string, self.mark_compare.toString())
             else:
-                mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.cmp_ins.toString())
+                mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.mark_compare.toString())
         elif self.ad_hoc or self.was_ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
@@ -130,13 +131,14 @@ class DataMark():
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
-                 self.end_addr, copy_length, self.offset, self.start, self.length, self.cmp_ins.toString())
+                 self.end_addr, copy_length, self.offset, self.start, self.length, self.mark_compare.toString())
         return mark_msg
 
     def addrRange(self, addr):
-        self.end_addr = addr
-        self.loop_count += 1
-        self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
+        if self.end_addr is not None or addr > self.addr:
+            self.end_addr = addr
+            self.loop_count += 1
+            self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
 
     def noAdHoc(self):
         if self.ad_hoc:
@@ -601,14 +603,17 @@ class WatchMarks():
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, cmp_ins, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None): 
+    def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None): 
         if ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = None
+        # start with an empty one so toString does not die
+        mark_compare = self.getCmp(None, None)
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc and not note:
             value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
-            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
+            mark_compare = self.getCmp(addr, trans_size)
+            dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
             wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
@@ -638,28 +643,33 @@ class WatchMarks():
                     sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
+                    dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
                     wm = self.addWatchMark(dm)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
         elif note is not None:
-            dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr, note=note, dest=dest)
+            dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, note=note, dest=dest)
             wm = self.addWatchMark(dm)
             #self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
+            # looking for multiple iterations over data range at same instruction
+            self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
-                if isinstance(pm.mark, DataMark):
+                if isinstance(pm.mark, DataMark) and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
                     pm.mark.addrRange(addr)
                     pm.cycle = self.cpu.cycles
                     if pm.mark.ad_hoc:
-                        #self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
+                        self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
-                    #self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
+                    self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
                 else:
-                    dm = DataMark(addr, start, length, cmp_ins, trans_size, self.lgr)
-                    wm = self.addWatchMark(dm, cycles=cycles)
+                    # not an iteration after all.  treat as regular data mark
+                    value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
+                    mark_compare = self.getCmp(addr, trans_size)
+                    dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
+                    wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
                     #self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s' % (ip, dm.getMsg()))
         self.recordIP(ip)
         #if wm is None:
@@ -1174,6 +1184,10 @@ class WatchMarks():
                 break
         return retval
 
+    def getCmp(self, addr, trans_size):
+        mark_compare = markCompare.MarkCompare(self.top, self.cpu, self.mem_utils, addr, trans_size, self.lgr)
+        return mark_compare
+
     def loadPickle(self, name):
         mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
         if os.path.isfile(mark_file):
@@ -1302,8 +1316,8 @@ class WatchMarks():
                 entry['reference_buffer'] = mark.mark.start
                 entry['trans_size'] = mark.mark.trans_size
                 entry['value'] = mark.mark.value
-                if mark.mark.cmp_ins is not None:
-                    entry['compare'] = mark.mark.cmp_ins.toString()
+                if mark.mark.mark_compare is not None:
+                    entry['compare'] = mark.mark.mark_compare.toString()
             elif isinstance(mark.mark, DataMark) and mark.mark.modify:
                 entry['mark_type'] = 'write' 
                 entry['addr'] = mark.mark.addr
