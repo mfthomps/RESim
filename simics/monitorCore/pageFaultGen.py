@@ -589,16 +589,15 @@ class PageFaultGen():
         return retval
 
     def hasPendingPageFault(self, tid):
+        retval = False
         if tid in self.pending_faults:
             prec = self.pending_faults[tid]
             if prec.page_fault:
-                self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault cr2 0x%x' % (tid, prec.name, prec.cr2))
+                self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending page fault cr2 0x%x' % (tid, prec.name, prec.cr2))
+                retval = True
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))
-            return True
-        else:
-            return False
-
+        return retval
     def getPendingFault(self, tid):
         if tid in self.pending_faults:
             return self.pending_faults[tid]
