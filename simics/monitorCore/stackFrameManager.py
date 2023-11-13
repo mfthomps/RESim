@@ -78,7 +78,7 @@ class StackFrameManager():
             self.stack_cache[cycle] = st
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -105,7 +105,7 @@ class StackFrameManager():
             reg_frame = self.task_utils.frameFromRegs()
             st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                     self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                    reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes)
+                    reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
             self.stack_cache[cycle] = st
         return st
 
