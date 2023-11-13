@@ -121,29 +121,6 @@ class FunMgr():
         else:
             return False
 
-    def getIDAFunsOld(self, full_path, root_prefix):
-        full_path = resimUtils.realPath(full_path)
-        fun_path = full_path+'.funs'
-        iterator_path = full_path+'.iterators'
-        root_dir = os.path.basename(root_prefix)
-        self.user_iterators = userIterators.UserIterators(iterator_path, self.lgr, root_dir)
-        if not os.path.isfile(fun_path):
-            ''' TBD REMOVE THIS...        No functions file, check for symbolic links '''
-            if os.path.islink(full_path):
-                parent = os.path.dirname(full_path)
-                actual = os.readlink(full_path)
-                actual = os.path.join(parent, actual)
-                self.lgr.debug('getIDAFuns is link, actual %s' % actual)
-                fun_path = actual+'.funs'
-
-        if os.path.isfile(fun_path):
-            if self.top.isWindows():
-                self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr)
-            else: 
-                self.ida_funs = idaFuns.IDAFuns(fun_path, self.lgr)
-            self.lgr.debug('getIDAFuns using IDA function analysis from %s' % fun_path)
-        else:
-            self.lgr.warning('No IDA function file at %s' % fun_path)
 
     def getIDAFuns(self, full_path, root_prefix, offset):
         if not self.top.isWindows():
@@ -165,9 +142,9 @@ class FunMgr():
                 self.setRelocateFuns(analysis_path, offset=offset)
                 self.lgr.debug('getIDAFuns using IDA function analysis from %s' % fun_path)
             else:
-                self.lgr.debug('getIDAFuns No IDA function file at %s try using old paths ' % fun_path)
-                self.getIDAFunsOld(full_path, root_prefix)
-                self.setRelocateFuns(full_path)
+                self.lgr.error('getIDAFuns No IDA function file at %s' % fun_path)
+                #self.getIDAFunsOld(full_path, root_prefix)
+                #self.setRelocateFuns(full_path)
 
         else:
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
