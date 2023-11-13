@@ -90,7 +90,8 @@ class MarkCompare():
                 our_reg = None 
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if instruct[1].startswith('ldr') or instruct[1].startswith('mov'):
-                    our_reg, op1 = self.decode.getOperands(instruct[1])
+                    op2, our_reg = self.decode.getOperands(instruct[1])
+                    self.lgr.debug('markCompare  findCompare got %s, our_reg %s' % (instruct[1], our_reg))
                 eip = eip + instruct[0]
                 relevent = False
                 for i in range(9):
@@ -98,6 +99,8 @@ class MarkCompare():
                     if instruct[1].startswith('cmp') or instruct[1].startswith('test'):
                         if our_reg is not None and our_reg in instruct[1]:
                             relevent = True
+                        else:
+                            self.lgr.debug('markCompare  findCompare got %s, BUT MISSING our reg %s' % (instruct[1], our_reg))
                         self.compare_instruction = instruct[1]
                         self.compare_eip = eip
                         if not relevent:
