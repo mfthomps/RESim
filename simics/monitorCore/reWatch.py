@@ -34,6 +34,7 @@ This module will generate watch marks on references to pointers to characters fo
 part of byte map lookups.  The dataWatch module manages watch marks for the initial
 character lookup.
 '''
+match_funs = ['charLookup', 'charLookupX', 'charLookupY']
 def findRegValue(reg, instruct_history, decode, mem_utils, cpu, lgr):
         retval = None
         done = False
@@ -61,7 +62,7 @@ def findRegValue(reg, instruct_history, decode, mem_utils, cpu, lgr):
         return retval
 
 class REWatch(object):
-    def __init__(self, addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val):
+    def __init__(self, addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val, match_type):
         self.addr = addr
         self.ip = ip
         self.decode = decode
@@ -73,6 +74,7 @@ class REWatch(object):
         self.top = top
         self.lgr = lgr
         self.base_val = base_val
+        self.match_type = match_type
         self.map_start = []
         self.map_length = []
         self.map_read_hap = []
@@ -92,6 +94,8 @@ class REWatch(object):
     def isCharLookup(cls, addr, ip, instruct, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr):
         retval = None
         op2, op1 = decode.getOperands(instruct[1])
+        # distinguish different function signatures
+        match_type = 0
         #lgr.debug('reWatch isCharLookup evaluate hit addr 0x%x ip: 0x%x %s' % (addr, ip, instruct[1]))
         ''' TBD generalize for x86 '''
         if decode.isLDRB(cpu, instruct[1]) and decode.isReg(op1):
@@ -123,7 +127,13 @@ class REWatch(object):
                             offset_str = inbracket.split(',')[1]
                             offset = decode.getValue(offset_str, cpu)
                             base_val = base_val + offset
-                            return cls(addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val)
+                            if match_type == 0:
+                                fun = top.getFunName(ip)
+                                if fun is None:
+                                    lgr.debug('reWatch isCharLookup no fun name was match type 0, assign match type 2  TBD???')
+                                    match_type = 2
+
+                            return cls(addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val, match_type)
                     break
                 else:
                     if next_instruct[1].startswith('cmp'):
@@ -156,6 +166,12 @@ class REWatch(object):
                                 else:
                                     #lgr.debug('reWatch isCharLookup not branch instruction %s' % branch_instruct[1])
                                     pass
+                                fun = top.getFunName(ip)
+                                if fun is None:
+                                    lgr.debug('reWatch isCharLookup no fun name, assign match type 2')
+                                    match_type = 2
+                                else:
+                                    match_type = 1
                             else:
                                 lgr.debug('reWatch isCharLookup failed to find reg value')
                                 break
@@ -220,7 +236,8 @@ class REWatch(object):
             if f.ret_addr is None:
                 self.lgr.error('reWatch getMemSomething f.ret_addr is None')
             else:
-                mem_something = dataWatch.MemSomething('charLookup', f.fun_addr, addr, f.ret_addr, None, None, None, f.ip, None, None, None)
+                fun = match_funs[self.match_type]
+                mem_something = dataWatch.MemSomething(fun, f.fun_addr, addr, f.ret_addr, None, None, None, f.ip, None, None, None)
                 mem_something.re_watch = self
                 retval =  mem_something 
                 #self.lgr.error('reWatch getMemSomething returning mem_something')
@@ -325,6 +342,9 @@ class REWatch(object):
             return
         length = found_ptr - self.addr
         self.lgr.debug('reWatch watchCharReference length %d' % length)
+        if length > 10000:
+            self.lgr.error('reWatch watchCharReference unexpected length %d, bail' % length)
+            return
         for i in range(length):
             char_addr = self.addr + i
             char_at_i = self.mem_utils.readByte(self.cpu, char_addr)
