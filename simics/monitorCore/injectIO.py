@@ -463,6 +463,7 @@ class InjectIO():
                 else:
                     self.lgr.debug('resetReverseAlone no callback, go for it and continue.')
                     SIM_run_command('c')
+                print('Done tracking with injectIO')
         
 
     def stopHap(self, count, one, exception, error_string):
