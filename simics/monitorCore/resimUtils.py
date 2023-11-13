@@ -490,6 +490,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
     #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     quick_check = fname+'.funs'
     if os.path.isfile(quick_check):
+        lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
         retval = fname
     else:
         analysis_path = os.getenv('IDA_ANALYSIS')
