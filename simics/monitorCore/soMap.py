@@ -251,8 +251,9 @@ class SOMap():
             text_seg = sort_map[locate]
             fpath = self.so_file_map[tid][text_seg]
             full_path = self.getAnalysisPath(fpath)
-            if full_path is None:
-                full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
+            # TBD can we finally get rid of old style paths?
+            #if full_path is None:
+            #    full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
             if full_path is not None:
                 full_path = full_path+'.funs'
                 self.fun_mgr.add(full_path, locate)
@@ -627,6 +628,7 @@ class SOMap():
            return False
 
     def wordSize(self, tid):
+       # TBD why take tid as param?
        return self.task_utils.getMemUtils().wordSize(self.cpu)
 
     def getMachineSize(self, tid):
