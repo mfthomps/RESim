@@ -35,7 +35,7 @@ class TrackResult():
         self.mark = mark
         self.num_marks = num_marks
 
-def findTrack(f, addr, one, quiet=False, lgr=None):
+def findTrack(f, addr, one, quiet=False, lgr=None, no_cbr=False):
     retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
@@ -56,15 +56,20 @@ def findTrack(f, addr, one, quiet=False, lgr=None):
                 mark_cycle = mark['cycle'] 
             #if mark['mark_type'] == 'read' and mark['ip']==addr:
             if mark['ip']==addr:
-                size = os.path.getsize(queue_path)
-                retval = TrackResult(queue_path, size, mark, len(mark_list))
-                #if lgr is not None:
-                #    lgr.debug('findTrack 0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
-                if not quiet:
-                    print('0x%x found %s at mark %d in (len %d)  %s packet: %d num_marks: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, 
-                          mark['packet'], len(mark_list)))
-                if one:
-                    break
+                if no_cbr and mark['type'] == 'read' and mark['compare'] == 'CBR':
+                    # skip this one
+                    print('mark is CBR skip this one')
+                    pass
+                else: 
+                    size = os.path.getsize(queue_path)
+                    retval = TrackResult(queue_path, size, mark, len(mark_list))
+                    #if lgr is not None:
+                    #    lgr.debug('findTrack 0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
+                    if not quiet:
+                        print('0x%x found %s at mark %d in (len %d)  %s packet: %d num_marks: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, 
+                              mark['packet'], len(mark_list)))
+                    if one:
+                        break
     else:
         print('not a file: %s' % track_path)
     return retval
