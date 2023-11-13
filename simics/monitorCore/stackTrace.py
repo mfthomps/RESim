@@ -69,16 +69,16 @@ class StackTrace():
             else:
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x %s' % (self.ip, self.fname, self.instruct, self.sp, fun_addr)
 
-    def __init__(self, top, cpu, pid, soMap, mem_utils, task_utils, stack_base, fun_mgr, targetFS, 
-                 reg_frame, lgr, max_frames=None, max_bytes=None):
+    def __init__(self, top, cpu, tid, soMap, mem_utils, task_utils, stack_base, fun_mgr, targetFS, 
+                 reg_frame, lgr, max_frames=None, max_bytes=None, skip_recurse=False):
         self.top = top
         self.cpu = cpu
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
             self.decode = decode
-        self.pid = pid
-        self.word_size = soMap.wordSize(pid)
+        self.tid = tid
+        self.word_size = soMap.wordSize(tid)
         self.lgr = lgr
         self.soMap = soMap
         self.targetFS = targetFS
@@ -89,6 +89,7 @@ class StackTrace():
         self.fun_mgr = fun_mgr
         self.reg_frame = reg_frame
         self.max_frames = max_frames
+        self.skip_recurse = skip_recurse
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
         if cpu.architecture == 'arm':
@@ -98,8 +99,8 @@ class StackTrace():
             self.callmn = 'call'
             self.jmpmn = 'jmp'
 
-        if pid == 0:
-            lgr.error('stackTrace asked to trace pid 0?')
+        if tid == 0:
+            lgr.error('stackTrace asked to trace tid 0?')
             return
         self.doTrace()
 
@@ -114,7 +115,7 @@ class StackTrace():
     def followCall(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
-        if return_to <= 10 or not self.soMap.isCode(return_to, self.pid):
+        if return_to <= 10 or not self.soMap.isCode(return_to, self.tid):
             self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
             return None
         if self.cpu.architecture == 'arm':
@@ -143,7 +144,7 @@ class StackTrace():
                         except:
                             retval = eip
                             continue
-                        if self.soMap.isCode(dst, self.pid):
+                        if self.soMap.isCode(dst, self.tid):
                             retval = eip
                         else:
                             self.lgr.debug('stackTrace dst not code 0x%x' % dst)
@@ -406,7 +407,7 @@ class StackTrace():
             pushed_bp = self.readAppPtr(bp)
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
-            if not self.soMap.isCode(ret_to, self.pid):
+            if not self.soMap.isCode(ret_to, self.tid):
                 self.frames[0].ret_addr = None
             else:
                 self.frames[0].ret_addr = ret_to
@@ -433,7 +434,7 @@ class StackTrace():
             if ret_to is None:
                 #self.lgr.debug('stackTrace doX86 ret_to None, bail')
                 break
-            if not self.soMap.isCode(ret_to, self.pid):
+            if not self.soMap.isCode(ret_to, self.tid):
                 #self.lgr.debug('stackTrace doX86 ret_to 0x%x is not code, bail' % ret_to)
                 break
 
@@ -558,7 +559,7 @@ class StackTrace():
                 #self.lgr.debug('val read from 0x%x is zero, continue' % ptr)
                 continue
             #self.lgr.debug('findReturnFromCall ptr 0x%x val 0x%x  limit 0x%x' % (ptr, val, limit))    
-            if self.soMap.isCode(val, self.pid):
+            if self.soMap.isCode(val, self.tid):
                 #self.lgr.debug('findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
                 call_ip = self.followCall(val)
                 if call_ip is not None:
@@ -690,8 +691,8 @@ class StackTrace():
         return call_to
 
     def doTrace(self):
-        if self.pid == 0 or self.pid == 1:
-            #self.lgr.debug('stackTrack doTrace called with pid 0')
+        if self.tid == 0 or self.tid == 1:
+            #self.lgr.debug('stackTrack doTrace called with tid 0')
             return
         '''
         cpl = memUtils.getCPL(self.cpu)
@@ -706,10 +707,10 @@ class StackTrace():
         esp = self.reg_frame['sp']
         eip = self.reg_frame['pc']
         #if self.stack_base is not None:
-        #    self.lgr.debug('stackTrace doTrace pid:%d esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.pid, esp, eip, self.stack_base))
+        #    self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
         #    pass
         #else:
-        #    self.lgr.debug('stackTrace doTrace NO STACK BASE pid:%d esp is 0x%x eip 0x%x' % (self.pid, esp, eip))
+        #    self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
         #    pass
         done  = False
         count = 0
@@ -735,7 +736,7 @@ class StackTrace():
         prev_fname = fname
         instruct = self.fun_mgr.resolveCall(instruct_tuple, eip)
 
-        #self.lgr.debug('StackTrace doTrace xx begin pid:%d cur eip 0x%x instruct %s  fname %s' % (self.pid, eip, instruct, fname))
+        #self.lgr.debug('StackTrace doTrace begin tid:%s cur eip 0x%x instruct %s  fname %s skip_recurse: %r' % (self.tid, eip, instruct, fname, self.skip_recurse))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp)
             self.addFrame(frame)
@@ -746,10 +747,10 @@ class StackTrace():
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         if prev_ip is None and self.cpu.architecture == 'arm':
             prev_ip = self.isCallToMe(fname, eip)
-            if prev_ip is not None:
-                self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
-            else:
-                self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
+            #if prev_ip is not None:
+            #    self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
+            #else:
+            #    self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
         
         cur_fun = None
         cur_fun_name = None
@@ -796,7 +797,7 @@ class StackTrace():
                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 continue
             #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
-            if self.soMap.isCode(val, self.pid):
+            if self.soMap.isCode(val, self.tid):
                 call_ip = self.followCall(val)
                 #if call_ip is not None:
                 #   self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
@@ -1029,7 +1030,12 @@ class StackTrace():
         prev_ip = None
         if len(self.frames) > 0:
             prev_ip = self.frames[-1].ip
-        if frame.ip != prev_ip:
+            fun_of_prev_ip = self.frames[-1].fun_name
+            #self.lgr.debug('stackTrace addFrame fun_of_prev_ip %s, this one %s' % (fun_of_prev_ip, frame.fun_name))
+        if self.skip_recurse and frame.fun_name is not None and frame.fun_name == fun_of_prev_ip:
+            self.lgr.debug('stackTrace addFrame function same as last function, skip_recurse is true, skip it')
+            pass
+        elif frame.ip != prev_ip:
             if self.fun_mgr is not None:
                 fun_of_ip = self.fun_mgr.getFunName(frame.ip)
                 frame.fun_of_ip = fun_of_ip
