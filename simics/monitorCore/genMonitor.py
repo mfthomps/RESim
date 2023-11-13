@@ -312,6 +312,8 @@ class GenMonitor():
 
         self.stop_on_exit = {}
 
+        self.no_gdb = False
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -1138,48 +1140,45 @@ class GenMonitor():
         self.debug(group=True)
 
     def doDebugCmd(self, tid = None):
-            ''' Note, target may not be currently scheduled '''
-            cpu, comm, this_tid = self.task_utils[self.target].curThread() 
-            if tid is None:
-                tid = this_tid 
-            self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r' % (cpu.name, self.gdb_port, tid, self.is_compat32))
-            if self.bookmarks is None:
-                if cpu.architecture == 'arm':
-                    cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
-                #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                elif self.isWindows:
-                    machine_size = self.soMap[self.target].getMachineSize(tid)
-                    self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
-                    if machine_size is None:
-                        ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
-                        dumb, machine, dumb2, dumb3 = winProg.getSizeAndMachine(self.full_path, self.lgr)
-                        if machine is None:
-                            self.lgr.error('doDebugCmd failed to get machine value from %s' % self.full_path)
-                            machine_size = 64
-                        elif 'I386' in machine:
-                            machine_size = 32
-                        elif 'AMD64' in machine:
-                            machine_size = 64
-                    if machine_size == 32:
-                        cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
-                    elif machine_size == 64:
-                        cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
-                    else:
-                        self.lgr.error('doDebugCmd failed to get windows machine type')
-                        return None 
+        ''' Note, target may not be currently scheduled '''
+        cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        if tid is None:
+            tid = this_tid 
+        self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r' % (cpu.name, self.gdb_port, tid, self.is_compat32))
+        if cpu.architecture == 'arm':
+            cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
+        #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+        elif self.isWindows:
+            machine_size = self.soMap[self.target].getMachineSize(tid)
+            self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
+            if machine_size is None:
+                ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
+                dumb, machine, dumb2, dumb3 = winProg.getSizeAndMachine(self.full_path, self.lgr)
+                if machine is None:
+                    self.lgr.error('doDebugCmd failed to get machine value from %s' % self.full_path)
+                    machine_size = 64
+                elif 'I386' in machine:
+                    machine_size = 32
+                elif 'AMD64' in machine:
+                    machine_size = 64
+            if machine_size == 32:
+                cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+            elif machine_size == 64:
+                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+            else:
+                self.lgr.error('doDebugCmd failed to get windows machine type')
+                return None 
 
-                elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                    cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
-                else:
-                    cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
-                self.lgr.debug('cmd: %s' % cmd)
-                try:
-                    SIM_run_command(cmd)
-                #except simics.SimExc_General:
-                except SimExc_General as e:
-                    self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
-                self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
-                self.debugger_target = self.target
+        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+            cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+        else:
+            cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+        self.lgr.debug('cmd: %s' % cmd)
+        try:
+            SIM_run_command(cmd)
+        #except simics.SimExc_General:
+        except SimExc_General as e:
+            self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
 
     def setPathToProg(self, tid):
         prog_name = self.getProgName(tid)
@@ -1211,8 +1210,12 @@ class GenMonitor():
                 self.setPathToProg(tid)
             # TBD already called in debugTidList.  Does a group==True cover it?
             if not group or self.bookmarks is None:
-                self.lgr.debug('genMonitor debug call doDebugCmd')
-                self.doDebugCmd()
+                if not self.no_gdb and self.bookmarks is None:
+                    self.lgr.debug('genMonitor debug call doDebugCmd')
+                    self.doDebugCmd()
+                if self.bookmarks is None:
+                    self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+                    self.debugger_target = self.target
             self.did_debug=True
             if not self.rev_execution_enabled:
                 self.lgr.debug('debug enable reverse execution')
@@ -1649,7 +1652,12 @@ class GenMonitor():
         if self.full_path is None:
             self.lgr.debug('debugTidList full_path is None, set it')
             self.setPathToProg(tid_list[0])
-        self.doDebugCmd(tid_list[0])
+        if not self.no_gdb and self.bookmarks is None:
+            self.lgr.debug('genMonitor debug call doDebugCmd')
+            self.doDebugCmd(tid_list[0])
+        if self.bookmarks is None:
+            self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+            self.debugger_target = self.target
         #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)
 
@@ -4254,7 +4262,14 @@ class GenMonitor():
             else:
                 dfile = dfile.replace('trackio', 'queue')
         if type(save_json) is bool:
-            save_json = 'logs/track.json'
+            if save_json:
+                save_json = 'logs/track.json'
+            else:
+                save_json = None
+
+        if save_json:
+            # hacky logic for turning off gdb server when running parallel trackIOs
+            self.no_gdb = True
         if self.bookmarks is not None:
             self.goToOrigin()
 
@@ -4763,6 +4778,8 @@ class GenMonitor():
         if no_cover:
             bb_coverage = None
         self.rmDebugWarnHap()
+        if parallel:
+            self.no_gdb = True
         play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover,
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
