@@ -80,7 +80,6 @@ import dmod
 import targetFS
 import winTargetFS
 import cellConfig
-import userIterators
 import trackFunctionWrite
 import pageUtils
 import ropCop
@@ -3467,8 +3466,8 @@ class GenMonitor():
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
         self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
-        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes)
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
+        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
 
     def getStackTrace(self):
         return self.stackFrameManager[self.target].getStackTrace()
@@ -4051,14 +4050,18 @@ class GenMonitor():
         crashing = False 
         if check_crash:
             for tid in thread_tids:
-                if self.page_faults[self.target].hasPendingPageFault(tid):
+                prec =  self.page_faults[self.target].getPendingFault(tid)
+                if prec is not None:
                     comm = self.task_utils[self.target].getCommFromTid(tid)
-                    cycle = self.page_faults[self.target].getPendingFaultCycle(tid)
-                    print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, cycle))
-                    self.lgr.debug('stopTrackIO Tid %s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                    leader = self.task_utils[self.target].getGroupLeaderTid(tid)
-                    self.page_faults[self.target].handleExit(tid, leader)
-                    crashing = True 
+                    if prec.page_fault:
+                        print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
+                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
+                        leader = self.task_utils[self.target].getGroupLeaderTid(tid)
+                        self.page_faults[self.target].handleExit(tid, leader)
+                        crashing = True 
+                    else:
+                        print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
         #if 'runToIO' in self.call_traces[self.target]:
@@ -4245,6 +4248,7 @@ class GenMonitor():
         self.track_started = True
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
+            self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             if 'coverage/id' in dfile:
                 dfile = dfile.replace('coverage', 'queue')
             else:
@@ -5376,6 +5380,14 @@ class GenMonitor():
             print('Yes, 0x%x is a function' % addr)
         else:
             print('No, 0x%x is not a function' % addr)
+
+    def getFunName(self, addr):
+        retval = None
+        if self.fun_mgr is None:
+            self.lgr.error('getFunName No function manager yet, are you debugging?')
+        else:
+            retval = self.fun_mgr.getFunName(addr)
+        return retval
 
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
