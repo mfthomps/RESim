@@ -231,9 +231,11 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if tid in self.pending_faults:
                 #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x' % self.pending_faults[tid].cr2)
+                phys_block = None
                 prec = self.pending_faults[tid]
-                phys_block = cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
-                if phys_block.address is not None and phys_block.address != 0:
+                if prec.cr2 is not None:
+                    phys_block = cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
+                if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
                     #self.lgr.debug('pageFaultGen modeChanged in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
                     del self.pending_faults[tid]
                     if self.ptable_hap is not None:
