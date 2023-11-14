@@ -21,13 +21,14 @@ class TargetFS():
         return retval
 
     def findFrom(self, name, from_dir):
-        #if self.top.isWindows():
-        #    ''' TBD avoid searching forever'''
-        #    return None
+        # use file searching via os.walk to find an executable with the given name.
+        # avoid files in etc.  TBD warn if multiple finds?
         self.lgr.debug('TargetFS find from %s look for [%s]' % (from_dir, name))
         for root, dirs, files in os.walk(from_dir):
    
             #self.lgr.debug('TargetFS find files is %s' % str(files))
+            if '/etc/' in root or '/lib/' in root:
+                continue 
             if name in files:
                 retval = os.path.join(from_dir, root, name)
                 abspath = os.path.abspath(retval)
