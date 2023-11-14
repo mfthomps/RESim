@@ -31,6 +31,9 @@ class CopyMark():
         self.op_type = op_type
         self.strcpy = strcpy
         self.sp = sp
+        if src is None or dest is None or buf_start is None:
+            print('watchMarks CopyMark bad call, something is None')
+            return
         if op_type == Sim_Trans_Load:
             if buf_start is not None:
                 offset = src - buf_start
@@ -798,11 +801,12 @@ class WatchMarks():
         return wm
 
     def isStackBuf(self, dest):
-        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        if dest >= sp:
-            return True
-        else:
-            return False
+        retval = False
+        if dest is not None:
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            if dest >= sp:
+                retval = True
+        return retval
 
     def getStackBase(self, dest):
         base = None
@@ -837,6 +841,9 @@ class WatchMarks():
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
+        if src is None or dest is None or buf_start is None:
+            self.lgr.error('watchMarks copy called with None for src, dest or buf_start?')
+            return
         cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated)
         self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
