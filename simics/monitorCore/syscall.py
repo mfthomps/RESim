@@ -364,7 +364,7 @@ class Syscall():
         tid, cpu = context_manager.getDebugTid()
         self.debugging = False
         self.stop_on_call = stop_on_call
-        if tid is not None:
+        if tid is not None or name == 'debugExit':
             self.debugging = True
             #self.lgr.debug('Syscall is debugging cell %s' % cell_name)
         self.cpu = cpu
