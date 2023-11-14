@@ -19,6 +19,7 @@ class MarkCompare():
             self.decode = decode
         self.our_value = None 
         self.byte_match = False
+        self.char_lookup = None
 
         # NO INIT PAST HERE
         if self.addr is not None:
@@ -75,7 +76,45 @@ class MarkCompare():
                 self.lgr.debug('MarkCompare armCompareOurRegNextLoad, cmp_instruct not a compare to our reg, NOT HANDLED')
         else:
             self.lgr.debug('MarkCompare armCompareOurRegNextLoad, next_instruct not ldrb, NOT HANDLED')
-        
+       
+    def charLookup(self, eip, instruct): 
+        retval = None
+        op2, our_reg = self.decode.getOperands(instruct[1])
+        #self.lgr.debug('MarkCompare charLookup instruct %s' % instruct[1])
+        if self.decode.isLDRB(self.cpu, instruct[1]):
+            next_eip = eip + instruct[0]
+            next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+            next_op2, next_op1 = self.decode.getOperands(next_instruct[1])
+            #self.lgr.debug('MarkCompare charLookup is ldrb, next_instruct %s' % next_instruct[1])
+            if self.decode.isLDRB(self.cpu, next_instruct[1]):
+                #self.lgr.debug('MarkCompare charLookup is next_instruct is ldrb, check op2 %s' % next_op2)
+                inbracket = self.decode.inBracket(next_op2)
+                if inbracket is not None:
+                    parts = inbracket.split(',')
+                    #self.lgr.debug('MarkCompare charLookup inBracket %s look for our_reg %s' % (inbracket, our_reg))
+                    if parts[1].strip() == our_reg:
+                        #self.lgr.debug('MarkCompare charLookup matches our_reg')
+                        test_eip = next_eip + next_instruct[0]
+                        test_instruct = SIM_disassemble_address(self.cpu, test_eip, 1, 0)
+                        if test_instruct[1].startswith('tst'):
+                            test_op2, test_op1 = self.decode.getOperands(test_instruct[1])
+                            test_val = self.decode.getValue(test_op2, self.cpu, None)
+                            if test_val is not None:
+                                base_reg = parts[0].strip() 
+                                base_val = self.mem_utils.getRegValue(self.cpu, base_reg) 
+                                retval = self.getCharLookup(base_val, test_val)
+                                self.our_value = self.mem_utils.readByte(self.cpu, self.addr) 
+                                self.lgr.debug('MarkCompare charLookup our_value 0x%x base_val 0x%x char list %s' % (self.our_value, base_val, str(retval)))
+                            else:
+                                self.lgr.debug('MarkCompare charLookup failed to get test_val from %s' % test_op2)
+                        else:
+                            self.lgr.debug('MarkCompare charLookup expected tst got %s' % test_instruct[1])
+                    else:
+                        self.lgr.debug('MarkCompare charLookup inBracket %s not our reg %s' % (parts[1], our_reg))
+                else:
+                    self.lgr.debug('MarkCompare charLookup inBracket None %s' % op2)
+        return retval
+
     def findCompare(self):        
         eip = self.top.getEIP(self.cpu)
         our_reg = self.armLoadAfterCompare(eip)
@@ -86,9 +125,9 @@ class MarkCompare():
                 self.compare_before_reference = True
 
         else:
-            if True:
-                our_reg = None 
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.char_lookup = self.charLookup(eip, instruct)
+            if self.char_lookup is None:
                 if instruct[1].startswith('ldr') or instruct[1].startswith('mov'):
                     op2, our_reg = self.decode.getOperands(instruct[1])
                     self.lgr.debug('markCompare  findCompare got %s, our_reg %s' % (instruct[1], our_reg))
@@ -96,7 +135,7 @@ class MarkCompare():
                 relevent = False
                 for i in range(9):
                     instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                    if instruct[1].startswith('cmp') or instruct[1].startswith('test'):
+                    if instruct[1].startswith('cmp') or instruct[1].startswith('test') or instruct[1].startswith('tst'):
                         if our_reg is not None and our_reg in instruct[1]:
                             relevent = True
                         else:
@@ -108,6 +147,14 @@ class MarkCompare():
                         break
                     elif instruct[1].startswith('pop') and 'pc' in instruct[1]:
                         break
+                    elif instruct[1].startswith('b ') or instruct[1].startswith('jmp '):
+                        dumb, op1 = self.decode.getOperands(instruct[1])
+                        value = self.decode.getValue(self.cpu, op1)
+                        if value is not None:
+                            eip = value
+                        else:
+                            break
+                        
                     else:
                         if our_reg is not None and our_reg in instruct[1]:
                             relevent = True
@@ -121,6 +168,43 @@ class MarkCompare():
             retval = 'CBR'
         elif self.reference_not_compared:
             retval = 'RNC'
+        elif self.char_lookup is not None:
+            retval = 'compare 0x%x to char map %s' % (self.our_value, self.char_lookup)
         elif self.compare_instruction is not None:
             retval = '0x%x %s' % (self.compare_eip, self.compare_instruction)
         return retval
+
+    def getCharLookup(self, base_val, test_val):
+        outstring = ''
+        last_index = None
+        in_a_row = 0
+        first_entry = ''
+        for i in range(256):
+            addr = base_val + i
+            val = self.mem_utils.readByte(self.cpu, addr)
+            if val != test_val:
+                hexval = '0x%x' % i
+                if i < 127 and i > 0x1f:
+                    cval = '(%s)' % chr(i)
+                else:
+                    cval = ''
+                if last_index is not None and last_index == i-1:
+                    in_a_row = in_a_row + 1
+                    last_entry = hexval+cval
+                else:
+                    first_entry = hexval+cval
+                    in_a_row = 1
+                last_index = i
+            else:
+                if in_a_row > 0:
+                    if in_a_row > 1:
+                        outstring = outstring+' '+first_entry+'-'+last_entry
+                    else:
+                        outstring = outstring+' '+first_entry
+                in_a_row = 0
+        if in_a_row > 0:
+            if in_a_row > 1:
+                outstring = outstring+' '+first_entry+'-'+last_entry
+            else:
+                outstring = outstring+' '+first_entry
+        return outstring
