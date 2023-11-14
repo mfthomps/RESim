@@ -3243,6 +3243,9 @@ class DataWatch():
 
     def cheapReuse(self, eip, addr, size):
         retval = False
+        if self.fun_mgr is None:
+            self.lgr.error('dataWatch cheapReuse no funMgr')
+            return retval
         fun_name = self.fun_mgr.funFromAddr(eip)
         self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s' % (addr, eip, fun_name))
         if fun_name is not None:
@@ -4376,7 +4379,9 @@ class DataWatch():
             Since only one byte, record it and go on.'''
         retval = False
         if self.mem_something is not None:
-            if self.mem_something.count == 1 and size == 1 and addr == self.mem_something.src:
+            if self.mem_something.dest is None:
+                self.lgr.debug('dataWatch oneByteCopy called with dest of None addr 0x%x' % addr)
+            elif self.mem_something.count == 1 and size == 1 and addr == self.mem_something.src:
                 self.lgr.debug('dataWatch oneByteCopy, maybe got one, addr 0x%x' % addr)
                 index = self.findRangeIndex(addr)
                 if index is not None and index < len(self.start):
