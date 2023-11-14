@@ -46,7 +46,7 @@ import reWatch
 import clibFuns
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'strtok', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l',
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
@@ -1081,7 +1081,7 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, str1, str2, self.mem_something.count, buf_start)
             #self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
             #       self.mem_something.dest, self.mem_something.count))
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp','mbscmp_l', 'strtok']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp','mbscmp_l', 'strtok', 'buffer_caseless_compare']: 
             buf_start = self.findRange(self.mem_something.dest)
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
             #self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
@@ -1901,7 +1901,7 @@ class DataWatch():
                     if self.mem_something.count > n:
                         self.mem_something.count = n
                 self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 'mbscmp_l', 'strtok']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 'mbscmp_l', 'strtok', 'buffer_caseless_compare']: 
             self.mem_something.dest, self.mem_something.src, count_maybe = self.getCallParams(sp, word_size)
             if self.cpu.architecture == 'arm':
                 if self.mem_something.fun == 'strncmp':
