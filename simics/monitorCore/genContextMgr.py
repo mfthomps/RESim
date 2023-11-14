@@ -833,9 +833,9 @@ class GenContextMgr():
                             retval = True
             elif tid == self.debugging_tid:
                 self.debugging_tid = self.tid_cache[0]
-                self.lgr.debug('rmTask debugging_tid now %s' % self.debugging_tid)
+                self.lgr.debug('genContextManager rmTask debugging_tid now %s' % self.debugging_tid)
             else:
-                self.lgr.debug('rmTask remaining debug recs %s' % str(self.watch_rec_list))
+                self.lgr.debug('genContextManager rmTask remaining debug recs %s' % str(self.watch_rec_list))
         return retval
 
     def addTask(self, tid, rec=None, watch_exit=True):
@@ -900,6 +900,15 @@ class GenContextMgr():
         self.cpu.current_context = self.resim_context
         self.current_context = self.resim_context
         #self.lgr.debug('contextManager restoreDebugContext')
+
+    def stopDebug(self):
+        self.lgr.debug('contextManager stopDebug')
+        self.debugging_tid = None
+        self.debugging_tid_saved = None
+        self.watch_rec_list = {}
+        self.watch_rec_list_saved = {}
+        self.tid_cache = []
+        self.restoreDefaultContext()
 
     def restoreDebug(self):
         if self.debugging_tid is not None:

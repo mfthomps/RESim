@@ -2556,7 +2556,7 @@ class GenMonitor():
         self.context_manager[self.target].restoreDefaultContext()
 
     def stopDebug(self):
-        ''' stop all debugging.  called by injectIO '''
+        ''' stop all debugging.  called by injectIO and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
         if self.rev_execution_enabled:
             cmd = 'disable-reverse-execution'
@@ -2569,7 +2569,7 @@ class GenMonitor():
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
         self.noWatchSysEnter()
-        self.context_manager[self.target].restoreDefaultContext()
+        self.context_manager[self.target].stopDebug()
 
     def restartDebug(self):
         self.lgr.debug('restartDebug')
