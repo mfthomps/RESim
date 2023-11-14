@@ -1235,7 +1235,7 @@ class GenContextMgr():
         ''' set breakpoint on task record that points to this (or the given) tid '''
         # TBD This asssume all threads die together.  On windows we assume the EPROCESS record is removed
         # and in Linux we assume the group leader is removed.
-        self.lgr.debug('contextManager watchExit tid:%s' % tid)
+        #self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
             self.lgr.debug('watchExit for tid 1, ignore')
@@ -1244,7 +1244,7 @@ class GenContextMgr():
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
         elif rec is None:
-            self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
+            #self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
             rec = self.task_utils.getRecAddrForTid(tid)
         if rec is None:
             self.lgr.debug('contextManager watchExit failed to get list_addr tid:%s cur_tid %s ' % (tid, cur_tid))
@@ -1277,7 +1277,7 @@ class GenContextMgr():
             SIM_run_alone(self.watchTaskHapAlone, tid)
             self.task_rec_watch[tid] = list_addr
         else:
-            self.lgr.debug('contextManager watchExit, already watching for tid %s' % tid)
+            #self.lgr.debug('contextManager watchExit, already watching for tid %s' % tid)
             pass
         return retval
 
