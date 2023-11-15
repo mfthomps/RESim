@@ -191,6 +191,18 @@ class SOMap():
             retval = False
         return retval
 
+    def setElfInfo(self, tid, elf_info, prog):
+        self.prog_start[tid] = elf_info.address
+        self.prog_end[tid] = elf_info.address+elf_info.size
+        if elf_info.text_start is not None:
+            self.prog_text_start[tid] = elf_info.text_start
+            self.prog_text_end[tid] = elf_info.text_start + elf_info.text_size
+            self.prog_text_offset[tid] = elf_info.text_offset
+        self.text_prog[tid] = prog
+        if tid not in self.so_addr_map:
+            self.so_addr_map[tid] = {}
+            self.so_file_map[tid] = {}
+
     def addText(self, path, prog, tid_in):
         elf_info = elfText.getText(path, self.lgr)
         ''' First check that SO not already loaded from a snapshot '''
@@ -199,18 +211,21 @@ class SOMap():
             tid = tid_in
         if tid in self.prog_start:
             self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
+            if '/' in prog and prog != self.text_prog[tid]:
+                self.lgr.debug('soMap addText tid:%s old prog %s does not match new %s' % (tid, self.text_prog[tid], prog))
+                if tid_in != tid:
+                    self.lgr.debug('soMap addText, tid_in not same as tid, setting elf info for tid_in %s' % tid_in)
+                    self.setElfInfo(tid_in, elf_info, prog)
+                else:
+                    self.lgr.debug('soMap addText, tid_in is the tid TBD reassign TID if multiple threads?  for now, pave it over')
+                    self.text_prog[tid] = {}
+                    self.so_addr_map[tid] = {}
+                    self.so_file_map[tid] = {}
+                    self.setElfInfo(tid, elf_info, prog)
+
         elif elf_info is not None:
             self.lgr.debug('soMap addText, prog %s tid:%s' % (prog, tid))
-            self.prog_start[tid] = elf_info.address
-            self.prog_end[tid] = elf_info.address+elf_info.size
-            if elf_info.text_start is not None:
-                self.prog_text_start[tid] = elf_info.text_start
-                self.prog_text_end[tid] = elf_info.text_start + elf_info.text_size
-                self.prog_text_offset[tid] = elf_info.text_offset
-            self.text_prog[tid] = prog
-            if tid not in self.so_addr_map:
-                self.so_addr_map[tid] = {}
-                self.so_file_map[tid] = {}
+            self.setElfInfo(tid, elf_info, prog)
         return elf_info
 
     def noText(self, prog, tid):
@@ -239,10 +254,13 @@ class SOMap():
             
     def setFunMgr(self, fun_mgr, tid_in):
         if fun_mgr is None:
-            self.lgr.warning('IDA funs is none, no SOMap')
+            self.lgr.warning('soMap setFunMgr input fun_mgr is none')
             return
         self.fun_mgr = fun_mgr
         tid = self.getThreadTid(tid_in, quiet=True)
+        if tid is None:
+            self.lgr.error('soMap setFunMgr failed to getThreadTid, tid_in was %s' % tid_in)
+            return
         sort_map = {}
         for text_seg in self.so_file_map[tid]:
             sort_map[text_seg.locate] = text_seg
@@ -479,6 +497,13 @@ class SOMap():
         else:
             self.lgr.debug('getSOFile no so map for %s' % tid)
         #self.lgr.debug('getSOFile returning %s' % retval)
+        return retval
+
+    def getProg(self, tid):
+        retval = None
+        tid = self.getSOTid(tid)
+        if tid in self.text_prog:
+            retval = self.text_prog[tid]
         return retval
 
     def getSOInfo(self, addr_in):
