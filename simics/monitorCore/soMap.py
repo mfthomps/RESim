@@ -209,7 +209,7 @@ class SOMap():
         tid = self.getThreadTid(tid_in, quiet=True)
         if tid is None:
             tid = tid_in
-        if tid in self.prog_start:
+        if elf_info is not None and tid in self.prog_start:
             self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
             if '/' in prog and prog != self.text_prog[tid]:
                 self.lgr.debug('soMap addText tid:%s old prog %s does not match new %s' % (tid, self.text_prog[tid], prog))
