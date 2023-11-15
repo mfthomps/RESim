@@ -149,7 +149,7 @@ class MarkCompare():
                         break
                     elif instruct[1].startswith('b ') or instruct[1].startswith('jmp '):
                         dumb, op1 = self.decode.getOperands(instruct[1])
-                        value = self.decode.getValue(self.cpu, op1)
+                        value = self.decode.getValue(op1, self.cpu)
                         if value is not None:
                             eip = value
                         else:
