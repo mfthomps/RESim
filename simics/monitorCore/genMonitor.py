@@ -1208,6 +1208,7 @@ class GenMonitor():
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
+                self.lgr.debug('debug called setPathToProg full_path now %s' % self.full_path)
             # TBD already called in debugTidList.  Does a group==True cover it?
             if not group or self.bookmarks is None:
                 if not self.no_gdb and self.bookmarks is None:
@@ -1607,12 +1608,22 @@ class GenMonitor():
     def debugTidGroup(self, tid, final_fun=None, to_user=True, track_threads=True):
         if not track_threads:
             self.track_threads = None
+        self.lgr.debug('debugTidGroup tid:%s' % tid)
         leader_tid = self.task_utils[self.target].getGroupLeaderTid(tid)
         if leader_tid is None:
             self.lgr.error('debugTidGroup leader_tid is None, asked about %s' % tid)
             return
+    
         tid_dict = self.task_utils[self.target].getGroupTids(leader_tid)
         tid_list = list(tid_dict.keys())
+        leader_prog = self.soMap[self.target].getProg(leader_tid)
+        copy_list = list(tid_list)
+        for tid in copy_list:
+            prog = self.soMap[self.target].getProg(tid)
+            if prog != leader_prog:
+                self.lgr.debug('debugTidGroup prog %s does not match leader %s, remove it' % (prog, leader_prog))
+                tid_list.remove(tid)
+      
         self.lgr.debug('debugTidGroup cell %s tid:%s found leader %s and %d tids' % (self.target, tid, leader_tid, len(tid_list)))
         if len(tid_list) == 0:
             self.lgr.error('debugTidGroup tid:%s not on current target?' % tid)
