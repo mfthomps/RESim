@@ -54,6 +54,7 @@ class PageFaultGen():
         self.exception_hap = None
         self.exception_hap2 = None
         self.pending_faults = {}
+        self.pending_sigill = {}
         self.mode_hap = None
         self.ignore_probes = []
         self.user_eip = None
@@ -71,6 +72,9 @@ class PageFaultGen():
         if tid in self.pending_faults:
             #self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_faults[tid])))
             del self.pending_faults[tid]
+        if tid in self.pending_sigill:
+            #self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_sigill[tid])))
+            del self.pending_sigill[tid]
         
     def rmPDirHap(self, hap):
         RES_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
@@ -355,7 +359,7 @@ class PageFaultGen():
         self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
                 exception_number, tid, comm, eip, instruct[1], cpu.cycles))
         prec = Prec(self.cpu, comm, tid=tid, eip=eip, name=name)
-        self.pending_faults[tid] = prec
+        self.pending_sigill[tid] = prec
 
     def stopWatchPageFaults(self, tid = None):
         if self.fault_hap is not None:
@@ -382,6 +386,7 @@ class PageFaultGen():
         self.faulted_pages.clear()
         #self.faulting_cycles.clear()
         self.pending_faults.clear()
+        self.pending_sigill.clear()
         if self.mode_hap is not None:
             self.lgr.debug('pageFaultGen stopWatchPageFaults remove mode hap')
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
