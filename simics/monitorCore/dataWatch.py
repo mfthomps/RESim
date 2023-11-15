@@ -1901,7 +1901,7 @@ class DataWatch():
                     if self.mem_something.count > n:
                         self.mem_something.count = n
                 self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 'mbscmp_l', 'strtok', 'buffer_caseless_compare']: 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 'mbscmp_l', 'strtok']: 
             self.mem_something.dest, self.mem_something.src, count_maybe = self.getCallParams(sp, word_size)
             if self.cpu.architecture == 'arm':
                 if self.mem_something.fun == 'strncmp':
@@ -1920,6 +1920,9 @@ class DataWatch():
                     self.mem_something.count = min(limit, self.getStrLen(self.mem_something.src))
                 else:
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
+        elif self.mem_something.fun in ['buffer_caseless_compare']:
+            self.mem_something.dest, self.mem_something.count, self.mem_something.src = self.getCallParams(sp, word_size)
+
         elif self.mem_something.fun in ['strchr', 'strrchr']:
             self.mem_something.src, self.mem_something.the_chr, dumb = self.getCallParams(sp, word_size)
             ''' TBD fix to reflect strnchr? '''
@@ -3242,6 +3245,7 @@ class DataWatch():
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
 
     def cheapReuse(self, eip, addr, size):
+        ''' look for quick and dirty signs of buffer reuse '''
         retval = False
         if self.fun_mgr is None:
             self.lgr.error('dataWatch cheapReuse no funMgr')
@@ -3260,8 +3264,8 @@ class DataWatch():
                     self.rmRange(addr)
                     retval = True
             else:
-                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_'):
-                    self.lgr.debug('dataWatch cheapReuse mod is construtor of some kind and we think we missed a free.  Assume reuse')
+                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
+                    self.lgr.debug('dataWatch cheapReuse mod is function %s and we think we missed a free.  Assume reuse' % (fun_name))
                     self.rmRange(addr)
                     retval = True
         if not retval:
@@ -3270,7 +3274,24 @@ class DataWatch():
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
                     self.lgr.debug('cheapReuse, looks like stack push into buffer, assume we missed free.')
+                    self.rmRange(addr)
                     retval = True
+        if not retval:
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('cheapReuse, check arm buf set to zero instruct %s' % instruct[1])
+            if self.cpu.architecture == 'arm' and instruct[1].startswith('str'):
+                self.lgr.debug('cheapReuse, check arm buf set to zero is str')
+                op2, op1 = self.decode.getOperands(instruct[1])
+                prev_eip = eip - instruct[0]
+                prev_instruct = SIM_disassemble_address(self.cpu, prev_eip, 1, 0)
+                prev_op2, prev_op1 = self.decode.getOperands(prev_instruct[1])
+                self.lgr.debug('cheapReuse, check arm buf set to zero prev_op1 %s op1 %s prev_op2 %s' % (prev_op1, op1, prev_op2)) 
+                if prev_op1 == op1 and prev_op2 == '#0':
+                    self.lgr.debug('cheapReuse, looks like setting buffer values to zero in arm 0x%x %s' % (eip, instruct[1]))
+                    self.rmRange(addr)
+                    retval = True
+                
+         
         if not retval:
             # these cases do not remove a buffer, while those above do.
             if size == 1:
