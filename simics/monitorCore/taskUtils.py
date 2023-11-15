@@ -523,16 +523,20 @@ class TaskUtils():
         if leader_tid in self.exec_addrs:
             leader_prog = self.exec_addrs[leader_tid].prog_name
         leader_tid = int(leader_tid)
+        leader_comm = None
         for ts in ts_list:
             if ts_list[ts].pid == leader_tid:
                 leader_rec = ts
+                leader_comm = ts_list[ts].comm
                 break
         if leader_rec is None:
             self.lgr.debug('taskUtils getGroupTids did not find record for leader tid %d' % leader_tid)
             return None 
-        self.lgr.debug('getGroupTids leader_rec 0x%x leader_prog %s' % (leader_rec, leader_prog))
+        self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
         retval[str(leader_tid)] = leader_rec
         for ts in ts_list:
+            if ts_list[ts].comm != leader_comm:
+                continue
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
             if group_leader != ts:
                 if group_leader == leader_rec:
@@ -547,8 +551,10 @@ class TaskUtils():
                 # TBD FIX to use thread head list?  This will find procs that happen to have the same comm, e.g., /etc/init.d/foo
                 comm_leader_tid = int(self.getCommLeaderTid(ts))
                 ts_pid = str(ts_list[ts].pid)
-                #self.lgr.debug('getGroupTids comm leader_tid %s  ts_pid %s' % (comm_leader_tid, ts_pid))
+                self.lgr.debug('getGroupTids comm leader_tid %s leader_tid: %s ts_pid %s leader_comm %s this comm: %s' % (comm_leader_tid, leader_tid, ts_pid,
+                     leader_comm, ts_list[ts].comm))
                 if comm_leader_tid == leader_tid and ts_pid not in retval:
+                    self.lgr.debug('getGroupTids tid matched')
                     if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
                         this_prog = None
                         if ts_pid in self.exec_addrs:
@@ -1130,3 +1136,10 @@ class TaskUtils():
         for t in task_list:
             tid_list.append(str(task_list[t].pid))
         return tid_list
+
+    def didClone(self, parent_tid, new_tid):
+        #self.lgr.debug('taskUtils didClone parent %s new %s' % (parent_tid, new_tid))
+        if parent_tid in self.exec_addrs and new_tid not in self.exec_addrs:
+            self.exec_addrs[new_tid] = self.exec_addrs[parent_tid]
+            self.lgr.debug('taskUtils didClone recorded clone of new tid %s in exec_addres' % (new_tid))
+            

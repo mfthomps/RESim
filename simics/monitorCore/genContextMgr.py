@@ -712,6 +712,7 @@ class GenContextMgr():
                self.lgr.debug('contextManager adding clone %s (%s) leader is %s' % (tid, comm, leader_tid))
                ''' add task, but do not try to watch exit since we do not have proper context yet.  Will watch below'''
                self.addTask(tid, new_addr, watch_exit=False)
+               self.task_utils.didClone(leader_tid, tid)
            else:
                pass
                #self.lgr.debug('contextManager tid:%s (%s) not in cache, group leader 0x%x  leader tid %s' % (tid, comm, group_leader, leader_tid))
