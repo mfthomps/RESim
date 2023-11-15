@@ -1950,6 +1950,19 @@ class Syscall():
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
+        elif callname.startswith('stat') or callname.startswith('fstat'):
+            fname_addr = frame['param1']
+            retval_addr = frame['param2']
+            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.retval_addr = retval_addr
+            exit_info.fname_addr = fname_addr
+            if fname is None:
+                ida_msg = '%s tid:%s path: not yet mapped? return buffer: 0x%x' % (callname, tid, retval_addr) 
+            else:
+                ida_msg = '%s tid:%s path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, fname_addr, fname, retval_addr)
+            #SIM_break_simulation(ida_msg)
+            #return
+
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
