@@ -460,7 +460,7 @@ class reverseToCall():
 
         elif tid in self.sysenter_cycles and len(self.sysenter_cycles[tid]) > 0:
             cur_cycles = self.cpu.cycles
-            self.lgr.debug('tryOneStopped kernel space tid %s expected %d' % (tid, my_args.tid))
+            self.lgr.debug('tryOneStopped kernel space tid %s expected %s' % (tid, my_args.tid))
             is_exit = self.isExit(instruct[1], eip)
             if tid in self.sysenter_cycles and is_exit:
                 self.lgr.debug('tryOneStopped is sysexit, cur_cycles is 0x%x' % cur_cycles)
@@ -601,8 +601,8 @@ class reverseToCall():
                 dum_cpu, comm, tid = self.task_utils.curThread()
                 self.lgr.debug('skipped to 0x%x got 0x%x eip 0x%x tid is %s' % (forward, self.cpu.cycles, eip, tid))
                 rev_to = eip
-            self.lgr.debug('jumpOverKernel in kernel, but not exit %s run back to 0x%x' % (instruct[1], rev_to))
             page_faults = self.page_faults.getFaultingCycles(tid)
+            self.lgr.debug('jumpOverKernel in kernel, but not exit %s len of page_faults is %d. Trying to run back to 0x%x' % (instruct[1], len(page_faults), rev_to))
             if rev_to in page_faults:
                 skip_to = self.getClosestFault(page_faults[rev_to])
                 if skip_to is None:
@@ -703,7 +703,7 @@ class reverseToCall():
             self.lgr.error('kernInterrupt uncall break turned to  None')
             return
         if tid is not None:
-            self.lgr.debug('kernInterruptHap ip: 0x%x uncall_break %d tid: %s expected %d reg:%s self.reg_val 0x%s cycle: 0x%x' % (eip, self.uncall_break, 
+            self.lgr.debug('kernInterruptHap ip: 0x%x uncall_break %d tid: %s expected %s reg:%s self.reg_val 0x%s cycle: 0x%x' % (eip, self.uncall_break, 
                   tid, self.tid, self.reg, str(self.reg_val), self.cpu.cycles))
         else:
             self.lgr.error('kernInterruptHap tid is None')    
@@ -1050,7 +1050,7 @@ class reverseToCall():
             return
         eip = self.top.getEIP(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
-        self.lgr.debug('uncallHapSimple ip: 0x%x uncall_break %d tid: %s expected %d ' % (eip, self.uncall_break, 
+        self.lgr.debug('uncallHapSimple ip: 0x%x uncall_break %d tid: %s expected %s ' % (eip, self.uncall_break, 
               tid, self.tid))
         if tid == self.tid:
             RES_delete_breakpoint(self.uncall_break)
@@ -1066,7 +1066,7 @@ class reverseToCall():
             return
         eip = self.top.getEIP(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
-        self.lgr.debug('uncallHap ip: 0x%x uncall_break %d tid: %s expected %d reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
+        self.lgr.debug('uncallHap ip: 0x%x uncall_break %d tid: %s expected %s reg:%s self.reg_val 0x%x' % (eip, self.uncall_break, 
               tid, self.tid, self.reg, self.reg_val))
         if tid == self.tid:
             RES_delete_breakpoint(self.uncall_break)
@@ -1219,7 +1219,7 @@ class reverseToCall():
                 self.top.skipAndMail()
        
     def cycleAlone(self, tid): 
-        self.lgr.debug('cycleAlone, tid %d entered looking for %s' % (tid, self.reg))
+        self.lgr.debug('cycleAlone, tid %s entered looking for %s' % (tid, self.reg))
         cmd = 'reverse'
         reg_mod_type = self.cycleRegisterMod()
         if reg_mod_type is None:
@@ -1313,7 +1313,7 @@ class reverseToCall():
         cmd = 'reverse'
         dum_cpu, comm, tid = self.task_utils.curThread()
         current = SIM_cycle_count(cpu)
-        self.lgr.debug('stoppedReverseToCall, entered %d (%s) cycle: 0x%x' % (tid, comm, current))
+        self.lgr.debug('stoppedReverseToCall, entered %s (%s) cycle: 0x%x' % (tid, comm, current))
         #if current < self.top.getFirstCycle():
         if current <= self.start_cycles:
             self.lgr.debug('stoppedReverseToCall found cycle 0x%x prior to first, stop here' %(current))
@@ -1423,7 +1423,7 @@ class reverseToCall():
                     self.the_breaks.append(all_break_num)
                     
             elif phys_block.address == 0:
-                self.lgr.debug('reverseToCall FAILED breakpoints for %s:%d (%s) at %x ' % (cell_name, tid, comm,
+                self.lgr.debug('reverseToCall FAILED breakpoints for %s:%s (%s) at %x ' % (cell_name, tid, comm,
                     start))
 
             start = limit
@@ -1443,7 +1443,7 @@ class reverseToCall():
                     frame = self.task_utils.frameFromRegs(compat32=self.compat32)
                     call_num = self.mem_utils.getCallNum(self.cpu)
                     frame['syscall_num'] = call_num
-                    #self.lgr.debug('sysenterHap tid:%d frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                    #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
                     #self.lgr.debug(taskUtils.stringFromFrame(frame))
                     #SIM_break_simulation('debug me')
                     callname = self.task_utils.syscallName(call_num, self.compat32)
