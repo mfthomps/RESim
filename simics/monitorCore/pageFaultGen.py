@@ -161,7 +161,7 @@ class PageFaultGen():
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
         eip = self.mem_utils.getRegValue(cpu, 'pc')
-        #self.lgr.debug('pageFaultHap tid:%s eip: 0x%x cycle 0x%x' % (tid, eip, self.cpu.cycles))
+        self.lgr.debug('pageFaultHap tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
             #self.lgr.debug('pageFaultHap tid:%s, contextManager says not watching' % tid)
             return
@@ -170,27 +170,40 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap exception_eip was none, use current 0x%x' % eip)
         else:
             eip = self.exception_eip
+
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         access_type = None
         if self.cpu.architecture == 'arm':
-            if cur_pc == self.param.page_fault:
-                ''' prefetch abort '''
-                reg_num = None
-            else:
-                reg_num = self.cpu.iface.int_register.get_number("combined_data_far")
-                data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
-                fault = self.cpu.iface.int_register.read(data_fault_reg)
+            # Get faulting eip
+            i_reg_num = self.cpu.iface.int_register.get_number("instruction_far")
+            self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
+            self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
+
+            # Get see if data was at fault
+            data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
+            fault = self.cpu.iface.int_register.read(data_fault_reg)
+            access_type = memUtils.testBit(fault, 11)
+            if access_type == 0:
+                # Data not at fault, must have been instruction
+                instruct_fault_reg = self.cpu.iface.int_register.get_number("instruction_fsr")
+                fault = self.cpu.iface.int_register.read(instruct_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                #self.lgr.debug('data fault tid:%s reg value 0x%x  violation type: %d' % (tid, fault, access_type))
+                self.lgr.debug('instruction fault tid:%s reg value 0x%x  violation type: %d' % (tid, fault, access_type))
+                reg_num = i_reg_num
+            else:
+                self.lgr.debug('data fault tid:%s reg value 0x%x  violation type: %d' % (tid, fault, access_type))
+                reg_num = self.cpu.iface.int_register.get_number("combined_data_far")
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
         if reg_num is not None:
             cr2 = self.cpu.iface.int_register.read(reg_num)
             #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
         else:
-            #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
+            self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
             cr2 = eip
 
+        # record cycle and eip for reversing back to user space    
+        self.recordFault(tid, self.user_eip)
         if tid not in self.faulted_pages:
             self.faulted_pages[tid] = []
         if cr2 in self.faulted_pages[tid]:
@@ -341,16 +354,17 @@ class PageFaultGen():
             #     self.faultCallback, self.cpu, 15, max_intr) 
         self.loadProbes()
 
-    def recordFault(self, cpu, tid, eip):
+    def recordFault(self, tid, eip):
         if tid not in self.faulting_cycles:
             self.faulting_cycles[tid] = {} 
         if eip not in self.faulting_cycles[tid]:
             self.faulting_cycles[tid][eip] = []
-        self.faulting_cycles[tid][eip].append(cpu.cycles)
-        #self.lgr.debug('pageExceptionHap tid:%s eip 0x%x cycles 0x%x' % (tid, eip, cpu.cycles))
+        self.faulting_cycles[tid][eip].append(self.cpu.cycles)
+        self.lgr.debug('recordFault tid:%s eip 0x%x cycles 0x%x' % (tid, eip, self.cpu.cycles))
 
 
     def faultCallback(self, cpu, one, exception_number):
+        ''' Called when an undefined instruction exception is hit '''
         cell_name = self.top.getTopComponentName(cpu)
         cpu, comm, tid = self.task_utils.curThread() 
         name = cpu.iface.exception.get_name(exception_number)
@@ -360,6 +374,8 @@ class PageFaultGen():
                 exception_number, tid, comm, eip, instruct[1], cpu.cycles))
         prec = Prec(self.cpu, comm, tid=tid, eip=eip, name=name)
         self.pending_sigill[tid] = prec
+        # record cycle and eip for reversing back to user space    
+        self.recordFault(tid, eip)
 
     def stopWatchPageFaults(self, tid = None):
         if self.fault_hap is not None:
@@ -603,6 +619,7 @@ class PageFaultGen():
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))
         return retval
+
     def getPendingFault(self, tid):
         if tid in self.pending_faults:
             return self.pending_faults[tid]
