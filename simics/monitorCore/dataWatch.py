@@ -3154,10 +3154,11 @@ class DataWatch():
         else:
             self.recent_reused_index=None
             self.hack_reuse_index = None
-            if self.oneByteCopy(addr, memory.size):
-                self.lgr.debug('dataWatch readHap, one byte copy')
-                self.prev_cycle = self.cpu.cycles
-                return
+            if self.mem_something is not None and self.mem_something.dest is not None:
+                if self.oneByteCopy(addr, memory.size):
+                    self.lgr.debug('dataWatch readHap, one byte copy')
+                    self.prev_cycle = self.cpu.cycles
+                    return
 
         ''' NOTE RETURNS above '''
         if self.finish_check_move_hap is not None:
