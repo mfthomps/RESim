@@ -34,8 +34,35 @@ This module will generate watch marks on references to pointers to characters fo
 part of byte map lookups.  The dataWatch module manages watch marks for the initial
 character lookup.
 '''
+match_funs = ['charLookup', 'charLookupX', 'charLookupY']
+def findRegValue(reg, instruct_history, decode, mem_utils, cpu, lgr):
+        retval = None
+        done = False
+        while not done:
+            if len(instruct_history) == 0:
+                lgr.debug('reWatch, findRegValue no instructions in history, done')
+                break
+            instruct = instruct_history.pop()
+            lgr.debug('reWatch, findRegValue instruct %s' % instruct[1])
+            if instruct[1].startswith('ldr'):
+                lgr.debug('reWatch, findRegValue is ldr')
+                op2, op1 = decode.getOperands(instruct[1])
+                if op1 == reg:
+                    lgr.debug('reWatch, findRegValue our reg, getaddr from %s' % op2)
+                    cmp_addr = decode.getAddressFromOperand(cpu, op2, lgr)
+                    if cmp_addr is not None:
+                        if instruct[1].startswith('ldrb'):
+                            lgr.debug('reWatch, findRegValue got cmp_addr 0x%x' % cmp_addr)
+                            retval = mem_utils.readByte(cpu, cmp_addr)
+                        else:
+                            lgr.debug('reWatch, findRegValue only ldrb handled for now')
+                    break
+                else:
+                    lgr.debug('reWatch, findRegValue op1 %s not reg %s' % (op1, reg))
+        return retval
+
 class REWatch(object):
-    def __init__(self, addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val):
+    def __init__(self, addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val, match_type):
         self.addr = addr
         self.ip = ip
         self.decode = decode
@@ -47,6 +74,7 @@ class REWatch(object):
         self.top = top
         self.lgr = lgr
         self.base_val = base_val
+        self.match_type = match_type
         self.map_start = []
         self.map_length = []
         self.map_read_hap = []
@@ -61,10 +89,13 @@ class REWatch(object):
         msg = 'REWatch Base value of char map is 0x%x %s' % (base_val, self.getSearchChars())
         self.lgr.debug(msg)
 
+
     @classmethod
     def isCharLookup(cls, addr, ip, instruct, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr):
         retval = None
         op2, op1 = decode.getOperands(instruct[1])
+        # distinguish different function signatures
+        match_type = 0
         #lgr.debug('reWatch isCharLookup evaluate hit addr 0x%x ip: 0x%x %s' % (addr, ip, instruct[1]))
         ''' TBD generalize for x86 '''
         if decode.isLDRB(cpu, instruct[1]) and decode.isReg(op1):
@@ -72,8 +103,11 @@ class REWatch(object):
             next_ip = ip + instruct[0]
             next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
             #lgr.debug('reWatch isCharLookup is ldrb our reg is %s' % our_reg)
-            for i in range(3):
-                #lgr.debug('reWatch isCharLookup ip: 0x%x %d %s' % (next_ip, i, next_instruct[1]))
+            bail_count = 0
+            bail_max = 3
+            instruct_history = []
+            while bail_count < bail_max:
+                #lgr.debug('reWatch isCharLookup ip: 0x%x bail_count %d %s' % (next_ip, bail_count, next_instruct[1]))
                 op2, op1 = decode.getOperands(next_instruct[1])
                 if decode.isReg(op1) and decode.isAdd(cpu, next_instruct[1]) \
                           and our_reg in op2 and ',' in op2:
@@ -93,12 +127,65 @@ class REWatch(object):
                             offset_str = inbracket.split(',')[1]
                             offset = decode.getValue(offset_str, cpu)
                             base_val = base_val + offset
-                            return cls(addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val)
+                            if match_type == 0:
+                                fun = top.getFunName(ip)
+                                if fun is None:
+                                    lgr.debug('reWatch isCharLookup no fun name was match type 0, assign match type 2  TBD???')
+                                    match_type = 2
+
+                            return cls(addr, ip, decode, cpu, pid, mem_utils, context_manager, watch_marks, top, lgr, base_val, match_type)
                     break
                 else:
-                    next_ip = next_ip + next_instruct[0]
-                    next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                    if next_instruct[1].startswith('cmp'):
+                        op2, op1 = decode.getOperands(next_instruct[1])
+                        #lgr.debug('reWatch isCharLookup is a cmp')
+                        if op2 in ['0', '#0','#0x0']:
+                            compare_value = findRegValue(op1, instruct_history, decode, mem_utils, cpu, lgr)
+                            if compare_value is not None:
+                                #lgr.debug('reWatch isCharLookup got compare_value 0x%x' % compare_value)
+                                branch_ip = next_ip + next_instruct[0]
+                                branch_instruct = SIM_disassemble_address(cpu, branch_ip, 1, 0)
+                                if branch_instruct[1].startswith('bne'): 
+                                    if compare_value == 0:
+                                        next_ip = branch_ip + next_instruct[0]
+                                        next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                                    else:
+                                        dumb, next_ip_str = decode.getOperands(branch_instruct[1])
+                                        next_ip = int(next_ip_str, 16)
+                                        next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                                    #lgr.debug('reWatch isCharLookup is bne')
+                                elif branch_instruct[1].startswith('beq'): 
+                                    if compare_value == 0:
+                                        dumb, next_ip_str = decode.getOperands(branch_instruct[1])
+                                        next_ip = int(next_ip_str, 16)
+                                        next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                                    else:
+                                        next_ip = branch_ip + next_instruct[0]
+                                        next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                                    #lgr.debug('reWatch isCharLookup is beq')
+                                else:
+                                    #lgr.debug('reWatch isCharLookup not branch instruction %s' % branch_instruct[1])
+                                    pass
+                                fun = top.getFunName(ip)
+                                if fun is None:
+                                    lgr.debug('reWatch isCharLookup no fun name, assign match type 2')
+                                    match_type = 2
+                                else:
+                                    match_type = 1
+                            else:
+                                lgr.debug('reWatch isCharLookup failed to find reg value')
+                                break
+                        else:
+                            #lgr.debug('reWatch isCharLookup compare op2 not zero %s' % op2)
+                            break
+                    else:                                     
+                        instruct_history.append(next_instruct)
+                        next_ip = next_ip + next_instruct[0]
+                        next_instruct = SIM_disassemble_address(cpu, next_ip, 1, 0)
+                        bail_count += 1
         return retval
+
+
     def getCharLookup(self, base_val):
         outstring = ''
         last_index = None
@@ -149,7 +236,8 @@ class REWatch(object):
             if f.ret_addr is None:
                 self.lgr.error('reWatch getMemSomething f.ret_addr is None')
             else:
-                mem_something = dataWatch.MemSomething('charLookup', f.fun_addr, addr, f.ret_addr, None, None, None, f.ip, None, None, None)
+                fun = match_funs[self.match_type]
+                mem_something = dataWatch.MemSomething(fun, f.fun_addr, addr, f.ret_addr, None, None, None, f.ip, None, None, None)
                 mem_something.re_watch = self
                 retval =  mem_something 
                 #self.lgr.error('reWatch getMemSomething returning mem_something')
@@ -254,6 +342,9 @@ class REWatch(object):
             return
         length = found_ptr - self.addr
         self.lgr.debug('reWatch watchCharReference length %d' % length)
+        if length > 10000:
+            self.lgr.error('reWatch watchCharReference unexpected length %d, bail' % length)
+            return
         for i in range(length):
             char_addr = self.addr + i
             char_at_i = self.mem_utils.readByte(self.cpu, char_addr)

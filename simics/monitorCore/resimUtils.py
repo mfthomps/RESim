@@ -207,30 +207,31 @@ def getPacketFilter(packet_filter, lgr):
                 raise Exception('failed to find filter at %s' % packet_filter)
     return retval
 
-def getBasicBlocks(prog, ini, lgr=None):
+def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
     blocks = None
-    analysis_path = getAnalysisPath(ini, prog)
-    print('analysis_path at %s' % analysis_path)
+    analysis_path = getAnalysisPath(ini, prog, root_prefix=root_prefix)
+    #print('analysis_path at %s' % analysis_path)
     if lgr is not None:
         lgr.debug('getBasicBlocks analysis_path %s' % analysis_path)
     prog_elf = None
-    os_type = getIniTargetValue(ini, 'OS_TYPE')
+    if os_type is None:
+        os_type = getIniTargetValue(ini, 'OS_TYPE')
     if analysis_path is not None:
-        prog_path = getProgPathFromAnalysis(analysis_path, ini, lgr=lgr) 
+        prog_path = getProgPathFromAnalysis(analysis_path, ini, lgr=lgr, root_prefix=root_prefix) 
         if lgr is not None:
             lgr.debug('getBasicBlocks got prog_path %s' % prog_path)
-        print('getBasicBlocks got prog_path %s' % prog_path)
+        #print('getBasicBlocks got prog_path %s' % prog_path)
         if os_type.startswith('WIN'):
             if lgr is not None:
                 lgr.debug('is windows')
             prog_elf = winProg.getText(prog_path, lgr)
         else:
             prog_elf = elfText.getTextOfText(prog_path)
-        print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+        #print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
         if lgr is not None:
             lgr.debug('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
         block_file = analysis_path+'.blocks'
-        print('block file is %s' % block_file)
+        #print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
             if os.path.islink(prog_file):
                 real = os.readlink(prog_file)
@@ -246,8 +247,9 @@ def getBasicBlocks(prog, ini, lgr=None):
             blocks = json.load(fh)
     return blocks, prog_elf
 
-def getOneBasicBlock(prog, addr):
-    blocks, dumb = getBasicBlocks(prog)
+def getOneBasicBlock(prog, addr, os_type, root_prefix):
+    #print('getOneBasicBloc os %s root_prefix %s' % (os_type, root_prefix))
+    blocks, dumb = getBasicBlocks(prog, root_prefix=root_prefix, os_type=os_type)
     retval = None
     for fun in blocks:
         for bb in blocks[fun]['blocks']:
@@ -468,14 +470,19 @@ def cutRealWorld():
     except:
         pass
 
-def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None):
+def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None, root_prefix=None):
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
-        analysis_path = '/mnt/resim_archive/analysis'
+        if lgr is not None:
+            lgr.error('getProgPathFromAnalysis no IDA_ANALYSIS defined as env variable.')
+        else:
+            print('ERROR getProgPathFromAnalysis no IDA_ANALYSIS defined as env variable.')
+        return None
     relative = full_analysis_path[len(analysis_path)+1:] 
     if lgr is not None:
         lgr.debug('getProgPathFromAnalysis relative is %s' % relative)
-    root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
+    if root_prefix is None:
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
     if lgr is not None:
         lgr.debug('getProgPathFromAnalysis root_prefix %s' % root_prefix)
     retval = os.path.join(os.path.dirname(root_prefix), relative)
@@ -486,6 +493,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
     #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     quick_check = fname+'.funs'
     if os.path.isfile(quick_check):
+        lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
         retval = fname
     else:
         analysis_path = os.getenv('IDA_ANALYSIS')
@@ -498,9 +506,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
+        #if lgr is not None:
+        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            #lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            #if lgr is not None:
+            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
@@ -515,7 +526,8 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
                 #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
-            #lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
             pass
 
     return retval
@@ -524,6 +536,6 @@ def isClib(lib_file):
     retval = False
     if lib_file is not None:
         lf = lib_file.lower()
-        if 'libc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
+        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
             retval = True
     return retval

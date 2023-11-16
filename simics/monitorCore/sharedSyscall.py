@@ -905,7 +905,7 @@ class SharedSyscall():
                                         #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
                                         # note rmDmod simply notes it has been removed so we know if future snapshot loads
-                                        self.top.rmDmod(cell_name, dmod.getPath())
+                                        self.top.rmDmod(self.cell_name, dmod.getPath())
                                         #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
                                         if not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
                                             self.top.notRunning(quiet=True)

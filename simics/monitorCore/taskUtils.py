@@ -514,20 +514,29 @@ class TaskUtils():
         return retval
 
     def getGroupTids(self, leader_tid):
+        # BEWARE uses PIDs and casts tid to pid
         retval = {}
-        #self.lgr.debug('getGroupTids for %s' % leader_tid)
+        self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
+        leader_prog = None
+        if leader_tid in self.exec_addrs:
+            leader_prog = self.exec_addrs[leader_tid].prog_name
         leader_tid = int(leader_tid)
+        leader_comm = None
         for ts in ts_list:
             if ts_list[ts].pid == leader_tid:
                 leader_rec = ts
+                leader_comm = ts_list[ts].comm
                 break
         if leader_rec is None:
             self.lgr.debug('taskUtils getGroupTids did not find record for leader tid %d' % leader_tid)
             return None 
-        #self.lgr.debug('getGroupTids leader_rec 0x%x' % leader_rec)
+        self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
+        retval[str(leader_tid)] = leader_rec
         for ts in ts_list:
+            if ts_list[ts].comm != leader_comm:
+                continue
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
             if group_leader != ts:
                 if group_leader == leader_rec:
@@ -536,14 +545,21 @@ class TaskUtils():
                     if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
                         #retval.append(ts_list[ts].pid)
                         retval[str(pid)] = ts
+                        #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
             else:
                 ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
+                # TBD FIX to use thread head list?  This will find procs that happen to have the same comm, e.g., /etc/init.d/foo
                 comm_leader_tid = int(self.getCommLeaderTid(ts))
                 ts_pid = str(ts_list[ts].pid)
-                #self.lgr.debug('getGroupTids comm leader_pid %d  ts_pid %s' % (comm_leader_pid, ts_pid))
+                self.lgr.debug('getGroupTids comm leader_tid %s leader_tid: %s ts_pid %s leader_comm %s this comm: %s' % (comm_leader_tid, leader_tid, ts_pid,
+                     leader_comm, ts_list[ts].comm))
                 if comm_leader_tid == leader_tid and ts_pid not in retval:
+                    self.lgr.debug('getGroupTids tid matched')
                     if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
-                        #self.lgr.debug('getGroupTids added %d' % ts_pid)
+                        this_prog = None
+                        if ts_pid in self.exec_addrs:
+                            this_prog = self.exec_addrs[ts_pid].prog_name
+                        self.lgr.debug('getGroupTids added %s this_prog %s' % (ts_pid, this_prog))
                         #retval.append(ts_pid)
                         retval[ts_pid] = ts
           
@@ -734,11 +750,14 @@ class TaskUtils():
     def getCommLeaderTid(self, cur_rec): 
         ''' return pid of oldest ancestor having same comm as cur_rec, which may be self'''
         leader_tid = None
+        leader_prog = None
         comm = self.mem_utils.readString(self.cpu, cur_rec + self.param.ts_comm, 16)
         leader_pid = self.mem_utils.readWord32(self.cpu, cur_rec + self.param.ts_pid)
+        if str(leader_pid) in self.exec_addrs:
+            leader_prog = self.exec_addrs[str(leader_pid)].prog_name
         parent = None
         prev_parent = None
-        #self.lgr.debug('getCommLeaderTid 0x%x pid:%d (%s)' % (cur_rec, leader_pid, comm))
+        #self.lgr.debug('getCommLeaderTid 0x%x pid:%d (%s) leader_prog %s' % (cur_rec, leader_pid, comm, leader_prog))
         while(True):
             parent = self.mem_utils.readPtr(self.cpu, cur_rec + self.param.ts_real_parent)
             #self.lgr.debug('getCommLeaderTid parent 0x%x' % parent)
@@ -748,8 +767,13 @@ class TaskUtils():
                 leader_comm = self.mem_utils.readString(self.cpu, parent + self.param.ts_comm, 16)
                 if leader_comm != comm:
                     break
-                leader_pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
-                #self.lgr.debug('getCommLeaderTid parent pid %d comm %s' % (leader_pid, leader_comm))
+                this_pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
+                this_prog = None
+                if str(this_pid) in self.exec_addrs:
+                    this_prog = self.exec_addrs[str(this_pid)].prog_name
+                if this_prog == leader_prog:
+                    leader_pid = this_pid
+                    #self.lgr.debug('getCommLeaderTid new leader? parent pid %d comm %s prog is %s' % (leader_pid, leader_comm, this_prog))
             cur_rec = parent
         if leader_pid is not None:
             leader_tid = str(leader_pid)
@@ -1112,3 +1136,10 @@ class TaskUtils():
         for t in task_list:
             tid_list.append(str(task_list[t].pid))
         return tid_list
+
+    def didClone(self, parent_tid, new_tid):
+        #self.lgr.debug('taskUtils didClone parent %s new %s' % (parent_tid, new_tid))
+        if parent_tid in self.exec_addrs and new_tid not in self.exec_addrs:
+            self.exec_addrs[new_tid] = self.exec_addrs[parent_tid]
+            self.lgr.debug('taskUtils didClone recorded clone of new tid %s in exec_addres' % (new_tid))
+            

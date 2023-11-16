@@ -98,7 +98,7 @@ def main():
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
-    parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
+    parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when needed, will miss SEGV.')
     
     args = parser.parse_args()
     resim_ini = args.ini

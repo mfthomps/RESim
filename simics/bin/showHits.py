@@ -14,12 +14,17 @@ except:
 def main():
     parser = argparse.ArgumentParser(prog='showHits', description='Show content of a hits file as hex. ')
     parser.add_argument('hits_file', action='store', help='Name of the hits file')
+    parser.add_argument('-s', '--sort', action='store_true', help='Sort by address')
     args = parser.parse_args()
     hits = args.hits_file
     jhits = json.load(open(hits))
     print('hits from %s:' % hits)
-    for hit in jhits:
-        print('\t0x%x' % hit)
+    if args.sort:
+        for hit in sorted(jhits):
+            print('\t0x%x' % hit)
+    else:
+        for hit in jhits:
+            print('\t0x%x' % hit)
     print('Total hits %d' % len(jhits))
     
          

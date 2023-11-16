@@ -13,7 +13,7 @@ import json
 import binascii
 import argparse
 
-parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
+parser = argparse.ArgumentParser(prog='clientudpJsonScapy', description='Use Scapy to send UDP data from a json')
 parser.add_argument('-d', '--device', action='store', help='Ethernet device to write data to.')
 parser.add_argument('-i', '--ip', action='store', help='IP address of destination.')
 parser.add_argument('-p', '--port', type=int, action='store', help='PORT of destination.')

@@ -76,6 +76,8 @@ def main():
     parser.add_argument('-i', '--index', action='store', help='index')
     parser.add_argument('-n', '--instance', action='store', help='instance')
     args = parser.parse_args()
+    lgr = resimUtils.getLogger('showCoverage', '/tmp', level=None)
+    lgr.debug('showCoverage begin')
 
     '''
     ida_data = os.getenv('RESIM_IDA_DATA')
@@ -98,7 +100,13 @@ def main():
     #prog_path = resimUtils.getProgPath(args.prog, args.ini)
     #print('prog_path is %s' % prog_path)
 
-    analysis_path = resimUtils.getAnalysisPath(args.ini, args.prog)
+    analysis_path = resimUtils.getAnalysisPath(args.ini, args.prog, lgr=lgr)
+    if analysis_path is None:
+        print('Failed to get analysis path from ini %s for prog %s' % (args.ini, args.prog))
+        exit(1)
+    elif not os.path.isdir(analysis_path):
+        print('Failed to find analysis path %s' % (analysis_path))
+        exit(1)
     print('analysis_path is %s' % analysis_path)
 
     funs = getFuns(analysis_path)

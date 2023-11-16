@@ -80,7 +80,6 @@ import dmod
 import targetFS
 import winTargetFS
 import cellConfig
-import userIterators
 import trackFunctionWrite
 import pageUtils
 import ropCop
@@ -312,6 +311,8 @@ class GenMonitor():
         self.dmod_mgr = {}
 
         self.stop_on_exit = {}
+
+        self.no_gdb = False
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -1139,48 +1140,45 @@ class GenMonitor():
         self.debug(group=True)
 
     def doDebugCmd(self, tid = None):
-            ''' Note, target may not be currently scheduled '''
-            cpu, comm, this_tid = self.task_utils[self.target].curThread() 
-            if tid is None:
-                tid = this_tid 
-            self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r' % (cpu.name, self.gdb_port, tid, self.is_compat32))
-            if self.bookmarks is None:
-                if cpu.architecture == 'arm':
-                    cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
-                #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                elif self.isWindows:
-                    machine_size = self.soMap[self.target].getMachineSize(tid)
-                    self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
-                    if machine_size is None:
-                        ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
-                        dumb, machine, dumb2, dumb3 = winProg.getSizeAndMachine(self.full_path, self.lgr)
-                        if machine is None:
-                            self.lgr.error('doDebugCmd failed to get machine value from %s' % self.full_path)
-                            machine_size = 64
-                        elif 'I386' in machine:
-                            machine_size = 32
-                        elif 'AMD64' in machine:
-                            machine_size = 64
-                    if machine_size == 32:
-                        cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
-                    elif machine_size == 64:
-                        cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
-                    else:
-                        self.lgr.error('doDebugCmd failed to get windows machine type')
-                        return None 
+        ''' Note, target may not be currently scheduled '''
+        cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        if tid is None:
+            tid = this_tid 
+        self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r' % (cpu.name, self.gdb_port, tid, self.is_compat32))
+        if cpu.architecture == 'arm':
+            cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
+        #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+        elif self.isWindows:
+            machine_size = self.soMap[self.target].getMachineSize(tid)
+            self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
+            if machine_size is None:
+                ''' hack for compatability with older windows tests. remove after all saved SOMaps have machine '''
+                dumb, machine, dumb2, dumb3 = winProg.getSizeAndMachine(self.full_path, self.lgr)
+                if machine is None:
+                    self.lgr.error('doDebugCmd failed to get machine value from %s' % self.full_path)
+                    machine_size = 64
+                elif 'I386' in machine:
+                    machine_size = 32
+                elif 'AMD64' in machine:
+                    machine_size = 64
+            if machine_size == 32:
+                cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+            elif machine_size == 64:
+                cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+            else:
+                self.lgr.error('doDebugCmd failed to get windows machine type')
+                return None 
 
-                elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-                    cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
-                else:
-                    cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
-                self.lgr.debug('cmd: %s' % cmd)
-                try:
-                    SIM_run_command(cmd)
-                #except simics.SimExc_General:
-                except SimExc_General as e:
-                    self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
-                self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
-                self.debugger_target = self.target
+        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+            cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
+        else:
+            cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
+        self.lgr.debug('cmd: %s' % cmd)
+        try:
+            SIM_run_command(cmd)
+        #except simics.SimExc_General:
+        except SimExc_General as e:
+            self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
 
     def setPathToProg(self, tid):
         prog_name = self.getProgName(tid)
@@ -1210,10 +1208,15 @@ class GenMonitor():
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
+                self.lgr.debug('debug called setPathToProg full_path now %s' % self.full_path)
             # TBD already called in debugTidList.  Does a group==True cover it?
             if not group or self.bookmarks is None:
-                self.lgr.debug('genMonitor debug call doDebugCmd')
-                self.doDebugCmd()
+                if not self.no_gdb and self.bookmarks is None:
+                    self.lgr.debug('genMonitor debug call doDebugCmd')
+                    self.doDebugCmd()
+                if self.bookmarks is None:
+                    self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+                    self.debugger_target = self.target
             self.did_debug=True
             if not self.rev_execution_enabled:
                 self.lgr.debug('debug enable reverse execution')
@@ -1605,12 +1608,22 @@ class GenMonitor():
     def debugTidGroup(self, tid, final_fun=None, to_user=True, track_threads=True):
         if not track_threads:
             self.track_threads = None
+        self.lgr.debug('debugTidGroup tid:%s' % tid)
         leader_tid = self.task_utils[self.target].getGroupLeaderTid(tid)
         if leader_tid is None:
             self.lgr.error('debugTidGroup leader_tid is None, asked about %s' % tid)
             return
+    
         tid_dict = self.task_utils[self.target].getGroupTids(leader_tid)
         tid_list = list(tid_dict.keys())
+        leader_prog = self.soMap[self.target].getProg(leader_tid)
+        copy_list = list(tid_list)
+        for tid in copy_list:
+            prog = self.soMap[self.target].getProg(tid)
+            if prog != leader_prog:
+                self.lgr.debug('debugTidGroup prog %s does not match leader %s, remove it' % (prog, leader_prog))
+                tid_list.remove(tid)
+      
         self.lgr.debug('debugTidGroup cell %s tid:%s found leader %s and %d tids' % (self.target, tid, leader_tid, len(tid_list)))
         if len(tid_list) == 0:
             self.lgr.error('debugTidGroup tid:%s not on current target?' % tid)
@@ -1650,7 +1663,12 @@ class GenMonitor():
         if self.full_path is None:
             self.lgr.debug('debugTidList full_path is None, set it')
             self.setPathToProg(tid_list[0])
-        self.doDebugCmd(tid_list[0])
+        if not self.no_gdb and self.bookmarks is None:
+            self.lgr.debug('genMonitor debug call doDebugCmd')
+            self.doDebugCmd(tid_list[0])
+        if self.bookmarks is None:
+            self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+            self.debugger_target = self.target
         #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)
 
@@ -2549,7 +2567,7 @@ class GenMonitor():
         self.context_manager[self.target].restoreDefaultContext()
 
     def stopDebug(self):
-        ''' stop all debugging.  called by injectIO '''
+        ''' stop all debugging.  called by injectIO and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
         if self.rev_execution_enabled:
             cmd = 'disable-reverse-execution'
@@ -2562,7 +2580,7 @@ class GenMonitor():
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
         self.noWatchSysEnter()
-        self.context_manager[self.target].restoreDefaultContext()
+        self.context_manager[self.target].stopDebug()
 
     def restartDebug(self):
         self.lgr.debug('restartDebug')
@@ -3467,8 +3485,8 @@ class GenMonitor():
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
         self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None):
-        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes)
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
+        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
 
     def getStackTrace(self):
         return self.stackFrameManager[self.target].getStackTrace()
@@ -4051,14 +4069,18 @@ class GenMonitor():
         crashing = False 
         if check_crash:
             for tid in thread_tids:
-                if self.page_faults[self.target].hasPendingPageFault(tid):
+                prec =  self.page_faults[self.target].getPendingFault(tid)
+                if prec is not None:
                     comm = self.task_utils[self.target].getCommFromTid(tid)
-                    cycle = self.page_faults[self.target].getPendingFaultCycle(tid)
-                    print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, cycle))
-                    self.lgr.debug('stopTrackIO Tid %s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                    leader = self.task_utils[self.target].getGroupLeaderTid(tid)
-                    self.page_faults[self.target].handleExit(tid, leader)
-                    crashing = True 
+                    if prec.page_fault:
+                        print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
+                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
+                        leader = self.task_utils[self.target].getGroupLeaderTid(tid)
+                        self.page_faults[self.target].handleExit(tid, leader)
+                        crashing = True 
+                    else:
+                        print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
         #if 'runToIO' in self.call_traces[self.target]:
@@ -4245,12 +4267,20 @@ class GenMonitor():
         self.track_started = True
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
+            self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             if 'coverage/id' in dfile:
                 dfile = dfile.replace('coverage', 'queue')
             else:
                 dfile = dfile.replace('trackio', 'queue')
         if type(save_json) is bool:
-            save_json = 'logs/track.json'
+            if save_json:
+                save_json = 'logs/track.json'
+            else:
+                save_json = None
+
+        if save_json:
+            # hacky logic for turning off gdb server when running parallel trackIOs
+            self.no_gdb = True
         if self.bookmarks is not None:
             self.goToOrigin()
 
@@ -4759,6 +4789,8 @@ class GenMonitor():
         if no_cover:
             bb_coverage = None
         self.rmDebugWarnHap()
+        if parallel:
+            self.no_gdb = True
         play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover,
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
@@ -5325,6 +5357,12 @@ class GenMonitor():
             platform = self.comp_dict[self.target]['PLATFORM']
         return platform
 
+    def getTargetEnv(self, name):
+        retval = None
+        if name in self.comp_dict[self.target]:
+            retval = self.comp_dict[self.target][name]
+        return retval
+
     def getReadAddr(self):
         return self.syscallManager[self.target].getReadAddr()
 
@@ -5376,6 +5414,14 @@ class GenMonitor():
             print('Yes, 0x%x is a function' % addr)
         else:
             print('No, 0x%x is not a function' % addr)
+
+    def getFunName(self, addr):
+        retval = None
+        if self.fun_mgr is None:
+            self.lgr.error('getFunName No function manager yet, are you debugging?')
+        else:
+            retval = self.fun_mgr.getFunName(addr)
+        return retval
 
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
@@ -5530,7 +5576,7 @@ class GenMonitor():
 
     def listRegNames(self):
         target_cpu = self.cell_config.cpuFromCell(self.target)
-        for i in range(100):
+        for i in range(200):
             reg_name = target_cpu.iface.int_register.get_name(i)
             print('%d %s' % (i, reg_name))
 
@@ -5674,6 +5720,7 @@ class GenMonitor():
         if fname is not None:
             analysis_path = self.soMap[self.target].getAnalysisPath(fname)
             if analysis_path is None:
+                self.lgr.debug('getAnalysisPath failed to get path from soMap for %s' % fname)
                 analysis_path = self.getFullPath(fname)
         else:
             analysis_path = None

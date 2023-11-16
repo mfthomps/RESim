@@ -6,7 +6,7 @@ mkdir -p $AFL_DATA/seeds/cadet-tst
 echo "not-a-palidrome" > $AFL_DATA/seeds/cadet-tst/seed.io
 rm -fr resim_*
 clonewd.sh 2
-runAFL ubuntu_driver.ini -s 50
+runAFL ubuntu_driver.ini -s 120
 list=$(ls ~/afl/output/cadet-tst/*_resim_*/crashes/*)
 if [[ $list = *id:000* ]]; then
     echo "AFL passed, found crash"

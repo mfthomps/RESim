@@ -712,6 +712,7 @@ class GenContextMgr():
                self.lgr.debug('contextManager adding clone %s (%s) leader is %s' % (tid, comm, leader_tid))
                ''' add task, but do not try to watch exit since we do not have proper context yet.  Will watch below'''
                self.addTask(tid, new_addr, watch_exit=False)
+               self.task_utils.didClone(leader_tid, tid)
            else:
                pass
                #self.lgr.debug('contextManager tid:%s (%s) not in cache, group leader 0x%x  leader tid %s' % (tid, comm, group_leader, leader_tid))
@@ -833,9 +834,9 @@ class GenContextMgr():
                             retval = True
             elif tid == self.debugging_tid:
                 self.debugging_tid = self.tid_cache[0]
-                self.lgr.debug('rmTask debugging_tid now %s' % self.debugging_tid)
+                self.lgr.debug('genContextManager rmTask debugging_tid now %s' % self.debugging_tid)
             else:
-                self.lgr.debug('rmTask remaining debug recs %s' % str(self.watch_rec_list))
+                self.lgr.debug('genContextManager rmTask remaining debug recs %s' % str(self.watch_rec_list))
         return retval
 
     def addTask(self, tid, rec=None, watch_exit=True):
@@ -900,6 +901,15 @@ class GenContextMgr():
         self.cpu.current_context = self.resim_context
         self.current_context = self.resim_context
         #self.lgr.debug('contextManager restoreDebugContext')
+
+    def stopDebug(self):
+        self.lgr.debug('contextManager stopDebug')
+        self.debugging_tid = None
+        self.debugging_tid_saved = None
+        self.watch_rec_list = {}
+        self.watch_rec_list_saved = {}
+        self.tid_cache = []
+        self.restoreDefaultContext()
 
     def restoreDebug(self):
         if self.debugging_tid is not None:
@@ -1235,7 +1245,7 @@ class GenContextMgr():
         ''' set breakpoint on task record that points to this (or the given) tid '''
         # TBD This asssume all threads die together.  On windows we assume the EPROCESS record is removed
         # and in Linux we assume the group leader is removed.
-        self.lgr.debug('contextManager watchExit tid:%s' % tid)
+        #self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
             self.lgr.debug('watchExit for tid 1, ignore')
@@ -1244,7 +1254,7 @@ class GenContextMgr():
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
         elif rec is None:
-            self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
+            #self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
             rec = self.task_utils.getRecAddrForTid(tid)
         if rec is None:
             self.lgr.debug('contextManager watchExit failed to get list_addr tid:%s cur_tid %s ' % (tid, cur_tid))
@@ -1277,7 +1287,7 @@ class GenContextMgr():
             SIM_run_alone(self.watchTaskHapAlone, tid)
             self.task_rec_watch[tid] = list_addr
         else:
-            self.lgr.debug('contextManager watchExit, already watching for tid %s' % tid)
+            #self.lgr.debug('contextManager watchExit, already watching for tid %s' % tid)
             pass
         return retval
 

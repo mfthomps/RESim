@@ -41,15 +41,17 @@ class InjectToBB():
         here = os.getcwd()
         target = os.path.basename(here)
         print('target is %s' % target)
-        self.lgr.debug('InjectToBB bb: 0x%x target is %s' % (bb, target))
-        flist = findBB.findBB(target, bb, quiet=True)
+        os_type = top.getTargetEnv('OS_TYPE')
+        root_prefix = top.getTargetEnv('RESIM_ROOT_PREFIX')
+        flist = findBB.findBB(target, bb, quiet=True, lgr=lgr)
+        self.lgr.debug('InjectToBB bb: 0x%x target is %s len of flist is %d' % (bb, target, len(flist)))
         self.inject_io = None
         self.top.debugSnap()
         if fname is None:
             prog = self.top.getFullPath()
         else: 
             prog = fname
-        basic_block = resimUtils.getOneBasicBlock(prog, bb)
+        basic_block = resimUtils.getOneBasicBlock(prog, bb, os_type, root_prefix)
         if basic_block is None:
             print('ERROR getting basic block for address 0x%x prog %s' % (bb, prog)) 
             return

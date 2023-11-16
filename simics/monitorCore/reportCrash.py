@@ -123,9 +123,11 @@ class ReportCrash():
 
     def tryCorruptRef(self, instruct, no_increments=False):
         op2, op1 = self.decode.getOperands(instruct[1])
-        self.lgr.debug('reportCrash op2: %s op1: %s' % (op2, op1))
-        reg_find = re.findall(r'\[.*?\]', op2) 
-        self.lgr.debug('reportCrash found in brackets for %s is %s' % (op2, str(reg_find)))
+        self.lgr.debug('reportCrash instruct: %s op2: %s op1: %s' % (instruct, op2, op1))
+        reg_find = []
+        if op2 is not None:
+            reg_find = re.findall(r'\[.*?\]', op2) 
+            self.lgr.debug('reportCrash found in brackets for %s is %s' % (op2, str(reg_find)))
         if len(reg_find) == 0:
             reg_find = re.findall(r'\[.*?\]', op1) 
             self.lgr.debug('reportCrash found in brackets for %s is %s' % (op1, str(reg_find)))
@@ -152,7 +154,7 @@ class ReportCrash():
                 self.top.quit()
     
         else:
-            self.lgr.debug('reportCrash no regs in %s' % op2)
+            self.lgr.debug('reportCrash no regs in op2 of %s' % instruct[1])
             self.top.setCommandCallback(None)
             self.top.quit()
 

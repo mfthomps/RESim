@@ -2,11 +2,14 @@
 #
 # 
 # diff 2 hits files
+# If the directory of the first hits file also contains an idle.hits file, then
+# those hits are not reported as appearing in one file but not the other.
 #
 import sys
 import os
 import glob
 import json
+
 f1 = sys.argv[1]
 f2 = sys.argv[2]
 

@@ -580,7 +580,7 @@ class PlayAFL():
                     count = 0
                     for hit in self.all_hits:
                         if hit not in all_prev_hits:
-                            #print('New hit found at 0x%x' % hit)
+                            print('New hit found at 0x%x' % hit)
                             gotone = True
                             count = count+1
                     if count == 0:
