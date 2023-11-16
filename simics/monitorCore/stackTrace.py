@@ -765,7 +765,8 @@ class StackTrace():
                     cur_fun_name = cur_fun_name[1:]
                 elif cur_fun_name.startswith('_'):
                     cur_fun_name = cur_fun_name[1:]
-                #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x' % (eip, cur_fun_name, cur_fun))
+                prev_ip = eip
+                #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
 
         if self.cpu.architecture != 'arm':
             bp = self.doX86()
