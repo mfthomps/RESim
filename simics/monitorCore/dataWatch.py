@@ -875,6 +875,8 @@ class DataWatch():
         self.top.runToIO(fd, linger=True, break_simulation=False, run=False)
 
     def kernelReturnHap(self, kernel_return_info, third, forth, memory):
+        ''' Data buffer had been read while in the kernel.  We ran forward to the return
+            and now determine what the kernel call was about. '''
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         eax = self.mem_utils.getSigned(eax)
         #self.top.showHaps()
@@ -885,28 +887,39 @@ class DataWatch():
             self.lgr.debug('dataWatch kernelReturnHap failed to get previous frame, bail')
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('kernelReturnHap, tid:%s (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (tid, comm, eip, eax, 
-            kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
+        self.lgr.debug('kernelReturnHap, tid:%s (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (tid, 
+                        comm, eip, eax, kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
         #self.lgr.debug(taskUtils.stringFromFrame(frame))
         if kernel_return_info.op_type == Sim_Trans_Load:
+            fname = None
+            write_fd = None
             if 'ss' in frame:
                 #self.lgr.debug('frame has ss: %s' % frame['ss'].getString())
                 callnum = 102
                 call = net.callname[frame['param1']].lower()
                 write_fd = frame['ss'].fd
-                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
+                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, fname, callnum, call)
             else:
                 callnum = self.mem_utils.getCallNum(self.cpu)
                 call = self.task_utils.syscallName(callnum, self.compat32)
-                write_fd = frame['param1']
-                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
-
-            read_fd = self.getPipeReader(str(write_fd))
-            if read_fd is not None:
-                self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
-                SIM_run_alone(self.runToIOAlone, read_fd)
-            else:
-                self.lgr.debug('dataWatch no pipe reader found for fd %d' % write_fd)
+                if call == 'open' or call.startswith('fstat') or call.startswith('stat'):
+                    fname_addr = frame['param1']
+                    fname = self.mem_utils.readString(self.cpu, fname_addr, 100)
+                    count = len(fname)
+                    src = fname_addr
+                else:
+                    write_fd = frame['param1']
+                    count = eax
+                    src = frame['param2']
+                wm = self.watchMarks.kernel(src, count, write_fd, fname, callnum, call)
+                self.lgr.debug('kernelReturnHap not socket, call %s, frame: %s' % (call, taskUtils.stringFromFrame(frame)))
+            if write_fd is not None:
+                read_fd = self.getPipeReader(str(write_fd))
+                if read_fd is not None:
+                    self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
+                    SIM_run_alone(self.runToIOAlone, read_fd)
+                else:
+                    self.lgr.debug('dataWatch no pipe reader found for fd %d' % write_fd)
         else:
             self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame)
  
@@ -920,7 +933,7 @@ class DataWatch():
         self.watch(i_am_alone=False)
 
     def kernelReturn(self, kernel_return_info):
-        ''' something found the kernel read or wrote one of our buffers.  Run to the kernel return. '''
+        ''' The readHap found that the kernel read or wrote one of our buffers.  Run to the kernel return. '''
         if self.top.getSharedSyscall().callbackPending():
             return
         self.lgr.debug('kernelReturn for addr 0x%x optype %s cycle 0x%x' % (kernel_return_info.addr, str(kernel_return_info.op_type), self.cpu.cycles))

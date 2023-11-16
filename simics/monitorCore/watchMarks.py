@@ -149,12 +149,17 @@ class DataMark():
             self.ad_hoc = False
 
 class KernelMark():
-    def __init__(self, addr, count, callnum, fd):
+    def __init__(self, addr, count, callnum, call, fd, fname):
         self.addr = addr
         self.count = count
         self.callnum = callnum
+        self.call = call
         self.fd = fd
-        self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d FD: %d' % (count, addr, callnum, fd)
+        self.fname = fname
+        if fd is not None:
+            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) FD: %d' % (count, addr, callnum, call, fd)
+        elif fname is not None:
+            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
     def getMsg(self):
         return self.msg
 
@@ -856,8 +861,8 @@ class WatchMarks():
         self.addWatchMark(sm)
         self.lgr.debug('watchMarks memset %s' % (sm.getMsg()))
 
-    def kernel(self, addr, count, fd, callnum):
-        km = KernelMark(addr, count, callnum, fd)
+    def kernel(self, addr, count, fd, fname, callnum, call):
+        km = KernelMark(addr, count, callnum, call, fd, fname)
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernel %s' % (km.getMsg()))
 
@@ -1335,7 +1340,9 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['count'] = mark.mark.count
                 entry['callnum'] = mark.mark.callnum
+                entry['call'] = mark.mark.call
                 entry['fd'] = mark.mark.fd
+                entry['fname'] = mark.mark.fname
             elif isinstance(mark.mark, StrChrMark):
                 entry['mark_type'] = 'strchr' 
                 entry['the_char'] = mark.mark.the_chr
