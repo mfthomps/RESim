@@ -5357,6 +5357,12 @@ class GenMonitor():
             platform = self.comp_dict[self.target]['PLATFORM']
         return platform
 
+    def getTargetEnv(self, name):
+        retval = None
+        if name in self.comp_dict[self.target]:
+            retval = self.comp_dict[self.target][name]
+        return retval
+
     def getReadAddr(self):
         return self.syscallManager[self.target].getReadAddr()
 
@@ -5570,7 +5576,7 @@ class GenMonitor():
 
     def listRegNames(self):
         target_cpu = self.cell_config.cpuFromCell(self.target)
-        for i in range(100):
+        for i in range(200):
             reg_name = target_cpu.iface.int_register.get_name(i)
             print('%d %s' % (i, reg_name))
 
