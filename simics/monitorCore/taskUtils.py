@@ -545,7 +545,7 @@ class TaskUtils():
                     if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
                         #retval.append(ts_list[ts].pid)
                         retval[str(pid)] = ts
-                        self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
+                        #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
             else:
                 ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
                 # TBD FIX to use thread head list?  This will find procs that happen to have the same comm, e.g., /etc/init.d/foo
