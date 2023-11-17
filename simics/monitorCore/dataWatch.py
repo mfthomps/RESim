@@ -907,6 +907,12 @@ class DataWatch():
                     fname = self.mem_utils.readString(self.cpu, fname_addr, 100)
                     count = len(fname)
                     src = fname_addr
+                elif call = 'writev':
+                    # TBD only record the first buffer of an iov
+                    write_fd = frame['param1']
+                    iov_addr = frame['param2']
+                    src = self.mem_utils.readPtr(self.cpu, iov_addr)
+                    count = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
                 else:
                     write_fd = frame['param1']
                     count = eax
@@ -3283,7 +3289,8 @@ class DataWatch():
                     self.rmRange(addr)
                     retval = True
             else:
-                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
+                #if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
+                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_'):
                     self.lgr.debug('dataWatch cheapReuse mod is function %s and we think we missed a free.  Assume reuse' % (fun_name))
                     self.rmRange(addr)
                     retval = True
