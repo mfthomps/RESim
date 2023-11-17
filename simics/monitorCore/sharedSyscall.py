@@ -731,6 +731,7 @@ class SharedSyscall():
                 trace_msg = ('\treturn from clone (tracing), new tid:%s  calling tid:%s (%s)\n' % (eax, tid, comm))
                 #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))
                 self.traceProcs.copyOpen(tid, eax)
+                self.task_utils.didClone(tid, eax)
             elif tid not in self.trace_procs:
                 trace_msg = ('\treturn from clone, new tid:%s  calling tid:%s\n' % (eax, tid))
             else:
@@ -954,6 +955,29 @@ class SharedSyscall():
                 trace_msg = ('\treturn from write tid:%s FD: %d exception %d\n' % (tid, exit_info.old_fd, eax))
                 exit_info.call_params = None
 
+        elif callname == 'writev':
+            if eax >= 0:
+                limit = min(10, exit_info.count)
+                iov_size = 2*self.mem_utils.WORD_SIZE
+                iov_addr = exit_info.retval_addr
+                remain = eax 
+                self.lgr.debug('sharedSyscall writev return count %d iov_addr 0x%x' % (eax, iov_addr))
+                trace_msg = ('\treturn from writev tid:%s FD: %d count: %d' % (tid, exit_info.old_fd, eax))
+                for i in range(limit):
+                    base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                    length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                    if remain > length:
+                        data_len = length
+                    else:
+                        data_len = remain
+                    self.lgr.debug('sharedSyscall writev base: 0x%x length: %d' % (base, length))
+                    trace_msg = trace_msg+' buffer: 0x%x len: %d' % (base, length)
+                    remain = remain - data_len 
+                    iov_addr = iov_addr+iov_size
+                trace_msg = trace_msg+'\n'
+                #SIM_break_simulation(trace_msg)
+                #return
+      
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
                 if self.mem_utils.WORD_SIZE == 4:
