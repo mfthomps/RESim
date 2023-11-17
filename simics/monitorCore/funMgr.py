@@ -203,7 +203,7 @@ class FunMgr():
             fun = self.funFromAddr(addr)
             if fun is None:
                 call_addr = self.mem_utils.readAppPtr(self.cpu, addr)
-                fun = str(self.funFromAddr(call_addr))
+                fun = self.funFromAddr(call_addr)
                 #self.lgr.debug('funMgr fun from addr 0x%x was None used readAddPtr to get call_addr 0x%x' % (addr, call_addr))
             else:
                 #self.lgr.debug('funMgr got fun %s from addr 0x%x' % (fun, addr))
@@ -226,7 +226,7 @@ class FunMgr():
                     #self.lgr.debug('getFunName, %s not a hex' % parts[1])
                     pass
                 if call_addr is not None:
-                    fun = str(self.funFromAddr(call_addr))
+                    fun = self.funFromAddr(call_addr)
                     #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
