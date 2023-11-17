@@ -630,7 +630,7 @@ class WriteData():
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
-                     rprint('**** Adjusted return value, RESET Origin ***') 
+                     #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                  self.kernel_buf_consumed = True
                  if self.no_call_hap:
