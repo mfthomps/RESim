@@ -491,17 +491,14 @@ def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None, root_prefix=None)
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
     #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    analysis_path = os.getenv('IDA_ANALYSIS')
+    if analysis_path is None:
+        lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
     quick_check = fname+'.funs'
-    if os.path.isfile(quick_check):
+    if fname.startswith(analysis_path) and os.path.isfile(quick_check):
         lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
         retval = fname
     else:
-        analysis_path = os.getenv('IDA_ANALYSIS')
-        if analysis_path is None:
-            analysis_path = '/mnt/resim_archive/analysis'
-            if lgr is not None and len(fun_list_cache) == 0:
-                lgr.warning('resimUtils getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
-        
         if root_prefix is None: 
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
