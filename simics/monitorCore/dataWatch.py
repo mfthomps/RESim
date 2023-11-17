@@ -796,7 +796,7 @@ class DataWatch():
                     #self.lgr.debug('dataWatch stopWatch delete read_hap %d' % self.read_hap[index])
                     self.context_manager.genDeleteHap(self.read_hap[index], immediate=immediate)
             else:
-                self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
+                #self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
                 pass
         #self.lgr.debug('DataWatch stopWatch removed read haps')
         del self.read_hap[:]
@@ -1042,19 +1042,24 @@ class DataWatch():
                 return
             skip_it = False          
             if self.mem_something.op_type == Sim_Trans_Load:
-                #buf_start = self.findRange(self.mem_something.src)
-                buf_index = self.findRangeIndex(self.mem_something.src)
+                #buf_index = self.findRangeIndex(self.mem_something.src)
+
+                buf_index, buf_start, buf_length = self.findRangeIndexForRange(self.mem_something.src, self.mem_something.count)
+
                 if buf_index is None:
                     self.lgr.debug('dataWatch buf_start for 0x%x is none in memcpyish?' % (self.mem_something.src))
                     buf_start = 0
                     #SIM_break_simulation('mempcpy')
                     #return
                 else:
-                    buf_start = self.start[buf_index]
-                    if self.length[buf_index] < self.mem_something.count:
-                        self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
-                        self.mem_something.truncated = self.mem_something.count 
-                        self.mem_something.count = self.length[buf_index]
+                    self.lgr.debug('dataWatch cpyish from findRangeIndexForRange buf_index %d, buf_start 0x%x, buf_length %d' % (buf_index, buf_start, buf_length))
+                    self.mem_something.src = buf_start 
+                    self.mem_something.count = buf_length 
+                    #buf_start = self.start[buf_index]
+                    #if self.length[buf_index] < self.mem_something.count:
+                    #    self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
+                    #    self.mem_something.truncated = self.mem_something.count 
+                    #    self.mem_something.count = self.length[buf_index]
             else:
                 self.lgr.debug('returnHap copy not a Load, first see if src is a buf')
                 buf_start = self.findRange(self.mem_something.src)
@@ -3604,6 +3609,9 @@ class DataWatch():
                     elif addr < self.start[index] and range_end <= end and range_end >= self.start[index]:
                         ret_start = self.start[index]
                         ret_length = length - (self.start[index] - addr)
+                    elif addr <= self.start[index] and range_end >= end:
+                        ret_start = self.start[index]
+                        ret_length = self.length[index]
                     if ret_start is not None:
                         ret_index = index
                         break            
