@@ -329,7 +329,7 @@ class PageFaultGen():
         ''' TBD explain why arm only uses faultCallback yet x86 also uses pageFaultHap '''
         if self.cpu.architecture == 'arm':
             
-            self.lgr.debug('watchPageFaults set break at page_fault 0x%x and data_abort 0x%x' % (self.param.page_fault, self.param.data_abort))
+            #self.lgr.debug('watchPageFaults set break at page_fault 0x%x and data_abort 0x%x' % (self.param.page_fault, self.param.data_abort))
             #note page_fault is prefech abort 
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             proc_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
@@ -370,8 +370,8 @@ class PageFaultGen():
         name = cpu.iface.exception.get_name(exception_number)
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
-                exception_number, tid, comm, eip, instruct[1], cpu.cycles))
+        #self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
+        #        exception_number, tid, comm, eip, instruct[1], cpu.cycles))
         prec = Prec(self.cpu, comm, tid=tid, eip=eip, name=name)
         self.pending_sigill[tid] = prec
         # record cycle and eip for reversing back to user space    
