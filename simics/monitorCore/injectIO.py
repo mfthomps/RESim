@@ -29,6 +29,7 @@ Alternately generate syscall or instruction traces.
 from simics import *
 import writeData
 import memUtils
+import syscall
 import cli
 import os
 import sys
@@ -342,7 +343,9 @@ class InjectIO():
                     if not self.no_rop:
                         self.top.watchROP()
                 else:
-                    self.top.traceAll()
+                    self.lgr.debug('injectIO call traceAll')
+                    call_params = syscall.CallParams('injectIO', None, self.fd)
+                    self.top.traceAll(call_params_list=[call_params])
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
