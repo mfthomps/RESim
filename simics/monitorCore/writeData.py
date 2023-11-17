@@ -262,9 +262,9 @@ class WriteData():
         return retval
 
     def readLimitCallback(self):
-        ''' Called by dataWatch when kernel buffer size is consumed '''
+        ''' Called by dataWatch when kernel buffer size is consumed TBD NO IT IS NOT.  remove this?'''
         if self.call_hap is None and self.call_ip is not None:
-            #self.lgr.debug('writeData readLimitCallback, add callHap at 0x%x context is %s' % (self.call_ip, self.cpu.current_context))
+            self.lgr.debug('writeData readLimitCallback, add callHap at 0x%x context is %s' % (self.call_ip, self.cpu.current_context))
             #self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_break = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
@@ -391,7 +391,7 @@ class WriteData():
                 if self.select_call_ip is not None:
                     self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
                     self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectHap, None, self.select_break)
-                    self.lgr.debug('writeData set selectHap on select_call_ip 0x%x, cell is %s' % (self.select_call_ip, str(self.cell)))
+                    #self.lgr.debug('writeData set selectHap on select_call_ip 0x%x, cell is %s' % (self.select_call_ip, str(self.cell)))
 
     def setSelectStopHap(self):
         if self.select_hap is None:
@@ -461,6 +461,7 @@ class WriteData():
             return
         skip_it = False
         if self.top.isWindows():
+            # TBD check FD
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
@@ -478,6 +479,17 @@ class WriteData():
                 skip_it = True
 
             #    return
+        else:
+            eip = self.top.getEIP(self.cpu)
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            callname = self.top.syscallName(callnum)
+            frame = self.top.frameFromRegs()
+            fd = frame['param1']
+            #self.lgr.debug('writeData callHap eip: 0x%x callnum %d  call: %s fd: %d' % (eip, callnum, callname, fd))
+            if fd != self.fd:
+                #self.lgr.debug('writeData callHap wrong fd, skip it')
+                skip_it = True
+
         if not skip_it:
             self.read_count = self.read_count + 1
             #self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
@@ -491,12 +503,12 @@ class WriteData():
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            #if self.closed_fd:
-            #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
-            #    pass
-            #else:
-            #    self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
-            #    pass
+            if self.closed_fd:
+                #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
+                pass
+            else:
+                #self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
+                pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
