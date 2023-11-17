@@ -2434,7 +2434,7 @@ class GenMonitor():
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
-        self.lgr.debug('genMonitor rmCallTrace %s' % callname)
+        #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
             the_call = self.call_traces[cell_name][callname]
             rm_list = []
@@ -2493,7 +2493,7 @@ class GenMonitor():
             self.ignoreThreadList()
         return retval
  
-    def traceAll(self, target=None, record_fd=False, swapper_ok=False):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[]):
         if target is None:
             target = self.target
 
@@ -2537,7 +2537,7 @@ class GenMonitor():
                 self.traceProcs[target].watchAllExits()
             self.lgr.debug('traceAll, create syscall hap')
             self.trace_all[target] = self.syscallManager[self.target].watchAllSyscalls(None, 'traceAll', trace=True, binders=self.binders, connectors=self.connectors,
-                                      record_fd=record_fd, linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok)
+                                      record_fd=record_fd, linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok, call_params_list=call_params_list)
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
