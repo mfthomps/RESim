@@ -939,13 +939,26 @@ class GenMonitor():
         self.runScripts()
 
     def getDbgFrames(self):
-        ''' Get stack frames from kernel entries as recorded by the reverseToCall module 
-            Do this for all siblings of the currently scheduled thread.
+        ''' Get stack frames from kernel entries as recorded by the reverseToCall module. 
+            If debugging, get all debug threads.  If not debugging, get whatever is recorded.
+            NOT this will only get frames that were recorded.
         '''
+        retval = {}
         if self.isWindows():
             retval = self.winMonitor[self.target].getDbgFrames()
+        elif not self.debugging():
+            self.lgr.debug('getDbgFrames task not debugging. force setup of reverseToCall to get entry frames.')
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.rev_to_call[self.target].setup(cpu, [])
+            tasks = self.task_utils[self.target].getTaskStructs()
+            for t in sorted(tasks):
+                tid = str(tasks[t].pid)
+                #self.lgr.debug('getDbgFrames task for tid:%s state %d' % (tid, tasks[t].state))
+                frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+                if frame is not None:
+                    #self.lgr.debug('getDbgFrames add frame for tid:%s' % (tid))
+                    retval[tid] = frame
         else:
-            retval = {}
             plist = {}
             tid_list = self.context_manager[self.target].getThreadTids()
             tasks = self.task_utils[self.target].getTaskStructs()
@@ -1812,8 +1825,7 @@ class GenMonitor():
                 # TBD skipping back to prior to call makes no sense
                 self.lgr.debug('skipAndMail left in kernel')
                 
-            db_tid, cpu = self.context_manager[self.target].getDebugTid() 
-            if db_tid is not None:
+            if self.debugging():
                 self.lgr.debug('skipAndMail, restoreDebugBreaks')
                 SIM_run_alone(self.restoreDebugBreaks, False)
 
@@ -2484,9 +2496,8 @@ class GenMonitor():
     def checkOnlyIgnore(self):
         ''' Load ignore list or only list if defined '''
         self.lgr.debug('checkOnlyIgnore')
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
         retval = False
-        if tid is None:
+        if not self.debugging():
             retval = self.ignoreProgList() 
             if not retval:
                 retval = self.onlyProgList() 
@@ -2541,19 +2552,21 @@ class GenMonitor():
 
             if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
+                self.lgr.debug('traceAll running from snap, starting cycle')
                 p_file = os.path.join('./', self.run_from_snap, target, 'sharedSyscall.pickle')
                 if os.path.isfile(p_file):
                     exit_info_list = pickle.load(open(p_file, 'rb'))
                     if exit_info_list is None:
-                        self.lgr.error('No data found in %s' % p_file)
+                        self.lgr.error('traceAll No sharedSyscall pickle data found in %s' % p_file)
                     else:
+                        self.lgr.debug('traceAll got sharedSyscall pickle len of exit_info %d' % len(exit_info_list))
                         ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
                         self.trace_all[target].setExits(exit_info_list, context_override = context)
 
             frames = self.getDbgFrames()
-            self.lgr.debug('traceAll, call to setExits')
-            self.trace_all[target].setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
-            ''' TBD not handling calls made prior to trace all without debug?  meaningful?'''
+            self.lgr.debug('traceAll, call to setExits %d frames context %s' % (len(frames), context))
+            self.trace_all[target].setExits(frames, context_override=context)
+
 
     def noDebugXXXXXXXXXX(self, dumb=None):
         # TBD clarify difference between this and stopDebug.  remove this one?
@@ -5791,6 +5804,13 @@ class GenMonitor():
     def clearAllHaps(self):
         for target in self.context_manager:
             self.context_manager.clearAllHaps()
+
+    def debugging(self):
+        retval = False
+        debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
+        if debug_tid is not None:
+            retval = True
+        return retval
 
 
 if __name__=="__main__":        
