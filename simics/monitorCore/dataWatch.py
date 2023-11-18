@@ -907,7 +907,7 @@ class DataWatch():
                     fname = self.mem_utils.readString(self.cpu, fname_addr, 100)
                     count = len(fname)
                     src = fname_addr
-                elif call = 'writev':
+                elif call == 'writev':
                     # TBD only record the first buffer of an iov
                     write_fd = frame['param1']
                     iov_addr = frame['param2']
