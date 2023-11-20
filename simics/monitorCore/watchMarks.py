@@ -31,7 +31,8 @@ class CopyMark():
         self.op_type = op_type
         self.strcpy = strcpy
         self.sp = sp
-        if src is None or dest is None or buf_start is None:
+        self.msg = None
+        if src is None or dest is None:
             print('watchMarks CopyMark bad call, something is None')
             return
         if op_type == Sim_Trans_Load:
@@ -51,7 +52,7 @@ class CopyMark():
                     offset = dest - buf_start
                     self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer unknown!)' % (length, src, dest, )
+                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer removed)' % (length, src, dest, )
             else:
                 self.msg = 'Modify Copy length is none, not where wth'
     def getMsg(self):
@@ -846,7 +847,7 @@ class WatchMarks():
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
-        if src is None or dest is None or buf_start is None:
+        if src is None or dest is None:
             self.lgr.error('watchMarks copy called with None for src, dest or buf_start?')
             return
         cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated)
@@ -875,12 +876,18 @@ class WatchMarks():
 
     def compare(self, fun, dest, src, count, buf_start):
         if count > 0:
-            dst_str = self.mem_utils.readString(self.cpu, dest, count)
+            if fun == 'strcmp':
+                dst_str = self.mem_utils.readString(self.cpu, dest, 100)
+            else:
+                dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
                     dst_str = dst_str.decode('ascii', 'replace')
-            src_str = self.mem_utils.readString(self.cpu, src, count)
+            if fun == 'strcmp':
+                src_str = self.mem_utils.readString(self.cpu, src, 100)
+            else:
+                src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
