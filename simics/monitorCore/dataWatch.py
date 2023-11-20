@@ -1074,15 +1074,16 @@ class DataWatch():
                     buf_index = self.findRangeIndex(self.mem_something.dest)
                     if buf_index is not None:
                         if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
-                            self.lgr.debug('dataWatch returnHap, overwrite buffer exact match, remove the buffer')
+                            self.lgr.debug('dataWatch returnHap, overwrite buffer start exact match.  Length of buffer %d, len of copy %d., remove the buffer' % (self.length[buf_index], self.mem_something.count))
                             if buf_index in self.read_hap:
                                 hap = self.read_hap[buf_index]
                                 self.context_manager.genDeleteHap(hap, immediate=False)
                                 self.read_hap[buf_index] = None
                             self.start[buf_index] = None
                         else:
-                            self.lgr.warning('dataWatch returnHap, TBD, overwrite buffer exact match, but not a match.  start 0x%x len %d' % (self.start[buf_index], 
-                                   self.length[buf_index]))
+                            self.lgr.warning('dataWatch returnHap, TBD, overwrite buffer but not a match with start.  The buffer: 0x%x len %d.  Copy dest: 0x%x len %d.  Remove subrange' % (self.start[buf_index], self.length[buf_index], self.mem_something.dest, self.mem_something.count))
+
+                            self.rmSubRange(self.mem_something.dest, self.mem_something.count)
                     else:
                         self.lgr.debug('dataWatch returnHap memcpy, but nothing we care about')
                         skip_it = True
@@ -3506,6 +3507,7 @@ class DataWatch():
         return self.show_cmp
 
     def rmSubRange(self, addr, trans_size):
+        ''' remove a subrange within a buffer '''
         index = self.findRangeIndex(addr)
         if index is not None:
             if index != self.recent_reused_index:
@@ -3518,6 +3520,7 @@ class DataWatch():
                     self.hack_reuse_index = index
                     self.hack_reuse = []
                     self.hack_reuse.append(addr)
+                    self.lgr.debug('dataWatch rmSubRange start == addr, use hack_reuse')
                 elif index == self.hack_reuse_index:
                     if addr not in self.hack_reuse:
                         self.hack_reuse.append(addr)
@@ -3525,20 +3528,22 @@ class DataWatch():
                             force_reuse = True
                             self.lgr.debug('dataWatch rmSubRange force reuse')
               
-                if force_reuse or (start >= addr and end <= (addr+trans_size)):
-                    self.lgr.debug('dataWatch rmSubRange, IS overlap start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
+                #if force_reuse or (start >= addr and end <= (addr+trans_size)):
+                if force_reuse or (start <= addr and end >= (addr+trans_size)):
+                    self.lgr.debug('dataWatch rmSubRange, IS overlap (or force_reuse) start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
                     new_start = None
                     self.lgr.debug('dataWatch rmSubRange, addr: 0x%x start 0x%x length: %d end 0x%x' % (addr, start, length, end))
+                    self.lgr.debug('dataWatch rmSubRange start[%d] (0x%x length %x) set to None' % (index, self.start[index], self.length[index]))
                     self.start[index] = None
-                    self.lgr.debug('dataWatch rmSubRange index[%d] set to None' % index)
                     if index < len(self.read_hap) and self.read_hap[index] is not None:
-                        self.lgr.debug('dataWatch rmSubRange read_hap[%d] %d' % (index, self.read_hap[index]))
+                        self.lgr.debug('dataWatch rmSubRange removing read_hap[%d] %d' % (index, self.read_hap[index]))
                         hap = self.read_hap[index]
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[index] = None
                     if start < addr:
                         newlen = addr - start + 1
                         if newlen > 0:
+                            self.lgr.debug('dataWatch rmSubRange adding new range start 0x%x len %x' % (start, newlen))
                             self.setRange(start, newlen, no_extend=True)
                         new_start = addr + trans_size
                     elif start == addr and trans_size < length:
@@ -3546,6 +3551,7 @@ class DataWatch():
                     if new_start is not None and new_start < end:
                         newlen = end - new_start + 1
                         if newlen > 0:
+                            self.lgr.debug('dataWatch rmSubRange adding range for new start 0x%x new len %x' % (new_start, newlen))
                             self.setRange(new_start, newlen, no_extend=True)
                     self.stopWatch()
                     self.watch()
