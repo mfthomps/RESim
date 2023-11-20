@@ -201,7 +201,9 @@ class PlayAFL():
         if target_proc is None:
             self.top.debugTidGroup(tid, to_user=False)
             self.finishInit()
-            self.disableReverse()
+
+            if self.dfile != 'oneplay':
+                self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
             ''' generate a bookmark so we can return here after setting coverage breakpoints on target'''
