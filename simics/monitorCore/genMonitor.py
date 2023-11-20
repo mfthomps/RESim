@@ -1037,7 +1037,8 @@ class GenMonitor():
                     this_in_kernel = True   
             t = plist[tid]
             if this_in_kernel or tasks[t].state > 0:
-                frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+                #frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+                frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(tid)
                 if frame is None:
                     print('frame for %s was none' % tid)
                     continue
