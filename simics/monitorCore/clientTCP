@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #  Send a file to a given host/port using tcp
 #
@@ -37,12 +37,12 @@ while True:
         sock.connect(server_addr)
         lgr.debug('connect ok')
         break
-    except socket.error, e:
+    except(socket.error, e):
         lgr.debug('connect fail %s' % e)
         time.sleep(1)
         
 for infile in infile_list:    
-    with open (infile) as fh:
+    with open (infile, 'rb') as fh:
         s = fh.read()
         sock.sendall(s) 
         lgr.debug('sent %d bytes' % len(s))
