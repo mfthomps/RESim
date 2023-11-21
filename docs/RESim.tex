@@ -1042,6 +1042,7 @@ wish to download and place in this directory.
    export PATH=$RESIM_DIR/simics/bin:$PATH
 \end{verbatim}
 
+\item For Windows, install the pev package to get the readpe function for reading coff headers.
 \end{itemize}
 
 \subsubsection{Missing Simics platform files}
@@ -3057,6 +3058,25 @@ The crashes are seen by AFL.
 Exits are watched during playback and are displayed to the user.  For Linux, the {\tt exit\_group} and the
 {\tt tgkill} calls are watched.  For Windows, the {\tt TerminateProcess} is watched.  (TBD add TerminateThread?)
 
+\subsection{Watch Marks and Parsing}
+Watch marks created by complex regular expression parsers such as perlMatcher may show multiple marks where you might expect to see one.  The ad-hoc nature
+of RESims regular expression detection can result in several adjacent marks that are part of the same call chain.  When RESim first sees a data reference
+that appears to be a regex character lookup, it finds the call to that function.  However it may be that the calling function might also be within a parser
+and it may then make a data reference, and so on.  One approach to making better sense of such watch marks (particularly when there are many of them) is
+to perform post-processing to consolidate multiple marks. 
+
+\subsection{BNTs and compares}
+Catch blocks such as these within markCompare.
+\begin{verbatim}
+LDR     R3, [SP,#0x50+var_44]
+CMP     R3, #0
+MOVNE   R3, #0
+STRNE   R3, [SP,#0x50+var_44]
+CMP     R0, #0
+BEQ     loc_6BEE8
+\end{verbatim}
+Some BNTs are at cycles that are not likely to be affected by input data, e.g., occur prior to parsing.  However we only record the first hit of a bb, so we cannot weed these out without
+running and seeing if early blocks are hit again.
 
 \section{Driver platforms}
 \label{driver}
@@ -3360,25 +3380,6 @@ The Context Manager must be able to distinguish between threads of a process, e.
 
 If traceAll while debugging, the all threads of the process must be traced.
 
-\subsection{Watch Marks and Parsing}
-Watch marks created by complex regular expression parsers such as perlMatcher may show multiple marks where you might expect to see one.  The ad-hoc nature
-of RESims regular expression detection can result in several adjacent marks that are part of the same call chain.  When RESim first sees a data reference
-that appears to be a regex character lookup, it finds the call to that function.  However it may be that the calling function might also be within a parser
-and it may then make a data reference, and so on.  One approach to making better sense of such watch marks (particularly when there are many of them) is
-to perform post-processing to consolidate multiple marks. 
-
-\subsection{BNTs and compares}
-Catch blocks such as these within markCompare.
-\begin{verbatim}
-LDR     R3, [SP,#0x50+var_44]
-CMP     R3, #0
-MOVNE   R3, #0
-STRNE   R3, [SP,#0x50+var_44]
-CMP     R0, #0
-BEQ     loc_6BEE8
-\end{verbatim}
-Some BNTs are at cycles that are not likely to be affected by input data, e.g., occur prior to parsing.  However we only record the first hit of a bb, so we cannot weed these out without
-running and seeing if early blocks are hit again.
 \end{appendices}
 \end{document}
 
