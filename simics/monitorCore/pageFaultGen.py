@@ -175,11 +175,16 @@ class PageFaultGen():
         access_type = None
         if self.cpu.architecture == 'arm':
             # Get faulting user eip
-            i_reg_num = self.cpu.iface.int_register.get_number("instruction_far")
-            self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
-            #self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
+            bad_reg = False
+            try:
+                i_reg_num = self.cpu.iface.int_register.get_number("instruction_far")
+                self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
+                #self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
+            except SimExc_General:
+                self.lgr.debug('bad reg num')
+                bad_reg = True
 
-            if eip == self.param.data_abort:
+            if bad_reg or eip == self.param.data_abort:
                 data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
                 fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
@@ -198,7 +203,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
                 fault_addr = self.cpu.iface.int_register.read(reg_num)
-                #sel.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
+                #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
             else:
                 #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
                 fault_addr = eip
@@ -227,6 +232,7 @@ class PageFaultGen():
                 #self.lgr.debug('pageFaultGen adding mode hap')
                 self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         hack_rec = (compat32, page_info, prec)
+
         SIM_run_alone(self.pageFaultHapAlone, hack_rec)
 
     def rmModeHapAlone(self, dumb):
