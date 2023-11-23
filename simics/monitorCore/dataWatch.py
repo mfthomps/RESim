@@ -604,6 +604,9 @@ class DataWatch():
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             rm_list = []
             for failed_index in self.stack_buffers[-1]:
+                if failed_index not in self.start or self.start[failed_index] is None:
+                    self.lgr.debug('dataWatch checkFailedStackBufs failed index %d not in self.start (or is None), sp: 0x%x' % (failed_index, sp))
+                    continue
                 self.lgr.debug('dataWatch checkFailedStackBufs failed index %d start 0x%x sp 0x%x' % (failed_index, self.start[failed_index], sp))
                 if self.start[failed_index] <= sp:
                     rm_list.append(failed_index)
