@@ -865,6 +865,7 @@ class Coverage():
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
+        self.halt_coverage = False
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
@@ -1101,5 +1102,5 @@ class Coverage():
             SIM_enable_breakpoint(self.missing_breaks[addr])
 
     def haltCoverage(self):
-        self.lgr.debug('coverage haltCoverage')  
+        #self.lgr.debug('coverage haltCoverage')  
         self.halt_coverage = True
