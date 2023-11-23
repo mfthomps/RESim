@@ -314,6 +314,8 @@ class GenMonitor():
 
         self.no_gdb = False
 
+        self.afl_instance= None
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -1037,9 +1039,12 @@ class GenMonitor():
                     this_in_kernel = True   
             t = plist[tid]
             if this_in_kernel or tasks[t].state > 0:
-                #frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                 frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(tid)
                 if frame is None:
+                    print('Nothing in previous, try recent loaded from pickle')
+                    frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+                if frame is None:
+                    #frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                     print('frame for %s was none' % tid)
                     continue
                 call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
@@ -1243,7 +1248,9 @@ class GenMonitor():
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugTid()
-            self.context_manager[self.target].restoreDebugContext()
+            #self.lgr.debug('debug restore RESim context')
+            # this is already done in setDebugTid???
+            #self.context_manager[self.target].restoreDebugContext()
             self.debug_breaks_set = True
 
             if group:
@@ -2681,10 +2688,11 @@ class GenMonitor():
             self.proc_hap = None
             self.skipAndMail()
 
-    def debugExitHap(self, flist=None): 
-        ''' intended to stop simultion if the threads we are debugging all exit '''
+    def debugExitHap(self, flist=None, context=None): 
+        ''' intended to stop simulation if the threads we are debugging all exit '''
+        retval = None
         if self.isWindows():
-            self.winMonitor[self.target].debugExitHap(flist)
+            self.winMonitor[self.target].debugExitHap(flist, context=context)
         else:
             if self.target not in self.exit_group_syscall:
                 somap = None
@@ -2692,13 +2700,15 @@ class GenMonitor():
                     somap = self.soMap[self.target]
                 else:
                     self.lgr.debug('debugExitHap no so map for %s' % self.target)
-        
-                context=self.context_manager[self.target].getRESimContextName()
+       
+                if context is None: 
+                    context=self.context_manager[self.target].getRESimContextName()
 
                 exit_calls = ['exit_group', 'tgkill']
                 self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
+                retval = self.exit_group_syscall[self.target]
                 #self.lgr.debug('debugExitHap')
-
+        return retval
 
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
@@ -4710,13 +4720,13 @@ class GenMonitor():
             full_path=fname
         '''
         full_path=fname
-        fuzz_it = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
+        self.afl_instance = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
             one_done=one_done, test_file=test_file)
         if target is None:
             self.noWatchSysEnter()
-            fuzz_it.goN(0)
+            self.afl_instance.goN(0)
 
     # TBD unused?
     def aflFD(self, fd, snap_name, count=1):
@@ -5813,7 +5823,15 @@ class GenMonitor():
             retval = True
         return retval
 
+    def haltCoverage(self):
+        if self.coverage is not None:
+            self.coverage.haltCoverage()
 
+    def brokenAFL(self):
+        self.lgr.debug('brokenAFL')
+        if self.afl_instance is not None:
+            self.afl_instance.saveThisData()
+            self.quit() 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
