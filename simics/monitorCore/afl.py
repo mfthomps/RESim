@@ -547,7 +547,7 @@ class AFL():
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()
-        self.lgr.debug('afl goN now continue current context %s' % str(self.cpu.current_context))
+        #self.lgr.debug('afl goN now continue current context %s' % str(self.cpu.current_context))
         #cli.quiet_run_command('c') 
         SIM_continue(0)
         

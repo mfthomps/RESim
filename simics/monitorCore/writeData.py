@@ -389,7 +389,7 @@ class WriteData():
             #if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             if self.k_start_ptr is None and self.call_ip is not None:
                 ''' NOTE stop on read will miss processing performed by other threads. '''
-                self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+                #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
                 phys_block = self.cpu.iface.processor_info.logical_to_physical(self.call_ip, Sim_Access_Execute)
                 self.call_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 #self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
@@ -571,7 +571,7 @@ class WriteData():
                     if self.closed_fd:
                         SIM_run_alone(self.delCallHap, None)
                         SIM_break_simulation('writeData fd closed')
-                        self.lgr.debug('writeData handleCall current packet %d fd closed stop simulation' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall current packet %d fd closed stop simulation' % self.current_packet)
                     elif not self.kernel_buf_consumed:
                         self.user_space_addr, length = self.top.getReadAddr()
                         if self.user_space_addr is not None:
@@ -581,7 +581,7 @@ class WriteData():
                         self.top.haltCoverage()
                         SIM_run_alone(self.delCallHap, None)
                         SIM_break_simulation('writeData out of data')
-                        self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
                 else:
                     if self.stop_on_read:
                         SIM_run_alone(self.delCallHap, None)
@@ -589,7 +589,7 @@ class WriteData():
                         SIM_break_simulation('writeData out of data')
                     elif self.top.isWindows():
                         SIM_run_alone(self.delCallHap, None)
-                        self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
                         SIM_break_simulation('writeData out of data windows')
                     else:
                         #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
@@ -686,7 +686,7 @@ class WriteData():
             self.setCallHap()
 
     def delCallHap(self, dumb):
-        self.lgr.debug('writeData delCallHap')
+        #self.lgr.debug('writeData delCallHap')
         if self.call_hap is not None:
             self.was_a_call_hap = True
             #self.lgr.debug('writeData delCallHap callbreak %d' % self.call_break)
@@ -716,7 +716,7 @@ class WriteData():
 
     def delRetHap(self, dumb):
         if self.ret_hap is not None:
-            self.lgr.debug('writeData delRetHap')
+            #self.lgr.debug('writeData delRetHap')
             #self.lgr.debug('writeData delCallHap re_break %d' % self.ret_break)
             RES_delete_breakpoint(self.ret_break)
             RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.ret_hap)
