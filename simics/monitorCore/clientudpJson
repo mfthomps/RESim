@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+#
+#  Send multiple UDP packets as read from a json file
+#  at /tmp/sendudp, with packets delimited by json entries
+#
+import sys
+import time
+import os
+import socket
+import json
+import binascii
+host = sys.argv[1].strip()
+port = int(sys.argv[2].strip())
+print('ip %s' % host)
+print('port %d' % port)
+infile = sys.argv[3]
+print('file %s' % infile)
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+server_addr = (host, port)
+#server_addr = ('localhost', port)
+if os.path.isfile(infile):
+    with open (infile) as fh:
+        data = fh.read()
+        udp_json = json.loads(data)
+        for packet in udp_json:
+            packet_hex = eval(packet)
+            packet_bytes = binascii.unhexlify(packet_hex)
+            print('len packet is %d' % len(packet_bytes))
+            sock.sendto(packet_bytes, server_addr)
+            #time.sleep(.01)
+        
