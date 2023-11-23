@@ -2722,6 +2722,8 @@ class Syscall():
                     break
         return retval 
 
+    def resetHackCycle(self):
+        self.hack_cycle= 0
 
     #def stopOnExit(self):
     #    self.stop_on_exit=True
