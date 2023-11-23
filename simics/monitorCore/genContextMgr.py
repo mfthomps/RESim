@@ -324,7 +324,7 @@ class GenContextMgr():
                 cell = self.resim_context
             else:
                 cell = self.default_context
-            #self.lgr.debug('gen break with resim context %s' % str(self.resim_context))
+            #self.lgr.debug('gen break with context %s' % str(cell))
         bp = GenBreakpoint(cell, addr_type, mode, addr, length, flags, handle, self.lgr, prefix=prefix) 
         self.breakpoints.append(bp)
         #self.lgr.debug('genBreakpoint handle %d number of breakpoints is now %d prefix %s context %s' % (handle, len(self.breakpoints), prefix, cell))
@@ -484,6 +484,7 @@ class GenContextMgr():
         if rec in self.suspend_watch_list:
             self.suspend_watch_list.remove(rec)
             if self.debugging_tid is not None:
+                self.lgr.debug('contextManager rmSuspendWatch restore RESim context')
                 SIM_run_alone(self.restoreDebugContext, None)
                 #self.restoreDebugContext()
             else:
@@ -545,7 +546,7 @@ class GenContextMgr():
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
-                #self.lgr.debug('contextManager alterWatches tid:%s restored debug context' % tid)
+                self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 SIM_run_alone(self.restoreDebugContext, None)
                 #self.restoreDebugContext()
             else:
@@ -895,12 +896,12 @@ class GenContextMgr():
     def restoreDefaultContext(self, dumb=None):
         self.cpu.current_context = self.default_context
         self.current_context = self.default_context
-        #self.lgr.debug('contextManager restoreDefaultContext')
+        self.lgr.debug('contextManager restoreDefaultContext')
 
     def restoreDebugContext(self, dumb=None):
         self.cpu.current_context = self.resim_context
         self.current_context = self.resim_context
-        #self.lgr.debug('contextManager restoreDebugContext')
+        self.lgr.debug('contextManager restoreDebugContext')
 
     def stopDebug(self):
         self.lgr.debug('contextManager stopDebug')
@@ -918,7 +919,10 @@ class GenContextMgr():
         self.watch_rec_list = self.watch_rec_list_saved.copy()
         for ctask in self.watch_rec_list:
             self.tid_cache.append(self.watch_rec_list[ctask])
-        SIM_run_alone(self.restoreDebugContext, None)
+        self.lgr.debug('contextManager restoreDebug restore RESim context') 
+        #SIM_run_alone(self.restoreDebugContext, None)
+        # assuming already running alone
+        self.restoreDebugContext()
 
     def stopWatchTid(self, tid):
         SIM_run_alone(self.stopWatchTidAlone, tid)
@@ -1026,7 +1030,7 @@ class GenContextMgr():
     def restoreWatchTasks(self):
         self.watching_tasks = True
         if self.debugging_tid is not None:
-            #self.lgr.debug('contextManager restoreWatchTasks cpu context to resim')
+            self.lgr.debug('contextManager restoreWatchTasks restore RESim context')
             self.restoreDebugContext()
 
     def watchTasks(self, set_debug_tid = False, tid=None):
@@ -1087,8 +1091,9 @@ class GenContextMgr():
         dumb, comm, dumb1  = self.task_utils.curThread()
         cur_tid = self.task_utils.curTID()
         #self.default_context = self.cpu.current_context
-        self.lgr.debug('contextManager setDebugTid debugging_tid to %s, (%s) restore cpu to resim_context' % (cur_tid, comm))
-        SIM_run_alone(self.restoreDebugContext, None)
+        self.lgr.debug('contextManager setDebugTid debugging_tid to %s, (%s) restore RESim context' % (cur_tid, comm))
+        #SIM_run_alone(self.restoreDebugContext, None)
+        self.restoreDebugContext()
         self.debugging_tid = cur_tid
         self.debugging_tid_saved = self.debugging_tid
         if comm not in self.debugging_comm:
@@ -1350,6 +1355,10 @@ class GenContextMgr():
 
     def getSavedDebugTid(self):
         return self.debugging_tid_saved
+
+    def clearDebuggingTid(self):
+        self.debugging_tid = None
+        self.debugging_tid_saved = None
 
     def showIdaMessage(self):
         print('genMonitor says: %s' % self.ida_message)
