@@ -160,7 +160,9 @@ class PageFaultGen():
         if self.user_eip in self.ignore_probes:
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
+        
         eip = self.mem_utils.getRegValue(cpu, 'pc')
+            
         #self.lgr.debug('pageFaultHap tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
             #self.lgr.debug('pageFaultHap tid:%s, contextManager says not watching' % tid)
@@ -205,10 +207,12 @@ class PageFaultGen():
                 fault_addr = self.cpu.iface.int_register.read(reg_num)
                 #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
             else:
-                #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
+                self.lgr.debug('pageFaultHap cr2 reg is NONE????? set to faulting addr to eip 0x%x' % eip)
                 fault_addr = eip
         # record cycle and eip for reversing back to user space    
-        self.recordFault(tid, self.user_eip)
+        
+        if self.mem_utils.isKernel(self.user_eip):
+            self.recordFault(tid, self.user_eip)
         if tid not in self.faulted_pages:
             self.faulted_pages[tid] = []
         if fault_addr in self.faulted_pages[tid]:
@@ -272,11 +276,15 @@ class PageFaultGen():
                 elif self.cpu.architecture != 'arm':
                     ''' TBD handle reflection of segv to user space for arm? '''
                     instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
-                    if instruct[1].startswith('push'):
+                    if instruct[1].startswith('push') or 'sp' in instruct[1]:
                         ''' growing stack '''
+                        #self.lgr.debug('pageFaultGen modeChanged fault addr 0x%x instruct is stack related: %s' % (prec.cr2, instruct[1]))
+                        del self.pending_faults[tid]
+                    elif self.mem_utils.isKernel(self.user_eip):
+                        self.lgr.debug('pageFaultHap tid:%s user_eip: 0x%x is kernel.  TBD misses kernel ref to passed pointers' % (tid, self.user_eip))
                         del self.pending_faults[tid]
                     else:
-                        #self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped' % prec.cr2)
+                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped' % prec.cr2)
                         SIM_run_alone(self.hapAlone, self.pending_faults[tid])
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
