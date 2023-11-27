@@ -407,7 +407,7 @@ class StackTrace():
             pushed_bp = self.readAppPtr(bp)
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
-            if not self.soMap.isCode(ret_to, self.tid):
+            if ret_to is None or not self.soMap.isCode(ret_to, self.tid):
                 self.frames[0].ret_addr = None
             else:
                 self.frames[0].ret_addr = ret_to
@@ -823,7 +823,10 @@ class StackTrace():
                                 #self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
                                     full_path = self.targetFS.getFull(fname, self.lgr)
-                                    self.fun_mgr.add(full_path, start)
+                                    if full_path is not None:
+                                        self.fun_mgr.add(full_path, start)
+                                    else:
+                                        self.lgr.debug('stackTrace, adding analysis? failed to get full_path from fname %s' % fname)
                             self.fun_mgr.soCheckAdd(call_to) 
                         if self.fun_mgr.isFun(call_to):
                             if not self.fun_mgr.inFun(prev_ip, call_to):
