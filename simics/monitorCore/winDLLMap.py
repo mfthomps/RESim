@@ -256,7 +256,6 @@ class WinDLLMap():
 
                     self.lgr.debug('WinDLLMap mapSection appended, len now %d' % len(self.section_list))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
-                    self.lgr.debug('wtf pid is %s section_handle %s' % (pid, section_handle))
                     dll_info = self.sections[pid][section_handle]
                     self.checkSOWatch(dll_info)
                     if pid not in self.max_addr:
