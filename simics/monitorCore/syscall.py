@@ -1810,6 +1810,15 @@ class Syscall():
                 else:
                     #self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
                     pass
+
+        elif callname == 'writev':
+            exit_info.old_fd = frame['param1']
+            # iovec addr
+            exit_info.retval_addr = frame['param2']
+            # iovcnt
+            exit_info.count = frame['param3']
+            ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
+            self.lgr.debug(ida_msg)
  
         elif callname == 'mmap' or callname == 'mmap2':        
             #self.lgr.debug('syscall mmap')
@@ -2713,6 +2722,8 @@ class Syscall():
                     break
         return retval 
 
+    def resetHackCycle(self):
+        self.hack_cycle= 0
 
     #def stopOnExit(self):
     #    self.stop_on_exit=True

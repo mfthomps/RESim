@@ -24,6 +24,7 @@ cp $WS/ubuntu_driver.ini $WS/ubuntu.param $WS/driver-script.sh $WS/mapdriver.sim
 
 
 sed -i 's/mapdriver.simics/cadet.simics/' ubuntu_driver.ini
+sed -i '/OS_TYPE/a AFL_STOP_ON_READ=TRUE' ubuntu_driver.ini
 #echo "INTERACT_SCRIPT=teecadet.simics" >> ubuntu_driver.ini
 
 cp $TD/*.simics .

@@ -180,6 +180,10 @@ class PrepInjectWatch():
         pickDict['return_ip'] = self.ret_ip
         pickDict['len_buf'] = self.len_buf
         pickDict['fd'] = self.fd
+        self.lgr.debug('prepInjectWatch pickleit fd %s' % self.fd)
+        if self.fd is None:
+            self.lgr.error('prepInjectWatch pickleit NO FD is set.  Was the watch mark a read/recv?')
+            return
         ''' POOR names, we don't know which one is the start until we read the values from these addresses '''
         pickDict['k_start_ptr'] = self.k_start_ptr
         pickDict['k_end_ptr'] = self.k_end_ptr

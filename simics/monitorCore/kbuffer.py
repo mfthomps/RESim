@@ -65,7 +65,7 @@ class Kbuffer():
             self.user_addr = addr
             self.user_count = count
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, addr, count)
-        if self.buf_remain is not None:
+        elif self.buf_remain is not None:
             self.lgr.debug('Kbuffer read buf_remain is %d count %d' % (self.buf_remain, count))
             if self.buf_remain < count:
                 new_addr = addr + self.buf_remain
@@ -156,7 +156,7 @@ class Kbuffer():
             if self.read_count > kbuf_remaining:
                 ''' change break to write of first byte from next buffer '''
                 new_break = self.watching_addr + kbuf_remaining
-                self.lgr.debug('Kbuffer, count given in read syscall %d greater than end of remaining kbuf %d, set next break at 0x%x' % (self.read_count, 
+                self.lgr.debug('Kbuffer updateBuffers not first buffer, count given in read syscall %d greater than end of remaining kbuf %d, set next break at 0x%x' % (self.read_count, 
                             kbuf_remaining, new_break))
                 SIM_run_alone(self.replaceHap, new_break)
                 self.watching_addr = new_break
@@ -166,7 +166,9 @@ class Kbuffer():
             self.kbufs.append(src)
             print('adding kbuf 0x%x' % src)
             if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
-                max_bad = 1000
+                # TBD this may need to be adjustable data files that require specific fields to force consumption of the entire kernel buffer.
+                # Better to parse the primer file  in writeData to identify the non-special characters and allow for them.
+                max_bad = 100
                 special = ord('Z')
                 done = False 
                 cur_addr = src
@@ -177,6 +179,8 @@ class Kbuffer():
                     #self.lgr.debug('b is %d' % b)
                     if b != special:
                         bad_count += 1
+                        size = (last_good - src) + 1
+                        #self.lgr.debug('bad count now %d buf size %d' % (bad_count, size))
                         if bad_count > max_bad:
                             done = True
                             break
@@ -202,7 +206,7 @@ class Kbuffer():
         
                 if self.read_count > self.kbuf_len:
                     new_break = self.watching_addr + self.kbuf_len
-                    self.lgr.debug('Kbuffer, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
+                    self.lgr.debug('Kbuffer updateBuffers, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
                     SIM_run_alone(self.replaceHap, new_break)
                     self.watching_addr = new_break
                 #SIM_break_simulation('tmp')
@@ -266,10 +270,12 @@ class Kbuffer():
             self.context_manager.genDeleteHap(hap, immediate=immediate)
 
     def replaceHap(self, addr):
+        self.lgr.debug('Kbuffer replaceHap')
         if self.write_hap is not None:
-            self.context_manager.genDeleteHap(self.write_hap)
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
-            self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
+            self.context_manager.genDeleteHap(self.write_hap, immediate=True)
+        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+        self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
+        self.lgr.debug('Kbuffer replaceHap set write hap on 0x%x' % addr) 
 
     def readReturn(self, length):
         if self.buf_remain is None:

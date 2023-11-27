@@ -153,12 +153,15 @@ class WriteData():
         else:
             self.ioctl_op_map = None
 
+        self.pending_call = True
+
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
         self.addr = addr
         self.expected_packet_count = expected_packet_count
         self.current_packet = 0
         self.total_read = 0
+        self.read_count = 0
         self.kernel_buf_consumed = False
         self.closed_fd = False
 
@@ -253,6 +256,7 @@ class WriteData():
             self.read_limit = retval
             self.total_read = 0
             self.in_data = ''
+            self.pending_call = True
            
         else:
             #self.lgr.debug('writeData write is to user buffer')
@@ -262,9 +266,9 @@ class WriteData():
         return retval
 
     def readLimitCallback(self):
-        ''' Called by dataWatch when kernel buffer size is consumed '''
+        ''' Called by dataWatch when kernel buffer size is consumed TBD NO IT IS NOT.  remove this?'''
         if self.call_hap is None and self.call_ip is not None:
-            #self.lgr.debug('writeData readLimitCallback, add callHap at 0x%x context is %s' % (self.call_ip, self.cpu.current_context))
+            self.lgr.debug('writeData readLimitCallback, add callHap at 0x%x context is %s' % (self.call_ip, self.cpu.current_context))
             #self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_break = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
             self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
@@ -386,7 +390,9 @@ class WriteData():
             if self.k_start_ptr is None and self.call_ip is not None:
                 ''' NOTE stop on read will miss processing performed by other threads. '''
                 #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
-                self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(self.call_ip, Sim_Access_Execute)
+                self.call_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                #self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
                 self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
                 if self.select_call_ip is not None:
                     self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.select_call_ip, 1, 0)
@@ -407,7 +413,9 @@ class WriteData():
         if self.shared_syscall is None:
             if self.ret_hap is None: 
                 #self.lgr.debug('writeData set retHap on return_ip 0x%x, cell is %s' % (self.return_ip, str(self.cell)))
-                self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
+                #self.ret_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.return_ip, 1, 0)
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(self.return_ip, Sim_Access_Execute)
+                self.ret_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
         else:
             #self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
@@ -436,7 +444,7 @@ class WriteData():
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
         if tid != self.tid:
-            self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
+            #self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             #self.lgr.debug('writeData selectHap current packet %d no data left, let backstop timeout? return value of zero to application since we cant block.' % (self.current_packet))
@@ -457,10 +465,11 @@ class WriteData():
             return
         tid = self.top.getTID()
         if tid != self.tid:
-            #self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
+            #self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
             return
         skip_it = False
         if self.top.isWindows():
+            # TBD check FD
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
@@ -478,9 +487,27 @@ class WriteData():
                 skip_it = True
 
             #    return
+        else:
+            eip = self.top.getEIP(self.cpu)
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            callname = self.top.syscallName(callnum)
+            frame = self.top.frameFromRegs()
+            fd = frame['param1']
+            if fd != self.fd:
+                #self.lgr.debug('writeData callHap wrong fd, skip it')
+                skip_it = True
+            if callname == 'socketcall':
+                self.lgr.warning('writeData fix this so we know if we are calling a read')
+            elif callname not in ['recv', 'recvfrom', 'read']:
+                #self.lgr.debug('writeData callHap wrong call %s' % callname)
+                skip_it = True
+            #self.lgr.debug('writeData callHap eip: 0x%x callnum %d  call: %s fd: %d cycle: 0x%x context: %s' % (eip, callnum, 
+            #     callname, fd, self.cpu.cycles, str(self.cpu.current_context)))
+
         if not skip_it:
             self.read_count = self.read_count + 1
             #self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
+            self.pending_call = True
             self.handleCall()
 
     def handleCall(self):
@@ -491,18 +518,18 @@ class WriteData():
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            #if self.closed_fd:
-            #    #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
-            #    pass
-            #else:
-            #    self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
-            #    pass
+            if self.closed_fd:
+                #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
+                pass
+            else:
+                #self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
+                pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             '''
             if self.write_callback is not None:
-                #self.lgr.debug('writeData handleCall write_callback not None')
+                self.lgr.debug('writeData handleCall write_callback not None')
                 if self.mem_utils.isKernel(self.addr):
                     if self.closed_fd:
                         rprint('fd closed')
@@ -526,9 +553,9 @@ class WriteData():
                         
                     else:
                         rprint('kernel buffer data consumed')
-                        #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
+                        self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
                         SIM_break_simulation('kernel buffer data consumed.')
-                        #self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
+                        self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
                         SIM_run_alone(self.write_callback, 0)
                 elif len(self.in_data) == 0:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
@@ -551,6 +578,7 @@ class WriteData():
                             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
                         #self.lgr.debug('writeData handleCall kernel buf not consumed')
                     else:
+                        self.top.haltCoverage()
                         SIM_run_alone(self.delCallHap, None)
                         SIM_break_simulation('writeData out of data')
                         #self.lgr.debug('writeData handleCall current packet %d no data left, stop simulation' % self.current_packet)
@@ -561,7 +589,7 @@ class WriteData():
                         SIM_break_simulation('writeData out of data')
                     elif self.top.isWindows():
                         SIM_run_alone(self.delCallHap, None)
-                        self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall current packet %d no data left, is windows, stop for lack of a plan' % self.current_packet)
                         SIM_break_simulation('writeData out of data windows')
                     else:
                         #self.lgr.debug('writeData handleCall current packet %d no data left, continue and trust in backstop' % self.current_packet)
@@ -593,6 +621,7 @@ class WriteData():
                     SIM_run_alone(self.write_callback, count)
                 
     def doRetFixup(self, fd):
+        ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         if tid != self.tid or fd != self.fd:
@@ -601,10 +630,15 @@ class WriteData():
         if eax <= 0: 
             #self.lgr.error('writeData retHap got count of %d' % eax)
             return eax
+        self.pending_call = False
         remain = self.read_limit - self.total_read
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
-        if self.total_read >= self.read_limit:
+
+        if self.stop_on_read and self.total_read >= self.read_limit:
+            if self.mem_utils.isKernel(self.addr):
+                self.kernel_buf_consumed = True
+        if self.total_read > self.read_limit:
             #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
@@ -618,18 +652,19 @@ class WriteData():
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
-                     rprint('**** Adjusted return value, RESET Origin ***') 
+                     #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
-                 self.kernel_buf_consumed = True
-                 if self.no_call_hap:
+                     self.kernel_buf_consumed = True
+                 if not self.no_call_hap:
                      self.setCallHap()
                  if self.top.isWindows():
                      ''' TBD '''
                      pass
                  else:
                      self.setSelectStopHap()
-                 SIM_run_alone(self.delRetHap, None)
-                 #self.lgr.debug('writeData retHap read over limit of %d, setCallHap and let it go' % self.read_limit)
+                 # TBD why was this being deleted?
+                 #SIM_run_alone(self.delRetHap, None)
+                 #self.lgr.debug('writeData doRetFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  SIM_break_simulation('Over read limit')
@@ -638,8 +673,11 @@ class WriteData():
 
     def retHap(self, dumb, third, break_num, memory):
         ''' Hit a return from read'''
-        if self.retHap is None:
+        if self.ret_hap is None:
             return
+        if not self.pending_call:
+            return
+        #self.lgr.debug('retHap call doRetFixup')
         self.doRetFixup(self.fd)
         
     def restoreCallHap(self):

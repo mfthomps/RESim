@@ -1487,25 +1487,25 @@ class reverseToCall():
         self.sysenter_cycles.clear()
 
     def getRecentCycleFrame(self, tid):
-        ''' TBD sort out use of this and getPreviousCycleFrame.  Seems latter 
-            is better if skipping around.  This just returns the most recent entry,
+        ''' 
+            This returns the most recent  frame and cycle entry,
             whose cycle is not related to the current cycle.
         '''
         ''' NOTE these frames do not reflect socket call decoding '''
-        retval = None
+        frame = None
         ret_cycles = None
         if self.cpu is not None:
             cur_cycles = self.cpu.cycles
             self.lgr.debug('getRecentCycleFrame tid %s' % tid)
             if tid in self.recent_cycle:
-                ret_cycles, retval = self.recent_cycle[tid]
+                ret_cycles, frame = self.recent_cycle[tid]
             else:
                 self.lgr.debug('getRecentCycleFrame tid %s not there')
-        return retval, ret_cycles
+        return frame, ret_cycles
 
     def getPreviousCycleFrame(self, tid):
         ''' NOTE these frames do not reflect socket call decoding '''
-        retval = None
+        frame = None
         ret_cycles = None
         cur_cycles = self.cpu.cycles
         self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x' % (tid, cur_cycles))
@@ -1520,14 +1520,14 @@ class reverseToCall():
                     prev_cycles = cycles
 
             if got_it is not None:
-                retval = self.sysenter_cycles[tid][got_it] 
+                frame = self.sysenter_cycles[tid][got_it] 
                 ret_cycles = got_it
             else:
-                retval = self.sysenter_cycles[tid][cycles] 
+                frame = self.sysenter_cycles[tid][cycles] 
                 ret_cycles = cycles
         else:
             self.lgr.debug('getPreviousCycleFrame tid not in sysenter_cycles')
-        return retval, ret_cycles
+        return frame, ret_cycles
 
     def satisfyCondition(self, pc):
         ''' See the findKernelWrite skipAlone function for memory mod and retrack call '''
@@ -1625,13 +1625,15 @@ class reverseToCall():
         #rev_call_pickle['recent_cycle'] = self.recent_cycle
         #pickle.dump( rev_call_pickle, open( rev_call_file, "wb")) 
         self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
-        for tid in self.recent_cycle:
-            r, f = self.recent_cycle[tid]
-            self.lgr.debug('pickleit tid %s cycle 0x%x f %s' % (tid, r, str(f)))
+        save_cycles = {}
+        for tid in self.sysenter_cycles:
+            frame, cycles = self.getPreviousCycleFrame(tid)
+            save_cycles[tid] = [cycles, frame]
+            self.lgr.debug('pickleit tid %s cycle 0x%x f %s' % (tid, cycles, str(frame)))
         try:
-            pickle.dump( self.recent_cycle, open( rev_call_file, "wb") ) 
+            pickle.dump( save_cycles, open( rev_call_file, "wb") ) 
         except TypeError as ex:
-            self.lgr.error('trouble dumping pickle of recent_cycle %s' % ex)
+            self.lgr.error('trouble dumping pickle of cycle fames')
 
     def setCallback(self, callback):
         self.callback = callback

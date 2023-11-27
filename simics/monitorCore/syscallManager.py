@@ -125,7 +125,7 @@ class SyscallManager():
         self.trace_all = {}
 
     def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
-                         trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None):
+                         trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[]):
    
         if compat32 is None:
             compat32 = self.compat32
@@ -147,7 +147,7 @@ class SyscallManager():
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
-                               self.lgr, self.traceMgr, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
+                               self.lgr, self.traceMgr, call_list=None, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
                                stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, soMap=self.soMap,
                                netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)

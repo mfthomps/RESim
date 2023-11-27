@@ -1,4 +1,11 @@
 #!/bin/bash
+#
+#  Archive fuzzing artifacts and workspace files.
+#
+if [ -z "$RESIM_FUZZ_ARCHIVE" ]; then
+    echo "RESIM_FUZZ_ARCHIVE is not defined."
+    exit
+fi
 if [ ! -f drones.txt ]; then
    echo "No drones.txt file found, archiving local finds."
    flist=""
@@ -18,7 +25,7 @@ fi
 here=$(pwd)
 base=$(basename $here)
 aflout=$AFL_DATA/output/$base
-fuzz_archive=/mnt/resim_archive/fuzz/$1/$base
+fuzz_archive=$RESIM_FUZZ_ARCHIVE/$1/$base
 destination=$fuzz_archive/afl/output
 mkdir -p $destination
 #

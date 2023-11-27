@@ -1747,5 +1747,8 @@ class WinSyscall():
                     break
                 else:
                     retval = None
-                
         return retval
+
+    def resetHackCycle(self):
+        self.hack_cycle= 0
+

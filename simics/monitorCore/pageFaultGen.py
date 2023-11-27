@@ -161,7 +161,7 @@ class PageFaultGen():
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
         eip = self.mem_utils.getRegValue(cpu, 'pc')
-        self.lgr.debug('pageFaultHap tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
+        #self.lgr.debug('pageFaultHap tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
             #self.lgr.debug('pageFaultHap tid:%s, contextManager says not watching' % tid)
             return
@@ -174,52 +174,57 @@ class PageFaultGen():
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         access_type = None
         if self.cpu.architecture == 'arm':
-            # Get faulting eip
-            i_reg_num = self.cpu.iface.int_register.get_number("instruction_far")
-            self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
-            self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
+            # Get faulting user eip
+            bad_reg = False
+            try:
+                i_reg_num = self.cpu.iface.int_register.get_number("instruction_far")
+                self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
+                #self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
+            except SimExc_General:
+                self.lgr.debug('bad reg num')
+                bad_reg = True
 
-            # Get see if data was at fault
-            data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
-            fault = self.cpu.iface.int_register.read(data_fault_reg)
-            access_type = memUtils.testBit(fault, 11)
-            if access_type == 0:
-                # Data not at fault, must have been instruction
-                instruct_fault_reg = self.cpu.iface.int_register.get_number("instruction_fsr")
-                fault = self.cpu.iface.int_register.read(instruct_fault_reg)
+            if bad_reg or eip == self.param.data_abort:
+                data_fault_reg = self.cpu.iface.int_register.get_number("combined_data_fsr")
+                fault = self.cpu.iface.int_register.read(data_fault_reg)
                 access_type = memUtils.testBit(fault, 11)
-                self.lgr.debug('instruction fault tid:%s reg value 0x%x  violation type: %d' % (tid, fault, access_type))
-                reg_num = i_reg_num
+                data_far_reg_num = self.cpu.iface.int_register.get_number("combined_data_far")
+                fault_addr = self.cpu.iface.int_register.read(data_far_reg_num)
+                #self.lgr.debug('pageFaultGen **DATA stuff data_fault_reg %d fault 0x%x type %d fault_addr 0x%X' % (data_fault_reg, fault, access_type, fault_addr))
+
             else:
-                self.lgr.debug('data fault tid:%s reg value 0x%x  violation type: %d' % (tid, fault, access_type))
-                reg_num = self.cpu.iface.int_register.get_number("combined_data_far")
+                i_fault_reg = self.cpu.iface.int_register.get_number("instruction_fsr")
+                i_fault = self.cpu.iface.int_register.read(i_fault_reg)
+                i_access_type = memUtils.testBit(i_fault, 11)
+                fault_addr = self.user_eip
+                #self.lgr.debug('pageFaultGen **INSTRUCTION stuff reg %d fault 0x%x type %d, fault_addr 0x%x' % (i_fault_reg, i_fault, i_access_type, fault_addr))
+
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
-        if reg_num is not None:
-            cr2 = self.cpu.iface.int_register.read(reg_num)
-            #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % cr2)
-        else:
-            self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
-            cr2 = eip
-
+            if reg_num is not None:
+                fault_addr = self.cpu.iface.int_register.read(reg_num)
+                #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
+            else:
+                #self.lgr.debug('pageFaultHap cr2 set to eip 0x%x' % eip)
+                fault_addr = eip
         # record cycle and eip for reversing back to user space    
         self.recordFault(tid, self.user_eip)
         if tid not in self.faulted_pages:
             self.faulted_pages[tid] = []
-        if cr2 in self.faulted_pages[tid]:
-            #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (cr2, tid, cur_pc))
+        if fault_addr in self.faulted_pages[tid]:
+            #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
-        self.faulted_pages[tid].append(cr2)
-        #self.lgr.debug('pageFaultHapAlone for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s' % (tid, comm, cr2, cur_pc, self.cpu.cycles, self.cpu.current_context))
-        #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, cr2))
+        self.faulted_pages[tid].append(fault_addr)
+        #self.lgr.debug('pageFaultHapAlone for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context))
+        #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
-            page_info = pageUtils.findPageTableArm(self.cpu, cr2, self.lgr)
+            page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
         elif pageUtils.isIA32E(cpu):
-            page_info = pageUtils.findPageTableIA32E(self.cpu, cr2, self.lgr)
+            page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
-            page_info = pageUtils.findPageTable(self.cpu, cr2, self.lgr)
-        prec = Prec(self.cpu, comm, tid=tid, cr2=cr2, eip=cur_pc, page_fault=True)
+            page_info = pageUtils.findPageTable(self.cpu, fault_addr, self.lgr)
+        prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
             self.pending_faults[tid] = prec
             #self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
@@ -227,6 +232,7 @@ class PageFaultGen():
                 #self.lgr.debug('pageFaultGen adding mode hap')
                 self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         hack_rec = (compat32, page_info, prec)
+
         SIM_run_alone(self.pageFaultHapAlone, hack_rec)
 
     def rmModeHapAlone(self, dumb):
@@ -329,7 +335,7 @@ class PageFaultGen():
         ''' TBD explain why arm only uses faultCallback yet x86 also uses pageFaultHap '''
         if self.cpu.architecture == 'arm':
             
-            self.lgr.debug('watchPageFaults set break at page_fault 0x%x and data_abort 0x%x' % (self.param.page_fault, self.param.data_abort))
+            #self.lgr.debug('watchPageFaults set break at page_fault 0x%x and data_abort 0x%x' % (self.param.page_fault, self.param.data_abort))
             #note page_fault is prefech abort 
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
             proc_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
@@ -360,7 +366,7 @@ class PageFaultGen():
         if eip not in self.faulting_cycles[tid]:
             self.faulting_cycles[tid][eip] = []
         self.faulting_cycles[tid][eip].append(self.cpu.cycles)
-        self.lgr.debug('recordFault tid:%s eip 0x%x cycles 0x%x' % (tid, eip, self.cpu.cycles))
+        #self.lgr.debug('recordFault tid:%s eip 0x%x cycles 0x%x' % (tid, eip, self.cpu.cycles))
 
 
     def faultCallback(self, cpu, one, exception_number):
@@ -370,8 +376,8 @@ class PageFaultGen():
         name = cpu.iface.exception.get_name(exception_number)
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
-                exception_number, tid, comm, eip, instruct[1], cpu.cycles))
+        #self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
+        #        exception_number, tid, comm, eip, instruct[1], cpu.cycles))
         prec = Prec(self.cpu, comm, tid=tid, eip=eip, name=name)
         self.pending_sigill[tid] = prec
         # record cycle and eip for reversing back to user space    
@@ -614,7 +620,7 @@ class PageFaultGen():
         if tid in self.pending_faults:
             prec = self.pending_faults[tid]
             if prec.page_fault:
-                self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending page fault cr2 0x%x' % (tid, prec.name, prec.cr2))
+                self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending page fault cr2 0x%x cycle: 0x%x' % (tid, prec.name, prec.cr2, prec.cycles))
                 retval = True
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))

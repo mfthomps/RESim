@@ -96,6 +96,7 @@ def main():
     if args.disconnect:
         driver_file.write('/tmp/simics-magic\n')
     file_list = []
+    last_io_file = None
     with open(args.directives) as fh:
         for line in fh:
             if line.strip().startswith('#'):
@@ -123,8 +124,10 @@ def main():
                 ''' multiple data files to be sent, last line will include directive info'''
                 iofile = parts[0].strip()
                 file_list.append(iofile)
-                cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
-                os.system(cmd)
+                if iofile != last_io_file:
+                    cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
+                    os.system(cmd)
+                    last_io_file = iofile
             elif not args.tcp and len(parts) != 4 and not args.server and not args.broadcast and not args.replay and not args.json:
                 print('Invalid driver directive: %s' % line)
                 print('    iofile ip port header')

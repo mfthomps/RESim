@@ -275,7 +275,7 @@ class StackTrace():
                             self.addFrame(frame)
                             #self.lgr.debug('isCallToMe add frame %s' % frame.dumpString())
                             retval = lr
-                        elif fun_hex is not None:
+                        elif fun_hex is not None and fun is not None and fun != 'None':
                             ''' LR does not suggest call to current function. Is current a different library then LR? '''
                             #self.lgr.debug('try got')
                             if self.tryGot(lr, eip, fun_hex):

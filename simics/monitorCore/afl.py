@@ -173,6 +173,8 @@ class AFL():
         self.exit_eip = None
         self.stop_hap_cycle = None
 
+        self.exit_syscall = None
+
         self.test_file = test_file
         if target_proc is None:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
@@ -315,6 +317,11 @@ class AFL():
                 self.setHangCallback(None)
             self.lgr.debug('afl finishInit, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
             self.fault_hap = None
+            self.lgr.debug('afl finishInit, call debugExitHap to catch exits')
+            self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
+            self.lgr.debug('afl finishInit, clear context manager debugging tid')
+            self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
+            self.context_manager.clearDebuggingTid()
             #tracemalloc.start()
             # hack around Simics model bug
             #self.fixFaults()
@@ -364,6 +371,7 @@ class AFL():
                         self.lgr.debug('afl finishUp found pending page fault for tid:%s' % tid)
                         status = AFL_CRASH
                         break
+            # why again and again?
             self.page_faults.stopWatchPageFaults()
             if status == AFL_CRASH:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
@@ -433,8 +441,7 @@ class AFL():
             if self.restart == 0:
                 if do_quit:
                     self.lgr.debug('afl was told to quit, bye')
-                    with open('./final_data.io', 'wb') as fh:
-                        fh.write(self.orig_in_data)
+                    self.saveThisData()
                     self.top.quit()
                 self.iteration += 1 
                 self.in_data = self.getMsg()
@@ -448,6 +455,10 @@ class AFL():
             else:
                 self.lgr.debug('afl was told to restart, bye')
                 self.top.quit()
+
+    def saveThisData(self):
+        with open('./final_data.io', 'wb') as fh:
+            fh.write(self.orig_in_data)
 
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
@@ -509,7 +520,7 @@ class AFL():
         ''' clear the bit_trace '''
         #self.lgr.debug('afl goN call doCoverage')
         if self.linear:
-            #self.lgr.debug('afl, linear use context manager to watch tasks')
+            self.lgr.debug('afl, linear use context manager to watch tasks restore RESim context')
             self.context_manager.restoreDebugContext()
             self.context_manager.watchTasks()
         self.coverage.doCoverage()
@@ -531,7 +542,12 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
+        # TBD why again and again?
         self.page_faults.watchPageFaults()
+        if self.exit_syscall is not None:
+            # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
+            self.exit_syscall.resetHackCycle()
+        #self.lgr.debug('afl goN now continue current context %s' % str(self.cpu.current_context))
         #cli.quiet_run_command('c') 
         SIM_continue(0)
         

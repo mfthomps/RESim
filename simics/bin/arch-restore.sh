@@ -1,3 +1,10 @@
+#
+# restore an archived fuzzing artifact set and workspace
+#
+if [ -z "$RESIM_FUZZ_ARCHIVE" ]; then
+    echo "RESIM_FUZZ_ARCHIVE is not defined."
+    exit
+fi
 if [ "$#" -ne 2 ]; then
     echo "arch-restore.sh <project> <workspace>"
     echo "   Restore a workspace and afl files from the resim archive"
@@ -24,12 +31,12 @@ tar -xf $tarfile
 echo "Extracted workspace."
 mkdir $afl_seed
 mkdir $afl_output
-sync_dirs=/mnt/resim_archive/fuzz/$project/$workspace/afl/output/sync_dirs.tgz
+sync_dirs=$RESIM_FUZZ_ARCHIVE/$project/$workspace/afl/output/sync_dirs.tgz
 cd $afl_output
 tar -xf $sync_dirs
 echo "Extracted sync dirs."
 cd $afl_seed
-seed_dir=/mnt/resim_archive/fuzz/$project/$workspace/afl/seeds
+seed_dir=$REIM_FUZZ_ARCHIVE/$project/$workspace/afl/seeds
 cp $seed_dir/* .
 cd $here
 echo "done."

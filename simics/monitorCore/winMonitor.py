@@ -288,9 +288,10 @@ class WinMonitor():
                 SIM_continue(0)
 
 
-    def debugExitHap(self, flist=None): 
+    def debugExitHap(self, flist=None, context=None): 
         if self.terminate_syscall is None:
-            context=self.context_manager.getRESimContextName()
+            if context is None:
+                context=self.context_manager.getRESimContextName()
             exit_calls = ['TerminateProcess', 'TerminateThread']
             self.terminate_syscall = self.syscallManager.watchSyscall(context, exit_calls, [], 'debugExit')
             self.lgr.debug('winMonitor debugExitHap')

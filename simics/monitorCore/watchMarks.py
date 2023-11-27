@@ -31,7 +31,8 @@ class CopyMark():
         self.op_type = op_type
         self.strcpy = strcpy
         self.sp = sp
-        if src is None or dest is None or buf_start is None:
+        self.msg = None
+        if src is None or dest is None:
             print('watchMarks CopyMark bad call, something is None')
             return
         if op_type == Sim_Trans_Load:
@@ -51,7 +52,7 @@ class CopyMark():
                     offset = dest - buf_start
                     self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer unknown!)' % (length, src, dest, )
+                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer removed)' % (length, src, dest, )
             else:
                 self.msg = 'Modify Copy length is none, not where wth'
     def getMsg(self):
@@ -149,12 +150,17 @@ class DataMark():
             self.ad_hoc = False
 
 class KernelMark():
-    def __init__(self, addr, count, callnum, fd):
+    def __init__(self, addr, count, callnum, call, fd, fname):
         self.addr = addr
         self.count = count
         self.callnum = callnum
+        self.call = call
         self.fd = fd
-        self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d FD: %d' % (count, addr, callnum, fd)
+        self.fname = fname
+        if fd is not None:
+            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) FD: %d' % (count, addr, callnum, call, fd)
+        elif fname is not None:
+            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
     def getMsg(self):
         return self.msg
 
@@ -841,7 +847,7 @@ class WatchMarks():
     def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
-        if src is None or dest is None or buf_start is None:
+        if src is None or dest is None:
             self.lgr.error('watchMarks copy called with None for src, dest or buf_start?')
             return
         cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated)
@@ -856,8 +862,8 @@ class WatchMarks():
         self.addWatchMark(sm)
         self.lgr.debug('watchMarks memset %s' % (sm.getMsg()))
 
-    def kernel(self, addr, count, fd, callnum):
-        km = KernelMark(addr, count, callnum, fd)
+    def kernel(self, addr, count, fd, fname, callnum, call):
+        km = KernelMark(addr, count, callnum, call, fd, fname)
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernel %s' % (km.getMsg()))
 
@@ -870,12 +876,18 @@ class WatchMarks():
 
     def compare(self, fun, dest, src, count, buf_start):
         if count > 0:
-            dst_str = self.mem_utils.readString(self.cpu, dest, count)
+            if fun == 'strcmp':
+                dst_str = self.mem_utils.readString(self.cpu, dest, 100)
+            else:
+                dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
                     dst_str = dst_str.decode('ascii', 'replace')
-            src_str = self.mem_utils.readString(self.cpu, src, count)
+            if fun == 'strcmp':
+                src_str = self.mem_utils.readString(self.cpu, src, 100)
+            else:
+                src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
@@ -1335,7 +1347,9 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['count'] = mark.mark.count
                 entry['callnum'] = mark.mark.callnum
+                entry['call'] = mark.mark.call
                 entry['fd'] = mark.mark.fd
+                entry['fname'] = mark.mark.fname
             elif isinstance(mark.mark, StrChrMark):
                 entry['mark_type'] = 'strchr' 
                 entry['the_char'] = mark.mark.the_chr

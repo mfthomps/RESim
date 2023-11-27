@@ -604,6 +604,9 @@ class DataWatch():
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             rm_list = []
             for failed_index in self.stack_buffers[-1]:
+                if failed_index not in self.start or self.start[failed_index] is None:
+                    self.lgr.debug('dataWatch checkFailedStackBufs failed index %d not in self.start (or is None), sp: 0x%x' % (failed_index, sp))
+                    continue
                 self.lgr.debug('dataWatch checkFailedStackBufs failed index %d start 0x%x sp 0x%x' % (failed_index, self.start[failed_index], sp))
                 if self.start[failed_index] <= sp:
                     rm_list.append(failed_index)
@@ -796,7 +799,7 @@ class DataWatch():
                     #self.lgr.debug('dataWatch stopWatch delete read_hap %d' % self.read_hap[index])
                     self.context_manager.genDeleteHap(self.read_hap[index], immediate=immediate)
             else:
-                self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
+                #self.lgr.debug('dataWatch stopWatch index %d not in read_hap len is %d ' % (index, len(self.read_hap)))
                 pass
         #self.lgr.debug('DataWatch stopWatch removed read haps')
         del self.read_hap[:]
@@ -875,6 +878,8 @@ class DataWatch():
         self.top.runToIO(fd, linger=True, break_simulation=False, run=False)
 
     def kernelReturnHap(self, kernel_return_info, third, forth, memory):
+        ''' Data buffer had been read while in the kernel.  We ran forward to the return
+            and now determine what the kernel call was about. '''
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         eax = self.mem_utils.getSigned(eax)
         #self.top.showHaps()
@@ -885,28 +890,45 @@ class DataWatch():
             self.lgr.debug('dataWatch kernelReturnHap failed to get previous frame, bail')
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('kernelReturnHap, tid:%s (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (tid, comm, eip, eax, 
-            kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
+        self.lgr.debug('kernelReturnHap, tid:%s (%s) eip: 0x%x retval 0x%x  addr: 0x%x context: %s compat32: %r cur_cycles: 0x%x, recent cycle: 0x%x' % (tid, 
+                        comm, eip, eax, kernel_return_info.addr, str(self.cpu.current_context), self.compat32, self.cpu.cycles, cycles))
         #self.lgr.debug(taskUtils.stringFromFrame(frame))
         if kernel_return_info.op_type == Sim_Trans_Load:
+            fname = None
+            write_fd = None
             if 'ss' in frame:
                 #self.lgr.debug('frame has ss: %s' % frame['ss'].getString())
                 callnum = 102
                 call = net.callname[frame['param1']].lower()
                 write_fd = frame['ss'].fd
-                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
+                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, fname, callnum, call)
             else:
                 callnum = self.mem_utils.getCallNum(self.cpu)
                 call = self.task_utils.syscallName(callnum, self.compat32)
-                write_fd = frame['param1']
-                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, callnum)
-
-            read_fd = self.getPipeReader(str(write_fd))
-            if read_fd is not None:
-                self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
-                SIM_run_alone(self.runToIOAlone, read_fd)
-            else:
-                self.lgr.debug('dataWatch no pipe reader found for fd %d' % write_fd)
+                if call == 'open' or call.startswith('fstat') or call.startswith('stat'):
+                    fname_addr = frame['param1']
+                    fname = self.mem_utils.readString(self.cpu, fname_addr, 100)
+                    count = len(fname)
+                    src = fname_addr
+                elif call == 'writev':
+                    # TBD only record the first buffer of an iov
+                    write_fd = frame['param1']
+                    iov_addr = frame['param2']
+                    src = self.mem_utils.readPtr(self.cpu, iov_addr)
+                    count = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                else:
+                    write_fd = frame['param1']
+                    count = eax
+                    src = frame['param2']
+                wm = self.watchMarks.kernel(src, count, write_fd, fname, callnum, call)
+                self.lgr.debug('kernelReturnHap not socket, call %s, frame: %s' % (call, taskUtils.stringFromFrame(frame)))
+            if write_fd is not None:
+                read_fd = self.getPipeReader(str(write_fd))
+                if read_fd is not None:
+                    self.lgr.debug('dataWatch got pipe reader %d from write_fd %d, set read hap.' % (read_fd, write_fd))
+                    SIM_run_alone(self.runToIOAlone, read_fd)
+                else:
+                    self.lgr.debug('dataWatch no pipe reader found for fd %d' % write_fd)
         else:
             self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame)
  
@@ -920,7 +942,7 @@ class DataWatch():
         self.watch(i_am_alone=False)
 
     def kernelReturn(self, kernel_return_info):
-        ''' something found the kernel read or wrote one of our buffers.  Run to the kernel return. '''
+        ''' The readHap found that the kernel read or wrote one of our buffers.  Run to the kernel return. '''
         if self.top.getSharedSyscall().callbackPending():
             return
         self.lgr.debug('kernelReturn for addr 0x%x optype %s cycle 0x%x' % (kernel_return_info.addr, str(kernel_return_info.op_type), self.cpu.cycles))
@@ -1029,19 +1051,24 @@ class DataWatch():
                 return
             skip_it = False          
             if self.mem_something.op_type == Sim_Trans_Load:
-                #buf_start = self.findRange(self.mem_something.src)
-                buf_index = self.findRangeIndex(self.mem_something.src)
+                #buf_index = self.findRangeIndex(self.mem_something.src)
+
+                buf_index, buf_start, buf_length = self.findRangeIndexForRange(self.mem_something.src, self.mem_something.count)
+
                 if buf_index is None:
                     self.lgr.debug('dataWatch buf_start for 0x%x is none in memcpyish?' % (self.mem_something.src))
                     buf_start = 0
                     #SIM_break_simulation('mempcpy')
                     #return
                 else:
-                    buf_start = self.start[buf_index]
-                    if self.length[buf_index] < self.mem_something.count:
-                        self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
-                        self.mem_something.truncated = self.mem_something.count 
-                        self.mem_something.count = self.length[buf_index]
+                    self.lgr.debug('dataWatch cpyish from findRangeIndexForRange buf_index %d, buf_start 0x%x, buf_length %d' % (buf_index, buf_start, buf_length))
+                    self.mem_something.src = buf_start 
+                    self.mem_something.count = buf_length 
+                    #buf_start = self.start[buf_index]
+                    #if self.length[buf_index] < self.mem_something.count:
+                    #    self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
+                    #    self.mem_something.truncated = self.mem_something.count 
+                    #    self.mem_something.count = self.length[buf_index]
             else:
                 self.lgr.debug('returnHap copy not a Load, first see if src is a buf')
                 buf_start = self.findRange(self.mem_something.src)
@@ -1050,15 +1077,16 @@ class DataWatch():
                     buf_index = self.findRangeIndex(self.mem_something.dest)
                     if buf_index is not None:
                         if self.start[buf_index] == self.mem_something.dest and self.length[buf_index] <= self.mem_something.count:
-                            self.lgr.debug('dataWatch returnHap, overwrite buffer exact match, remove the buffer')
+                            self.lgr.debug('dataWatch returnHap, overwrite buffer start exact match.  Length of buffer %d, len of copy %d., remove the buffer' % (self.length[buf_index], self.mem_something.count))
                             if buf_index in self.read_hap:
                                 hap = self.read_hap[buf_index]
                                 self.context_manager.genDeleteHap(hap, immediate=False)
                                 self.read_hap[buf_index] = None
                             self.start[buf_index] = None
                         else:
-                            self.lgr.warning('dataWatch returnHap, TBD, overwrite buffer exact match, but not a match.  start 0x%x len %d' % (self.start[buf_index], 
-                                   self.length[buf_index]))
+                            self.lgr.warning('dataWatch returnHap, TBD, overwrite buffer but not a match with start.  The buffer: 0x%x len %d.  Copy dest: 0x%x len %d.  Remove subrange' % (self.start[buf_index], self.length[buf_index], self.mem_something.dest, self.mem_something.count))
+
+                            self.rmSubRange(self.mem_something.dest, self.mem_something.count)
                     else:
                         self.lgr.debug('dataWatch returnHap memcpy, but nothing we care about')
                         skip_it = True
@@ -3265,7 +3293,8 @@ class DataWatch():
                     self.rmRange(addr)
                     retval = True
             else:
-                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
+                #if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
+                if fun_name.startswith('std::vector') or fun_name.startswith('allocate_'):
                     self.lgr.debug('dataWatch cheapReuse mod is function %s and we think we missed a free.  Assume reuse' % (fun_name))
                     self.rmRange(addr)
                     retval = True
@@ -3481,6 +3510,7 @@ class DataWatch():
         return self.show_cmp
 
     def rmSubRange(self, addr, trans_size):
+        ''' remove a subrange within a buffer '''
         index = self.findRangeIndex(addr)
         if index is not None:
             if index != self.recent_reused_index:
@@ -3493,6 +3523,7 @@ class DataWatch():
                     self.hack_reuse_index = index
                     self.hack_reuse = []
                     self.hack_reuse.append(addr)
+                    self.lgr.debug('dataWatch rmSubRange start == addr, use hack_reuse')
                 elif index == self.hack_reuse_index:
                     if addr not in self.hack_reuse:
                         self.hack_reuse.append(addr)
@@ -3500,20 +3531,22 @@ class DataWatch():
                             force_reuse = True
                             self.lgr.debug('dataWatch rmSubRange force reuse')
               
-                if force_reuse or (start >= addr and end <= (addr+trans_size)):
-                    self.lgr.debug('dataWatch rmSubRange, IS overlap start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
+                #if force_reuse or (start >= addr and end <= (addr+trans_size)):
+                if force_reuse or (start <= addr and end >= (addr+trans_size)):
+                    self.lgr.debug('dataWatch rmSubRange, IS overlap (or force_reuse) start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
                     new_start = None
                     self.lgr.debug('dataWatch rmSubRange, addr: 0x%x start 0x%x length: %d end 0x%x' % (addr, start, length, end))
+                    self.lgr.debug('dataWatch rmSubRange start[%d] (0x%x length %x) set to None' % (index, self.start[index], self.length[index]))
                     self.start[index] = None
-                    self.lgr.debug('dataWatch rmSubRange index[%d] set to None' % index)
                     if index < len(self.read_hap) and self.read_hap[index] is not None:
-                        self.lgr.debug('dataWatch rmSubRange read_hap[%d] %d' % (index, self.read_hap[index]))
+                        self.lgr.debug('dataWatch rmSubRange removing read_hap[%d] %d' % (index, self.read_hap[index]))
                         hap = self.read_hap[index]
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[index] = None
                     if start < addr:
                         newlen = addr - start + 1
                         if newlen > 0:
+                            self.lgr.debug('dataWatch rmSubRange adding new range start 0x%x len %x' % (start, newlen))
                             self.setRange(start, newlen, no_extend=True)
                         new_start = addr + trans_size
                     elif start == addr and trans_size < length:
@@ -3521,6 +3554,7 @@ class DataWatch():
                     if new_start is not None and new_start < end:
                         newlen = end - new_start + 1
                         if newlen > 0:
+                            self.lgr.debug('dataWatch rmSubRange adding range for new start 0x%x new len %x' % (new_start, newlen))
                             self.setRange(new_start, newlen, no_extend=True)
                     self.stopWatch()
                     self.watch()
@@ -3591,6 +3625,9 @@ class DataWatch():
                     elif addr < self.start[index] and range_end <= end and range_end >= self.start[index]:
                         ret_start = self.start[index]
                         ret_length = length - (self.start[index] - addr)
+                    elif addr <= self.start[index] and range_end >= end:
+                        ret_start = self.start[index]
+                        ret_length = self.length[index]
                     if ret_start is not None:
                         ret_index = index
                         break            

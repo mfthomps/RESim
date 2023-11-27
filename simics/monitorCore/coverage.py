@@ -90,6 +90,7 @@ class Coverage():
         self.record_hits = True
         self.did_missing = []
         self.packet_num = None
+        self.halt_coverage = False
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
     def loadBlocks(self, block_file):
@@ -529,6 +530,11 @@ class Coverage():
    
     def pageHap(self, dumb, third, break_num, memory):
         if break_num in self.missing_haps:
+            tid = self.top.getTID(target=self.cell_name)
+            if tid != self.tid:
+                # TBD what about coverage of muliple threads?
+                self.lgr.debug('pageHap wrong tid %s we are %s' % (tid, self.tid))
+                return
             length = memory.size
             op_type = SIM_get_mem_op_type(memory)
             type_name = SIM_get_mem_op_type_name(op_type)
@@ -544,9 +550,10 @@ class Coverage():
                     #offset = memUtils.bitRange(pdir_entry, 0, 19)
                     #addr = value + offset
                     pt = pageUtils.findPageTable(self.cpu, bb, self.lgr)
-                    addr = pg.page_addr
+                    addr = pt.page_addr
                     if addr is None:
-                        self.lgr.error('coverage pageHap got none for addr.  broken') 
+                        self.lgr.error('coverage pageHap got none for addr ofr bb 0x%x.  broken' % bb) 
+                        self.top.brokenAFL()
                     elif addr not in self.dead_map:
                         bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
                         self.lgr.error('pageHap NOT YET FINISHED added break at phys addr 0x%x' % addr)
@@ -559,6 +566,8 @@ class Coverage():
 
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
+        if self.halt_coverage:
+            return
 
         # TBD convoluted determination of phys vs linear
         if self.linear:
@@ -856,6 +865,7 @@ class Coverage():
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
             return
+        self.halt_coverage = False
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
@@ -1090,3 +1100,7 @@ class Coverage():
             SIM_enable_breakpoint(bp) 
         for addr in self.missing_breaks:
             SIM_enable_breakpoint(self.missing_breaks[addr])
+
+    def haltCoverage(self):
+        #self.lgr.debug('coverage haltCoverage')  
+        self.halt_coverage = True

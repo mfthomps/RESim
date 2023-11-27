@@ -29,6 +29,7 @@ Alternately generate syscall or instruction traces.
 from simics import *
 import writeData
 import memUtils
+import syscall
 import cli
 import os
 import sys
@@ -40,7 +41,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -160,6 +161,8 @@ class InjectIO():
         self.hit_break_on = False
         self.no_reset = no_reset
         self.no_page_faults = no_page_faults
+        self.no_trace_dbg = no_trace_dbg
+        self.run = run
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -269,7 +272,7 @@ class InjectIO():
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
-        elif self.trace_all and self.target_proc is None:
+        elif self.trace_all and self.target_proc is None and not self.no_trace_dbg:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
@@ -342,7 +345,9 @@ class InjectIO():
                     if not self.no_rop:
                         self.top.watchROP()
                 else:
-                    self.top.traceAll()
+                    self.lgr.debug('injectIO call traceAll')
+                    call_params = syscall.CallParams('injectIO', None, self.fd)
+                    self.top.traceAll(call_params_list=[call_params])
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -367,7 +372,7 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
-                    self.top.runToIO(self.fd, linger=True, break_simulation=False)
+                    self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
             self.lgr.debug('injectIO debug to %s' % self.target_proc)
