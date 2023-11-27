@@ -359,7 +359,7 @@ class WinDLLMap():
 
     def isCode(self, addr_in, tid):
         if addr_in is None:
-            self.lgr.error('winDLLMap isCode pid:%s addr_in is none '% pid)
+            self.lgr.error('winDLLMap isCode pid:%s addr_in is none '% tid)
             return False
         pid = self.pidFromTID(tid)
         retval = False
@@ -474,39 +474,8 @@ class WinDLLMap():
         return retval
             
     def getAnalysisPath(self, fname):
-        retval = None
-        self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
-        analysis_path = os.getenv('IDA_ANALYSIS')
-        if analysis_path is None:
-            self.lgr.error('IDA_ANALYSIS not defined')
-            return None
-         
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-        root_dir = os.path.basename(root_prefix)
-        top_dir = os.path.join(analysis_path, root_dir)
-        self.lgr.debug('top_dir %s from root_dir %s from ap %s' % (top_dir, root_dir, analysis_path))
-        if len(self.fun_list_cache) == 0:
-            self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
-            self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
-
-        fname = fname.replace('\\', '/')
-        if fname.startswith('/??/C:/'):
-                fname = fname[7:]
-
-        base = ntpath.basename(fname)+'.funs'
-        if base.upper() in map(str.upper, self.fun_list_cache):
-            with_funs = os.path.join(top_dir, base)
-            self.lgr.debug('windDLLMap getAnalysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
-            retval = resimUtils.getfileInsensitive(with_funs, top_dir, self.lgr)
-            if retval is not None:
-                self.lgr.debug('windDLLMap getAnalsysisPath got %s from %s' % (retval, with_funs))
-                retval = retval[:-5]
-        else:
-            self.lgr.debug('winDLL getAnalysisPath %s not in cache' % base)
-            pass
-
-        return retval
-            
+        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=root_prefix, lgr=self.lgr)
 
     def setFunMgr(self, fun_mgr, tid):
         if fun_mgr is None:
