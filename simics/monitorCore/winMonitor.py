@@ -172,10 +172,10 @@ class WinMonitor():
             tid, cpu = self.context_manager.getDebugTid() 
             if tid is not None:
                 pid = pidFromTID(tid)
-                tf = '/tmp/syscall_trace-%s-%s.txt' % (self.cell_name, pid)
+                tf = 'logs/syscall_trace-%s-%s.txt' % (self.cell_name, pid)
                 context = self.context_manager.getRESimContext()
             else:
-                tf = '/tmp/syscall_trace-%s.txt' % self.cell_name
+                tf = 'logs/syscall_trace-%s.txt' % self.cell_name
                 cpu, comm, tid = self.task_utils.curThread() 
 
             traceBuffer.TraceBuffer(self.top, cpu, self.mem_utils, self.context_manager, self.lgr)
@@ -304,7 +304,7 @@ class WinMonitor():
         plist = {}
         tid_dict = self.task_utils.findThreads()
         for tid in tid_dict:
-            frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
+            frame, cycles = self.rev_to_call.getRecentCycleFrame(tid)
             if frame is not None:
                 retval[tid] = frame
         return retval

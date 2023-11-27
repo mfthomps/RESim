@@ -116,7 +116,7 @@ class WinSyscall():
         self.ignore_progs = context_manager.getIgnoredProgs()
 
         if trace is None and self.traceMgr is not None:
-            tf = '/tmp/syscall_trace.txt'
+            tf = 'logs/syscall_trace.txt'
             #self.traceMgr.open(tf, cpu, noclose=True)
             self.traceMgr.open(tf, cpu)
         ''' track kernel buffers '''
@@ -991,8 +991,8 @@ class WinSyscall():
 
             #self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
-                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name))
-                if (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
+                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s call_list: %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name, str(self.call_list)))
+                if self.call_list is not None and (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
                              (call_param.match_param == -1 or call_param.match_param == exit_info.old_fd) and \
                              (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     if call_param.nth is not None:

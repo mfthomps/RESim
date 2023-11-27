@@ -638,33 +638,16 @@ class WinDLLMap():
         ''' TBD for windows'''
         self.lgr.debug('DLLmap handleExit pid:%s  TBD for windows' % pid)
         return
-        if not killed:
-            pid_list = self.context_manager.getThreadTids()
-            if pid in pid_list:
-                self.lgr.debug('SOMap handleExit pid:%s in pidlist' % pid)
-                for tpid in pid_list:
-                    if tpid != pid:
-                        self.lgr.debug('SOMap handleExit new pid:%s added to SOmap' % tpid)
-                        if pid in self.so_addr_map:
-                            self.so_addr_map[tpid] = self.so_addr_map[pid]
-                            self.so_file_map[tpid] = self.so_file_map[pid]
-                        if pid in self.prog_start and self.prog_start[pid] is not None:
-                            self.prog_start[tpid] = self.prog_start[pid]
-                            self.prog_end[tpid] = self.prog_end[pid]
-                            self.text_prog[tpid] = self.text_prog[pid]
-                        else:
-                            self.lgr.debug('SOMap handle exit, missing text_start entry pid: %d tpid:%s' % (pid, tpid))
-        
-            else:
-                self.lgr.debug('SOMap handleExit pid:%s NOT in pidlist' % pid)
-        if pid in self.so_addr_map:
-            del self.so_addr_map[pid]
-            del self.so_file_map[pid]
-        if pid in self.prog_start:
-           del self.prog_start[pid]
-           del self.prog_end[pid]
-           del self.text_prog[pid]
 
     def swapTid(self, old, new):
        ''' TBD ??? '''
        return False
+
+    def getProg(self, tid):
+        retval = None
+        pid = self.pidFromTID(tid)
+        if pid in self.text:
+            dll_info = self.text[pid]
+            retval = dll_info.fname
+        return retval
+

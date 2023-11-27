@@ -65,7 +65,6 @@ class TraceProcs():
                 self.latest_tid_instance = proc_pickle['latest_tid_instance']
             self.init_proc_list = proc_pickle['init_proc_list']
             self.lgr.debug('traceProcs %s loaded %d tids' % (self.cell_name, len(self.plist)))
-            
 
     def pickleit(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')

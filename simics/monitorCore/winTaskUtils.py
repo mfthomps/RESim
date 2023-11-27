@@ -151,9 +151,10 @@ class WinTaskUtils():
 
             exec_addrs_file = os.path.join('./', run_from_snap, cell_name, 'exec_addrs.pickle')
             if os.path.isfile(exec_addrs_file):
-                self.program_map = pickle.load( open(exec_addrs_file, 'rb') ) 
-                for tid in self.program_map:
-                    self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[tid]))
+                pmap = pickle.load( open(exec_addrs_file, 'rb') ) 
+                for tid in pmap:
+                    self.program_map[str(tid)] = pmap[tid]
+                    self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[str(tid)]))
             else:
                 self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
         else:

@@ -5287,14 +5287,17 @@ class GenMonitor():
             self.lgr.debug('genMonitor getProgName tid is none')
             return None
         prog_name = self.traceProcs[target].getProg(tid)
-        self.lgr.debug('genMonitor getProgName tid:%s progname is %s' % (tid, prog_name))
+        self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
         if prog_name is None or prog_name == 'unknown':
+            #prog_name = self.soMap[target].getProg(tid)
+            #if True or prog_name is None:
+            self.lgr.debug('getProgName call to get from soMap failed, try taskUtils')
             prog_name, dumb = self.task_utils[target].getProgName(tid) 
             self.lgr.debug('genMonitor getProgName tid:%s NOT in traceProcs task_utils got %s' % (tid, prog_name))
             if prog_name is None:
                 comm = self.task_utils[target].getCommFromTid(tid) 
                 if comm is None:
-                    self.lgr.error('genMonitor getProgNmae tid:%s on target %s got None' % (tid, target))
+                    self.lgr.error('genMonitor getProgName tid:%s on target %s got None' % (tid, target))
                 else: 
                     prog_name = self.task_utils[target].getProgNameFromComm(comm) 
                     if prog_name is None:
