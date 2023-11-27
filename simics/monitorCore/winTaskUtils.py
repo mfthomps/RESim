@@ -310,15 +310,15 @@ class WinTaskUtils():
         ''' Return tuple of cpu, comm and tid '''
         #self.lgr.debug('taskUtils curThread')
         cur_proc_rec = self.getCurProcRec()
-        self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
+        #self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
         if cur_proc_rec is None:
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
-        self.lgr.debug('taskUtils curThread comm %s' % comm)
+        #self.lgr.debug('taskUtils curThread comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
         thread = self.getThreadId()
         pid_thread = '%d-%d' % (pid, thread)
-        self.lgr.debug('taskUtils curThread pid %s' % str(pid))
+        #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_proc_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid_thread
@@ -530,7 +530,7 @@ class WinTaskUtils():
 
     def getCommFromTid(self, tid):
         ts_list = self.getTaskStructs()
-        pid = int(tid.split('-')[0])
+        pid = int(self.pidString(tid))
         for ts in ts_list:
            if ts_list[ts].pid == pid:
                return ts_list[ts].comm
@@ -543,10 +543,16 @@ class WinTaskUtils():
             pid = tid_in
         self.program_map[pid] = program
 
+    def pidString(self, tid_in):
+        if type(tid_in) is str and '-' in tid_in:
+            pid = tid_in.split('-')[0]
+        else:
+            pid = str(tid_in)
+        return pid
+
     def getProgName(self, tid_in):
         retval = None
-        if '-' in tid_in:
-            pid = tid_in.split('-')[0]
+        pid = self.pidString(tid_in)
         if pid in self.program_map:
             retval = self.program_map[pid]
         ''' TBD find arg list? '''
@@ -608,10 +614,7 @@ class WinTaskUtils():
         self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
-        if '-' in leader_tid:
-            pid = int(leader_tid.split('-')[0])
-        else:
-            pid = int(leader_tid)
+        pid = int(self.pidString(leader_tid))
         for ts in ts_list:
             if ts_list[ts].pid == pid:
                 thread_dict = self.tidDictFromProcRec(ts)
