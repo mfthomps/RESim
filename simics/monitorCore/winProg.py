@@ -9,6 +9,7 @@ except:
     # if loaded from script like findBNT.py
     pass
 
+PEB_ADDR = 0x338
 class WinProgInfo():
     def __init__(self, load_addr, text_offset, text_size, machine, image_base):
         self.load_addr = load_addr
@@ -41,7 +42,7 @@ def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
 def getLoadAddress(cpu, mem_utils, eproc, lgr):
         retval = None
         ''' TBD put in params! '''
-        peb_addr = eproc+0x338
+        peb_addr = eproc+PEB_ADDR
         lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
         peb = mem_utils.readPtr(cpu, peb_addr)
         if peb is not None:
@@ -187,6 +188,7 @@ class WinProg():
         cur_thread = SIM_get_mem_op_value_le(memory)
         tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
         self.context_manager.newProg(prog_string, tid)
+        cur_proc = self.task_utils.getCurProcRec(cur_thread_in=cur_thread)
         if cur_proc not in self.current_tasks:
             proc = ntpath.basename(prog_string)
             self.lgr.debug('winProg does %s start with %s?' % (proc, comm))
@@ -227,8 +229,11 @@ class WinProg():
 
     def runToText(self, want_tid):
         self.lgr.debug('winProg runToText want_tid %s' % want_tid)
-        eproc = self.task_utils.getCurThreadRec()
+        eproc = self.task_utils.getCurProcRec()
         load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
+        if load_addr is None:
+            self.lgr.error('winprog failed to get load addess for %s' % want_tid)
+            return
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
         self.top.debugExitHap()

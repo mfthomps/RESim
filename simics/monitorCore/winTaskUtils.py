@@ -61,6 +61,7 @@ class WinTaskUtils():
     THREAD_NEXT = 0x428
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
+    PEB_ADDR = 0x338
     def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
         self.cpu = cpu
         self.cell_name = cell_name
@@ -309,15 +310,15 @@ class WinTaskUtils():
         ''' Return tuple of cpu, comm and tid '''
         #self.lgr.debug('taskUtils curThread')
         cur_proc_rec = self.getCurProcRec()
-        #self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
+        self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
         if cur_proc_rec is None:
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
-        #self.lgr.debug('taskUtils curThread comm %s' % comm)
+        self.lgr.debug('taskUtils curThread comm %s' % comm)
         pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
         thread = self.getThreadId()
         pid_thread = '%d-%d' % (pid, thread)
-        #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
+        self.lgr.debug('taskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_proc_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid_thread
@@ -535,9 +536,11 @@ class WinTaskUtils():
                return ts_list[ts].comm
         return None
 
-    def addProgram(self, tid, program):
+    def addProgram(self, tid_in, program):
         if '-' in tid_in:
             pid = tid_in.split('-')[0]
+        else:
+            pid = tid_in
         self.program_map[pid] = program
 
     def getProgName(self, tid_in):
@@ -700,24 +703,25 @@ class WinTaskUtils():
 
     def findThreads(self, cur_thread=None, quiet=True):
         ''' return a dictionary of all threads for the current thread or given thread record address'''
-        if cur_thread is None:
-            cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
         thread_id_dict = {}
-        if cur_thread is None:
-            self.lgr.error('winTaskUtils findThreads got cur_thread of None reading 0x%x' % self.phys_current_task)
+        cur_proc = self.getCurProcRec(cur_thread_in=cur_thread)
+        if cur_proc is None:
+            self.lgr.error('winTaskUtils findThreads failed to get cur_proc from getCurProcRec')
+            return thread_id_dict
         else:
-            ptr = cur_thread + self.param.proc_ptr
-            cur_proc = self.mem_utils.readPtr(self.cpu, ptr)
-            self.lgr.debug('winTaskUtils findThreads ptr 0x%x  cur_proc 0x%x ' % (ptr, cur_proc))
+            self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x ' % (cur_proc))
             comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
+            if pid is None:
+                self.lgr.debug('winTaskUtils findThreads failed to read pid.  cur_proc 0x%x ts_pid 0x%x' % (cur_proc, self.param.ts_pid))
+                return thread_id_dict
 
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + self.ACTIVE_THREADS)
-            self.lgr.debug('winTaskUtils findThreads cur_thread 0x%x  ptr 0x%x  cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_thread, ptr, cur_proc, pid, comm, active_threads))
+            self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_proc, pid, comm, active_threads))
             if active_threads < 1:
                 print('not enough threads %d' % active_threads)
                 self.lgr.debug('winTaskUtils findThreads not enough threads %d' % active_threads)
-                return
+                return thread_id_dict
             thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + self.THREAD_HEAD)
             self.lgr.debug('thread list head is 0x%x' % thread_list_head)
 
@@ -782,7 +786,7 @@ class WinTaskUtils():
         thread_id = self.getThreadId(thread_rec)
         proc_rec = self.getCurProcRec(cur_thread_in=thread_rec)
         pid = self.mem_utils.readWord32(self.cpu, proc_rec + self.param.ts_pid)
-        comm = self.mem_utils.readWord32(self.cpu, proc_rec + self.param.ts_comm)
+        comm = self.mem_utils.readString(self.cpu, proc_rec + self.param.ts_comm, 16)
         tid = '%d-%d' %(pid, thread_id)
         return tid, comm
 

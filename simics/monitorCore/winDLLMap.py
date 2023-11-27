@@ -224,7 +224,7 @@ class WinDLLMap():
                         self.addSectionFunction(section_copy, section_copy.addr)
                     if pid not in self.text and len(self.pending_procs)>0:
                         self.lgr.debug('winDLL mapSection pid:%s not in text' % pid)
-                        cpu, comm, pid = self.task_utils.curThread() 
+                        cpu, comm, dumb_pid = self.task_utils.curThread() 
                         rm_pp = None
                         for pp in self.pending_procs:
                             proc_base = ntpath.basename(pp)
@@ -256,7 +256,9 @@ class WinDLLMap():
 
                     self.lgr.debug('WinDLLMap mapSection appended, len now %d' % len(self.section_list))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
-                    self.checkSOWatch(self.sections[pid][section_handle])
+                    self.lgr.debug('wtf pid is %s section_handle %s' % (pid, section_handle))
+                    dll_info = self.sections[pid][section_handle]
+                    self.checkSOWatch(dll_info)
                     if pid not in self.max_addr:
                         self.max_addr[pid] = None
                         self.min_addr[pid] = None
@@ -474,19 +476,19 @@ class WinDLLMap():
             
     def getAnalysisPath(self, fname):
         retval = None
-        #self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
+        self.lgr.debug('winDLL getAnalyisPath find %s' % fname)
         analysis_path = os.getenv('IDA_ANALYSIS')
         if analysis_path is None:
-            analysis_path = '/mnt/resim_archive/analysis'
-            if len(self.fun_list_cache) == 0:
-                self.lgr.warning('winDLL getAnalysis path IDA_ANALYSIS not defined, default to /mnt/resim_archive/analysis')
+            self.lgr.error('IDA_ANALYSIS not defined')
+            return None
          
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
+        self.lgr.debug('top_dir %s from root_dir %s from ap %s' % (top_dir, root_dir, analysis_path))
         if len(self.fun_list_cache) == 0:
             self.fun_list_cache = resimUtils.findListFrom('*.funs', top_dir)
-            #self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
+            self.lgr.debug('winDLLMap getAnalysisPath loaded %d fun files into cache' % (len(self.fun_list_cache)))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
@@ -494,14 +496,14 @@ class WinDLLMap():
 
         base = ntpath.basename(fname)+'.funs'
         if base.upper() in map(str.upper, self.fun_list_cache):
-            with_funs = fname+'.funs'
-            #self.lgr.debug('windDLLMap getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+            with_funs = os.path.join(top_dir, base)
+            self.lgr.debug('windDLLMap getAnalysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = resimUtils.getfileInsensitive(with_funs, top_dir, self.lgr)
             if retval is not None:
-                #self.lgr.debug('windDLLMap getAnalsysisPath got %s from %s' % (retval, with_funs))
+                self.lgr.debug('windDLLMap getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
-            #self.lgr.debug('winDLL getAnalysisPath %s not in cache' % base)
+            self.lgr.debug('winDLL getAnalysisPath %s not in cache' % base)
             pass
 
         return retval
