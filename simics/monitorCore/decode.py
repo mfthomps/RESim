@@ -183,18 +183,20 @@ def getValue(s, cpu, lgr=None):
             retval = retval * getValue(p, cpu, lgr=lgr) 
     elif isReg(s):
         reg_num = cpu.iface.int_register.get_number(s)
-        #lgr.debug('getValue %s is reg, get its value' % s)
+        #if lgr is not None:
+        #    lgr.debug('getValue %s is reg, get its value' % s)
         retval = cpu.iface.int_register.read(reg_num)
     else:
         try:
             retval = int(s, 16)
-            #lgr.debug('getValue returning 0x%x' % retval)
         except:
             try: 
                 retval = int(s)
-                #lgr.debug('getValue returning 0x%x' % retval)
+                #if lgr is not None:
+                #    lgr.debug('getValue returning 0x%x' % retval)
             except:
-                lgr.error('getValue could not parse %s' % s)
+                if lgr is not None:
+                    lgr.error('getValue could not parse %s' % s)
                 pass
     return retval
 
