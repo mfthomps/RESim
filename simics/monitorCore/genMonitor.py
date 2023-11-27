@@ -5748,8 +5748,7 @@ class GenMonitor():
         if fname is not None:
             analysis_path = self.soMap[self.target].getAnalysisPath(fname)
             if analysis_path is None:
-                self.lgr.debug('getAnalysisPath failed to get path from soMap for %s' % fname)
-                analysis_path = self.getFullPath(fname)
+                self.lgr.error('getAnalysisPath failed to get path from soMap for %s' % fname)
         else:
             analysis_path = None
         return analysis_path
