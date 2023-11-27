@@ -511,10 +511,13 @@ class DataWatch():
                             ret_to_addr = bp + word_size
                             self.lgr.debug('dataWatch setRange bp 0x%x ret_to_addr 0x%x wordsize %d' % (bp, ret_to_addr,word_size))
                             maybe = self.mem_utils.readAppPtr(self.cpu, ret_to_addr, size=word_size)
-                            self.lgr.debug('dataWatch setRange got mabe of 0x%x' % maybe)
-                            if self.top.isCode(maybe):
-                                ret_to = maybe
-                                self.lgr.debug('dataWatch stack buffer but no good return address, using bp to get 0x%x' % ret_to)
+                            if maybe is not None:
+                                self.lgr.debug('dataWatch setRange got mabe of 0x%x' % maybe)
+                                if self.top.isCode(maybe):
+                                    ret_to = maybe
+                                    self.lgr.debug('dataWatch stack buffer but no good return address, using bp to get 0x%x' % ret_to)
+                            else:
+                                self.lgr.debug('dataWatch stack buffer got none reading ret_to_addr 0x%x' % ret_to_addr)
                 if ret_to is not None:
                     self.lgr.debug('dataWatch setRange is stack buffer start 0x%x, ret_to 0x%x index %d' % (start, ret_to, index))
                     self.manageStackBuf([index], ret_to)
@@ -4103,6 +4106,8 @@ class DataWatch():
                         ret_addr = frame.ret_addr
                     elif frame.sp > 0 and i != 0:
                         ''' TBD poor assumption about sp pointing to the return address?  have we made this so, arm exceptions? '''
+                        dum_cpu, comm, tid = self.task_utils.curThread()
+                        word_size = self.top.wordSize(tid, target=self.cell_name)
                         ret_addr = self.mem_utils.readAppPtr(self.cpu, frame.sp, size=word_size)
                         #self.lgr.debug('dataWatch memsomething assumption about sp being ret addr? set to 0x%x' % ret_addr)
                     else:
