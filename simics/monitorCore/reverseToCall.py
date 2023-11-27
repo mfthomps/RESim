@@ -1500,7 +1500,7 @@ class reverseToCall():
             if tid in self.recent_cycle:
                 ret_cycles, frame = self.recent_cycle[tid]
             else:
-                self.lgr.debug('getRecentCycleFrame tid %s not there')
+                self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
         return frame, ret_cycles
 
     def getPreviousCycleFrame(self, tid):
@@ -1570,7 +1570,7 @@ class reverseToCall():
         for tid in plist:
             t = plist[tid]
             if tasks[t].state > 0:
-                frame, cycles = self.getRecentCycleFrame(tid)
+                frame, cycles = self.getPreviousCycleFrame(tid)
                 if frame is not None:
                     call = self.task_utils.syscallName(frame['syscall_num'], self.compat32)
                     if call in read_calls and frame['param1'] == fd:
