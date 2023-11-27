@@ -66,7 +66,9 @@ class FunMgr():
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0, text_offset=0):
         #self.lgr.debug('funMgr add path %s' % path)
-        if self.ida_funs is not None:
+        if path is None:
+            self.lgr.debug('funMgr add called with path of None')
+        elif self.ida_funs is not None:
             use_offset = start
             if offset != 0:
                 use_offset = offset - text_offset
