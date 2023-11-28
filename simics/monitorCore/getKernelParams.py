@@ -145,6 +145,9 @@ class GetKernelParams():
         self.win7_tasks = []
         self.win7_count = 0
         self.win7_saved_cr3_phys = None
+
+        self.quit = False
+        self.force = False
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -1356,6 +1359,8 @@ class GetKernelParams():
              prec['saved_cr3_phys'] = self.win7_saved_cr3_phys
              pickle.dump(prec, open(pfile, 'wb'))
              print('current task phys addr written to %s' % pfile)
+        if self.quit:
+             SIM_run_command('quit')
 
     def deleteStopTaskHap(self, dumb):
         self.lgr.debug('deleteStopTaskHap')
@@ -1530,20 +1535,38 @@ class GetKernelParams():
             self.lgr.debug('setDataAbortHap set exception and stop haps')
         self.continueAhead()
        
-    def go(self, force=False, skip_sysenter=False): 
+    def go(self, force=False, skip_sysenter=False, quit=False): 
         ''' Initial method for gathering kernel parameters.  Will chain a number of functions, the first being runUntilSwapper '''
+        self.quit = quit
+        self.skip_sysenter = skip_sysenter
+        self.force = force
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
-            print('not in kernel, please run forward until in kernel')
-            return
+            self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.startInKernel, True)
+            SIM_continue(0)
+            #print('not in kernel, please run forward until in kernel')
+            #return
+        else:
+            self.go2()
+
+    def go2(self):
         if self.cpu.architecture != 'arm':
             self.fs_base = self.cpu.ia32_fs_base
-            if self.fs_base == 0 and not force:
+            if self.fs_base == 0 and not self.force:
                 print('fs_base is zero, maybe just entered kernel?  consider running ahead a bit, or use gkp.go(True)')
                 return
-        if skip_sysenter:
-            self.skip_sysenter = skip_sysenter
         self.runUntilSwapper()
+
+    def startInKernel(self, cpu, one, old, new):
+        self.lgr.debug('startInKernel')
+        hap = self.entry_mode_hap
+        self.entry_mode_hap = None
+        SIM_run_alone(self.deleteModeAlone, hap)
+        self.go2()
+
+    def deleteModeAlone(self, hap):
+        if hap is not None:
+            SIM_hap_delete_callback_id("Core_Mode_Change", hap)
 
     def compat32(self):
         self.loadParam()
