@@ -1,0 +1,3 @@
+@cgc.runToSeconds(120)
+@cgc.writeConfig('running_test')
+quit

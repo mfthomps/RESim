@@ -1,0 +1,8 @@
+echo "BEGIN accept_test.simics"
+!./background.sh ./move2driver.sh 3
+@cgc.debugProc('simple_server.exe')
+@cgc.runToBind(9999)
+!./background.sh "drive-driver.py simple.directive -t"
+@cgc.runToAccept(0x64)
+@cgc.writeConfig('accept_test')
+quit

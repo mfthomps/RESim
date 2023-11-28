@@ -1,0 +1,7 @@
+echo "BEGIN to_accept.simics"
+!./background.sh ./move2driver.sh 3
+@cgc.debugProc('simple_server.exe')
+!./background.sh "drive-driver.py simple.directive -t"
+@cgc.quitWhenDone()
+@cgc.traceAll()
+c
