@@ -23,7 +23,7 @@ sed -i 's/^CREATE_RESIM_PARAMS=YES/#CREATE_RESIM_PARAMS=YES/' wintest.ini
 resim wintest.ini -c save_running.simics || exit
 sed -i 's/RUN_FROM_SNAP=booted_test/RUN_FROM_SNAP=running_test/' wintest.ini
 resim wintest.ini -c trace_test.simics
-check_trace.sh || exit
+./check_trace.sh || exit
 resim wintest.ini -c accept_test.simics
 ./check_accept.sh || exit
 sed -i 's/RUN_FROM_SNAP=running_test/RUN_FROM_SNAP=accept_test/' wintest.ini
