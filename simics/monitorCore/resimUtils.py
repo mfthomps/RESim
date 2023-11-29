@@ -523,8 +523,8 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
                 #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
-            if lgr is not None:
-                lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
+            #if lgr is not None:
+            #    lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
             pass
 
     return retval
