@@ -5375,8 +5375,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         self.bookmarks.setOrigin(cpu) 
 
-    def isCode(self, addr):
-        tid = self.getTID()
+    def isCode(self, addr, tid=None):
+        if tid is None:
+            tid = self.getTID()
         return self.soMap[self.target].isCode(addr, tid)
 
     def getTargetPlatform(self):
