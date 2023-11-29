@@ -160,7 +160,9 @@ class WinDLLMap():
             self.lgr.debug('winDLL loadPickle have text for pid:%s' % pid)
 
     def pidFromTID(self, tid):
-        if '-' in tid:
+        if tid is None:
+            return None
+        elif '-' in tid:
             return int(tid.split('-')[0])
         else:
             return int(tid)
