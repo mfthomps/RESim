@@ -484,16 +484,16 @@ class GenContextMgr():
         if rec in self.suspend_watch_list:
             self.suspend_watch_list.remove(rec)
             if self.debugging_tid is not None:
-                self.lgr.debug('contextManager rmSuspendWatch restore RESim context')
+                #self.lgr.debug('contextManager rmSuspendWatch restore RESim context')
                 SIM_run_alone(self.restoreDebugContext, None)
                 #self.restoreDebugContext()
             else:
                 SIM_run_alone(self.restoreDefaultContext, None)
                 #self.restoreDefaultContext()
             context = SIM_object_name(self.cpu.current_context)
-            self.lgr.debug('contextManager rmSuspendWatch for rec 0x%x context now %s' % (rec, context))
+            #self.lgr.debug('contextManager rmSuspendWatch for rec 0x%x context now %s' % (rec, context))
         else:
-            self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
+            #self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
             SIM_break_simulation('fix this')
         #SIM_run_alone(self.clearAllHap, True)
 
@@ -546,7 +546,7 @@ class GenContextMgr():
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
-                self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
+                #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 SIM_run_alone(self.restoreDebugContext, None)
                 #self.restoreDebugContext()
             else:
@@ -726,7 +726,7 @@ class GenContextMgr():
                     pid_item = tid_item.split('-')[0]
                     if pid_item == pid:
                         add_task=True
-                        leader_pid = None
+                        leader_tid = None
                         break 
             if add_task:
                 self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
@@ -896,12 +896,12 @@ class GenContextMgr():
     def restoreDefaultContext(self, dumb=None):
         self.cpu.current_context = self.default_context
         self.current_context = self.default_context
-        self.lgr.debug('contextManager restoreDefaultContext')
+        #self.lgr.debug('contextManager restoreDefaultContext')
 
     def restoreDebugContext(self, dumb=None):
         self.cpu.current_context = self.resim_context
         self.current_context = self.resim_context
-        self.lgr.debug('contextManager restoreDebugContext')
+        #self.lgr.debug('contextManager restoreDebugContext')
 
     def stopDebug(self):
         self.lgr.debug('contextManager stopDebug')
