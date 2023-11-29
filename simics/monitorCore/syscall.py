@@ -1801,7 +1801,7 @@ class Syscall():
                                 self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
                                 if not self.remainingDmod(call_param.name):
                                     #self.top.stopTrace(cell_name=self.cell_name, syscall=self)
-                                    self.top.rmTrace(call_param.name)
+                                    self.top.rmSyscall(call_param.name)
                                     if not self.top.remainingCallTraces(cell_name=self.cell_name) and SIM_simics_is_running():
                                         self.top.notRunning(quiet=True)
                                         SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
