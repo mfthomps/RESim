@@ -1721,7 +1721,7 @@ class Syscall():
             ''' check runToIO '''
             #self.lgr.debug('syscall read loop %d call_params ' % len(syscall_info.call_params))
             ''' Look for matching params, preference to non-Dmods.  TBD refine this to allow Dmods with other call params.'''
-            got_dmod = False
+            got_dmod = None
             for call_param in syscall_info.call_params:
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
@@ -1742,7 +1742,7 @@ class Syscall():
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                         break
-                elif not got_dmod and call_param.match_param.__class__.__name__ == 'Dmod':
+                elif got_dmod is None and call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
                     self.lgr.debug('syscall read, is dmod: %s' % call_param.match_param.toString())
                     if call_param.match_param.tid is not None and (tid != call_param.match_param.tid or exit_info.old_fd != call_param.match_param.fd):
@@ -1762,7 +1762,8 @@ class Syscall():
                     else:
                         exit_info.call_params = call_param
                     '''
-            if exit_info.call_params is None and got_dmod:
+            if exit_info.call_params is None and got_dmod is not None:
+                self.lgr.debug('syscall read adding got_dmod')
                 exit_info.call_params = got_dmod
 
         elif callname == 'write':        
@@ -1798,8 +1799,7 @@ class Syscall():
                         if mod.checkString(self.cpu, frame['param2'], count):
                             if mod.getCount() == 0:
                                 self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
-                                self.syscall_info.callparams.remove(call_param)
-                                if not self.remainingDmod():
+                                if not self.remainingDmod(call_param.name):
                                     #self.top.stopTrace(cell_name=self.cell_name, syscall=self)
                                     self.top.rmTrace(call_param.name)
                                     if not self.top.remainingCallTraces(cell_name=self.cell_name) and SIM_simics_is_running():
@@ -1807,6 +1807,8 @@ class Syscall():
                                         SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
                                     else:
                                         print('%s performed' % mod.getPath())
+                                else:
+                                    self.syscall_info.callparams.remove(call_param)
                 else:
                     #self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
                     pass
@@ -2310,15 +2312,17 @@ class Syscall():
                                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                                         exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params tid %s is %s' % (tid, str(exit_info.call_params)))
-                                    #if syscall_info.call_params is not None:
-                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d len %d trace_all %r' % (self.name, 
-                                    #       self.cell_name, tid, syscall_info.callnum, len(syscall_info.call_params), tracing_all))
-                                    #else:
-                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d no params trace_all %r' % (self.name, self.cell, 
-                                    #       tid, syscall_info.callnum, tracing_all))
-                                    #self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
-                                    self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
-                                    #self.sharedSyscall.addExitHap(cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    if tracing_all or exit_info.call_params is not None:
+                                        if syscall_info.call_params is not None:
+                                            self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d len %d trace_all %r tid_sockes? %s' % (self.name, 
+                                               self.cell_name, tid, syscall_info.callnum, len(syscall_info.call_params), tracing_all, str(self.tid_sockets)))
+                                        else:
+                                            self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d no params trace_all %r tid_sockets? %s' % (self.name, self.cell, 
+                                               tid, syscall_info.callnum, tracing_all, str(self.tid_sockets)))
+                                        self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    else:
+                                        self.lgr.debug('syscallHap not trace all and no exit_info call params, so no exit hap')
+                                        pass
                                 elif callname.startswith('mmap') and self.name == 'runToText':
                                     # TBD this is broken, what about so added after we hit text segment.  Problem is syscall that includes multiple param requests.
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
@@ -2601,18 +2605,11 @@ class Syscall():
             else:
                 self.lgr.debug('setExits call_param is none, NO EXIT set.')
 
-    def hasCallParamName(self, name):
-        retval = False
-        for cp in self.syscall_info.call_params:
-            if cp.name == name:
-                retval = True
-                break
-        return retval
 
     def addCallParams(self, call_params):
         gotone = False
         for call in call_params:
-            if not self.hasCallParamName(call.name):
+            if not self.hasCallParam(call.name):
                 self.lgr.debug('syscall addCallParams %s' % call.name)
                 self.syscall_info.call_params.append(call)
                 gotone = True
@@ -2638,6 +2635,7 @@ class Syscall():
         return self.cell
 
     def rmCallParam(self, call_param, quiet=False):
+        self.lgr.debug('sycall rmCallParam syscall %s param %s' % (self.name, call_param.name))
         if call_param in self.syscall_info.call_params: 
             self.syscall_info.call_params.remove(call_param)
         elif not quiet:
@@ -2661,9 +2659,9 @@ class Syscall():
         else:
             return None
 
-    def remainingDmod(self):
+    def remainingDmod(self, besides):
         for call_param in self.syscall_info.call_params:
-            if call_param.match_param.__class__.__name__ == 'Dmod':
+            if call_param.match_param.__class__.__name__ == 'Dmod' and call_param.name != besides:
                  return True
         return False
 

@@ -899,8 +899,7 @@ class SharedSyscall():
                                 self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
                                 if dmod.getCount() == 0:
                                     self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
-                                    exit_info.syscall_instance.rmCallParam(call_param)
-                                    if not exit_info.syscall_instance.remainingDmod() and exit_info.syscall_instance.name != 'traceAll':
+                                    if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
                                         self.lgr.debug('sharedSyscall read Dmod stopping trace')
                                         self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
                                         #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
@@ -911,6 +910,8 @@ class SharedSyscall():
                                         if not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
                                             self.top.notRunning(quiet=True)
                                             SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+                                    else:
+                                        exit_info.syscall_instance.rmCallParam(call_param)
                                 else:
                                     print('%s performed' % dmod.getPath())
                                 if call_param.break_simulation:
